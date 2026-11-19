@@ -168,6 +168,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         livenessGate = BiometricLivenessGate()
         livenessPassed.set(false)
         faceTrackingFailed = false
+        runCatching { detector?.close() }
+        detector = null
         val options = FaceDetectorOptions.Builder().setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL).setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
             .setMinFaceSize(0.15f).build()
