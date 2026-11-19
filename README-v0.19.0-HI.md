@@ -57,3 +57,12 @@ Source integration is not a claim that every capability works without credential
 
 ## Paired-device Task Handoff
 Device Control → Remote App Control में Task Handoff title, description और steps भरकर चुने हुए paired phone को task plan भेजें। Receiver 15 मिनट के अंदर Accept & Save या Reject कर सकता है। स्वीकार किया गया plan Android Keystore-backed EncryptedFeatureStore में local encrypted Task Inbox में save होता है। Inbox में अधिकतम 10 task plans रखे जाते हैं। यह feature task plan भेजता है, remote app action स्वतः execute नहीं करता।
+
+
+## People Memory: वास्तविक Face और Voice मॉडल
+- Android build के समय OpenCV Zoo का SFace ONNX और SpeechBrain ECAPA-TDNN का ONNX मॉडल pinned upstream revision से download होता है।
+- दोनों model files का SHA-256 verify होता है; checksum गलत होने पर build रुकता है।
+- दोनों वास्तविक weights APK के assets में पैक होते हैं और People Memory के पहले उपयोग पर app-private storage में दोबारा verify होकर install होते हैं।
+- मॉडल की license/attribution सूचना APK में शामिल है। इस कारण APK का आकार लगभग 123 MB model weights से बढ़ेगा।
+- Blink/head-turn challenge को मजबूत किया गया है, लेकिन यह अभी certified anti-spoofing नहीं है। Certified PAD के लिए licensed SDK और ISO/IEC 30107-3 independent test evidence आवश्यक है।
+- GitHub CI और source code अकेले वास्तविक फोन की accuracy या certification साबित नहीं करते; target phones पर FAR/FRR और spoof परीक्षण बाकी रहेंगे।
