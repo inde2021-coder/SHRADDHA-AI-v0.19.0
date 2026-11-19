@@ -205,28 +205,46 @@ class BiometricCaptureActivity : AppCompatActivity() {
             .setMinFaceSize(0.15f).build()
         detector = FaceDetection.getClient(options)
         val providerFuture = ProcessCameraProvider.getInstance(this)
-        providerFuture.addListener({
-            try {
-                val provider = providerFuture.get()
-                cameraProvider = provider
-                val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-                val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-                imageCapture = capture
-                val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also { useCase ->
-                    useCase.setAnalyzer(cameraExecutor) { proxy -> analyzeChallengeFrame(proxy) }
+        try {
+            cameraExecutor.execute {
+                try {
+                    val provider: ProcessCameraProvider = providerFuture.get()
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) {
+                            cameraStarting = false
+                            return@runOnUiThread
+                        }
+                        try {
+                            cameraProvider = provider
+                            val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+                            val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                            imageCapture = capture
+                            val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also { useCase ->
+                                useCase.setAnalyzer(cameraExecutor) { proxy -> analyzeChallengeFrame(proxy) }
+                            }
+                            imageAnalysis = analysis
+                            provider.unbindAll()
+                            provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, capture, analysis)
+                            cameraStarting = false
+                            message.text = challengeText()
+                            action.text = "Complete the live challenge"
+                            action.isEnabled = false
+                        } catch (error: Exception) {
+                            cameraStarting = false
+                            finishWith("Camera could not start: ${error.message}")
+                        }
+                    }
+                } catch (error: Exception) {
+                    runOnUiThread {
+                        cameraStarting = false
+                        finishWith("Camera provider could not start: ${error.message}")
+                    }
                 }
-                imageAnalysis = analysis
-                provider.unbindAll()
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, capture, analysis)
-                cameraStarting = false
-                message.text = challengeText()
-                action.text = "Complete the live challenge"
-                action.isEnabled = false
-            } catch (error: Exception) {
-                cameraStarting = false
-                finishWith("Camera could not start: ${error.message}")
             }
-        }, ContextCompat.getMainExecutor(this))
+        } catch (error: Exception) {
+            cameraStarting = false
+            finishWith("Camera setup could not start: ${error.message}")
+        }
     }
 
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
