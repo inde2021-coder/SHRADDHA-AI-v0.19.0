@@ -109,7 +109,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
         val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
+        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in -1f..1f))) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
