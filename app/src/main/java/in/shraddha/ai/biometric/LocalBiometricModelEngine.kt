@@ -3,6 +3,7 @@ package `in`.shraddha.ai.biometric
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.TensorInfo
 import java.io.Closeable
 import java.nio.FloatBuffer
 
@@ -24,6 +25,10 @@ class LocalBiometricModelEngine : Closeable {
         try {
             require(candidate.inputNames.contains("data")) { "Face model must expose input 'data'" }
             require(candidate.outputNames.contains("fc1")) { "Face model must expose output 'fc1'" }
+            val inputShape = (candidate.inputInfo["data"]?.info as? TensorInfo)?.shape ?: error("Face model input 'data' must be a tensor")
+            require(inputShape.contentEquals(longArrayOf(1, 3, 112, 112))) { "Face model input shape must be [1,3,112,112]" }
+            val outputShape = (candidate.outputInfo["fc1"]?.info as? TensorInfo)?.shape ?: error("Face model output 'fc1' must be a tensor")
+            require(outputShape.lastOrNull() == 128L) { "SFace model must output a 128-value embedding" }
             faceSession?.close()
             faceSession = candidate
         } catch (error: Exception) {
@@ -40,6 +45,12 @@ class LocalBiometricModelEngine : Closeable {
                 "Speaker model must expose 'wav' and 'lens' inputs"
             }
             require(candidate.outputNames.contains("emb")) { "Speaker model must expose output 'emb'" }
+            val wavShape = (candidate.inputInfo["wav"]?.info as? TensorInfo)?.shape ?: error("Speaker model input 'wav' must be a tensor")
+            val lensShape = (candidate.inputInfo["lens"]?.info as? TensorInfo)?.shape ?: error("Speaker model input 'lens' must be a tensor")
+            val embeddingShape = (candidate.outputInfo["emb"]?.info as? TensorInfo)?.shape ?: error("Speaker model output 'emb' must be a tensor")
+            require(wavShape.size == 2 && wavShape[0] == 1L) { "Speaker wav input must be [1,samples]" }
+            require(lensShape.contentEquals(longArrayOf(1))) { "Speaker lens input must be [1]" }
+            require(embeddingShape.lastOrNull() == 192L) { "Speaker model must output a 192-value embedding" }
             speakerSession?.close()
             speakerSession = candidate
         } catch (error: Exception) {
