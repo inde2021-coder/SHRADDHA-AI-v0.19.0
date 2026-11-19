@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.SecureMemoryVault
+import `in`.shraddha.ai.future.ExpertProjectLibrary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,8 +19,9 @@ class DeviceRecoveryBundleInstrumentedTest {
         val twinPrefs = context.getSharedPreferences("shraddha_digital_twin", Context.MODE_PRIVATE)
         val mirrorPrefs = context.getSharedPreferences("shraddha_local_memory", Context.MODE_PRIVATE)
         val graphPrefs = context.getSharedPreferences("shraddha_knowledge_graph", Context.MODE_PRIVATE)
+        val projectLibrary = ExpertProjectLibrary(context)
         try {
-            listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint_", "app_profile_")
+            listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint_", "app_profile_", "expert_project_library")
                 .forEach { store.removeAllWithPrefix(it) }
             store.put("person_directory", "[]").getOrThrow()
             store.put("workflow_checkpoint_0123456789abcdef0123456789abcdef", JSONObject()
@@ -33,11 +35,13 @@ class DeviceRecoveryBundleInstrumentedTest {
             projectPrefs.edit().putString("active_project", "{\"title\":\"Test project\"}").commit()
             twinPrefs.edit().putString("name", "Shraddha").putString("language", "Hindi").putString("style", "step-by-step").commit()
             graphPrefs.edit().putString("nodes", "[{\"id\":\"node-1\"}]").commit()
+            projectLibrary.save("Test expert project", "Encrypted output", "electronics", "course", "gemini").getOrThrow()
 
             val bundle = DeviceRecoveryBundle.capture(context).getOrThrow()
             val preview = DeviceRecoveryBundle.preview(bundle).getOrThrow()
-            assertEquals(2, preview.recordCount)
+            assertEquals(3, preview.recordCount)
             assertEquals(0, preview.appProfileCount)
+            assertEquals(1, preview.expertProjectCount)
             assertEquals(1, preview.workflowCheckpointCount)
             assertTrue(preview.hasMemory)
             assertTrue(preview.hasActiveProject)
@@ -49,6 +53,7 @@ class DeviceRecoveryBundleInstrumentedTest {
             projectPrefs.edit().putString("active_project", "changed").commit()
             twinPrefs.edit().putString("name", "Changed").commit()
             graphPrefs.edit().putString("nodes", "[]").commit()
+            projectLibrary.save("Changed expert project", "Changed output", "creator", "create", "openai").getOrThrow()
 
             DeviceRecoveryBundle.restore(context, bundle).getOrThrow()
             assertEquals("[]", store.get("person_directory").getOrThrow())
@@ -57,6 +62,7 @@ class DeviceRecoveryBundleInstrumentedTest {
             assertEquals("{\"title\":\"Test project\"}", projectPrefs.getString("active_project", ""))
             assertEquals("Shraddha", twinPrefs.getString("name", ""))
             assertEquals("[{\"id\":\"node-1\"}]", graphPrefs.getString("nodes", "[]"))
+            assertEquals("Test expert project", projectLibrary.load().getOrThrow().single().title)
             assertEquals("private recovery note", mirrorPrefs.getString("notes", ""))
         } finally {
             listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint_", "app_profile_")
