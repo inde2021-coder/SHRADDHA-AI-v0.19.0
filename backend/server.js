@@ -160,9 +160,9 @@ const server = http.createServer(async (req, res) => {
       if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 4000) return json(res, 400, { error: 'prompt must be 1-4000 characters' });
       if (typeof body.imageBase64 !== 'string' || body.imageBase64.length > 4_200_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.imageBase64)) return json(res, 400, { error: 'imageBase64 is missing or too large' });
       const mimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType) ? body.mimeType : 'image/jpeg';
-      const provider = ['openai', 'gemini', 'anthropic'].includes(body.provider) ? body.provider : 'gemini';
-      const answer = await askVision(provider, body.prompt.trim(), body.imageBase64, mimeType);
-      return json(res, 200, { provider, answer });
+      const provider = ['auto', 'openai', 'gemini', 'anthropic'].includes(body.provider) ? body.provider : 'gemini';
+      const result = await askVision(provider, body.prompt.trim(), body.imageBase64, mimeType);
+      return json(res, 200, { provider: result.provider, requestedProvider: provider, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
     }
     if (req.method === 'POST' && req.url === '/api/voice/synthesize') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
