@@ -65,6 +65,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
     private var livenessGate = BiometricLivenessGate()
     private val livenessPassed = AtomicBoolean(false)
+    private val captureCancelled = AtomicBoolean(false)
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
     private var cameraProvider: ProcessCameraProvider? = null
@@ -474,6 +475,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         message.text = "Phrase verified locally. अब 5 सेकंड वही phrase दोहराएँ…"
         Thread({
             var recorder: AudioRecord? = null
+            var rawPcm: ShortArray? = null
+            var normalizedPcm: FloatArray? = null
             try {
                 val rate = 16000
                 val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -482,11 +485,19 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 activeRecorder = recorder
                 require(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone initialization failed" }
                 val pcm = ShortArray(rate * 5)
+                rawPcm = pcm
+                check(!captureCancelled.get()) { "Voice capture cancelled" }
                 recorder.startRecording()
                 var offset = 0
-                while (offset < pcm.size) { val n = recorder.read(pcm, offset, pcm.size - offset); require(n > 0) { "Microphone read failed" }; offset += n }
+                while (offset < pcm.size && !captureCancelled.get()) {
+                    val n = recorder.read(pcm, offset, pcm.size - offset)
+                    require(n > 0) { "Microphone read failed" }
+                    offset += n
+                }
+                check(!captureCancelled.get() && offset == pcm.size) { "Voice capture cancelled" }
                 recorder.stop()
                 val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
+                normalizedPcm = samples
                 val rms = sqrt(samples.map { it * it }.average()).toFloat()
                 val peak = samples.maxOf { kotlin.math.abs(it) }
                 val clipped = samples.count { kotlin.math.abs(it) > 0.995f }
@@ -506,6 +517,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
             finally {
+                rawPcm?.fill(0)
+                normalizedPcm?.fill(0f)
                 runCatching { recorder?.stop() }
                 runCatching { recorder?.release() }
                 activeRecorder = null
@@ -527,6 +540,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun messageOrStatus(text: String) { if (::message.isInitialized) message.text = text }
 
     override fun onDestroy() {
+        captureCancelled.set(true)
         activeRecorder?.let { recorder ->
             runCatching { if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop() }
         }
