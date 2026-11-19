@@ -1776,23 +1776,52 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             refreshProfiles()
-            refreshProfileList = { refreshProfiles() }
-            refreshBiometricStatus = { updateBiometricStatus() }
+            refreshProfileList = { refreshProfiles(); refreshBiometricStatus?.invoke() }
             addView(TextView(this@MainActivity).apply { text = "CONSENTED PERSON"; setTextColor(0xFFB9C8E4.toInt()) })
             addView(profileSpinner)
             addView(profileStatus)
             val faceThreshold = edit("Face cosine threshold (auto-calibrated)", "").apply { keyListener = null; isFocusable = false; isFocusableInTouchMode = false }
             val speakerThreshold = edit("Speaker cosine threshold (auto-calibrated)", "").apply { keyListener = null; isFocusable = false; isFocusableInTouchMode = false }
             addView(faceThreshold); addView(speakerThreshold)
+            fun loadSavedThresholds() {
+                biometricVault.loadThreshold("face").onSuccess { value ->
+                    faceThreshold.setText(value?.let { "%.4f".format(java.util.Locale.US, it) } ?: "")
+                }.onFailure { faceThreshold.text.clear(); status.text = "Stored face threshold invalid: ${it.message}" }
+                biometricVault.loadThreshold("speaker").onSuccess { value ->
+                    speakerThreshold.setText(value?.let { "%.4f".format(java.util.Locale.US, it) } ?: "")
+                }.onFailure { speakerThreshold.text.clear(); status.text = "Stored speaker threshold invalid: ${it.message}" }
+            }
+            refreshBiometricStatus = { updateBiometricStatus(); loadSavedThresholds() }
+            refreshBiometricStatus?.invoke()
             addView(actionButton("CALIBRATE FACE THRESHOLD", "कम-से-कम 2 consented लोगों के 2-2 face samples से genuine/impostor score separation जाँचें") {
                 faceThreshold.text.clear()
-                biometricVault.calibrateThreshold("face").onSuccess { result -> faceThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold)); status.text = "Face threshold calibrated: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs) }
-                    .onFailure { status.text = "Face calibration blocked: ${it.message}" }
+                biometricVault.calibrateThreshold("face").onSuccess { result ->
+                    biometricVault.saveThreshold("face", result.threshold)
+                        .onSuccess {
+                            faceThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold))
+                            status.text = "Face threshold calibrated and saved: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs)
+                        }
+                        .onFailure { faceThreshold.text.clear(); status.text = "Face threshold save failed: ${it.message}" }
+                }.onFailure {
+                    biometricVault.clearThreshold("face")
+                    faceThreshold.text.clear()
+                    status.text = "Face calibration blocked: ${it.message}"
+                }
             })
             addView(actionButton("CALIBRATE SPEAKER THRESHOLD", "कम-से-कम 2 consented लोगों के 2-2 voice samples से threshold निकालें") {
                 speakerThreshold.text.clear()
-                biometricVault.calibrateThreshold("speaker").onSuccess { result -> speakerThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold)); status.text = "Speaker threshold calibrated: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs) }
-                    .onFailure { status.text = "Speaker calibration blocked: ${it.message}" }
+                biometricVault.calibrateThreshold("speaker").onSuccess { result ->
+                    biometricVault.saveThreshold("speaker", result.threshold)
+                        .onSuccess {
+                            speakerThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold))
+                            status.text = "Speaker threshold calibrated and saved: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs)
+                        }
+                        .onFailure { speakerThreshold.text.clear(); status.text = "Speaker threshold save failed: ${it.message}" }
+                }.onFailure {
+                    biometricVault.clearThreshold("speaker")
+                    speakerThreshold.text.clear()
+                    status.text = "Speaker calibration blocked: ${it.message}"
+                }
             })
             fun launchCapture(kind: String, mode: String) {
                 val selected = people().getOrNull(profileSpinner.selectedItemPosition)
@@ -1820,7 +1849,7 @@ class MainActivity : AppCompatActivity() {
                     .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
                         val ok = biometricVault.clear()
                         status.text = if (ok) "All local biometric templates deleted." else "Some biometric records could not be deleted."
-                        updateBiometricStatus()
+                        refreshBiometricStatus?.invoke()
                     }.show()
             })
             addView(TextView(this@MainActivity).apply {
