@@ -1088,7 +1088,7 @@ class MainActivity : AppCompatActivity() {
             }
             addView(endpoint); addView(tokenField); addView(platform); addView(post); addView(result)
             addView(actionButton("REVIEW EXACT POST & PUBLISH", "External publication • final confirmation required") {
-                val base = endpoint.text.toString().trim().trimEnd("/")
+                val base = endpoint.text.toString().trim().trimEnd('/')
                 val secret = tokenField.text.toString().trim()
                 val exact = post.text.toString()
                 val selected = platform.selectedItem?.toString().orEmpty()
@@ -1441,7 +1441,7 @@ class MainActivity : AppCompatActivity() {
                 val memory = localVault.load().getOrDefault("")
                 val bundle = JSONObject().put("version", 1).put("createdAt", System.currentTimeMillis())
                     .put("items", items).put("memory", memory).toString()
-                if (bundle.length() > 100000) { result.text = "Selected data 100 KB limit से अधिक है; पहले पुराने records कम करें।"; return@actionButton }
+                if (bundle.length > 100000) { result.text = "Selected data 100 KB limit से अधिक है; पहले पुराने records कम करें।"; return@actionButton }
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
                 result.text = "Selected records encrypt करके Firebase पर भेजे जा रहे हैं…"
                 Thread {
