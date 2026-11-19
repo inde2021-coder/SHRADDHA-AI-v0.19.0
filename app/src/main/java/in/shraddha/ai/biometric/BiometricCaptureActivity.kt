@@ -334,7 +334,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val source = FloatArray(10)
             landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
             val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
-            val transform = affineFromFivePoints(source, target)
+            val transform = similarityFromFivePoints(source, target)
             val alignedBitmap = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
             aligned = alignedBitmap
             Canvas(alignedBitmap).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
@@ -379,41 +379,48 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
 
-    /** Least-squares 5-point affine warp; Android Matrix.setPolyToPoly accepts at most 4 pairs. */
-    private fun affineFromFivePoints(source: FloatArray, target: FloatArray): Matrix {
+    /** Five-point similarity alignment (rotation, uniform scale and translation; no shear). */
+    private fun similarityFromFivePoints(source: FloatArray, target: FloatArray): Matrix {
         require(source.size == 10 && target.size == 10)
-        val normal = Array(3) { DoubleArray(3) }
-        val rhsX = DoubleArray(3)
-        val rhsY = DoubleArray(3)
+        var sourceX = 0.0
+        var sourceY = 0.0
+        var targetX = 0.0
+        var targetY = 0.0
         for (i in 0 until 5) {
-            val x = source[i * 2].toDouble()
-            val y = source[i * 2 + 1].toDouble()
-            val row = doubleArrayOf(x, y, 1.0)
-            for (r in 0..2) {
-                for (c in 0..2) normal[r][c] += row[r] * row[c]
-                rhsX[r] += row[r] * target[i * 2]
-                rhsY[r] += row[r] * target[i * 2 + 1]
-            }
+            sourceX += source[i * 2]
+            sourceY += source[i * 2 + 1]
+            targetX += target[i * 2]
+            targetY += target[i * 2 + 1]
         }
-        fun solve(rhs: DoubleArray): DoubleArray {
-            val a = Array(3) { r -> DoubleArray(4) { c -> if (c == 3) rhs[r] else normal[r][c] } }
-            for (pivot in 0..2) {
-                var best = pivot
-                for (r in pivot + 1..2) if (kotlin.math.abs(a[r][pivot]) > kotlin.math.abs(a[best][pivot])) best = r
-                require(kotlin.math.abs(a[best][pivot]) > 1e-9) { "Face landmarks are degenerate" }
-                val temp = a[pivot]; a[pivot] = a[best]; a[best] = temp
-                val divisor = a[pivot][pivot]
-                for (c in pivot..3) a[pivot][c] /= divisor
-                for (r in 0..2) if (r != pivot) {
-                    val factor = a[r][pivot]
-                    for (c in pivot..3) a[r][c] -= factor * a[pivot][c]
-                }
-            }
-            return doubleArrayOf(a[0][3], a[1][3], a[2][3])
+        sourceX /= 5.0
+        sourceY /= 5.0
+        targetX /= 5.0
+        targetY /= 5.0
+
+        var denominator = 0.0
+        var scaleNumerator = 0.0
+        var rotationNumerator = 0.0
+        for (i in 0 until 5) {
+            val x = source[i * 2] - sourceX
+            val y = source[i * 2 + 1] - sourceY
+            val u = target[i * 2] - targetX
+            val v = target[i * 2 + 1] - targetY
+            denominator += x * x + y * y
+            scaleNumerator += x * u + y * v
+            rotationNumerator += x * v - y * u
         }
-        val x = solve(rhsX)
-        val y = solve(rhsY)
-        return Matrix().apply { setValues(floatArrayOf(x[0].toFloat(), x[1].toFloat(), x[2].toFloat(), y[0].toFloat(), y[1].toFloat(), y[2].toFloat(), 0f, 0f, 1f)) }
+        require(denominator > 1e-9) { "Face landmarks are degenerate" }
+        val a = scaleNumerator / denominator
+        val b = rotationNumerator / denominator
+        val translateX = targetX - a * sourceX + b * sourceY
+        val translateY = targetY - b * sourceX - a * sourceY
+        return Matrix().apply {
+            setValues(floatArrayOf(
+                a.toFloat(), (-b).toFloat(), translateX.toFloat(),
+                b.toFloat(), a.toFloat(), translateY.toFloat(),
+                0f, 0f, 1f
+            ))
+        }
     }
 
     private fun buildSpeakerScreen(mode: String, id: String, name: String, threshold: Float) {
