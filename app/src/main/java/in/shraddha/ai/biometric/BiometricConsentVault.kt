@@ -62,11 +62,12 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     fun withdraw(personId: String): Result<Unit> = runCatching {
         require(personId.matches(Regex("[A-Za-z0-9_-]{8,64}")))
         val old = readIndex()
-        check(store.remove(thresholdKey("face")) && store.remove(thresholdKey("speaker"))) { "Could not invalidate biometric thresholds" }
-        check(store.remove(PREFIX + personId)) { "Could not delete biometric templates" }
         val updated = JSONArray()
         for (i in 0 until old.length()) if (old.optString(i) != personId) updated.put(old.optString(i))
-        check(store.put(INDEX, updated.toString()).isSuccess) { "Could not update biometric index" }
+        check(store.putAllAndRemove(
+            mapOf(INDEX to updated.toString()),
+            setOf(thresholdKey("face"), thresholdKey("speaker"), PREFIX + personId)
+        ).isSuccess) { "Atomic biometric withdrawal failed; stored data was not partially updated" }
     }
 
     @Synchronized fun clear(): Boolean = runCatching {
