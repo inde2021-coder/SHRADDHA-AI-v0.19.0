@@ -661,8 +661,8 @@ class MainActivity : AppCompatActivity() {
                         getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).edit().putBoolean(key, checked).apply()
                         if (!checked) {
                             when (key) {
-                                "screen" -> stopService(Intent(this@MainActivity, ScreenShareService::class.java))
-                                "camera" -> stopService(Intent(this@MainActivity, RemoteCameraService::class.java))
+                                "screen" -> { stopService(Intent(this@MainActivity, ScreenShareService::class.java)); lastScreenJpeg = null }
+                                "camera" -> { stopService(Intent(this@MainActivity, RemoteCameraService::class.java)); lastCameraJpeg = null }
                             }
                         }
                         publishDataPermissions()
@@ -841,7 +841,7 @@ class MainActivity : AppCompatActivity() {
             }
             addView(mainOnlyMode)
             addView(actionButton("Share This Phone Screen", "Android system confirmation हर बार जरूरी है") { requestScreenShare() })
-            addView(actionButton("Stop Screen Sharing", "Live screen stream तुरंत बंद करें") { stopService(Intent(this@MainActivity, ScreenShareService::class.java)); status.text = "Screen sharing stopped on this phone." })
+            addView(actionButton("Stop Screen Sharing", "Live screen stream तुरंत बंद करें") { stopService(Intent(this@MainActivity, ScreenShareService::class.java)); lastScreenJpeg = null; status.text = "Screen sharing stopped on this phone." })
         }
 
         section(root, "03  •  REMOTE APP CONTROL", "चुने हुए paired phone पर अनुमत gestures और data entry") {
@@ -871,7 +871,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "04  •  VISUAL LENS – LIVE SCREEN & REMOTE CAMERA", "स्क्रीन और कैमरा अलग-अलग, स्पष्ट अनुमति से साझा करें") {
             addView(actionButton("Start Rear Camera Share", "Selected paired device को camera दिखाएँ") { startCameraShare("back") })
             addView(actionButton("Start Front Camera Share", "Selected paired device को selfie camera दिखाएँ") { startCameraShare("front") })
-            addView(actionButton("Stop This Phone Camera Share", "Remote camera stream तुरंत बंद करें") { stopService(Intent(this@MainActivity, RemoteCameraService::class.java)); status.text = "Camera sharing stopped." })
+            addView(actionButton("Stop This Phone Camera Share", "Remote camera stream तुरंत बंद करें") { stopService(Intent(this@MainActivity, RemoteCameraService::class.java)); lastCameraJpeg = null; status.text = "Camera sharing stopped." })
             cameraPreview = ImageView(this@MainActivity).apply { setBackgroundColor(0xFF101827.toInt()); scaleType = ImageView.ScaleType.FIT_CENTER; adjustViewBounds = true; contentDescription = "Remote camera preview" }
             cameraPreview.layoutParams = LinearLayout.LayoutParams(-1, dp(210))
             addView(TextView(this@MainActivity).apply { text = "REMOTE CAMERA PREVIEW"; setTextColor(0xFFB9C3D6.toInt()); textSize = 12f; setPadding(0, dp(8), 0, dp(5)) })
