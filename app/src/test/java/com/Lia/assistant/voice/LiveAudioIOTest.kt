@@ -7,10 +7,26 @@ import org.junit.Test
 class LiveAudioIOTest {
 
     @Test
+    fun testRmsEmptyAndOddLengthBuffers() {
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf()), 0f)
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf(1)), 0f)
+    }
+
+    @Test
     fun testRmsSilence() {
         val silence = ByteArray(2048) { 0 }
         val rms = LiveAudioIO.calculateRms(silence)
         assertEquals(0f, rms, 0.0001f)
+    }
+
+    @Test
+    fun testRmsNegativeFullScale() {
+        val negativeFullScale = ByteArray(2048)
+        for (i in 0 until 1024) {
+            negativeFullScale[i * 2] = 0x00
+            negativeFullScale[i * 2 + 1] = 0x80.toByte()
+        }
+        assertEquals(1f, LiveAudioIO.calculateRms(negativeFullScale), 0.0001f)
     }
 
     @Test
