@@ -93,19 +93,6 @@ class MainActivity : AppCompatActivity() {
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        val startupPermissions = mutableListOf(
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.SEND_SMS
-        )
-        if (Build.VERSION.SDK_INT >= 33) startupPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        val missingStartupPermissions = startupPermissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missingStartupPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missingStartupPermissions.toTypedArray(), 11)
-        }
-
         pageRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(30))
