@@ -449,15 +449,22 @@ class BiometricCaptureActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, randomPhraseLocale)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             putExtra(RecognizerIntent.EXTRA_PROMPT, randomPhrase)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
         }
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
+                mainHandler.removeCallbacks(speechTimeout)
                 runCatching { speechRecognizer?.destroy() }
                 speechRecognizer = null
                 val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                 if (BiometricVoiceChallenge.matches(randomPhrase, heard)) recordSpeaker() else finishWith("Voice challenge phrase did not match. No biometric sample was saved.")
             }
-            override fun onError(error: Int) { finishWith("On-device speech challenge failed ($error); no voiceprint saved.") }
+            override fun onError(error: Int) {
+                mainHandler.removeCallbacks(speechTimeout)
+                runCatching { speechRecognizer?.destroy() }
+                speechRecognizer = null
+                finishWith("On-device speech challenge failed ($error); no voiceprint saved.")
+            }
             override fun onReadyForSpeech(params: Bundle?) { runOnUiThread { message.text = "अब स्क्रीन पर दिया गया random phrase बोलें…" } }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
