@@ -297,7 +297,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                         finishWith("Face template encrypted and saved for $name. SFace inference ${engine.lastFaceInferenceMs} ms • model load ${engine.faceModelLoadMs} ms • original camera frame discarded.")
                     } else {
                         val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
-                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold • SFace inference ${engine.lastFaceInferenceMs} ms.")
+                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f / threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown person. No face template passed threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms.".format(threshold))
                     }
                 } catch (error: Exception) {
                     file.delete()
@@ -515,7 +515,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
                     val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
-                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.")
+                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f / threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown speaker. No voiceprint passed threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.".format(threshold))
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
             finally {
