@@ -46,7 +46,7 @@ Voice operator tools: screen पढ़ना, unique label पर tap, safe fiel
 `desktop-companion/shraddha-pc-companion/README.md` देखें। यह Windows Credential Manager में pairing credentials रखता है, remote control के लिए PC पर explicit approval माँगता है, और text paste default में disabled रखता है।
 
 ## Communication safety
-Voice-authorized call के लिए Contacts/Phone permissions आवश्यक हैं। SMS या WhatsApp भेजने से पहले श्रद्धा resolved phone number और पूरा message preview देती है। उपयोगकर्ता की स्पष्ट अनुमति के बाद ही वही exact number और exact message दोबारा भेजने पर स्वीकार होता है; recipient या message बदलने पर नई पुष्टि आवश्यक है। SMS permission और WhatsApp Accessibility verification भी आवश्यक हैं। WhatsApp chat reading/search और social-media publishing अभी उपलब्ध नहीं हैं।
+Voice-authorized call के लिए Contacts/Phone permissions आवश्यक हैं। SMS या WhatsApp भेजने से पहले श्रद्धा resolved phone number और पूरा message preview देती है। उपयोगकर्ता की स्पष्ट अनुमति के बाद ही वही exact number और exact message दोबारा भेजने पर स्वीकार होता है; recipient या message बदलने पर नई पुष्टि आवश्यक है। SMS permission और WhatsApp Accessibility verification भी आवश्यक हैं। WhatsApp chat reading/search उपलब्ध नहीं है। Social publishing में Telegram, Mastodon, Bluesky और LinkedIn पर केवल text post supported है; पहले exact platform और पूरा text preview दिखाकर आपकी स्पष्ट अनुमति जरूरी है। Media uploads, Reels, Stories, Instagram, Facebook, YouTube और X अभी connected नहीं हैं।
 
 ## Required device permissions
 Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable “Shraddha AI — Device Control” manually in Android Settings for voice-driven app control. The optional “Advanced App Operator” service is currently used only for WhatsApp send verification. Android secure screens, OTP/PIN/password fields and apps that block Accessibility remain unavailable. PC control needs a paired MYRA desktop companion.
@@ -66,3 +66,15 @@ Device Control → Remote App Control में Task Handoff title, description 
 - मॉडल की license/attribution सूचना APK में शामिल है। इस कारण APK का आकार लगभग 123 MB model weights से बढ़ेगा।
 - Blink/head-turn challenge को मजबूत किया गया है, लेकिन यह अभी certified anti-spoofing नहीं है। Certified PAD के लिए licensed SDK और ISO/IEC 30107-3 independent test evidence आवश्यक है।
 - GitHub CI और source code अकेले वास्तविक फोन की accuracy या certification साबित नहीं करते; target phones पर FAR/FRR और spoof परीक्षण बाकी रहेंगे।
+
+
+## Firebase Storage और Push Notifications
+- Firebase Firestore पर छोटे encrypted recovery bundles (100 KB plaintext तक) और Firebase Storage पर बड़े encrypted recovery files (1.4 MB plaintext तक) upload/download किए जा सकते हैं।
+- Recovery में person/child records, encrypted app-training profiles, workflow checkpoints, task inbox, active project, digital twin, knowledge graph और private memory शामिल होते हैं। Face/voice biometric templates, API keys, OTPs, payment details और pairing credentials शामिल नहीं होते।
+- Restore से पहले overwrite preview आता है; selected encrypted record families को atomic तरीके से replace किया जाता है और अन्य preferences में failure होने पर rollback का प्रयास होता है।
+- Firebase Cloud Messaging default में बंद है। User opt-in के बाद ही device token generate/register होता है। Token encrypted local storage और owner-only Firestore device record में रहता है; revoke button token और device record हटाता है।
+- FCM receiver केवल generic, non-sensitive notifications दिखाता है। Outbound push delivery के लिए Firebase Console या अलग सुरक्षित trusted server चाहिए।
+- Setup के लिए `firebase/README.md`, `firestore.rules` और `storage.rules` देखें। Firebase credentials, Storage bucket, App Check और owner-only rules configure किए बिना cloud features काम नहीं करेंगे।
+
+## App-training profile encryption
+पुराने plaintext app-training profiles को पहली बार उपयोग या backup पर Android Keystore-backed encrypted feature store में migrate किया जाता है। Recovery bundle में trained app profiles और workflow recipes encrypted रूप में शामिल होते हैं।
