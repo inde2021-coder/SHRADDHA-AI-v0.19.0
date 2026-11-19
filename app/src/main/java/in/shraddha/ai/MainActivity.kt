@@ -1766,8 +1766,14 @@ class MainActivity : AppCompatActivity() {
                 profileSpinner.post { updateBiometricStatus() }
             }
             profileSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) = updateBiometricStatus()
-                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) { profileStatus.text = "Select a consented person profile." }
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                    consent.isChecked = false
+                    updateBiometricStatus()
+                }
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {
+                    consent.isChecked = false
+                    profileStatus.text = "Select a consented person profile."
+                }
             }
             refreshProfiles()
             refreshProfileList = { refreshProfiles() }
