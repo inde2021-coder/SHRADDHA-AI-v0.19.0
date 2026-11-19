@@ -21,7 +21,7 @@ object DeviceRecoveryBundle {
         "person_directory", "kids_profile", "kids_care_log", "task_inbox",
         "workflow_checkpoint", "active_project", "digital_twin"
     )
-    private const val MAX_BUNDLE_CHARS = 100_000
+    private const val MAX_BUNDLE_CHARS = 1_400_000
 
     data class Preview(
         val version: Int,
@@ -42,7 +42,8 @@ object DeviceRecoveryBundle {
         val knowledgeGraph: String
     )
 
-    fun capture(context: Context): Result<String> = runCatching {
+    fun capture(context: Context, maxCharacters: Int = 100_000): Result<String> = runCatching {
+        require(maxCharacters in 100_000..MAX_BUNDLE_CHARS) { "Recovery bundle size limit is invalid" }
         val app = context.applicationContext
         val store = EncryptedFeatureStore(app)
         val records = store.getAllWithPrefixes(prefixes).getOrThrow()
@@ -66,7 +67,7 @@ object DeviceRecoveryBundle {
             .put("memory", memory)
             .put("preferences", JSONObject().put("activeProject", project).put("digitalTwin", twin).put("knowledgeGraph", graph))
             .toString()
-        require(bundle.length <= MAX_BUNDLE_CHARS) {
+        require(bundle.length <= maxCharacters) {
             "Selected recovery bundle exceeds the 100 KB Firestore limit; remove older records first."
         }
         bundle
