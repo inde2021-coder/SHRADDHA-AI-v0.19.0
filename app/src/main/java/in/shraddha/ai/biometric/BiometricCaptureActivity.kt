@@ -63,7 +63,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private lateinit var message: TextView
     private lateinit var action: Button
     private lateinit var cameraExecutor: ExecutorService
-    private val livenessGate = BiometricLivenessGate()
+    private var livenessGate = BiometricLivenessGate()
     private val livenessPassed = AtomicBoolean(false)
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
@@ -97,8 +97,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val kind = intent.getStringExtra(EXTRA_KIND) ?: "face"
         val mode = intent.getStringExtra(EXTRA_MODE) ?: "enroll"
         val id = intent.getStringExtra(EXTRA_PERSON_ID).orEmpty()
-        val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()        val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)        val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
+        val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()        val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)        val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
@@ -154,6 +153,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun startCamera() {
         val view = previewView ?: return
+        // Start the 45-second challenge window only after the user actually starts the camera.
+        livenessGate = BiometricLivenessGate()
+        livenessPassed.set(false)
         val options = FaceDetectorOptions.Builder().setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL).setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
             .setMinFaceSize(0.15f).build()
@@ -197,8 +199,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             .addOnCompleteListener { proxy.close() }
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) { finishWith("Permission denied; biometric capture cancelled."); return }
-        if (requestCode == CAMERA_PERMISSION) startCamera()
+        if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) { finishWith("Permission denied; biometric capture cancelled."); return }        if (requestCode == CAMERA_PERMISSION) startCamera()
         if (requestCode == AUDIO_PERMISSION) startSpeakerChallenge()
     }
 
@@ -297,8 +298,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val row = doubleArrayOf(x, y, 1.0)            for (r in 0..2) {
                 for (c in 0..2) normal[r][c] += row[r] * row[c]                rhsX[r] += row[r] * target[i * 2]
                 rhsY[r] += row[r] * target[i * 2 + 1]
-            }
-        }
+            }        }
         fun solve(rhs: DoubleArray): DoubleArray {
             val a = Array(3) { r -> DoubleArray(4) { c -> if (c == 3) rhs[r] else normal[r][c] } }
             for (pivot in 0..2) {
@@ -397,8 +397,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)                    val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
                     finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
                 }
-            } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
-            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() } }
+            } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() } }
         }, "SpeakerCapture").start()
     }
 
