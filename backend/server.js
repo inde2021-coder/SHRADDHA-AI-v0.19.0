@@ -475,7 +475,7 @@ wss.on('connection', (ws, ctx) => {
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
       if (!target || targetIdIsSelf(targetId, deviceId) || expiresAt < Date.now()) return;
       if (session.controlMode === 'master' && device.role !== 'owner') return;
-      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll', 'ocr', 'file_list', 'file_read', 'offline_chat'].includes(msg.action.kind)) return;
+      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll', 'ocr', 'file_list', 'file_read', 'file_search', 'offline_chat'].includes(msg.action.kind)) return;
       send(targetId, JSON.stringify({ type: 'remote_action', fromDeviceId: deviceId, action: msg.action }));
     } else if (msg.type === 'remote_action_result') {
       const requesterId = String(msg.targetDeviceId || '');
