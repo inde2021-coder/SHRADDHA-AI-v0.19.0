@@ -36,6 +36,8 @@ import org.json.JSONObject
 import org.json.JSONArray
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.biometric.LocalBiometricModelEngine
+import `in`.shraddha.ai.biometric.BiometricConsentVault
+import `in`.shraddha.ai.biometric.BiometricCaptureActivity
 import com.Lia.assistant.data.VoiceGatewaySettings
 
 class MainActivity : AppCompatActivity() {
@@ -79,6 +81,8 @@ class MainActivity : AppCompatActivity() {
     private val offlineModelImportRequest = 47
     private val faceBiometricModelRequest = 48
     private val speakerBiometricModelRequest = 49
+    private val faceCaptureRequest = 52
+    private val speakerCaptureRequest = 53
     private val biometricEngine by lazy { LocalBiometricModelEngine() }
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
@@ -125,6 +129,7 @@ class MainActivity : AppCompatActivity() {
             background = rounded(0xFF111B2D.toInt(), 16)
         }
         showHome()
+        restoreBiometricModels()
         installLinkCallbacks()
     }
 
@@ -1664,53 +1669,108 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun restoreBiometricModels() {
+        Thread({
+            val dir = java.io.File(filesDir, "biometric-models")
+            val face = java.io.File(dir, "sface.onnx")
+            val speaker = java.io.File(dir, "ecapa-any-length.onnx")
+            if (face.isFile) runCatching { biometricEngine.loadFaceModel(face.absolutePath) }
+            if (speaker.isFile) runCatching { biometricEngine.loadSpeakerModel(speaker.absolutePath) }
+        }, "BiometricModelRestore").start()
+    }
+
     private fun addPersonMemory(root: LinearLayout) {
         val store = EncryptedFeatureStore(this)
+        val biometricVault = BiometricConsentVault(store)
         val personName = edit("Person name", "Example: Rahul")
         val relation = edit("Relationship / introduction", "Friend, family, colleague…")
         val notes = edit("Optional notes", "Only information you are allowed to store")
         val consent = Switch(this).apply { text = "इस व्यक्ति की स्पष्ट सहमति प्राप्त है"; setTextColor(-1); textSize = 13f; setPadding(0, dp(8), 0, dp(10)) }
+        fun readPeople(): JSONArray {
+            val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("[]")) }.getOrElse { JSONArray() }
+            var changed = false
+            for (i in 0 until arr.length()) {
+                val person = arr.optJSONObject(i) ?: continue
+                if (person.optString("id").isBlank()) { person.put("id", java.util.UUID.randomUUID().toString().replace("-", "")); changed = true }
+            }
+            if (changed) store.put("person_directory", arr.toString())
+            return arr
+        }
+        fun people(): List<JSONObject> {
+            val arr = readPeople()
+            return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.filter { it.optBoolean("consent", false) }
+        }
         section(root, "PERSON DIRECTORY", "परिचित व्यक्तियों के consent-based profiles • encrypted, local-only") {
             addView(personName); addView(relation); addView(notes); addView(consent)
-            addView(actionButton("Save Person Profile", "सहमति के बिना सेव नहीं होगा") {
+            addView(actionButton("Save Person Profile", "व्यक्ति की स्पष्ट अनुमति के बाद profile सुरक्षित करें") {
                 val name = personName.text.toString().trim()
                 if (name.isBlank() || !consent.isChecked) { status.text = "नाम और व्यक्ति की स्पष्ट सहमति आवश्यक है।"; return@actionButton }
-                val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
-                arr.put(JSONObject().put("name", name.take(80)).put("relation", relation.text.toString().take(100)).put("notes", notes.text.toString().take(500)).put("consent", true).put("createdAt", System.currentTimeMillis()))
+                val arr = readPeople()
+                val id = java.util.UUID.randomUUID().toString().replace("-", "")
+                arr.put(JSONObject().put("id", id).put("name", name.take(80)).put("relation", relation.text.toString().take(100)).put("notes", notes.text.toString().take(500)).put("consent", true).put("consentAt", System.currentTimeMillis()).put("createdAt", System.currentTimeMillis()))
                 store.put("person_directory", arr.toString()).onSuccess { status.text = "Person profile सुरक्षित रूप से सेव हुआ।"; personName.text.clear(); relation.text.clear(); notes.text.clear(); consent.isChecked = false }.onFailure { status.text = "Save error: ${it.message}" }
             })
-            addView(actionButton("View Saved People", "परिचय और प्रोफाइल देखें") {
-                val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
-                val rows = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { "${it.optString("name")} — ${it.optString("relation")}\n${it.optString("notes")}" } }
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Person Memory").setMessage(if (rows.isEmpty()) "कोई प्रोफाइल सेव नहीं है।" else rows.joinToString("\n\n")).setPositiveButton("OK", null).setNeutralButton("Delete all") { _, _ -> store.remove("person_directory"); status.text = "Person directory हटाई गई।" }.show()
+            addView(actionButton("View Saved People", "परिचय और profiles देखें") {
+                val rows = people().map { "${it.optString("name")} — ${it.optString("relation")}\n${it.optString("notes")}" }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Person Memory").setMessage(if (rows.isEmpty()) "कोई consented profile सेव नहीं है।" else rows.joinToString("\n\n")).setPositiveButton("OK", null).show()
             })
-            addView(actionButton("Withdraw Consent / Delete One Person", "उस व्यक्ति की profile और stored notes हटाएँ") {
-                val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
-                val names = (0 until arr.length()).map { i -> arr.optJSONObject(i)?.optString("name", "Unknown") ?: "Unknown" }
-                if (names.isEmpty()) { status.text = "कोई person profile सेव नहीं है।"; return@actionButton }
-                android.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("किस व्यक्ति की consent वापस लेनी है?")
-                    .setItems(names.toTypedArray()) { _, index ->
-                        android.app.AlertDialog.Builder(this@MainActivity)
-                            .setTitle("Delete ${names[index]} profile?")
-                            .setMessage("यह नाम, relationship और notes इस device से हटाएगा। Cloud backup में पुरानी encrypted copy हो सकती है; उसे अलग से replace/delete करना होगा।")
-                            .setNegativeButton("Cancel", null)
-                            .setPositiveButton("Withdraw & Delete") { _, _ ->
-                                val updated = JSONArray()
-                                for (i in 0 until arr.length()) if (i != index) updated.put(arr.opt(i))
-                                store.put("person_directory", updated.toString())
-                                    .onSuccess { status.text = "Consent withdrawn; profile deleted from this device." }
-                                    .onFailure { status.text = "Delete failed: ${it.message}" }
-                            }.show()
-                    }.show()
+            addView(actionButton("Withdraw Consent / Delete One Person", "उस व्यक्ति के notes, face और voice templates हटाएँ") {
+                val list = people()
+                if (list.isEmpty()) { status.text = "कोई consented profile सेव नहीं है।"; return@actionButton }
+                val names = list.map { it.optString("name") }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("किस व्यक्ति की consent वापस लेनी है?").setItems(names.toTypedArray()) { _, index ->
+                    val selected = list[index]
+                    android.app.AlertDialog.Builder(this@MainActivity).setTitle("Withdraw ${names[index]}?").setMessage("Local profile और सभी biometric templates मिटेंगे। पहले से बने encrypted cloud backups में पुरानी copy अलग से रह सकती है।")
+                        .setNegativeButton("Cancel", null).setPositiveButton("Withdraw & Delete") { _, _ ->
+                            val deleted = biometricVault.withdraw(selected.optString("id"))
+                            val updated = JSONArray()
+                            val all = readPeople()
+                            for (i in 0 until all.length()) { val p = all.optJSONObject(i) ?: continue; if (p.optString("id") != selected.optString("id")) updated.put(p) }
+                            if (deleted.isSuccess) store.put("person_directory", updated.toString()).onSuccess { status.text = "Consent withdrawn; local profile and face/voice templates deleted." }.onFailure { status.text = "Profile delete failed: ${it.message}" }
+                            else status.text = "Biometric delete failed: ${deleted.exceptionOrNull()?.message}"
+                        }.show()
+                }.show()
             })
         }
-        section(root, "FACE & SPEAKER RECOGNITION", "Local ONNX models • biometric consent • encrypted templates") {
+        section(root, "FACE & SPEAKER RECOGNITION", "On-device SFace + ECAPA • randomized live challenge • encrypted local templates") {
             addView(TextView(this@MainActivity).apply {
-                text = "Face: OpenCV SFace • Speaker: SpeechBrain ECAPA-TDNN. दोनों मॉडल इस फोन पर ONNX Runtime से चलते हैं। पहले compatible model file import करें। अभी camera face alignment और microphone enrollment UI बाकी है; इसलिए केवल model load होने को पहचान की सफलता न समझें।"
+                text = "पहले दोनों compatible ONNX models import करें। हर enrollment से पहले व्यक्ति की स्पष्ट सहमति switch ON करनी होगी। Camera में blink + head-turn challenge और speaker के लिए on-device random phrase challenge चलेगा। Match केवल manually calibrated threshold पर होगा; Unknown default है।"
                 setTextColor(0xFFB9C8E4.toInt()); textSize = 12f
             })
-            addView(actionButton("IMPORT FACE MODEL • SFace ONNX", "sface.onnx • aligned 112×112 RGB face → 128D embedding") {
+            val profileSpinner = Spinner(this@MainActivity)
+            fun refreshProfiles() {
+                val labels = people().map { it.optString("name") + " • " + it.optString("relation") }
+                profileSpinner.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, if (labels.isEmpty()) listOf("No consented people") else labels)
+            }
+            refreshProfiles()
+            addView(TextView(this@MainActivity).apply { text = "CONSENTED PERSON"; setTextColor(0xFFB9C8E4.toInt()) })
+            addView(profileSpinner)
+            val faceThreshold = edit("Face cosine threshold (calibrated 0–1)", "")
+            faceThreshold.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            val speakerThreshold = edit("Speaker cosine threshold (calibrated 0–1)", "")
+            speakerThreshold.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            addView(faceThreshold); addView(speakerThreshold)
+            fun launchCapture(kind: String, mode: String) {
+                val selected = people().getOrNull(profileSpinner.selectedItemPosition)
+                if (selected == null) { status.text = "पहले consent वाला Person Profile बनाएँ।"; return }
+                if (!consent.isChecked) { status.text = "Capture से पहले व्यक्ति की स्पष्ट consent दोबारा confirm करें।"; return }
+                val thresholdText = if (kind == "face") faceThreshold.text.toString().trim() else speakerThreshold.text.toString().trim()
+                val threshold = if (mode == "match") thresholdText.toFloatOrNull() else Float.NaN
+                if (mode == "match" && (threshold == null || threshold !in 0f..1f)) { status.text = "Match के लिए पहले locally calibrated threshold 0 से 1 के बीच भरें।"; return }
+                val request = Intent(this@MainActivity, BiometricCaptureActivity::class.java)
+                    .putExtra(BiometricCaptureActivity.EXTRA_KIND, kind)
+                    .putExtra(BiometricCaptureActivity.EXTRA_MODE, mode)
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, selected.optString("id"))
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, selected.optString("name"))
+                    .putExtra(BiometricCaptureActivity.EXTRA_CONSENT, true)
+                    .putExtra(BiometricCaptureActivity.EXTRA_THRESHOLD, threshold ?: Float.NaN)
+                startActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
+            }
+            addView(actionButton("ENROLL FACE • LIVE CAMERA", "Random blink + head-turn liveness check; camera runs only on this screen") { launchCapture("face", "enroll") })
+            addView(actionButton("MATCH FACE • LIVE CAMERA", "Compare with consented templates; no threshold means no match") { launchCapture("face", "match") })
+            addView(actionButton("ENROLL SPEAKER • LIVE MICROPHONE", "On-device random phrase check then 5-second voice sample") { launchCapture("speaker", "enroll") })
+            addView(actionButton("MATCH SPEAKER • LIVE MICROPHONE", "On-device random phrase check then compare with consented voiceprints") { launchCapture("speaker", "match") })
+            addView(actionButton("IMPORT FACE MODEL • SFace ONNX", "sface.onnx • 112×112 aligned RGB → face embedding") {
                 val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
                 startActivityForResult(pick, faceBiometricModelRequest)
             })
@@ -1718,12 +1778,19 @@ class MainActivity : AppCompatActivity() {
                 val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
                 startActivityForResult(pick, speakerBiometricModelRequest)
             })
-            addView(actionButton("Delete Person Memory", "सभी स्थानीय person profiles हटाएँ") {
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete person memory?").setMessage("सभी स्थानीय person profiles हटेंगे।").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> store.remove("person_directory"); status.text = "Person memory हटाई गई।" }.show()
+            addView(actionButton("DELETE ALL BIOMETRIC TEMPLATES", "स्थानीय face और speaker templates मिटाएँ") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete all biometric templates?").setMessage("यह सभी enrolled face और voice templates मिटाएगा।")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                        val ok = biometricVault.clear()
+                        status.text = if (ok) "All local biometric templates deleted." else "Some biometric records could not be deleted."
+                    }.show()
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Threshold calibration: collect multiple genuine samples and multiple consenting non-matching test samples in the same lighting/mic environment. Choose a threshold that rejects all test impostors; if you cannot validate it, do not use Match. This is not certified anti-spoofing or authentication. Never use results to unlock devices, approve payments, or authorize sensitive actions."
+                setTextColor(0xFFFFD7A8.toInt()); textSize = 11f
             })
         }
     }
-
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
         val card = MaterialCardView(this).apply {
             radius = dp(22).toFloat(); cardElevation = dp(3).toFloat()
