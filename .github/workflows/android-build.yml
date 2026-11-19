@@ -31,6 +31,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Check backend JavaScript syntax
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate backend source
+        run: node --check backend/server.js
+
+      - name: Check patch whitespace
+        run: git diff --check
+
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
