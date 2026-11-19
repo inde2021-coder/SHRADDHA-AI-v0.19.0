@@ -537,7 +537,10 @@ object ActionExecutor {
 
     private suspend fun publishSocialPost(baseUrl: String, gatewayToken: String, platform: String, exactText: String): Result<String> =
         suspendCancellableCoroutine { continuation ->
-            DeviceLinkManager.publishSocialPost(baseUrl, gatewayToken, platform, exactText) { response ->
+            DeviceLinkManager.publishSocialPost(
+                baseUrl, gatewayToken, platform, exactText,
+                userConfirmed = true, confirmedPlatform = platform, confirmedText = exactText
+            ) { response ->
                 if (continuation.isActive) continuation.resume(response)
             }
         }
