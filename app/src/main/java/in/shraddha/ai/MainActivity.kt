@@ -1814,6 +1814,7 @@ class MainActivity : AppCompatActivity() {
                     .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
                         val ok = biometricVault.clear()
                         status.text = if (ok) "All local biometric templates deleted." else "Some biometric records could not be deleted."
+                        updateBiometricStatus()
                     }.show()
             })
             addView(TextView(this@MainActivity).apply {
