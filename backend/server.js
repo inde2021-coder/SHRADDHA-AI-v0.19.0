@@ -431,6 +431,34 @@ wss.on('connection', (ws, ctx) => {
       if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() || payload.length > 900_000 || !payload) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category, fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100), payload }));
+    } else if (msg.type === 'task_handoff') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const raw = msg.task && typeof msg.task === 'object' && !Array.isArray(msg.task) ? msg.task : {};
+      const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 120) : '';
+      const description = typeof raw.description === 'string' ? raw.description.trim().slice(0, 3000) : '';
+      const steps = Array.isArray(raw.steps) ? raw.steps.filter(x => typeof x === 'string').slice(0, 12).map(x => x.trim().slice(0, 300)).filter(Boolean) : [];
+      if (!target || targetId === deviceId || !title || !description || (session.controlMode === 'master' && device.role !== 'owner')) return;
+      send(targetId, JSON.stringify({
+        type: 'task_handoff',
+        fromDeviceId: deviceId,
+        fromDeviceName: device.name,
+        task: { id: randomBytes(12).toString('hex'), title, description, steps },
+        expiresAt: Date.now() + 15 * 60_000
+      }));
+    } else if (msg.type === 'task_handoff_response') {
+      const requesterId = String(msg.targetDeviceId || '');
+      const requester = session.devices.get(requesterId);
+      const taskId = String(msg.taskId || '').slice(0, 48);
+      if (!requester || requesterId === deviceId || !taskId) return;
+      send(requesterId, JSON.stringify({
+        type: 'task_handoff_response',
+        fromDeviceId: deviceId,
+        fromDeviceName: device.name,
+        taskId,
+        accepted: msg.accepted === true,
+        note: String(msg.note || '').slice(0, 300)
+      }));
     } else if (msg.type === 'signal' || msg.type === 'chat' || msg.type === 'control_consent') {
       if (msg.type === 'signal') { if (typeof msg.targetDeviceId !== 'string' || !session.devices.has(msg.targetDeviceId)) return; send(msg.targetDeviceId, JSON.stringify({ ...msg, fromDeviceId: deviceId })); }
       else for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ ...msg, fromDeviceId: deviceId }));
