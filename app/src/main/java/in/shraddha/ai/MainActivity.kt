@@ -209,7 +209,7 @@ class MainActivity : AppCompatActivity() {
         }
         section(pageRoot, "SYSTEM STATUS", "यहाँ केवल app द्वारा ज्ञात वास्तविक स्थिति दिखाई जाएगी") {
             addView(TextView(this@MainActivity).apply {
-                text = "ON-DEVICE CORE  •  READY\\nCLOUD SYNC  •  CONFIGURATION REQUIRED\\nPC COMPANION  •  PAIRING REQUIRED"
+                text = "ON-DEVICE CORE  •  READY\nCLOUD SYNC  •  CONFIGURATION REQUIRED\nPC COMPANION  •  PAIRING REQUIRED"
                 textSize = 11f; setLineSpacing(dp(5).toFloat(), 1f); setTextColor(0xFFB8C6DF.toInt())
                 background = rounded(0xFF0B1422.toInt(), 16); setPadding(dp(14), dp(14), dp(14), dp(14))
             })
@@ -1599,44 +1599,98 @@ object VoiceCommandParser {
 }
 
 
-/** Animated decorative agent orb. It does not imply that the microphone is active. */
+/** Animated 3D-style energy orb. Its animation is decorative; microphone state is reported separately. */
 private class ShraddhaOrbView(context: android.content.Context) : View(context) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 3600L
+        duration = 7200L
         repeatCount = ValueAnimator.INFINITE
-        addUpdateListener { phase = it.animatedValue as Float; invalidate() }
+        addUpdateListener {
+            phase = it.animatedValue as Float
+            invalidate()
+        }
     }
+
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        animator.start()
-        contentDescription = "Shraddha AI animated orb. Tap to start voice input."
+        contentDescription = "Shraddha AI animated energy orb. Microphone state is shown by the voice controls."
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (!animator.isStarted) animator.start()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val cx = width / 2f; val cy = height / 2f
-        val base = minOf(width, height) * .34f
-        val pulse = 1f + .045f * kotlin.math.sin(phase * Math.PI * 2).toFloat()
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = base * .035f
-        paint.color = 0x665B8CFF
-        canvas.drawCircle(cx, cy, base * (1.28f + .035f * pulse), paint)
-        paint.strokeWidth = base * .018f
-        paint.color = 0x668B5CF6
-        canvas.drawCircle(cx, cy, base * 1.42f, paint)
+        val cx = width / 2f
+        val cy = height / 2f
+        val base = minOf(width, height) * .285f
+        if (base <= 0f) return
+        val wave = (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
+        val pulse = 1f + .035f * wave
+        val rotation = phase * 360f
+
+        // Soft atmospheric halo behind the core.
         paint.style = Paint.Style.FILL
-        val radius = base * pulse
-        paint.shader = RadialGradient(cx - radius * .28f, cy - radius * .32f, radius * 1.35f,
-            intArrayOf(0xFFE8E4FF.toInt(), 0xFF9B83FF.toInt(), 0xFF4C52B8.toInt(), 0xFF111A3B.toInt()),
-            floatArrayOf(0f, .28f, .68f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, cy, radius, paint)
+        paint.shader = RadialGradient(
+            cx, cy, base * 2.05f,
+            intArrayOf(0x443D7BFF, 0x222B4DCE, 0x003D7BFF),
+            floatArrayOf(0f, .52f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, base * 2.05f, paint)
         paint.shader = null
-        paint.color = 0x66FFFFFF.toInt()
-        canvas.drawCircle(cx - radius * .28f, cy - radius * .32f, radius * .18f, paint)
-        paint.color = 0x3387E7FF
-        canvas.drawCircle(cx + radius * .34f, cy + radius * .25f, radius * .22f, paint)
+
+        // Three tilted orbital rings create a layered, dimensional silhouette.
+        val ringColors = intArrayOf(0xAA74E6FF.toInt(), 0x997D76FF.toInt(), 0x8878B7FF.toInt())
+        for (i in 0..2) {
+            canvas.save()
+            canvas.rotate(rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f, cx, cy)
+            canvas.scale(1f, if (i == 1) .34f else .48f, cx, cy)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = base * (if (i == 0) .027f else .016f)
+            paint.color = ringColors[i]
+            canvas.drawCircle(cx, cy, base * (1.28f + i * .12f), paint)
+            paint.style = Paint.Style.FILL
+            val dotAngle = Math.toRadians((rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f).toDouble())
+            val orbit = base * (1.28f + i * .12f)
+            val dx = cx + kotlin.math.cos(dotAngle).toFloat() * orbit
+            val dy = cy + kotlin.math.sin(dotAngle).toFloat() * orbit
+            paint.color = if (i == 0) 0xFFE8FCFF.toInt() else 0xFFD8C8FF.toInt()
+            canvas.drawCircle(dx, dy, base * .055f, paint)
+            canvas.restore()
+        }
+
+        // Core depth: dark outer shell, luminous radial volume, then specular highlights.
+        paint.style = Paint.Style.FILL
+        paint.shader = RadialGradient(
+            cx - base * .30f, cy - base * .36f, base * 1.48f,
+            intArrayOf(0xFFFFFFFF.toInt(), 0xFFDAD4FF.toInt(), 0xFF8F79FF.toInt(), 0xFF414DB5.toInt(), 0xFF111A3B.toInt()),
+            floatArrayOf(0f, .16f, .42f, .76f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, base * pulse, paint)
+        paint.shader = null
+
+        paint.color = 0x99FFFFFF.toInt()
+        canvas.drawCircle(cx - base * .31f, cy - base * .36f, base * .16f, paint)
+        paint.color = 0x44B7F4FF
+        canvas.drawCircle(cx + base * .34f, cy + base * .28f, base * .24f, paint)
+
+        // Small orbiting energy points add motion without implying a live camera feed.
+        for (i in 0 until 12) {
+            val angle = phase * Math.PI * 2.0 + i * (Math.PI * 2.0 / 12.0)
+            val orbit = base * (1.58f + .08f * kotlin.math.sin(angle * 2.0).toFloat())
+            val x = cx + kotlin.math.cos(angle).toFloat() * orbit
+            val y = cy + kotlin.math.sin(angle).toFloat() * orbit * .72f
+            paint.color = if (i % 3 == 0) 0xFFD9FBFF.toInt() else 0x997F9DFF.toInt()
+            canvas.drawCircle(x, y, base * (if (i % 3 == 0) .026f else .014f), paint)
+        }
     }
+
     override fun onDetachedFromWindow() {
         animator.cancel()
         super.onDetachedFromWindow()
