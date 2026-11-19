@@ -28,6 +28,7 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
+        if (EncryptedFeatureStore(applicationContext).get("firebase_fcm_consent").getOrNull() != "true") return
         val type = message.data["type"].orEmpty()
         val safeMessage = when (type) {
             "device_paired" -> "A device was paired with your Shraddha account."
