@@ -39,3 +39,25 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 3. Install the debug APK on a real Android 13+ device and verify permissions, foreground notification, voice start/stop, process-death behavior, accessibility setup and camera/screen-share consent.
 4. Test every backend route with valid and invalid credentials, offline network, provider timeout and malformed responses.
 5. Test UI on small and large screens, including font scaling and Android Back navigation.
+
+
+## Follow-up operator hardening (2026-11-19)
+- Voice screen tools now route through the primary `Shraddha AI — Device Control` Accessibility service used by the Universal App Operator, rather than requiring the separate optional LIA compatibility service.
+- Added directional swipe commands (up/down/left/right) alongside screen reading, unique-label taps, safe text entry, scroll, Back and Home.
+- Screen snapshots redact password, OTP, PIN, CVV, verification-code and UPI-labelled fields before their values can reach the voice tool response.
+- Focused and resource-ID text entry reject sensitive fields. Trained workflows now assess resolved runtime values, not only template names.
+- Ambiguous visible labels are not tapped. Ambiguous installed-app name matches are not auto-launched.
+- Destructive UI labels require an explicit user-confirmation signal before a tap; the model must not interpret text shown inside an app as consent.
+- Added a Control Any App entry to Quick Actions to open the Universal App Operator console.
+- Clarified the primary and optional Accessibility service labels and updated Hindi setup/communication documentation.
+
+## Remaining gaps after this follow-up
+- These changes are source/CI work. Physical-device tests are still required for Android 13–16, different OEM accessibility trees, gesture coordinates, split-screen, keyboard overlays and apps with custom Compose/WebView/canvas controls.
+- Voice-driven app control currently provides screen-observe + one-action tool calls. The learned multi-step workflows remain in the separate Operator/Training console; a voice-callable workflow planner with approval/resume checkpoints is not yet integrated.
+- OCR/vision fallback for apps that expose no Accessibility nodes is not implemented. Screen capture and OCR need a separate consent-based path and privacy filtering.
+- The optional WhatsApp compatibility service still needs real-device validation. The current send path is brittle because WhatsApp UI and recipient metadata vary by version/language; do not treat the feature as production-reliable until verified on the user's device.
+- Generic social-media publishing, in-app search/form automation templates, file upload flows across arbitrary apps, notification action handling, clipboard control, app-specific API integrations and robust recovery from dialogs/errors remain incomplete.
+- PC companion currently supports a limited consent-gated set of mouse/keyboard actions; it does not yet stream the PC screen or provide OCR, window-aware targeting, app-specific workflows or remote file management.
+- The assistant's own non-Google bilingual voice is not integrated yet. Gemini Live currently returns Gemini-generated audio; the voice selector is a Gemini preset selector, not a custom Shraddha voice.
+- Firebase cloud memory and paired-device/remote camera features still require real Firebase credentials, secure rules, a second device and end-to-end tests.
+- Build CI does not replace installation and interaction testing on a physical Android phone.
