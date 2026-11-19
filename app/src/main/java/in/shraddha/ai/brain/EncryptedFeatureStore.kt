@@ -65,6 +65,32 @@ class EncryptedFeatureStore(context: Context) {
 
     @Synchronized fun remove(name: String): Boolean = prefs.edit().remove(name).commit()
 
+    /** Atomically replace encrypted records and remove related keys in one transaction. */
+    @Synchronized fun putAllAndRemove(values: Map<String, String>, namesToRemove: Set<String>): Result<Unit> = runCatching {
+        val secretKey = key()
+        val editor = prefs.edit()
+        namesToRemove.forEach { name ->
+            require(name.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+            editor.remove(name)
+        }
+        values.forEach { (name, value) ->
+            require(name.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+            require(value.length <= 100_000) { "Data too large for $name" }
+            val plain = value.toByteArray(Charsets.UTF_8)
+            try {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+                val encrypted = cipher.doFinal(plain)
+                editor.putString(name, Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
+                    Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                encrypted.fill(0)
+            } finally {
+                plain.fill(0)
+            }
+        }
+        check(editor.commit()) { "Atomic encrypted update/delete failed" }
+    }
+
     /** Atomically remove all encrypted entries in one namespaced feature family. */
     @Synchronized fun removeAllWithPrefix(prefix: String): Boolean {
         require(prefix.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
