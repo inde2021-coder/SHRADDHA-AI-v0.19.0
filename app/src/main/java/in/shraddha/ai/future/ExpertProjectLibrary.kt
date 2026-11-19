@@ -91,9 +91,9 @@ class ExpertProjectLibrary(context: Context) {
                 val json = JSONObject(raw)
                 Entry(
                     json.optString("id").ifBlank { UUID.randomUUID().toString().replace("-", "") },
-                    json.optString("title"),
-                    json.optString("content"),
-                    json.optLong("savedAt", System.currentTimeMillis()),
+                    json.optString("title").take(160),
+                    json.optString("content").take(12_000),
+                    json.optLong("savedAt", System.currentTimeMillis()).coerceAtLeast(1L),
                     json.optString("workspace"),
                     json.optString("task"),
                     json.optString("provider")
@@ -103,7 +103,12 @@ class ExpertProjectLibrary(context: Context) {
             }
             .sortedByDescending { it.savedAt }
             .take(MAX_ITEMS)
-        val encoded = encode(oldEntries)
+        val retained = oldEntries.toMutableList()
+        var encoded = encode(retained)
+        while (encoded.length > MAX_JSON_CHARS && retained.size > 1) {
+            retained.removeAt(retained.lastIndex)
+            encoded = encode(retained)
+        }
         require(encoded.length <= MAX_JSON_CHARS) { "Legacy project library is too large to migrate safely" }
         store.putAll(mapOf(KEY to encoded, MIGRATION_KEY to "complete")).getOrThrow()
         check(legacy.edit().clear().commit()) { "Encrypted project library saved, but plaintext cleanup failed" }
