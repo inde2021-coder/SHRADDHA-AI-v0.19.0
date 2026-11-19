@@ -14,16 +14,25 @@ import java.nio.FloatBuffer
  * OpenCV SFace (data -> fc1) and ECAPA-TDNN (wav/lens -> emb).
  *
  * The engine never uploads biometric samples or embeddings. Model provenance and
- * licence must be checked by the user before import.
+ * licence and provenance must be reviewed before deployment.
  */
 class LocalBiometricModelEngine : Closeable {
     private val environment = OrtEnvironment.getEnvironment()
     private var faceSession: OrtSession? = null
     private var speakerSession: OrtSession? = null
 
+    private fun createSession(modelPath: String): OrtSession {
+        val options = OrtSession.SessionOptions()
+        return try {
+            environment.createSession(modelPath, options)
+        } finally {
+            options.close()
+        }
+    }
+
     @Synchronized
     fun loadFaceModel(modelPath: String) {
-        val candidate = environment.createSession(modelPath, OrtSession.SessionOptions())
+        val candidate = createSession(modelPath)
         try {
             require(candidate.inputNames.contains("data")) { "Face model must expose input 'data'" }
             require(candidate.outputNames.contains("fc1")) { "Face model must expose output 'fc1'" }
