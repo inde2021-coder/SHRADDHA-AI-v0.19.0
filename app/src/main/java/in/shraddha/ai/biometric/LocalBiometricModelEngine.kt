@@ -22,7 +22,10 @@ class LocalBiometricModelEngine : Closeable {
     private var speakerSession: OrtSession? = null
 
     private fun createSession(modelPath: String): OrtSession {
-        val options = OrtSession.SessionOptions()
+        val options = OrtSession.SessionOptions().apply {
+            setIntraOpNumThreads(2)
+            setInterOpNumThreads(1)
+        }
         return try {
             environment.createSession(modelPath, options)
         } finally {
