@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var visionProvider: Spinner
     private lateinit var visionResult: TextView
     @Volatile private var lastScreenJpeg: ByteArray? = null
+    @Volatile private var lastCameraJpeg: ByteArray? = null
     private var touchStartX = 0f
     private var touchStartY = 0f
     private var lastPeerId: String? = null
@@ -918,6 +919,17 @@ class MainActivity : AppCompatActivity() {
                         .onFailure { visionResult.text = "Analysis error: ${it.message}" }
                 } }
             })
+            addView(actionButton("ASK AI ABOUT REMOTE CAMERA", "Latest consented paired-phone camera frame का Visual Lens analysis") {
+                val frame = lastCameraJpeg
+                if (frame == null) { status.text = "पहले paired phone पर camera sharing ON करें और camera permission दें।"; return@actionButton }
+                val url = relayUrl.text.toString().trim()
+                if (!validRelay(url)) { status.text = "HTTPS relay URL जरूरी है।"; return@actionButton }
+                visionResult.text = "Visual Lens remote camera frame समझ रहा है…"
+                DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), visionProvider.selectedItem.toString(), visionPrompt.text.toString(), frame) { result -> runOnUiThread {
+                    result.onSuccess { visionResult.text = it; status.text = "Remote camera visual analysis complete." }
+                        .onFailure { visionResult.text = "Camera analysis error: ${it.message}" }
+                } }
+            })
             visionResult = TextView(this@MainActivity).apply { text = "AI screen analysis result यहाँ दिखेगा।"; setTextColor(0xFFE4E8F2.toInt()); textSize = 14f; setPadding(dp(14), dp(14), dp(14), dp(14)); background = rounded(0xFF111B2D.toInt(), 16) }
             addView(visionResult)
             addView(TextView(this@MainActivity).apply {
@@ -1462,6 +1474,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         DeviceLinkManager.onCameraFrame = { sourceId, bytes ->
+            lastCameraJpeg = bytes
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) runOnUiThread {
                 cameraPreview.setImageBitmap(bitmap)
