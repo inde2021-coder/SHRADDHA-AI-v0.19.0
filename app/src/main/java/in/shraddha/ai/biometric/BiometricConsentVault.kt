@@ -31,6 +31,7 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         // Read and validate the index before writing any profile data. A corrupt or
         // undecryptable index must never create an unindexed biometric template.
         val ids = readIndex()
+        check(store.remove(thresholdKey(kind))) { "Could not invalidate the stale biometric threshold" }
         val key = PREFIX + personId
         val person = readPerson(personId) ?: run {
             require(ids.length() < MAX_PEOPLE) { "Person directory limit reached" }
@@ -57,6 +58,7 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     fun withdraw(personId: String): Result<Unit> = runCatching {
         require(personId.matches(Regex("[A-Za-z0-9_-]{8,64}")))
         val old = readIndex()
+        check(store.remove(thresholdKey("face")) && store.remove(thresholdKey("speaker"))) { "Could not invalidate biometric thresholds" }
         check(store.remove(PREFIX + personId)) { "Could not delete biometric templates" }
         val updated = JSONArray()
         for (i in 0 until old.length()) if (old.optString(i) != personId) updated.put(old.optString(i))
@@ -65,8 +67,7 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
 
     @Synchronized fun clear(): Boolean = runCatching {
         // Prefix removal also catches any orphaned records left by an older build.
-        if (!store.removeAllWithPrefix(PREFIX)) return@runCatching false
-        store.remove(INDEX)
+        store.removeAllWithPrefix("biometric_")
     }.getOrDefault(false)
 
     @Synchronized
@@ -126,6 +127,24 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         require(bytes.size == dimension * 4)
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         return FloatArray(dimension) { buffer.float }
+    }
+
+    private fun thresholdKey(kind: String): String = "biometric_threshold_${kind}_v1"
+
+    @Synchronized
+    fun saveThreshold(kind: String, threshold: Float): Result<Unit> = runCatching {
+        require(kind == "face" || kind == "speaker")
+        require(threshold.isFinite() && threshold in -1f..1f)
+        check(store.put(thresholdKey(kind), threshold.toString()).isSuccess) { "Could not save calibrated threshold" }
+    }
+
+    @Synchronized
+    fun loadThreshold(kind: String): Result<Float?> = runCatching {
+        require(kind == "face" || kind == "speaker")
+        val raw = store.get(thresholdKey(kind)).getOrThrow()
+        if (raw.isBlank()) null else raw.toFloat().also {
+            require(it.isFinite() && it in -1f..1f) { "Stored biometric threshold is invalid" }
+        }
     }
 
     data class TemplateCounts(val face: Int, val speaker: Int)
