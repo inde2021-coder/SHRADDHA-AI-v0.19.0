@@ -10,7 +10,7 @@
 - `desktop-companion/README-SHRADDHA-MYRA-PAIRING-HI.md` — MYRA PC setup.
 
 ## Build
-Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `:app:assembleDebug`. Build has not been verified in this execution environment because Gradle distribution download was blocked by DNS/network. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
+Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `:app:assembleDebug`. Latest GitHub Actions run 44480874186 passed Android unit tests and debug APK build for commit 0c1d09df3c46ee15ea9f186413cd3c75b40b79f0. Debug APK artifact is available from the linked Actions run. Physical-device testing is still required. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
 
 ## Secure Gemini Live Voice setup (v0.19.2)
 1. Backend में `GATEWAY_TOKEN` और `GEMINI_API_KEY` server environment variables में set करें। Permanent Gemini key APK में न डालें।
