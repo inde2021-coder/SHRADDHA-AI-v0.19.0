@@ -169,3 +169,4 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Expert Hub's prior plaintext StringSet project library is migrated to an Android Keystore-backed encrypted ordered library (up to 20 projects), included in consented recovery snapshots.
 
 - Voice session shutdown now invalidates stale connection epochs, prevents a delayed token response from reconnecting after Stop, cancels in-flight tool jobs on stop/reconnect, and serializes WebSocket/microphone release. LiveAudioIO uses an atomic idempotent start gate, serializes recorder lifecycle, and zeroes each temporary PCM chunk after handoff.
+- Voice service stop intents now carry the failed session epoch; an old network failure cannot stop a newer user-started microphone session. Voice tool jobs are canceled on stop/reconnect, and stale tool results are not sent to a later session.
