@@ -33,6 +33,7 @@
         android:roundIcon="@drawable/ic_shraddha"
         android:theme="@style/Theme.ShraddhaAI"
         android:supportsRtl="true">
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <activity android:name=".biometric.BiometricCaptureActivity" android:exported="false" android:screenOrientation="portrait" />
