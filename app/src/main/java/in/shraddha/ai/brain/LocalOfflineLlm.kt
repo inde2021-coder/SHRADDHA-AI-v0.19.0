@@ -25,13 +25,14 @@ object LocalOfflineLlm {
 
     data class DeviceCheck(val allowed: Boolean, val report: String)
 
-    fun checkDevice(context: Context, modelPath: String): DeviceCheck {
+    fun checkDevice(context: Context, modelPath: String, backendPreference: String = "auto"): DeviceCheck {
         val model = File(modelPath).canonicalFile
         if (!model.isFile || !model.extension.equals("litertlm", true)) return DeviceCheck(false, "Compatible .litertlm model file not found.")
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memory = ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo)
         val modelBytes = model.length()
-        val alreadyLoaded = loadedPath == model.absolutePath && engine != null && conversation != null
+        val normalizedPreference = backendPreference.lowercase().ifBlank { "auto" }
+        val alreadyLoaded = loadedPath == model.absolutePath && loadedPreference == normalizedPreference && engine != null && conversation != null
         val requiredBytes = if (alreadyLoaded) 256L * 1024L * 1024L else (modelBytes * 1.25).toLong() + 450L * 1024L * 1024L
         val storage = StatFs(context.filesDir.absolutePath)
         val freeStorage = storage.availableBytes
@@ -57,10 +58,10 @@ object LocalOfflineLlm {
         val model = File(modelPath).canonicalFile
         require(model.isFile && model.extension.equals("litertlm", ignoreCase = true)) { "Select a valid local .litertlm model file" }
         require(model.length() >= 10_000_000L) { "Model file is too small to be valid" }
-        val check = checkDevice(context, model.absolutePath)
-        require(check.allowed) { check.report }
         val preference = backendPreference.lowercase().ifBlank { "auto" }
         require(preference in setOf("auto", "cpu", "gpu", "npu")) { "Backend must be auto, cpu, gpu or npu" }
+        val check = checkDevice(context, model.absolutePath, preference)
+        require(check.allowed) { check.report }
         val candidates = when (preference) {
             "cpu" -> listOf("cpu")
             "gpu" -> listOf("gpu", "cpu")
