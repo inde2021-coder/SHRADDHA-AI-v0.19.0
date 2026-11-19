@@ -59,9 +59,13 @@ object ActionExecutor {
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
-                        result.put("status", if (callStatus == "dialer_opened_user_confirmation") "pending_user_confirmation" else "error")
+                        result.put("status", if (callStatus == "call_started") "success" else "error")
                         result.put("action", callStatus)
-                        result.put("message", if (callStatus == "dialer_opened_user_confirmation") "Dialer opened. Review the number and tap Call yourself; no call was placed automatically." else "Could not open the dialer.")
+                        result.put("message", when (callStatus) {
+                            "call_started" -> "Calling ${lookup.displayName}."
+                            "call_permission_required" -> "Allow Phone permission once in Android settings, then voice calling can start automatically."
+                            else -> "Could not start the call."
+                        })
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
                     }
@@ -109,17 +113,27 @@ object ActionExecutor {
                 }
 
                 val isWhatsApp = targetApp == "whatsapp"
-                val composerStatus = if (isWhatsApp) {
-                    CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
+                val sendStatus = if (isWhatsApp) {
+                    val service = NovaAccessibilityService.instance
+                    if (service == null) "whatsapp_accessibility_required" else {
+                        val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
+                        if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
+                        else opened
+                    }
                 } else {
-                    CommIntents.openSmsComposer(context, phoneNumber, messageText)
+                    CommIntents.sendSms(context, phoneNumber, messageText)
                 }
-
-                // Never auto-press Send. The user reviews the recipient and message in the target app.
-                result.put("status", if (composerStatus == "composer_opened") "pending_user_confirmation" else "error")
-                result.put("action", composerStatus)
+                result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "success" else "error")
+                result.put("action", sendStatus)
                 result.put("recipient", phoneNumber)
-                result.put("message", if (composerStatus == "composer_opened") "Draft opened. Review it and tap Send yourself; nothing has been sent by Shraddha AI." else "Could not open the message composer.")
+                result.put("message", when (sendStatus) {
+                    "sms_sent_to_carrier" -> "SMS handed to Android's messaging service for delivery."
+                    "whatsapp_sent" -> "WhatsApp message sent."
+                    "sms_permission_required" -> "Allow SMS permission once in Android settings to enable voice sending."
+                    "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
+                    "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
+                    else -> "Message was not sent: $sendStatus"
+                })
             }
 
             "read_screen" -> {
@@ -235,11 +249,13 @@ object ActionExecutor {
                             result.put("action", "recipient_not_found")
                             result.put("message", "Provide a full phone number or grant Contacts permission.")
                         } else {
-                            val opened = CommIntents.openWhatsAppComposer(context, number, message)
-                            result.put("status", if (opened == "composer_opened") "pending_user_confirmation" else "error")
-                            result.put("action", opened)
+                            val service = NovaAccessibilityService.instance
+                            val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
+                            val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
+                            result.put("status", if (sent == "whatsapp_sent") "success" else "error")
+                            result.put("action", sent)
                             result.put("recipient", number)
-                            result.put("message", "Review the WhatsApp draft and tap Send yourself. No message was sent automatically.")
+                            result.put("message", if (sent == "whatsapp_sent") "WhatsApp message sent." else "Message not sent: $sent")
                         }
                     }
                 }
