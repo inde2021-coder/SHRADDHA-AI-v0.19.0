@@ -2,7 +2,7 @@
 
 1. Create a Firebase project and register Android package `in.shraddha.ai`.
 2. Enable **Authentication → Email/Password**, **Cloud Firestore**, **Cloud Storage**, and **Cloud Messaging**.
-3. Publish `firestore.rules` and `storage.rules` from the repository root. Do not use test mode in production.
+3. Publish `firestore.rules` and `storage.rules` from the repository root. Do not use test mode in production. The rules enforce owner-only access, exact encrypted backup paths/metadata, size limits and hashed device IDs.
 4. Copy `local.properties.example` to `local.properties` in the Android project root and replace every placeholder with the values from Firebase Project settings, including the Storage bucket.
 5. Enable Firebase App Check (Play Integrity for Play builds) before production release.
 6. In Shraddha AI → Firebase Account & Encrypted Cloud Vault, create/sign in to the owner account. Explicitly opt in before backup/restore.
@@ -15,6 +15,18 @@ Cloud recovery payloads are encrypted client-side with AES-256-GCM; the key is d
 
 Selected snapshots include consented person/child records, trained app profiles and workflow recipes, workflow checkpoints, task inbox, active project, digital twin, knowledge graph and private memory. Face/voice biometric templates, API keys, gateway credentials, pairing tokens, OTPs and payment data are excluded. Restore validates allowed record keys and schemas, replaces only selected record families, and attempts to roll back the prior local state if a restore step fails.
 
-FCM device tokens are stored in the Android Keystore-backed encrypted feature store on-device and in the signed-in owner's private Firestore `devices` subcollection. The notification service displays generic event categories only; it does not show message contents, biometric data or other sensitive payloads. Token rotation cleanup and user-initiated revocation are supported. This build receives notifications; outbound FCM delivery must be sent by Firebase Console or a separately secured trusted server.
+FCM device tokens are stored in the Android Keystore-backed encrypted feature store on-device and in the signed-in owner's private Firestore `devices` subcollection. A cached token is never uploaded during ordinary cloud backup/sign-in unless the explicit push-consent flag is enabled; revocation disables that flag locally before attempting remote cleanup. The notification service displays generic event categories only; it does not show message contents, biometric data or other sensitive payloads. Token rotation cleanup and user-initiated revocation are supported. This build receives notifications; outbound FCM delivery must be sent by Firebase Console or a separately secured trusted server.
 
 Storage objects are owner-scoped under `users/{uid}/backups/`, use `application/octet-stream`, and are limited to 2 MB. Firestore metadata and device-token rules are owner-only. Deploy App Check and verify the published rules before production.
+
+
+## Security-rules tests
+
+The repository includes Firebase Emulator tests for Firestore and Storage ownership, backup metadata, invalid paths, and FCM device records. From the repository root run:
+
+```sh
+npm install --prefix firebase/rules-tests --no-audit --no-fund
+./firebase/rules-tests/node_modules/.bin/firebase emulators:exec --project demo-shraddha-ai --only firestore,storage "npm --prefix firebase/rules-tests test"
+```
+
+The Android GitHub Actions workflow runs these tests before the Android build. Emulator tests validate the rules source; production deployment and App Check still need to be verified in the target Firebase project.
