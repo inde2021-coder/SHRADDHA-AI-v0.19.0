@@ -91,6 +91,27 @@ class EncryptedFeatureStore(context: Context) {
         check(editor.commit()) { "Atomic encrypted update/delete failed" }
     }
 
+
+    /** Read and decrypt every stored record whose key belongs to an explicitly selected family. */
+    @Synchronized fun getAllWithPrefixes(prefixes: Set<String>): Result<Map<String, String>> = runCatching {
+        require(prefixes.isNotEmpty())
+        prefixes.forEach { require(it.matches(Regex("[a-zA-Z0-9_.-]{1,80}"))) }
+        val keys = prefs.all.keys.filter { key -> prefixes.any { key.startsWith(it) } }.sorted()
+        keys.associateWith { key -> get(key).getOrThrow() }
+    }
+
+    /** Replace complete selected record families in one encrypted preference transaction. */
+    @Synchronized fun replaceAllWithPrefixes(values: Map<String, String>, prefixes: Set<String>): Result<Unit> = runCatching {
+        require(prefixes.isNotEmpty())
+        prefixes.forEach { require(it.matches(Regex("[a-zA-Z0-9_.-]{1,80}"))) }
+        values.keys.forEach { key ->
+            require(prefixes.any { key.startsWith(it) }) { "Backup contains an unapproved feature key: $key" }
+        }
+        val oldKeys = prefs.all.keys.filter { key -> prefixes.any { key.startsWith(it) } }.toSet()
+        val removals = oldKeys - values.keys
+        putAllAndRemove(values, removals).getOrThrow()
+    }
+
     /** Atomically remove all encrypted entries in one namespaced feature family. */
     @Synchronized fun removeAllWithPrefix(prefix: String): Boolean {
         require(prefix.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
