@@ -30,7 +30,8 @@ object LocalOfflineLlm {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memory = ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo)
         val modelBytes = model.length()
-        val requiredBytes = (modelBytes * 1.25).toLong() + 450L * 1024L * 1024L
+        val alreadyLoaded = loadedPath == model.absolutePath && engine != null && conversation != null
+        val requiredBytes = if (alreadyLoaded) 256L * 1024L * 1024L else (modelBytes * 1.25).toLong() + 450L * 1024L * 1024L
         val storage = StatFs(context.filesDir.absolutePath)
         val freeStorage = storage.availableBytes
         val heapMax = Runtime.getRuntime().maxMemory()
