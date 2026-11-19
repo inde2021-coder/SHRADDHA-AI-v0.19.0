@@ -485,7 +485,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     if (sqrt(windowSquares / (end - start)) > 0.006) activeWindows++
                 }
                 val rms = sqrt(sumSquares / samples.size).toFloat()
-                require(rms > 0.008f && activeWindows >= 8) { "आवाज़ बहुत धीमी/रुकी हुई है; शांत जगह में पूरा phrase दोहराएँ" }
+                require(rms > 0.008f && activeWindows >= 3) { "आवाज़ बहुत धीमी/रुकी हुई है; शांत जगह में पूरा phrase दोहराएँ" }
                 require(peak < 0.999f && clipped < samples.size / 100) { "Audio clipping/distortion है; microphone से थोड़ा दूर बोलें" }
                 val embedding = engine.speakerEmbedding(samples)
                 val extras = intent
