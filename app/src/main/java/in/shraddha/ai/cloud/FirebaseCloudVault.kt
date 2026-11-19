@@ -19,8 +19,12 @@ import android.util.Base64
 
 /** Firebase owner-scoped vault. Client-side AES-GCM means Firestore receives ciphertext only. */
 class FirebaseCloudVault(private val context: Context) {
+    companion object {
+        private const val APP_NAME = "shraddha_cloud_vault"
+    }
+
     private fun initialize(): FirebaseApp {
-        FirebaseApp.getApps(context).firstOrNull()?.let { return it }
+        FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }?.let { return it }
         require(BuildConfig.FIREBASE_API_KEY.isNotBlank() && BuildConfig.FIREBASE_APP_ID.isNotBlank() && BuildConfig.FIREBASE_PROJECT_ID.isNotBlank() && BuildConfig.FIREBASE_SENDER_ID.isNotBlank()) {
             "Firebase config missing. Add FIREBASE_API_KEY, FIREBASE_APP_ID, FIREBASE_PROJECT_ID and FIREBASE_SENDER_ID to local.properties."
         }
@@ -31,18 +35,31 @@ class FirebaseCloudVault(private val context: Context) {
             .setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
             .apply { if (BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) setStorageBucket(BuildConfig.FIREBASE_STORAGE_BUCKET) }
             .build()
-        return FirebaseApp.initializeApp(context, options) ?: error("Firebase initialization failed")
+        return FirebaseApp.initializeApp(context, options, APP_NAME)
+            ?: FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
+            ?: error("Firebase initialization failed")
     }
 
     fun createAccount(email: String, password: String): Result<String> = runCatching {
-        runBlocking { FirebaseAuth.getInstance(initialize()).createUserWithEmailAndPassword(email, password).await().user?.uid ?: error("Account creation returned no user") }
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            FirebaseAuth.getInstance(initialize())
+                .createUserWithEmailAndPassword(normalizedEmail, password)
+                .await().user?.uid ?: error("Account creation returned no user")
+        }
     }
 
     fun signInAndSave(email: String, password: String, key: String, plaintext: String): Result<String> = runCatching {
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
+        require(plaintext.length <= 16000) { "Cloud memory is limited to 16,000 characters" }
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
         runBlocking {
             val app = initialize()
-            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email, password).await().user ?: error("Sign-in failed")
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
             val encrypted = encrypt(plaintext, password)
             FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
                 .set(mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis()))
@@ -52,9 +69,13 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     fun signInAndLoad(email: String, password: String, key: String): Result<String?> = runCatching {
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
         runBlocking {
             val app = initialize()
-            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email, password).await().user ?: error("Sign-in failed")
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
             val doc = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key).get().await()
             val payload = doc.getString("payload") ?: return@runBlocking null
             decrypt(payload, password)
