@@ -7,7 +7,7 @@
 5. Enable Firebase App Check (Play Integrity for Play builds) before production release.
 6. In Shraddha AI → Firebase Account & Encrypted Cloud Vault, create/sign in to the owner account. Explicitly opt in before backup/restore.
 7. For small recovery snapshots, use Firestore backup (100 KB plaintext limit). For larger selected snapshots, use Firebase Storage (up to 1.4 MB plaintext; encrypted object size capped at 2 MB). Both retain up to 10 timestamped revisions. Restore always shows an overwrite preview and asks for confirmation.
-8. For push, explicitly opt in and tap **REGISTER THIS DEVICE FOR PUSH**. Grant Android notification permission when requested. Send a test message from Firebase Console → Cloud Messaging. **DISABLE PUSH & REMOVE THIS DEVICE** deletes the owner-scoped device token record and asks FCM to delete the token.
+8. For push, explicitly opt in and tap **REGISTER THIS DEVICE FOR PUSH**. Grant Android notification permission when requested. Send a data-only test message from Firebase Console → Cloud Messaging with no notification title/body fields (the app maps approved data event types to generic local notices). **DISABLE PUSH & REMOVE THIS DEVICE** deletes the owner-scoped device token record, disables FCM auto-init and asks FCM to delete the token.
 
 ## Encryption and data scope
 
