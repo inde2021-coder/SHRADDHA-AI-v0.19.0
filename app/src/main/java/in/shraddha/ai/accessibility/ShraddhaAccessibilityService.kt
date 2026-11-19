@@ -22,13 +22,23 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     override fun onInterrupt() { }
     override fun onDestroy() { if (active === this) active = null; super.onDestroy() }
 
+    private fun isSensitiveNode(node: AccessibilityNodeInfo): Boolean {
+        if (node.isPassword) return true
+        val labels = listOfNotNull(
+            node.text?.toString(), node.contentDescription?.toString(), node.hintText?.toString(),
+            node.viewIdResourceName, node.parent?.contentDescription?.toString()
+        ).joinToString(" ").lowercase()
+        return Regex("(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड")
+            .containsMatchIn(labels)
+    }
+
     private fun setFocusedText(value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
-        // Never interact with password fields or nodes marked sensitive.
-        if (focused.isPassword || !focused.isEditable || focused.isVisibleToUser.not()) return false
+        // Never enter secrets or interact with password/OTP/PIN fields.
+        if (isSensitiveNode(focused) || !focused.isEditable || !focused.isVisibleToUser) return false
         return focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
-            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value.take(4000))
         })
     }
 
@@ -67,15 +77,23 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     }
 
     private fun clickVisibleText(label: String): Boolean {
+        val wanted = label.trim()
+        if (wanted.isBlank()) return false
         val root = rootInActiveWindow ?: return false
-        val matches = root.findAccessibilityNodeInfosByText(label)
-        val node = matches.firstOrNull { it.isVisibleToUser && it.isClickable }
-            ?: matches.firstOrNull { it.isVisibleToUser }?.let { candidate ->
-                var parent = candidate.parent
-                while (parent != null && !parent.isClickable) parent = parent.parent
-                parent
-            }
-        return node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        val matches = root.findAccessibilityNodeInfosByText(wanted)
+            .filter { it.isVisibleToUser && !isSensitiveNode(it) }
+        val exact = matches.filter {
+            it.text?.toString()?.trim().equals(wanted, true) ||
+                it.contentDescription?.toString()?.trim().equals(wanted, true)
+        }
+        val candidates = (if (exact.isNotEmpty()) exact else matches).mapNotNull { candidate ->
+            var node: AccessibilityNodeInfo? = candidate
+            while (node != null && !node.isClickable) node = node.parent
+            node
+        }.distinctBy { it.viewIdResourceName.orEmpty() + ":" + it.text?.toString().orEmpty() + ":" + it.contentDescription?.toString().orEmpty() }
+        // Ambiguous labels are refused; the agent must inspect the screen and ask which one.
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun clickByResourceId(resourceId: String): Boolean {
@@ -123,13 +141,15 @@ class ShraddhaAccessibilityService : AccessibilityService() {
                 val node = queue.removeFirst(); count++
                 val rect = Rect(); node.getBoundsInScreen(rect)
                 if (node.isVisibleToUser && (node.text != null || node.contentDescription != null || node.isClickable || node.isEditable)) {
+                    val sensitive = service.isSensitiveNode(node)
                     found.add(ScreenElement(
                         id = node.viewIdResourceName ?: "node_$count",
-                        text = node.text?.toString()?.take(300).orEmpty(),
-                        description = node.contentDescription?.toString()?.take(300).orEmpty(),
+                        text = if (sensitive) "" else node.text?.toString()?.take(300).orEmpty(),
+                        description = if (sensitive) "संवेदनशील फ़ील्ड छिपाया गया" else node.contentDescription?.toString()?.take(300).orEmpty(),
                         className = node.className?.toString().orEmpty(), bounds = Rect(rect),
                         clickable = node.isClickable, editable = node.isEditable,
-                        scrollable = node.isScrollable, password = node.isPassword, packageName = node.packageName?.toString().orEmpty(), hintText = node.hintText?.toString().orEmpty()
+                        scrollable = node.isScrollable, password = sensitive, packageName = node.packageName?.toString().orEmpty(),
+                        hintText = if (sensitive) "" else node.hintText?.toString().orEmpty()
                     ))
                 }
                 for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
