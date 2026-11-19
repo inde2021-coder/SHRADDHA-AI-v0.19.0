@@ -309,24 +309,26 @@ class FirebaseCloudVault(private val context: Context) {
                 ?: error("Sign-in failed")
             val store = EncryptedFeatureStore(context)
             val messaging = FirebaseMessaging.getInstance(FirebaseApp.getInstance())
+            // Persist both consent flags before allowing FCM to create or rotate a token.
             store.put("firebase_fcm_consent", "true").getOrThrow()
+            store.put("firebase_push_consent", "true").getOrThrow()
             messaging.isAutoInitEnabled = true
-            val token = try {
-                messaging.token.await()
+            try {
+                val token = messaging.token.await()
+                require(token.length in 20..4096) { "Firebase returned an invalid device token" }
+                val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
+                val rotated = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
+                if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, user.uid, previous)
+                if (rotated.isNotBlank() && rotated != token && rotated != previous) deleteDeviceToken(app, user.uid, rotated)
+                store.put("firebase_fcm_token", token).getOrThrow()
+                check(store.remove("firebase_fcm_previous_token"))
+                registerDeviceToken(app, user.uid, token, deviceName)
             } catch (error: Exception) {
                 store.put("firebase_fcm_consent", "false")
+                store.put("firebase_push_consent", "false")
                 messaging.isAutoInitEnabled = false
                 throw error
             }
-            require(token.length in 20..4096) { "Firebase returned an invalid device token" }
-            val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
-            val rotated = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
-            if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, user.uid, previous)
-            if (rotated.isNotBlank() && rotated != token && rotated != previous) deleteDeviceToken(app, user.uid, rotated)
-            store.put("firebase_fcm_token", token).getOrThrow()
-            store.put("firebase_push_consent", "true").getOrThrow()
-            store.remove("firebase_fcm_previous_token")
-            registerDeviceToken(app, user.uid, token, deviceName)
         }
     }
 
