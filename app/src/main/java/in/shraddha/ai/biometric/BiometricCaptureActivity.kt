@@ -464,10 +464,24 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 recorder.stop()
                 val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
                 normalizedPcm = samples
-                val rms = sqrt(samples.map { it * it }.average()).toFloat()
-                val peak = samples.maxOf { kotlin.math.abs(it) }
-                val clipped = samples.count { kotlin.math.abs(it) > 0.995f }
-                val activeWindows = samples.toList().chunked(4000).count { frame -> sqrt(frame.map { it * it }.average()).toFloat() > 0.006f }
+                var sumSquares = 0.0
+                var peak = 0f
+                var clipped = 0
+                var activeWindows = 0
+                for (start in samples.indices step 4000) {
+                    val end = minOf(start + 4000, samples.size)
+                    var windowSquares = 0.0
+                    for (i in start until end) {
+                        val value = samples[i]
+                        val magnitude = kotlin.math.abs(value)
+                        sumSquares += value.toDouble() * value
+                        windowSquares += value.toDouble() * value
+                        if (magnitude > peak) peak = magnitude
+                        if (magnitude > 0.995f) clipped++
+                    }
+                    if (sqrt(windowSquares / (end - start)) > 0.006) activeWindows++
+                }
+                val rms = sqrt(sumSquares / samples.size).toFloat()
                 require(rms > 0.008f && activeWindows >= 8) { "आवाज़ बहुत धीमी/रुकी हुई है; शांत जगह में पूरा phrase दोहराएँ" }
                 require(peak < 0.999f && clipped < samples.size / 100) { "Audio clipping/distortion है; microphone से थोड़ा दूर बोलें" }
                 val embedding = engine.speakerEmbedding(samples)
