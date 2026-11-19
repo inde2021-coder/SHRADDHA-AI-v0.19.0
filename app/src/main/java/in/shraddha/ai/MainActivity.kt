@@ -1547,6 +1547,29 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
+            addView(actionButton("BACK UP LARGER SNAPSHOT TO FIREBASE STORAGE", "Encrypted file upload • up to 1.4 MB selected data • last 10 revisions retained") {
+                if (!bundleConsent.isChecked) { result.text = "पहले selected-data backup consent दें।"; return@actionButton }
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "Larger encrypted recovery file तैयार और Firebase Storage पर upload हो रही है…"
+                Thread {
+                    val captured = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity, 1_400_000)
+                    val saved = captured.fold(
+                        onSuccess = { bundle ->
+                            `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                                .signInAndUploadStorageBundle(emailValue, passwordValue, bundle)
+                        },
+                        onFailure = { Result.failure(it) }
+                    )
+                    runOnUiThread {
+                        result.text = saved.fold(
+                            { "Encrypted Firebase Storage backup uploaded. Revision: $it. Face/voice templates and credentials are excluded." },
+                            { "Storage backup failed safely: ${it.message}" }
+                        )
+                    }
+                }.start()
+            })
             addView(actionButton("RESTORE SELECTED DEVICE MEMORY", "Preview overwrite scope and confirm before restoring") {
                 if (!bundleConsent.isChecked) { result.text = "पहले selected-data restore consent दें।"; return@actionButton }
                 if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
@@ -1600,6 +1623,48 @@ class MainActivity : AppCompatActivity() {
                                                     if (raw.isNullOrBlank()) result.text = "Selected snapshot खाली है।"
                                                     else showDeviceRecoveryPreview(raw, result)
                                                 }.onFailure { result.text = "Snapshot restore failed: ${it.message}" }
+                                            }
+                                        }.start()
+                                    }.setNegativeButton("CLOSE", null).show()
+                            }
+                        }
+                    }
+                }.start()
+            })
+            addView(actionButton("FIREBASE STORAGE HISTORY • RESTORE", "पिछले अधिकतम 10 encrypted file backups में से चुनें") {
+                if (!bundleConsent.isChecked) { result.text = "पहले selected-data restore consent दें।"; return@actionButton }
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "Firebase Storage recovery history खोजी जा रही है…"
+                Thread {
+                    val vault = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                    val listed = vault.signInAndListStorageRevisions(emailValue, passwordValue)
+                    runOnUiThread {
+                        if (listed.isFailure) {
+                            result.text = "Storage history failed: ${listed.exceptionOrNull()?.message}"
+                        } else {
+                            val revisions = listed.getOrDefault(emptyList())
+                            if (revisions.isEmpty()) {
+                                result.text = "इस Firebase account में Storage backups नहीं मिले।"
+                            } else {
+                                val labels = revisions.map { revision ->
+                                    val date = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+                                        .format(java.util.Date(revision.updatedAt))
+                                    "$date • ${revision.sizeBytes / 1024} KB"
+                                }.toTypedArray()
+                                android.app.AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Choose encrypted Storage snapshot")
+                                    .setItems(labels) { _, which ->
+                                        val selected = revisions[which]
+                                        result.text = "Selected encrypted Storage file download और decrypt हो रही है…"
+                                        Thread {
+                                            val loaded = vault.signInAndLoadStorageRevision(emailValue, passwordValue, selected.id)
+                                            runOnUiThread {
+                                                loaded.onSuccess { raw ->
+                                                    if (raw.isNullOrBlank()) result.text = "Selected Storage snapshot खाली है।"
+                                                    else showDeviceRecoveryPreview(raw, result)
+                                                }.onFailure { result.text = "Storage restore failed: ${it.message}" }
                                             }
                                         }.start()
                                     }.setNegativeButton("CLOSE", null).show()
