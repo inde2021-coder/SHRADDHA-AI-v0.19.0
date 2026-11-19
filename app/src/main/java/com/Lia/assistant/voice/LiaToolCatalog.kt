@@ -84,6 +84,15 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
+                name = "swipe_screen",
+                description = "Performs a controlled swipe gesture on the current app screen. Use after inspecting the screen; directions are up, down, left, or right.",
+                params = mapOf("direction" to "Swipe direction: up, down, left, or right"),
+                required = listOf("direction")
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
                 name = "go_back",
                 description = "Performs the system Back action on the phone."
             )
