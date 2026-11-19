@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.voice.ConversationMemory
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
@@ -77,6 +78,7 @@ fun SettingsScreen(
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
     var gatewaySaveError by remember { mutableStateOf<String?>(null) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
+    var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -168,6 +170,16 @@ fun SettingsScreen(
                         gatewayTokenInput = current.gatewayToken
                         gatewaySaveError = null
                         showGatewayDialog = true
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Encrypted Voice Memory",
+                    subtitle = if (voiceMemoryEnabled) "Recent turns saved encrypted on this phone" else "Off • voice history stays in this session only",
+                    icon = Icons.Default.Security,
+                    switch = voiceMemoryEnabled,
+                    onCheckedChange = {
+                        voiceMemoryEnabled = it
+                        ConversationMemory.setPersistenceEnabled(context, it)
                     }
                 )
                 NovaSettingsRow(
