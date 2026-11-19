@@ -53,7 +53,9 @@ class FirebaseCloudVault(private val context: Context) {
             defaultApp.options.projectId == BuildConfig.FIREBASE_PROJECT_ID) {
             "The default FirebaseApp belongs to a different project; correct the Firebase configuration before enabling FCM."
         }
-        val pushConsent = EncryptedFeatureStore(context).get("firebase_fcm_consent").getOrNull() == "true"
+        val store = EncryptedFeatureStore(context)
+        val pushConsent = store.get("firebase_fcm_consent").getOrNull() == "true" &&
+            store.get("firebase_push_consent").getOrNull() == "true"
         FirebaseMessaging.getInstance(defaultApp).isAutoInitEnabled = pushConsent
         return FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
             ?: FirebaseApp.initializeApp(context, options, APP_NAME)
@@ -329,18 +331,26 @@ class FirebaseCloudVault(private val context: Context) {
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
             val store = EncryptedFeatureStore(context)
-            // Revoke locally first so future sign-ins can never silently re-register this token.
+            // Revoke locally before any network request. A failed remote cleanup must not
+            // keep auto-init, token callbacks or queued notifications enabled.
             store.put("firebase_push_consent", "false").getOrThrow()
-            val current = store.get("firebase_fcm_token").getOrNull().orEmpty()
-            val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
-            if (current.isNotBlank()) deleteDeviceToken(app, user.uid, current)
-            if (previous.isNotBlank() && previous != current) deleteDeviceToken(app, user.uid, previous)
             store.put("firebase_fcm_consent", "false").getOrThrow()
             val messaging = FirebaseMessaging.getInstance(FirebaseApp.getInstance())
             messaging.isAutoInitEnabled = false
-            messaging.deleteToken().await()
+            val current = store.get("firebase_fcm_token").getOrNull().orEmpty()
+            val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
             check(store.remove("firebase_fcm_token")) { "Could not clear local FCM token" }
             check(store.remove("firebase_fcm_previous_token")) { "Could not clear rotated FCM token" }
+            val cleanupErrors = mutableListOf<String>()
+            if (current.isNotBlank()) runCatching { deleteDeviceToken(app, user.uid, current) }
+                .onFailure { cleanupErrors += "current Firestore token: ${it.message}" }
+            if (previous.isNotBlank() && previous != current) runCatching { deleteDeviceToken(app, user.uid, previous) }
+                .onFailure { cleanupErrors += "previous Firestore token: ${it.message}" }
+            runCatching { messaging.deleteToken().await() }
+                .onFailure { cleanupErrors += "FCM token deletion: ${it.message}" }
+            check(cleanupErrors.isEmpty()) {
+                "Push is disabled locally, but remote cleanup needs retry: ${cleanupErrors.joinToString("; ")}"
+            }
         }
     }
 
