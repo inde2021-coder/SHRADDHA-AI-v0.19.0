@@ -20,10 +20,14 @@ class LocalBiometricModelEngine : Closeable {
     private val environment = OrtEnvironment.getEnvironment()
     private var faceSession: OrtSession? = null
     private var speakerSession: OrtSession? = null
-    @Volatile var faceModelLoadMs: Long = 0; private set
-    @Volatile var speakerModelLoadMs: Long = 0; private set
-    @Volatile var lastFaceInferenceMs: Long = 0; private set
-    @Volatile var lastSpeakerInferenceMs: Long = 0; private set
+    @Volatile var faceModelLoadMs: Long = 0
+        private set
+    @Volatile var speakerModelLoadMs: Long = 0
+        private set
+    @Volatile var lastFaceInferenceMs: Long = 0
+        private set
+    @Volatile var lastSpeakerInferenceMs: Long = 0
+        private set
 
     private fun createSession(modelPath: String): OrtSession {
         val options = OrtSession.SessionOptions().apply {
