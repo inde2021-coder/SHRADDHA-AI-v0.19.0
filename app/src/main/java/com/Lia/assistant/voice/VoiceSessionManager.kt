@@ -72,6 +72,9 @@ object VoiceSessionManager {
     private val pendingAssistantText = StringBuilder()
     private val pendingTextLock = Any()
 
+    fun isCurrentSession(epoch: Long): Boolean = sessionEpoch.get() == epoch
+    fun isActiveNow(): Boolean = _isActive.value
+
     fun start(context: Context) {
         if (_isActive.value) return
         appContext = context.applicationContext
