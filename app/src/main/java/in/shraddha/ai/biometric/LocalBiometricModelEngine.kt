@@ -13,8 +13,8 @@ import java.nio.FloatBuffer
  * On-device ONNX inference for the checksum-verified bundled models:
  * OpenCV SFace (data -> fc1) and ECAPA-TDNN (wav/lens -> emb).
  *
- * The engine never uploads biometric samples or embeddings. Model provenance and
- * licence and provenance must be reviewed before deployment.
+ * The engine never uploads biometric samples or embeddings. Review model licensing
+ * and provenance before redistribution or deployment.
  */
 class LocalBiometricModelEngine : Closeable {
     private val environment = OrtEnvironment.getEnvironment()
