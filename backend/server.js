@@ -69,7 +69,7 @@ async function askProvider(provider, prompt) {
   return (await askProviderDetailed(provider, prompt)).answer;
 }
 
-async function askVision(provider, prompt, imageBase64, mimeType) {
+async function askVisionDirect(provider, prompt, imageBase64, mimeType) {
   if (provider === 'openai') {
     if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured');
     const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } }] }] }) });
@@ -87,6 +87,22 @@ async function askVision(provider, prompt, imageBase64, mimeType) {
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic vision request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
   throw new Error('Unsupported provider');
+}
+
+async function askVision(provider, prompt, imageBase64, mimeType) {
+  if (provider !== 'auto') return { provider, answer: await askVisionDirect(provider, prompt, imageBase64, mimeType) };
+  const order = resolveProviderOrder({ requested: 'auto', env: process.env }).filter(name => ['openai', 'gemini', 'anthropic'].includes(name));
+  const failures = [];
+  for (const candidate of order) {
+    try {
+      const answer = await askVisionDirect(candidate, prompt, imageBase64, mimeType);
+      if (typeof answer !== 'string' || !answer.trim()) throw new Error('Provider returned an empty response');
+      return { provider: candidate, answer };
+    } catch (error) {
+      failures.push(`${candidate}: ${String(error?.message || 'request failed').slice(0, 160)}`);
+    }
+  }
+  throw new Error(failures.length ? `No configured vision provider succeeded. ${failures.join(' | ')}` : 'No configured vision provider is available for automatic routing');
 }
 
 function createSession(ownerName) {
