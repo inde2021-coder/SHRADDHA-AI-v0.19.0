@@ -10,10 +10,17 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 /** On-device OCR only. Text is redacted in memory and never uploaded or persisted. */
 object ScreenOcrEngine {
+    data class OcrLine(
+        val text: String,
+        val centerX: Float,
+        val centerY: Float,
+        val sensitive: Boolean = false
+    )
+
     private val sensitive = Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|upi|account number|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड|यूपीआई""")
     private val longDigits = Regex("""(?<!\d)\d{4,}(?!\d)""")
 
-    fun recognize(bitmap: Bitmap, done: (Result<String>) -> Unit) {
+    fun recognize(bitmap: Bitmap, done: (Result<List<OcrLine>>) -> Unit) {
         val image = InputImage.fromBitmap(bitmap, 0)
         val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
@@ -24,13 +31,13 @@ object ScreenOcrEngine {
                 val lines = tasks.flatMap { (it.result as? Text)?.textBlocks.orEmpty() }
                     .flatMap { it.lines }
                     .sortedWith(compareBy({ it.boundingBox?.top ?: Int.MAX_VALUE }, { it.boundingBox?.left ?: Int.MAX_VALUE }))
-                    .map { it.text.trim() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-                val safe = mutableListOf<String>()
+                    .distinctBy { it.text.trim().lowercase() }
+                val safe = mutableListOf<OcrLine>()
                 var hideFollowing = 0
                 for (line in lines) {
-                    if (sensitive.containsMatchIn(line)) {
+                    val value = line.text.trim()
+                    if (value.isBlank()) continue
+                    if (sensitive.containsMatchIn(value)) {
                         hideFollowing = 2
                         continue
                     }
@@ -38,11 +45,17 @@ object ScreenOcrEngine {
                         hideFollowing--
                         continue
                     }
-                    safe += longDigits.replace(line, "••••")
+                    val bounds = line.boundingBox ?: continue
+                    val digitsSensitive = longDigits.containsMatchIn(value)
+                    safe += OcrLine(
+                        text = if (digitsSensitive) "संवेदनशील अंक छिपाए गए" else value.take(120),
+                        centerX = ((bounds.exactCenterX() / bitmap.width).coerceIn(0f, 1f)),
+                        centerY = ((bounds.exactCenterY() / bitmap.height).coerceIn(0f, 1f)),
+                        sensitive = digitsSensitive
+                    )
                 }
-                val output = safe.joinToString("\n").take(6000)
-                if (output.isBlank()) done(Result.failure(IllegalStateException("No readable non-sensitive screen text was found")))
-                else done(Result.success(output))
+                if (safe.none { !it.sensitive }) done(Result.failure(IllegalStateException("No readable non-sensitive screen text was found")))
+                else done(Result.success(safe.take(100)))
             } catch (error: Exception) {
                 done(Result.failure(error))
             } finally {
