@@ -64,6 +64,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
+    implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
