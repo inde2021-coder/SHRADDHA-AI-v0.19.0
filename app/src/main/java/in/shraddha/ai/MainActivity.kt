@@ -1739,7 +1739,7 @@ class MainActivity : AppCompatActivity() {
         }
         section(root, "FACE & SPEAKER RECOGNITION", "On-device SFace + ECAPA • randomized live challenge • encrypted local templates") {
             addView(TextView(this@MainActivity).apply {
-                text = "SFace और ECAPA models सामान्य build में bundled और checksum-verified हैं; पहली capture पर app उन्हें private storage में install करेगा। अलग से model import करने की जरूरत नहीं है। हर enrollment से पहले व्यक्ति की स्पष्ट सहमति switch ON करनी होगी। Camera में blink + head-turn challenge और speaker के लिए on-device random phrase challenge चलेगा। Match केवल locally calibrated threshold पर होगा; Unknown default है। यह certified anti-spoofing नहीं है।"
+                text = "SFace और ECAPA models सामान्य build में bundled और checksum-verified हैं; पहली capture पर app उन्हें private storage में install करेगा। अलग से model import करने की जरूरत नहीं है। हर enrollment से पहले व्यक्ति की स्पष्ट सहमति switch ON करनी होगी। Camera में blink + head-turn challenge और speaker के लिए on-device random phrase challenge चलेगा। Match केवल locally calibrated threshold पर होगा; Unknown default है। यह certified anti-spoofing नहीं है; photo/video replay और advanced spoof से धोखा संभव है।"
                 setTextColor(0xFFB9C8E4.toInt()); textSize = 12f
             })
             val profileSpinner = Spinner(this@MainActivity)
