@@ -128,6 +128,21 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         return FloatArray(dimension) { buffer.float }
     }
 
+    data class TemplateCounts(val face: Int, val speaker: Int)
+
+    @Synchronized
+    fun templateCounts(personId: String): Result<TemplateCounts> = runCatching {
+        require(personId.matches(Regex("[A-Za-z0-9_-]{8,64}")))
+        val ids = readIndex()
+        if ((0 until ids.length()).none { ids.optString(it) == personId }) return@runCatching TemplateCounts(0, 0)
+        val person = readPerson(personId) ?: return@runCatching TemplateCounts(0, 0)
+        if (!person.optBoolean("consent")) return@runCatching TemplateCounts(0, 0)
+        TemplateCounts(
+            person.optJSONArray("face")?.length() ?: 0,
+            person.optJSONArray("speaker")?.length() ?: 0
+        )
+    }
+
     data class CalibrationResult(val threshold: Float, val minimumGenuine: Float, val maximumImpostor: Float, val genuinePairs: Int, val impostorPairs: Int)
 
     @Synchronized
