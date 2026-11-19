@@ -1,7 +1,7 @@
 package com.Lia.assistant
 
 import android.app.Application
-import in.shraddha.ai.biometric.BiometricModelInstaller
+import `in`.shraddha.ai.biometric.BiometricModelInstaller
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
