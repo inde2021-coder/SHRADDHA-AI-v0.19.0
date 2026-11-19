@@ -1,5 +1,3 @@
 <resources>
     <string name="app_name">Shraddha AI</string>
-    <string name="accessibility_description">Shraddha AI uses accessibility only to interact with visible controls when you request an action. It avoids password and sensitive fields.</string>
-    <string name="accessibility_service_description">Optional LIA screen agent. Reads visible screen controls and performs requested actions only when you explicitly enable this accessibility service.</string>
 </resources>
