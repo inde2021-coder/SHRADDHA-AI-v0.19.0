@@ -215,9 +215,9 @@ def main() -> int:
             keyring.delete_password("shraddha-pc-companion", "device-pairing")
             print("Saved PC pairing deleted.")
             return 0
-        except keyring.errors.PasswordDeleteError:
-            print("No saved PC pairing found.")
-            return 0
+        except Exception as exc:
+            print("Could not remove saved pairing:", exc)
+            return 1
     try:
         asyncio.run(run(args))
         return 0
