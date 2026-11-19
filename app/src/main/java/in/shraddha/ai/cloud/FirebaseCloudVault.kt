@@ -59,13 +59,16 @@ class FirebaseCloudVault(private val context: Context) {
             defaultApp.options.projectId == BuildConfig.FIREBASE_PROJECT_ID) {
             "The default FirebaseApp belongs to a different project; correct the Firebase configuration before enabling FCM."
         }
+        installAppCheck(defaultApp)
         val store = EncryptedFeatureStore(context)
         val pushConsent = store.get("firebase_fcm_consent").getOrNull() == "true" &&
             store.get("firebase_push_consent").getOrNull() == "true"
         FirebaseMessaging.getInstance(defaultApp).isAutoInitEnabled = pushConsent
-        return FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
+        val cloudApp = FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
             ?: FirebaseApp.initializeApp(context, options, APP_NAME)
             ?: error("Firebase initialization failed")
+        installAppCheck(cloudApp)
+        return cloudApp
     }
 
     private fun installAppCheck(app: FirebaseApp) {
