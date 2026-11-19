@@ -5,10 +5,12 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import java.io.Closeable
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
 /**
- * On-device ONNX inference for two explicitly selected, user-supplied models:
+ * On-device ONNX inference for the checksum-verified bundled models:
  * OpenCV SFace (data -> fc1) and ECAPA-TDNN (wav/lens -> emb).
  *
  * The engine never uploads biometric samples or embeddings. Model provenance and
@@ -76,7 +78,7 @@ class LocalBiometricModelEngine : Closeable {
             values[2 * plane + pixel] = (alignedRgb112[pixel * 3 + 2].toInt() and 0xff).toFloat()
         }
         val tensor = OnnxTensor.createTensor(
-            environment, FloatBuffer.wrap(values), longArrayOf(1, 3, 112, 112)
+            environment, nativeFloatBuffer(values), longArrayOf(1, 3, 112, 112)
         )
         tensor.use {
             val result = session.run(mapOf("data" to tensor))
@@ -96,8 +98,8 @@ class LocalBiometricModelEngine : Closeable {
         require(monoPcm16k.size in 16_000..160_000) { "Record 1–10 seconds of 16 kHz audio" }
         require(monoPcm16k.all { it.isFinite() && it in -1.05f..1.05f }) { "Audio must be normalized 16 kHz PCM" }
         val session = speakerSession ?: error("Speaker model is not loaded")
-        val wav = OnnxTensor.createTensor(environment, FloatBuffer.wrap(monoPcm16k), longArrayOf(1, monoPcm16k.size.toLong()))
-        val lens = OnnxTensor.createTensor(environment, FloatBuffer.wrap(floatArrayOf(1f)), longArrayOf(1))
+        val wav = OnnxTensor.createTensor(environment, nativeFloatBuffer(monoPcm16k), longArrayOf(1, monoPcm16k.size.toLong()))
+        val lens = OnnxTensor.createTensor(environment, nativeFloatBuffer(floatArrayOf(1f)), longArrayOf(1))
         wav.use { w ->
             lens.use { l ->
                 val result = session.run(mapOf("wav" to w, "lens" to l))
@@ -108,6 +110,12 @@ class LocalBiometricModelEngine : Closeable {
             }
         }
     }
+
+    private fun nativeFloatBuffer(values: FloatArray): FloatBuffer = ByteBuffer
+        .allocateDirect(values.size * Float.SIZE_BYTES)
+        .order(ByteOrder.nativeOrder())
+        .asFloatBuffer()
+        .apply { put(values); rewind() }
 
     private fun flatten(value: Any?): FloatArray = when (value) {
         is FloatArray -> value
