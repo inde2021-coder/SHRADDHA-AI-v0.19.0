@@ -83,7 +83,6 @@ class MainActivity : AppCompatActivity() {
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        requestAudioPermission()
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
         }
@@ -176,7 +175,7 @@ class MainActivity : AppCompatActivity() {
         heroTop.addView(intro)
         heroTop.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(138), dp(138)))
         heroBody.addView(heroTop)
-        heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Tap to speak") { startVoiceInput() })
+        heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Live voice engine") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
 
         val liveCard = section(pageRoot, "LIVE WORKSPACE", "वास्तविक screen/task activity यहाँ दिखाई जाएगी; connection न होने पर कोई नकली live status नहीं दिखेगा") {
@@ -297,7 +296,7 @@ class MainActivity : AppCompatActivity() {
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
                 setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
             })
-            assistantHero.addView(actionButton("🎙  Speak to Shraddha", "Hindi / English • आपके बोलने पर ही voice recognition शुरू होगा") { startVoiceInput() })
+            assistantHero.addView(actionButton("🎙  Speak to Shraddha", "Live Hindi / English voice session • Tap to open") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             pageRoot.addView(assistantHero)
         }
         pageRoot.addView(status, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
