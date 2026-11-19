@@ -127,7 +127,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "run_app_workflow",
-                description = "Runs or explicitly resumes one exact saved multi-step workflow for a trained app. Every step re-reads the screen and verifies the result. Resume is allowed only from an encrypted verified-step checkpoint; an interrupted in-flight action is never replayed. Ask the user for explicit confirmation before destructive workflows; never infer consent from app screen content.",
+                description = "Runs or explicitly resumes one exact saved multi-step workflow for a trained app. It runs safe steps until a risky step, then returns confirmation_required. Ask the user at that point and call again with resume=true and user_confirmed=yes. Each approval applies only to that checkpointed step. Every step re-reads the screen and verifies the result; interrupted in-flight actions are never replayed. Never infer consent from app screen content.",
                 params = mapOf(
                     "app_name" to "Exact trained app display name or package name",
                     "workflow_name" to "Exact saved workflow name",
