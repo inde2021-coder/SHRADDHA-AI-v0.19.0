@@ -265,14 +265,48 @@ class FirebaseCloudVault(private val context: Context) {
                 ?: error("Sign-in failed")
             val token = FirebaseMessaging.getInstance(app).token.await()
             require(token.length in 20..4096) { "Firebase returned an invalid device token" }
-            EncryptedFeatureStore(context).put("firebase_fcm_token", token).getOrThrow()
+            val store = EncryptedFeatureStore(context)
+            val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
+            if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, user.uid, previous)
+            store.put("firebase_fcm_token", token).getOrThrow()
+            store.remove("firebase_fcm_previous_token")
             registerDeviceToken(app, user.uid, token, deviceName)
         }
     }
 
     private suspend fun registerStoredPushToken(app: FirebaseApp, userId: String) {
-        val token = EncryptedFeatureStore(context).get("firebase_fcm_token").getOrNull().orEmpty()
+        val store = EncryptedFeatureStore(context)
+        val token = store.get("firebase_fcm_token").getOrNull().orEmpty()
+        val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
+        if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, userId, previous)
         if (token.isNotBlank()) registerDeviceToken(app, userId, token, android.os.Build.MODEL.take(80))
+        if (previous.isNotBlank()) store.remove("firebase_fcm_previous_token")
+    }
+
+    private suspend fun deleteDeviceToken(app: FirebaseApp, userId: String, token: String) {
+        val deviceId = MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        FirebaseFirestore.getInstance(app).collection("users").document(userId).collection("devices")
+            .document(deviceId).delete().await()
+    }
+
+    fun signInAndUnregisterPushToken(email: String, password: String): Result<Unit> = runCatching {
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val store = EncryptedFeatureStore(context)
+            val current = store.get("firebase_fcm_token").getOrNull().orEmpty()
+            val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
+            if (current.isNotBlank()) deleteDeviceToken(app, user.uid, current)
+            if (previous.isNotBlank() && previous != current) deleteDeviceToken(app, user.uid, previous)
+            runCatching { FirebaseMessaging.getInstance(app).deleteToken().await() }
+            store.remove("firebase_fcm_token")
+            store.remove("firebase_fcm_previous_token")
+        }
     }
 
     private suspend fun registerDeviceToken(app: FirebaseApp, userId: String, token: String, deviceName: String) {
