@@ -325,7 +325,7 @@ class MainActivity : AppCompatActivity() {
                     })
                     setOnClickListener { if (item.third == "home") showHome() else showPage(item.third) }
                 }
-                addView(tab, LayoutParams(0, -1, 1f))
+                addView(tab, LinearLayout.LayoutParams(0, -1, 1f))
             }
         }
     }
