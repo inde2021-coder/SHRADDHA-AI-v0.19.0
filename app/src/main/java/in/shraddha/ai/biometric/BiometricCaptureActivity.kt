@@ -88,16 +88,19 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
     @Volatile private var activeRecorder: AudioRecord? = null
-    private val randomChallenge = listOf(
-        "blue river seven" to "en-US",
-        "silver mango twenty" to "en-US",
-        "quiet garden five" to "en-US",
-        "orange window nine" to "en-US",
-        "नीला आसमान सात" to "hi-IN",
-        "चाँदी का आम बीस" to "hi-IN",
-        "शांत बगीचा पाँच" to "hi-IN",
-        "नारंगी खिड़की नौ" to "hi-IN"
-    ).random()
+    // Three independently selected words provide thousands of fresh spoken challenges
+    // per language, reducing trivial replay compared with a short fixed phrase list.
+    private val randomChallenge: Pair<String, String> = if (kotlin.random.Random.nextBoolean()) {
+        val first = listOf("amber", "silver", "quiet", "green", "golden", "gentle", "bright", "blue", "violet", "narrow", "calm", "rapid")
+        val second = listOf("river", "mango", "garden", "window", "forest", "candle", "mountain", "mirror", "basket", "planet", "lantern", "meadow")
+        val third = listOf("seven", "twenty", "five", "nine", "thirteen", "thirty", "four", "eleven", "sixteen", "eight", "twelve", "eighteen")
+        "${first.random()} ${second.random()} ${third.random()}" to "en-US"
+    } else {
+        val first = listOf("नीला", "सुनहरा", "शांत", "मीठा", "उजला", "हरा", "लाल", "छोटा", "तेज", "ठंडा", "चमकीला", "नया")
+        val second = listOf("आसमान", "आम", "बगीचा", "खिड़की", "जंगल", "दीपक", "पहाड़", "दर्पण", "नदी", "बादल", "किताब", "कमल")
+        val third = listOf("सात", "बीस", "पाँच", "नौ", "तेरह", "तीस", "चार", "ग्यारह", "सोलह", "आठ", "बारह", "अठारह")
+        "${first.random()} ${second.random()} ${third.random()}" to "hi-IN"
+    }
     private val randomPhrase get() = randomChallenge.first
     private val randomPhraseLocale get() = randomChallenge.second
     private var busy = false
