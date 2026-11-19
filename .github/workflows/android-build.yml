@@ -43,6 +43,9 @@ jobs:
       - name: Test backend relay consent policy
         run: node --test backend/relay-policy.test.js
 
+      - name: Test Gemini Live token request
+        run: node --test backend/gemini-live-token.test.js
+
       - name: Check patch whitespace
         run: git diff --check
 
