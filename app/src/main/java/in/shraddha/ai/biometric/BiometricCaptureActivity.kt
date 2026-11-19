@@ -70,7 +70,18 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var detector: com.google.mlkit.vision.face.FaceDetector? = null
     private var previewView: PreviewView? = null
     private var speechRecognizer: SpeechRecognizer? = null
-    private val randomPhrase = listOf("blue river seven", "silver mango twenty", "quiet garden five", "orange window nine").random()
+    private val randomChallenge = listOf(
+        "blue river seven" to "en-US",
+        "silver mango twenty" to "en-US",
+        "quiet garden five" to "en-US",
+        "orange window nine" to "en-US",
+        "नीला आसमान सात" to "hi-IN",
+        "चाँदी का आम बीस" to "hi-IN",
+        "शांत बगीचा पाँच" to "hi-IN",
+        "नारंगी खिड़की नौ" to "hi-IN"
+    ).random()
+    private val randomPhrase get() = randomChallenge.first
+    private val randomPhraseLocale get() = randomChallenge.second
     private var busy = false
     private var activeMode = "enroll"
     private var activePersonId = ""
@@ -336,7 +347,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         speechRecognizer = recognizer
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, randomPhraseLocale)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, randomPhraseLocale)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             putExtra(RecognizerIntent.EXTRA_PROMPT, randomPhrase)
         }
