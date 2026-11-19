@@ -73,7 +73,7 @@ object VoiceSessionManager {
         _statusText.value = "Connecting..."
         _state.value = NovaOrbState.CONNECTING
 
-        ConversationMemory.initialize(currentContext)
+        ConversationMemory.initialize(appContext ?: context.applicationContext)
         VoiceLatencyTracker.reset()
         InstalledAppLabelCache.prewarm(context)
 
