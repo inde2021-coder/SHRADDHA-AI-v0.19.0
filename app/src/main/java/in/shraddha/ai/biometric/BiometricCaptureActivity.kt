@@ -309,6 +309,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun faceEmbeddingFromFile(file: File): FloatArray {
         var bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: error("Camera image could not be decoded")
         var aligned: Bitmap? = null
+        var rawRgb: ByteArray? = null
         try {
             val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> 90f
@@ -362,6 +363,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             require(sharpness > 18.0) { "चेहरा धुंधला है; फोन स्थिर रखकर दोबारा capture करें" }
 
             val rgb = ByteArray(112 * 112 * 3)
+            rawRgb = rgb
             var offset = 0
             for (y in 0 until 112) for (x in 0 until 112) {
                 val pixel = alignedBitmap.getPixel(x, y)
@@ -371,6 +373,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             }
             return engine.faceEmbedding(rgb)
         } finally {
+            rawRgb?.fill(0)
             if (!bitmap.isRecycled) bitmap.recycle()
             aligned?.let { if (!it.isRecycled) it.recycle() }
         }
