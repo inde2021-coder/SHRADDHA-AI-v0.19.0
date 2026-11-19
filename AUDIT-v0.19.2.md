@@ -111,3 +111,5 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Connected the workflow runner's WAITING_CONFIRMATION state to a real Android confirmation dialog.
 - The dialog approves only the current checkpointed step; each later risky step prompts again.
 - Resume continues from the verified checkpoint rather than restarting the previous action. Declining leaves the plan stopped; it does not execute.
+
+- Resource-ID text entry now also requires exactly one visible, editable, non-sensitive field; duplicate IDs are refused rather than filling the first match.
