@@ -124,7 +124,13 @@ object ActionExecutor {
                 val confirmedMessage = args.optString("confirmed_message", "")
                 // Bind approval to the exact resolved recipient and exact message body.
                 // A generic yes must never authorize a changed recipient or edited text.
-                if (!userConfirmed || confirmedRecipient != phoneNumber || confirmedMessage != messageText) {
+                if (!MessageApprovalPolicy.isApproved(
+                        actualRecipient = phoneNumber,
+                        actualMessage = messageText,
+                        userConfirmed = userConfirmed,
+                        approvedRecipient = confirmedRecipient,
+                        approvedMessage = confirmedMessage
+                    )) {
                     result.put("status", "confirmation_required")
                     result.put("action", "message_confirmation_required")
                     result.put("recipient", phoneNumber)
