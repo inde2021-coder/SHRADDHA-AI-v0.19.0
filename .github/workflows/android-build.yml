@@ -46,6 +46,15 @@ jobs:
       - name: Test Gemini Live token request
         run: node --test backend/gemini-live-token.test.js
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test Windows PC companion safety policy
+        working-directory: desktop-companion/shraddha-pc-companion
+        run: python -m unittest -v
+
       - name: Check patch whitespace
         run: git diff --check
 
