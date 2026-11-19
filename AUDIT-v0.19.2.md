@@ -53,7 +53,7 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 
 ## Remaining gaps after this follow-up
 - These changes are source/CI work. Physical-device tests are still required for Android 13–16, different OEM accessibility trees, gesture coordinates, split-screen, keyboard overlays and apps with custom Compose/WebView/canvas controls.
-- Voice-driven app control currently provides screen-observe + one-action tool calls. The learned multi-step workflows remain in the separate Operator/Training console; a voice-callable workflow planner with approval/resume checkpoints is not yet integrated.
+- Voice-driven app control provides screen-observe + single-action tools and now exposes saved learned workflows through `list_app_workflows` / `run_app_workflow`. Training remains in the Operator/Training console; pause/resume checkpoints and voice-driven workflow creation are not yet integrated.
 - OCR/vision fallback for apps that expose no Accessibility nodes is not implemented. Screen capture and OCR need a separate consent-based path and privacy filtering.
 - The optional WhatsApp compatibility service still needs real-device validation. The current send path is brittle because WhatsApp UI and recipient metadata vary by version/language; do not treat the feature as production-reliable until verified on the user's device.
 - Generic social-media publishing, in-app search/form automation templates, file upload flows across arbitrary apps, notification action handling, clipboard control, app-specific API integrations and robust recovery from dialogs/errors remain incomplete.
