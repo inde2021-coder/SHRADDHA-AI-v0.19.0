@@ -107,16 +107,18 @@ object VoiceSessionManager {
             }
         )
 
+        val startEpoch = sessionEpoch.incrementAndGet()
         scope.launch {
             sessionMutex.withLock {
-                connectSession(isResuming = false)
+                connectSession(isResuming = false, expectedEpoch = startEpoch)
             }
         }
     }
 
-    private suspend fun connectSession(isResuming: Boolean) {
+    private suspend fun connectSession(isResuming: Boolean, expectedEpoch: Long? = null) {
         val currentContext = appContext ?: return
-        val currentEpoch = sessionEpoch.incrementAndGet()
+        val currentEpoch = expectedEpoch ?: sessionEpoch.incrementAndGet()
+        if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
         cancelToolJobs()
 
         synchronized(clientLock) {
