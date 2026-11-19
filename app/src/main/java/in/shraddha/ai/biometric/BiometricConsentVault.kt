@@ -70,14 +70,16 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     }
 
     @Synchronized
-    fun match(kind: String, probe: FloatArray, calibratedThreshold: Float): Match? {
+    fun match(kind: String, probe: FloatArray, calibratedThreshold: Float, onlyPersonId: String? = null): Match? {
         require(kind == "face" || kind == "speaker")
         require(calibratedThreshold in -1f..1f)
         val normalized = BiometricMath.unitNormalize(probe)
         var best: Match? = null
         val ids = readIndex()
         for (i in 0 until ids.length()) {
-            val person = readPerson(ids.optString(i)) ?: continue
+            val personId = ids.optString(i)
+            if (onlyPersonId != null && personId != onlyPersonId) continue
+            val person = readPerson(personId) ?: continue
             if (!person.optBoolean("consent")) continue
             val templates = person.optJSONArray(kind) ?: continue
             for (j in 0 until templates.length()) {
