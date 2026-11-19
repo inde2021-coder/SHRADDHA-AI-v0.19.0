@@ -192,7 +192,7 @@ async def run(args) -> None:
         session_id, device_id, device_token = saved["sessionId"], saved["deviceId"], saved["deviceToken"]
     else:
         raise RuntimeError("First run requires --pairing-code. Later runs reuse Windows Credential Manager.")
-    ws_base = args.base_url.rstrip("/").replace("https://", "wss://", 1)
+    ws_base = base_url.replace("https://", "wss://", 1)
     url = f"{ws_base}/ws?sessionId={quote(session_id)}&deviceId={quote(device_id)}"
     headers = {"Authorization": "Bearer " + device_token}
 
