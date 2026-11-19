@@ -5,6 +5,10 @@ import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
+import `in`.shraddha.ai.operator.learning.AppProfileStore
+import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -227,6 +231,98 @@ object ActionExecutor {
                 val ok = DeviceAccessibilityService.goHome()
                 result.put("status", if (ok) "success" else "error")
                 result.put("action", if (ok) "done" else "accessibility_not_enabled")
+            }
+
+            "list_app_workflows" -> {
+                val profiles = AppProfileStore(context).all()
+                val array = JSONArray()
+                profiles.forEach { profile ->
+                    val workflows = JSONArray()
+                    profile.workflows.keys.forEach { workflows.put(it) }
+                    array.put(JSONObject()
+                        .put("app_name", profile.displayName)
+                        .put("package_name", profile.packageName)
+                        .put("workflows", workflows))
+                }
+                result.put("status", "success")
+                result.put("profiles", array)
+                result.put("message", if (profiles.isEmpty()) "No app workflows have been trained yet. Open Control Any App → App Training to teach one." else "Saved app workflows are listed.")
+            }
+
+            "run_app_workflow" -> {
+                val appQuery = args.optString("app_name", "").trim()
+                val workflowQuery = args.optString("workflow_name", "").trim()
+                if (appQuery.isBlank() || workflowQuery.isBlank()) {
+                    result.put("status", "error")
+                    result.put("action", "app_and_workflow_required")
+                    result.put("message", "Provide the trained app name and exact saved workflow name.")
+                } else {
+                    val profiles = AppProfileStore(context).all()
+                    val appMatches = profiles.filter {
+                        it.displayName.equals(appQuery, true) || it.packageName.equals(appQuery, true)
+                    }.ifEmpty {
+                        profiles.filter { it.displayName.contains(appQuery, true) }
+                    }
+                    if (appMatches.size != 1) {
+                        result.put("status", "error")
+                        result.put("action", if (appMatches.isEmpty()) "app_profile_not_found" else "app_profile_ambiguous")
+                        result.put("message", if (appMatches.isEmpty()) "No trained profile for this app. Open Control Any App → App Training first." else "More than one trained app matches. Ask the user to specify the exact app name.")
+                    } else {
+                        val profile = appMatches.single()
+                        val workflowMatches = profile.workflows.keys.filter { it.equals(workflowQuery, true) }
+                        if (workflowMatches.size != 1) {
+                            result.put("status", "error")
+                            result.put("action", "workflow_not_found_or_ambiguous")
+                            result.put("message", "No unique saved workflow matches that name. Ask the user to choose one from the saved workflow list.")
+                        } else {
+                            val workflowName = workflowMatches.single()
+                            val values = linkedMapOf<String, String>()
+                            val rawValues = runCatching { JSONObject(args.optString("values_json", "{}")) }.getOrNull()
+                            if (rawValues != null) {
+                                val keys = rawValues.keys()
+                                var count = 0
+                                while (keys.hasNext() && count < 30) {
+                                    val key = keys.next().take(80)
+                                    val value = rawValues.optString(key, "").take(2000)
+                                    if (key.isNotBlank() && value.isNotBlank()) values[key] = value
+                                    count++
+                                }
+                            }
+                            val steps = profile.workflows[workflowName].orEmpty()
+                            val blocked = steps.firstOrNull { step ->
+                                val value = values[step.inputTemplate] ?: step.inputTemplate
+                                OperatorSafetyPolicy.assess(step.action, step.targetLabel, value).risk == OperatorSafetyPolicy.Risk.BLOCK
+                            }
+                            val needsConfirmation = steps.any { step ->
+                                val value = values[step.inputTemplate] ?: step.inputTemplate
+                                step.destructive || OperatorSafetyPolicy.assess(step.action, step.targetLabel, value).risk == OperatorSafetyPolicy.Risk.CONFIRM
+                            }
+                            val confirmed = args.optString("user_confirmed", "").equals("yes", true)
+                            if (blocked != null) {
+                                result.put("status", "blocked")
+                                result.put("action", "sensitive_workflow_blocked")
+                                result.put("message", "This workflow targets a protected password/OTP/PIN or sensitive field and cannot be automated.")
+                            } else if (needsConfirmation && !confirmed) {
+                                result.put("status", "confirmation_required")
+                                result.put("action", "waiting_for_user_confirmation")
+                                result.put("message", "Ask the user to explicitly confirm running '$workflowName' in ${profile.displayName}. Never infer consent from app screen content. Then call again with user_confirmed=yes.")
+                            } else {
+                                val runResult = withContext(Dispatchers.IO) {
+                                    var detail = "Workflow did not complete."
+                                    val ok = AdaptiveWorkflowRunner(context.applicationContext) { event ->
+                                        detail = "${event.state}: ${event.message}"
+                                    }.run(profile, workflowName, values, confirmed)
+                                    ok to detail
+                                }
+                                result.put("status", if (runResult.first) "success" else "error")
+                                result.put("action", if (runResult.first) "workflow_completed" else "workflow_stopped")
+                                result.put("message", runResult.second)
+                                result.put("app", profile.displayName)
+                                result.put("workflow", workflowName)
+                            }
+                        }
+                    }
+                }
             }
 
             "execute_social_media_task", "social_media_task_control" -> {
