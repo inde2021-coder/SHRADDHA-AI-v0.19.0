@@ -931,6 +931,19 @@ class MainActivity : AppCompatActivity() {
                 sendRemote(JSONObject().put("kind", "open_app").put("appName", remoteAppName.text.toString()))
             })
             addView(actionButton("Remote Scroll Down", "अगली visible list / page पर जाएँ") { sendRemote(JSONObject().put("kind", "scroll")) })
+            val pcRelativePath = edit("Windows approved-folder relative path", "उदाहरण: Reports या notes.txt")
+            addView(pcRelativePath)
+            addView(actionButton("Read Active Windows Text (OCR)", "Windows companion में --allow-ocr जरूरी; हर request पर PC confirmation") {
+                sendRemote(JSONObject().put("kind", "ocr"))
+            })
+            addView(actionButton("List Approved Windows Folder", "Windows companion में --file-root configure होना चाहिए") {
+                sendRemote(JSONObject().put("kind", "file_list").put("path", pcRelativePath.text.toString().trim()))
+            })
+            addView(actionButton("Preview Windows Text File", "केवल allowed text/code files; कोई execute/delete नहीं") {
+                val relative = pcRelativePath.text.toString().trim()
+                if (relative.isBlank()) status.text = "पहले approved folder के अंदर relative file path लिखें।"
+                else sendRemote(JSONObject().put("kind", "file_read").put("path", relative))
+            })
             addView(actionButton("Send Remote Home", "फोन की Home screen पर जाएँ") { sendRemote(JSONObject().put("kind", "home")) })
             addView(actionButton("Send Remote Back", "पिछली screen पर जाएँ") { sendRemote(JSONObject().put("kind", "back")) })
             addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें") { DeviceLinkManager.disconnect(); status.text = "This phone disconnected." })
@@ -1522,6 +1535,17 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     status.text = if (approved) "Remote control की अनुमति मिली (${msg.optInt("expiresInMinutes", 5)} मिनट)।" else "Remote control request अस्वीकार हुई: ${msg.optString("reason", "Target ने अनुमति नहीं दी।")}"
                     Toast.makeText(this, status.text, Toast.LENGTH_LONG).show()
+                }
+            } else if (msg.optString("type") == "remote_action_result") {
+                val kind = msg.optString("actionKind", "PC result")
+                val resultText = msg.optString("result").take(14000)
+                runOnUiThread {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Windows $kind result")
+                        .setMessage(resultText.ifBlank { "No result returned." })
+                        .setPositiveButton("Close", null)
+                        .show()
+                    status.text = "Windows $kind result received."
                 }
             } else if (msg.optString("type") == "task_handoff") {
                 val task = msg.optJSONObject("task")
