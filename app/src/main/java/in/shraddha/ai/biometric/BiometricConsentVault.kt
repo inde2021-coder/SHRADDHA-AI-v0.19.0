@@ -28,29 +28,34 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         require(displayName.isNotBlank() && displayName.length <= 80)
         require(kind == "face" || kind == "speaker")
         val normalized = BiometricMath.unitNormalize(embedding)
-        // Read and validate the index before writing any profile data. A corrupt or
-        // undecryptable index must never create an unindexed biometric template.
-        val ids = readIndex()
-        check(store.remove(thresholdKey(kind))) { "Could not invalidate the stale biometric threshold" }
-        val key = PREFIX + personId
-        val person = readPerson(personId) ?: run {
-            require(ids.length() < MAX_PEOPLE) { "Person directory limit reached" }
-            JSONObject().put("id", personId).put("name", displayName)
-                .put("consentVersion", CONSENT_VERSION).put("consentAt", System.currentTimeMillis())
-                .put("consent", true).put("face", JSONArray()).put("speaker", JSONArray())
-        }
-        require(person.optBoolean("consent")) { "Consent was withdrawn" }
-        person.put("name", displayName)
-        val templates = person.optJSONArray(kind) ?: JSONArray()
-        require(templates.length() < MAX_TEMPLATES_PER_KIND) { "Template limit reached; remove old samples first" }
-        val consentAt = System.currentTimeMillis()
-        templates.put(JSONObject().put("dimension", normalized.size).put("vector", encode(normalized))
-            .put("createdAt", consentAt).put("consentAt", consentAt).put("consentVersion", CONSENT_VERSION))
-        person.put(kind, templates)
-        check(store.put(key, person.toString()).isSuccess) { "Encrypted biometric save failed" }
-        if ((0 until ids.length()).none { ids.optString(it) == personId }) {
-            ids.put(personId)
-            check(store.put(INDEX, ids.toString()).isSuccess) { "Biometric index save failed" }
+        try {
+            // Read and validate the index before writing any profile data. A corrupt or
+            // undecryptable index must never create an unindexed biometric template.
+            val ids = readIndex()
+            check(store.remove(thresholdKey(kind))) { "Could not invalidate the stale biometric threshold" }
+            val key = PREFIX + personId
+            val person = readPerson(personId) ?: run {
+                require(ids.length() < MAX_PEOPLE) { "Person directory limit reached" }
+                JSONObject().put("id", personId).put("name", displayName)
+                    .put("consentVersion", CONSENT_VERSION).put("consentAt", System.currentTimeMillis())
+                    .put("consent", true).put("face", JSONArray()).put("speaker", JSONArray())
+            }
+            require(person.optBoolean("consent")) { "Consent was withdrawn" }
+            person.put("name", displayName)
+            val templates = person.optJSONArray(kind) ?: JSONArray()
+            require(templates.length() < MAX_TEMPLATES_PER_KIND) { "Template limit reached; remove old samples first" }
+            val consentAt = System.currentTimeMillis()
+            val encoded = encode(normalized)
+            templates.put(JSONObject().put("dimension", normalized.size).put("vector", encoded)
+                .put("createdAt", consentAt).put("consentAt", consentAt).put("consentVersion", CONSENT_VERSION))
+            person.put(kind, templates)
+            check(store.put(key, person.toString()).isSuccess) { "Encrypted biometric save failed" }
+            if ((0 until ids.length()).none { ids.optString(it) == personId }) {
+                ids.put(personId)
+                check(store.put(INDEX, ids.toString()).isSuccess) { "Biometric index save failed" }
+            }
+        } finally {
+            normalized.fill(0f)
         }
     }
 
