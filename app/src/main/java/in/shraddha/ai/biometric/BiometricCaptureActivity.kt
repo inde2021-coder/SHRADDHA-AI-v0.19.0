@@ -45,7 +45,6 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
 /** Foreground, user-started biometric capture. Samples are processed locally and discarded. */
@@ -64,10 +63,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private lateinit var message: TextView
     private lateinit var action: Button
     private lateinit var cameraExecutor: ExecutorService
-    private val challengeIndex = AtomicInteger(0)
-    private val blinkClosed = AtomicBoolean(false)
+    private val livenessGate = BiometricLivenessGate()
     private val livenessPassed = AtomicBoolean(false)
-    private val challenges = listOf("BLINK", "TURN_LEFT", "TURN_RIGHT").shuffled()
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
     private var detector: com.google.mlkit.vision.face.FaceDetector? = null
@@ -91,7 +88,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
         val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || id.isBlank() || name.isBlank() || (mode == "match" && !threshold.isFinite())) {
+        if (!consent || id.isBlank() || name.isBlank() || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
@@ -140,15 +137,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
         setContentView(root)
         action.isEnabled = true
-        action.tag = Pair(mode, Triple(id, name, threshold))
     }
 
-    private fun challengeText(): String = when (challenges.getOrNull(challengeIndex.get())) {
-        "BLINK" -> "Live check 1/3: blink naturally, then open both eyes"
-        "TURN_LEFT" -> "Live check 2/3: slowly turn your face to your left"
-        "TURN_RIGHT" -> "Live check 3/3: slowly turn your face to your right"
-        else -> "Live check complete. Tap capture to continue."
-    }
+    private fun challengeText(): String = livenessGate.prompt()
 
     private fun startCamera() {
         val view = previewView ?: return
@@ -183,27 +174,12 @@ class BiometricCaptureActivity : AppCompatActivity() {
             if (livenessPassed.get()) return@addOnSuccessListener
             if (faces.size != 1) { runOnUiThread { message.text = "Keep exactly one face in the frame." }; return@addOnSuccessListener }
             val face = faces.first()
-            val step = challenges.getOrNull(challengeIndex.get()) ?: return@addOnSuccessListener
-            val left = face.leftEyeOpenProbability ?: 1f
-            val right = face.rightEyeOpenProbability ?: 1f
-            val eyes = minOf(left, right)
-            val passed = when (step) {
-                "BLINK" -> { if (eyes < 0.25f) blinkClosed.set(true); blinkClosed.get() && eyes > 0.65f }
-                "TURN_LEFT" -> face.headEulerAngleY < -18f
-                "TURN_RIGHT" -> face.headEulerAngleY > 18f
-                else -> false
-            }
-            if (passed) {
-                val next = challengeIndex.incrementAndGet()
-                if (next >= challenges.size) {
-                    livenessPassed.set(true)
-                    runOnUiThread { message.text = "Live challenge passed. Tap capture to finish."; action.text = "Capture and continue"; action.isEnabled = true }
-                    imageAnalysis?.clearAnalyzer()
-                    return@addOnSuccessListener
-                }
-                if (challenges[next] == "BLINK") blinkClosed.set(false)
-                runOnUiThread { message.text = challengeText() }
-            }
+            val complete = livenessGate.observe(1, face.leftEyeOpenProbability ?: 1f, face.rightEyeOpenProbability ?: 1f, face.headEulerAngleY)
+            if (complete) {
+                livenessPassed.set(true)
+                runOnUiThread { message.text = "Active liveness challenge passed. Tap capture to finish."; action.text = "Capture and continue"; action.isEnabled = true }
+                imageAnalysis?.clearAnalyzer()
+            } else runOnUiThread { message.text = challengeText() }
         }.addOnFailureListener { runOnUiThread { message.text = "Face tracking error: ${it.message}" } }
             .addOnCompleteListener { proxy.close() }
     }
