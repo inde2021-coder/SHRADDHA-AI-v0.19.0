@@ -1762,16 +1762,17 @@ class MainActivity : AppCompatActivity() {
             })
             fun launchCapture(kind: String, mode: String) {
                 val selected = people().getOrNull(profileSpinner.selectedItemPosition)
-                if (selected == null) { status.text = "पहले consent वाला Person Profile बनाएँ।"; return }
-                if (!consent.isChecked) { status.text = "Capture से पहले व्यक्ति की स्पष्ट consent दोबारा confirm करें।"; return }
+                if (mode == "enroll" && selected == null) { status.text = "पहले consent वाला Person Profile बनाएँ।"; return }
+                if (mode == "match" && people().isEmpty()) { status.text = "पहले कम-से-कम एक consented Person Profile और biometric template enroll करें।"; return }
+                if (!consent.isChecked) { status.text = "Capture से पहले स्पष्ट consent की पुष्टि करें।"; return }
                 val thresholdText = if (kind == "face") faceThreshold.text.toString().trim() else speakerThreshold.text.toString().trim()
                 val threshold = if (mode == "match") thresholdText.toFloatOrNull() else Float.NaN
                 if (mode == "match" && (threshold == null || threshold !in 0f..1f)) { status.text = "Match के लिए पहले locally calibrated threshold 0 से 1 के बीच भरें।"; return }
                 val request = Intent(this@MainActivity, BiometricCaptureActivity::class.java)
                     .putExtra(BiometricCaptureActivity.EXTRA_KIND, kind)
                     .putExtra(BiometricCaptureActivity.EXTRA_MODE, mode)
-                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, selected.optString("id"))
-                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, selected.optString("name"))
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, if (mode == "enroll") selected!!.optString("id") else "")
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, if (mode == "enroll") selected!!.optString("name") else "")
                     .putExtra(BiometricCaptureActivity.EXTRA_CONSENT, true)
                     .putExtra(BiometricCaptureActivity.EXTRA_THRESHOLD, threshold ?: Float.NaN)
                 startActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
