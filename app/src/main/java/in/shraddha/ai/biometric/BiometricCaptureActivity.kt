@@ -267,6 +267,28 @@ class BiometricCaptureActivity : AppCompatActivity() {
         require(transform.setPolyToPoly(source, 0, target, 0, 5)) { "Five-point face alignment failed" }
         val aligned = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
         Canvas(aligned).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
+        val gray = IntArray(112 * 112)
+        var brightness = 0.0
+        for (y in 0 until 112) for (x in 0 until 112) {
+            val pixel = aligned.getPixel(x, y)
+            val value = (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114).toInt()
+            gray[y * 112 + x] = value
+            brightness += value
+        }
+        val meanBrightness = brightness / gray.size
+        var lapSum = 0.0
+        var lapSquare = 0.0
+        var lapCount = 0
+        for (y in 1 until 111) for (x in 1 until 111) {
+            val i = y * 112 + x
+            val lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - 112] - gray[i + 112]
+            lapSum += lap
+            lapSquare += lap.toDouble() * lap
+            lapCount++
+        }
+        val sharpness = lapSquare / lapCount - (lapSum / lapCount) * (lapSum / lapCount)
+        require(meanBrightness in 35.0..220.0) { "रोशनी कम/ज्यादा है; समान रोशनी में फिर से capture करें" }
+        require(sharpness > 18.0) { "चेहरा धुंधला है; फोन स्थिर रखकर दोबारा capture करें" }
         val rgb = ByteArray(112 * 112 * 3)
         var offset = 0
         for (y in 0 until 112) for (x in 0 until 112) {
@@ -340,7 +362,11 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 recorder.stop()
                 val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
                 val rms = sqrt(samples.map { it * it }.average()).toFloat()
-                require(rms > 0.008f) { "आवाज़ बहुत धीमी है; शांत जगह में दोबारा कोशिश करें" }
+                val peak = samples.maxOf { kotlin.math.abs(it) }
+                val clipped = samples.count { kotlin.math.abs(it) > 0.995f }
+                val activeWindows = samples.toList().chunked(4000).count { frame -> sqrt(frame.map { it * it }.average()).toFloat() > 0.006f }
+                require(rms > 0.008f && activeWindows >= 8) { "आवाज़ बहुत धीमी/रुकी हुई है; शांत जगह में पूरा phrase दोहराएँ" }
+                require(peak < 0.999f && clipped < samples.size / 100) { "Audio clipping/distortion है; microphone से थोड़ा दूर बोलें" }
                 val embedding = engine.speakerEmbedding(samples)
                 val extras = intent
                 val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
