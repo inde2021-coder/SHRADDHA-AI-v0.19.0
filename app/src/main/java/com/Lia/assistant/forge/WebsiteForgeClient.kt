@@ -1,5 +1,7 @@
 package com.Lia.assistant.forge
 
+import in.shraddha.ai.R
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
