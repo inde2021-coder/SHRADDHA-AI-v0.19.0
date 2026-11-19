@@ -187,32 +187,43 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     fun calibrateThreshold(kind: String): Result<CalibrationResult> = runCatching {
         require(kind == "face" || kind == "speaker")
         val groups = mutableListOf<Pair<String, List<FloatArray>>>()
-        val ids = readIndex()
-        for (i in 0 until ids.length()) {
-            val person = readPerson(ids.optString(i)) ?: continue
-            if (!person.optBoolean("consent")) continue
-            val templates = person.optJSONArray(kind) ?: continue
-            val vectors = (0 until templates.length()).map { index ->
-                val item = templates.getJSONObject(index)
-                val dimension = item.getInt("dimension")
-                decode(item.getString("vector"), dimension)
+        try {
+            val ids = readIndex()
+            for (i in 0 until ids.length()) {
+                val person = readPerson(ids.optString(i)) ?: continue
+                if (!person.optBoolean("consent")) continue
+                val templates = person.optJSONArray(kind) ?: continue
+                val vectors = mutableListOf<FloatArray>()
+                try {
+                    for (index in 0 until templates.length()) {
+                        val item = templates.getJSONObject(index)
+                        val dimension = item.getInt("dimension")
+                        vectors.add(decode(item.getString("vector"), dimension))
+                    }
+                } catch (error: Exception) {
+                    vectors.forEach { it.fill(0f) }
+                    throw error
+                }
+                if (vectors.size >= 2) groups.add(person.optString("id") to vectors)
+                else vectors.forEach { it.fill(0f) }
             }
-            if (vectors.size >= 2) groups.add(person.optString("id") to vectors)
-        }
-        require(groups.size >= 2) { "कम-से-कम 2 अलग consented लोगों के 2-2 samples जरूरी हैं" }
-        val genuine = mutableListOf<Float>()
-        val impostor = mutableListOf<Float>()
-        for ((_, vectors) in groups) for (a in vectors.indices) for (b in a + 1 until vectors.size) {
-            if (vectors[a].size == vectors[b].size) genuine.add(BiometricMath.cosineSimilarity(vectors[a], vectors[b]))
-        }
-        for (a in groups.indices) for (b in a + 1 until groups.size) {
-            for (left in groups[a].second) for (right in groups[b].second) {
-                if (left.size == right.size) impostor.add(BiometricMath.cosineSimilarity(left, right))
+            require(groups.size >= 2) { "कम-से-कम 2 अलग consented लोगों के 2-2 samples जरूरी हैं" }
+            val genuine = mutableListOf<Float>()
+            val impostor = mutableListOf<Float>()
+            for ((_, vectors) in groups) for (a in vectors.indices) for (b in a + 1 until vectors.size) {
+                if (vectors[a].size == vectors[b].size) genuine.add(BiometricMath.cosineSimilarity(vectors[a], vectors[b]))
             }
+            for (a in groups.indices) for (b in a + 1 until groups.size) {
+                for (left in groups[a].second) for (right in groups[b].second) {
+                    if (left.size == right.size) impostor.add(BiometricMath.cosineSimilarity(left, right))
+                }
+            }
+            require(genuine.isNotEmpty() && impostor.isNotEmpty()) { "Calibration samples are insufficient" }
+            val calibrated = BiometricMath.calibrateThreshold(genuine, impostor)
+            CalibrationResult(calibrated.threshold, calibrated.minimumGenuine, calibrated.maximumImpostor, genuine.size, impostor.size)
+        } finally {
+            groups.forEach { (_, vectors) -> vectors.forEach { it.fill(0f) } }
         }
-        require(genuine.isNotEmpty() && impostor.isNotEmpty()) { "Calibration samples are insufficient" }
-        val calibrated = BiometricMath.calibrateThreshold(genuine, impostor)
-        CalibrationResult(calibrated.threshold, calibrated.minimumGenuine, calibrated.maximumImpostor, genuine.size, impostor.size)
     }
 
     data class Match(val personId: String, val name: String, val kind: String, val similarity: Float)
