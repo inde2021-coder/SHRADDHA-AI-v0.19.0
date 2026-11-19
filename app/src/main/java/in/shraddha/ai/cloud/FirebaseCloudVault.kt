@@ -53,6 +53,8 @@ class FirebaseCloudVault(private val context: Context) {
             defaultApp.options.projectId == BuildConfig.FIREBASE_PROJECT_ID) {
             "The default FirebaseApp belongs to a different project; correct the Firebase configuration before enabling FCM."
         }
+        val pushConsent = EncryptedFeatureStore(context).get("firebase_fcm_consent").getOrNull() == "true"
+        FirebaseMessaging.getInstance(defaultApp).isAutoInitEnabled = pushConsent
         return FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
             ?: FirebaseApp.initializeApp(context, options, APP_NAME)
             ?: error("Firebase initialization failed")
@@ -276,9 +278,18 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
-            val token = FirebaseMessaging.getInstance(FirebaseApp.getInstance()).token.await()
-            require(token.length in 20..4096) { "Firebase returned an invalid device token" }
             val store = EncryptedFeatureStore(context)
+            val messaging = FirebaseMessaging.getInstance(FirebaseApp.getInstance())
+            store.put("firebase_fcm_consent", "true").getOrThrow()
+            messaging.isAutoInitEnabled = true
+            val token = try {
+                messaging.token.await()
+            } catch (error: Exception) {
+                store.put("firebase_fcm_consent", "false")
+                messaging.isAutoInitEnabled = false
+                throw error
+            }
+            require(token.length in 20..4096) { "Firebase returned an invalid device token" }
             val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
             val rotated = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
             if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, user.uid, previous)
@@ -294,6 +305,7 @@ class FirebaseCloudVault(private val context: Context) {
         val store = EncryptedFeatureStore(context)
         // A cached token is never uploaded unless the user explicitly enabled push notifications.
         if (store.get("firebase_push_consent").getOrNull() != "true") return
+        if (store.get("firebase_fcm_consent").getOrNull() != "true") return
         val token = store.get("firebase_fcm_token").getOrNull().orEmpty()
         val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
         if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, userId, previous)
@@ -323,9 +335,12 @@ class FirebaseCloudVault(private val context: Context) {
             val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
             if (current.isNotBlank()) deleteDeviceToken(app, user.uid, current)
             if (previous.isNotBlank() && previous != current) deleteDeviceToken(app, user.uid, previous)
-            runCatching { FirebaseMessaging.getInstance(FirebaseApp.getInstance()).deleteToken().await() }
-            store.remove("firebase_fcm_token")
-            store.remove("firebase_fcm_previous_token")
+            store.put("firebase_fcm_consent", "false").getOrThrow()
+            val messaging = FirebaseMessaging.getInstance(FirebaseApp.getInstance())
+            messaging.isAutoInitEnabled = false
+            messaging.deleteToken().await()
+            check(store.remove("firebase_fcm_token")) { "Could not clear local FCM token" }
+            check(store.remove("firebase_fcm_previous_token")) { "Could not clear rotated FCM token" }
         }
     }
 
