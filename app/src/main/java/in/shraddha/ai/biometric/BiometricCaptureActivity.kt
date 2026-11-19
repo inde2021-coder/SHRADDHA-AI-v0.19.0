@@ -294,7 +294,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     file.delete()
                     if (mode == "enroll") {
                         vault.enroll(id, name, "face", embedding, true).getOrThrow()
-                        finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.")
+                        finishWith("Face template encrypted and saved for $name. SFace inference ${engine.lastFaceInferenceMs} ms • model load ${engine.faceModelLoadMs} ms • original camera frame discarded.")
                     } else {
                         val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
                         finishWith(match?.let { "Face match: ${it.name} • similarity %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold • SFace inference ${engine.lastFaceInferenceMs} ms.")
