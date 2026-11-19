@@ -5,7 +5,7 @@
 - People Memory profiles receive stable random IDs and a consent timestamp. The person must confirm the consent switch again before each capture session.
 - The user imports compatible ONNX weights locally. Face model: OpenCV Zoo SFace; speaker model: SpeechBrain ECAPA-TDNN ONNX.
 - Model sessions are loaded off the UI thread and are recreated inside the foreground capture activity.
-- Face flow uses CameraX front-camera preview and ML Kit face tracking. A randomized active challenge asks for a blink and left/right head turns. Only after all steps pass can the user capture one still frame.
+- Face flow uses CameraX front-camera preview and ML Kit face tracking. A randomized active challenge asks for a blink and head turns to one side and then the opposite side. Only after all steps pass can the user capture one still frame.
 - Face capture rejects multiple/no faces, small faces, excessive head pose, closed eyes, poor brightness and low sharpness. Five landmarks align the face to 112×112 before SFace embedding.
 - Speaker flow uses Android on-device speech recognition to verify a random English phrase. If on-device recognition is unavailable, it fails closed and does not use cloud speech recognition. It then records 5 seconds of mono 16 kHz PCM and checks silence/activity and clipping before ECAPA inference.
 - Enrollment stores only normalized embeddings in the Android Keystore AES-GCM encrypted feature store. Temporary face image files are deleted after processing; raw speaker PCM remains in memory and is discarded.
