@@ -523,7 +523,7 @@ async def run(args) -> None:
                     action = message.get("action") or {}
                     result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root, offline_model)
                     print("Remote action:", action.get("kind"), "=>", result[:500])
-                    if action.get("kind") in {"ocr", "file_list", "file_read", "offline_chat"}:
+                    if action.get("kind") in {"ocr", "file_list", "file_read", "file_search", "offline_chat"}:
                         await ws.send(json.dumps({"type": "remote_action_result", "targetDeviceId": message.get("fromDeviceId", ""), "actionKind": action.get("kind"), "result": result[:14000]}))
                 elif kind == "peer_status":
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
