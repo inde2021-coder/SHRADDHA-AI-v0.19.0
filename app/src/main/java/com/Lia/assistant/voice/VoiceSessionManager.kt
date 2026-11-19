@@ -30,6 +30,7 @@ object VoiceSessionManager {
     private val toolJobsLock = Any()
     private val toolJobs = mutableSetOf<Job>()
     private val sessionEpoch = AtomicLong(0)
+    private val audioEpoch = AtomicLong(0)
 
     private val _state = MutableStateFlow(NovaOrbState.IDLE)
     val state: StateFlow<NovaOrbState> = _state.asStateFlow()
@@ -79,6 +80,8 @@ object VoiceSessionManager {
         _lastError.value = null
         _statusText.value = "Connecting..."
         _state.value = NovaOrbState.CONNECTING
+        val currentAudioEpoch = audioEpoch.incrementAndGet()
+        val startEpoch = sessionEpoch.incrementAndGet()
 
         ConversationMemory.initialize(appContext ?: context.applicationContext)
         VoiceLatencyTracker.reset()
@@ -86,19 +89,19 @@ object VoiceSessionManager {
 
         audioIO = LiveAudioIO(
             onMicChunk = { bytes ->
-                if (_isActive.value && !_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
                     client?.sendAudio(bytes)
                 }
             },
             onMicAmplitude = { amp ->
-                if (!_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
                     _amplitude.value = amp
                     _vadActive.value = amp > 0.05f
                 }
             },
             onRecordingError = { message ->
                 scope.launch {
-                    if (_isActive.value) {
+                    if (_isActive.value && audioEpoch.get() == currentAudioEpoch) {
                         _lastError.value = message
                         _state.value = NovaOrbState.ERROR
                         _statusText.value = "Microphone unavailable: $message"
@@ -107,7 +110,6 @@ object VoiceSessionManager {
             }
         )
 
-        val startEpoch = sessionEpoch.incrementAndGet()
         scope.launch {
             sessionMutex.withLock {
                 connectSession(isResuming = false, expectedEpoch = startEpoch)
@@ -131,6 +133,7 @@ object VoiceSessionManager {
         val ephemeralToken = try {
             VoiceGatewaySettings.fetchEphemeralToken(currentContext)
         } catch (error: Exception) {
+            if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
             val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
             _isActive.value = false
             _state.value = NovaOrbState.ERROR
@@ -408,6 +411,7 @@ object VoiceSessionManager {
     fun stop() {
         _isActive.value = false
         sessionEpoch.incrementAndGet()
+        audioEpoch.incrementAndGet()
         cancelToolJobs()
         reconnectJob?.cancel()
         reconnectJob = null
