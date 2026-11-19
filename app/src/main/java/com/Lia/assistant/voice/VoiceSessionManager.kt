@@ -10,6 +10,7 @@ import com.Lia.assistant.data.PersonalityRepository
 import com.Lia.assistant.forge.ForgeController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -231,7 +232,13 @@ object VoiceSessionManager {
                 }
 
                 val toolJob = scope.launch(start = CoroutineStart.LAZY) {
-                    val result = ActionExecutor.execute(currentContext, name, args)
+                    val result = try {
+                        ActionExecutor.execute(currentContext, name, args)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        JSONObject().put("status", "error").put("message", error.localizedMessage ?: "Tool execution failed")
+                    }
                     if (sessionEpoch.get() == currentEpoch && _isActive.value) {
                         client?.sendToolResponse(id, name, result)
                         _state.value = NovaOrbState.LISTENING
