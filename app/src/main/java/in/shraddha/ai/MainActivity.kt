@@ -1803,9 +1803,9 @@ class MainActivity : AppCompatActivity() {
                         }
                         .onFailure { faceThreshold.text.clear(); status.text = "Face threshold save failed: ${it.message}" }
                 }.onFailure {
-                    biometricVault.clearThreshold("face")
+                    val cleared = biometricVault.clearThreshold("face")
                     faceThreshold.text.clear()
-                    status.text = "Face calibration blocked: ${it.message}"
+                    status.text = if (cleared) "Face calibration blocked: ${it.message}" else "Face calibration blocked and previous threshold could not be cleared. Do not use face matching until recalibrated."
                 }
             })
             addView(actionButton("CALIBRATE SPEAKER THRESHOLD", "कम-से-कम 2 consented लोगों के 2-2 voice samples से threshold निकालें") {
@@ -1818,9 +1818,9 @@ class MainActivity : AppCompatActivity() {
                         }
                         .onFailure { speakerThreshold.text.clear(); status.text = "Speaker threshold save failed: ${it.message}" }
                 }.onFailure {
-                    biometricVault.clearThreshold("speaker")
+                    val cleared = biometricVault.clearThreshold("speaker")
                     speakerThreshold.text.clear()
-                    status.text = "Speaker calibration blocked: ${it.message}"
+                    status.text = if (cleared) "Speaker calibration blocked: ${it.message}" else "Speaker calibration blocked and previous threshold could not be cleared. Do not use speaker matching until recalibrated."
                 }
             })
             fun launchCapture(kind: String, mode: String) {
