@@ -34,6 +34,7 @@ import `in`.shraddha.ai.vision.RemoteCameraService
 import org.json.JSONObject
 import org.json.JSONArray
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 
 class MainActivity : AppCompatActivity() {
     private lateinit var status: TextView
@@ -303,8 +304,11 @@ class MainActivity : AppCompatActivity() {
         pageRoot.addView(status, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         when (page) {
             "assistant" -> {
-                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
-                if (!::gatewayToken.isInitialized) gatewayToken = edit("Optional AI gateway token", "GATEWAY_TOKEN if configured")
+                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example").apply { setText(VoiceGatewaySettings.get(this@MainActivity).baseUrl) }
+                if (!::gatewayToken.isInitialized) gatewayToken = edit("AI gateway token", "Saved securely in Settings").apply {
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    setText(VoiceGatewaySettings.get(this@MainActivity).gatewayToken)
+                }
                 addAiBrainSection(pageRoot)
             }
             "expert" -> {
@@ -899,8 +903,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             addView(livePreview)
-            gatewayToken = edit("Optional AI gateway token", "GATEWAY_TOKEN if configured")
-            gatewayToken.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            gatewayToken = edit("AI gateway token", "Saved securely in Settings").apply {
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                setText(VoiceGatewaySettings.get(this@MainActivity).gatewayToken)
+            }
             addView(gatewayToken)
             visionProvider = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("gemini", "openai", "anthropic")) }
             addView(visionProvider)
