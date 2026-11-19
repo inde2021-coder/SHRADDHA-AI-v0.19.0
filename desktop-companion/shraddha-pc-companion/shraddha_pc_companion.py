@@ -40,6 +40,10 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return False
     if kind == "ocr" and not allow_ocr:
         return False
+    if kind == "offline_chat" and offline_model is None:
+        return False
+    if kind == "offline_chat":
+        return isinstance(action.get("prompt"), str) and 0 < len(action["prompt"].strip()) <= 4000
     if kind in {"file_list", "file_read"} and not file_root:
         return False
     if kind == "file_list":
@@ -60,7 +64,7 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
     if kind == "scroll":
         amount = action.get("amount", -3)
         return isinstance(amount, (int, float)) and not isinstance(amount, bool) and -10 <= amount <= 10 and amount != 0
-    return kind in {"back", "home", "ocr"}
+    return kind in {"back", "home", "ocr", "offline_chat"}
 
 
 def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | None:
@@ -193,8 +197,8 @@ def confirm(prompt: str) -> bool:
     return answer in {"y", "yes"}
 
 
-async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = False, file_root: str = "") -> str:
-    if not validate_action(action, allow_typing, allow_ocr, file_root):
+async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = False, file_root: str = "", offline_model=None) -> str:
+    if not validate_action(action, allow_typing, allow_ocr, file_root, offline_model):
         return "blocked_unsupported_or_invalid_action"
 
     import pyautogui
