@@ -113,20 +113,52 @@ async def execute_action(action: dict, allow_typing: bool) -> str:
     return "blocked_unsupported_action"
 
 
+def load_saved_pairing():
+    try:
+        import keyring
+        raw = keyring.get_password("shraddha-pc-companion", "device-pairing")
+        return json.loads(raw) if raw else None
+    except Exception as exc:
+        raise RuntimeError(f"Windows Credential Manager unavailable: {exc}") from exc
+
+
+def save_pairing(pair: dict, base_url: str) -> None:
+    try:
+        import keyring
+        keyring.set_password("shraddha-pc-companion", "device-pairing", json.dumps({
+            "baseUrl": base_url.rstrip("/"),
+            "sessionId": pair["sessionId"],
+            "deviceId": pair["deviceId"],
+            "deviceToken": pair["deviceToken"]
+        }))
+    except Exception as exc:
+        raise RuntimeError(f"Could not store pairing securely in Windows Credential Manager: {exc}") from exc
+
+
 async def run(args) -> None:
     try:
         import websockets
     except ImportError as exc:
         raise RuntimeError("Install requirements first: python -m pip install -r requirements.txt") from exc
 
-    if not args.base_url.startswith("https://"):
-        raise RuntimeError("Use the HTTPS URL of your deployed Shraddha relay.")
-    pair = await asyncio.to_thread(join_device, args.base_url, args.pairing_code, args.device_name)
+    saved = load_saved_pairing() if not args.pairing_code else None
+    base_url = (args.base_url or (saved or {}).get("baseUrl") or "").rstrip("/")
+    if not base_url.startswith("https://"):
+        raise RuntimeError("Use --base-url with the HTTPS URL of your deployed Shraddha relay.")
+    if args.pairing_code:
+        pair = await asyncio.to_thread(join_device, base_url, args.pairing_code, args.device_name)
+        save_pairing(pair, base_url)
+        print("Pairing credentials saved in Windows Credential Manager.")
+        session_id, device_id, device_token = pair["sessionId"], pair["deviceId"], pair["deviceToken"]
+    elif saved:
+        session_id, device_id, device_token = saved["sessionId"], saved["deviceId"], saved["deviceToken"]
+    else:
+        raise RuntimeError("First run requires --pairing-code. Later runs reuse Windows Credential Manager.")
     ws_base = args.base_url.rstrip("/").replace("https://", "wss://", 1)
-    url = f"{ws_base}/ws?sessionId={quote(pair['sessionId'])}&deviceId={quote(pair['deviceId'])}"
-    headers = {"Authorization": "Bearer " + pair["deviceToken"]}
+    url = f"{ws_base}/ws?sessionId={quote(session_id)}&deviceId={quote(device_id)}"
+    headers = {"Authorization": "Bearer " + device_token}
 
-    print(f"Paired as {args.device_name}. Device ID: {pair['deviceId']}")
+    print(f"Paired PC device ID: {device_id}")
     allow_control = await asyncio.to_thread(confirm, "Allow this paired phone to request temporary control of this PC?")
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=2**20) as ws:
         await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control}}))
@@ -171,11 +203,21 @@ async def run(args) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Consent-gated Shraddha AI Windows PC companion")
-    parser.add_argument("--base-url", required=True, help="HTTPS URL of your Shraddha relay")
-    parser.add_argument("--pairing-code", required=True, help="Six-digit code shown by the Android owner device")
+    parser.add_argument("--base-url", default="", help="HTTPS URL of your Shraddha relay (saved after pairing)")
+    parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
     parser.add_argument("--device-name", default="My Windows PC")
     parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")
+    parser.add_argument("--forget-pairing", action="store_true", help="Delete saved PC pairing from Windows Credential Manager and exit")
     args = parser.parse_args()
+    if args.forget_pairing:
+        try:
+            import keyring
+            keyring.delete_password("shraddha-pc-companion", "device-pairing")
+            print("Saved PC pairing deleted.")
+            return 0
+        except keyring.errors.PasswordDeleteError:
+            print("No saved PC pairing found.")
+            return 0
     try:
         asyncio.run(run(args))
         return 0
