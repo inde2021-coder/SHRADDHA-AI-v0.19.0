@@ -29,7 +29,8 @@ object DeviceRecoveryBundle {
         val appProfileCount: Int,
         val workflowCheckpointCount: Int,
         val hasMemory: Boolean,
-        val hasActiveProject: Boolean
+        val hasActiveProject: Boolean,
+        val hasKnowledgeGraph: Boolean
     )
 
     private data class Parsed(
@@ -37,7 +38,8 @@ object DeviceRecoveryBundle {
         val records: Map<String, String>,
         val memory: String,
         val activeProject: String,
-        val digitalTwin: JSONObject
+        val digitalTwin: JSONObject,
+        val knowledgeGraph: String
     )
 
     fun capture(context: Context): Result<String> = runCatching {
@@ -47,6 +49,8 @@ object DeviceRecoveryBundle {
         val memory = SecureMemoryVault(app).load().getOrThrow()
         val project = app.getSharedPreferences("shraddha_projects", Context.MODE_PRIVATE)
             .getString("active_project", "").orEmpty()
+        val graph = app.getSharedPreferences("shraddha_knowledge_graph", Context.MODE_PRIVATE).getString("nodes", "[]").orEmpty()
+        JSONArray(graph)
         val twinPrefs = app.getSharedPreferences("shraddha_digital_twin", Context.MODE_PRIVATE)
         val twin = JSONObject()
             .put("name", twinPrefs.getString("name", "").orEmpty())
@@ -60,7 +64,7 @@ object DeviceRecoveryBundle {
             .put("createdAt", System.currentTimeMillis())
             .put("items", items)
             .put("memory", memory)
-            .put("preferences", JSONObject().put("activeProject", project).put("digitalTwin", twin))
+            .put("preferences", JSONObject().put("activeProject", project).put("digitalTwin", twin).put("knowledgeGraph", graph))
             .toString()
         require(bundle.length <= MAX_BUNDLE_CHARS) {
             "Selected recovery bundle exceeds the 100 KB Firestore limit; remove older records first."
@@ -76,7 +80,8 @@ object DeviceRecoveryBundle {
             appProfileCount = parsed.records.keys.count { it.startsWith("app_profile_") },
             workflowCheckpointCount = parsed.records.keys.count { it.startsWith("workflow_checkpoint_") },
             hasMemory = parsed.memory.isNotBlank(),
-            hasActiveProject = parsed.activeProject.isNotBlank()
+            hasActiveProject = parsed.activeProject.isNotBlank(),
+            hasKnowledgeGraph = parsed.knowledgeGraph != "[]"
         )
     }
 
@@ -92,6 +97,7 @@ object DeviceRecoveryBundle {
         val oldMemory = memoryVault.load().getOrThrow()
         val projectPrefs = app.getSharedPreferences("shraddha_projects", Context.MODE_PRIVATE)
         val twinPrefs = app.getSharedPreferences("shraddha_digital_twin", Context.MODE_PRIVATE)
+        val graphPrefs = app.getSharedPreferences("shraddha_knowledge_graph", Context.MODE_PRIVATE)
         val localMemoryPrefs = app.getSharedPreferences("shraddha_local_memory", Context.MODE_PRIVATE)
         val oldProject = projectPrefs.getString("active_project", "").orEmpty()
         val oldTwin = JSONObject()
@@ -99,11 +105,13 @@ object DeviceRecoveryBundle {
             .put("language", twinPrefs.getString("language", "Hindi").orEmpty())
             .put("style", twinPrefs.getString("style", "step-by-step").orEmpty())
         val oldMirrorMemory = localMemoryPrefs.getString("notes", "").orEmpty()
+        val oldGraph = graphPrefs.getString("nodes", "[]").orEmpty()
 
         try {
             store.replaceAllWithPrefixes(parsed.records, prefixes).getOrThrow()
             check(writeProject(projectPrefs, parsed.activeProject)) { "Could not restore active project preferences" }
             check(writeTwin(twinPrefs, parsed.digitalTwin)) { "Could not restore digital twin preferences" }
+            check(graphPrefs.edit().putString("nodes", parsed.knowledgeGraph).commit()) { "Could not restore knowledge graph" }
             if (parsed.memory.isBlank()) {
                 check(memoryVault.clear()) { "Could not clear local encrypted memory" }
                 check(localMemoryPrefs.edit().remove("notes").commit()) { "Could not clear local memory mirror" }
@@ -115,6 +123,7 @@ object DeviceRecoveryBundle {
             runCatching { store.replaceAllWithPrefixes(oldRecords, prefixes).getOrThrow() }
             runCatching { writeProject(projectPrefs, oldProject) }
             runCatching { writeTwin(twinPrefs, oldTwin) }
+            runCatching { graphPrefs.edit().putString("nodes", oldGraph).commit() }
             runCatching {
                 if (oldMemory.isBlank()) memoryVault.clear() else memoryVault.save(oldMemory).getOrThrow()
                 if (oldMirrorMemory.isBlank()) localMemoryPrefs.edit().remove("notes").commit()
@@ -128,7 +137,8 @@ object DeviceRecoveryBundle {
             appProfileCount = parsed.records.keys.count { it.startsWith("app_profile_") },
             workflowCheckpointCount = parsed.records.keys.count { it.startsWith("workflow_checkpoint_") },
             hasMemory = parsed.memory.isNotBlank(),
-            hasActiveProject = parsed.activeProject.isNotBlank()
+            hasActiveProject = parsed.activeProject.isNotBlank(),
+            hasKnowledgeGraph = parsed.knowledgeGraph != "[]"
         )
     }
 
@@ -157,11 +167,15 @@ object DeviceRecoveryBundle {
         val memory = root.optString("memory", "")
         var project = ""
         var twin = JSONObject().put("name", "").put("language", "Hindi").put("style", "step-by-step")
+        var graph = "[]"
         if (version == 2) {
             require(root.optString("schema") == "shraddha-device-recovery-v2") { "Recovery bundle schema mismatch" }
             val preferences = root.optJSONObject("preferences") ?: error("Recovery preferences are missing")
             project = preferences.optString("activeProject", "")
             twin = preferences.optJSONObject("digitalTwin") ?: error("Digital twin preferences are malformed")
+            graph = preferences.optString("knowledgeGraph", "[]")
+            JSONArray(graph)
+            require(graph.length <= 80_000) { "Knowledge graph is too large" }
             require(project.length <= 100_000) { "Active project is too large" }
         } else {
             project = sourceItems.optString("active_project", "")
@@ -172,7 +186,7 @@ object DeviceRecoveryBundle {
         require(twin.optString("name").length <= 100 && twin.optString("language").length <= 40 && twin.optString("style").length <= 80) {
             "Digital twin preferences are invalid"
         }
-        return Parsed(version, records, memory, project, twin)
+        return Parsed(version, records, memory, project, twin, graph)
     }
 
     private fun validateRecord(key: String, value: String) {
