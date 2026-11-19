@@ -1,5 +1,8 @@
 import java.util.Properties
 import java.io.File
+import java.security.MessageDigest
+import java.net.URL
+import java.io.File
 
 plugins {
     id("com.android.application")
@@ -91,13 +94,10 @@ dependencies {
 }
 
 
-import java.security.MessageDigest
-import java.net.URL
-
-data class BiometricModelAsset(val fileName: String, val url: String, val sha256: String, val expectedBytes: Long)
+data class BiometricModelAsset(val fileName: String, val url: String, val sha256: String)
 val biometricModelAssets = listOf(
-    BiometricModelAsset("sface.onnx", "https://huggingface.co/opencv/opencv_zoo/resolve/39a1451/models/face_recognition_sface/face_recognition_sface_2021dec.onnx", "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79", 38_696_353L),
-    BiometricModelAsset("ecapa-any-length.onnx", "https://huggingface.co/kenrunio/transcriber-speaker-onnx/resolve/4467ef1/ecapa-any-length.onnx", "700b63064ee98981186f59f247d28e56f7f6ab265d8b50ebb450db5a8ce21dc7", 84_300_000L)
+    BiometricModelAsset("sface.onnx", "https://huggingface.co/opencv/opencv_zoo/resolve/39a1451/models/face_recognition_sface/face_recognition_sface_2021dec.onnx", "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"),
+    BiometricModelAsset("ecapa-any-length.onnx", "https://huggingface.co/kenrunio/transcriber-speaker-onnx/resolve/4467ef1/ecapa-any-length.onnx", "700b63064ee98981186f59f247d28e56f7f6ab265d8b50ebb450db5a8ce21dc7")
 )
 fun biometricSha256(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -119,7 +119,7 @@ val downloadBiometricModels by tasks.registering {
         directory.mkdirs()
         biometricModelAssets.forEach { model ->
             val target = File(directory, model.fileName)
-            if (target.isFile && target.length() == model.expectedBytes && biometricSha256(target) == model.sha256) {
+            if (target.isFile && biometricSha256(target) == model.sha256) {
                 logger.lifecycle("Verified cached biometric model: ${model.fileName}")
             } else {
                 target.delete()
@@ -133,7 +133,6 @@ val downloadBiometricModels by tasks.registering {
                 }.getInputStream().use { input ->
                     temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
                 }
-                check(temporary.length() == model.expectedBytes) { "Unexpected model size: ${model.fileName}" }
                 val actual = biometricSha256(temporary)
                 check(actual == model.sha256) { "Model SHA-256 mismatch for ${model.fileName}: $actual" }
                 check(temporary.renameTo(target)) { "Could not install ${model.fileName}" }
