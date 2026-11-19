@@ -41,6 +41,7 @@ import com.google.mlkit.vision.face.FaceLandmark
 import com.google.android.gms.tasks.Tasks
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
