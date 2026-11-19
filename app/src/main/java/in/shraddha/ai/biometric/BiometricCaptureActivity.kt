@@ -82,6 +82,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         cameraExecutor = Executors.newSingleThreadExecutor()
+        cacheDir.listFiles()?.filter { it.name.startsWith("biometric-frame-") }?.forEach { it.delete() }
         val kind = intent.getStringExtra(EXTRA_KIND) ?: "face"
         val mode = intent.getStringExtra(EXTRA_MODE) ?: "enroll"
         val id = intent.getStringExtra(EXTRA_PERSON_ID).orEmpty()
@@ -411,7 +412,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         runCatching { speechRecognizer?.destroy() }
         runCatching { detector?.close() }
         runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
-        runCatching { engine.close() }
+        Thread { runCatching { engine.close() } }.start()
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
         super.onDestroy()
     }
