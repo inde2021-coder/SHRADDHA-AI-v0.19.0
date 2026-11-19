@@ -216,18 +216,15 @@ fun SettingsScreen(
                     }
                 )
                 NovaSettingsRow(
-                    title = "Gemini Voice",
-                    subtitle = appState.voiceName,
+                    title = "Shraddha Voice Engine",
+                    subtitle = "Non-Google custom voice • requires SHRADDHA_TTS_URL on backend",
                     icon = Icons.Default.RecordVoiceOver,
                     onClick = {
-                        val nextVoice = when (appState.voiceName) {
-                            "Aoede" -> "Puck"
-                            "Puck" -> "Charon"
-                            "Charon" -> "Kore"
-                            "Kore" -> "Fenrir"
-                            else -> "Aoede"
-                        }
-                        appState.applyVoiceName(context, nextVoice)
+                        android.widget.Toast.makeText(
+                            context,
+                            "Deploy a licensed Hindi-English Shraddha voice model and configure SHRADDHA_TTS_URL on your HTTPS backend.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
                     }
                 )
             }
