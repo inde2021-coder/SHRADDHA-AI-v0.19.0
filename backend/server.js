@@ -6,6 +6,7 @@ import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps } from './plan-safety.js';
+import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility } from './social-publishing.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -15,7 +16,7 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare','/api/voice/synthesize']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare','/api/voice/synthesize','/api/social/publish']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
@@ -154,6 +155,49 @@ const server = http.createServer(async (req, res) => {
       session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
+    }
+    if (req.method === 'POST' && req.url === '/api/social/publish') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const body = await readBody(req, 12 * 1024);
+      let intent;
+      try { intent = validatePublishIntent(body); }
+      catch (error) { return json(res, 400, { error: error.message }); }
+      if (intent.platform === 'telegram') {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+        const chatId = process.env.TELEGRAM_CHAT_ID || '';
+        if (!botToken || !chatId || /\s/.test(botToken) || botToken.length > 256) {
+          return json(res, 503, { error: 'Telegram bot credentials and destination are not configured on the server' });
+        }
+        let upstream;
+        try {
+          upstream = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ chat_id: chatId, text: intent.text, disable_web_page_preview: true })
+          });
+        } catch { return json(res, 502, { error: 'Telegram service could not be reached' }); }
+        const result = await upstream.json().catch(() => ({}));
+        if (!upstream.ok || result.ok !== true) return json(res, 502, { error: 'Telegram did not accept the post' });
+        return json(res, 200, { ok: true, platform: 'telegram', messageId: result.result?.message_id || null, confirmedPreview: true });
+      }
+      const base = process.env.MASTODON_BASE_URL || '';
+      const accessToken = process.env.MASTODON_ACCESS_TOKEN || '';
+      if (!base || !accessToken) return json(res, 503, { error: 'Mastodon server URL and access token are not configured on the server' });
+      let origin, visibility;
+      try { origin = validateMastodonOrigin(base); visibility = mastodonVisibility(process.env.MASTODON_VISIBILITY); }
+      catch (error) { return json(res, 503, { error: error.message }); }
+      let upstream;
+      try {
+        upstream = await fetch(origin + '/api/v1/statuses', {
+          method: 'POST',
+          headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
+          signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({ status: intent.text, visibility })
+        });
+      } catch { return json(res, 502, { error: 'Mastodon service could not be reached' }); }
+      const result = await upstream.json().catch(() => ({}));
+      if (!upstream.ok || typeof result.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the post' });
+      return json(res, 200, { ok: true, platform: 'mastodon', postId: result.id, url: typeof result.url === 'string' ? result.url : '', visibility, confirmedPreview: true });
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
