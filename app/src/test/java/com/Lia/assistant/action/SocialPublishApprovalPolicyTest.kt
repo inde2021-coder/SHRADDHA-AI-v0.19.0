@@ -13,13 +13,15 @@ class SocialPublishApprovalPolicyTest {
         assertTrue(SocialPublishApprovalPolicy.validate("instagram", "TEXT_POST", "Hello") != null)
     }
 
-    @Test fun appliesPlatformSpecificCharacterLimitsByUnicodeCodePoint() {
+    @Test fun appliesPlatformSpecificCharacterLimitsUsingBackendCountingRules() {
+        // Bluesky counts Unicode code points, while LinkedIn/Mastodon/Telegram backend
+        // adapters currently enforce JavaScript UTF-16 string length.
         assertNull(SocialPublishApprovalPolicy.validate("bluesky", "TEXT_POST", "😀".repeat(300)))
         assertTrue(SocialPublishApprovalPolicy.validate("bluesky", "TEXT_POST", "😀".repeat(301)) != null)
-        assertNull(SocialPublishApprovalPolicy.validate("linkedin", "CREATE_POST", "x".repeat(3000)))
-        assertTrue(SocialPublishApprovalPolicy.validate("linkedin", "CREATE_POST", "x".repeat(3001)) != null)
-        assertNull(SocialPublishApprovalPolicy.validate("mastodon", "TEXT_POST", "x".repeat(5000)))
-        assertTrue(SocialPublishApprovalPolicy.validate("telegram", "TEXT_POST", "x".repeat(5001)) != null)
+        assertNull(SocialPublishApprovalPolicy.validate("linkedin", "CREATE_POST", "😀".repeat(1500)))
+        assertTrue(SocialPublishApprovalPolicy.validate("linkedin", "CREATE_POST", "😀".repeat(1501)) != null)
+        assertNull(SocialPublishApprovalPolicy.validate("mastodon", "TEXT_POST", "😀".repeat(2500)))
+        assertTrue(SocialPublishApprovalPolicy.validate("telegram", "TEXT_POST", "😀".repeat(2501)) != null)
     }
 
     @Test fun rejectsMediaAndUnsupportedActions() {
