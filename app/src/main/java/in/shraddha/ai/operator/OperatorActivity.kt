@@ -101,15 +101,28 @@ class OperatorActivity : Activity() {
             val steps = profile.workflows[name].orEmpty()
             val vars = EditText(this).apply { hint = "Variable values: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
             val container = LinearLayout(this).apply { setPadding(24, 12, 24, 0); addView(vars) }
-            android.app.AlertDialog.Builder(this).setTitle("Workflow: $name").setMessage("ऐप: ${profile.displayName}\nचरण: ${steps.size}\nहर चरण पर स्क्रीन दोबारा पढ़ी जाएगी। संवेदनशील/पासवर्ड फ़ील्ड ब्लॉक रहेंगे।")
-                .setView(container).setNegativeButton("रद्द") { _, _ -> }.setPositiveButton("चलाएँ") { _, _ ->
+            val checkpoint = AdaptiveWorkflowRunner(this) { }.resumableCheckpoint(profile, name)
+            val dialog = android.app.AlertDialog.Builder(this).setTitle("Workflow: $name")
+                .setMessage("ऐप: ${profile.displayName}\nचरण: ${steps.size}\nहर चरण पर स्क्रीन दोबारा पढ़ी जाएगी। संवेदनशील/पासवर्ड फ़ील्ड ब्लॉक रहेंगे।" +
+                    if (checkpoint != null) "\n\nसुरक्षित checkpoint: चरण ${checkpoint.nextStep + 1}/${checkpoint.totalSteps} से आगे बढ़ सकते हैं।" else "")
+                .setView(container)
+                .setNegativeButton("रद्द", null)
+                .setPositiveButton("शुरू से चलाएँ") { _, _ ->
                     val map = vars.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                    runLearned(profile, name, map)
-                }.show()
+                    runLearned(profile, name, map, resume = false)
+                }
+                .setNeutralButton("Checkpoint से Resume") { _, _ ->
+                    val map = vars.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
+                    runLearned(profile, name, map, resume = true)
+                }.create()
+            dialog.setOnShowListener {
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).isEnabled = checkpoint != null
+            }
+            dialog.show()
         }.show()
     }
 
-    private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>) {
+    private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, resume: Boolean = false) {
         lateinit var runner: AdaptiveWorkflowRunner
         runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
             val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
@@ -124,7 +137,7 @@ class OperatorActivity : Activity() {
                     }.show()
             }
         } }
-        Thread { runner.run(profile, name, values, confirmed = false, resume = false) }.start()
+        Thread { runner.run(profile, name, values, confirmed = false, resume = resume) }.start()
     }
 
     private fun field(hintText: String) = EditText(this).apply {
