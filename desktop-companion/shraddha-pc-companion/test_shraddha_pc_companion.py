@@ -84,5 +84,12 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "file_read", "path": ""}, file_root="C:/Approved"))
 
 
+    def test_offline_chat_requires_a_loaded_local_model_and_bounded_prompt(self):
+        self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "Hello"}))
+        self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "Hello"}, offline_model=object()) is False)
+        self.assertFalse(validate_action({"kind": "offline_chat", "prompt": ""}, offline_model=object()))
+        self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "x" * 4001}, offline_model=object()))
+
+
 if __name__ == "__main__":
     unittest.main()
