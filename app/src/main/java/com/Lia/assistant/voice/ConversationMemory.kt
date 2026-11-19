@@ -99,7 +99,7 @@ object ConversationMemory {
 
     fun recap(): String? = synchronized(lock) {
         if (turns.isEmpty()) return@synchronized null
-        val fullText = turns.joinToString("\\n") { (if (it.role == MemoryRole.USER) "User" else "Assistant") + ": " + it.text }.trim()
+        val fullText = turns.joinToString("\n") { (if (it.role == MemoryRole.USER) "User" else "Assistant") + ": " + it.text }.trim()
         if (fullText.isEmpty()) null else if (fullText.length > MAX_RECAP_CHARS) fullText.takeLast(MAX_RECAP_CHARS) else fullText
     }
 
