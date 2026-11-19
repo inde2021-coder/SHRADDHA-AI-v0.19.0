@@ -91,6 +91,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var activePersonName = ""
     private var activeThreshold = Float.NaN
     private var faceTrackingFailed = false
+    private var cameraStarting = false
     private val engineLazy = lazy { LocalBiometricModelEngine() }
     private val engine by engineLazy
     private val vault by lazy { BiometricConsentVault(EncryptedFeatureStore(this)) }
@@ -189,10 +190,14 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 imageAnalysis = analysis
                 provider.unbindAll()
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, capture, analysis)
+                cameraStarting = false
                 message.text = challengeText()
                 action.text = "Complete the live challenge"
                 action.isEnabled = false
-            } catch (error: Exception) { finishWith("Camera could not start: ${error.message}") }
+            } catch (error: Exception) {
+                cameraStarting = false
+                finishWith("Camera could not start: ${error.message}")
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -246,6 +251,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun restartFaceChallenge() {
+        cameraStarting = false
         imageAnalysis?.clearAnalyzer()
         runCatching { cameraProvider?.unbindAll() }
         imageCapture = null
