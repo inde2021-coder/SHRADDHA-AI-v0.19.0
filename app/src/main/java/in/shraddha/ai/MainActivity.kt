@@ -1476,60 +1476,49 @@ class MainActivity : AppCompatActivity() {
                 }.start()
             })
             val bundleConsent = CheckBox(this@MainActivity).apply {
-                text = "मैं person/child profiles, task inbox और चुनी हुई app memory को encrypted Firebase backup/restore करने की अनुमति देता/देती हूँ।"
+                text = "मैं person/child profiles, app-training workflows, task inbox, project, digital twin और memory को encrypted Firebase backup/restore करने की अनुमति देता/देती हूँ। Biometric templates इसमें शामिल नहीं होंगे।"
                 setTextColor(0xFFE4E9F5.toInt())
             }
             addView(bundleConsent)
-            val featureStore = EncryptedFeatureStore(this@MainActivity)
-            val bundleKeys = listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint", "active_project", "digital_twin")
-            addView(actionButton("BACK UP SELECTED DEVICE MEMORY", "Selected local records का client-side AES-GCM encrypted bundle") {
+            addView(actionButton("BACK UP SELECTED DEVICE MEMORY", "Encrypted person/child profiles • app training • workflows • project • memory") {
                 if (!bundleConsent.isChecked) { result.text = "पहले selected-data backup consent दें।"; return@actionButton }
                 if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
-                val items = JSONObject()
-                var count = 0
-                bundleKeys.forEach { key ->
-                    val value = featureStore.get(key).getOrDefault("")
-                    if (value.isNotBlank()) { items.put(key, value); count++ }
-                }
-                val memory = localVault.load().getOrDefault("")
-                val bundle = JSONObject().put("version", 1).put("createdAt", System.currentTimeMillis())
-                    .put("items", items).put("memory", memory).toString()
-                if (bundle.length > 100000) { result.text = "Selected data 100 KB limit से अधिक है; पहले पुराने records कम करें।"; return@actionButton }
-                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
-                result.text = "Selected records encrypt करके Firebase पर भेजे जा रहे हैं…"
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "Local encrypted records जाँचे और recovery bundle बनाया जा रहा है…"
                 Thread {
-                    val saved = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSaveBundle(emailValue, passwordValue, bundle)
-                    runOnUiThread { result.text = saved.fold({ "Encrypted device recovery backup saved. $count feature collections + local memory." }, { "Backup failed: ${it.message}" }) }
+                    val captured = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity)
+                    val saved = captured.fold(
+                        onSuccess = { bundle ->
+                            `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                                .signInAndSaveBundle(emailValue, passwordValue, bundle)
+                        },
+                        onFailure = { Result.failure(it) }
+                    )
+                    runOnUiThread {
+                        result.text = saved.fold(
+                            { "Encrypted device recovery backup saved. No face/voice biometric templates were uploaded." },
+                            { "Backup failed safely: ${it.message}" }
+                        )
+                    }
                 }.start()
             })
-            addView(actionButton("RESTORE SELECTED DEVICE MEMORY", "दूसरे device पर login करके चुने records recover करें; restore से पहले overwrite preview आएगा") {
+            addView(actionButton("RESTORE SELECTED DEVICE MEMORY", "Preview overwrite scope and confirm before restoring") {
                 if (!bundleConsent.isChecked) { result.text = "पहले selected-data restore consent दें।"; return@actionButton }
                 if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
-                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
-                result.text = "Encrypted recovery bundle download हो रहा है…"
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "Encrypted recovery bundle download और decrypt हो रहा है…"
                 Thread {
-                    val restored = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoadBundle(emailValue, passwordValue)
+                    val restored = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                        .signInAndLoadBundle(emailValue, passwordValue)
                     runOnUiThread {
                         restored.onSuccess { raw ->
-                            if (raw.isNullOrBlank()) { result.text = "इस Firebase account में device recovery backup नहीं मिला।"; return@onSuccess }
-                            val parsed = runCatching { JSONObject(raw) }.getOrNull()
-                            val items = parsed?.optJSONObject("items")
-                            if (parsed?.optInt("version") != 1 || items == null) { result.text = "Backup format unsupported या corrupt है।"; return@onSuccess }
-                            val keys = items.keys().asSequence().toList().filter { it in bundleKeys }
-                            android.app.AlertDialog.Builder(this@MainActivity)
-                                .setTitle("Restore ${keys.size} collections?")
-                                .setMessage("यह backup इन local collections को replace करेगा:\n\n" + keys.joinToString("\n") + "\n\nLocal encrypted memory भी restore होगी।")
-                                .setNegativeButton("CANCEL", null)
-                                .setPositiveButton("RESTORE") { _, _ ->
-                                    val failures = mutableListOf<String>()
-                                    keys.forEach { key -> if (featureStore.put(key, items.optString(key)).isFailure) failures.add(key) }
-                                    val memory = parsed.optString("memory", "")
-                                    if (memory.isNotBlank()) {
-                                        if (localVault.save(memory).isFailure) failures.add("personal_memory")
-                                        else getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", memory).apply()
-                                    }
-                                    result.text = if (failures.isEmpty()) "Recovery complete: ${keys.size} collections and local memory restored." else "Partial restore. Failed: " + failures.joinToString()
-                                }.show()
+                            if (raw.isNullOrBlank()) {
+                                result.text = "इस Firebase account में device recovery backup नहीं मिला।"
+                            } else {
+                                showDeviceRecoveryPreview(raw, result)
+                            }
                         }.onFailure { result.text = "Recovery failed: ${it.message}" }
                     }
                 }.start()
@@ -1564,25 +1553,8 @@ class MainActivity : AppCompatActivity() {
                                             val loaded = vault.signInAndLoadBundleRevision(emailValue, passwordValue, selected.id)
                                             runOnUiThread {
                                                 loaded.onSuccess { raw ->
-                                                    if (raw.isNullOrBlank()) { result.text = "Selected snapshot खाली है।"; return@onSuccess }
-                                                    val parsed = runCatching { JSONObject(raw) }.getOrNull()
-                                                    val items = parsed?.optJSONObject("items")
-                                                    if (parsed?.optInt("version") != 1 || items == null) { result.text = "Snapshot format unsupported या corrupt है।"; return@onSuccess }
-                                                    val keys = items.keys().asSequence().toList().filter { it in bundleKeys }
-                                                    android.app.AlertDialog.Builder(this@MainActivity)
-                                                        .setTitle("Restore older snapshot?")
-                                                        .setMessage("यह snapshot इन local collections को replace करेगा:\n\n" + keys.joinToString("\n") + "\n\nCurrent local values पहले अपने आप overwrite नहीं होंगे; केवल आपकी पुष्टि पर restore होगा।")
-                                                        .setNegativeButton("CANCEL", null)
-                                                        .setPositiveButton("RESTORE") { _, _ ->
-                                                            val failures = mutableListOf<String>()
-                                                            keys.forEach { key -> if (featureStore.put(key, items.optString(key)).isFailure) failures.add(key) }
-                                                            val memory = parsed.optString("memory", "")
-                                                            if (memory.isNotBlank()) {
-                                                                if (localVault.save(memory).isFailure) failures.add("personal_memory")
-                                                                else getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", memory).apply()
-                                                            }
-                                                            result.text = if (failures.isEmpty()) "Older snapshot restored: ${keys.size} collections + local memory." else "Partial restore. Failed: " + failures.joinToString()
-                                                        }.show()
+                                                    if (raw.isNullOrBlank()) result.text = "Selected snapshot खाली है।"
+                                                    else showDeviceRecoveryPreview(raw, result)
                                                 }.onFailure { result.text = "Snapshot restore failed: ${it.message}" }
                                             }
                                         }.start()
