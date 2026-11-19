@@ -201,7 +201,8 @@ const server = http.createServer(async (req, res) => {
         anthropic: Boolean(process.env.ANTHROPIC_API_KEY), groq: Boolean(process.env.GROQ_API_KEY),
         perplexity: Boolean(process.env.PERPLEXITY_API_KEY)
       };
-      const autoOrder = resolveProviderOrder({ requested: 'auto', env: process.env });\n      return json(res, 200, { providers: configured, configuredCount: Object.values(configured).filter(Boolean).length, autoRouting: { available: autoOrder.length > 0, order: autoOrder, fallbackEnabled: true }, keysRemainServerSide: true });
+      const autoOrder = resolveProviderOrder({ requested: 'auto', env: process.env });
+      return json(res, 200, { providers: configured, configuredCount: Object.values(configured).filter(Boolean).length, autoRouting: { available: autoOrder.length > 0, order: autoOrder, fallbackEnabled: true }, keysRemainServerSide: true });
     }
     if (req.method === 'POST' && req.url === '/api/ai/summarize') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
