@@ -1877,6 +1877,7 @@ class MainActivity : AppCompatActivity() {
                 val directory = java.io.File(filesDir, "offline-models").apply { mkdirs() }
                 val target = java.io.File(directory, "shraddha.litertlm")
                 val temporary = java.io.File(directory, "shraddha.litertlm.part")
+                val freeBytes = android.os.StatFs(directory.absolutePath).availableBytes
                 contentResolver.openInputStream(uri)?.use { input ->
                     java.io.FileOutputStream(temporary).use { output ->
                         val buffer = ByteArray(1024 * 1024)
@@ -1885,16 +1886,17 @@ class MainActivity : AppCompatActivity() {
                             val count = input.read(buffer)
                             if (count < 0) break
                             total += count
-                            if (total > 5_000_000_000L) error("Model 5 GB limit से बड़ा है")
+                            if (total > 5_000_000_000L || total + 512_000_000L > freeBytes) error("Model size/storage limit exceeded; keep 512 MB free")
                             output.write(buffer, 0, count)
                         }
                         output.fd.sync()
                     }
                 } ?: error("Model file पढ़ी नहीं जा सकी")
                 if (temporary.length() < 10_000_000L) error("Model file बहुत छोटी या invalid है")
-                if (!temporary.renameTo(target)) {
-                    target.delete()
-                    if (!temporary.renameTo(target)) error("Model को सुरक्षित रूप से install नहीं किया जा सका")
+                try {
+                    java.nio.file.Files.move(temporary.toPath(), target.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                    java.nio.file.Files.move(temporary.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                 }
                 status.text = "Offline model import complete • ${target.length() / 1_000_000} MB. अब Local Offline AI चला सकते हैं।"
             } catch (error: Exception) {
@@ -1977,6 +1979,7 @@ class MainActivity : AppCompatActivity() {
         DeviceLinkManager.onPeerMessage = null
         DeviceLinkManager.onScreenFrame = null
         DeviceLinkManager.onCameraFrame = null
+        LocalOfflineLlm.close()
         super.onDestroy()
     }
 
