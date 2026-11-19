@@ -2112,7 +2112,7 @@ class MainActivity : AppCompatActivity() {
         DeviceLinkManager.onPeerMessage = null
         DeviceLinkManager.onScreenFrame = null
         DeviceLinkManager.onCameraFrame = null
-        Thread { LocalOfflineLlm.close() }.start()
+        Thread { LocalOfflineLlm.close(); runCatching { biometricEngine.close() } }.start()
         super.onDestroy()
     }
 
