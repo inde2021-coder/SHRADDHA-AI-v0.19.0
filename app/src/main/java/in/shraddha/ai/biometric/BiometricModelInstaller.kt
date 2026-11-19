@@ -16,13 +16,6 @@ object BiometricModelInstaller {
     @Volatile private var finished = false
     @Volatile private var failure: String? = null
 
-    fun installInBackground(context: Context) {
-        if (finished) return
-        Thread({
-            runCatching { ensureInstalled(context.applicationContext) }
-        }, "BiometricModelInstaller").start()
-    }
-
     @Synchronized
     fun ensureInstalled(context: Context) {
         if (finished) {
