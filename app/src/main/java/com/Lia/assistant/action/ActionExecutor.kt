@@ -447,7 +447,7 @@ object ActionExecutor {
                             val response = publishSocialPost(config.baseUrl, config.gatewayToken, platform, text)
                             response.onSuccess { raw ->
                                 val body = runCatching { JSONObject(raw) }.getOrNull()
-                                if (body?.optBoolean("ok") == true && body.optString("platform") == platform) {
+                                if (body != null && body.optBoolean("ok") && body.optString("platform") == platform) {
                                     val postId = body.optString("postId").ifBlank { body.optString("messageId") }
                                     result.put("status", "success")
                                     result.put("action", "social_post_published")
