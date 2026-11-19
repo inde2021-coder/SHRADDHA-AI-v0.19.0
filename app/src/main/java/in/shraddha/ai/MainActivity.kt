@@ -1238,7 +1238,7 @@ class MainActivity : AppCompatActivity() {
                             @Suppress("DEPRECATION")
                             startActivityForResult(intent,backupFileRequest)
                         } catch(e:Exception) { status.text="Backup encryption failed: ${e.message}" }
-                        finally { secret.fill('\u0000') }
+                        finally { secret.fill('\u0000'); password.text?.clear() }
                     }.show()
             })
             addView(actionButton("RESTORE ENCRYPTED BACKUP","Choose a Shraddha encrypted backup file and enter its passphrase") {
@@ -1625,7 +1625,7 @@ class MainActivity : AppCompatActivity() {
                             `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_restore","completed","encrypted backup v2")
                             status.text="Backup decrypted and restored successfully."
                         } catch(e:Exception) { status.text="Restore failed; backup was not accepted: ${e.message}" }
-                        finally { secret.fill('\u0000') }
+                        finally { secret.fill('\u0000'); password.text?.clear() }
                     }.show()
             } catch(e:Exception) { status.text="Backup file could not be opened: ${e.message}" }
             return
