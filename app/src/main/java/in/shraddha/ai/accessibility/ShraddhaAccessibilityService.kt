@@ -10,6 +10,10 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONObject
 import android.graphics.Rect
+import android.graphics.Bitmap
+import android.view.Display
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import `in`.shraddha.ai.operator.ScreenElement
 import `in`.shraddha.ai.operator.ScreenSnapshot
 
@@ -29,6 +33,34 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             node.viewIdResourceName, node.parent?.contentDescription?.toString()
         ).joinToString(" ").lowercase()
         return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(labels)
+    }
+
+    private fun captureOcrTextInternal(done: (Result<String>) -> Unit) {
+        if (Build.VERSION.SDK_INT < 30) {
+            done(Result.failure(IllegalStateException("On-device OCR screenshot capture requires Android 11 or newer")))
+            return
+        }
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    val bitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                    screenshot.hardwareBuffer.close()
+                    if (bitmap == null) {
+                        done(Result.failure(IllegalStateException("Android screenshot buffer unavailable")))
+                        return
+                    }
+                    ScreenOcrEngine.recognize(bitmap) { result ->
+                        bitmap.recycle()
+                        done(result)
+                    }
+                }
+                override fun onFailure(errorCode: Int) {
+                    done(Result.failure(IllegalStateException("Android refused screen OCR capture (code $errorCode). Secure screens may block capture.")))
+                }
+            })
+        } catch (error: Exception) {
+            done(Result.failure(error))
+        }
     }
 
     private fun setFocusedText(value: String): Boolean {
@@ -126,7 +158,17 @@ class ShraddhaAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile private var active: ShraddhaAccessibilityService? = null
-        fun fillFocusedField(text: String): Boolean = active?.setFocusedText(text) ?: false
+        suspend fun captureOcrText(): String? = suspendCancellableCoroutine { continuation ->
+            val service = active
+            if (service == null) {
+                continuation.resume(null)
+            } else {
+                service.captureOcrTextInternal { result ->
+                    if (continuation.isActive) continuation.resume(result.getOrNull())
+                }
+            }
+        }
+                fun fillFocusedField(text: String): Boolean = active?.setFocusedText(text) ?: false
         fun openApp(name: String): Boolean = active?.openInstalledApp(name) ?: false
         fun goHome(): Boolean = active?.performGlobalAction(GLOBAL_ACTION_HOME) ?: false
         fun captureVisibleScreen(): ScreenSnapshot? {
