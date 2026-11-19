@@ -5,6 +5,9 @@ import `in`.shraddha.ai.BuildConfig
 import android.content.Context
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import com.google.firebase.appcheck.AppCheckProviderFactory
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -30,6 +33,9 @@ data class CloudStorageBackupRevision(val id: String, val updatedAt: Long, val s
 /** Firebase owner-scoped vault. Client-side AES-GCM means Firestore receives ciphertext only. */
 class FirebaseCloudVault(private val context: Context) {
     companion object {
+        private val appCheckLock = Any()
+        private val appCheckInstalled = mutableSetOf<String>()
+
         private const val APP_NAME = "shraddha_cloud_vault"
     }
 
@@ -60,6 +66,20 @@ class FirebaseCloudVault(private val context: Context) {
         return FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
             ?: FirebaseApp.initializeApp(context, options, APP_NAME)
             ?: error("Firebase initialization failed")
+    }
+
+    private fun installAppCheck(app: FirebaseApp) {
+        synchronized(appCheckLock) {
+            if (app.name in appCheckInstalled) return
+            val factory = if (BuildConfig.DEBUG) {
+                val debugFactory = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
+                debugFactory.getMethod("getInstance").invoke(null) as AppCheckProviderFactory
+            } else {
+                PlayIntegrityAppCheckProviderFactory.getInstance()
+            }
+            FirebaseAppCheck.getInstance(app).installAppCheckProviderFactory(factory)
+            appCheckInstalled.add(app.name)
+        }
     }
 
     fun createAccount(email: String, password: String): Result<String> = runCatching {
