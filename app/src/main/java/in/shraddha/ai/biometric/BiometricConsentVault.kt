@@ -42,7 +42,9 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         person.put("name", displayName)
         val templates = person.optJSONArray(kind) ?: JSONArray()
         require(templates.length() < MAX_TEMPLATES_PER_KIND) { "Template limit reached; remove old samples first" }
-        templates.put(JSONObject().put("dimension", normalized.size).put("vector", encode(normalized)).put("createdAt", System.currentTimeMillis()))
+        val consentAt = System.currentTimeMillis()
+        templates.put(JSONObject().put("dimension", normalized.size).put("vector", encode(normalized))
+            .put("createdAt", consentAt).put("consentAt", consentAt).put("consentVersion", CONSENT_VERSION))
         person.put(kind, templates)
         check(store.put(key, person.toString()).isSuccess) { "Encrypted biometric save failed" }
         if ((0 until ids.length()).none { ids.optString(it) == personId }) {
