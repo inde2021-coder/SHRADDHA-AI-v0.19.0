@@ -7,6 +7,6 @@
 5. Sync Gradle and run the app. Open **Secure Cloud Sync**. Create an account, then explicitly opt in before backup/restore.
 6. Enable Firebase App Check (Play Integrity for Play builds) before production release.
 
-The current implementation uses Firebase Authentication and Firestore. Cloud memory payloads are encrypted client-side with AES-256-GCM; a key is derived from the account password using PBKDF2-HMAC-SHA256. Firebase stores ciphertext, not the plaintext note. If the user loses the password, this backup cannot be decrypted. The password is not uploaded by this feature.
+The current implementation uses Firebase Authentication and Firestore. Cloud memory payloads are encrypted client-side with AES-256-GCM; a key is derived from the account password using PBKDF2-HMAC-SHA256. Firebase stores ciphertext, not the plaintext note. If the user loses the password, this backup cannot be decrypted. The password is not uploaded by this feature. Selected device backups also keep up to 10 timestamped encrypted recovery revisions plus a stable latest-backup pointer. The Android recovery history picker lets the user select an older snapshot; restoring always requires an explicit confirmation.
 
 Storage and FCM SDKs are included as dependencies for the next integration stage, but file uploads and push-notification handlers are **not yet implemented**. `storage.rules` is a least-privilege starting point; deploy it only when Storage is enabled. Biometric templates, child records, API keys, OTPs, and payment data are not included in cloud sync.
