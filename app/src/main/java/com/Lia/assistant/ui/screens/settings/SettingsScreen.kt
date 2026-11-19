@@ -81,6 +81,7 @@ fun SettingsScreen(
     var gatewaySaveError by remember { mutableStateOf<String?>(null) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
+    var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -182,6 +183,17 @@ fun SettingsScreen(
                     onCheckedChange = {
                         voiceMemoryEnabled = it
                         ConversationMemory.setPersistenceEnabled(context, it)
+                    }
+                )
+                NovaSettingsRow(
+                    title = "On-device OCR Screen Reading",
+                    subtitle = if (screenOcrEnabled) "Hindi + English • local processing • no screenshot upload" else "Off • optional Android 11+ screenshot OCR",
+                    icon = Icons.Default.Visibility,
+                    switch = screenOcrEnabled,
+                    onCheckedChange = {
+                        screenOcrEnabled = it
+                        context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("on_device_screen_ocr", it).apply()
                     }
                 )
                 NovaSettingsRow(
