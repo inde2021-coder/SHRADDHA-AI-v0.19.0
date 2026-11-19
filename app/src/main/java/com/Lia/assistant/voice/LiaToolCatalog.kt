@@ -66,6 +66,18 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
+                name = "tap_ocr_text",
+                description = "Taps one unique visible text line detected by explicitly enabled on-device Hindi/English OCR. Only use after read_screen and only when the user enabled OCR. For Send/Delete/Pay/Publish/Submit ask for explicit confirmation first. Never tap redacted or ambiguous targets.",
+                params = mapOf(
+                    "text" to "Exact visible OCR text label to tap",
+                    "user_confirmed" to "Optional yes only after explicit user confirmation for a destructive action"
+                ),
+                required = listOf("text")
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
                 name = "type_text",
                 description = "Types text into the currently focused or active input field.",
                 params = mapOf("text" to "Text to type into the active field"),
