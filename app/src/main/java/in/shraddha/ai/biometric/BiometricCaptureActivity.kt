@@ -199,7 +199,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
             if (livenessPassed.get()) return@addOnSuccessListener
             if (faces.size != 1) {
                 livenessGate.observe(faces.size, Float.NaN, Float.NaN, Float.NaN)
-                runOnUiThread { message.text = "Keep exactly one face in the frame. Challenge progress was reset." }
+                if (livenessGate.isExpired) showChallengeRestart("Live challenge expired. Restart it to continue.")
+                else runOnUiThread { message.text = "Keep exactly one face in the frame. Challenge progress was reset." }
                 return@addOnSuccessListener
             }
             val face = faces.first()
@@ -208,24 +209,23 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 livenessPassed.set(true)
                 runOnUiThread { message.text = "Basic active challenge passed (not certified anti-spoofing). सीधे camera की ओर वापस आएँ, फिर capture करें."; action.text = "Capture and continue"; action.isEnabled = true }
                 imageAnalysis?.clearAnalyzer()
+            } else if (livenessGate.isExpired) {
+                showChallengeRestart("Live challenge expired. Restart it to continue.")
             } else runOnUiThread { message.text = challengeText() }
         }.addOnFailureListener {
             livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
             faceTrackingFailed = true
-            imageAnalysis?.clearAnalyzer()
-            runOnUiThread {
-                message.text = "Face tracking error: ${it.message}. Restart the live check."
-                action.text = "Restart live challenge"
-                action.isEnabled = true
-            }
+            showChallengeRestart("Face tracking error: ${it.message}. Restart the live check.")
         }.addOnCompleteListener { proxy.close() }
-        if (livenessGate.isExpired) {
-            imageAnalysis?.clearAnalyzer()
-            runOnUiThread {
-                message.text = "Live challenge expired. Restart it to continue."
-                action.text = "Restart live challenge"
-                action.isEnabled = true
-            }
+    }
+
+    private fun showChallengeRestart(text: String) {
+        imageAnalysis?.clearAnalyzer()
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            message.text = text
+            action.text = "Restart live challenge"
+            action.isEnabled = true
         }
     }
 
