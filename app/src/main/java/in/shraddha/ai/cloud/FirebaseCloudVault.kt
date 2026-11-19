@@ -34,7 +34,6 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     private fun initialize(): FirebaseApp {
-        FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }?.let { return it }
         require(BuildConfig.FIREBASE_API_KEY.isNotBlank() && BuildConfig.FIREBASE_APP_ID.isNotBlank() && BuildConfig.FIREBASE_PROJECT_ID.isNotBlank() && BuildConfig.FIREBASE_SENDER_ID.isNotBlank()) {
             "Firebase config missing. Add FIREBASE_API_KEY, FIREBASE_APP_ID, FIREBASE_PROJECT_ID and FIREBASE_SENDER_ID to local.properties."
         }
@@ -45,8 +44,13 @@ class FirebaseCloudVault(private val context: Context) {
             .setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
             .apply { if (BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) setStorageBucket(BuildConfig.FIREBASE_STORAGE_BUCKET) }
             .build()
-        return FirebaseApp.initializeApp(context, options, APP_NAME)
-            ?: FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
+        // FirebaseMessagingService is dispatched through the default FirebaseApp. Initialize
+        // it explicitly because this project injects FirebaseOptions instead of google-services.json.
+        if (FirebaseApp.getApps(context).none { it.name == FirebaseApp.DEFAULT_APP_NAME }) {
+            FirebaseApp.initializeApp(context, options)
+        }
+        return FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
+            ?: FirebaseApp.initializeApp(context, options, APP_NAME)
             ?: error("Firebase initialization failed")
     }
 
@@ -263,7 +267,7 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
-            val token = FirebaseMessaging.getInstance(app).token.await()
+            val token = FirebaseMessaging.getInstance(FirebaseApp.getInstance()).token.await()
             require(token.length in 20..4096) { "Firebase returned an invalid device token" }
             val store = EncryptedFeatureStore(context)
             val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
@@ -305,7 +309,7 @@ class FirebaseCloudVault(private val context: Context) {
             val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
             if (current.isNotBlank()) deleteDeviceToken(app, user.uid, current)
             if (previous.isNotBlank() && previous != current) deleteDeviceToken(app, user.uid, previous)
-            runCatching { FirebaseMessaging.getInstance(app).deleteToken().await() }
+            runCatching { FirebaseMessaging.getInstance(FirebaseApp.getInstance()).deleteToken().await() }
             store.remove("firebase_fcm_token")
             store.remove("firebase_fcm_previous_token")
         }
