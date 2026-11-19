@@ -105,6 +105,16 @@ object DeviceLinkManager {
         })
     }
 
+    fun publishSocialPost(baseUrl: String, gatewayToken: String, platform: String, exactText: String, done: (Result<String>) -> Unit) {
+        if (platform !in setOf("telegram", "mastodon") || exactText.isBlank() || exactText.length > 5000) {
+            done(Result.failure(IllegalArgumentException("Unsupported platform or post length")))
+            return
+        }
+        val body = JSONObject().put("platform", platform).put("text", exactText)
+            .put("preview", exactText).put("confirmed", true)
+        postAuthenticated(baseUrl, "/api/social/publish", gatewayToken, body, done)
+    }
+
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
         val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
