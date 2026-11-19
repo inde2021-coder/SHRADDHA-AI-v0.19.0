@@ -1674,24 +1674,30 @@ class MainActivity : AppCompatActivity() {
         var refreshProfileList: (() -> Unit)? = null
         var directoryReadFailed = false
         fun readPeople(): JSONArray {
-            val arr = try {
+            return try {
                 val raw = store.get("person_directory").getOrThrow()
-                if (raw.isBlank()) JSONArray() else JSONArray(raw)
+                val arr = if (raw.isBlank()) JSONArray() else JSONArray(raw)
+                require(arr.length() <= 50) { "Person Memory directory limit exceeded" }
+                var changed = false
+                val seenIds = mutableSetOf<String>()
+                for (i in 0 until arr.length()) {
+                    val person = arr.optJSONObject(i) ?: error("Person Memory contains an invalid profile entry")
+                    var id = person.optString("id")
+                    if (id.isBlank()) {
+                        id = java.util.UUID.randomUUID().toString().replace("-", "")
+                        person.put("id", id)
+                        changed = true
+                    }
+                    require(id.matches(Regex("[A-Za-z0-9_-]{8,64}"))) { "Person Memory contains an invalid profile ID" }
+                    require(seenIds.add(id)) { "Person Memory contains duplicate profile IDs" }
+                }
+                if (changed) store.put("person_directory", arr.toString()).getOrThrow()
+                arr
             } catch (error: Exception) {
                 directoryReadFailed = true
                 status.text = "Person Memory data सुरक्षित रूप से पढ़ा नहीं जा सका। मौजूदा डेटा overwrite नहीं किया गया: ${error.message}"
-                return JSONArray()
+                JSONArray()
             }
-            var changed = false
-            for (i in 0 until arr.length()) {
-                val person = arr.optJSONObject(i) ?: continue
-                if (person.optString("id").isBlank()) { person.put("id", java.util.UUID.randomUUID().toString().replace("-", "")); changed = true }
-            }
-            if (changed) store.put("person_directory", arr.toString()).onFailure {
-                directoryReadFailed = true
-                status.text = "Person Memory migration save failed; editing is blocked: ${it.message}"
-            }
-            return arr
         }
         fun people(): List<JSONObject> {
             val arr = readPeople()
