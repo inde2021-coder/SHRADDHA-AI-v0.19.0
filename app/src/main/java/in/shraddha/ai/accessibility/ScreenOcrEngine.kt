@@ -28,7 +28,7 @@ object ScreenOcrEngine {
         val devanagariTask = devanagari.process(image)
         Tasks.whenAllComplete(latinTask, devanagariTask).addOnSuccessListener { tasks ->
             try {
-                val lines = tasks.flatMap { (it.result as? Text)?.textBlocks.orEmpty() }
+                val lines = tasks.flatMap { task -> if (task.isSuccessful) (task.result as? Text)?.textBlocks.orEmpty() else emptyList() }
                     .flatMap { it.lines }
                     .sortedWith(compareBy({ it.boundingBox?.top ?: Int.MAX_VALUE }, { it.boundingBox?.left ?: Int.MAX_VALUE }))
                     .distinctBy { it.text.trim().lowercase() }
