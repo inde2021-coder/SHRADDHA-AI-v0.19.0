@@ -26,7 +26,7 @@ class LocalBiometricModelEngine : Closeable {
             require(candidate.inputNames.contains("data")) { "Face model must expose input 'data'" }
             require(candidate.outputNames.contains("fc1")) { "Face model must expose output 'fc1'" }
             val inputShape = (candidate.inputInfo["data"]?.info as? TensorInfo)?.shape ?: error("Face model input 'data' must be a tensor")
-            require(inputShape.contentEquals(longArrayOf(1, 3, 112, 112))) { "Face model input shape must be [1,3,112,112]" }
+            require(inputShape.size == 4 && (inputShape[0] == 1L || inputShape[0] == -1L) && inputShape[1] == 3L && inputShape[2] == 112L && inputShape[3] == 112L) { "Face model input shape must be [1|dynamic,3,112,112]" }
             val outputShape = (candidate.outputInfo["fc1"]?.info as? TensorInfo)?.shape ?: error("Face model output 'fc1' must be a tensor")
             require(outputShape.lastOrNull() == 128L) { "SFace model must output a 128-value embedding" }
             faceSession?.close()
@@ -48,8 +48,8 @@ class LocalBiometricModelEngine : Closeable {
             val wavShape = (candidate.inputInfo["wav"]?.info as? TensorInfo)?.shape ?: error("Speaker model input 'wav' must be a tensor")
             val lensShape = (candidate.inputInfo["lens"]?.info as? TensorInfo)?.shape ?: error("Speaker model input 'lens' must be a tensor")
             val embeddingShape = (candidate.outputInfo["emb"]?.info as? TensorInfo)?.shape ?: error("Speaker model output 'emb' must be a tensor")
-            require(wavShape.size == 2 && wavShape[0] == 1L) { "Speaker wav input must be [1,samples]" }
-            require(lensShape.contentEquals(longArrayOf(1))) { "Speaker lens input must be [1]" }
+            require(wavShape.size == 2 && (wavShape[0] == 1L || wavShape[0] == -1L)) { "Speaker wav input must be [1|dynamic,samples]" }
+            require(lensShape.size == 1 && (lensShape[0] == 1L || lensShape[0] == -1L)) { "Speaker lens input must be [1|dynamic]" }
             require(embeddingShape.lastOrNull() == 192L) { "Speaker model must output a 192-value embedding" }
             speakerSession?.close()
             speakerSession = candidate
