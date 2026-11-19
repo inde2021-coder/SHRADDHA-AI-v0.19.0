@@ -341,6 +341,12 @@ class MainActivity : AppCompatActivity() {
             "cloud" -> addFirebaseCloudSection(pageRoot)
             "future" -> addFutureIntelligence(pageRoot)
             "permissions" -> section(pageRoot, "APP CONTROL SETUP", "Android permissions को अपनी इच्छा से चालू करें") {
+                addView(actionButton("Enable Contacts + Calling", "Voice call के लिए Contacts और Phone permission एक बार दें") {
+                    requestFeaturePermissions(arrayOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.CALL_PHONE), 12, "Voice calling")
+                })
+                addView(actionButton("Enable Contacts + SMS", "Voice से SMS भेजने के लिए Contacts और SMS permission एक बार दें") {
+                    requestFeaturePermissions(arrayOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.SEND_SMS), 13, "SMS sending")
+                })
                 addView(actionButton("Enable Accessibility App Control", "Visible UI actions और approved gestures") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
                 addView(actionButton("Enable Floating AI Orb", "दूसरे ऐप्स के ऊपर Shraddha shortcut") {
                     if (!Settings.canDrawOverlays(this@MainActivity)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -1811,7 +1817,7 @@ class MainActivity : AppCompatActivity() {
         val personName = edit("Person name", "Example: Rahul")
         val relation = edit("Relationship / introduction", "Friend, family, colleague…")
         val notes = edit("Optional notes", "Only information you are allowed to store")
-        val consent = Switch(this).apply { text = "इस व्यक्ति की स्पष्ट सहमति प्राप्त है"; setTextColor(-1); textSize = 13f; setPadding(0, dp(8), 0, dp(10)) }
+        val consent = Switch(this).apply { text = "इस profile या live capture में सामने मौजूद व्यक्ति की स्पष्ट सहमति प्राप्त है"; setTextColor(-1); textSize = 13f; setPadding(0, dp(8), 0, dp(10)) }
         var refreshProfileList: (() -> Unit)? = null
         var directoryReadFailed = false
         fun readPeople(): JSONArray {
@@ -1979,17 +1985,19 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             fun launchCapture(kind: String, mode: String) {
-                val selected = people().getOrNull(profileSpinner.selectedItemPosition)
-                if (selected == null) { status.text = "पहले dropdown से consented Person Profile चुनें।"; return }
-                if (!consent.isChecked) { status.text = "चुने हुए व्यक्ति की इस capture/match session के लिए स्पष्ट consent की पुष्टि करें।"; return }
+                val availablePeople = people()
+                val selected = availablePeople.getOrNull(profileSpinner.selectedItemPosition)
+                if (mode == "identify" && availablePeople.isEmpty()) { status.text = "पहले कम-से-कम एक consented Person Profile enroll करें।"; return }
+                if (mode != "identify" && selected == null) { status.text = "पहले dropdown से consented Person Profile चुनें।"; return }
+                if (!consent.isChecked) { status.text = "इस live capture में सामने मौजूद व्यक्ति की स्पष्ट session consent की पुष्टि करें।"; return }
                 val thresholdText = if (kind == "face") faceThreshold.text.toString().trim() else speakerThreshold.text.toString().trim()
                 val threshold = if (mode != "enroll") thresholdText.toFloatOrNull() else Float.NaN
                 if (mode != "enroll" && (threshold == null || threshold !in -1f..1f)) { status.text = "Match/identify के लिए पहले locally calibrated threshold -1 से 1 के बीच भरें।"; return }
                 val request = Intent(this@MainActivity, BiometricCaptureActivity::class.java)
                     .putExtra(BiometricCaptureActivity.EXTRA_KIND, kind)
                     .putExtra(BiometricCaptureActivity.EXTRA_MODE, mode)
-                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, selected.optString("id"))
-                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, selected.optString("name"))
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, selected?.optString("id").orEmpty())
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, selected?.optString("name").orEmpty())
                     .putExtra(BiometricCaptureActivity.EXTRA_CONSENT, true)
                     .putExtra(BiometricCaptureActivity.EXTRA_THRESHOLD, threshold ?: Float.NaN)
                 consent.isChecked = false
@@ -2212,8 +2220,31 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(manager.createScreenCaptureIntent(), screenShareRequest)
     }
 
+    private fun requestFeaturePermissions(requested: Array<String>, requestCode: Int, feature: String) {
+        val missing = requested.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            status.text = "$feature permissions पहले से enabled हैं।"
+            return
+        }
+        androidx.core.app.ActivityCompat.requestPermissions(this, missing.toTypedArray(), requestCode)
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 12 || requestCode == 13) {
+            val denied = permissions.filterIndexed { index, _ ->
+                grantResults.getOrNull(index) != PackageManager.PERMISSION_GRANTED
+            }
+            status.text = if (denied.isEmpty()) {
+                if (requestCode == 12) "Voice calling के लिए Contacts और Phone permissions enabled हैं।"
+                else "Voice SMS के लिए Contacts और SMS permissions enabled हैं।"
+            } else {
+                "कुछ permissions नहीं मिलीं: ${denied.joinToString()}. आप इस page से दोबारा कोशिश कर सकते हैं।"
+            }
+            return
+        }
         if (requestCode == 44) {
             val visualShareAllowed = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("camera", false)
             if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && visualShareAllowed) {

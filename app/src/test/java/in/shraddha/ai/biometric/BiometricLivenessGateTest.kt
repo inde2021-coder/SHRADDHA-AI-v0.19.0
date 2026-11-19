@@ -122,6 +122,14 @@ class BiometricLivenessGateTest {
         assertTrue(gate.isExpired)
     }
 
+    @Test fun captureMustFollowLiveChallengeWithinEightSeconds() {
+        assertTrue(BiometricLivenessGate.isCaptureFresh(1_000L, 1_000L))
+        assertTrue(BiometricLivenessGate.isCaptureFresh(1_000L, 9_000L))
+        assertFalse(BiometricLivenessGate.isCaptureFresh(1_000L, 9_001L))
+        assertFalse(BiometricLivenessGate.isCaptureFresh(0L, 1_001L))
+        assertFalse(BiometricLivenessGate.isCaptureFresh(2_000L, 1_999L))
+    }
+
     @Test fun randomizedDefaultSequenceAlwaysHasValidTurnOrder() {
         repeat(100) { assertNotNull(BiometricLivenessGate().currentStep) }
     }

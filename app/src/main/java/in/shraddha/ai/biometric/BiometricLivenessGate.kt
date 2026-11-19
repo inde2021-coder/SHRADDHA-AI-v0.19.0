@@ -15,7 +15,13 @@ class BiometricLivenessGate(
 
     companion object {
         private const val MAX_CHALLENGE_MS = 45_000L
+        private const val MAX_CAPTURE_AGE_MS = 8_000L
         private const val REQUIRED_STABLE_FRAMES = 2
+
+        /** Require the still frame immediately after the live challenge, not later. */
+        fun isCaptureFresh(passedAtMs: Long, nowMs: Long): Boolean =
+            passedAtMs > 0L && nowMs >= passedAtMs && nowMs - passedAtMs <= MAX_CAPTURE_AGE_MS
+
         private fun monotonicNow(): Long = System.nanoTime() / 1_000_000L
     }
 

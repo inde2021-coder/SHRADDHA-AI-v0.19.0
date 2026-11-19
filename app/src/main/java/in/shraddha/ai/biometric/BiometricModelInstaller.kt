@@ -15,15 +15,19 @@ object BiometricModelInstaller {
     )
     @Volatile private var finished = false
     @Volatile private var failure: String? = null
+    private var verifiedFiles: Map<String, Pair<Long, Long>> = emptyMap()
 
     @Synchronized
     fun ensureInstalled(context: Context) {
-        if (finished) {
-            check(failure == null) { "Biometric model installation failed: $failure" }
-            return
-        }
+        val directory = File(context.filesDir, "biometric-models")
+        if (finished && models.all { model ->
+                val target = File(directory, model.output)
+                val fingerprint = verifiedFiles[model.output]
+                target.isFile && fingerprint == (target.length() to target.lastModified())
+            }) return
+        finished = false
         try {
-            val directory = File(context.filesDir, "biometric-models")
+            check(directory.exists() || directory.mkdirs()) { "Cannot create private model directory" }
             check(directory.exists() || directory.mkdirs()) { "Cannot create private model directory" }
             models.forEach { model ->
                 val target = File(directory, model.output)
@@ -37,9 +41,14 @@ object BiometricModelInstaller {
                 if (target.exists()) check(target.delete()) { "Could not replace invalid model: ${model.output}" }
                 check(temporary.renameTo(target)) { "Could not install model: ${model.output}" }
             }
+            verifiedFiles = models.associate { model ->
+                val target = File(directory, model.output)
+                model.output to (target.length() to target.lastModified())
+            }
             failure = null
             finished = true
         } catch (error: Exception) {
+            verifiedFiles = emptyMap()
             failure = error.message ?: error.javaClass.simpleName
             // A transient storage or I/O failure must be retryable in the same process.
             finished = false

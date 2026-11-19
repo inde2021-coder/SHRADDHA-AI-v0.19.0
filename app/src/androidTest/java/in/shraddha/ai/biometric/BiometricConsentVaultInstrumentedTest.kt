@@ -19,12 +19,20 @@ class BiometricConsentVaultInstrumentedTest {
             val a2 = FloatArray(128).also { it[0] = .99f; it[1] = .10f }
             val b1 = FloatArray(128).also { it[1] = 1f }
             val b2 = FloatArray(128).also { it[1] = .99f; it[2] = .10f }
+            val speakerA1 = FloatArray(192).also { it[0] = 1f }
+            val speakerA2 = FloatArray(192).also { it[0] = .99f; it[1] = .10f }
+            val speakerB1 = FloatArray(192).also { it[1] = 1f }
+            val speakerB2 = FloatArray(192).also { it[1] = .99f; it[2] = .10f }
 
             assertTrue(vault.enroll("person_001", "Person A", "face", a1, false).isFailure)
             assertTrue(vault.enroll("person_001", "Person A", "face", a1, true).isSuccess)
             assertTrue(vault.enroll("person_001", "Person A", "face", a2, true).isSuccess)
             assertTrue(vault.enroll("person_002", "Person B", "face", b1, true).isSuccess)
             assertTrue(vault.enroll("person_002", "Person B", "face", b2, true).isSuccess)
+            assertTrue(vault.enroll("person_001", "Person A", "speaker", speakerA1, true).isSuccess)
+            assertTrue(vault.enroll("person_001", "Person A", "speaker", speakerA2, true).isSuccess)
+            assertTrue(vault.enroll("person_002", "Person B", "speaker", speakerB1, true).isSuccess)
+            assertTrue(vault.enroll("person_002", "Person B", "speaker", speakerB2, true).isSuccess)
 
             val calibration = vault.calibrateThreshold("face").getOrThrow()
             assertTrue(calibration.threshold in -1f..1f)
@@ -40,7 +48,13 @@ class BiometricConsentVaultInstrumentedTest {
             assertNotNull("One-to-many identification should search every consented profile", identified)
             assertEquals("person_001", identified?.personId)
 
+            val speakerCalibration = vault.calibrateThreshold("speaker").getOrThrow()
+            val identifiedSpeaker = vault.match("speaker", speakerA1, speakerCalibration.threshold, null)
+            assertNotNull("One-to-many speaker identification should search every consented profile", identifiedSpeaker)
+            assertEquals("person_001", identifiedSpeaker?.personId)
+
             assertEquals(2, vault.templateCounts("person_001").getOrThrow().face)
+            assertEquals(2, vault.templateCounts("person_001").getOrThrow().speaker)
             // Any new sample invalidates the prior threshold before the data changes.
             assertTrue(vault.enroll("person_001", "Person A", "face", a1, true).isSuccess)
             assertNull(vault.loadThreshold("face").getOrThrow())
@@ -50,6 +64,7 @@ class BiometricConsentVaultInstrumentedTest {
             assertEquals("[{\"id\":\"person_002\"}]", store.get("person_directory").getOrThrow())
             assertEquals(0, vault.templateCounts("person_001").getOrThrow().face)
             assertEquals(2, vault.templateCounts("person_002").getOrThrow().face)
+            assertEquals(2, vault.templateCounts("person_002").getOrThrow().speaker)
         } finally {
             vault.clear()
             store.remove("person_directory")

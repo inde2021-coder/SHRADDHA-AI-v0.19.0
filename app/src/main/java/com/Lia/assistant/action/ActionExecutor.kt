@@ -74,7 +74,7 @@ object ActionExecutor {
                         result.put("action", callStatus)
                         result.put("message", when (callStatus) {
                             "call_started" -> "Calling ${lookup.displayName}."
-                            "call_permission_required" -> "Allow Phone permission once in Android settings, then voice calling can start automatically."
+                            "call_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + Calling दबाएँ, फिर voice command दोहराएँ।"
                             else -> "Could not start the call."
                         })
                         result.put("contact", lookup.displayName)
@@ -83,7 +83,7 @@ object ActionExecutor {
                     is ContactLookupResult.NoPermission -> {
                         result.put("status", "error")
                         result.put("action", "no_contacts_permission")
-                        result.put("message", "Please grant Contacts permission in Settings.")
+                        result.put("message", "Shraddha AI → Permissions में Enable Contacts + Calling या Enable Contacts + SMS चालू करें; चाहें तो पूरा phone number बोलें।")
                     }
                     is ContactLookupResult.NotFound -> {
                         result.put("status", "error")
@@ -110,7 +110,7 @@ object ActionExecutor {
                     ContactLookupResult.NoPermission -> {
                         result.put("status", "error")
                         result.put("action", "contacts_permission_required")
-                        result.put("message", "Contacts permission is required to resolve this name. You can provide a full phone number instead.")
+                        result.put("message", "नाम से contact खोजने के लिए Shraddha AI → Permissions → Enable Contacts + Calling/SMS चालू करें; या पूरा phone number दें।")
                         return result
                     }
                     ContactLookupResult.NotFound -> {
@@ -160,7 +160,7 @@ object ActionExecutor {
                 result.put("message", when (sendStatus) {
                     "sms_sent_to_carrier" -> "SMS handed to Android's messaging service for delivery."
                     "whatsapp_sent" -> "WhatsApp message sent."
-                    "sms_permission_required" -> "Allow SMS permission once in Android settings to enable voice sending."
+                    "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
                     "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
                     "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
                     else -> "Message was not sent: $sendStatus"

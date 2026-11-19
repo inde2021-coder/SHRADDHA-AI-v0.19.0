@@ -136,15 +136,27 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     }
 
     private fun encode(values: FloatArray): String {
+        require(values.size in 1..4096) { "Biometric embedding dimension is invalid" }
         val bytes = ByteBuffer.allocate(values.size * 4).order(ByteOrder.LITTLE_ENDIAN)
         values.forEach { bytes.putFloat(it) }
-        return Base64.encodeToString(bytes.array(), Base64.NO_WRAP)
+        val raw = bytes.array()
+        return try {
+            Base64.encodeToString(raw, Base64.NO_WRAP)
+        } finally {
+            raw.fill(0)
+        }
     }
+
     private fun decode(value: String, dimension: Int): FloatArray {
+        require(dimension in 1..4096) { "Biometric embedding dimension is invalid" }
         val bytes = Base64.decode(value, Base64.NO_WRAP)
-        require(bytes.size == dimension * 4)
-        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        return FloatArray(dimension) { buffer.float }
+        try {
+            require(bytes.size == dimension * 4) { "Biometric embedding byte length is invalid" }
+            val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            return FloatArray(dimension) { buffer.float }
+        } finally {
+            bytes.fill(0)
+        }
     }
 
     private fun thresholdKey(kind: String): String = "biometric_threshold_${kind}_v1"

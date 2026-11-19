@@ -16,6 +16,7 @@ import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -70,6 +71,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     @Volatile private var captureThread: Thread? = null
     private var livenessGate = BiometricLivenessGate()
     private val livenessPassed = AtomicBoolean(false)
+    @Volatile private var livenessPassedAtMs = 0L
     private val captureCancelled = AtomicBoolean(false)
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
@@ -193,6 +195,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         // Start the 45-second challenge window only after the user actually starts the camera.
         livenessGate = BiometricLivenessGate()
         livenessPassed.set(false)
+        livenessPassedAtMs = 0L
         faceTrackingFailed = false
         runCatching { detector?.close() }
         detector = null
@@ -252,6 +255,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val complete = livenessGate.observe(1, face.leftEyeOpenProbability ?: 1f, face.rightEyeOpenProbability ?: 1f, face.headEulerAngleY)
             if (complete) {
                 livenessPassed.set(true)
+                livenessPassedAtMs = SystemClock.elapsedRealtime()
                 runOnUiThread { message.text = "Basic active challenge passed (not certified anti-spoofing). सीधे camera की ओर वापस आएँ, फिर capture करें."; action.text = "Capture and continue"; action.isEnabled = true }
                 imageAnalysis?.clearAnalyzer()
             } else if (livenessGate.isExpired) {
@@ -281,6 +285,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         imageCapture = null
         imageAnalysis = null
         livenessPassed.set(false)
+        livenessPassedAtMs = 0L
         action.isEnabled = false
         startCamera()
     }
@@ -297,6 +302,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun captureFace(mode: String, id: String, name: String, threshold: Float) {
         val capture = imageCapture ?: run { finishWith("Camera capture is not ready."); return }
         if (!livenessPassed.get() || busy) return
+        if (!BiometricLivenessGate.isCaptureFresh(livenessPassedAtMs, SystemClock.elapsedRealtime())) {
+            restartFaceChallenge()
+            return
+        }
         busy = true
         action.isEnabled = false
         message.text = "Capturing one live frame and checking face quality…"
@@ -304,6 +313,12 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                if (!BiometricLivenessGate.isCaptureFresh(livenessPassedAtMs, SystemClock.elapsedRealtime())) {
+                    file.delete()
+                    busy = false
+                    runOnUiThread { if (!isFinishing && !isDestroyed) restartFaceChallenge() }
+                    return
+                }
                 try {
                     val embedding = faceEmbeddingFromFile(file)
                     file.delete()
@@ -348,6 +363,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
         var bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: error("Camera image could not be decoded")
         var aligned: Bitmap? = null
         var rawRgb: ByteArray? = null
+        var rawGray: IntArray? = null
+        var sourceLandmarks: FloatArray? = null
+        var targetLandmarks: FloatArray? = null
+        var transformValues: FloatArray? = null
         try {
             val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> 90f
@@ -370,14 +389,19 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
                 .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
             val source = FloatArray(10)
+            sourceLandmarks = source
             landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
             val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
-            val transform = Matrix().apply { setValues(FaceAlignmentMath.similarityTransform(source, target)) }
+            targetLandmarks = target
+            val transformArray = FaceAlignmentMath.similarityTransform(source, target)
+            transformValues = transformArray
+            val transform = Matrix().apply { setValues(transformArray) }
             val alignedBitmap = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
             aligned = alignedBitmap
             Canvas(alignedBitmap).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
 
             val gray = IntArray(112 * 112)
+            rawGray = gray
             var brightness = 0.0
             for (y in 0 until 112) for (x in 0 until 112) {
                 val pixel = alignedBitmap.getPixel(x, y)
@@ -412,6 +436,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
             return engine.faceEmbedding(rgb)
         } finally {
             rawRgb?.fill(0)
+            rawGray?.fill(0)
+            sourceLandmarks?.fill(0f)
+            targetLandmarks?.fill(0f)
+            transformValues?.fill(0f)
             if (!bitmap.isRecycled) bitmap.recycle()
             aligned?.let { if (!it.isRecycled) it.recycle() }
         }
@@ -420,11 +448,12 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun buildSpeakerScreen(mode: String, id: String, name: String, threshold: Float) {
         val root = baseLayout(
             when (mode) { "enroll" -> "Speaker enrollment • $name"; "identify" -> "Identify consented speaker"; else -> "Live speaker match • $name" },
-            "Selected consented profile • on-device speech challenge • raw audio is processed in memory and discarded"
+            if (mode == "identify") "Search all separately consented profiles • on-device speech challenge • current speaker must consent to this session"
+            else "Selected consented profile • on-device speech challenge • raw audio is processed in memory and discarded"
         )
         val phrase = TextView(this).apply { text = "Read this phrase clearly:  $randomPhrase"; textSize = 18f; setTextColor(Color.WHITE); setPadding(0, 20, 0, 20) }
         root.addView(phrase, 1)
-        message.text = "A random phrase is generated for this session. On-device speech recognition must verify it before the biometric sample is recorded."
+        message.text = "A random phrase is checked on-device, then a separate 5-second voice sample is captured. These are two capture steps, not certified anti-spoofing."
         action.text = "Start voice challenge"
         action.setOnClickListener {
             if (android.os.Build.VERSION.SDK_INT < 31 || !SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) { finishWith("On-device speech recognition is unavailable. Voice capture is blocked to avoid cloud speech upload."); return@setOnClickListener }
@@ -488,7 +517,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun recordSpeaker() {
-        message.text = "Phrase verified locally. अब 5 सेकंड वही phrase दोहराएँ…"
+        message.text = "Phrase verified locally. अब अलग 5-second voice sample में वही phrase दोहराएँ; यह handoff/replay-proof नहीं है…"
         captureThread = Thread({
             var recorder: AudioRecord? = null
             var rawPcm: ShortArray? = null
