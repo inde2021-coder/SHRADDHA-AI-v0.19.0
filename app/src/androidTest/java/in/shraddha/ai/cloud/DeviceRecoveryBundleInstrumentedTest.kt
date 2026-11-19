@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.SecureMemoryVault
 import `in`.shraddha.ai.future.ExpertProjectLibrary
-import `in`.shraddha.ai.future.ExpertProjectLibrary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
