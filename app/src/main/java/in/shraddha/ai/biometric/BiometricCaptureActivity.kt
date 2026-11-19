@@ -334,7 +334,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val source = FloatArray(10)
             landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
             val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
-            val transform = similarityFromFivePoints(source, target)
+            val transform = Matrix().apply { setValues(FaceAlignmentMath.similarityTransform(source, target)) }
             val alignedBitmap = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
             aligned = alignedBitmap
             Canvas(alignedBitmap).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
@@ -376,50 +376,6 @@ class BiometricCaptureActivity : AppCompatActivity() {
             rawRgb?.fill(0)
             if (!bitmap.isRecycled) bitmap.recycle()
             aligned?.let { if (!it.isRecycled) it.recycle() }
-        }
-    }
-
-    /** Five-point similarity alignment (rotation, uniform scale and translation; no shear). */
-    private fun similarityFromFivePoints(source: FloatArray, target: FloatArray): Matrix {
-        require(source.size == 10 && target.size == 10)
-        var sourceX = 0.0
-        var sourceY = 0.0
-        var targetX = 0.0
-        var targetY = 0.0
-        for (i in 0 until 5) {
-            sourceX += source[i * 2]
-            sourceY += source[i * 2 + 1]
-            targetX += target[i * 2]
-            targetY += target[i * 2 + 1]
-        }
-        sourceX /= 5.0
-        sourceY /= 5.0
-        targetX /= 5.0
-        targetY /= 5.0
-
-        var denominator = 0.0
-        var scaleNumerator = 0.0
-        var rotationNumerator = 0.0
-        for (i in 0 until 5) {
-            val x = source[i * 2] - sourceX
-            val y = source[i * 2 + 1] - sourceY
-            val u = target[i * 2] - targetX
-            val v = target[i * 2 + 1] - targetY
-            denominator += x * x + y * y
-            scaleNumerator += x * u + y * v
-            rotationNumerator += x * v - y * u
-        }
-        require(denominator > 1e-9) { "Face landmarks are degenerate" }
-        val a = scaleNumerator / denominator
-        val b = rotationNumerator / denominator
-        val translateX = targetX - a * sourceX + b * sourceY
-        val translateY = targetY - b * sourceX - a * sourceY
-        return Matrix().apply {
-            setValues(floatArrayOf(
-                a.toFloat(), (-b).toFloat(), translateX.toFloat(),
-                b.toFloat(), a.toFloat(), translateY.toFloat(),
-                0f, 0f, 1f
-            ))
         }
     }
 
