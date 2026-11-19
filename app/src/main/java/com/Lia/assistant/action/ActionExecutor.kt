@@ -59,8 +59,9 @@ object ActionExecutor {
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
-                        result.put("status", "success")
+                        result.put("status", if (callStatus == "dialer_opened_user_confirmation") "pending_user_confirmation" else "error")
                         result.put("action", callStatus)
+                        result.put("message", if (callStatus == "dialer_opened_user_confirmation") "Dialer opened. Review the number and tap Call yourself; no call was placed automatically." else "Could not open the dialer.")
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
                     }
