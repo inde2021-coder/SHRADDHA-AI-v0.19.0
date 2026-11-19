@@ -17,7 +17,7 @@ export function validatePublishIntent(body) {
 }
 
 export function validateBlueskyCredentials(identifier, appPassword) {
-  if (typeof identifier !== 'string' || identifier.length < 3 || identifier.length > 253 || /\\s/.test(identifier)) throw new Error('BLUESKY_IDENTIFIER must be a handle or email');
+  if (typeof identifier !== 'string' || identifier.length < 3 || identifier.length > 253 || /\s/.test(identifier)) throw new Error('BLUESKY_IDENTIFIER must be a handle or email');
   if (typeof appPassword !== 'string' || !/^[A-Za-z0-9-]{16,64}$/.test(appPassword.replace(/-/g, ''))) throw new Error('BLUESKY_APP_PASSWORD must be an app password');
   return { identifier, appPassword };
 }
