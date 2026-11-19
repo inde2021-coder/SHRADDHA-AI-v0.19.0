@@ -1709,6 +1709,7 @@ class MainActivity : AppCompatActivity() {
             "Encrypted records: ${preview.recordCount}",
             "App training profiles: ${preview.appProfileCount}",
             "Workflow checkpoints: ${preview.workflowCheckpointCount}",
+            "Expert projects: ${preview.expertProjectCount}",
             "Active project: ${if (preview.hasActiveProject) "included" else "empty"}",
             "Private memory: ${if (preview.hasMemory) "included" else "empty"}",
             "Knowledge graph: ${if (preview.hasKnowledgeGraph) "included" else "empty"}",
@@ -1716,7 +1717,7 @@ class MainActivity : AppCompatActivity() {
         ).joinToString("\n")
         android.app.AlertDialog.Builder(this)
             .setTitle("Restore device recovery v${preview.version}?")
-            .setMessage(details + "\n\nThis replaces the selected local collections, trained app profiles, workflows, project, digital twin, knowledge graph and private memory. Existing selected local data will be overwritten. Continue only if this is the intended backup.")
+            .setMessage(details + "\n\nThis replaces the selected local collections, trained app profiles, workflows, expert projects, project, digital twin, knowledge graph and private memory. Existing selected local data will be overwritten. Continue only if this is the intended backup.")
             .setNegativeButton("CANCEL", null)
             .setPositiveButton("RESTORE") { _, _ ->
                 output.text = "Validating and restoring encrypted device data…"
@@ -2331,7 +2332,7 @@ class MainActivity : AppCompatActivity() {
                                     val recovery = backup.optJSONObject("deviceRecoveryBundle") ?: error("Device recovery data missing")
                                     val rawRecovery = recovery.toString()
                                     val preview = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.preview(rawRecovery).getOrThrow()
-                                    val details = "Encrypted records: ${preview.recordCount}\nApp profiles: ${preview.appProfileCount}\nWorkflow checkpoints: ${preview.workflowCheckpointCount}\nActive project: ${preview.hasActiveProject}\nKnowledge graph: ${preview.hasKnowledgeGraph}\nPrivate memory: ${preview.hasMemory}\nBiometric templates: excluded"
+                                    val details = "Encrypted records: ${preview.recordCount}\nApp profiles: ${preview.appProfileCount}\nWorkflow checkpoints: ${preview.workflowCheckpointCount}\nExpert projects: ${preview.expertProjectCount}\nActive project: ${preview.hasActiveProject}\nKnowledge graph: ${preview.hasKnowledgeGraph}\nPrivate memory: ${preview.hasMemory}\nBiometric templates: excluded"
                                     android.app.AlertDialog.Builder(this@MainActivity)
                                         .setTitle("Restore encrypted backup v3?")
                                         .setMessage(details + "\n\nThis will replace the selected local records and preferences. Continue only if you trust this backup.")
