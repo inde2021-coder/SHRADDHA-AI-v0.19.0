@@ -1,5 +1,5 @@
 import unittest
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
