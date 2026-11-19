@@ -63,6 +63,8 @@ object VoiceSessionManager {
     private var reconnectJob: Job? = null
     private var silenceWatchdogJob: Job? = null
     private var isTurnActive = false
+    private val pendingAssistantText = StringBuilder()
+    private val pendingTextLock = Any()
 
     fun start(context: Context) {
         if (_isActive.value) return
@@ -132,7 +134,7 @@ object VoiceSessionManager {
         val personality = PersonalityRepository.getPersonality(currentContext)
         val language = PersonalityRepository.getLanguage(currentContext)
         val assistantName = PersonalityRepository.getAssistantName(currentContext)
-        val voiceName = PersonalityRepository.getVoiceName(currentContext)
+        synchronized(pendingTextLock) { pendingAssistantText.clear() }
 
         _currentPersonality.value = personality
         _currentLanguage.value = language
@@ -195,7 +197,9 @@ object VoiceSessionManager {
 
             override fun onOutputTranscript(text: String) {
                 if (sessionEpoch.get() != currentEpoch) return
-                ConversationMemory.recordTurn(MemoryRole.ASSISTANT, text)
+                synchronized(pendingTextLock) {
+                    if (pendingAssistantText.length < 6000) pendingAssistantText.append(text).append(' ')
+                }
             }
 
             override fun onToolCall(id: String, name: String, args: JSONObject) {
@@ -225,15 +229,24 @@ object VoiceSessionManager {
             override fun onTurnComplete() {
                 if (sessionEpoch.get() != currentEpoch) return
                 silenceWatchdogJob?.cancel()
-                if (isTurnActive) {
-                    isTurnActive = false
-                    EchoGuard.notifyPlaybackStopped()
+                val response = synchronized(pendingTextLock) {
+                    pendingAssistantText.toString().trim().also { pendingAssistantText.clear() }
                 }
-                audioIO?.flushPlayback()
-                _state.value = NovaOrbState.LISTENING
-                _statusText.value = "Listening..."
-                _amplitude.value = 0f
-                VoiceLatencyTracker.markTurnComplete()
+                if (response.isNotBlank()) {
+                    ConversationMemory.recordTurn(MemoryRole.ASSISTANT, response)
+                    VoiceLatencyTracker.markTurnComplete()
+                    speakWithShraddha(currentContext, currentEpoch, assistantName, response)
+                } else {
+                    if (isTurnActive) {
+                        isTurnActive = false
+                        EchoGuard.notifyPlaybackStopped()
+                    }
+                    audioIO?.flushPlayback()
+                    _state.value = NovaOrbState.LISTENING
+                    _statusText.value = "Listening..."
+                    _amplitude.value = 0f
+                    VoiceLatencyTracker.markTurnComplete()
+                }
             }
 
             override fun onInterrupted() {
@@ -243,6 +256,7 @@ object VoiceSessionManager {
                     isTurnActive = false
                     EchoGuard.notifyPlaybackStopped()
                 }
+                synchronized(pendingTextLock) { pendingAssistantText.clear() }
                 audioIO?.flushPlayback()
                 _state.value = NovaOrbState.LISTENING
                 _statusText.value = "Listening..."
@@ -266,7 +280,38 @@ object VoiceSessionManager {
         }
 
         client = GeminiLiveClient(liveListener)
-        client?.connect(ephemeralToken, prompt, voiceName)
+        client?.connect(ephemeralToken, prompt)
+    }
+
+    private fun speakWithShraddha(context: Context, epoch: Long, assistantName: String, text: String) {
+        _state.value = NovaOrbState.THINKING
+        _statusText.value = "Preparing Shraddha's own voice..."
+        ShraddhaSpeechClient.synthesize(context, text, _detectedLanguage.value) { result ->
+            if (sessionEpoch.get() != epoch || !_isActive.value) return@synthesize
+            result.onSuccess { pcm ->
+                scope.launch {
+                    if (sessionEpoch.get() != epoch || !_isActive.value) return@launch
+                    isTurnActive = true
+                    EchoGuard.notifyPlaybackStarted()
+                    _state.value = NovaOrbState.SPEAKING
+                    _statusText.value = assistantName + " is speaking..."
+                    _amplitude.value = audioIO?.playChunk(pcm) ?: 0f
+                    val durationMs = (pcm.size / 48.0).toLong().coerceIn(100L, 60000L)
+                    delay(durationMs + 180L)
+                    if (sessionEpoch.get() == epoch && isTurnActive) {
+                        isTurnActive = false
+                        EchoGuard.notifyPlaybackStopped()
+                        _state.value = NovaOrbState.LISTENING
+                        _statusText.value = "Listening..."
+                        _amplitude.value = 0f
+                    }
+                }
+            }.onFailure { error ->
+                _lastError.value = error.localizedMessage ?: "Shraddha custom voice engine unavailable"
+                _state.value = NovaOrbState.ERROR
+                _statusText.value = "Shraddha voice engine setup required — no Google voice fallback"
+            }
+        }
     }
 
     private fun scheduleReconnect() {
@@ -330,6 +375,7 @@ object VoiceSessionManager {
 
         EchoGuard.reset()
         ConversationMemory.clear()
+        synchronized(pendingTextLock) { pendingAssistantText.clear() }
 
         isTurnActive = false
         _state.value = NovaOrbState.IDLE
