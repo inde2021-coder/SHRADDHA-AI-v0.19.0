@@ -48,166 +48,186 @@ class LiveAudioIO(
     private var audioTrack: AudioTrack? = null
     private val isRecording = AtomicBoolean(false)
     private var recordThread: Thread? = null
-    private val lock = Any()
+    private val recordingLock = Any()
+    private val speakerLock = Any()
     private var currentVolume = 1.0f
 
+    /** Idempotent: repeated Live API setup callbacks never open a second microphone. */
     @SuppressLint("MissingPermission")
     fun startRecording() {
-        if (isRecording.get()) return
-
-        val minBuf = AudioRecord.getMinBufferSize(
-            MIC_SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-        if (minBuf <= 0) {
-            onRecordingError("Android returned an invalid microphone buffer size ($minBuf).")
-            return
-        }
-        val bufSize = max(minBuf, 4096)
-        var createdRecord: AudioRecord? = null
-
-        try {
-            val record = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                MIC_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                bufSize
-            )
-            createdRecord = record
-            check(record.state == AudioRecord.STATE_INITIALIZED) {
-                "Microphone could not be initialized. Check microphone permission and device availability."
-            }
-
-            val sessionId = record.audioSessionId
-            if (sessionId != 0) {
-                try {
-                    if (AcousticEchoCanceler.isAvailable()) {
-                        echoCanceler = AcousticEchoCanceler.create(sessionId)?.apply { enabled = true }
-                    }
-                } catch (_: Exception) {}
-
-                try {
-                    if (NoiseSuppressor.isAvailable()) {
-                        noiseSuppressor = NoiseSuppressor.create(sessionId)?.apply { enabled = true }
-                    }
-                } catch (_: Exception) {}
-
-                try {
-                    if (AutomaticGainControl.isAvailable()) {
-                        gainControl = AutomaticGainControl.create(sessionId)?.apply { enabled = true }
-                    }
-                } catch (_: Exception) {}
-            }
-
-            record.startRecording()
-            check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                "Android did not start microphone recording."
-            }
-            audioRecord = record
-            isRecording.set(true)
-
-            recordThread = Thread({
-                val buffer = ByteArray(MIC_CHUNK_SIZE)
-                try {
-                    while (isRecording.get() && !Thread.currentThread().isInterrupted) {
-                        val read = record.read(buffer, 0, MIC_CHUNK_SIZE)
-                        if (read > 0) {
-                            val chunk = if (read == MIC_CHUNK_SIZE) buffer.clone() else buffer.copyOf(read)
-                            val amp = calculateRms(chunk)
-                            onMicAmplitude(amp)
-                            onMicChunk(chunk)
-                        } else if (read < 0 && isRecording.get()) {
-                            throw IllegalStateException("Microphone read failed (AudioRecord code $read).")
-                        }
-                    }
-                } catch (error: Exception) {
-                    if (isRecording.get()) {
-                        isRecording.set(false)
-                        onRecordingError(error.localizedMessage ?: "Microphone recording stopped unexpectedly.")
-                    }
+        synchronized(recordingLock) {
+            if (!isRecording.compareAndSet(false, true)) return
+            var createdRecord: AudioRecord? = null
+            try {
+                val minBuf = AudioRecord.getMinBufferSize(
+                    MIC_SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                require(minBuf > 0) { "Android returned an invalid microphone buffer size ($minBuf)." }
+                val record = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    MIC_SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    max(minBuf, 4096)
+                )
+                createdRecord = record
+                check(record.state == AudioRecord.STATE_INITIALIZED) {
+                    "Microphone could not be initialized. Check microphone permission and device availability."
                 }
-            }, "LiveAudioIO-MicThread").apply { start() }
-        } catch (error: Exception) {
-            isRecording.set(false)
-            audioRecord = null
-            runCatching { createdRecord?.release() }
-            onRecordingError(error.localizedMessage ?: "Unable to start microphone recording.")
+
+                val sessionId = record.audioSessionId
+                if (sessionId != 0) {
+                    try {
+                        if (AcousticEchoCanceler.isAvailable()) {
+                            echoCanceler = AcousticEchoCanceler.create(sessionId)?.apply { enabled = true }
+                        }
+                    } catch (_: Exception) {}
+                    try {
+                        if (NoiseSuppressor.isAvailable()) {
+                            noiseSuppressor = NoiseSuppressor.create(sessionId)?.apply { enabled = true }
+                        }
+                    } catch (_: Exception) {}
+                    try {
+                        if (AutomaticGainControl.isAvailable()) {
+                            gainControl = AutomaticGainControl.create(sessionId)?.apply { enabled = true }
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                record.startRecording()
+                check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    "Android did not start microphone recording."
+                }
+                audioRecord = record
+                recordThread = Thread({
+                    val buffer = ByteArray(MIC_CHUNK_SIZE)
+                    try {
+                        while (isRecording.get() && !Thread.currentThread().isInterrupted) {
+                            val read = record.read(buffer, 0, MIC_CHUNK_SIZE)
+                            if (read > 0) {
+                                val chunk = if (read == MIC_CHUNK_SIZE) buffer.clone() else buffer.copyOf(read)
+                                try {
+                                    onMicAmplitude(calculateRms(chunk))
+                                    onMicChunk(chunk)
+                                } finally {
+                                    chunk.fill(0)
+                                }
+                            } else if (read < 0 && isRecording.get()) {
+                                throw IllegalStateException("Microphone read failed (AudioRecord code $read).")
+                            }
+                        }
+                    } catch (error: Exception) {
+                        if (isRecording.compareAndSet(true, false)) {
+                            onRecordingError(error.localizedMessage ?: "Microphone recording stopped unexpectedly.")
+                        }
+                    } finally {
+                        buffer.fill(0)
+                    }
+                }, "LiveAudioIO-MicThread").apply { start() }
+            } catch (error: Exception) {
+                isRecording.set(false)
+                audioRecord = null
+                recordThread = null
+                releaseEffects()
+                runCatching { createdRecord?.stop() }
+                runCatching { createdRecord?.release() }
+                onRecordingError(error.localizedMessage ?: "Unable to start microphone recording.")
+            }
         }
     }
 
     fun stopRecording() {
-        isRecording.set(false)
-        val threadToStop = recordThread
-        try { audioRecord?.stop() } catch (_: Exception) {}
-        threadToStop?.interrupt()
-        if (threadToStop != null && threadToStop !== Thread.currentThread()) {
-            try { threadToStop.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        synchronized(recordingLock) {
+            isRecording.set(false)
+            val threadToStop = recordThread
+            val recordToStop = audioRecord
+            recordThread = null
+            audioRecord = null
+            runCatching { recordToStop?.stop() }
+            threadToStop?.interrupt()
+            if (threadToStop != null && threadToStop !== Thread.currentThread()) {
+                try {
+                    threadToStop.join(500)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+            }
+            runCatching { recordToStop?.release() }
+            releaseEffects()
         }
-        recordThread = null
-        try { audioRecord?.release() } catch (_: Exception) {}
-        audioRecord = null
+    }
 
-        try { echoCanceler?.release() } catch (_: Exception) {}
-        try { noiseSuppressor?.release() } catch (_: Exception) {}
-        try { gainControl?.release() } catch (_: Exception) {}
+    private fun releaseEffects() {
+        runCatching { echoCanceler?.release() }
+        runCatching { noiseSuppressor?.release() }
+        runCatching { gainControl?.release() }
         echoCanceler = null
         noiseSuppressor = null
         gainControl = null
     }
 
-    private fun getOrCreateSpeaker(): AudioTrack {
-        synchronized(lock) {
-            audioTrack?.let { return it }
-
-            val minBuf = AudioTrack.getMinBufferSize(
-                SPEAKER_SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            val bufSize = minBuf * 4
-
-            val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-
-            val format = AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setSampleRate(SPEAKER_SAMPLE_RATE)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .build()
-
-            val track = AudioTrack(
-                attributes,
-                format,
-                bufSize,
-                AudioTrack.MODE_STREAM,
-                0
-            )
+    private fun getOrCreateSpeakerLocked(): AudioTrack {
+        audioTrack?.let { return it }
+        val minBuf = AudioTrack.getMinBufferSize(
+            SPEAKER_SAMPLE_RATE,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+        check(minBuf > 0) { "Android returned an invalid speaker buffer size ($minBuf)." }
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+        val format = AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(SPEAKER_SAMPLE_RATE)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .build()
+        val track = AudioTrack(
+            attributes,
+            format,
+            max(minBuf * 4, minBuf),
+            AudioTrack.MODE_STREAM,
+            0
+        )
+        try {
+            check(track.state == AudioTrack.STATE_INITIALIZED) { "Speaker output could not be initialized." }
             track.setVolume(currentVolume)
             track.play()
             audioTrack = track
             return track
+        } catch (error: Exception) {
+            runCatching { track.release() }
+            throw error
         }
     }
 
     fun playChunk(pcmBytes: ByteArray): Float {
         if (pcmBytes.isEmpty()) return 0f
-        val track = getOrCreateSpeaker()
-        track.write(pcmBytes, 0, pcmBytes.size)
-        return calculateRms(pcmBytes)
+        return runCatching {
+            synchronized(speakerLock) {
+                val track = getOrCreateSpeakerLocked()
+                var offset = 0
+                while (offset < pcmBytes.size) {
+                    val written = track.write(pcmBytes, offset, pcmBytes.size - offset, AudioTrack.WRITE_BLOCKING)
+                    check(written > 0) { "Speaker playback failed (AudioTrack code $written)." }
+                    offset += written
+                }
+                calculateRms(pcmBytes)
+            }
+        }.getOrDefault(0f)
     }
 
     fun flushPlayback() {
-        synchronized(lock) {
+        synchronized(speakerLock) {
             audioTrack?.let { track ->
-                try {
+                runCatching {
                     track.pause()
                     track.flush()
                     track.play()
-                } catch (_: Exception) {}
+                }
             }
         }
     }
@@ -215,19 +235,19 @@ class LiveAudioIO(
     fun setVolume(volume: Float) {
         val clamped = max(0f, min(1f, volume))
         currentVolume = clamped
-        synchronized(lock) {
-            audioTrack?.setVolume(clamped)
+        synchronized(speakerLock) {
+            runCatching { audioTrack?.setVolume(clamped) }
         }
     }
 
     fun release() {
         stopRecording()
-        synchronized(lock) {
+        synchronized(speakerLock) {
             audioTrack?.let { track ->
-                try {
+                runCatching {
                     track.stop()
                     track.release()
-                } catch (_: Exception) {}
+                }
             }
             audioTrack = null
         }
