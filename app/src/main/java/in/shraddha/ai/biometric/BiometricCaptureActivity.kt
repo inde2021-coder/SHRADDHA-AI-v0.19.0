@@ -70,6 +70,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var detector: com.google.mlkit.vision.face.FaceDetector? = null
     private var previewView: PreviewView? = null
     private var speechRecognizer: SpeechRecognizer? = null
+    @Volatile private var activeRecorder: AudioRecord? = null
     private val randomChallenge = listOf(
         "blue river seven" to "en-US",
         "silver mango twenty" to "en-US",
@@ -394,7 +395,13 @@ class BiometricCaptureActivity : AppCompatActivity() {
         if (busy) return
         busy = true
         action.isEnabled = false
-        val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        val recognizer = try {
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        } catch (error: Exception) {
+            busy = false
+            finishWith("On-device speech recognizer could not start: ${error.message}")
+            return
+        }
         speechRecognizer = recognizer
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -419,7 +426,13 @@ class BiometricCaptureActivity : AppCompatActivity() {
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        recognizer.startListening(request)
+        try {
+            recognizer.startListening(request)
+        } catch (error: Exception) {
+            runCatching { recognizer.destroy() }
+            speechRecognizer = null
+            finishWith("Voice challenge could not start: ${error.message}")
+        }
     }
 
     private fun recordSpeaker() {
@@ -431,6 +444,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(minBuffer > 0) { "Microphone unavailable" }
                 recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 16384))
+                activeRecorder = recorder
                 require(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone initialization failed" }
                 val pcm = ShortArray(rate * 5)
                 recorder.startRecording()
@@ -456,12 +470,17 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
-            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() } }
+            finally {
+                runCatching { recorder?.stop() }
+                runCatching { recorder?.release() }
+                activeRecorder = null
+            }
         }, "SpeakerCapture").start()
     }
 
     private fun finishWith(text: String) {
         runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_RESULT, text))
             if (!::action.isInitialized) { finish(); return@runOnUiThread }
             messageOrStatus(text)
@@ -473,6 +492,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun messageOrStatus(text: String) { if (::message.isInitialized) message.text = text }
 
     override fun onDestroy() {
+        activeRecorder?.let { recorder ->
+            runCatching { if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop() }
+        }
         runCatching { speechRecognizer?.destroy() }
         runCatching { detector?.close() }
         runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
