@@ -28,9 +28,11 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         require(displayName.isNotBlank() && displayName.length <= 80)
         require(kind == "face" || kind == "speaker")
         val normalized = BiometricMath.unitNormalize(embedding)
+        // Read and validate the index before writing any profile data. A corrupt or
+        // undecryptable index must never create an unindexed biometric template.
+        val ids = readIndex()
         val key = PREFIX + personId
         val person = readPerson(personId) ?: run {
-            val ids = readIndex()
             require(ids.length() < MAX_PEOPLE) { "Person directory limit reached" }
             JSONObject().put("id", personId).put("name", displayName)
                 .put("consentVersion", CONSENT_VERSION).put("consentAt", System.currentTimeMillis())
@@ -43,7 +45,6 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         templates.put(JSONObject().put("dimension", normalized.size).put("vector", encode(normalized)).put("createdAt", System.currentTimeMillis()))
         person.put(kind, templates)
         check(store.put(key, person.toString()).isSuccess) { "Encrypted biometric save failed" }
-        val ids = readIndex()
         if ((0 until ids.length()).none { ids.optString(it) == personId }) {
             ids.put(personId)
             check(store.put(INDEX, ids.toString()).isSuccess) { "Biometric index save failed" }
