@@ -13,17 +13,19 @@
 - Threshold calibration requires at least two consented people with at least two templates each. It computes genuine within-person and impostor cross-person cosine scores. If the distributions overlap or lack a minimum 0.02 margin, calibration fails closed.
 - Consent withdrawal deletes the selected profile and its local face/speaker templates. A previously created encrypted cloud backup may still contain an older copy and must be separately replaced/deleted.
 
-## Compatible model files
+## Bundled model files
 
-1. Face: [OpenCV Zoo SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface), Apache-2.0. Import the compatible `face_recognition_sface_2021dec.onnx` file and verify the model exposes `data` input and `fc1` output.
+The Android Gradle `preBuild` task downloads and packages both real ONNX weights into the APK under `assets/biometric-models/`. The download URLs are pinned to upstream revisions and the complete files are verified by SHA-256 before packaging; a mismatch fails the build.
+
+1. Face: [OpenCV Zoo SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface), Apache-2.0. APK asset `sface.onnx`; expected inputs/outputs are checked at runtime.
 2. Face tracking: Google ML Kit Face Detection, run locally by the Android app; it provides face box, eye-open probability, head pose and landmarks. It is not a biometric identity model.
-3. Speaker: [SpeechBrain ECAPA-TDNN ONNX](https://huggingface.co/kenrunio/transcriber-speaker-onnx), Apache-2.0. Import `ecapa-any-length.onnx`; expected inputs are `wav` and `lens`, output `emb`.
+3. Speaker: [SpeechBrain ECAPA-TDNN ONNX conversion](https://huggingface.co/kenrunio/transcriber-speaker-onnx), Apache-2.0. APK asset `ecapa-any-length.onnx`; expected inputs are `wav` and `lens`, output `emb`.
 
-Model weights are not committed to this repository or bundled into the APK. The user must obtain the exact model files, review their licences and import them in People Memory. The speaker model is approximately 84 MB.
+On first use, the app copies the bundled models into app-private storage on a worker thread and verifies their SHA-256 again before inference. The APK is substantially larger (approximately 123 MB of model weights before packaging). The binary model files are intentionally not committed to Git; the CI/build downloads them from the pinned sources. See `BIOMETRIC-MODELS-LICENSES.md` for provenance and checksums.
 
 ## Important security boundary
 
-The randomized blink/head-turn and spoken random phrase checks are basic active challenge-response checks. They can deter a static printed photograph and simple replay, but they are **not certified presentation-attack detection** and cannot reliably stop sophisticated replay video, masks, deepfakes, voice conversion or real-time synthetic media. Android on-device speech recognition availability varies by device and language pack.
+The randomized blink/head-turn challenge now requires multiple consecutive frames for each head turn and expires after 45 seconds. The spoken random phrase remains a separate voice challenge. These are still **heuristic active challenge-response checks, not certified presentation-attack detection (PAD)**. They may deter simple static-photo attempts but cannot reliably stop replay video, masks, deepfakes, voice conversion or real-time synthetic media. No certification is claimed. Android on-device speech recognition availability varies by device and language pack.
 
 Biometric similarity is not proof of identity. Do not use it to unlock a device, authorize payments, approve transactions, grant access, place calls, or replace Android system authentication. Do not run background or covert identification. Camera and microphone operate only after a user tap and visible system permission.
 
@@ -44,4 +46,4 @@ Threshold calibration is only a small-sample separation check, not a statistical
 - Test on-device ASR availability and verify network traffic is not used for biometric capture or speech challenge.
 - Confirm temporary JPEG deletion, no raw PCM persistence, encrypted template deletion on consent withdrawal and cloud-backup retention behavior.
 
-Physical Android phones and spoof artefacts are not available to GitHub CI. Passing automated tests must not be described as completed physical-device or security certification.
+Physical Android phones and spoof artefacts are not available to GitHub CI. Passing automated tests must not be described as completed physical-device or security certification. For certified PAD, integrate a licensed SDK/product with an independently published ISO/IEC 30107-3 test report for the exact product/version and validate it on the supported phone fleet. The current repository does not contain such a licensed SDK or certification evidence.
