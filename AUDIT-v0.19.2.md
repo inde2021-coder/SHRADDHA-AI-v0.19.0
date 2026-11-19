@@ -61,3 +61,19 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - The assistant's own non-Google bilingual voice is not integrated yet. Gemini Live currently returns Gemini-generated audio; the voice selector is a Gemini preset selector, not a custom Shraddha voice.
 - Firebase cloud memory and paired-device/remote camera features still require real Firebase credentials, secure rules, a second device and end-to-end tests.
 - Build CI does not replace installation and interaction testing on a physical Android phone.
+
+
+## Additional completion work (2026-11-19)
+- Replaced Gemini Live audio output with text-only responses. All spoken assistant replies now route to the dedicated `ShraddhaSpeechClient`; there is no Android system TTS or Gemini voice fallback.
+- Added authenticated backend `POST /api/voice/synthesize` proxy with bounded text/audio payloads, HTTPS-only upstream, server-side TTS token, 24 kHz mono PCM validation and no-store response.
+- Added `voice-engine/` self-hosted Piper HTTP service container. It requires licensed Hindi and English model files that represent the same Shraddha voice identity; no third-party voice model or model weights are silently bundled.
+- Added custom voice gateway tests and Python syntax validation to CI.
+- Added `EncryptedBackupCodec`: PBKDF2-HMAC-SHA256 (240,000 iterations) + AES-256-GCM authenticated backup envelope, strict schema/size validation and passphrase-based restore. UI exports/restores selected notes, knowledge graph, active project and digital-twin preferences. API keys, pairing tokens, permissions, voice transcripts and biometric data are intentionally excluded.
+- Added JVM tests for backup round-trip, wrong passphrase and malformed/unsupported envelopes.
+
+## Remaining external dependencies and limits
+- The custom TTS engine code is integrated, but a branded voice is not yet active until the user supplies or commissions licensed Hindi and English voice models trained/designed for the same Shraddha identity, deploys the `voice-engine` service, and configures backend `SHRADDHA_TTS_URL` and `SHRADDHA_TTS_TOKEN`. No custom model weights or voice recordings are present in the repository.
+- Self-hosted Piper is a CPU/GPU service and should run on a persistent HTTPS host; Vercel serverless is not the intended inference host.
+- Encrypted backup covers only the selected app-managed records listed above. It does not yet export Android Keystore-protected vault ciphertext, Firebase cloud vault, installed app data, contacts, messages, device pairing secrets or media.
+- Voice response playback, microphone barge-in timing and TTS latency require physical-device validation with actual Hindi/English model files.
+- OCR/canvas fallback, durable resume checkpoints, Windows live screen streaming, native offline LLM inference, biometric identity models, smart-home connectors, generic social-media publishing and rendered video/CAD pipelines remain integration work rather than shipped capability.
