@@ -102,18 +102,25 @@ class LocalBiometricModelEngine : Closeable {
             values[2 * plane + pixel] = (alignedRgb112[pixel * 3 + 2].toInt() and 0xff).toFloat()
         }
         val started = System.nanoTime()
+        val inputBuffer = nativeFloatBuffer(values)
         try {
             val tensor = OnnxTensor.createTensor(
-                environment, nativeFloatBuffer(values), longArrayOf(1, 3, 112, 112)
+                environment, inputBuffer, longArrayOf(1, 3, 112, 112)
             )
             tensor.use {
                 val result = session.run(mapOf("data" to tensor))
                 result.use {
                     val output = result.get("fc1").orElseThrow { IllegalStateException("Face model output fc1 missing") }
-                    return BiometricMath.unitNormalize(flatten(output.value))
+                    val rawEmbedding = flatten(output.value)
+                    try {
+                        return BiometricMath.unitNormalize(rawEmbedding)
+                    } finally {
+                        rawEmbedding.fill(0f)
+                    }
                 }
             }
         } finally {
+            zero(inputBuffer)
             values.fill(0f)
             lastFaceInferenceMs = (System.nanoTime() - started) / 1_000_000L
         }
@@ -129,19 +136,30 @@ class LocalBiometricModelEngine : Closeable {
         require(monoPcm16k.all { it.isFinite() && it in -1.05f..1.05f }) { "Audio must be normalized 16 kHz PCM" }
         val session = speakerSession ?: error("Speaker model is not loaded")
         val started = System.nanoTime()
+        val wavBuffer = nativeFloatBuffer(monoPcm16k)
+        val lensValues = floatArrayOf(1f)
+        val lensBuffer = nativeFloatBuffer(lensValues)
         try {
-            val wav = OnnxTensor.createTensor(environment, nativeFloatBuffer(monoPcm16k), longArrayOf(1, monoPcm16k.size.toLong()))
+            val wav = OnnxTensor.createTensor(environment, wavBuffer, longArrayOf(1, monoPcm16k.size.toLong()))
             wav.use { w ->
-                val lens = OnnxTensor.createTensor(environment, nativeFloatBuffer(floatArrayOf(1f)), longArrayOf(1))
+                val lens = OnnxTensor.createTensor(environment, lensBuffer, longArrayOf(1))
                 lens.use { l ->
                     val result = session.run(mapOf("wav" to w, "lens" to l))
                     result.use {
                         val output = result.get("emb").orElseThrow { IllegalStateException("Speaker model output emb missing") }
-                        return BiometricMath.unitNormalize(flatten(output.value))
+                        val rawEmbedding = flatten(output.value)
+                        try {
+                            return BiometricMath.unitNormalize(rawEmbedding)
+                        } finally {
+                            rawEmbedding.fill(0f)
+                        }
                     }
                 }
             }
         } finally {
+            zero(wavBuffer)
+            zero(lensBuffer)
+            lensValues.fill(0f)
             lastSpeakerInferenceMs = (System.nanoTime() - started) / 1_000_000L
         }
     }
@@ -151,6 +169,12 @@ class LocalBiometricModelEngine : Closeable {
         .order(ByteOrder.nativeOrder())
         .asFloatBuffer()
         .apply { put(values); rewind() }
+
+    private fun zero(buffer: FloatBuffer) {
+        buffer.clear()
+        while (buffer.hasRemaining()) buffer.put(0f)
+        buffer.clear()
+    }
 
     private fun flatten(value: Any?): FloatArray = when (value) {
         is FloatArray -> value
