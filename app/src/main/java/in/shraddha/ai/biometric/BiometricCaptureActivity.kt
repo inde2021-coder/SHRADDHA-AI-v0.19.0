@@ -305,57 +305,72 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun faceEmbeddingFromFile(file: File): FloatArray {
         var bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: error("Camera image could not be decoded")
-        val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
+        var aligned: Bitmap? = null
+        try {
+            val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            if (rotation != 0f) {
+                val matrix = Matrix().apply { postRotate(rotation) }
+                val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                bitmap.recycle()
+                bitmap = rotated
+            }
+            val faces = Tasks.await(detector!!.process(InputImage.fromBitmap(bitmap, 0)))
+            require(faces.size == 1) { "एक ही स्पष्ट चेहरा चाहिए; group/ambiguous frame स्वीकार नहीं है" }
+            val face = faces.first()
+            require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
+            require(kotlin.math.abs(face.headEulerAngleY) <= 12f && kotlin.math.abs(face.headEulerAngleX) <= 12f) { "चेहरा सीधा camera की ओर रखें; head pose center में होना चाहिए" }
+            require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
+            val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
+                .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
+            val source = FloatArray(10)
+            landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
+            val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
+            val transform = affineFromFivePoints(source, target)
+            val alignedBitmap = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
+            aligned = alignedBitmap
+            Canvas(alignedBitmap).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
+
+            val gray = IntArray(112 * 112)
+            var brightness = 0.0
+            for (y in 0 until 112) for (x in 0 until 112) {
+                val pixel = alignedBitmap.getPixel(x, y)
+                val value = (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114).toInt()
+                gray[y * 112 + x] = value
+                brightness += value
+            }
+            val meanBrightness = brightness / gray.size
+            var lapSum = 0.0
+            var lapSquare = 0.0
+            var lapCount = 0
+            for (y in 1 until 111) for (x in 1 until 111) {
+                val i = y * 112 + x
+                val lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - 112] - gray[i + 112]
+                lapSum += lap
+                lapSquare += lap.toDouble() * lap
+                lapCount++
+            }
+            val sharpness = lapSquare / lapCount - (lapSum / lapCount) * (lapSum / lapCount)
+            require(meanBrightness in 35.0..220.0) { "रोशनी कम/ज्यादा है; समान रोशनी में फिर से capture करें" }
+            require(sharpness > 18.0) { "चेहरा धुंधला है; फोन स्थिर रखकर दोबारा capture करें" }
+
+            val rgb = ByteArray(112 * 112 * 3)
+            var offset = 0
+            for (y in 0 until 112) for (x in 0 until 112) {
+                val pixel = alignedBitmap.getPixel(x, y)
+                rgb[offset++] = Color.red(pixel).toByte()
+                rgb[offset++] = Color.green(pixel).toByte()
+                rgb[offset++] = Color.blue(pixel).toByte()
+            }
+            return engine.faceEmbedding(rgb)
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+            aligned?.let { if (!it.isRecycled) it.recycle() }
         }
-        if (rotation != 0f) { val matrix = Matrix().apply { postRotate(rotation) }; bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) }
-        val faces = try { Tasks.await(detector!!.process(InputImage.fromBitmap(bitmap, 0))) } catch (error: Exception) { bitmap.recycle(); throw error }
-        require(faces.size == 1) { "एक ही स्पष्ट चेहरा चाहिए; group/ambiguous frame स्वीकार नहीं है" }
-        val face = faces.first()
-        require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
-        require(kotlin.math.abs(face.headEulerAngleY) <= 12f && kotlin.math.abs(face.headEulerAngleX) <= 12f) { "चेहरा सीधा camera की ओर रखें; head pose center में होना चाहिए" }
-        require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
-        val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
-            .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
-        val source = FloatArray(10)
-        landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
-        val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
-        val transform = affineFromFivePoints(source, target)
-        val aligned = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
-        Canvas(aligned).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
-        val gray = IntArray(112 * 112)
-        var brightness = 0.0
-        for (y in 0 until 112) for (x in 0 until 112) {
-            val pixel = aligned.getPixel(x, y)
-            val value = (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114).toInt()
-            gray[y * 112 + x] = value
-            brightness += value
-        }
-        val meanBrightness = brightness / gray.size
-        var lapSum = 0.0
-        var lapSquare = 0.0
-        var lapCount = 0
-        for (y in 1 until 111) for (x in 1 until 111) {
-            val i = y * 112 + x
-            val lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - 112] - gray[i + 112]
-            lapSum += lap
-            lapSquare += lap.toDouble() * lap
-            lapCount++
-        }
-        val sharpness = lapSquare / lapCount - (lapSum / lapCount) * (lapSum / lapCount)
-        require(meanBrightness in 35.0..220.0) { "रोशनी कम/ज्यादा है; समान रोशनी में फिर से capture करें" }
-        require(sharpness > 18.0) { "चेहरा धुंधला है; फोन स्थिर रखकर दोबारा capture करें" }
-        val rgb = ByteArray(112 * 112 * 3)
-        var offset = 0
-        for (y in 0 until 112) for (x in 0 until 112) {
-            val pixel = aligned.getPixel(x, y)
-            rgb[offset++] = Color.red(pixel).toByte(); rgb[offset++] = Color.green(pixel).toByte(); rgb[offset++] = Color.blue(pixel).toByte()
-        }
-        bitmap.recycle(); aligned.recycle()
-        return engine.faceEmbedding(rgb)
     }
 
     /** Least-squares 5-point affine warp; Android Matrix.setPolyToPoly accepts at most 4 pairs. */
