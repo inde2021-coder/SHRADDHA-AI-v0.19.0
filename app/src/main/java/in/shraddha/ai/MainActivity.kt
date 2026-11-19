@@ -1393,7 +1393,7 @@ class MainActivity : AppCompatActivity() {
                         status.text = "Capturing selected encrypted device data and preparing backup…"
                         Thread {
                             try {
-                                val recovery = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity).getOrThrow()
+                                val recovery = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity, 1_400_000).getOrThrow()
                                 val backup = JSONObject()
                                     .put("schema", "shraddha-backup-v3")
                                     .put("createdAt", System.currentTimeMillis())
