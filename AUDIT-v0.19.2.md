@@ -167,3 +167,5 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - PR #2 remains open/unmerged and is one commit behind main; no direct changes were made to main.
 
 - Expert Hub's prior plaintext StringSet project library is migrated to an Android Keystore-backed encrypted ordered library (up to 20 projects), included in consented recovery snapshots.
+
+- Voice session shutdown now invalidates stale connection epochs, prevents a delayed token response from reconnecting after Stop, cancels in-flight tool jobs on stop/reconnect, and serializes WebSocket/microphone release. LiveAudioIO uses an atomic idempotent start gate, serializes recorder lifecycle, and zeroes each temporary PCM chunk after handoff.
