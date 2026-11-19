@@ -46,6 +46,9 @@ jobs:
       - name: Test Gemini Live token request
         run: node --test backend/gemini-live-token.test.js
 
+      - name: Test custom Shraddha voice gateway
+        run: node --test backend/voice-synthesis.test.js
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -54,6 +57,9 @@ jobs:
       - name: Test Windows PC companion safety policy
         working-directory: desktop-companion/shraddha-pc-companion
         run: python -m unittest -v
+
+      - name: Validate custom voice engine Python syntax
+        run: python -m py_compile voice-engine/app.py
 
       - name: Check patch whitespace
         run: git diff --check
