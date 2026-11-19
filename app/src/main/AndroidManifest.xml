@@ -33,6 +33,8 @@
         android:roundIcon="@drawable/ic_shraddha"
         android:theme="@style/Theme.ShraddhaAI"
         android:supportsRtl="true">
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
