@@ -1483,6 +1483,22 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
+            addView(actionButton("DISABLE PUSH & REMOVE THIS DEVICE", "Revoke this device's FCM token from the signed-in account") {
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "इस account से device push registration हटाई जा रही है…"
+                Thread {
+                    val revoked = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                        .signInAndUnregisterPushToken(emailValue, passwordValue)
+                    runOnUiThread {
+                        result.text = revoked.fold(
+                            { "Push token और owner-only device record हटाए गए। इस device पर Shraddha AI push notifications बंद हैं।" },
+                            { "Push revocation failed: ${it.message}" }
+                        )
+                    }
+                }.start()
+            })
             addView(actionButton("Create Firebase Account", "Email/password authentication") {
                 if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Valid email और कम-से-कम 8 अक्षर का password दें।"; return@actionButton }
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
