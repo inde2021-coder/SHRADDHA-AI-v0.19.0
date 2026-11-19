@@ -142,11 +142,15 @@ class BiometricCaptureActivity : AppCompatActivity() {
         message.text = challengeText()
         action.text = "Start live face check"
         action.setOnClickListener {
-            if (imageCapture == null) {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
-                } else startCamera()
-            } else if (livenessPassed.get()) captureFace(activeMode, activePersonId, activePersonName, activeThreshold)
+            when {
+                imageCapture == null -> {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
+                    } else startCamera()
+                }
+                livenessPassed.get() -> captureFace(activeMode, activePersonId, activePersonName, activeThreshold)
+                livenessGate.isExpired -> restartFaceChallenge()
+            }
         }
         setContentView(root)
         action.isEnabled = true
@@ -202,8 +206,27 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 runOnUiThread { message.text = "Basic active challenge passed (not certified anti-spoofing). सीधे camera की ओर वापस आएँ, फिर capture करें."; action.text = "Capture and continue"; action.isEnabled = true }
                 imageAnalysis?.clearAnalyzer()
             } else runOnUiThread { message.text = challengeText() }
-        }.addOnFailureListener { runOnUiThread { message.text = "Face tracking error: ${it.message}" } }
-            .addOnCompleteListener { proxy.close() }
+        }.addOnFailureListener {
+            livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
+            runOnUiThread { message.text = "Face tracking error: ${it.message}" }
+        }.addOnCompleteListener { proxy.close() }
+        if (livenessGate.isExpired) {
+            imageAnalysis?.clearAnalyzer()
+            runOnUiThread {
+                message.text = "Live challenge expired. Restart it to continue."
+                action.text = "Restart live challenge"
+                action.isEnabled = true
+            }
+        }
+    }
+
+    private fun restartFaceChallenge() {
+        runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
+        imageCapture = null
+        imageAnalysis = null
+        livenessPassed.set(false)
+        action.isEnabled = false
+        startCamera()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -235,9 +258,29 @@ class BiometricCaptureActivity : AppCompatActivity() {
                         val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
                         finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.")
                     }
-                } catch (error: Exception) { file.delete(); finishWith("Face capture failed: ${error.message}") }
+                } catch (error: Exception) {
+                    file.delete()
+                    busy = false
+                    runOnUiThread {
+                        if (!isFinishing) {
+                            message.text = "Face capture failed: ${error.message}. सुधार करके फिर capture करें।"
+                            action.text = "Capture again"
+                            action.isEnabled = true
+                        }
+                    }
+                }
             }
-            override fun onError(exception: ImageCaptureException) { file.delete(); finishWith("Camera capture failed: ${exception.message}") }
+            override fun onError(exception: ImageCaptureException) {
+                file.delete()
+                busy = false
+                runOnUiThread {
+                    if (!isFinishing) {
+                        message.text = "Camera capture failed: ${exception.message}"
+                        action.text = "Capture again"
+                        action.isEnabled = true
+                    }
+                }
+            }
         })
     }
 
