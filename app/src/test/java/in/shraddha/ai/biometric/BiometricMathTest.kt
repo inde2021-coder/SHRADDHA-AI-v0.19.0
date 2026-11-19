@@ -24,4 +24,20 @@ class BiometricMathTest {
     fun rejectsNanEmbedding() {
         BiometricMath.unitNormalize(floatArrayOf(Float.NaN, 1f))
     }
+    @Test fun thresholdCalibrationUsesGenuineAndImpostorSeparation() {
+        val result = BiometricMath.calibrateThreshold(listOf(0.82f, 0.86f, 0.91f), listOf(0.21f, 0.31f, 0.42f))
+        assertEquals(0.82f, result.minimumGenuine, 0.0001f)
+        assertEquals(0.42f, result.maximumImpostor, 0.0001f)
+        assertEquals(0.62f, result.threshold, 0.0001f)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun thresholdCalibrationFailsClosedWhenDistributionsOverlap() {
+        BiometricMath.calibrateThreshold(listOf(0.65f, 0.72f), listOf(0.68f, 0.40f))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun thresholdCalibrationRequiresBothSampleClasses() {
+        BiometricMath.calibrateThreshold(listOf(0.8f), emptyList())
+    }
 }
