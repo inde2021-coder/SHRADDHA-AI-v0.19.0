@@ -51,3 +51,11 @@ The Mastodon host must be a public HTTPS origin. Tokens are never returned to th
 ## Visual Lens analysis modes
 
 The authenticated `POST /api/vision` route accepts `mode` values `general`, `objects`, `document`, and `machine`. Object mode structures visible objects/counts/relationships without identifying people. Document mode transcribes legible content and marks uncertain text. Machine mode separates visible observations from possible causes and includes electrical/mechanical safety boundaries. These are model-guidance modes, not calibrated measurement, guaranteed OCR, or a certified equipment diagnosis. Image quality and provider capability affect results.
+
+## Firebase multi-device recovery
+
+The Android Cloud workspace supports manual, consent-gated encrypted recovery bundles in addition to the original single-note vault. The bundle currently includes only non-empty selected local collections: person directory, child profile/care log, task inbox, workflow checkpoint, active project, digital twin, and the SecureMemoryVault note. It does not include passwords, API tokens, device pairing credentials, Firebase credentials, face/voice biometric templates, or arbitrary app files.
+
+Before using it, configure the Firebase Android app values in `local.properties` and deploy the repository's `firestore.rules` to the Firebase project. The rules scope reads/writes to the authenticated user's own vault documents and deny collection listing and deletion. The bundle is encrypted on the device using AES-256-GCM with a PBKDF2-HMAC-SHA256 key derived from the account password; Firestore stores ciphertext. Restore requires the same account password and explicit consent, then shows the selected collections before local replacement.
+
+This is manual backup/restore, not continuous background sync. Firebase configuration, email/password authentication, Firestore rules, and a successful second-device restore must be verified in the user's own Firebase project.
