@@ -1579,11 +1579,12 @@ class MainActivity : AppCompatActivity() {
             "Workflow checkpoints: ${preview.workflowCheckpointCount}",
             "Active project: ${if (preview.hasActiveProject) "included" else "empty"}",
             "Private memory: ${if (preview.hasMemory) "included" else "empty"}",
+            "Knowledge graph: ${if (preview.hasKnowledgeGraph) "included" else "empty"}",
             "Face/voice biometric templates: never included"
         ).joinToString("\n")
         android.app.AlertDialog.Builder(this)
             .setTitle("Restore device recovery v${preview.version}?")
-            .setMessage(details + "\n\nThis replaces the selected local collections, trained app profiles, workflows, project, digital twin and private memory. Existing selected local data will be overwritten. Continue only if this is the intended backup.")
+            .setMessage(details + "\n\nThis replaces the selected local collections, trained app profiles, workflows, project, digital twin, knowledge graph and private memory. Existing selected local data will be overwritten. Continue only if this is the intended backup.")
             .setNegativeButton("CANCEL", null)
             .setPositiveButton("RESTORE") { _, _ ->
                 output.text = "Validating and restoring encrypted device data…"
