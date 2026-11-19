@@ -148,6 +148,7 @@ object DeviceRecoveryBundle {
             recordCount = parsed.records.size,
             appProfileCount = parsed.records.keys.count { it.startsWith("app_profile_") },
             workflowCheckpointCount = parsed.records.keys.count { it.startsWith("workflow_checkpoint_") },
+            expertProjectCount = parsed.records["expert_project_library"]?.let { JSONArray(it).length() } ?: 0,
             hasMemory = parsed.memory.isNotBlank(),
             hasActiveProject = parsed.activeProject.isNotBlank(),
             hasKnowledgeGraph = parsed.knowledgeGraph != "[]"
