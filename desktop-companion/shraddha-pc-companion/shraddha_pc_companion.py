@@ -18,7 +18,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read"}
 
 
 def normalize_point(value: object) -> float:
@@ -69,7 +69,43 @@ def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | Non
     return matches[0] if len(matches) == 1 else None
 
 
-def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
+def safe_relative_path(root: str, relative: str):
+    """Resolve a relative path under an explicitly approved root; reject traversal."""
+    from pathlib import Path
+    base = Path(root).expanduser().resolve()
+    candidate = (base / relative).resolve()
+    if candidate != base and base not in candidate.parents:
+        raise ValueError("Path escapes the approved file root")
+    return base, candidate
+
+
+def list_safe_files(root: str, relative: str = "") -> list[dict]:
+    from pathlib import Path
+    base, folder = safe_relative_path(root, relative or ".")
+    if not folder.exists() or not folder.is_dir():
+        raise ValueError("Folder does not exist")
+    results = []
+    for item in sorted(folder.iterdir(), key=lambda p: p.name.casefold())[:100]:
+        if item.is_symlink():
+            continue
+        results.append({"name": item.name[:180], "type": "folder" if item.is_dir() else "file",
+                        "size": item.stat().st_size if item.is_file() else 0})
+    return results
+
+
+def read_safe_text_file(root: str, relative: str) -> str:
+    _, candidate = safe_relative_path(root, relative)
+    if candidate.is_symlink() or not candidate.is_file():
+        raise ValueError("Only regular files can be read")
+    if candidate.suffix.lower() not in {".txt", ".md", ".csv", ".json", ".log", ".py", ".js", ".kt", ".html", ".css", ".xml", ".yaml", ".yml"}:
+        raise ValueError("File type is not allowed for text preview")
+    if candidate.stat().st_size > 256_000:
+        raise ValueError("File exceeds 256 KB preview limit")
+    return candidate.read_text(encoding="utf-8", errors="replace")[:256_000]
+
+
+def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = False, file_root: str = "") -> bool:
+    kind = action.get("kind")
     target = target_device_id.encode("utf-8")
     if not jpeg or len(jpeg) > 2_500_000 or len(target) > 255:
         raise ValueError("Screen frame is empty or exceeds relay limits")
@@ -345,7 +381,7 @@ def main() -> int:
     parser.add_argument("--base-url", default="", help="HTTPS URL of your Shraddha relay (saved after pairing)")
     parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
     parser.add_argument("--device-name", default="My Windows PC")
-    parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")
+    parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")\n    parser.add_argument("--allow-ocr", action="store_true", help="Enable active-window OCR; each request asks PC user")\n    parser.add_argument("--file-root", default="", help="Optional approved folder for file listing and text previews; each request asks PC user")
     parser.add_argument("--share-screen", action="store_true", help="Offer optional live PC screen sharing; still requires a separate local confirmation")
     parser.add_argument("--screen-fps", type=float, default=1.0, help="PC screen share frame rate, clamped to 0.5–2 FPS")
     parser.add_argument("--screen-target", default="", help="Optional paired device ID; blank broadcasts to paired devices")
