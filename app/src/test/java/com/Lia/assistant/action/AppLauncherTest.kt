@@ -30,6 +30,15 @@ class AppLauncherTest {
     }
 
     @Test
+    fun testAmbiguousMatchesAreRejected() {
+        val apps = mapOf(
+            "google maps" to "com.google.maps",
+            "google meet" to "com.google.meet"
+        )
+        assertNull(AppLauncher.findApp("google", apps))
+    }
+
+    @Test
     fun testNoLooseSubstring() {
         // "app" should not match "whatsapp" because it's a loose substring, not a prefix or exact
         assertNull(AppLauncher.findApp("app", mapOf("whatsapp" to "com.whatsapp")))
