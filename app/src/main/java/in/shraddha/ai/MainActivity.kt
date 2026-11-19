@@ -1392,13 +1392,13 @@ class MainActivity : AppCompatActivity() {
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Device Health Snapshot").setMessage(info).setPositiveButton("OK",null).show()
             })
             addView(actionButton("EXPORT ENCRYPTED BACKUP","AES-256-GCM • passphrase protected • selected user data only") {
-                val backup=JSONObject().put("schema","shraddha-backup-v2").put("createdAt",System.currentTimeMillis())
-                    .put("knowledgeGraph",getSharedPreferences("shraddha_knowledge_graph",MODE_PRIVATE).getString("nodes","[]"))
-                    .put("activeProject",getSharedPreferences("shraddha_projects",MODE_PRIVATE).getString("active_project",""))
-                    .put("localNotes",getSharedPreferences("shraddha_local_memory",MODE_PRIVATE).getString("notes",""))
-                    .put("digitalTwin",JSONObject().put("name",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("name","")).put("language",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("language","Hindi")).put("style",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("style","step-by-step")))
+                val recovery = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity).getOrThrow()
+                val backup = JSONObject()
+                    .put("schema", "shraddha-backup-v3")
+                    .put("createdAt", System.currentTimeMillis())
+                    .put("deviceRecoveryBundle", JSONObject(recovery))
                 val password=EditText(this@MainActivity).apply { hint="Backup passphrase (12+ characters)"; inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt Shraddha backup").setMessage("Use a strong passphrase and keep it safe. It cannot be recovered if lost. API keys, pairing tokens, permissions and biometric data are excluded.")
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt Shraddha backup") .setMessage("Use a strong passphrase and keep it safe. It cannot be recovered if lost. Selected encrypted profiles, app workflows, checkpoints, project, digital twin, knowledge graph and memory are included. API keys, pairing tokens, permissions and biometric templates are excluded.")
                     .setView(password).setNegativeButton("Cancel",null).setPositiveButton("Encrypt & Save") { _,_ ->
                         val secret=password.text.toString().toCharArray()
                         try {
@@ -2181,21 +2181,48 @@ class MainActivity : AppCompatActivity() {
                         try {
                             val plain=`in`.shraddha.ai.future.EncryptedBackupCodec.decrypt(envelope,secret)
                             val backup=JSONObject(plain)
-                            require(backup.optString("schema")=="shraddha-backup-v2") { "Unsupported backup data schema" }
-                            val graph=backup.optString("knowledgeGraph","[]")
-                            JSONArray(graph)
-                            val project=backup.optString("activeProject","").take(100_000)
-                            val notes=backup.optString("localNotes","").take(8_000)
-                            val twin=backup.optJSONObject("digitalTwin") ?: JSONObject()
-                            val graphPrefs=getSharedPreferences("shraddha_knowledge_graph",MODE_PRIVATE)
-                            val projectPrefs=getSharedPreferences("shraddha_projects",MODE_PRIVATE)
-                            val twinPrefs=getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE)
-                            graphPrefs.edit().putString("nodes",graph).commit()
-                            projectPrefs.edit().putString("active_project",project).commit()
-                            getSharedPreferences("shraddha_local_memory",MODE_PRIVATE).edit().putString("notes",notes).commit()
-                            twinPrefs.edit().putString("name",twin.optString("name","")).putString("language",twin.optString("language","Hindi")).putString("style",twin.optString("style","step-by-step")).commit()
-                            `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_restore","completed","encrypted backup v2")
-                            status.text="Backup decrypted and restored successfully."
+                            when (backup.optString("schema")) {
+                                "shraddha-backup-v3" -> {
+                                    val recovery = backup.optJSONObject("deviceRecoveryBundle") ?: error("Device recovery data missing")
+                                    val rawRecovery = recovery.toString()
+                                    val preview = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.preview(rawRecovery).getOrThrow()
+                                    val details = "Encrypted records: ${preview.recordCount}\nApp profiles: ${preview.appProfileCount}\nWorkflow checkpoints: ${preview.workflowCheckpointCount}\nActive project: ${preview.hasActiveProject}\nKnowledge graph: ${preview.hasKnowledgeGraph}\nPrivate memory: ${preview.hasMemory}\nBiometric templates: excluded"
+                                    android.app.AlertDialog.Builder(this@MainActivity)
+                                        .setTitle("Restore encrypted backup v3?")
+                                        .setMessage(details + "\n\nThis will replace the selected local records and preferences. Continue only if you trust this backup.")
+                                        .setNegativeButton("CANCEL", null)
+                                        .setPositiveButton("RESTORE") { _, _ ->
+                                            status.text = "Validating and restoring encrypted backup…"
+                                            Thread {
+                                                val restored = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.restore(this@MainActivity, rawRecovery)
+                                                runOnUiThread {
+                                                    status.text = restored.fold(
+                                                        { "Encrypted backup restored: ${it.recordCount} records, ${it.appProfileCount} app profiles and ${it.workflowCheckpointCount} workflow checkpoints." },
+                                                        { "Backup restore rolled back where possible: ${it.message}" }
+                                                    )
+                                                    if (restored.isSuccess) `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("backup_restore","completed","encrypted backup v3")
+                                                }
+                                            }.start()
+                                        }.show()
+                                }
+                                "shraddha-backup-v2" -> {
+                                    val graph=backup.optString("knowledgeGraph","[]")
+                                    JSONArray(graph)
+                                    val project=backup.optString("activeProject","").take(100_000)
+                                    val notes=backup.optString("localNotes","").take(8_000)
+                                    val twin=backup.optJSONObject("digitalTwin") ?: JSONObject()
+                                    val graphPrefs=getSharedPreferences("shraddha_knowledge_graph",MODE_PRIVATE)
+                                    val projectPrefs=getSharedPreferences("shraddha_projects",MODE_PRIVATE)
+                                    val twinPrefs=getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE)
+                                    check(graphPrefs.edit().putString("nodes",graph).commit())
+                                    check(projectPrefs.edit().putString("active_project",project).commit())
+                                    check(getSharedPreferences("shraddha_local_memory",MODE_PRIVATE).edit().putString("notes",notes).commit())
+                                    check(twinPrefs.edit().putString("name",twin.optString("name","")).putString("language",twin.optString("language","Hindi")).putString("style",twin.optString("style","step-by-step")).commit())
+                                    `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_restore","completed","legacy encrypted backup v2")
+                                    status.text="Legacy encrypted backup v2 restored. It does not contain app profiles or workflow checkpoints."
+                                }
+                                else -> error("Unsupported backup data schema")
+                            }
                         } catch(e:Exception) { status.text="Restore failed; backup was not accepted: ${e.message}" }
                         finally { secret.fill('\u0000'); password.text?.clear() }
                     }.show()
