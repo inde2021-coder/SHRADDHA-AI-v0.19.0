@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.ByteString
 import org.json.JSONObject
+import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
