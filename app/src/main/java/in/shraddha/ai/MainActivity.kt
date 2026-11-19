@@ -1774,25 +1774,25 @@ class MainActivity : AppCompatActivity() {
             })
             fun launchCapture(kind: String, mode: String) {
                 val selected = people().getOrNull(profileSpinner.selectedItemPosition)
-                if (mode == "enroll" && selected == null) { status.text = "पहले consent वाला Person Profile बनाएँ।"; return }
-                if (mode == "match" && people().isEmpty()) { status.text = "पहले कम-से-कम एक consented Person Profile और biometric template enroll करें।"; return }
-                if (!consent.isChecked) { status.text = "Capture से पहले स्पष्ट consent की पुष्टि करें।"; return }
+                if (selected == null) { status.text = "पहले dropdown से consented Person Profile चुनें।"; return }
+                if (!consent.isChecked) { status.text = "चुने हुए व्यक्ति की इस capture/match session के लिए स्पष्ट consent की पुष्टि करें।"; return }
                 val thresholdText = if (kind == "face") faceThreshold.text.toString().trim() else speakerThreshold.text.toString().trim()
                 val threshold = if (mode == "match") thresholdText.toFloatOrNull() else Float.NaN
                 if (mode == "match" && (threshold == null || threshold !in 0f..1f)) { status.text = "Match के लिए पहले locally calibrated threshold 0 से 1 के बीच भरें।"; return }
                 val request = Intent(this@MainActivity, BiometricCaptureActivity::class.java)
                     .putExtra(BiometricCaptureActivity.EXTRA_KIND, kind)
                     .putExtra(BiometricCaptureActivity.EXTRA_MODE, mode)
-                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, if (mode == "enroll") selected!!.optString("id") else "")
-                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, if (mode == "enroll") selected!!.optString("name") else "")
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_ID, selected.optString("id"))
+                    .putExtra(BiometricCaptureActivity.EXTRA_PERSON_NAME, selected.optString("name"))
                     .putExtra(BiometricCaptureActivity.EXTRA_CONSENT, true)
                     .putExtra(BiometricCaptureActivity.EXTRA_THRESHOLD, threshold ?: Float.NaN)
+                consent.isChecked = false
                 startActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
             }
             addView(actionButton("ENROLL FACE • LIVE CAMERA", "Random blink + head-turn liveness check; camera runs only on this screen") { launchCapture("face", "enroll") })
-            addView(actionButton("MATCH FACE • LIVE CAMERA", "Compare with consented templates; no threshold means no match") { launchCapture("face", "match") })
+            addView(actionButton("MATCH FACE • LIVE CAMERA", "Compare only with the selected consented profile; no threshold means no match") { launchCapture("face", "match") })
             addView(actionButton("ENROLL SPEAKER • LIVE MICROPHONE", "On-device random phrase check then 5-second voice sample") { launchCapture("speaker", "enroll") })
-            addView(actionButton("MATCH SPEAKER • LIVE MICROPHONE", "On-device random phrase check then compare with consented voiceprints") { launchCapture("speaker", "match") })
+            addView(actionButton("MATCH SPEAKER • LIVE MICROPHONE", "On-device random phrase check then compare only with the selected consented voiceprint") { launchCapture("speaker", "match") })
             addView(actionButton("IMPORT FACE MODEL • SFace ONNX", "sface.onnx • 112×112 aligned RGB → face embedding") {
                 val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
                 startActivityForResult(pick, faceBiometricModelRequest)
