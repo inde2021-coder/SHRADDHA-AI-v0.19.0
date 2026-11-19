@@ -59,7 +59,7 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
     if kind == "type":
         return isinstance(action.get("text"), str) and 0 < len(action["text"]) <= 500
     if kind == "click_text":
-        label = action.get("label")
+        label = action.get("label", action.get("text"))
         return isinstance(label, str) and 0 < len(label.strip()) <= 120 and label.strip() == label
     if kind == "scroll":
         amount = action.get("amount", -3)
@@ -222,6 +222,7 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
         pyautogui.hotkey("win", "d")
         return "desktop_shown"
     if kind == "click_text":
+        label = action.get("label", action.get("text", ""))
         try:
             import pygetwindow
             active = pygetwindow.getActiveWindow()
@@ -245,10 +246,10 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                     })
                 except Exception:
                     continue
-            target = resolve_unique_text_target(candidates, action["label"])
+            target = resolve_unique_text_target(candidates, label)
             if target is None:
                 return "blocked_missing_or_ambiguous_text"
-            if not await asyncio.to_thread(confirm, f"Click the unique PC control labelled {action['label']!r} in {title!r}?"):
+            if not await asyncio.to_thread(confirm, f"Click the unique PC control labelled {label!r} in {title!r}?"):
                 return "text_click_rejected_by_pc_user"
             # Re-resolve immediately before acting so a changed UI cannot redirect the click.
             fresh = root.descendants()
@@ -259,7 +260,7 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                     live.append((control, {"name": str(info.name or ""), "control_type": str(info.control_type or ""), "visible": bool(info.visible and info.enabled)}))
                 except Exception:
                     continue
-            current = resolve_unique_text_target([item for _, item in live], action["label"])
+            current = resolve_unique_text_target([item for _, item in live], label)
             if current is None:
                 return "blocked_ui_changed_or_ambiguous"
             for control, item in live:
