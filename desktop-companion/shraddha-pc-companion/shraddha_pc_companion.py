@@ -80,11 +80,11 @@ async def execute_action(action: dict, allow_typing: bool) -> str:
     kind = action["kind"]
     width, height = pyautogui.size()
     if kind == "tap":
-        pyautogui.click(round(normalize_point(action["x"]) * width), round(normalize_point(action["y"]) * height))
+        pyautogui.click(round(normalize_point(action["x"]) * (width - 1)), round(normalize_point(action["y"]) * (height - 1)))
         return "tap_executed"
     if kind == "swipe":
-        pyautogui.moveTo(round(normalize_point(action["x1"]) * width), round(normalize_point(action["y1"]) * height))
-        pyautogui.dragTo(round(normalize_point(action["x2"]) * width), round(normalize_point(action["y2"]) * height), duration=0.35)
+        pyautogui.moveTo(round(normalize_point(action["x1"]) * (width - 1)), round(normalize_point(action["y1"]) * (height - 1)))
+        pyautogui.dragTo(round(normalize_point(action["x2"]) * (width - 1)), round(normalize_point(action["y2"]) * (height - 1)), duration=0.35)
         return "swipe_executed"
     if kind == "scroll":
         pyautogui.scroll(-3)
