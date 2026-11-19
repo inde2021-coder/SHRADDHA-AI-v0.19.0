@@ -107,14 +107,14 @@ object DeviceLinkManager {
 
     fun publishSocialPost(baseUrl: String, gatewayToken: String, platform: String, exactText: String, done: (Result<String>) -> Unit) {
         val normalizedPlatform = platform.lowercase()
-        val codePointLength = exactText.codePointCount(0, exactText.length)
+        val characterLength = if (normalizedPlatform == "bluesky") exactText.codePointCount(0, exactText.length) else exactText.length
         val limit = when (normalizedPlatform) {
             "bluesky" -> 300
             "linkedin" -> 3000
             "telegram", "mastodon" -> 5000
             else -> 0
         }
-        if (limit == 0 || exactText.isBlank() || codePointLength > limit) {
+        if (limit == 0 || exactText.isBlank() || characterLength > limit) {
             done(Result.failure(IllegalArgumentException("Unsupported platform or post length (limit: ${if (limit == 0) 0 else limit} characters)")))
             return
         }
