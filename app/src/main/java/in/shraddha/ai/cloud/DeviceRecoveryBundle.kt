@@ -94,6 +94,8 @@ object DeviceRecoveryBundle {
         val parsed = parse(raw)
         val store = EncryptedFeatureStore(app)
         val memoryVault = SecureMemoryVault(app)
+        // Migrate legacy profiles first so a restore replaces, rather than merges with, them.
+        AppProfileStore(app).all()
 
         // Capture the old local state first. If any target write fails, best-effort rollback
         // restores every collection and preference rather than leaving a silent partial restore.
