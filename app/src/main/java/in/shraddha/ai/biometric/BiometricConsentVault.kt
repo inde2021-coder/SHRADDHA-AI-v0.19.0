@@ -62,12 +62,18 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         check(store.put(INDEX, updated.toString()).isSuccess) { "Could not update biometric index" }
     }
 
-    @Synchronized fun clear(): Boolean {
+    @Synchronized fun clear(): Boolean = runCatching {
         val ids = readIndex()
         var ok = true
-        for (i in 0 until ids.length()) ok = store.remove(PREFIX + ids.optString(i)) && ok
-        return store.remove(INDEX) && ok
-    }
+        for (i in 0 until ids.length()) {
+            val id = ids.getString(i)
+            ok = store.remove(PREFIX + id) && ok
+        }
+        // Keep the index if any deletion fails so the remaining encrypted records
+        // stay discoverable and the user can retry deletion instead of orphaning them.
+        if (!ok) return@runCatching false
+        store.remove(INDEX)
+    }.getOrDefault(false)
 
     @Synchronized
     fun match(kind: String, probe: FloatArray, calibratedThreshold: Float, onlyPersonId: String? = null): Match? {
@@ -93,11 +99,28 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         return best?.takeIf { BiometricMath.isMatch(it.similarity, calibratedThreshold) }
     }
 
-    private fun readIndex(): JSONArray = runCatching { JSONArray(store.get(INDEX).getOrDefault("[]")) }.getOrElse { JSONArray() }
-    private fun readPerson(id: String): JSONObject? = runCatching {
-        val raw = store.get(PREFIX + id).getOrDefault("")
-        if (raw.isBlank()) null else JSONObject(raw)
-    }.getOrNull()
+    private fun readIndex(): JSONArray {
+        val raw = store.get(INDEX).getOrThrow()
+        if (raw.isBlank()) return JSONArray()
+        val ids = JSONArray(raw)
+        require(ids.length() <= MAX_PEOPLE) { "Biometric person index exceeds the supported limit" }
+        val seen = mutableSetOf<String>()
+        for (i in 0 until ids.length()) {
+            val id = ids.getString(i)
+            require(id.matches(Regex("[A-Za-z0-9_-]{8,64}"))) { "Biometric person index contains an invalid ID" }
+            require(seen.add(id)) { "Biometric person index contains a duplicate ID" }
+        }
+        return ids
+    }
+
+    private fun readPerson(id: String): JSONObject? {
+        require(id.matches(Regex("[A-Za-z0-9_-]{8,64}")))
+        val raw = store.get(PREFIX + id).getOrThrow()
+        if (raw.isBlank()) return null
+        return JSONObject(raw).also { person ->
+            require(person.optString("id") == id) { "Biometric profile ID does not match its storage key" }
+        }
+    }
 
     private fun encode(values: FloatArray): String {
         val bytes = ByteBuffer.allocate(values.size * 4).order(ByteOrder.LITTLE_ENDIAN)
