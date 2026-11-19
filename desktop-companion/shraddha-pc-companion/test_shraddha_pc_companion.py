@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
@@ -52,6 +52,36 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "tap", "x": 5, "y": 0.5}))
         self.assertFalse(validate_action({"kind": "unknown"}))
         self.assertTrue(validate_action({"kind": "tap", "x": 0.5, "y": 0.5}))
+
+
+    def test_file_access_rejects_path_traversal(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            outside_file = Path(outside) / "secret.txt"
+            outside_file.write_text("private", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                safe_relative_path(root, str(outside_file))
+
+    def test_file_listing_and_text_preview_are_bounded(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as root:
+            Path(root, "notes.txt").write_text("hello", encoding="utf-8")
+            Path(root, "private.exe").write_bytes(b"binary")
+            self.assertEqual(list_safe_files(root)[0]["name"], "notes.txt")
+            self.assertEqual(read_safe_text_file(root, "notes.txt"), "hello")
+            with self.assertRaises(ValueError):
+                read_safe_text_file(root, "private.exe")
+            with self.assertRaises(ValueError):
+                read_safe_text_file(root, "../outside.txt")
+
+    def test_ocr_and_file_actions_require_explicit_local_flags(self):
+        self.assertFalse(validate_action({"kind": "ocr"}))
+        self.assertTrue(validate_action({"kind": "ocr"}, allow_ocr=True))
+        self.assertFalse(validate_action({"kind": "file_list"}))
+        self.assertTrue(validate_action({"kind": "file_list"}, file_root="C:/Approved"))
+        self.assertFalse(validate_action({"kind": "file_read", "path": ""}, file_root="C:/Approved"))
 
 
 if __name__ == "__main__":
