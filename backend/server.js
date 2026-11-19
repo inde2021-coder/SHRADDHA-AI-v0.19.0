@@ -217,13 +217,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 12000) return json(res, 400, { error: 'prompt must be 1-12000 characters' });
       const provider = ['auto', 'openai', 'gemini', 'anthropic', 'groq', 'perplexity'].includes(body.provider) ? body.provider : 'gemini';
-      const result = await askProviderDetailed(provider, body.prompt.trim());\n      return json(res, 200, { provider: result.provider, requestedProvider: provider, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
+      const result = await askProviderDetailed(provider, body.prompt.trim());
+      return json(res, 200, { provider: result.provider, requestedProvider: provider, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
     }
     if (req.method === 'POST' && req.url === '/api/agent/plan') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const body = await readBody(req, 32 * 1024);
       if (typeof body.goal !== 'string' || !body.goal.trim() || body.goal.length > 3000) return json(res, 400, { error: 'goal must be 1-3000 characters' });
-      const provider = ['openai', 'gemini', 'anthropic', 'groq', 'perplexity'].includes(body.provider) ? body.provider : 'gemini';
+      const provider = ['auto', 'openai', 'gemini', 'anthropic', 'groq', 'perplexity'].includes(body.provider) ? body.provider : 'gemini';
       const prompt = `You are Shraddha AI's task planner. Convert the user's goal into a safe, reviewable plan. Never claim an action was executed. Never request passwords, OTPs, banking secrets, covert camera/microphone access, bypassing Android permissions, or hidden surveillance. Return ONLY valid JSON with this exact shape: {"summary":"...","steps":[{"title":"...","detail":"...","tool":"chat|open_app|click_text|type|tap|swipe|scroll|back|home|camera_view|screen_view|share_file|ask_user","requiresApproval":true,"risk":"low|medium|high"}],"userApprovalRequired":true}. Use 1-8 steps. Mark every device action, data sharing, camera/screen access, external message, or irreversible action requiresApproval=true. If the goal is unsafe or impossible, return an empty steps array and explain in summary. User goal: ${body.goal.trim()}`;
       const raw = await askProvider(provider, prompt);
       let parsed;
