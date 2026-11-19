@@ -1454,6 +1454,35 @@ class MainActivity : AppCompatActivity() {
             val consent = CheckBox(this@MainActivity).apply { text = "मैं इस private memory note को अपने Firebase खाते में encrypted रूप में sync/restore करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val result = TextView(this@MainActivity).apply { setTextColor(0xFFBFE8D2.toInt()); textSize = 13f }
             addView(email); addView(password); addView(note); addView(consent); addView(result)
+            val pushConsent = CheckBox(this@MainActivity).apply {
+                text = "मैं इस device पर Shraddha AI के non-sensitive push notifications प्राप्त करने की अनुमति देता/देती हूँ।"
+                setTextColor(0xFFE4E9F5.toInt())
+            }
+            addView(pushConsent)
+            addView(actionButton("REGISTER THIS DEVICE FOR PUSH", "Firebase Cloud Messaging • encrypted token • owner-only Firestore registration") {
+                if (!pushConsent.isChecked) { result.text = "पहले push notification consent दें।"; return@actionButton }
+                if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    androidx.core.app.ActivityCompat.requestPermissions(this@MainActivity, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 731)
+                    result.text = "Notification permission माँगी गई है। अनुमति देने के बाद इस button को फिर दबाएँ।"
+                    return@actionButton
+                }
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "FCM token प्राप्त करके इस account के साथ सुरक्षित रूप से register किया जा रहा है…"
+                Thread {
+                    val registered = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                        .signInAndRegisterPushToken(emailValue, passwordValue, "${Build.MANUFACTURER} ${Build.MODEL}".take(80))
+                    runOnUiThread {
+                        result.text = registered.fold(
+                            { "इस device का FCM token encrypted local storage और owner-only Firestore device record में register हुआ। Firebase Console से test message भेजकर जाँचें।" },
+                            { "Push registration failed: ${it.message}" }
+                        )
+                    }
+                }.start()
+            })
             addView(actionButton("Create Firebase Account", "Email/password authentication") {
                 if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Valid email और कम-से-कम 8 अक्षर का password दें।"; return@actionButton }
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
