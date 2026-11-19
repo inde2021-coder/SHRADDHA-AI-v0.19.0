@@ -144,7 +144,7 @@ object VoiceSessionManager {
             _lastError.value = message
             audioIO?.release()
             audioIO = null
-            VoiceForegroundService.stop(currentContext)
+            VoiceForegroundService.stop(currentContext, currentEpoch)
             return
         }
 
