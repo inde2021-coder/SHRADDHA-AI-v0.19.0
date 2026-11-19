@@ -189,6 +189,20 @@ object ActionExecutor {
                 result.put("action", if (scrolled) "scrolled" else "no_scrollable_target")
             }
 
+            "swipe_screen" -> {
+                val direction = args.optString("direction", "").lowercase()
+                val points = when (direction) {
+                    "up" -> floatArrayOf(0.50f, 0.78f, 0.50f, 0.28f)
+                    "down" -> floatArrayOf(0.50f, 0.28f, 0.50f, 0.78f)
+                    "left" -> floatArrayOf(0.82f, 0.50f, 0.18f, 0.50f)
+                    "right" -> floatArrayOf(0.18f, 0.50f, 0.82f, 0.50f)
+                    else -> null
+                }
+                val swiped = points?.let { DeviceAccessibilityService.remoteSwipe(it[0], it[1], it[2], it[3]) } ?: false
+                result.put("status", if (swiped) "success" else "error")
+                result.put("action", if (swiped) "swipe_dispatched" else "invalid_direction_or_accessibility_off")
+            }
+
             "go_back" -> {
                 val ok = DeviceAccessibilityService.goBack()
                 result.put("status", if (ok) "success" else "error")
