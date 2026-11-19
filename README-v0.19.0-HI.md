@@ -12,6 +12,22 @@
 ## Build
 Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `:app:assembleDebug`. Build has not been verified in this execution environment because Gradle distribution download was blocked by DNS/network. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
 
+## Secure Gemini Live Voice setup (v0.19.2)
+1. Backend में `GATEWAY_TOKEN` और `GEMINI_API_KEY` server environment variables में set करें। Permanent Gemini key APK में न डालें।
+2. Backend deploy/restart करें; `POST /api/ai/gemini-live-token` route authenticated one-use, short-lived Live token देता है।
+3. Android Settings → Secure Voice Backend में HTTPS backend URL और वही gateway token save करें। Gateway token Android Keystore से encrypted है।
+4. Voice screen अब permanent Gemini API key के बजाय short-lived token से Live WebSocket खोलता है। Backend/Gemini configuration न होने पर voice start स्पष्ट error देगा।
+5. Backend API key rotation और rate limiting अपने hosting dashboard में करें; gateway token को किसी public repository में commit न करें।
+
+## Persistent voice memory
+Settings → Encrypted Voice Memory default में OFF है। ON करने पर हाल के अधिकतम 12 voice turns Android Keystore AES-GCM से local encrypted storage में save होते हैं। OTP/password/PIN जैसे शब्द या 4–8 digit code वाले turns save नहीं किए जाते। OFF करने पर saved voice-history ciphertext हटता है।
+
+## Windows PC companion
+`desktop-companion/shraddha-pc-companion/README.md` देखें। यह Windows Credential Manager में pairing credentials रखता है, remote control के लिए PC पर explicit approval माँगता है, और text paste default में disabled रखता है।
+
+## Communication safety
+Voice call Android dialer खोलती है; अंतिम Call user करता है। SMS/WhatsApp केवल draft composer खोलते हैं; Send user को खुद दबाना होता है। WhatsApp chat reading/search, social media publishing और background auto-send अभी implemented नहीं हैं।
+
 ## Required device permissions
 Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable Accessibility manually in Android Settings for cross-app automation. PC control needs a paired MYRA desktop companion.
 
