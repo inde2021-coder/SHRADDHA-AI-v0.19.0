@@ -2181,7 +2181,10 @@ class MainActivity : AppCompatActivity() {
                 check(getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().remove("payload").commit()) { "Could not clear temporary encrypted backup payload" }
                 `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_export","completed","encrypted user-selected backup")
                 status.text="Encrypted backup export complete. Keep the passphrase and file separately."
-            } catch(e:Exception) { status.text="Backup export failed: ${e.message}" }
+            } catch(e:Exception) {
+                getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().remove("payload").commit()
+                status.text="Backup export failed: ${e.message}"
+            }
             return
         }
         if (requestCode == backupFileRequest) {
