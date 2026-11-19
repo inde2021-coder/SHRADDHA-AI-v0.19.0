@@ -78,3 +78,5 @@ Device Control → Remote App Control में Task Handoff title, description 
 
 ## App-training profile encryption
 पुराने plaintext app-training profiles को पहली बार उपयोग या backup पर Android Keystore-backed encrypted feature store में migrate किया जाता है। Recovery bundle में trained app profiles और workflow recipes encrypted रूप में शामिल होते हैं।
+
+- Expert Hub की My Project Library अब Android Keystore-backed encrypted storage में है, पुरानी plaintext library पहली बार खुलने/backup पर migrate होती है, और अधिकतम 20 projects क्रमबद्ध रूप से सुरक्षित रहते हैं।
