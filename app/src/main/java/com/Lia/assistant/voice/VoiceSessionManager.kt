@@ -91,8 +91,13 @@ object VoiceSessionManager {
             },
             onRecordingError = { message ->
                 _lastError.value = message
+                _vadActive.value = false
+                _amplitude.value = 0f
                 _state.value = NovaOrbState.ERROR
                 _statusText.value = "Microphone unavailable"
+                // Stop capture immediately after a fatal AudioRecord error; never leave a
+                // dead microphone thread running while the UI still reports an active session.
+                audioIO?.stopRecording()
             }
         )
 
