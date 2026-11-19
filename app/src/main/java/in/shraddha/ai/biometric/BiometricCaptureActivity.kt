@@ -97,23 +97,23 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val kind = intent.getStringExtra(EXTRA_KIND) ?: "face"
         val mode = intent.getStringExtra(EXTRA_MODE) ?: "enroll"
         val id = intent.getStringExtra(EXTRA_PERSON_ID).orEmpty()
-        val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
-        val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
+        val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()        val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
         if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
-        val modelDirectory = File(filesDir, "biometric-models")
-        val model = File(modelDirectory, if (kind == "face") "sface.onnx" else "ecapa-any-length.onnx")
-        if (!model.isFile) { finishWith("Required local biometric model is not imported."); return }
-        message = TextView(this).apply { text = "Local biometric model loading…"; setTextColor(android.graphics.Color.WHITE) }
+        message = TextView(this).apply { text = "Installing and verifying bundled biometric models…"; setTextColor(android.graphics.Color.WHITE) }
         setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
         Thread({
             try {
+                BiometricModelInstaller.ensureInstalled(applicationContext)
+                val modelDirectory = File(filesDir, "biometric-models")
+                val model = File(modelDirectory, if (kind == "face") "sface.onnx" else "ecapa-any-length.onnx")
+                check(model.isFile) { "Verified biometric model is not available in private storage." }
                 if (kind == "face") engine.loadFaceModel(model.absolutePath) else engine.loadSpeakerModel(model.absolutePath)
                 runOnUiThread { if (!isFinishing) { if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold) else buildFaceScreen(mode, id, name, threshold) } }
-            } catch (error: Exception) { finishWith("Biometric model could not load: ${error.message}") }
+            } catch (error: Exception) { finishWith("Biometric model installation/loading failed: ${error.message}") }
         }, "BiometricModelLoad").start()
     }
 
@@ -197,7 +197,6 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }.addOnFailureListener { runOnUiThread { message.text = "Face tracking error: ${it.message}" } }
             .addOnCompleteListener { proxy.close() }
     }
-
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) { finishWith("Permission denied; biometric capture cancelled."); return }
@@ -297,8 +296,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         for (i in 0 until 5) {
             val x = source[i * 2].toDouble()
             val y = source[i * 2 + 1].toDouble()
-            val row = doubleArrayOf(x, y, 1.0)
-            for (r in 0..2) {
+            val row = doubleArrayOf(x, y, 1.0)            for (r in 0..2) {
                 for (c in 0..2) normal[r][c] += row[r] * row[c]
                 rhsX[r] += row[r] * target[i * 2]
                 rhsY[r] += row[r] * target[i * 2 + 1]
@@ -397,8 +395,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val extras = intent
                 val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
                 val id = extras.getStringExtra(EXTRA_PERSON_ID).orEmpty()
-                val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
-                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
+                val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
                 else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
                     val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
