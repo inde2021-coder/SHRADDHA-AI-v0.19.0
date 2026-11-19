@@ -11,14 +11,9 @@ service cloud.firestore {
         && request.resource.data.payload is string
         && request.resource.data.payload.size() <= 150000
         && request.resource.data.updatedAt is int;
-      allow delete: if request.auth != null && request.auth.uid == userId\n        && entryId.matches('^selected_device_backup_v1_[0-9]+_[a-f0-9]{8}
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-);
+      allow delete: if request.auth != null
+        && request.auth.uid == userId
+        && entryId.matches('^selected_device_backup_v1_[0-9]+_[a-f0-9]{8}$');
     }
     match /{document=**} {
       allow read, write: if false;
