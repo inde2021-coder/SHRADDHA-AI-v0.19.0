@@ -2050,7 +2050,7 @@ class MainActivity : AppCompatActivity() {
         DeviceLinkManager.onPeerMessage = null
         DeviceLinkManager.onScreenFrame = null
         DeviceLinkManager.onCameraFrame = null
-        LocalOfflineLlm.close()
+        Thread { LocalOfflineLlm.close() }.start()
         super.onDestroy()
     }
 
