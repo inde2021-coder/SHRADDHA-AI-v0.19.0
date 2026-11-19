@@ -88,6 +88,40 @@ class BiometricLivenessGateTest {
         assertEquals(BiometricLivenessGate.Step.BLINK, gate.currentStep)
     }
 
+    @Test fun alternatingHeadDirectionsCannotSatisfySideTurn() {
+        val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
+        gate.observe(1, 0.1f, 0.1f, 0f, 1_010L)
+        gate.observe(1, 0.95f, 0.95f, 0f, 1_020L)
+        gate.observe(1, 0.95f, 0.95f, 0f, 1_030L)
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_040L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, -25f, 1_050L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_060L))
+        assertEquals(BiometricLivenessGate.Step.TURN_SIDE, gate.currentStep)
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_070L))
+        assertEquals(BiometricLivenessGate.Step.TURN_OPPOSITE, gate.currentStep)
+    }
+
+    @Test fun alternatingHeadDirectionsCannotSatisfyOppositeTurn() {
+        val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
+        gate.observe(1, 0.1f, 0.1f, 0f, 1_010L)
+        gate.observe(1, 0.95f, 0.95f, 0f, 1_020L)
+        gate.observe(1, 0.95f, 0.95f, 0f, 1_030L)
+        gate.observe(1, 0.95f, 0.95f, 25f, 1_040L)
+        gate.observe(1, 0.95f, 0.95f, 25f, 1_050L)
+        assertFalse(gate.observe(1, 0.95f, 0.95f, -25f, 1_060L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_070L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, -25f, 1_080L))
+        assertEquals(BiometricLivenessGate.Step.TURN_OPPOSITE, gate.currentStep)
+        assertTrue(gate.observe(1, 0.95f, 0.95f, -25f, 1_090L))
+    }
+
+    @Test fun nonMonotonicFrameTimestampsExpireChallenge() {
+        val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
+        assertFalse(gate.observe(1, 0.1f, 0.1f, 0f, 1_020L))
+        assertFalse(gate.observe(1, 0.1f, 0.1f, 0f, 1_010L))
+        assertTrue(gate.isExpired)
+    }
+
     @Test fun randomizedDefaultSequenceAlwaysHasValidTurnOrder() {
         repeat(100) { assertNotNull(BiometricLivenessGate().currentStep) }
     }
