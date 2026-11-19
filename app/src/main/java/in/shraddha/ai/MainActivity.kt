@@ -1568,6 +1568,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showDeviceRecoveryPreview(raw: String, output: TextView) {
+        val preview = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.preview(raw).getOrElse {
+            output.text = "Recovery preview rejected: ${it.message}"
+            return
+        }
+        val details = listOf(
+            "Encrypted records: ${preview.recordCount}",
+            "App training profiles: ${preview.appProfileCount}",
+            "Workflow checkpoints: ${preview.workflowCheckpointCount}",
+            "Active project: ${if (preview.hasActiveProject) "included" else "empty"}",
+            "Private memory: ${if (preview.hasMemory) "included" else "empty"}",
+            "Face/voice biometric templates: never included"
+        ).joinToString("\n")
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Restore device recovery v${preview.version}?")
+            .setMessage(details + "\n\nThis replaces the selected local collections, trained app profiles, workflows, project, digital twin and private memory. Existing selected local data will be overwritten. Continue only if this is the intended backup.")
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("RESTORE") { _, _ ->
+                output.text = "Validating and restoring encrypted device data…"
+                Thread {
+                    val restored = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.restore(this@MainActivity, raw)
+                    runOnUiThread {
+                        output.text = restored.fold(
+                            { "Recovery complete: ${it.recordCount} encrypted records, ${it.appProfileCount} app profiles, ${it.workflowCheckpointCount} workflow checkpoints and selected preferences restored." },
+                            { "Recovery was rolled back where possible: ${it.message}" }
+                        )
+                    }
+                }.start()
+            }.show()
+    }
+
     private fun addKidsUniverse(root: LinearLayout) {
         val store = EncryptedFeatureStore(this)
         val ageOptions = listOf("0–6 months", "6–12 months", "1–2 years", "2–3 years", "3–4 years", "4–5 years", "5–6 years")
