@@ -190,7 +190,11 @@ class BiometricCaptureActivity : AppCompatActivity() {
         if (task == null) { proxy.close(); return }
         task.addOnSuccessListener { faces ->
             if (livenessPassed.get()) return@addOnSuccessListener
-            if (faces.size != 1) { runOnUiThread { message.text = "Keep exactly one face in the frame." }; return@addOnSuccessListener }
+            if (faces.size != 1) {
+                livenessGate.observe(faces.size, Float.NaN, Float.NaN, Float.NaN)
+                runOnUiThread { message.text = "Keep exactly one face in the frame. Challenge progress was reset." }
+                return@addOnSuccessListener
+            }
             val face = faces.first()
             val complete = livenessGate.observe(1, face.leftEyeOpenProbability ?: 1f, face.rightEyeOpenProbability ?: 1f, face.headEulerAngleY)
             if (complete) {
