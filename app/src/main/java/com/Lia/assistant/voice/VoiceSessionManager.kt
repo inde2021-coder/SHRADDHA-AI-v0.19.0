@@ -3,7 +3,7 @@ package com.Lia.assistant.voice
 import android.content.Context
 import com.Lia.assistant.action.ActionExecutor
 import com.Lia.assistant.action.InstalledAppLabelCache
-import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
@@ -115,12 +115,14 @@ object VoiceSessionManager {
         _state.value = NovaOrbState.CONNECTING
         _statusText.value = if (isResuming) "Reconnecting..." else "Connecting..."
 
-        val apiKey = ApiKeyStore.getKey(currentContext)
-        if (apiKey.isEmpty()) {
+        val ephemeralToken = try {
+            VoiceGatewaySettings.fetchEphemeralToken(currentContext)
+        } catch (error: Exception) {
+            val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
             _isActive.value = false
             _state.value = NovaOrbState.ERROR
-            _statusText.value = "API key missing. Enter the Gemini key in Settings, then start Voice again."
-            _lastError.value = "Missing Gemini API Key"
+            _statusText.value = "Secure voice setup required"
+            _lastError.value = message
             audioIO?.release()
             audioIO = null
             VoiceForegroundService.stop(currentContext)
@@ -264,7 +266,7 @@ object VoiceSessionManager {
         }
 
         client = GeminiLiveClient(liveListener)
-        client?.connect(apiKey, prompt, voiceName)
+        client?.connect(ephemeralToken, prompt, voiceName)
     }
 
     private fun scheduleReconnect() {
