@@ -75,4 +75,7 @@ test("Firebase Storage accepts only owner-scoped encrypted backup objects", asyn
   await assertFails(uploadBytes(ref(alice, "users/alice/backups/backup_1770000000000_deadbeef.enc"), bytes, {
     contentType: "text/plain", customMetadata: { format: "plaintext", updatedAt: String(Date.now()) }
   }));
+  await assertFails(uploadBytes(ref(alice, "users/alice/backups/backup_1770000000001_deadbeef.enc"), bytes, {
+    contentType: "application/octet-stream", customMetadata: { format: "plaintext", updatedAt: String(Date.now()) }
+  }));
 });
