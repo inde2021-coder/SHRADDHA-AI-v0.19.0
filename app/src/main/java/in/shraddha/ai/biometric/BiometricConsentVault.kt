@@ -55,24 +55,15 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     fun withdraw(personId: String): Result<Unit> = runCatching {
         require(personId.matches(Regex("[A-Za-z0-9_-]{8,64}")))
         val old = readIndex()
-        val wasIndexed = (0 until old.length()).any { old.optString(it) == personId }
-        if (wasIndexed) check(store.remove(PREFIX + personId)) { "Could not delete biometric templates" }
-        else store.remove(PREFIX + personId)
+        check(store.remove(PREFIX + personId)) { "Could not delete biometric templates" }
         val updated = JSONArray()
         for (i in 0 until old.length()) if (old.optString(i) != personId) updated.put(old.optString(i))
         check(store.put(INDEX, updated.toString()).isSuccess) { "Could not update biometric index" }
     }
 
     @Synchronized fun clear(): Boolean = runCatching {
-        val ids = readIndex()
-        var ok = true
-        for (i in 0 until ids.length()) {
-            val id = ids.getString(i)
-            ok = store.remove(PREFIX + id) && ok
-        }
-        // Keep the index if any deletion fails so the remaining encrypted records
-        // stay discoverable and the user can retry deletion instead of orphaning them.
-        if (!ok) return@runCatching false
+        // Prefix removal also catches any orphaned records left by an older build.
+        if (!store.removeAllWithPrefix(PREFIX)) return@runCatching false
         store.remove(INDEX)
     }.getOrDefault(false)
 
@@ -146,10 +137,10 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
             val person = readPerson(ids.optString(i)) ?: continue
             if (!person.optBoolean("consent")) continue
             val templates = person.optJSONArray(kind) ?: continue
-            val vectors = (0 until templates.length()).mapNotNull { index ->
-                val item = templates.optJSONObject(index) ?: return@mapNotNull null
-                val dimension = item.optInt("dimension")
-                runCatching { decode(item.optString("vector"), dimension) }.getOrNull()
+            val vectors = (0 until templates.length()).map { index ->
+                val item = templates.getJSONObject(index)
+                val dimension = item.getInt("dimension")
+                decode(item.getString("vector"), dimension)
             }
             if (vectors.size >= 2) groups.add(person.optString("id") to vectors)
         }
