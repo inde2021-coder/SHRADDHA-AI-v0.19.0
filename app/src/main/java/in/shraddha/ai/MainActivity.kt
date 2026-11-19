@@ -417,14 +417,14 @@ class MainActivity : AppCompatActivity() {
             addView(relayUrl)
             addView(gatewayToken)
             val provider = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("gemini", "openai", "anthropic", "groq", "perplexity"))
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
             }
             addView(provider)
             val prompt = edit("Ask Shraddha", "हिंदी या English में अपना सवाल लिखें").apply { isSingleLine = false; minLines = 3 }
             addView(prompt)
             val answer = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
             addView(answer)
-            addView(actionButton("Ask Selected AI Provider", "API key backend environment में configure करें") {
+            addView(actionButton("Ask AI • Auto Failover", "Auto चुनने पर configured providers क्रम से try होंगे; API key server पर ही रहेगी") {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url) || prompt.text.isNullOrBlank()) { status.text = "पहले relay URL और सवाल भरें।"; return@actionButton }
                 answer.text = "AI से जवाब लिया जा रहा है…"
@@ -450,7 +450,7 @@ class MainActivity : AppCompatActivity() {
             addView(relayUrl)
             addView(gatewayToken)
             val plannerProvider = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("gemini", "openai", "anthropic", "groq", "perplexity"))
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
             }
             addView(TextView(this@MainActivity).apply { text = "AI Task Planner"; setTextColor(0xFFBFAEFF.toInt()); textSize = 16f; setPadding(0, dp(6), 0, dp(6)) })
             addView(plannerProvider)
@@ -569,7 +569,7 @@ class MainActivity : AppCompatActivity() {
             }
             addView(modePicker)
             val expertProvider = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("gemini", "openai", "anthropic", "groq", "perplexity"))
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
             }
             addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(0, dp(10), 0, dp(4)) })
             addView(expertProvider)
@@ -610,7 +610,7 @@ class MainActivity : AppCompatActivity() {
             val tasks = listOf("teach" to "Teach / Explain", "course" to "Build Full Course", "quiz" to "Quiz & Exam", "solve" to "Solve Problem", "design" to "Design / Create", "diagnose" to "Diagnose / Troubleshoot", "research" to "Research / Compare", "create" to "Create Deliverable", "estimate" to "Estimate / Calculate", "review" to "Review / Audit")
             val workspacePicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, workspaces.map { it.second }) }
             val taskPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, tasks.map { it.second }) }
-            val providerPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("gemini", "openai", "anthropic", "groq", "perplexity")) }
+            val providerPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity")) }
             addView(relayUrl)
             addView(gatewayToken)
             addView(TextView(this@MainActivity).apply { text = "Select expert department"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f })
