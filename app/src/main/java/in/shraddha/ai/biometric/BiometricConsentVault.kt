@@ -131,7 +131,7 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         val genuine = mutableListOf<Float>()
         val impostor = mutableListOf<Float>()
         for ((_, vectors) in groups) for (a in vectors.indices) for (b in a + 1 until vectors.size) {
-            genuine.add(BiometricMath.cosineSimilarity(vectors[a], vectors[b]))
+            if (vectors[a].size == vectors[b].size) genuine.add(BiometricMath.cosineSimilarity(vectors[a], vectors[b]))
         }
         for (a in groups.indices) for (b in a + 1 until groups.size) {
             for (left in groups[a].second) for (right in groups[b].second) {
@@ -139,11 +139,8 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
             }
         }
         require(genuine.isNotEmpty() && impostor.isNotEmpty()) { "Calibration samples are insufficient" }
-        val minGenuine = genuine.minOrNull() ?: error("No genuine scores")
-        val maxImpostor = impostor.maxOrNull() ?: error("No impostor scores")
-        require(minGenuine > maxImpostor + 0.02f) { "Samples overlap; safe threshold cannot be calibrated. Add clearer samples or do not enable matching." }
-        val threshold = (minGenuine + maxImpostor) / 2f
-        CalibrationResult(threshold, minGenuine, maxImpostor, genuine.size, impostor.size)
+        val calibrated = BiometricMath.calibrateThreshold(genuine, impostor)
+        CalibrationResult(calibrated.threshold, calibrated.minimumGenuine, calibrated.maximumImpostor, genuine.size, impostor.size)
     }
 
     data class Match(val personId: String, val name: String, val kind: String, val similarity: Float)
