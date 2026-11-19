@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -94,7 +94,7 @@ fun VoiceScreen(
         }
     }
 
-    val hasKey = ApiKeyStore.hasKey(context)
+    val hasKey = VoiceGatewaySettings.isConfigured(context)
 
     LaunchedEffect(hasRecordAudioPermission, hasKey) {
         if (!hasRecordAudioPermission) {
@@ -153,7 +153,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "API Key Required",
+                        text = "Secure Voice Backend Required",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
                         fontSize = 20.sp,
@@ -161,7 +161,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     NovaButton(
-                        text = "Open Settings",
+                        text = "Configure Secure Backend",
                         onClick = { navController.navigate("settings") },
                         type = NovaButtonType.PRIMARY
                     )
