@@ -32,10 +32,10 @@ class AppLauncherTest {
     @Test
     fun testAmbiguousMatchesAreRejected() {
         val apps = mapOf(
-            "google maps" to "com.google.maps",
-            "google meet" to "com.google.meet"
+            "camera" to "com.camera",
+            "canary" to "com.canary"
         )
-        assertNull(AppLauncher.findApp("google", apps))
+        assertNull(AppLauncher.findApp("ca", apps))
     }
 
     @Test
