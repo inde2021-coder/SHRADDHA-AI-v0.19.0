@@ -28,7 +28,7 @@ class GeminiLiveClient(private val listener: Listener) {
 
     companion object {
         const val MODEL = "models/gemini-3.1-flash-live-preview"
-        const val BASE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        const val BASE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained"
     }
 
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
@@ -43,7 +43,7 @@ class GeminiLiveClient(private val listener: Listener) {
 
     fun isLive(): Boolean = isConnected.get()
 
-    fun connect(apiKey: String, systemInstruction: String, voiceName: String = "Aoede") {
+    fun connect(ephemeralToken: String, systemInstruction: String, voiceName: String = "Aoede") {
         if (apiKey.isBlank()) {
             listener.onError("Missing Gemini API Key. Please configure it in Settings.")
             return
@@ -52,7 +52,7 @@ class GeminiLiveClient(private val listener: Listener) {
         disconnect()
         deduplicator.clear()
 
-        val url = "$BASE_WS_URL?key=$apiKey"
+        val url = "$BASE_WS_URL?access_token=$ephemeralToken"
         val request = Request.Builder()
             .url(url)
             .build()
