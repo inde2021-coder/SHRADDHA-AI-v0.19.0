@@ -26,6 +26,7 @@ import com.google.android.material.card.MaterialCardView
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.brain.SecureMemoryVault
 import `in`.shraddha.ai.brain.OfflineCommandEngine
+import `in`.shraddha.ai.brain.LocalOfflineLlm
 import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.overlay.ShraddhaOverlayService
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private val dataFileRequest = 43
     private val backupFileRequest = 45
     private val backupImportRequest = 46
+    private val offlineModelImportRequest = 47
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
@@ -512,6 +514,30 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Recognize Offline Command", "स्थानीय bilingual intent engine • केवल proposal, action execute नहीं") {
                 val proposal = OfflineCommandEngine.recognize(offlineInput.text.toString())
                 offlineResult.text = proposal?.let { "Intent: ${it.intent}\n${it.summary}\nअनुमति/पुष्टि जरूरी: ${it.needsPermission}" } ?: "यह command offline grammar में नहीं मिली। AI provider से पूछने के लिए online chat इस्तेमाल करें।"
+            })
+            val localModelPrompt = edit("Local AI prompt (no internet)", "Shraddha, मेरे सवाल का उत्तर दो…").apply { isSingleLine = false; minLines = 2 }
+            addView(localModelPrompt)
+            addView(actionButton("SELECT ON-DEVICE LLM MODEL", "अपनी compatible .litertlm model file चुनें; model APK में शामिल नहीं है") {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/octet-stream"
+                }
+                startActivityForResult(picker, offlineModelImportRequest)
+            })
+            addView(actionButton("RUN LOCAL OFFLINE AI", "LiteRT-LM inference • CPU backend • model और prompt इसी फोन पर रहते हैं") {
+                val model = java.io.File(filesDir, "offline-models/shraddha.litertlm")
+                val prompt = localModelPrompt.text.toString().trim()
+                if (!model.isFile || model.length() < 10_000_000L) {
+                    offlineResult.text = "पहले compatible .litertlm model import करें।"
+                } else if (prompt.isBlank() || prompt.length > 6000) {
+                    offlineResult.text = "Prompt 1-6000 characters का होना चाहिए।"
+                } else {
+                    offlineResult.text = "Local model लोड हो रहा है… पहली बार कुछ समय लग सकता है।"
+                    Thread {
+                        val answer = runCatching { LocalOfflineLlm.generate(this@MainActivity, model.absolutePath, prompt) }
+                        runOnUiThread { offlineResult.text = answer.getOrElse { "Local inference failed: ${it.message}" } }
+                    }.start()
+                }
             })
 
             addView(TextView(this@MainActivity).apply { text = "ENCRYPTED PERSONAL MEMORY VAULT"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
@@ -1838,6 +1864,43 @@ class MainActivity : AppCompatActivity() {
                 pendingShareTarget = null
             } else status.text = if (!getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) "Screen sharing permission is off; capture was not started." else "Screen sharing cancelled."
             pendingShareTarget = null
+            return
+        }
+
+        if (requestCode == offlineModelImportRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
+            try {
+                val uri = data.data!!
+                val displayName = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                }.orEmpty()
+                if (!displayName.lowercase().endsWith(".litertlm")) error("केवल .litertlm मॉडल फ़ाइल चुनें")
+                val directory = java.io.File(filesDir, "offline-models").apply { mkdirs() }
+                val target = java.io.File(directory, "shraddha.litertlm")
+                val temporary = java.io.File(directory, "shraddha.litertlm.part")
+                contentResolver.openInputStream(uri)?.use { input ->
+                    java.io.FileOutputStream(temporary).use { output ->
+                        val buffer = ByteArray(1024 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > 5_000_000_000L) error("Model 5 GB limit से बड़ा है")
+                            output.write(buffer, 0, count)
+                        }
+                        output.fd.sync()
+                    }
+                } ?: error("Model file पढ़ी नहीं जा सकी")
+                if (temporary.length() < 10_000_000L) error("Model file बहुत छोटी या invalid है")
+                if (!temporary.renameTo(target)) {
+                    target.delete()
+                    if (!temporary.renameTo(target)) error("Model को सुरक्षित रूप से install नहीं किया जा सका")
+                }
+                status.text = "Offline model import complete • ${target.length() / 1_000_000} MB. अब Local Offline AI चला सकते हैं।"
+            } catch (error: Exception) {
+                java.io.File(filesDir, "offline-models/shraddha.litertlm.part").delete()
+                status.text = "Offline model import failed: ${error.message}"
+            }
             return
         }
         if (requestCode == backupFileRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
