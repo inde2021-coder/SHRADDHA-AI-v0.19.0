@@ -5,6 +5,7 @@ import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.SecureMemoryVault
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
 import `in`.shraddha.ai.operator.learning.AppProfileStore
+import `in`.shraddha.ai.future.ExpertProjectLibrary
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -16,7 +17,8 @@ object DeviceRecoveryBundle {
         "kids_care_log",
         "task_inbox",
         "workflow_checkpoint_",
-        "app_profile_"
+        "app_profile_",
+        "expert_project_library"
     )
     private val legacyV1Keys = setOf(
         "person_directory", "kids_profile", "kids_care_log", "task_inbox",
@@ -29,6 +31,7 @@ object DeviceRecoveryBundle {
         val recordCount: Int,
         val appProfileCount: Int,
         val workflowCheckpointCount: Int,
+        val expertProjectCount: Int,
         val hasMemory: Boolean,
         val hasActiveProject: Boolean,
         val hasKnowledgeGraph: Boolean
@@ -49,6 +52,7 @@ object DeviceRecoveryBundle {
         val store = EncryptedFeatureStore(app)
         // Migrate any older plaintext app-training profiles before taking the encrypted snapshot.
         AppProfileStore(app).all()
+        ExpertProjectLibrary(app).load().getOrThrow()
         val records = store.getAllWithPrefixes(prefixes).getOrThrow()
         val memory = SecureMemoryVault(app).load().getOrThrow()
         val project = app.getSharedPreferences("shraddha_projects", Context.MODE_PRIVATE)
@@ -83,6 +87,7 @@ object DeviceRecoveryBundle {
             recordCount = parsed.records.size,
             appProfileCount = parsed.records.keys.count { it.startsWith("app_profile_") },
             workflowCheckpointCount = parsed.records.keys.count { it.startsWith("workflow_checkpoint_") },
+            expertProjectCount = parsed.records["expert_project_library"]?.let { JSONArray(it).length() } ?: 0,
             hasMemory = parsed.memory.isNotBlank(),
             hasActiveProject = parsed.activeProject.isNotBlank(),
             hasKnowledgeGraph = parsed.knowledgeGraph != "[]"
@@ -96,6 +101,7 @@ object DeviceRecoveryBundle {
         val memoryVault = SecureMemoryVault(app)
         // Migrate legacy profiles first so a restore replaces, rather than merges with, them.
         AppProfileStore(app).all()
+        ExpertProjectLibrary(app).load().getOrThrow()
 
         // Capture the old local state first. If any target write fails, best-effort rollback
         // restores every collection and preference rather than leaving a silent partial restore.
@@ -223,6 +229,11 @@ object DeviceRecoveryBundle {
                 require(key.matches(Regex("app_profile_[a-f0-9]{32}")))
                 val profile = AppTrainingProfile.fromJson(JSONObject(value))
                 require(profile.packageName.isNotBlank())
+            }
+            key == "expert_project_library" -> {
+                val projects = JSONArray(value)
+                require(projects.length() <= 20)
+                for (index in 0 until projects.length()) ExpertProjectLibrary.Entry.fromJson(projects.getJSONObject(index))
             }
             else -> error("Unsupported recovery key: $key")
         }
