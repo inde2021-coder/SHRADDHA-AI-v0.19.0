@@ -33,6 +33,19 @@ object BiometricMath {
         return (dot / (sqrt(leftNorm) * sqrt(rightNorm))).toFloat().coerceIn(-1f, 1f)
     }
 
+    data class ThresholdCalibration(val threshold: Float, val minimumGenuine: Float, val maximumImpostor: Float)
+
+    /** Conservative separation-only calibration; overlapping score distributions fail closed. */
+    fun calibrateThreshold(genuineScores: List<Float>, impostorScores: List<Float>, minimumMargin: Float = 0.02f): ThresholdCalibration {
+        require(genuineScores.isNotEmpty() && impostorScores.isNotEmpty()) { "Both genuine and impostor samples are required" }
+        require(minimumMargin.isFinite() && minimumMargin > 0f && minimumMargin <= 0.25f)
+        require((genuineScores + impostorScores).all { it.isFinite() && it in -1f..1f })
+        val minimumGenuine = genuineScores.minOrNull()!!
+        val maximumImpostor = impostorScores.maxOrNull()!!
+        require(minimumGenuine > maximumImpostor + minimumMargin) { "Genuine and impostor scores overlap; threshold calibration failed closed" }
+        return ThresholdCalibration((minimumGenuine + maximumImpostor) / 2f, minimumGenuine, maximumImpostor)
+    }
+
     /** A match is deliberately impossible without a calibrated, explicit threshold. */
     fun isMatch(similarity: Float, calibratedThreshold: Float): Boolean {
         require(calibratedThreshold in -1f..1f && similarity.isFinite())
