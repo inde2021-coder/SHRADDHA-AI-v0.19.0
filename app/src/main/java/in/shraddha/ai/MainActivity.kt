@@ -658,6 +658,12 @@ class MainActivity : AppCompatActivity() {
                     isChecked = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean(key, false)
                     setOnCheckedChangeListener { _, checked ->
                         getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).edit().putBoolean(key, checked).apply()
+                        if (!checked) {
+                            when (key) {
+                                "screen" -> stopService(Intent(this@MainActivity, ScreenShareService::class.java))
+                                "camera" -> stopService(Intent(this@MainActivity, RemoteCameraService::class.java))
+                            }
+                        }
                         publishDataPermissions()
                     }
                 }
@@ -674,6 +680,12 @@ class MainActivity : AppCompatActivity() {
                     isChecked = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean(key, false)
                     setOnCheckedChangeListener { _, checked ->
                         getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).edit().putBoolean(key, checked).apply()
+                        if (!checked) {
+                            when (key) {
+                                "screen" -> stopService(Intent(this@MainActivity, ScreenShareService::class.java))
+                                "camera" -> stopService(Intent(this@MainActivity, RemoteCameraService::class.java))
+                            }
+                        }
                         publishDataPermissions()
                     }
                 }
@@ -708,6 +720,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCameraShare(facing: String) {
+        if (!getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("camera", false)) {
+            status.text = "पहले Data Hub में Camera sharing की अनुमति ON करें। इसे बंद करते ही कैमरा शेयरिंग रुक जाएगी।"
+            return
+        }
         val target = targetDevice.text.toString().trim()
         if (target.isBlank()) { status.text = "Remote camera के लिए पहले target device चुनें।"; return }
         getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putString("pending_camera_facing", facing).putString("pending_camera_target", target).apply()
@@ -1453,6 +1469,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestScreenShare() {
+        if (!getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) {
+            status.text = "पहले Data Hub में Screen sharing की अनुमति ON करें। इसे बंद करते ही स्क्रीन शेयरिंग रुक जाएगी।"
+            return
+        }
         val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
         if (target.isBlank() || peerOnline[target] != true) {
             status.text = "पहले Device Control में एक paired और online device चुनें। Screen किसी भी device पर स्वतः broadcast नहीं होगी।"
