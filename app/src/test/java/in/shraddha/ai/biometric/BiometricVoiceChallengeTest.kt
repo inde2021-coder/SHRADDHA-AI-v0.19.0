@@ -1,27 +1,22 @@
 package `in`.shraddha.ai.biometric
 
-import org.junit.Assert.*
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BiometricVoiceChallengeTest {
-    @Test fun acceptsExactPhraseWithCaseAndPunctuationDifferences() {
-        assertTrue(BiometricVoiceChallenge.matches("blue river seven", "Blue river seven."))
+    @Test fun exactPhraseMatchesAfterCaseAndPunctuationNormalization() {
+        assertTrue(BiometricVoiceChallenge.matches("Blue sky is clear", "BLUE sky is clear!"))
+        assertTrue(BiometricVoiceChallenge.matches("नीला आकाश साफ है", "नीला आकाश साफ है।"))
     }
 
-    @Test fun rejectsWrongPhraseAndEmptyTranscript() {
-        assertFalse(BiometricVoiceChallenge.matches("blue river seven", "blue river eight"))
-        assertFalse(BiometricVoiceChallenge.matches("blue river seven", ""))
+    @Test fun substringOrNegatedPhraseDoesNotPass() {
+        assertFalse(BiometricVoiceChallenge.matches("blue sky is clear", "not blue sky is clear"))
+        assertFalse(BiometricVoiceChallenge.matches("blue sky is clear", "blue sky"))
+        assertFalse(BiometricVoiceChallenge.matches("blue sky is clear", "the blue sky is clear"))
     }
 
-    @Test fun doesNotAcceptPartialPhrase() {
-        assertFalse(BiometricVoiceChallenge.matches("silver mango twenty", "silver mango"))
+    @Test fun blankChallengeNeverPasses() {
+        assertFalse(BiometricVoiceChallenge.matches("   ", "   "))
     }
-    @Test fun acceptsHindiPhraseWithoutStrippingDevanagari() {
-        assertTrue(BiometricVoiceChallenge.matches("नीला आसमान सात", "नीला आसमान सात।"))
-    }
-
-    @Test fun rejectsDifferentHindiPhrase() {
-        assertFalse(BiometricVoiceChallenge.matches("नीला आसमान सात", "नीला आसमान आठ"))
-    }
-
 }
