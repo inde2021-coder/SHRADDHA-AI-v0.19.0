@@ -1480,8 +1480,10 @@ class MainActivity : AppCompatActivity() {
             lastScreenJpeg = bytes
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) runOnUiThread {
-                livePreviewSourceId = sourceId
-                livePreview.setImageBitmap(bitmap)
+                if (::livePreview.isInitialized) {
+                    livePreviewSourceId = sourceId
+                    livePreview.setImageBitmap(bitmap)
+                }
                 status.text = "Live screen received from device $sourceId"
             }
         }
@@ -1489,7 +1491,7 @@ class MainActivity : AppCompatActivity() {
             lastCameraJpeg = bytes
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) runOnUiThread {
-                cameraPreview.setImageBitmap(bitmap)
+                if (::cameraPreview.isInitialized) cameraPreview.setImageBitmap(bitmap)
                 status.text = "Remote camera frame received from device $sourceId"
             }
         }
