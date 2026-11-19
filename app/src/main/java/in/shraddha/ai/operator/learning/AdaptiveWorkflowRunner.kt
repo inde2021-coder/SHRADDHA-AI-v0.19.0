@@ -67,6 +67,10 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         } else {
             0
         }
+        // A confirmation acknowledges only the exact checkpointed step. It must never
+        // pre-authorize later destructive steps in the same workflow.
+        var checkpointConfirmationAvailable =
+            resume && saved?.state == "WAITING_CONFIRMATION" && confirmed
         if (!resume) checkpoints.clear(profile.packageName, workflowName)
         if (startIndex >= steps.size) {
             checkpoints.clear(profile.packageName, workflowName)
@@ -86,10 +90,15 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
                 return fail(risk.reason)
             }
-            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && !confirmed) {
-                checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "WAITING_CONFIRMATION"))
-                emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason}"))
-                return false
+            if (risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) {
+                if (!checkpointConfirmationAvailable) {
+                    checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "WAITING_CONFIRMATION"))
+                    val reason = if (risk.risk == OperatorSafetyPolicy.Risk.CONFIRM) risk.reason
+                        else "यह प्रशिक्षित चरण बदलाव कर सकता है; स्पष्ट पुष्टि आवश्यक है।"
+                    emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: $reason"))
+                    return false
+                }
+                checkpointConfirmationAvailable = false
             }
             val before = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("स्क्रीन पढ़ने के लिए Accessibility सेवा चालू करें।")
             if (before.packageName != profile.packageName && before.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) return fail("खुला हुआ ऐप ${before.packageName} है, जबकि प्रशिक्षित ऐप ${profile.packageName} है।")
