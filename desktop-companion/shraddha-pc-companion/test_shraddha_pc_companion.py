@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
@@ -90,6 +90,39 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertTrue(validate_action({"kind": "offline_chat", "prompt": "Hello"}, offline_model=object()))
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": ""}, offline_model=object()))
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "x" * 4001}, offline_model=object()))
+
+    def test_ocr_redacts_credentials_adjacent_values_and_long_numbers(self):
+        raw = "Account number\\n123456789012\\nPublic heading\\nOTP: 123456\\n654321\\nVisible note"
+        safe = redact_ocr_text(raw)
+        self.assertNotIn("123456789012", safe)
+        self.assertNotIn("OTP: 123456", safe)
+        self.assertNotIn("654321", safe)
+        self.assertIn("Public heading", safe)
+        self.assertIn("Visible note", safe)
+
+    def test_ocr_output_is_bounded_and_non_string_safe(self):
+        self.assertEqual(redact_ocr_text(None), "")
+        self.assertLessEqual(len(redact_ocr_text("hello " * 10000)), 12000)
+
+    def test_file_search_is_confined_to_approved_folder_and_bounded(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            Path(root, "notes.txt").write_text("hello from Shraddha", encoding="utf-8")
+            Path(root, "binary.exe").write_text("Shraddha", encoding="utf-8")
+            Path(outside, "secret.txt").write_text("Shraddha secret", encoding="utf-8")
+            matches = search_safe_text_files(root, ".", "shraddha")
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0]["path"], "notes.txt")
+            self.assertEqual(search_safe_text_files(root, ".", "missing"), [])
+            with self.assertRaises(ValueError):
+                search_safe_text_files(root, "../" + Path(outside).name, "secret")
+
+    def test_file_search_action_validation(self):
+        self.assertTrue(validate_action({"kind": "file_search", "query": "invoice"}, file_root="C:/Approved"))
+        self.assertFalse(validate_action({"kind": "file_search", "query": ""}, file_root="C:/Approved"))
+        self.assertFalse(validate_action({"kind": "file_search", "query": "x" * 121}, file_root="C:/Approved"))
+        self.assertFalse(validate_action({"kind": "file_search", "query": "x", "limit": 51}, file_root="C:/Approved"))
 
 
 if __name__ == "__main__":
