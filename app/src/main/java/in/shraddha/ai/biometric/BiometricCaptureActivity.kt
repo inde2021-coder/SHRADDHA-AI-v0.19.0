@@ -41,7 +41,6 @@ import com.google.mlkit.vision.face.FaceLandmark
 import com.google.android.gms.tasks.Tasks
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import java.io.File
-import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -342,9 +341,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
             override fun onResults(results: Bundle?) {
                 runCatching { speechRecognizer?.destroy() }
                 speechRecognizer = null
-                val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().lowercase(Locale.US).replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
-                val expected = randomPhrase.lowercase(Locale.US)
-                if (heard.contains(expected)) recordSpeaker() else finishWith("Voice challenge phrase did not match. No biometric sample was saved.")
+                val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                if (BiometricVoiceChallenge.matches(randomPhrase, heard)) recordSpeaker() else finishWith("Voice challenge phrase did not match. No biometric sample was saved.")
             }
             override fun onError(error: Int) { finishWith("On-device speech challenge failed ($error); no voiceprint saved.") }
             override fun onReadyForSpeech(params: Bundle?) { runOnUiThread { message.text = "अब स्क्रीन पर दिया गया random phrase बोलें…" } }
