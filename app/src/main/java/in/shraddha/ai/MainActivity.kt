@@ -996,6 +996,10 @@ class MainActivity : AppCompatActivity() {
             addView(gatewayToken)
             visionProvider = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic")) }
             addView(visionProvider)
+            val visionMode = Spinner(this@MainActivity).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("general", "objects", "document", "machine"))
+            }
+            addView(visionMode)
             visionPrompt = edit("Ask AI about this screen", "Visible form fields, labels and safe next step")
             visionPrompt.setText("इस स्क्रीन पर दिख रहे ऐप और फॉर्म को समझो। दिखाई दे रहे फील्ड के नाम पढ़ो और बताओ कि कौन-सी जानकारी कहाँ भरनी है। बिना मेरी पुष्टि कोई कार्रवाई मत करना।")
             visionPrompt.isSingleLine = false; visionPrompt.minLines = 3
@@ -1006,7 +1010,7 @@ class MainActivity : AppCompatActivity() {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "HTTPS relay URL जरूरी है।"; return@actionButton }
                 visionResult.text = "Shraddha स्क्रीन समझ रही है…"
-                DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), visionProvider.selectedItem.toString(), visionPrompt.text.toString(), frame) { result -> runOnUiThread {
+                DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), visionProvider.selectedItem.toString(), visionPrompt.text.toString(), frame, visionMode.selectedItem?.toString() ?: "general") { result -> runOnUiThread {
                     result.onSuccess { visionResult.text = it; status.text = "Remote screen analysis complete." }
                         .onFailure { visionResult.text = "Analysis error: ${it.message}" }
                 } }
