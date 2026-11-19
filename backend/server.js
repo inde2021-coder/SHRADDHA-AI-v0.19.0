@@ -166,7 +166,7 @@ const server = http.createServer(async (req, res) => {
       if (intent.platform === 'telegram') {
         const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
         const chatId = process.env.TELEGRAM_CHAT_ID || '';
-        if (!botToken || !chatId || /\s/.test(botToken) || botToken.length > 256) {
+        if (!/^\\d+:[A-Za-z0-9_-]{20,}$/.test(botToken) || !chatId || chatId.length > 128) {
           return json(res, 503, { error: 'Telegram bot credentials and destination are not configured on the server' });
         }
         let upstream;
