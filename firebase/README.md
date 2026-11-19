@@ -1,12 +1,20 @@
 # Firebase setup for Shraddha AI
 
 1. Create a Firebase project and register Android package `in.shraddha.ai`.
-2. Enable **Authentication > Email/Password** and create a **Cloud Firestore** database.
-3. Publish `firestore.rules` from this folder. Do not use test mode in production.
-4. Copy `local.properties.example` to `local.properties` in the Android project root and replace every placeholder with the values from Firebase Project settings.
-5. Sync Gradle and run the app. Open **Secure Cloud Sync**. Create an account, then explicitly opt in before backup/restore.
-6. Enable Firebase App Check (Play Integrity for Play builds) before production release.
+2. Enable **Authentication → Email/Password**, **Cloud Firestore**, **Cloud Storage**, and **Cloud Messaging**.
+3. Publish `firestore.rules` and `storage.rules` from the repository root. Do not use test mode in production.
+4. Copy `local.properties.example` to `local.properties` in the Android project root and replace every placeholder with the values from Firebase Project settings, including the Storage bucket.
+5. Enable Firebase App Check (Play Integrity for Play builds) before production release.
+6. In Shraddha AI → Firebase Account & Encrypted Cloud Vault, create/sign in to the owner account. Explicitly opt in before backup/restore.
+7. For small recovery snapshots, use Firestore backup (100 KB plaintext limit). For larger selected snapshots, use Firebase Storage (up to 1.4 MB plaintext; encrypted object size capped at 2 MB). Both retain up to 10 timestamped revisions. Restore always shows an overwrite preview and asks for confirmation.
+8. For push, explicitly opt in and tap **REGISTER THIS DEVICE FOR PUSH**. Grant Android notification permission when requested. Send a test message from Firebase Console → Cloud Messaging. **DISABLE PUSH & REMOVE THIS DEVICE** deletes the owner-scoped device token record and asks FCM to delete the token.
 
-The current implementation uses Firebase Authentication and Firestore. Cloud memory payloads are encrypted client-side with AES-256-GCM; a key is derived from the account password using PBKDF2-HMAC-SHA256. Firebase stores ciphertext, not the plaintext note. If the user loses the password, this backup cannot be decrypted. The password is not uploaded by this feature. Selected device backups also keep up to 10 timestamped encrypted recovery revisions plus a stable latest-backup pointer. The Android recovery history picker lets the user select an older snapshot; restoring always requires an explicit confirmation.
+## Encryption and data scope
 
-Storage and FCM SDKs are included as dependencies for the next integration stage, but file uploads and push-notification handlers are **not yet implemented**. `storage.rules` is a least-privilege starting point; deploy it only when Storage is enabled. Biometric templates, child records, API keys, OTPs, and payment data are not included in cloud sync.
+Cloud recovery payloads are encrypted client-side with AES-256-GCM; the key is derived from the account password using PBKDF2-HMAC-SHA256. Firebase stores ciphertext, not the plaintext note or selected device records. If the user loses the password, the backup cannot be decrypted. The password is not uploaded by this feature.
+
+Selected snapshots include consented person/child records, trained app profiles and workflow recipes, workflow checkpoints, task inbox, active project, digital twin, knowledge graph and private memory. Face/voice biometric templates, API keys, gateway credentials, pairing tokens, OTPs and payment data are excluded. Restore validates allowed record keys and schemas, replaces only selected record families, and attempts to roll back the prior local state if a restore step fails.
+
+FCM device tokens are stored in the Android Keystore-backed encrypted feature store on-device and in the signed-in owner's private Firestore `devices` subcollection. The notification service displays generic event categories only; it does not show message contents, biometric data or other sensitive payloads. Token rotation cleanup and user-initiated revocation are supported. This build receives notifications; outbound FCM delivery must be sent by Firebase Console or a separately secured trusted server.
+
+Storage objects are owner-scoped under `users/{uid}/backups/`, use `application/octet-stream`, and are limited to 2 MB. Firestore metadata and device-token rules are owner-only. Deploy App Check and verify the published rules before production.
