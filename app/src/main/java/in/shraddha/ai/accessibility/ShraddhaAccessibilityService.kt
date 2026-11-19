@@ -28,8 +28,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             node.text?.toString(), node.contentDescription?.toString(), node.hintText?.toString(),
             node.viewIdResourceName, node.parent?.contentDescription?.toString()
         ).joinToString(" ").lowercase()
-        return Regex("(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड")
-            .containsMatchIn(labels)
+        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\\bupi\\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(labels)
     }
 
     private fun setFocusedText(value: String): Boolean {
@@ -119,7 +118,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     private fun fillByResourceId(resourceId: String, value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
-        val node = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList()).firstOrNull { it.isVisibleToUser && it.isEditable && !it.isPassword } ?: return false
+        val node = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList()).firstOrNull { it.isVisibleToUser && it.isEditable && !isSensitiveNode(it) } ?: return false
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value.take(4000))
         })
@@ -181,6 +180,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             }
         }
         fun scrollForward(): Boolean = active?.rootInActiveWindow?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true
+        fun scrollBackward(): Boolean = active?.rootInActiveWindow?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
         fun goBack(): Boolean = active?.performGlobalAction(GLOBAL_ACTION_BACK) == true
     }
 }
