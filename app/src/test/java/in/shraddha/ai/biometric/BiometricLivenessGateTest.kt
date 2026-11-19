@@ -15,8 +15,9 @@ class BiometricLivenessGateTest {
     @Test fun oneEyeWinkCannotSatisfyBlinkChallenge() {
         val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
         repeat(10) { index ->
-            assertFalse(gate.observe(1, 0.1f, 0.95f, 0f, 1_010L + index))
-            assertFalse(gate.observe(1, 0.95f, 0.95f, 0f, 1_020L + index))
+            val time = 1_010L + index * 20L
+            assertFalse(gate.observe(1, 0.1f, 0.95f, 0f, time))
+            assertFalse(gate.observe(1, 0.95f, 0.95f, 0f, time + 10L))
         }
         assertEquals(BiometricLivenessGate.Step.BLINK, gate.currentStep)
     }
