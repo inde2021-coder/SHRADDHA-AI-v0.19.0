@@ -40,6 +40,9 @@ jobs:
       - name: Validate backend source
         run: node --check backend/server.js
 
+      - name: Test automatic AI provider routing
+        run: node --test backend/provider-routing.test.js
+
       - name: Test backend relay consent policy
         run: node --test backend/relay-policy.test.js
 
