@@ -18,32 +18,40 @@ object BiometricModelInstaller {
 
     fun installInBackground(context: Context) {
         if (finished) return
-        synchronized(this) {
-            if (finished) return
-            Thread({
-                try {
-                    val directory = File(context.filesDir, "biometric-models")
-                    check(directory.exists() || directory.mkdirs()) { "Cannot create private model directory" }
-                    models.forEach { model ->
-                        val target = File(directory, model.output)
-                        if (target.isFile && sha256(target) == model.sha256) return@forEach
-                        val temporary = File(directory, model.output + ".part")
-                        temporary.delete()
-                        context.assets.open(model.assetPath).use { input ->
-                            temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
-                        }
-                        check(sha256(temporary) == model.sha256) { "Bundled model checksum mismatch: ${model.output}" }
-                        check(temporary.renameTo(target)) { "Could not install model: ${model.output}" }
-                    }
-                    failure = null
-                } catch (error: Exception) {
-                    failure = error.message ?: error.javaClass.simpleName
-                } finally {
-                    finished = true
+        Thread({
+            runCatching { ensureInstalled(context.applicationContext) }
+        }, "BiometricModelInstaller").start()
+    }
+
+    @Synchronized
+    fun ensureInstalled(context: Context) {
+        if (finished) {
+            check(failure == null) { "Biometric model installation failed: $failure" }
+            return
+        }
+        try {
+            val directory = File(context.filesDir, "biometric-models")
+            check(directory.exists() || directory.mkdirs()) { "Cannot create private model directory" }
+            models.forEach { model ->
+                val target = File(directory, model.output)
+                if (target.isFile && sha256(target) == model.sha256) return@forEach
+                val temporary = File(directory, model.output + ".part")
+                temporary.delete()
+                context.assets.open(model.assetPath).use { input ->
+                    temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
                 }
-            }, "BiometricModelInstaller").start()
+                check(sha256(temporary) == model.sha256) { "Bundled model checksum mismatch: ${model.output}" }
+                check(temporary.renameTo(target)) { "Could not install model: ${model.output}" }
+            }
+            failure = null
+            finished = true
+        } catch (error: Exception) {
+            failure = error.message ?: error.javaClass.simpleName
+            finished = true
+            throw error
         }
     }
+
     fun status(): String? = if (finished) failure else "Biometric models are being installed locally"
 
     private fun sha256(file: File): String {
