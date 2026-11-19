@@ -138,7 +138,7 @@ def redact_ocr_text(raw: str) -> str:
             continue
         if sensitive.search(value):
             output.append("[संवेदनशील OCR पंक्ति छिपाई गई]")
-            hide_next = 2
+            hide_next = 1
             continue
         if hide_next:
             output.append("[संवेदनशील जानकारी छिपाई गई]")
