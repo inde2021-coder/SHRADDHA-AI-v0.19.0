@@ -115,7 +115,10 @@ class LiveAudioIO(
                         onMicAmplitude(amp)
                         onMicChunk(chunk)
                     } else if (read == AudioRecord.ERROR_DEAD_OBJECT || read == AudioRecord.ERROR_INVALID_OPERATION || read == AudioRecord.ERROR_BAD_VALUE) {
-                        if (isRecording.get()) onRecordingError("Microphone recording stopped unexpectedly (AudioRecord error $read).")
+                        if (isRecording.get()) {
+                            isRecording.set(false)
+                            onRecordingError("Microphone recording stopped unexpectedly (AudioRecord error $read).")
+                        }
                         break
                     }
                 }
@@ -124,6 +127,10 @@ class LiveAudioIO(
             isRecording.set(false)
             try { audioRecord?.release() } catch (_: Exception) {}
             audioRecord = null
+            try { echoCanceler?.release() } catch (_: Exception) {}
+            try { noiseSuppressor?.release() } catch (_: Exception) {}
+            try { gainControl?.release() } catch (_: Exception) {}
+            echoCanceler = null; noiseSuppressor = null; gainControl = null
             onRecordingError(error.localizedMessage ?: "Unable to open the microphone.")
         }
     }
