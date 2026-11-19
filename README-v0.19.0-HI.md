@@ -22,6 +22,17 @@ Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow G
 ## Persistent voice memory
 Settings → Encrypted Voice Memory default में OFF है। ON करने पर हाल के अधिकतम 12 voice turns Android Keystore AES-GCM से local encrypted storage में save होते हैं। OTP/password/PIN जैसे शब्द या 4–8 digit code वाले turns save नहीं किए जाते। OFF करने पर saved voice-history ciphertext हटता है।
 
+## Voice से दूसरे Apps में सीखे हुए काम
+1. Quick Actions → **Control Any App** → **App Training / सीखने की लैब** खोलें।
+2. जिस ऐप में काम सिखाना है उसे पहले स्वयं खोलें; Accessibility में **Shraddha AI — Device Control** चालू रखें।
+3. स्क्रीन के बटन/फील्ड को पहचानकर workflow steps जोड़ें और नाम देकर सेव करें। केवल सामान्य non-sensitive fields उपयोग करें।
+4. Voice में कहें: “मेरे saved app workflows दिखाओ”; Shraddha `list_app_workflows` से उपलब्ध ऐप और workflow बताएगी।
+5. फिर exact app और workflow नाम के साथ चलाने को कहें। Shraddha हर चरण पर स्क्रीन फिर पढ़ेगी, target दोबारा खोजेगी और परिणाम verify करेगी।
+6. Send/Delete/Pay/Publish/Submit जैसे जोखिम वाले workflow के लिए पहले आपसे स्पष्ट पुष्टि ली जाएगी। OTP/PIN/password/UPI security fields block रहेंगे।
+7. किसी ऐप के UI में बदलाव हो तो उसका workflow फिर से train/verify करें; पुराने coordinates replay नहीं किए जाते।
+
+Voice operator tools: screen पढ़ना, unique label पर tap, safe field में text भरना, scroll, directional swipe, Back और Home। जिन ऐप्स में Accessibility nodes उपलब्ध नहीं हैं, वहाँ OCR/canvas fallback अभी नहीं है।
+
 ## Windows PC companion
 `desktop-companion/shraddha-pc-companion/README.md` देखें। यह Windows Credential Manager में pairing credentials रखता है, remote control के लिए PC पर explicit approval माँगता है, और text paste default में disabled रखता है।
 
