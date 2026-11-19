@@ -1830,6 +1830,7 @@ class MainActivity : AppCompatActivity() {
                 val name = personName.text.toString().trim()
                 if (name.isBlank() || !consent.isChecked) { status.text = "नाम और व्यक्ति की स्पष्ट सहमति आवश्यक है।"; return@actionButton }
                 val arr = readPeople()
+                if (arr.length() >= 50) { status.text = "Person Memory में अधिकतम 50 profiles रख सकते हैं।"; return@actionButton }
                 val id = java.util.UUID.randomUUID().toString().replace("-", "")
                 arr.put(JSONObject().put("id", id).put("name", name.take(80)).put("relation", relation.text.toString().take(100)).put("notes", notes.text.toString().take(500)).put("consent", true).put("consentAt", System.currentTimeMillis()).put("createdAt", System.currentTimeMillis()))
                 store.put("person_directory", arr.toString()).onSuccess { status.text = "Person profile सुरक्षित रूप से सेव हुआ।"; personName.text.clear(); relation.text.clear(); notes.text.clear(); consent.isChecked = false; refreshProfileList?.invoke() }.onFailure { status.text = "Save error: ${it.message}" }
@@ -1961,8 +1962,8 @@ class MainActivity : AppCompatActivity() {
                 if (selected == null) { status.text = "पहले dropdown से consented Person Profile चुनें।"; return }
                 if (!consent.isChecked) { status.text = "चुने हुए व्यक्ति की इस capture/match session के लिए स्पष्ट consent की पुष्टि करें।"; return }
                 val thresholdText = if (kind == "face") faceThreshold.text.toString().trim() else speakerThreshold.text.toString().trim()
-                val threshold = if (mode == "match") thresholdText.toFloatOrNull() else Float.NaN
-                if (mode == "match" && (threshold == null || threshold !in -1f..1f)) { status.text = "Match के लिए पहले locally calibrated threshold -1 से 1 के बीच भरें।"; return }
+                val threshold = if (mode != "enroll") thresholdText.toFloatOrNull() else Float.NaN
+                if (mode != "enroll" && (threshold == null || threshold !in -1f..1f)) { status.text = "Match/identify के लिए पहले locally calibrated threshold -1 से 1 के बीच भरें।"; return }
                 val request = Intent(this@MainActivity, BiometricCaptureActivity::class.java)
                     .putExtra(BiometricCaptureActivity.EXTRA_KIND, kind)
                     .putExtra(BiometricCaptureActivity.EXTRA_MODE, mode)
@@ -1974,9 +1975,11 @@ class MainActivity : AppCompatActivity() {
                 startActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
             }
             addView(actionButton("ENROLL FACE • LIVE CAMERA", "Random blink + head-turn liveness check; camera runs only on this screen") { launchCapture("face", "enroll") })
-            addView(actionButton("MATCH FACE • LIVE CAMERA", "Compare only with the selected consented profile; no threshold means no match") { launchCapture("face", "match") })
+            addView(actionButton("MATCH FACE • SELECTED PERSON", "Compare only with the selected consented profile") { launchCapture("face", "match") })
+            addView(actionButton("IDENTIFY FACE • ALL CONSENTED PEOPLE", "Find the closest passing match across every separately consented face profile; Unknown if none passes") { launchCapture("face", "identify") })
             addView(actionButton("ENROLL SPEAKER • LIVE MICROPHONE", "On-device random phrase check then 5-second voice sample") { launchCapture("speaker", "enroll") })
-            addView(actionButton("MATCH SPEAKER • LIVE MICROPHONE", "On-device random phrase check then compare only with the selected consented voiceprint") { launchCapture("speaker", "match") })
+            addView(actionButton("MATCH SPEAKER • SELECTED PERSON", "On-device random phrase check then compare only with the selected consented voiceprint") { launchCapture("speaker", "match") })
+            addView(actionButton("IDENTIFY SPEAKER • ALL CONSENTED PEOPLE", "Find the closest passing match across all separately consented speaker profiles; Unknown if none passes") { launchCapture("speaker", "identify") })
             addView(actionButton("DELETE ALL BIOMETRIC TEMPLATES", "स्थानीय face और speaker templates मिटाएँ") {
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete all biometric templates?").setMessage("यह सभी enrolled face और voice templates मिटाएगा।")
                     .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
