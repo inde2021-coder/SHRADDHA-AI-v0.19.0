@@ -343,8 +343,6 @@ class FirebaseCloudVault(private val context: Context) {
             messaging.isAutoInitEnabled = false
             val current = store.get("firebase_fcm_token").getOrNull().orEmpty()
             val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
-            check(store.remove("firebase_fcm_token")) { "Could not clear local FCM token" }
-            check(store.remove("firebase_fcm_previous_token")) { "Could not clear rotated FCM token" }
             val cleanupErrors = mutableListOf<String>()
             if (current.isNotBlank()) runCatching { deleteDeviceToken(app, user.uid, current) }
                 .onFailure { cleanupErrors += "current Firestore token: ${it.message}" }
@@ -355,6 +353,8 @@ class FirebaseCloudVault(private val context: Context) {
             check(cleanupErrors.isEmpty()) {
                 "Push is disabled locally, but remote cleanup needs retry: ${cleanupErrors.joinToString("; ")}"
             }
+            check(store.remove("firebase_fcm_token")) { "Could not clear local FCM token after remote revocation" }
+            check(store.remove("firebase_fcm_previous_token")) { "Could not clear rotated FCM token after remote revocation" }
         }
     }
 
