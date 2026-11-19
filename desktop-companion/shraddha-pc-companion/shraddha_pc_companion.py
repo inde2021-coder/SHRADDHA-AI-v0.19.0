@@ -46,6 +46,9 @@ def validate_action(action: dict, allow_typing: bool = False) -> bool:
             return False
     if kind == "type":
         return isinstance(action.get("text"), str) and 0 < len(action["text"]) <= 500
+    if kind == "scroll":
+        amount = action.get("amount", -3)
+        return isinstance(amount, (int, float)) and not isinstance(amount, bool) and -10 <= amount <= 10 and amount != 0
     return True
 
 
@@ -56,25 +59,47 @@ def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
     return bytes((1, len(target))) + target + jpeg
 
 
+def safe_active_window_region(window) -> dict | None:
+    """Return a bounded visible active-window rectangle; fail closed if unknown."""
+    try:
+        title = str(window.title or "").strip()
+        if not title or is_sensitive_window(title) or bool(window.isMinimized):
+            return None
+        left, top = int(window.left), int(window.top)
+        width, height = int(window.width), int(window.height)
+        if width < 160 or height < 120 or width > 10000 or height > 10000:
+            return None
+        if left < 0 or top < 0:
+            return None
+        return {"left": left, "top": top, "width": width, "height": height}
+    except Exception:
+        return None
+
+
 def capture_screen_jpeg(max_width: int = 960, quality: int = 48) -> bytes | None:
+    # Share only the active application window, never the entire desktop. If the
+    # title/geometry cannot be read, stop sharing rather than guessing.
     try:
         import pygetwindow
-        title = pygetwindow.getActiveWindowTitle() or ""
+        window = pygetwindow.getActiveWindow()
     except Exception:
-        title = ""
-    if is_sensitive_window(title):
+        return None
+    region = safe_active_window_region(window) if window else None
+    if not region:
         return None
     import mss
     from PIL import Image
-    with mss.mss() as capture:
-        monitor = capture.monitors[1]
-        shot = capture.grab(monitor)
-        image = Image.frombytes("RGB", shot.size, shot.rgb)
-        image.thumbnail((max_width, 540))
-        output = io.BytesIO()
-        image.save(output, format="JPEG", quality=max(25, min(70, quality)), optimize=True)
-        payload = output.getvalue()
-        return payload if len(payload) <= 2_500_000 else None
+    try:
+        with mss.mss() as capture:
+            shot = capture.grab(region)
+            image = Image.frombytes("RGB", shot.size, shot.rgb)
+            image.thumbnail((max_width, 540))
+            output = io.BytesIO()
+            image.save(output, format="JPEG", quality=max(25, min(70, quality)), optimize=True)
+            payload = output.getvalue()
+            return payload if len(payload) <= 2_500_000 else None
+    except Exception:
+        return None
 
 
 async def share_screen_loop(ws, fps: float, target_device_id: str) -> None:
@@ -125,7 +150,7 @@ async def execute_action(action: dict, allow_typing: bool) -> str:
         pyautogui.dragTo(round(normalize_point(action["x2"]) * (width - 1)), round(normalize_point(action["y2"]) * (height - 1)), duration=0.35)
         return "swipe_executed"
     if kind == "scroll":
-        pyautogui.scroll(-3)
+        pyautogui.scroll(int(action.get("amount", -3)))
         return "scroll_executed"
     if kind == "back":
         pyautogui.hotkey("alt", "left")
