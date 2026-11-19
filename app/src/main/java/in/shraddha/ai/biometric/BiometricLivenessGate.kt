@@ -45,6 +45,7 @@ class BiometricLivenessGate(
         }
         if (faceCount != 1 || !leftEyeOpen.isFinite() || !rightEyeOpen.isFinite() || !yawDegrees.isFinite()) {
             stableFrames = 0
+            if (currentStep == Step.BLINK) blinkClosed = false
             return false
         }
         val eyeOpen = minOf(leftEyeOpen, rightEyeOpen)
