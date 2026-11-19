@@ -539,7 +539,8 @@ object ActionExecutor {
         suspendCancellableCoroutine { continuation ->
             DeviceLinkManager.publishSocialPost(
                 baseUrl, gatewayToken, platform, exactText,
-                userConfirmed = true, confirmedPlatform = platform, confirmedText = exactText
+                userConfirmed = true, confirmedPlatform = platform, confirmedText = exactText,
+                onCall = { request -> continuation.invokeOnCancellation { request.cancel() } }
             ) { response ->
                 if (continuation.isActive) continuation.resume(response)
             }
