@@ -44,6 +44,25 @@ jobs:
       - name: Run unit tests and assemble debug APK
         run: ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
+      - name: Run on-device biometric model smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
+
+      - name: Upload instrumentation test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-instrumentation-reports
+          path: app/build/reports/androidTests/connected/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
