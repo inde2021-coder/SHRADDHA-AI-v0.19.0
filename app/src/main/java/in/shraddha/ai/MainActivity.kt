@@ -521,25 +521,31 @@ class MainActivity : AppCompatActivity() {
             })
             val localModelPrompt = edit("Local AI prompt (no internet)", "Shraddha, मेरे सवाल का उत्तर दो…").apply { isSingleLine = false; minLines = 2 }
             addView(localModelPrompt)
+            val localBackend = Spinner(this@MainActivity).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gpu", "npu", "cpu"))
+            }
+            addView(TextView(this@MainActivity).apply { text = "HARDWARE BACKEND • AUTO tries NPU → GPU → CPU fallback"; setTextColor(0xFFB9C8E4.toInt()); textSize = 11f })
+            addView(localBackend)
             addView(actionButton("SELECT ON-DEVICE LLM MODEL", "अपनी compatible .litertlm model file चुनें; model APK में शामिल नहीं है") {
-                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "application/octet-stream"
-                }
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
                 startActivityForResult(picker, offlineModelImportRequest)
             })
-            addView(actionButton("RUN LOCAL OFFLINE AI", "LiteRT-LM inference • CPU backend • model और prompt इसी फोन पर रहते हैं") {
+            addView(actionButton("CHECK DEVICE RAM & STORAGE", "Model load से पहले available RAM, low-memory mode, Java/native heap और storage जाँचें") {
+                val model = java.io.File(filesDir, "offline-models/shraddha.litertlm")
+                val check = LocalOfflineLlm.checkDevice(this@MainActivity, model.absolutePath)
+                offlineResult.text = check.report
+            })
+            addView(actionButton("RUN LOCAL OFFLINE AI", "Local inference • NPU/GPU acceleration where supported • safe CPU fallback") {
                 val model = java.io.File(filesDir, "offline-models/shraddha.litertlm")
                 val prompt = localModelPrompt.text.toString().trim()
-                if (!model.isFile || model.length() < 10_000_000L) {
-                    offlineResult.text = "पहले compatible .litertlm model import करें।"
-                } else if (prompt.isBlank() || prompt.length > 6000) {
-                    offlineResult.text = "Prompt 1-6000 characters का होना चाहिए।"
-                } else {
-                    offlineResult.text = "Local model लोड हो रहा है… पहली बार कुछ समय लग सकता है।"
-                    Thread {
-                        val answer = runCatching { LocalOfflineLlm.generate(this@MainActivity, model.absolutePath, prompt) }
-                        runOnUiThread { offlineResult.text = answer.getOrElse { "Local inference failed: ${it.message}" } }
+                if (!model.isFile || model.length() < 10_000_000L) { offlineResult.text = "पहले compatible .litertlm model import करें।" }
+                else if (prompt.isBlank() || prompt.length > 6000) { offlineResult.text = "Prompt 1-6000 characters का होना चाहिए।" }
+                else {
+                    val check = LocalOfflineLlm.checkDevice(this@MainActivity, model.absolutePath)
+                    offlineResult.text = check.report + "\n\nLocal model लोड हो रहा है…"
+                    if (check.allowed) Thread {
+                        val answer = runCatching { LocalOfflineLlm.generate(this@MainActivity, model.absolutePath, prompt, localBackend.selectedItem?.toString() ?: "auto") }
+                        runOnUiThread { offlineResult.text = LocalOfflineLlm.lastRuntimeInfo + "\n\n" + answer.getOrElse { "Local inference failed: ${it.message}" } }
                     }.start()
                 }
             })
