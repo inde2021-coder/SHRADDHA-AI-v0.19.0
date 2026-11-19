@@ -267,7 +267,9 @@ class FirebaseCloudVault(private val context: Context) {
             require(token.length in 20..4096) { "Firebase returned an invalid device token" }
             val store = EncryptedFeatureStore(context)
             val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
+            val rotated = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
             if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, user.uid, previous)
+            if (rotated.isNotBlank() && rotated != token && rotated != previous) deleteDeviceToken(app, user.uid, rotated)
             store.put("firebase_fcm_token", token).getOrThrow()
             store.remove("firebase_fcm_previous_token")
             registerDeviceToken(app, user.uid, token, deviceName)
