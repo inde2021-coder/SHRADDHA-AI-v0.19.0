@@ -28,11 +28,14 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "message_contact",
-                description = "Finds the named contact and sends the dictated SMS or WhatsApp message automatically after the required Android permissions are granted. Ask for message text if missing and clarify ambiguous contacts.",
+                description = "Resolves the recipient, then returns confirmation_required with the exact number and exact message preview. NEVER sends until the user has explicitly approved that exact recipient and exact text. After approval, call again with user_confirmed=yes, confirmed_recipient set to the returned number, and confirmed_message set byte-for-byte to the approved message. A changed recipient or message requires a new confirmation.",
                 params = mapOf(
                     "contact_name" to "Name or phone number of the recipient",
-                    "message" to "Text body of the message",
-                    "app" to "Target app: 'whatsapp' or 'sms' (defaults to 'sms')"
+                    "message" to "Exact text body of the message",
+                    "app" to "Target app: 'whatsapp' or 'sms' (defaults to 'sms')",
+                    "user_confirmed" to "yes only after the user explicitly approves the exact preview",
+                    "confirmed_recipient" to "Exact resolved phone number shown in the confirmation preview",
+                    "confirmed_message" to "Exact message text shown in the confirmation preview; must match byte-for-byte"
                 ),
                 required = listOf("contact_name", "message")
             )
