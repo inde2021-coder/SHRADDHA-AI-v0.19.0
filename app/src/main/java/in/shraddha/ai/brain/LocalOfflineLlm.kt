@@ -17,6 +17,7 @@ object LocalOfflineLlm {
     private val lock = Any()
     private var loadedPath: String? = null
     private var loadedBackend: String? = null
+    private var loadedPreference: String? = null
     private var engine: Engine? = null
     private var conversation: Conversation? = null
     @Volatile var lastRuntimeInfo: String = "No local model loaded"
@@ -44,7 +45,7 @@ object LocalOfflineLlm {
         val storageGb = freeStorage / (1024.0 * 1024.0 * 1024.0)
         val lowRam = activityManager.isLowRamDevice || memory.lowMemory
         val allowed = !lowRam && memory.availMem >= requiredBytes && freeStorage >= 256L * 1024L * 1024L
-        val report = "Device RAM: %.2f GB • Available now: %.2f GB • Model: %.2f GB • Estimated safe headroom: %.2f GB • Free storage: %.2f GB • Java heap: %.0f/%.0f MB • Native heap: %.0f MB • Low-RAM mode: %s".format(
+        val report = "Device RAM: %.2f GB • Available now: %.2f GB • Model: %.2f GB • Estimated memory requirement: %.2f GB • Free storage: %.2f GB • Java heap: %.0f/%.0f MB • Native heap: %.0f MB • Low-RAM mode: %s".format(
             ramGb, availableGb, modelGb, requiredGb, storageGb,
             heapUsed / (1024.0 * 1024.0), heapMax / (1024.0 * 1024.0), nativeHeap / (1024.0 * 1024.0), lowRam
         ) + if (allowed) "\nMemory pre-check: PASS (runtime may still need additional memory)." else "\nMemory pre-check: BLOCKED — close background apps or import a smaller quantized model."
@@ -66,7 +67,7 @@ object LocalOfflineLlm {
             "npu" -> listOf("npu", "gpu", "cpu")
             else -> listOf("npu", "gpu", "cpu")
         }
-        if (loadedPath != model.absolutePath || engine == null || conversation == null || loadedBackend !in candidates) {
+        if (loadedPath != model.absolutePath || engine == null || conversation == null || loadedPreference != preference) {
             closeLocked()
             var lastFailure: Throwable? = null
             var loaded = false
@@ -92,6 +93,7 @@ object LocalOfflineLlm {
                     conversation = chat
                     loadedPath = model.absolutePath
                     loadedBackend = candidate
+                    loadedPreference = preference
                     lastRuntimeInfo = "Backend: ${candidate.uppercase()} • ${check.report}"
                     loaded = true
                     break
@@ -117,5 +119,6 @@ object LocalOfflineLlm {
         engine = null
         loadedPath = null
         loadedBackend = null
+        loadedPreference = null
     }
 }
