@@ -73,7 +73,7 @@ object VoiceSessionManager {
         _statusText.value = "Connecting..."
         _state.value = NovaOrbState.CONNECTING
 
-        ConversationMemory.clear()
+        ConversationMemory.initialize(currentContext)
         VoiceLatencyTracker.reset()
         InstalledAppLabelCache.prewarm(context)
 
@@ -137,7 +137,7 @@ object VoiceSessionManager {
         _currentPersonality.value = personality
         _currentLanguage.value = language
 
-        val recap = if (isResuming) ConversationMemory.recap() else null
+        val recap = ConversationMemory.recap()
         val prompt = PersonalityPromptBuilder.build(
             personality = personality,
             language = language,
