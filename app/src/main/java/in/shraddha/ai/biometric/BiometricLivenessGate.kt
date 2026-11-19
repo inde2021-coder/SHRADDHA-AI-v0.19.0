@@ -24,6 +24,8 @@ class BiometricLivenessGate(
     private var blinkClosed = false
     private var firstTurnSign = 0
     private var stableFrames = 0
+    private var pendingTurnSign = 0
+    private var lastObservedAtMs = startedAtMs
     private var expired = false
 
     val isComplete: Boolean get() = index >= steps.size
@@ -39,13 +41,15 @@ class BiometricLivenessGate(
     fun observe(faceCount: Int, leftEyeOpen: Float, rightEyeOpen: Float, yawDegrees: Float,
                 nowMs: Long = monotonicNow()): Boolean {
         if (isComplete) return true
-        if (expired || nowMs < startedAtMs || nowMs - startedAtMs > MAX_CHALLENGE_MS) {
+        if (expired || nowMs < startedAtMs || nowMs < lastObservedAtMs || nowMs - startedAtMs > MAX_CHALLENGE_MS) {
             expired = true
             return false
         }
+        lastObservedAtMs = nowMs
         if (faceCount != 1 || !leftEyeOpen.isFinite() || !rightEyeOpen.isFinite() ||
             leftEyeOpen !in 0f..1f || rightEyeOpen !in 0f..1f || !yawDegrees.isFinite()) {
             stableFrames = 0
+            pendingTurnSign = 0
             if (currentStep == Step.BLINK) blinkClosed = false
             return false
         }
@@ -66,24 +70,34 @@ class BiometricLivenessGate(
                 }
             }
             Step.TURN_SIDE -> {
+                val sign = if (yawDegrees < 0f) -1 else 1
                 if (abs(yawDegrees) > 18f) {
-                    stableFrames++
+                    if (pendingTurnSign == sign) stableFrames++ else {
+                        pendingTurnSign = sign
+                        stableFrames = 1
+                    }
                     if (stableFrames >= REQUIRED_STABLE_FRAMES) {
-                        firstTurnSign = if (yawDegrees < 0f) -1 else 1
+                        firstTurnSign = sign
                         true
                     } else false
                 } else {
                     stableFrames = 0
+                    pendingTurnSign = 0
                     false
                 }
             }
             Step.TURN_OPPOSITE -> {
-                val opposite = firstTurnSign != 0 && (if (firstTurnSign < 0) yawDegrees > 18f else yawDegrees < -18f)
+                val sign = if (yawDegrees < 0f) -1 else 1
+                val opposite = firstTurnSign != 0 && sign == -firstTurnSign && abs(yawDegrees) > 18f
                 if (opposite) {
-                    stableFrames++
+                    if (pendingTurnSign == sign) stableFrames++ else {
+                        pendingTurnSign = sign
+                        stableFrames = 1
+                    }
                     stableFrames >= REQUIRED_STABLE_FRAMES
                 } else {
                     stableFrames = 0
+                    pendingTurnSign = 0
                     false
                 }
             }
@@ -92,6 +106,7 @@ class BiometricLivenessGate(
         if (passed) {
             index++
             stableFrames = 0
+            pendingTurnSign = 0
             if (steps.getOrNull(index - 1) == Step.BLINK) blinkClosed = false
         }
         return isComplete
