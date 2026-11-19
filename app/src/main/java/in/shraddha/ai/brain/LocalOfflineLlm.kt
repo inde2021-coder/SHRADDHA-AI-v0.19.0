@@ -106,7 +106,7 @@ object LocalOfflineLlm {
             }
         }
         val response = requireNotNull(conversation).sendMessage(prompt)
-        response.text.trim().ifBlank { "Local model ने कोई उत्तर नहीं दिया।" }
+        response.contents.toString().trim().ifBlank { "Local model ने कोई उत्तर नहीं दिया।" }
     }
 
     fun close() = synchronized(lock) { closeLocked() }
