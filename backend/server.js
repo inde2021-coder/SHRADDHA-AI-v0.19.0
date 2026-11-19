@@ -7,6 +7,7 @@ import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps } from './plan-safety.js';
 import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility } from './social-publishing.js';
+import { buildVisionPrompt } from './vision-analysis.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -206,8 +207,9 @@ const server = http.createServer(async (req, res) => {
       if (typeof body.imageBase64 !== 'string' || body.imageBase64.length > 4_200_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.imageBase64)) return json(res, 400, { error: 'imageBase64 is missing or too large' });
       const mimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType) ? body.mimeType : 'image/jpeg';
       const provider = ['auto', 'openai', 'gemini', 'anthropic'].includes(body.provider) ? body.provider : 'gemini';
-      const result = await askVision(provider, body.prompt.trim(), body.imageBase64, mimeType);
-      return json(res, 200, { provider: result.provider, requestedProvider: provider, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
+      const analysis = buildVisionPrompt(body.mode, body.prompt.trim());
+      const result = await askVision(provider, analysis.prompt, body.imageBase64, mimeType);
+      return json(res, 200, { provider: result.provider, requestedProvider: provider, mode: analysis.mode, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
     }
     if (req.method === 'POST' && req.url === '/api/voice/synthesize') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
