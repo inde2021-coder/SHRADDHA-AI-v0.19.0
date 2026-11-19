@@ -88,6 +88,15 @@ object VoiceSessionManager {
                     _amplitude.value = amp
                     _vadActive.value = amp > 0.05f
                 }
+            },
+            onRecordingError = { message ->
+                scope.launch {
+                    if (_isActive.value) {
+                        _lastError.value = message
+                        _state.value = NovaOrbState.ERROR
+                        _statusText.value = "Microphone unavailable: $message"
+                    }
+                }
             }
         )
 
@@ -108,9 +117,13 @@ object VoiceSessionManager {
 
         val apiKey = ApiKeyStore.getKey(currentContext)
         if (apiKey.isEmpty()) {
+            _isActive.value = false
             _state.value = NovaOrbState.ERROR
-            _statusText.value = "API key missing. Enter key in Settings."
+            _statusText.value = "API key missing. Enter the Gemini key in Settings, then start Voice again."
             _lastError.value = "Missing Gemini API Key"
+            audioIO?.release()
+            audioIO = null
+            VoiceForegroundService.stop(currentContext)
             return
         }
 
@@ -261,8 +274,9 @@ object VoiceSessionManager {
         val count = VoiceLatencyTracker.reconnectCount.value
         if (count >= 5) {
             _state.value = NovaOrbState.ERROR
-            _statusText.value = "Connection lost - tap Stop and reopen Voice Mode"
+            _statusText.value = "Connection lost after 5 attempts. Check network/API access and start Voice again."
             _lastError.value = "Connection lost after 5 attempts"
+            appContext?.let { VoiceForegroundService.stop(it) }
             return
         }
 
