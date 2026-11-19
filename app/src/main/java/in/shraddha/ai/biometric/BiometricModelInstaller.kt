@@ -34,18 +34,24 @@ object BiometricModelInstaller {
                     temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
                 }
                 check(sha256(temporary) == model.sha256) { "Bundled model checksum mismatch: ${model.output}" }
+                if (target.exists()) check(target.delete()) { "Could not replace invalid model: ${model.output}" }
                 check(temporary.renameTo(target)) { "Could not install model: ${model.output}" }
             }
             failure = null
             finished = true
         } catch (error: Exception) {
             failure = error.message ?: error.javaClass.simpleName
-            finished = true
+            // A transient storage or I/O failure must be retryable in the same process.
+            finished = false
             throw error
         }
     }
 
-    fun status(): String? = if (finished) failure else "Biometric models are being installed locally"
+    fun status(): String? = when {
+        finished -> null
+        failure != null -> "Last model installation failed: $failure. Retry is available."
+        else -> "Biometric models are being installed locally"
+    }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
