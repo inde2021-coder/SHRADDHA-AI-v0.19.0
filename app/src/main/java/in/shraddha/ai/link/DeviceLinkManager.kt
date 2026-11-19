@@ -157,8 +157,8 @@ object DeviceLinkManager {
         })
     }
 
-    fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, done: (Result<String>) -> Unit) {
-        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000))
+    fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
+        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000)).put("mode", mode)
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
         val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
