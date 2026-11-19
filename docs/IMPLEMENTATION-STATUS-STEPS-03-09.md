@@ -41,3 +41,25 @@ Not started. Requires successful unit tests, lint/static checks, debug and relea
 
 ## Truthful completion gate
 A step is complete only when its source changes are committed, tests pass, relevant device/integration checks are performed, limitations are documented and artifacts are reproducible. A GitHub CI run alone does not prove hardware behavior.
+
+## Update — 2026-11-19 implementation pass
+
+### Step 3 — Voice AI source changes
+- Added fatal AudioRecord error handling and resource cleanup; failed microphone capture no longer leaves its capture loop marked active.
+- Propagated microphone errors into the voice session state and clears VAD/amplitude indicators.
+- When all five reconnect attempts are exhausted, microphone capture is paused (fail-closed) instead of continuing to collect audio while disconnected.
+- Foreground notification wording no longer falsely claims that the assistant is actively listening while it may still be connecting or recovering.
+- Added conversation-memory tests (12-turn retention, role-aware recap, blank input filtering and clear).
+- Still requires a passing latest CI run and physical-device checks for actual continuous listening, Android microphone foreground-service restrictions, lock-screen/OEM behavior, Bluetooth/audio focus and real Gemini Live API connectivity.
+
+### Step 4 — People Memory / Visual Lens source changes
+- Added CameraX, ML Kit Face Detection, ExifInterface, Guava ListenableFuture, Google Tasks and ONNX Runtime Android dependencies.
+- Registered the consent-gated biometric capture activity as non-exported.
+- Added an encrypted local biometric template vault backed by Android Keystore AES-GCM, with explicit enrollment consent, person deletion and cosine similarity threshold matching.
+- Added a strict ONNX adapter that checks input tensor contracts and refuses unknown model shapes rather than generating fake embeddings.
+- Added a basic randomized blink/head-turn interaction gate and voice phrase normalization tests.
+- Important limitations: blink/head-turn is not certified anti-spoofing; ECAPA exports with mel-feature inputs are rejected until exact preprocessing is validated; no licensed SFace/ECAPA model weights are bundled; no benchmark or physical-device biometric accuracy test has been performed. The current capture flow must not be treated as secure identity proof.
+
+### Build verification
+- Earlier CI run exposed namespace import errors, missing CameraX/ML Kit/Exif dependencies, missing Guava ListenableFuture and missing biometric implementation classes. Source changes were made to address these blockers.
+- A new CI run after adding Guava and Kotlin escaped-package imports is in progress. Do not treat it as passed until the run concludes successfully.
