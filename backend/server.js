@@ -368,8 +368,9 @@ wss.on('connection', (ws, ctx) => {
       for (const [grantKey] of device.grants) {
         const category = grantKey.split(':').slice(1).join(':');
         if (next[category] !== true) device.grants.delete(grantKey);
-      if (next.remote_control !== true) device.controlGrants.clear();
       }
+      // Revoke remote-control grants immediately, even when no data-share grants exist.
+      if (next.remote_control !== true) device.controlGrants.clear();
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
       const targetId = String(msg.targetDeviceId || '');
