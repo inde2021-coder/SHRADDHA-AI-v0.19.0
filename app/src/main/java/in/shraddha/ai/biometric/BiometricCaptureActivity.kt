@@ -88,6 +88,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var activePersonId = ""
     private var activePersonName = ""
     private var activeThreshold = Float.NaN
+    private var faceTrackingFailed = false
     private val engine by lazy { LocalBiometricModelEngine() }
     private val vault by lazy { BiometricConsentVault(EncryptedFeatureStore(this)) }
 
@@ -150,7 +151,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     } else startCamera()
                 }
                 livenessPassed.get() -> captureFace(activeMode, activePersonId, activePersonName, activeThreshold)
-                livenessGate.isExpired -> restartFaceChallenge()
+                livenessGate.isExpired || faceTrackingFailed -> restartFaceChallenge()
             }
         }
         setContentView(root)
@@ -164,6 +165,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         // Start the 45-second challenge window only after the user actually starts the camera.
         livenessGate = BiometricLivenessGate()
         livenessPassed.set(false)
+        faceTrackingFailed = false
         val options = FaceDetectorOptions.Builder().setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL).setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
             .setMinFaceSize(0.15f).build()
@@ -209,7 +211,13 @@ class BiometricCaptureActivity : AppCompatActivity() {
             } else runOnUiThread { message.text = challengeText() }
         }.addOnFailureListener {
             livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
-            runOnUiThread { message.text = "Face tracking error: ${it.message}" }
+            faceTrackingFailed = true
+            imageAnalysis?.clearAnalyzer()
+            runOnUiThread {
+                message.text = "Face tracking error: ${it.message}. Restart the live check."
+                action.text = "Restart live challenge"
+                action.isEnabled = true
+            }
         }.addOnCompleteListener { proxy.close() }
         if (livenessGate.isExpired) {
             imageAnalysis?.clearAnalyzer()
