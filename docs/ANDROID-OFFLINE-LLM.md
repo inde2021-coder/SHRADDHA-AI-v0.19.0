@@ -1,26 +1,45 @@
 # Shraddha AI — Android local LLM setup
 
-Shraddha AI now has a native Android inference path using Google's LiteRT-LM Kotlin runtime. Inference runs in-process on the phone using the CPU backend; the local model prompt is not sent to the cloud gateway and there is no cloud fallback in this feature.
+Shraddha AI has a native Android inference path using Google's LiteRT-LM Kotlin runtime. Model prompts and inference stay in the app process; this local feature has no cloud fallback.
 
 ## Install a compatible model
 
-1. Obtain a `.litertlm` model from the [LiteRT Community model collection](https://huggingface.co/LiteRT).
-2. Review and accept that model's licence and usage terms before downloading it.
-3. Choose a model compatible with LiteRT-LM and sized for the phone's RAM and free storage. Model files are large and are intentionally not bundled in the APK.
-4. In Shraddha AI, open the AI Assistant workspace, select **SELECT ON-DEVICE LLM MODEL**, and choose the `.litertlm` file.
-5. Enter a prompt and select **RUN LOCAL OFFLINE AI**. The first model load can take several seconds; inference speed depends on CPU, RAM, thermal limits, and model size.
+1. Obtain a compatible `.litertlm` model from the [LiteRT Community model collection](https://huggingface.co/LiteRT).
+2. Review the model licence and usage terms.
+3. Choose a model that fits the phone's RAM and storage. Weights are not bundled in the APK.
+4. In the AI Assistant workspace, select **SELECT ON-DEVICE LLM MODEL** and import the file.
+5. Select **CHECK DEVICE RAM & STORAGE** before inference.
 
-The app copies the model into its private internal files directory. Import is capped at 5 GB and keeps at least 512 MB free. It writes to a temporary file and atomically replaces the previously imported model when supported. The model is not uploaded to Firebase or the backend.
+## Memory preflight
+
+The app reports total RAM, currently available RAM, model size, a conservative headroom estimate, free internal storage, Java heap usage, native heap usage and Android low-RAM mode. It blocks a run when Android reports low-memory mode or available RAM is below 1.25× model file size plus 450 MiB. This is a conservative preflight, not a guarantee: native runtime allocations, KV cache, prompt length, concurrent apps and thermal limits can still cause an out-of-memory failure.
+
+Keep at least 256 MiB free internal storage. If preflight blocks, close heavy apps or import a smaller/quantized model. A 1B/2B model may be too large for some phones even if the file can be copied.
+
+## Hardware backends
+
+The backend selector offers:
+- **Auto**: try NPU, then GPU, then CPU.
+- **GPU**: try GPU, then CPU if the device/runtime cannot initialize GPU.
+- **NPU**: try NPU, then GPU, then CPU.
+- **CPU**: force CPU.
+
+Android GPU support depends on vendor/SoC OpenCL availability. The manifest declares optional `libvndksupport.so` and `libOpenCL.so` native libraries as recommended by the official LiteRT-LM Android guide. NPU initialization uses the app native-library directory. Unsupported accelerators fall back to CPU. The status panel reports the backend that initialized successfully.
+
+Acceleration is device- and model-dependent. Selecting GPU or NPU does not guarantee that the device supports it; verify the reported backend and benchmark on the actual phone. Do not describe a CPU fallback as accelerated inference.
 
 ## Runtime behaviour and limitations
 
-- LiteRT-LM runs in the Android app process. The current implementation uses CPU backend for broad compatibility; GPU/NPU selection and benchmarking are future work.
-- A compatible model must be supplied by the user. No model weights, download URL, or model licence is silently assumed.
+- LiteRT-LM engine initialization runs on a background thread and may take several seconds.
+- The app closes native engine/conversation resources when the activity is destroyed.
 - This is a local text-chat path, not a complete offline voice pipeline. Speech recognition and speech output may still depend on Android system services or separately configured voice models.
 - The Android offline model is separate from the Windows companion's optional GGUF/llama.cpp local inference.
-- The local engine is closed when the activity is destroyed to release native memory.
-- Not all Android devices can run every model. If model loading fails, use a smaller compatible model or a device with more available memory.
+- If model loading fails, try a smaller quantized model or CPU backend.
 
-## Build
+## Build and official references
 
-The Android app uses the official Maven dependency `com.google.ai.edge.litertlm:litertlm-android`. The Gradle build resolves the current published release. See the official [LiteRT-LM Android guide](https://developers.google.com/edge/litert-lm/android) for runtime and model-format details.
+- [LiteRT-LM Android guide](https://developers.google.com/edge/litert-lm/android)
+- [LiteRT Android runtime and accelerators](https://developer.android.com/ai/custom)
+- [LiteRT hardware backends](https://developers.google.com/edge/litert)
+
+The Gradle dependency is `com.google.ai.edge.litertlm:litertlm-android:latest.release`.
