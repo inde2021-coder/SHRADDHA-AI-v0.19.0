@@ -144,7 +144,7 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 ## 2026-11-19 — App-training privacy and full recovery
 - Legacy plaintext app-training profiles are migrated to the Android Keystore-backed encrypted feature store; corrupt migration fails closed and leaves the old records intact.
 - EncryptedFeatureStore now supports family-scoped decrypted snapshots and atomic replace/delete transactions.
-- New recovery bundle v2 includes selected person/child/task records, app-training profiles, workflow checkpoints, active project, digital twin, knowledge graph and private memory. It excludes biometric templates, API credentials, pairing tokens, OTPs and payment data.
+- New recovery bundle v2 includes selected person/child/task records, app-training profiles, encrypted Expert Project Library, workflow checkpoints, active project, digital twin, knowledge graph and private memory. It excludes biometric templates, API credentials, pairing tokens, OTPs and payment data.
 - Recovery validates allowed keys and data shapes, previews overwrite scope, and attempts rollback of all selected collections/preferences if a restore operation fails.
 - Local passphrase-protected backup v3 and Firebase Firestore/Storage restore share the same validated recovery format. Firestore supports 100 KB plaintext bundles; Firebase Storage supports up to 1.4 MB plaintext / 2 MB encrypted objects with 10 retained revisions.
 
@@ -165,3 +165,5 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Real Android camera/microphone tests, participant accuracy, FAR/FRR/EER and spoof evaluation require physical devices and consenting participants. No certified PAD claim is made.
 - Firebase cloud tests require the user's Firebase project, bucket, App Check configuration and published owner-only rules. No credentials or live cloud account were used in this source audit.
 - PR #2 remains open/unmerged and is one commit behind main; no direct changes were made to main.
+
+- Expert Hub's prior plaintext StringSet project library is migrated to an Android Keystore-backed encrypted ordered library (up to 20 projects), included in consented recovery snapshots.
