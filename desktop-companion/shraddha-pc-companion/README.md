@@ -44,3 +44,7 @@ Text entry enable करना हो तो `--allow-typing` जोड़ें
 - Companion बंद करने के लिए Ctrl+C करें; Android से device unpair करने पर access revoke करें।
 
 PC पर control permission को ON रखना तभी चुनें जब यह आपका भरोसेमंद PC हो।
+
+
+## Optional live PC screen sharing
+Install the additional `mss` and `Pillow` dependencies (included in requirements), then run with `--share-screen`. The PC user must confirm sharing locally every session. Frames are JPEG-compressed and relayed only to paired devices in the same Shraddha session; use `--screen-target DEVICE_ID` to target one paired device instead of broadcasting. The stream pauses when the active window title matches password, sign-in, bank, OTP, PIN, payment or credential patterns. This title-based pause is a best-effort guard, not a guarantee that all sensitive pixels are hidden; close sensitive windows before enabling sharing. Stop the companion to revoke the stream.
