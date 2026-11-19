@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - audit-fixes-v0.19.1
+      - redesign-v0.19.2
   pull_request:
     branches:
       - main
