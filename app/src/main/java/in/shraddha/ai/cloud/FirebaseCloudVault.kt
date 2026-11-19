@@ -279,6 +279,7 @@ class FirebaseCloudVault(private val context: Context) {
             if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, user.uid, previous)
             if (rotated.isNotBlank() && rotated != token && rotated != previous) deleteDeviceToken(app, user.uid, rotated)
             store.put("firebase_fcm_token", token).getOrThrow()
+            store.put("firebase_push_consent", "true").getOrThrow()
             store.remove("firebase_fcm_previous_token")
             registerDeviceToken(app, user.uid, token, deviceName)
         }
@@ -286,6 +287,8 @@ class FirebaseCloudVault(private val context: Context) {
 
     private suspend fun registerStoredPushToken(app: FirebaseApp, userId: String) {
         val store = EncryptedFeatureStore(context)
+        // A cached token is never uploaded unless the user explicitly enabled push notifications.
+        if (store.get("firebase_push_consent").getOrNull() != "true") return
         val token = store.get("firebase_fcm_token").getOrNull().orEmpty()
         val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
         if (previous.isNotBlank() && previous != token) deleteDeviceToken(app, userId, previous)
@@ -309,6 +312,8 @@ class FirebaseCloudVault(private val context: Context) {
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
             val store = EncryptedFeatureStore(context)
+            // Revoke locally first so future sign-ins can never silently re-register this token.
+            store.put("firebase_push_consent", "false").getOrThrow()
             val current = store.get("firebase_fcm_token").getOrNull().orEmpty()
             val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
             if (current.isNotBlank()) deleteDeviceToken(app, user.uid, current)
