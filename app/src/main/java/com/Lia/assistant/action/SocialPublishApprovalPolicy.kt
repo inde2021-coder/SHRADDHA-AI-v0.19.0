@@ -18,7 +18,8 @@ object SocialPublishApprovalPolicy {
             return "Only text posts are supported; media, Reels and Stories are unavailable"
         }
         if (text.isBlank()) return "Post text is required"
-        val length = text.codePointCount(0, text.length)
+        // Bluesky counts Unicode code points; the other backend adapters enforce JS string length.
+        val length = if (normalizedPlatform == "bluesky") text.codePointCount(0, text.length) else text.length
         if (length > maxCharacters(normalizedPlatform)) return "Post exceeds the selected platform character limit"
         return null
     }
