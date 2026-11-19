@@ -3,6 +3,7 @@ package `in`.shraddha.ai.cloud
 import android.content.Context
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.SecureMemoryVault
+import `in`.shraddha.ai.operator.learning.AppTrainingProfile
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -188,7 +189,21 @@ object DeviceRecoveryBundle {
             }
             key == "kids_profile" -> JSONObject(value)
             key == "kids_care_log" || key == "task_inbox" -> JSONArray(value)
-            key.startsWith("workflow_checkpoint_") || key.startsWith("app_profile_") -> JSONObject(value)
+            key.startsWith("workflow_checkpoint_") -> {
+                require(key.matches(Regex("workflow_checkpoint_[a-f0-9]{32}")))
+                val checkpoint = JSONObject(value)
+                require(checkpoint.optString("packageName").isNotBlank())
+                require(checkpoint.optString("workflowName").isNotBlank())
+                require(checkpoint.optString("workflowHash").matches(Regex("[a-f0-9]{64}")))
+                val total = checkpoint.optInt("totalSteps", -1)
+                require(total in 1..100 && checkpoint.optInt("nextStep", -1) in 0..total)
+                require(checkpoint.optString("state") in setOf("READY", "PAUSED", "WAITING_CONFIRMATION", "EXECUTING", "FAILED"))
+            }
+            key.startsWith("app_profile_") -> {
+                require(key.matches(Regex("app_profile_[a-f0-9]{32}")))
+                val profile = AppTrainingProfile.fromJson(JSONObject(value))
+                require(profile.packageName.isNotBlank())
+            }
             else -> error("Unsupported recovery key: $key")
         }
     }
