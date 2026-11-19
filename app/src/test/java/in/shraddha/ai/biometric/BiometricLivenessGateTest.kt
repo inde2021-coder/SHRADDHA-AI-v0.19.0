@@ -47,6 +47,37 @@ class BiometricLivenessGateTest {
         BiometricLivenessGate(listOf(BiometricLivenessGate.Step.TURN_OPPOSITE, BiometricLivenessGate.Step.TURN_SIDE, BiometricLivenessGate.Step.BLINK))
     }
 
+    @Test fun multiFaceFrameResetsConsecutiveBlinkStability() {
+        val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
+        assertFalse(gate.observe(1, 0.1f, 0.1f, 0f, 1_010L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 0f, 1_020L))
+        assertFalse(gate.observe(2, 0.95f, 0.95f, 0f, 1_030L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 0f, 1_040L))
+        assertFalse(gate.observe(1, 0.1f, 0.1f, 0f, 1_050L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 0f, 1_060L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 0f, 1_070L))
+        assertEquals(BiometricLivenessGate.Step.TURN_SIDE, gate.currentStep)
+    }
+
+    @Test fun invalidFaceCountResetsHeldTurnStability() {
+        val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
+        gate.observe(1, 0.1f, 0.1f, 0f, 1_010L)
+        gate.observe(1, 0.95f, 0.95f, 0f, 1_020L)
+        gate.observe(1, 0.95f, 0.95f, 0f, 1_030L)
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_040L))
+        assertFalse(gate.observe(2, 0.95f, 0.95f, 25f, 1_050L))
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_060L))
+        assertEquals(BiometricLivenessGate.Step.TURN_SIDE, gate.currentStep)
+        assertFalse(gate.observe(1, 0.95f, 0.95f, 25f, 1_070L))
+        assertEquals(BiometricLivenessGate.Step.TURN_OPPOSITE, gate.currentStep)
+    }
+
+    @Test fun nonFiniteFrameCannotAdvanceChallenge() {
+        val gate = BiometricLivenessGate(sequence, startedAtMs = 1_000L)
+        assertFalse(gate.observe(1, Float.NaN, 0.95f, 0f, 1_010L))
+        assertEquals(BiometricLivenessGate.Step.BLINK, gate.currentStep)
+    }
+
     @Test fun randomizedDefaultSequenceAlwaysHasValidTurnOrder() {
         repeat(100) { assertNotNull(BiometricLivenessGate().currentStep) }
     }
