@@ -1491,7 +1491,7 @@ class MainActivity : AppCompatActivity() {
                 }.start()
             })
             val bundleConsent = CheckBox(this@MainActivity).apply {
-                text = "मैं person/child profiles, app-training workflows, task inbox, project, digital twin और memory को encrypted Firebase backup/restore करने की अनुमति देता/देती हूँ। Biometric templates इसमें शामिल नहीं होंगे।"
+                text = "मैं person/child profiles, app-training workflows, task inbox, project, digital twin, knowledge graph और memory को encrypted Firebase backup/restore करने की अनुमति देता/देती हूँ। Biometric templates इसमें शामिल नहीं होंगे।"
                 setTextColor(0xFFE4E9F5.toInt())
             }
             addView(bundleConsent)
