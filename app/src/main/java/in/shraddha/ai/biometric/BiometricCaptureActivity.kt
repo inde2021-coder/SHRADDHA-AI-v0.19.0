@@ -213,7 +213,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                         vault.enroll(id, name, "face", embedding, true).getOrThrow()
                         finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.")
                     } else {
-                        val match = vault.match("face", embedding, threshold)
+                        val match = vault.match("face", embedding, threshold, id)
                         finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.")
                     }
                 } catch (error: Exception) { file.delete(); finishWith("Face capture failed: ${error.message}") }
@@ -389,7 +389,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
                 else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-                    val match = vault.match("speaker", embedding, threshold)
+                    val match = vault.match("speaker", embedding, threshold, id)
                     finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
