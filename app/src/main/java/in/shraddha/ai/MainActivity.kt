@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
     private val speakerCaptureRequest = 53
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
+    private var refreshBiometricStatus: (() -> Unit)? = null
     private var pendingShareCategory: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1747,7 +1748,7 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(0xFF9CB4D7.toInt())
                 setPadding(0, dp(4), 0, dp(8))
             }
-            fun refreshBiometricStatus() {
+            fun updateBiometricStatus() {
                 val selected = people().getOrNull(profileSpinner.selectedItemPosition)
                 if (selected == null) {
                     profileStatus.text = if (directoryReadFailed) "Person Memory सुरक्षित रूप से पढ़ा नहीं जा सका।" else "पहले consented person profile बनाएँ।"
@@ -1762,14 +1763,15 @@ class MainActivity : AppCompatActivity() {
                 val labels = people().map { it.optString("name") + " • " + it.optString("relation") }
                 profileSpinner.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, if (labels.isEmpty()) listOf("No consented people") else labels)
                 if (selectedPosition in labels.indices) profileSpinner.setSelection(selectedPosition)
-                profileSpinner.post { refreshBiometricStatus() }
+                profileSpinner.post { updateBiometricStatus() }
             }
             profileSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) = refreshBiometricStatus()
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) = updateBiometricStatus()
                 override fun onNothingSelected(parent: android.widget.AdapterView<*>?) { profileStatus.text = "Select a consented person profile." }
             }
             refreshProfiles()
             refreshProfileList = { refreshProfiles() }
+            refreshBiometricStatus = { updateBiometricStatus() }
             addView(TextView(this@MainActivity).apply { text = "CONSENTED PERSON"; setTextColor(0xFFB9C8E4.toInt()) })
             addView(profileSpinner)
             addView(profileStatus)
@@ -2057,7 +2059,7 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode == faceCaptureRequest || requestCode == speakerCaptureRequest) {
             status.text = data?.getStringExtra(BiometricCaptureActivity.EXTRA_RESULT) ?: "Biometric capture cancelled or did not complete."
-            refreshProfileList?.invoke()
+            refreshBiometricStatus?.invoke()
             return
         }
 
