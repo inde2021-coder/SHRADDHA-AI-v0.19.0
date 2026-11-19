@@ -1577,6 +1577,26 @@ class MainActivity : AppCompatActivity() {
                 val rows = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { "${it.optString("name")} — ${it.optString("relation")}\n${it.optString("notes")}" } }
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Person Memory").setMessage(if (rows.isEmpty()) "कोई प्रोफाइल सेव नहीं है।" else rows.joinToString("\n\n")).setPositiveButton("OK", null).setNeutralButton("Delete all") { _, _ -> store.remove("person_directory"); status.text = "Person directory हटाई गई।" }.show()
             })
+            addView(actionButton("Withdraw Consent / Delete One Person", "उस व्यक्ति की profile और stored notes हटाएँ") {
+                val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
+                val names = (0 until arr.length()).map { i -> arr.optJSONObject(i)?.optString("name", "Unknown") ?: "Unknown" }
+                if (names.isEmpty()) { status.text = "कोई person profile सेव नहीं है।"; return@actionButton }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("किस व्यक्ति की consent वापस लेनी है?")
+                    .setItems(names.toTypedArray()) { _, index ->
+                        android.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Delete ${names[index]} profile?")
+                            .setMessage("यह नाम, relationship और notes इस device से हटाएगा। Cloud backup में पुरानी encrypted copy हो सकती है; उसे अलग से replace/delete करना होगा।")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Withdraw & Delete") { _, _ ->
+                                val updated = JSONArray()
+                                for (i in 0 until arr.length()) if (i != index) updated.put(arr.opt(i))
+                                store.put("person_directory", updated.toString())
+                                    .onSuccess { status.text = "Consent withdrawn; profile deleted from this device." }
+                                    .onFailure { status.text = "Delete failed: ${it.message}" }
+                            }.show()
+                    }.show()
+            })
         }
         section(root, "FACE & VOICE RECOGNITION — INTEGRATION STATUS", "बिना अनुमति biometric enrollment या पहचान नहीं होगी") {
             addView(TextView(this@MainActivity).apply { text = "अभी इस build में नाम/रिश्ते वाला encrypted Person Directory कार्यशील है। वास्तविक face identity matching और speaker voiceprint matching के लिए vetted on-device recognition models, explicit biometric consent, liveness / spoof checks और accuracy evaluation जोड़ना बाकी है। Android face detection या speech-to-text अकेले किसी व्यक्ति की पहचान प्रमाणित नहीं करते। इसलिए यह build किसी फोटो/आवाज़ को देखकर व्यक्ति का नाम बताने का झूठा दावा नहीं करेगा।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
