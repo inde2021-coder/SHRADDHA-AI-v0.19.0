@@ -67,6 +67,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private val livenessPassed = AtomicBoolean(false)
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
+    private var cameraProvider: ProcessCameraProvider? = null
     private var detector: com.google.mlkit.vision.face.FaceDetector? = null
     private var previewView: PreviewView? = null
     private var speechRecognizer: SpeechRecognizer? = null
@@ -174,6 +175,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         providerFuture.addListener({
             try {
                 val provider = providerFuture.get()
+                cameraProvider = provider
                 val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
                 val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
                 imageCapture = capture
@@ -240,7 +242,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun restartFaceChallenge() {
-        runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
+        runCatching { cameraProvider?.unbindAll() }
         imageCapture = null
         imageAnalysis = null
         livenessPassed.set(false)
@@ -530,7 +532,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
         runCatching { speechRecognizer?.destroy() }
         runCatching { detector?.close() }
-        runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
+        runCatching { cameraProvider?.unbindAll() }
+        cameraProvider = null
         Thread { runCatching { engine.close() } }.start()
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
         super.onDestroy()
