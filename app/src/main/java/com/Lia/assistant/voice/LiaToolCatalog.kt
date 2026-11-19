@@ -174,13 +174,16 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "execute_whatsapp_task",
-                description = "Sends a WhatsApp SEND_MESSAGE after verifying the foreground WhatsApp recipient and exact dictated message using the enabled accessibility service. Other chat management actions are unsupported.",
+                description = "Only SEND_MESSAGE is supported. First returns a confirmation preview with the resolved recipient and exact message. Never sends until the user explicitly approves that exact number and exact text; then repeat with user_confirmed=yes, confirmed_recipient and confirmed_message exactly matching the preview. Any edit requires new approval. Other chat actions are unsupported.",
                 params = mapOf(
-                    "action" to "Action: 'READ_UNREAD', 'SEND_MESSAGE', 'READ_CHAT', 'SEARCH_CHAT', 'MUTE_CHAT', 'UNMUTE_CHAT', or 'MARK_READ'",
+                    "action" to "Only 'SEND_MESSAGE' is supported",
                     "contact_name" to "Name of contact",
                     "phone_number" to "Optional phone number",
-                    "message" to "Message body if sending",
-                    "query" to "Search query if searching"
+                    "message" to "Exact message body",
+                    "user_confirmed" to "yes only after explicit approval of the exact preview",
+                    "confirmed_recipient" to "Exact resolved phone number from the preview",
+                    "confirmed_message" to "Exact message text from the preview",
+                    "query" to "Unsupported in this build"
                 ),
                 required = listOf("action")
             )
