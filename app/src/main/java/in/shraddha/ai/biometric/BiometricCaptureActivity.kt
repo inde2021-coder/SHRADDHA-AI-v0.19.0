@@ -165,7 +165,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun challengeText(): String = livenessGate.prompt()
 
     private fun startCamera() {
+        if (cameraStarting) return
         val view = previewView ?: return
+        cameraStarting = true
+        action.isEnabled = false
         // Start the 45-second challenge window only after the user actually starts the camera.
         livenessGate = BiometricLivenessGate()
         livenessPassed.set(false)
