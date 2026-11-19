@@ -153,12 +153,14 @@ class BiometricCaptureActivity : AppCompatActivity() {
             try {
                 val provider = providerFuture.get()
                 val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-                imageCapture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-                imageAnalysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also { analysis ->
-                    analysis.setAnalyzer(cameraExecutor) { proxy -> analyzeChallengeFrame(proxy) }
+                val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                imageCapture = capture
+                val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also { useCase ->
+                    useCase.setAnalyzer(cameraExecutor) { proxy -> analyzeChallengeFrame(proxy) }
                 }
+                imageAnalysis = analysis
                 provider.unbindAll()
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, imageCapture, imageAnalysis)
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, capture, analysis)
                 message.text = challengeText()
                 action.text = "Complete the live challenge"
                 action.isEnabled = false
