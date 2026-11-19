@@ -350,7 +350,7 @@ object ActionExecutor {
                                     var detail = "Workflow did not complete."
                                     val ok = AdaptiveWorkflowRunner(context.applicationContext) { event ->
                                         detail = "${event.state}: ${event.message}"
-                                    }.run(profile, workflowName, values, confirmed)
+                                    }.run(profile, workflowName, values, confirmed, args.optBoolean("resume", false))
                                     ok to detail
                                 }
                                 result.put("status", if (runResult.first) "success" else "error")
