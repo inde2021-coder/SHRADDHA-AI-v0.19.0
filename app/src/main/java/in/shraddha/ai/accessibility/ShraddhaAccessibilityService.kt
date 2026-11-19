@@ -35,7 +35,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(labels)
     }
 
-    private fun captureOcrTextInternal(done: (Result<String>) -> Unit) {
+    private fun captureOcrTargetsInternal(done: (Result<List<ScreenOcrEngine.OcrLine>>) -> Unit) {
         if (Build.VERSION.SDK_INT < 30) {
             done(Result.failure(IllegalStateException("On-device OCR screenshot capture requires Android 11 or newer")))
             return
@@ -160,16 +160,18 @@ class ShraddhaAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile private var active: ShraddhaAccessibilityService? = null
-        suspend fun captureOcrText(): String? = suspendCancellableCoroutine { continuation ->
+        suspend fun captureOcrTargets(): List<ScreenOcrEngine.OcrLine>? = suspendCancellableCoroutine { continuation ->
             val service = active
             if (service == null) {
                 continuation.resume(null)
             } else {
-                service.captureOcrTextInternal { result ->
+                service.captureOcrTargetsInternal { result ->
                     if (continuation.isActive) continuation.resume(result.getOrNull())
                 }
             }
         }
+        suspend fun captureOcrText(): String? =
+            captureOcrTargets()?.filterNot { it.sensitive }?.joinToString("\n") { it.text }
                 fun fillFocusedField(text: String): Boolean = active?.setFocusedText(text) ?: false
         fun openApp(name: String): Boolean = active?.openInstalledApp(name) ?: false
         fun goHome(): Boolean = active?.performGlobalAction(GLOBAL_ACTION_HOME) ?: false
