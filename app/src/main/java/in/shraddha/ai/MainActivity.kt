@@ -1392,23 +1392,38 @@ class MainActivity : AppCompatActivity() {
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Device Health Snapshot").setMessage(info).setPositiveButton("OK",null).show()
             })
             addView(actionButton("EXPORT ENCRYPTED BACKUP","AES-256-GCM • passphrase protected • selected user data only") {
-                val recovery = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity).getOrThrow()
-                val backup = JSONObject()
-                    .put("schema", "shraddha-backup-v3")
-                    .put("createdAt", System.currentTimeMillis())
-                    .put("deviceRecoveryBundle", JSONObject(recovery))
                 val password=EditText(this@MainActivity).apply { hint="Backup passphrase (12+ characters)"; inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt Shraddha backup") .setMessage("Use a strong passphrase and keep it safe. It cannot be recovered if lost. Selected encrypted profiles, app workflows, checkpoints, project, digital twin, knowledge graph and memory are included. API keys, pairing tokens, permissions and biometric templates are excluded.")
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt Shraddha backup")
+                    .setMessage("Use a strong passphrase and keep it safe. It cannot be recovered if lost. Selected encrypted profiles, app workflows, checkpoints, project, digital twin, knowledge graph and memory are included. API keys, pairing tokens, permissions and biometric templates are excluded.")
                     .setView(password).setNegativeButton("Cancel",null).setPositiveButton("Encrypt & Save") { _,_ ->
                         val secret=password.text.toString().toCharArray()
-                        try {
-                            val encrypted=`in`.shraddha.ai.future.EncryptedBackupCodec.encrypt(backup.toString(),secret)
-                            getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().putString("payload",encrypted).apply()
-                            val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json"; putExtra(Intent.EXTRA_TITLE,"shraddha-ai-encrypted-backup-${System.currentTimeMillis()}.json") }
-                            @Suppress("DEPRECATION")
-                            startActivityForResult(intent,backupFileRequest)
-                        } catch(e:Exception) { status.text="Backup encryption failed: ${e.message}" }
-                        finally { secret.fill('\u0000'); password.text?.clear() }
+                        password.text?.clear()
+                        if (secret.size < 12) {
+                            secret.fill('\\u0000')
+                            status.text = "Backup passphrase must contain at least 12 characters."
+                            return@setPositiveButton
+                        }
+                        status.text = "Capturing selected encrypted device data and preparing backup…"
+                        Thread {
+                            try {
+                                val recovery = `in`.shraddha.ai.cloud.DeviceRecoveryBundle.capture(this@MainActivity).getOrThrow()
+                                val backup = JSONObject()
+                                    .put("schema", "shraddha-backup-v3")
+                                    .put("createdAt", System.currentTimeMillis())
+                                    .put("deviceRecoveryBundle", JSONObject(recovery))
+                                val encrypted = `in`.shraddha.ai.future.EncryptedBackupCodec.encrypt(backup.toString(), secret)
+                                runOnUiThread {
+                                    getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().putString("payload",encrypted).commit()
+                                    val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json"; putExtra(Intent.EXTRA_TITLE,"shraddha-ai-encrypted-backup-${System.currentTimeMillis()}.json") }
+                                    @Suppress("DEPRECATION")
+                                    startActivityForResult(intent,backupFileRequest)
+                                }
+                            } catch(e:Exception) {
+                                runOnUiThread { status.text = "Backup preparation failed: ${e.message}" }
+                            } finally {
+                                secret.fill('\\u0000')
+                            }
+                        }.start()
                     }.show()
             })
             addView(actionButton("RESTORE ENCRYPTED BACKUP","Choose a Shraddha encrypted backup file and enter its passphrase") {
