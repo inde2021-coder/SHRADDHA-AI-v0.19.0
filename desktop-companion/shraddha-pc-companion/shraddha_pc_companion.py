@@ -18,7 +18,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "offline_chat"}
 
 
 def normalize_point(value: object) -> float:
@@ -32,7 +32,7 @@ def is_sensitive_window(title: str) -> bool:
     return bool(SENSITIVE_WINDOW.search(title or ""))
 
 
-def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = False, file_root: str = "") -> bool:
+def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = False, file_root: str = "", offline_model=None) -> bool:
     kind = action.get("kind")
     if kind not in SUPPORTED_ACTIONS:
         return False
@@ -265,6 +265,26 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             return "blocked_ui_target_disappeared"
         except Exception:
             return "blocked_ui_automation_unavailable"
+    if kind == "offline_chat":
+        prompt = action["prompt"].strip()
+        if not await asyncio.to_thread(confirm, "Run this prompt on the local offline PC model? " + prompt[:160]):
+            return "offline_ai_request_rejected_by_pc_user"
+        try:
+            result = await asyncio.to_thread(
+                offline_model.create_chat_completion,
+                messages=[
+                    {"role": "system", "content": "You are Shraddha AI running locally on this PC without network access. Be accurate, concise, and state uncertainty. Never claim to have performed external actions."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=600
+            )
+            answer = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not isinstance(answer, str) or not answer.strip():
+                return "offline_ai_returned_no_answer"
+            return json.dumps({"status": "offline_inference_complete", "answer": answer[:10000]}, ensure_ascii=False)
+        except Exception as exc:
+            return "offline_inference_failed: " + str(exc)[:180]
     if kind in {"ocr", "file_list", "file_read"}:
         if kind == "ocr":
             try:
@@ -360,6 +380,24 @@ async def run(args) -> None:
     headers = {"Authorization": "Bearer " + device_token}
 
     print(f"Paired PC device ID: {device_id}")
+    offline_model = None
+    if args.offline_model:
+        from pathlib import Path
+        model_path = Path(args.offline_model).expanduser().resolve()
+        if not model_path.is_file() or model_path.suffix.lower() != ".gguf" or model_path.stat().st_size < 1_000_000:
+            raise RuntimeError("--offline-model must point to a valid local .gguf model file")
+        try:
+            from llama_cpp import Llama
+        except ImportError as exc:
+            raise RuntimeError("Install optional offline dependencies: python -m pip install -r requirements-offline.txt") from exc
+        import os
+        print("Loading local GGUF model; first startup may take time…")
+        offline_model = await asyncio.to_thread(
+            Llama, model_path=str(model_path), n_ctx=4096,
+            n_threads=max(1, min(os.cpu_count() or 2, 8)), verbose=False
+        )
+        print("Local offline inference is ready. No cloud AI provider is used for offline_chat.")
+
     allow_control = await asyncio.to_thread(confirm, "Allow this paired phone to request temporary control of this PC?")
     share_screen = bool(args.share_screen and await asyncio.to_thread(confirm, "Share this PC screen with paired Shraddha devices? Sensitive active windows will pause sharing."))
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
@@ -399,9 +437,9 @@ async def run(args) -> None:
                         print("Blocked remote action: local PC approval expired.")
                         continue
                     action = message.get("action") or {}
-                    result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root)
+                    result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root, offline_model)
                     print("Remote action:", action.get("kind"), "=>", result[:500])
-                    if action.get("kind") in {"ocr", "file_list", "file_read"}:
+                    if action.get("kind") in {"ocr", "file_list", "file_read", "offline_chat"}:
                         await ws.send(json.dumps({"type": "remote_action_result", "targetDeviceId": message.get("fromDeviceId", ""), "actionKind": action.get("kind"), "result": result[:14000]}))
                 elif kind == "peer_status":
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
@@ -423,6 +461,7 @@ def main() -> int:
     parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")
     parser.add_argument("--allow-ocr", action="store_true", help="Enable active-window OCR; each request asks PC user")
     parser.add_argument("--file-root", default="", help="Optional approved folder for file listing and text previews; each request asks PC user")
+    parser.add_argument("--offline-model", default="", help="Local GGUF model file for private offline inference on this PC")
     parser.add_argument("--share-screen", action="store_true", help="Offer optional live PC screen sharing; still requires a separate local confirmation")
     parser.add_argument("--screen-fps", type=float, default=1.0, help="PC screen share frame rate, clamped to 0.5–2 FPS")
     parser.add_argument("--screen-target", default="", help="Optional paired device ID; blank broadcasts to paired devices")
