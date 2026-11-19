@@ -64,3 +64,24 @@ python shraddha_pc_companion.py --allow-ocr --file-root "$HOME\\Documents"
 ```
 
 Remote OCR and file-preview results are relayed only to the paired requester while its temporary PC-control grant remains active.
+
+
+## Local offline AI inference (GGUF)
+
+The Windows companion can run a real local language model through `llama.cpp`. Model inference happens on the paired Windows PC; the companion does not call a cloud AI provider for `offline_chat`. Model weights are not bundled in this repository: download a compatible instruct GGUF file yourself and verify its license and source.
+
+Install the optional CPU runtime:
+
+```powershell
+python -m pip install -r requirements-offline.txt
+```
+
+Start the companion with your local model:
+
+```powershell
+python shraddha_pc_companion.py --offline-model "C:\\Models\\assistant-instruct-q4.gguf"
+```
+
+The first startup loads the model into memory and may take time. CPU speed and memory depend on the model size and quantization. The Android Devices workspace can send a prompt to the paired PC; the PC console asks for local confirmation before inference. The answer returns over the authenticated, paired-device relay. This is PC-local inference, not Android on-device inference. If no model path is configured, the offline action is unavailable.
+
+The companion binds no inference HTTP port and exposes no unauthenticated local model server.
