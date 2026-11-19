@@ -36,6 +36,9 @@ class BiometricConsentVaultInstrumentedTest {
             assertNotNull("Selected consented person should match their own template", ownMatch)
             val otherMatch = vault.match("face", a1, calibration.threshold, "person_002")
             assertNull("A selected different person must not be reported as a match", otherMatch)
+            val identified = vault.match("face", a1, calibration.threshold, null)
+            assertNotNull("One-to-many identification should search every consented profile", identified)
+            assertEquals("person_001", identified?.personId)
 
             assertEquals(2, vault.templateCounts("person_001").getOrThrow().face)
             // Any new sample invalidates the prior threshold before the data changes.
