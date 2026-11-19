@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -309,10 +311,13 @@ fun SettingsScreen(
                         placeholder = "https://your-backend.example"
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    NovaTextField(
+                    OutlinedTextField(
                         value = gatewayTokenInput,
                         onValueChange = { gatewayTokenInput = it },
-                        placeholder = "Backend GATEWAY_TOKEN"
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Backend GATEWAY_TOKEN") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation()
                     )
                     if (gatewaySaveError != null) {
                         Spacer(modifier = Modifier.height(8.dp))
