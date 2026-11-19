@@ -893,7 +893,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             addView(actionButton("VIEW TASK INBOX", "दूसरे paired devices से स्वीकार किए गए task plans") {
-                val tasks = runCatching { JSONArray(getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE).getString("tasks", "[]")) }.getOrDefault(JSONArray())
+                val tasks = runCatching { JSONArray(EncryptedFeatureStore(this@MainActivity).get("task_inbox").getOrDefault("[]")) }.getOrDefault(JSONArray())
                 if (tasks.length() == 0) {
                     android.app.AlertDialog.Builder(this@MainActivity).setTitle("Task Inbox").setMessage("अभी कोई task नहीं है।").setPositiveButton("OK", null).show()
                 } else {
@@ -908,7 +908,7 @@ class MainActivity : AppCompatActivity() {
                                 .setPositiveButton("OK", null).setNegativeButton("Remove") { _, _ ->
                                     val updated = JSONArray()
                                     for (i in 0 until tasks.length()) if (i != index) updated.put(tasks.optJSONObject(i))
-                                    getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE).edit().putString("tasks", updated.toString()).apply()
+                                    EncryptedFeatureStore(this@MainActivity).put("task_inbox", updated.toString())
                                 }.show()
                         }.setNegativeButton("Close", null).show()
                 }
@@ -1536,15 +1536,18 @@ class MainActivity : AppCompatActivity() {
                             .setTitle("Task from " + fromName)
                             .setMessage(task.optString("title") + "\n\n" + task.optString("description") + "\n\nAccepting saves the plan only. It will NOT run app actions.")
                             .setPositiveButton("Accept & Save") { _, _ ->
-                                val prefs = getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE)
-                                val inbox = runCatching { JSONArray(prefs.getString("tasks", "[]")) }.getOrDefault(JSONArray())
-                                if (inbox.length() < 50) {
-                                    inbox.put(JSONObject().put("id", task.optString("id")).put("title", task.optString("title"))
-                                        .put("description", task.optString("description")).put("steps", task.optJSONArray("steps") ?: JSONArray())
-                                        .put("fromDeviceId", fromId).put("fromDeviceName", fromName).put("receivedAt", System.currentTimeMillis()))
-                                    prefs.edit().putString("tasks", inbox.toString()).apply()
-                                    DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), true, "Saved to Task Inbox")
-                                    status.text = "Task accepted and saved. It has not been executed."
+                                val store = EncryptedFeatureStore(this@MainActivity)
+                                val inbox = runCatching { JSONArray(store.get("task_inbox").getOrDefault("[]")) }.getOrDefault(JSONArray())
+                                if (inbox.length() < 10) {
+                                    val safeSteps = JSONArray()
+                                    val rawSteps = task.optJSONArray("steps")
+                                    for (i in 0 until minOf(rawSteps?.length() ?: 0, 8)) safeSteps.put(rawSteps?.optString(i).orEmpty().take(150))
+                                    inbox.put(JSONObject().put("id", task.optString("id")).put("title", task.optString("title").take(120))
+                                        .put("description", task.optString("description").take(1500)).put("steps", safeSteps)
+                                        .put("fromDeviceId", fromId).put("fromDeviceName", fromName.take(48)).put("receivedAt", System.currentTimeMillis()))
+                                    val saved = store.put("task_inbox", inbox.toString()).isSuccess
+                                    DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), saved, if (saved) "Saved to encrypted Task Inbox" else "Encrypted local storage failed")
+                                    status.text = if (saved) "Task accepted and saved in encrypted local inbox. It has not been executed." else "Encrypted Task Inbox में save नहीं हो सकी।"
                                 } else {
                                     DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), false, "Task inbox is full")
                                     status.text = "Task Inbox full है; task save नहीं हुई।"
