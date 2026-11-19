@@ -8,7 +8,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.Lia.assistant.MainActivity
-import com.Lia.assistant.R
+import `in`.shraddha.ai.R
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.voice.GeminiTextClient
 import kotlinx.coroutines.delay
