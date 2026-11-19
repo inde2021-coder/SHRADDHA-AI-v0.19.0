@@ -87,7 +87,7 @@ class FirebaseCloudVault(private val context: Context) {
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
-            registerStoredPushToken(app, user.uid)
+            runCatching { registerStoredPushToken(app, user.uid) }
             val doc = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key).get().await()
             val payload = doc.getString("payload") ?: return@runBlocking null
             decrypt(payload, password)
@@ -103,7 +103,7 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
-            registerStoredPushToken(app, user.uid)
+            runCatching { registerStoredPushToken(app, user.uid) }
             val collection = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault")
             val encrypted = encrypt(bundleJson, password)
             val now = System.currentTimeMillis()
@@ -165,7 +165,7 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
-            registerStoredPushToken(app, user.uid)
+            runCatching { registerStoredPushToken(app, user.uid) }
             val encrypted = encrypt(bundleJson, password)
             val bytes = encrypted.toByteArray(Charsets.UTF_8)
             require(bytes.size <= 2 * 1024 * 1024) { "Encrypted backup exceeds the 2 MB Storage limit" }
@@ -216,7 +216,7 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
-            registerStoredPushToken(app, user.uid)
+            runCatching { registerStoredPushToken(app, user.uid) }
             FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("storage_backups")
                 .orderBy("updatedAt", Query.Direction.DESCENDING).limit(10).get().await().documents
                 .map { doc ->
@@ -234,7 +234,7 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
-            registerStoredPushToken(app, user.uid)
+            runCatching { registerStoredPushToken(app, user.uid) }
             val metadata = FirebaseFirestore.getInstance(app).collection("users").document(user.uid)
                 .collection("storage_backups").document(revisionId).get().await()
             if (!metadata.exists()) return@runBlocking null
