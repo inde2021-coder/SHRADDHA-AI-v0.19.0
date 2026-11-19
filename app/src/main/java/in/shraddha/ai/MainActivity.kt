@@ -312,14 +312,20 @@ class MainActivity : AppCompatActivity() {
                 addAiBrainSection(pageRoot)
             }
             "expert" -> {
-                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
-                if (!::gatewayToken.isInitialized) gatewayToken = edit("Optional AI gateway token", "GATEWAY_TOKEN if configured")
+                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example").apply { setText(VoiceGatewaySettings.get(this@MainActivity).baseUrl) }
+                if (!::gatewayToken.isInitialized) gatewayToken = edit("AI gateway token", "Saved securely in Settings").apply {
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    setText(VoiceGatewaySettings.get(this@MainActivity).gatewayToken)
+                }
                 addCompleteExpertHubSection(pageRoot)
             }
             "devices" -> addDeviceLinkSection(pageRoot)
             "lab" -> {
-                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
-                if (!::gatewayToken.isInitialized) gatewayToken = edit("Optional AI gateway token", "GATEWAY_TOKEN if configured")
+                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example").apply { setText(VoiceGatewaySettings.get(this@MainActivity).baseUrl) }
+                if (!::gatewayToken.isInitialized) gatewayToken = edit("AI gateway token", "Saved securely in Settings").apply {
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    setText(VoiceGatewaySettings.get(this@MainActivity).gatewayToken)
+                }
                 addAdvancedAiSection(pageRoot)
             }
             "data" -> {
