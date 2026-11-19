@@ -20,6 +20,10 @@ class LocalBiometricModelEngine : Closeable {
     private val environment = OrtEnvironment.getEnvironment()
     private var faceSession: OrtSession? = null
     private var speakerSession: OrtSession? = null
+    @Volatile var faceModelLoadMs: Long = 0; private set
+    @Volatile var speakerModelLoadMs: Long = 0; private set
+    @Volatile var lastFaceInferenceMs: Long = 0; private set
+    @Volatile var lastSpeakerInferenceMs: Long = 0; private set
 
     private fun createSession(modelPath: String): OrtSession {
         val options = OrtSession.SessionOptions().apply {
@@ -35,6 +39,7 @@ class LocalBiometricModelEngine : Closeable {
 
     @Synchronized
     fun loadFaceModel(modelPath: String) {
+        val started = System.nanoTime()
         val candidate = createSession(modelPath)
         try {
             require(candidate.inputNames.contains("data")) { "Face model must expose input 'data'" }
@@ -45,6 +50,7 @@ class LocalBiometricModelEngine : Closeable {
             require(outputShape.lastOrNull() == 128L) { "SFace model must output a 128-value embedding" }
             faceSession?.close()
             faceSession = candidate
+            faceModelLoadMs = (System.nanoTime() - started) / 1_000_000L
         } catch (error: Exception) {
             candidate.close()
             throw error
@@ -53,7 +59,8 @@ class LocalBiometricModelEngine : Closeable {
 
     @Synchronized
     fun loadSpeakerModel(modelPath: String) {
-        val candidate = environment.createSession(modelPath, OrtSession.SessionOptions())
+        val started = System.nanoTime()
+        val candidate = createSession(modelPath)
         try {
             require(candidate.inputNames.containsAll(setOf("wav", "lens"))) {
                 "Speaker model must expose 'wav' and 'lens' inputs"
@@ -67,6 +74,7 @@ class LocalBiometricModelEngine : Closeable {
             require(embeddingShape.lastOrNull() == 192L) { "Speaker model must output a 192-value embedding" }
             speakerSession?.close()
             speakerSession = candidate
+            speakerModelLoadMs = (System.nanoTime() - started) / 1_000_000L
         } catch (error: Exception) {
             candidate.close()
             throw error
@@ -89,15 +97,20 @@ class LocalBiometricModelEngine : Closeable {
             values[plane + pixel] = (alignedRgb112[pixel * 3 + 1].toInt() and 0xff).toFloat()
             values[2 * plane + pixel] = (alignedRgb112[pixel * 3 + 2].toInt() and 0xff).toFloat()
         }
-        val tensor = OnnxTensor.createTensor(
-            environment, nativeFloatBuffer(values), longArrayOf(1, 3, 112, 112)
-        )
-        tensor.use {
-            val result = session.run(mapOf("data" to tensor))
-            result.use {
-                val output = result.get("fc1").orElseThrow { IllegalStateException("Face model output fc1 missing") }
-                return BiometricMath.unitNormalize(flatten(output.value))
+        val started = System.nanoTime()
+        try {
+            val tensor = OnnxTensor.createTensor(
+                environment, nativeFloatBuffer(values), longArrayOf(1, 3, 112, 112)
+            )
+            tensor.use {
+                val result = session.run(mapOf("data" to tensor))
+                result.use {
+                    val output = result.get("fc1").orElseThrow { IllegalStateException("Face model output fc1 missing") }
+                    return BiometricMath.unitNormalize(flatten(output.value))
+                }
             }
+        } finally {
+            lastFaceInferenceMs = (System.nanoTime() - started) / 1_000_000L
         }
     }
 
@@ -110,16 +123,21 @@ class LocalBiometricModelEngine : Closeable {
         require(monoPcm16k.size in 16_000..160_000) { "Record 1–10 seconds of 16 kHz audio" }
         require(monoPcm16k.all { it.isFinite() && it in -1.05f..1.05f }) { "Audio must be normalized 16 kHz PCM" }
         val session = speakerSession ?: error("Speaker model is not loaded")
-        val wav = OnnxTensor.createTensor(environment, nativeFloatBuffer(monoPcm16k), longArrayOf(1, monoPcm16k.size.toLong()))
-        val lens = OnnxTensor.createTensor(environment, nativeFloatBuffer(floatArrayOf(1f)), longArrayOf(1))
-        wav.use { w ->
-            lens.use { l ->
-                val result = session.run(mapOf("wav" to w, "lens" to l))
-                result.use {
-                    val output = result.get("emb").orElseThrow { IllegalStateException("Speaker model output emb missing") }
-                    return BiometricMath.unitNormalize(flatten(output.value))
+        val started = System.nanoTime()
+        try {
+            val wav = OnnxTensor.createTensor(environment, nativeFloatBuffer(monoPcm16k), longArrayOf(1, monoPcm16k.size.toLong()))
+            val lens = OnnxTensor.createTensor(environment, nativeFloatBuffer(floatArrayOf(1f)), longArrayOf(1))
+            wav.use { w ->
+                lens.use { l ->
+                    val result = session.run(mapOf("wav" to w, "lens" to l))
+                    result.use {
+                        val output = result.get("emb").orElseThrow { IllegalStateException("Speaker model output emb missing") }
+                        return BiometricMath.unitNormalize(flatten(output.value))
+                    }
                 }
             }
+        } finally {
+            lastSpeakerInferenceMs = (System.nanoTime() - started) / 1_000_000L
         }
     }
 
