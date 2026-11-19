@@ -1,7 +1,7 @@
 package `in`.shraddha.ai.biometric
 
 /** Active challenge-response gate; this is basic PAD, not a certified anti-spoofing system. */
-class BiometricLivenessGate(sequence: List<Step> = listOf(Step.BLINK, Step.TURN_SIDE, Step.TURN_OPPOSITE).shuffled()) {
+class BiometricLivenessGate(sequence: List<Step> = listOf(listOf(Step.BLINK, Step.TURN_SIDE, Step.TURN_OPPOSITE), listOf(Step.TURN_SIDE, Step.BLINK, Step.TURN_OPPOSITE), listOf(Step.TURN_SIDE, Step.TURN_OPPOSITE, Step.BLINK)).random()) {
     enum class Step { BLINK, TURN_SIDE, TURN_OPPOSITE }
     private val steps = sequence.toList()
     private var index = 0
@@ -10,7 +10,7 @@ class BiometricLivenessGate(sequence: List<Step> = listOf(Step.BLINK, Step.TURN_
     val isComplete: Boolean get() = index >= steps.size
     val currentStep: Step? get() = steps.getOrNull(index)
 
-    init { require(steps.size == 3 && steps.toSet() == Step.values().toSet()) }
+    init { require(steps.size == 3 && steps.toSet() == Step.values().toSet() && steps.indexOf(Step.TURN_SIDE) < steps.indexOf(Step.TURN_OPPOSITE)) }
 
     @Synchronized
     fun observe(faceCount: Int, leftEyeOpen: Float, rightEyeOpen: Float, yawDegrees: Float): Boolean {
