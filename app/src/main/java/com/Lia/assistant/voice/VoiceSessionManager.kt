@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
 object VoiceSessionManager {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val sessionMutex = Mutex()
+    private val clientLock = Any()
     private val sessionEpoch = AtomicLong(0)
 
     private val _state = MutableStateFlow(NovaOrbState.IDLE)
@@ -56,8 +57,8 @@ object VoiceSessionManager {
     private val _vadActive = MutableStateFlow(false)
     val vadActive: StateFlow<Boolean> = _vadActive.asStateFlow()
 
-    private var client: GeminiLiveClient? = null
-    private var audioIO: LiveAudioIO? = null
+    @Volatile private var client: GeminiLiveClient? = null
+    @Volatile private var audioIO: LiveAudioIO? = null
     private var appContext: Context? = null
 
     private var reconnectJob: Job? = null
@@ -113,7 +114,10 @@ object VoiceSessionManager {
         val currentContext = appContext ?: return
         val currentEpoch = sessionEpoch.incrementAndGet()
 
-        client?.disconnect()
+        synchronized(clientLock) {
+            client?.disconnect()
+            client = null
+        }
         _state.value = NovaOrbState.CONNECTING
         _statusText.value = if (isResuming) "Reconnecting..." else "Connecting..."
 
@@ -130,6 +134,10 @@ object VoiceSessionManager {
             VoiceForegroundService.stop(currentContext)
             return
         }
+
+        // The user may stop while the ephemeral token request is in flight. Never
+        // create a WebSocket client or restart the microphone for a stale session.
+        if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
 
         val personality = PersonalityRepository.getPersonality(currentContext)
         val language = PersonalityRepository.getLanguage(currentContext)
@@ -154,7 +162,9 @@ object VoiceSessionManager {
                 _state.value = NovaOrbState.LISTENING
                 _statusText.value = "Listening..."
                 VoiceLatencyTracker.resetReconnect()
-                audioIO?.startRecording()
+                synchronized(clientLock) {
+                    if (_isActive.value && sessionEpoch.get() == currentEpoch) audioIO?.startRecording()
+                }
             }
 
             override fun onAudioChunk(bytes: ByteArray) {
@@ -279,8 +289,15 @@ object VoiceSessionManager {
             }
         }
 
-        client = GeminiLiveClient(liveListener)
-        client?.connect(ephemeralToken, prompt)
+        val nextClient = GeminiLiveClient(liveListener)
+        synchronized(clientLock) {
+            if (!_isActive.value || sessionEpoch.get() != currentEpoch) {
+                nextClient.disconnect()
+                return
+            }
+            client = nextClient
+            nextClient.connect(ephemeralToken, prompt)
+        }
     }
 
     private fun speakWithShraddha(context: Context, epoch: Long, assistantName: String, text: String) {
@@ -367,11 +384,12 @@ object VoiceSessionManager {
         silenceWatchdogJob?.cancel()
         silenceWatchdogJob = null
 
-        client?.disconnect()
-        client = null
-
-        audioIO?.release()
-        audioIO = null
+        synchronized(clientLock) {
+            client?.disconnect()
+            client = null
+            audioIO?.release()
+            audioIO = null
+        }
 
         EchoGuard.reset()
         ConversationMemory.clear()
