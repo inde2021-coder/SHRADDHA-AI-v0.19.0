@@ -865,6 +865,54 @@ class MainActivity : AppCompatActivity() {
         }
 
         section(root, "03  •  REMOTE APP CONTROL", "चुने हुए paired phone पर अनुमत gestures और data entry") {
+            val handoffTitle = edit("Task handoff title", "उदाहरण: Prepare project report")
+            val handoffDescription = edit("Task description", "दूसरे paired device को भेजने वाला काम")
+            val handoffSteps = edit("Task steps (one per line)", "1. Review files\\n2. Prepare summary\\n3. Send result").apply {
+                minLines = 3
+                maxLines = 5
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            }
+            addView(handoffTitle); addView(handoffDescription); addView(handoffSteps)
+            addView(actionButton("SEND TASK TO PAIRED DEVICE", "15-minute task offer • receiver must accept • never auto-executes") {
+                val target = targetDevice.text.toString().trim()
+                val title = handoffTitle.text.toString().trim()
+                val description = handoffDescription.text.toString().trim()
+                val steps = handoffSteps.text.toString().lines().map { it.trim() }.filter { it.isNotBlank() }
+                if (target.isBlank() || title.isBlank() || description.isBlank()) {
+                    status.text = "Target device, task title और description जरूरी हैं।"
+                } else {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Share task with paired device?")
+                        .setMessage(title + "\\n\\n" + description + "\\n\\nयह केवल task plan भेजेगा; कोई app action अपने-आप execute नहीं होगा।")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Share") { _, _ ->
+                            status.text = if (DeviceLinkManager.sendTaskHandoff(target, title, description, steps))
+                                "Task offer भेज दी गई। Receiver की स्वीकृति का इंतजार है।"
+                            else "Relay connected नहीं है या task भेजा नहीं जा सका।"
+                        }.show()
+                }
+            })
+            addView(actionButton("VIEW TASK INBOX", "दूसरे paired devices से स्वीकार किए गए task plans") {
+                val tasks = runCatching { JSONArray(getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE).getString("tasks", "[]")) }.getOrDefault(JSONArray())
+                if (tasks.length() == 0) {
+                    android.app.AlertDialog.Builder(this@MainActivity).setTitle("Task Inbox").setMessage("अभी कोई task नहीं है।").setPositiveButton("OK", null).show()
+                } else {
+                    val labels = Array(tasks.length()) { i -> tasks.optJSONObject(i)?.optString("title", "Task") ?: "Task" }
+                    android.app.AlertDialog.Builder(this@MainActivity).setTitle("Task Inbox")
+                        .setItems(labels) { _, index ->
+                            val task = tasks.optJSONObject(index) ?: return@setItems
+                            val stepArray = task.optJSONArray("steps")
+                            val stepText = (0 until (stepArray?.length() ?: 0)).joinToString("\\n") { n -> stepArray?.optString(n).orEmpty() }
+                            android.app.AlertDialog.Builder(this@MainActivity).setTitle(task.optString("title"))
+                                .setMessage(task.optString("description") + "\\n\\n" + stepText)
+                                .setPositiveButton("OK", null).setNegativeButton("Remove") { _, _ ->
+                                    val updated = JSONArray()
+                                    for (i in 0 until tasks.length()) if (i != index) updated.put(tasks.optJSONObject(i))
+                                    getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE).edit().putString("tasks", updated.toString()).apply()
+                                }.show()
+                        }.setNegativeButton("Close", null).show()
+                }
+            })
             remoteText = edit("Text to enter", "केवल focused, visible, non-password field")
             addView(remoteText)
             addView(actionButton("Request 5-Minute Remote Control", "Target phone पर हर session के लिए approval dialog आएगा") {
@@ -1474,6 +1522,45 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     status.text = if (approved) "Remote control की अनुमति मिली (${msg.optInt("expiresInMinutes", 5)} मिनट)।" else "Remote control request अस्वीकार हुई: ${msg.optString("reason", "Target ने अनुमति नहीं दी।")}"
                     Toast.makeText(this, status.text, Toast.LENGTH_LONG).show()
+                }
+            } else if (msg.optString("type") == "task_handoff") {
+                val task = msg.optJSONObject("task")
+                if (task != null) {
+                    val fromId = msg.optString("fromDeviceId")
+                    val fromName = msg.optString("fromDeviceName", "Paired device")
+                    val expiresAt = msg.optLong("expiresAt", 0L)
+                    if (expiresAt <= System.currentTimeMillis()) {
+                        DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), false, "Task offer expired")
+                    } else runOnUiThread {
+                        android.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Task from " + fromName)
+                            .setMessage(task.optString("title") + "\\n\\n" + task.optString("description") + "\\n\\nAccepting saves the plan only. It will NOT run app actions.")
+                            .setPositiveButton("Accept & Save") { _, _ ->
+                                val prefs = getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE)
+                                val inbox = runCatching { JSONArray(prefs.getString("tasks", "[]")) }.getOrDefault(JSONArray())
+                                if (inbox.length() < 50) {
+                                    inbox.put(JSONObject().put("id", task.optString("id")).put("title", task.optString("title"))
+                                        .put("description", task.optString("description")).put("steps", task.optJSONArray("steps") ?: JSONArray())
+                                        .put("fromDeviceId", fromId).put("fromDeviceName", fromName).put("receivedAt", System.currentTimeMillis()))
+                                    prefs.edit().putString("tasks", inbox.toString()).apply()
+                                    DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), true, "Saved to Task Inbox")
+                                    status.text = "Task accepted and saved. It has not been executed."
+                                } else {
+                                    DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), false, "Task inbox is full")
+                                    status.text = "Task Inbox full है; task save नहीं हुई।"
+                                }
+                            }
+                            .setNegativeButton("Reject") { _, _ ->
+                                DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), false, "Rejected by receiver")
+                            }.setOnCancelListener {
+                                DeviceLinkManager.respondTaskHandoff(fromId, task.optString("id"), false, "Dismissed by receiver")
+                            }.show()
+                    }
+                }
+            } else if (msg.optString("type") == "task_handoff_response") {
+                runOnUiThread {
+                    status.text = if (msg.optBoolean("accepted")) "Task " + msg.optString("taskId") + " accepted by " + msg.optString("fromDeviceName", "paired device") + "."
+                    else "Task offer was not accepted: " + msg.optString("note", "No reason supplied")
                 }
             } else if (msg.optString("type") == "data_share_request") {
                 handleIncomingShareRequest(msg)
