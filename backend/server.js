@@ -5,6 +5,7 @@ import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
+import { normalizePlanSteps } from './plan-safety.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -233,7 +234,7 @@ const server = http.createServer(async (req, res) => {
       try { parsed = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
       catch { return json(res, 502, { error: 'AI returned an invalid plan. Please retry.', provider }); }
       const allowedTools = new Set(['chat','open_app','click_text','type','tap','swipe','scroll','back','home','camera_view','screen_view','share_file','ask_user']);
-      const steps = Array.isArray(parsed.steps) ? parsed.steps.slice(0, 8).filter(x => x && typeof x.title === 'string' && typeof x.detail === 'string' && allowedTools.has(x.tool)).map(x => ({ title: x.title.slice(0,120), detail: x.detail.slice(0,500), tool: x.tool, requiresApproval: x.requiresApproval !== false, risk: ['low','medium','high'].includes(x.risk) ? x.risk : 'medium' })) : [];
+      const steps = normalizePlanSteps(parsed.steps, allowedTools);
       return json(res, 200, { provider: providerResult.provider, requestedProvider: provider, summary: String(parsed.summary || 'Plan तैयार है।').slice(0,800), steps, userApprovalRequired: true, executionMode: 'proposal_only', routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
     }
     if (req.method === 'POST' && req.url === '/api/studio/work') {
