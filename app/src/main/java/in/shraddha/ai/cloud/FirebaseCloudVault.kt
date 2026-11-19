@@ -8,6 +8,11 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import com.google.firebase.messaging.FirebaseMessaging
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
@@ -20,6 +25,7 @@ import javax.crypto.spec.SecretKeySpec
 import android.util.Base64
 
 data class CloudBackupRevision(val id: String, val updatedAt: Long)
+data class CloudStorageBackupRevision(val id: String, val updatedAt: Long, val sizeBytes: Long)
 
 /** Firebase owner-scoped vault. Client-side AES-GCM means Firestore receives ciphertext only. */
 class FirebaseCloudVault(private val context: Context) {
@@ -64,6 +70,7 @@ class FirebaseCloudVault(private val context: Context) {
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
+            registerStoredPushToken(app, user.uid)
             val encrypted = encrypt(plaintext, password)
             FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
                 .set(mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis()))
@@ -80,6 +87,7 @@ class FirebaseCloudVault(private val context: Context) {
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
+            registerStoredPushToken(app, user.uid)
             val doc = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key).get().await()
             val payload = doc.getString("payload") ?: return@runBlocking null
             decrypt(payload, password)
@@ -95,6 +103,7 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
+            registerStoredPushToken(app, user.uid)
             val collection = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault")
             val encrypted = encrypt(bundleJson, password)
             val now = System.currentTimeMillis()
@@ -142,6 +151,141 @@ class FirebaseCloudVault(private val context: Context) {
                 .collection("vault").document(revisionId).get().await()
             val payload = document.getString("payload") ?: return@runBlocking null
             decrypt(payload, password)
+        }
+    }
+
+
+    /** Uploads an encrypted recovery bundle to Firebase Storage (up to 1.4 MB plaintext). */
+    fun signInAndUploadStorageBundle(email: String, password: String, bundleJson: String): Result<String> = runCatching {
+        require(bundleJson.isNotBlank() && bundleJson.length <= 1_400_000) { "Storage backup must be 1-1,400,000 characters" }
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            registerStoredPushToken(app, user.uid)
+            val encrypted = encrypt(bundleJson, password)
+            val bytes = encrypted.toByteArray(Charsets.UTF_8)
+            require(bytes.size <= 2 * 1024 * 1024) { "Encrypted backup exceeds the 2 MB Storage limit" }
+            val now = System.currentTimeMillis()
+            val revisionId = "backup_${now}_${UUID.randomUUID().toString().take(8)}"
+            val storagePath = "users/${user.uid}/backups/${revisionId}.enc"
+            val storage = FirebaseStorage.getInstance(app)
+            val objectRef = storage.reference.child(storagePath)
+            var uploaded = false
+            try {
+                val metadata = StorageMetadata.Builder()
+                    .setContentType("application/octet-stream")
+                    .setCustomMetadata("format", "AES-256-GCM/PBKDF2-SHA256-v1")
+                    .setCustomMetadata("updatedAt", now.toString())
+                    .build()
+                objectRef.putBytes(bytes, metadata).await()
+                uploaded = true
+                val collection = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("storage_backups")
+                collection.document(revisionId).set(mapOf(
+                    "storagePath" to storagePath,
+                    "format" to "AES-256-GCM/PBKDF2-SHA256-v1",
+                    "updatedAt" to now,
+                    "sizeBytes" to bytes.size.toLong()
+                )).await()
+                val history = collection.orderBy("updatedAt", Query.Direction.DESCENDING).get().await()
+                history.documents.filter { it.id.startsWith("backup_") }.drop(10).forEach { old ->
+                    val oldPath = old.getString("storagePath")
+                    if (oldPath != null && oldPath.startsWith("users/${user.uid}/backups/")) {
+                        storage.reference.child(oldPath).delete().await()
+                    }
+                    old.reference.delete().await()
+                }
+                revisionId
+            } catch (error: Exception) {
+                if (uploaded) runCatching { objectRef.delete().await() }
+                throw error
+            } finally {
+                bytes.fill(0)
+            }
+        }
+    }
+
+    fun signInAndListStorageRevisions(email: String, password: String): Result<List<CloudStorageBackupRevision>> = runCatching {
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            registerStoredPushToken(app, user.uid)
+            FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("storage_backups")
+                .orderBy("updatedAt", Query.Direction.DESCENDING).limit(10).get().await().documents
+                .map { doc ->
+                    CloudStorageBackupRevision(doc.id, doc.getLong("updatedAt") ?: 0L, doc.getLong("sizeBytes") ?: 0L)
+                }
+        }
+    }
+
+    fun signInAndLoadStorageRevision(email: String, password: String, revisionId: String): Result<String?> = runCatching {
+        require(revisionId.matches(Regex("^backup_[0-9]{10,}_[a-f0-9]{8}$"))) { "Invalid Storage backup revision ID" }
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            registerStoredPushToken(app, user.uid)
+            val metadata = FirebaseFirestore.getInstance(app).collection("users").document(user.uid)
+                .collection("storage_backups").document(revisionId).get().await()
+            if (!metadata.exists()) return@runBlocking null
+            val storagePath = metadata.getString("storagePath") ?: error("Storage path is missing")
+            require(storagePath == "users/${user.uid}/backups/${revisionId}.enc")
+            val size = metadata.getLong("sizeBytes") ?: error("Storage backup size is missing")
+            require(size in 1..(2L * 1024 * 1024)) { "Storage backup size is invalid" }
+            val bytes = FirebaseStorage.getInstance(app).reference.child(storagePath)
+                .getBytes(2L * 1024 * 1024).await()
+            try {
+                require(bytes.size.toLong() == size) { "Downloaded backup size does not match metadata" }
+                decrypt(String(bytes, Charsets.UTF_8), password)
+            } finally {
+                bytes.fill(0)
+            }
+        }
+    }
+
+    /** Obtain a device FCM token and register it under the signed-in owner's private document. */
+    fun signInAndRegisterPushToken(email: String, password: String, deviceName: String): Result<Unit> = runCatching {
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        require(deviceName.isNotBlank() && deviceName.length <= 80)
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val token = FirebaseMessaging.getInstance(app).token.await()
+            require(token.length in 20..4096) { "Firebase returned an invalid device token" }
+            EncryptedFeatureStore(context).put("firebase_fcm_token", token).getOrThrow()
+            registerDeviceToken(app, user.uid, token, deviceName)
+        }
+    }
+
+    private fun registerStoredPushToken(app: FirebaseApp, userId: String) {
+        val token = EncryptedFeatureStore(context).get("firebase_fcm_token").getOrThrow()
+        if (token.isNotBlank()) registerDeviceToken(app, userId, token, android.os.Build.MODEL.take(80))
+    }
+
+    private fun registerDeviceToken(app: FirebaseApp, userId: String, token: String, deviceName: String) {
+        val deviceId = MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        runBlocking {
+            FirebaseFirestore.getInstance(app).collection("users").document(userId).collection("devices")
+                .document(deviceId).set(mapOf(
+                    "fcmToken" to token,
+                    "updatedAt" to System.currentTimeMillis(),
+                    "platform" to "android",
+                    "deviceName" to deviceName.take(80)
+                )).await()
         }
     }
 
