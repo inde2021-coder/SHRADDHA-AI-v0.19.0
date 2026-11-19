@@ -18,7 +18,8 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         if (token.isNotBlank() && token.length <= 4096) {
             val store = EncryptedFeatureStore(applicationContext)
-            if (store.get("firebase_fcm_consent").getOrNull() != "true") return
+            if (store.get("firebase_fcm_consent").getOrNull() != "true" ||
+                store.get("firebase_push_consent").getOrNull() != "true") return
             val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
             if (previous.isNotBlank() && previous != token) {
                 store.put("firebase_fcm_previous_token", previous)
@@ -28,7 +29,9 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        if (EncryptedFeatureStore(applicationContext).get("firebase_fcm_consent").getOrNull() != "true") return
+        val store = EncryptedFeatureStore(applicationContext)
+        if (store.get("firebase_fcm_consent").getOrNull() != "true" ||
+            store.get("firebase_push_consent").getOrNull() != "true") return
         val type = message.data["type"].orEmpty()
         val safeMessage = when (type) {
             "device_paired" -> "A device was paired with your Shraddha account."
