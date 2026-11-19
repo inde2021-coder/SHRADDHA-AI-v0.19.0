@@ -142,7 +142,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun buildFaceScreen(mode: String, id: String, name: String, threshold: Float) {
-        val root = baseLayout(if (mode == "enroll") "Face enrollment" else "Live face match", "Front camera • randomized blink and head-turn challenge • processing remains on this phone")
+        val root = baseLayout(
+            if (mode == "enroll") "Face enrollment • $name" else "Live face match • $name",
+            "Selected consented profile • front camera • randomized blink/head-turn challenge • on-device processing"
+        )
         previewView = PreviewView(this).also { root.addView(it, LinearLayout.LayoutParams(-1, 0, 1f)) }
         activeMode = mode
         activePersonId = id
@@ -396,7 +399,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun buildSpeakerScreen(mode: String, id: String, name: String, threshold: Float) {
-        val root = baseLayout(if (mode == "enroll") "Speaker enrollment" else "Live speaker match", "On-device speech challenge • raw audio is processed in memory and discarded")
+        val root = baseLayout(
+            if (mode == "enroll") "Speaker enrollment • $name" else "Live speaker match • $name",
+            "Selected consented profile • on-device speech challenge • raw audio is processed in memory and discarded"
+        )
         val phrase = TextView(this).apply { text = "Read this phrase clearly:  $randomPhrase"; textSize = 18f; setTextColor(Color.WHITE); setPadding(0, 20, 0, 20) }
         root.addView(phrase, 1)
         message.text = "A random phrase is generated for this session. On-device speech recognition must verify it before the biometric sample is recorded."
