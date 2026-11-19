@@ -1487,13 +1487,14 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 44) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            val visualShareAllowed = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("camera", false)
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && visualShareAllowed) {
                 val prefs = getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
                 val facing = prefs.getString("pending_camera_facing", "back") ?: "back"
                 val target = prefs.getString("pending_camera_target", "").orEmpty()
                 ContextCompat.startForegroundService(this, Intent(this, RemoteCameraService::class.java).putExtra(RemoteCameraService.EXTRA_FACING, facing).putExtra(RemoteCameraService.EXTRA_TARGET, target))
                 status.text = "Camera permission मिली; $facing camera share शुरू किया गया।"
-            } else status.text = "Camera permission नहीं मिली; Remote Camera शुरू नहीं हुआ।"
+            } else status.text = if (!visualShareAllowed) "Camera sharing अनुमति बंद है; कैमरा शुरू नहीं किया गया।" else "Camera permission नहीं मिली; Remote Camera शुरू नहीं हुआ।"
         }
     }
 
@@ -1501,7 +1502,8 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == screenShareRequest) {
-            if (resultCode == Activity.RESULT_OK && data != null) {
+            if (resultCode == Activity.RESULT_OK && data != null &&
+                getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) {
                 val target = pendingShareTarget.orEmpty()
                 if (target.isBlank() || peerOnline[target] != true) {
                     status.text = "Selected device is no longer online. Screen sharing was not started."
@@ -1515,7 +1517,7 @@ class MainActivity : AppCompatActivity() {
                 if (Build.VERSION.SDK_INT >= 26) ContextCompat.startForegroundService(this, service) else startService(service)
                 status.text = "Screen sharing started for the selected device only. Android shows an active-sharing notification."
                 pendingShareTarget = null
-            } else status.text = "Screen sharing cancelled."
+            } else status.text = if (!getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) "Screen sharing permission is off; capture was not started." else "Screen sharing cancelled."
             pendingShareTarget = null
             return
         }
