@@ -59,13 +59,18 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     }
 
     @Synchronized
-    fun withdraw(personId: String): Result<Unit> = runCatching {
+    fun withdraw(personId: String, updatedPersonDirectory: String? = null): Result<Unit> = runCatching {
         require(personId.matches(Regex("[A-Za-z0-9_-]{8,64}")))
         val old = readIndex()
         val updated = JSONArray()
         for (i in 0 until old.length()) if (old.optString(i) != personId) updated.put(old.optString(i))
+        val replacements = mutableMapOf(INDEX to updated.toString())
+        updatedPersonDirectory?.let { directory ->
+            require(directory.length <= 100_000) { "Person directory is too large" }
+            replacements["person_directory"] = directory
+        }
         check(store.putAllAndRemove(
-            mapOf(INDEX to updated.toString()),
+            replacements,
             setOf(thresholdKey("face"), thresholdKey("speaker"), PREFIX + personId)
         ).isSuccess) { "Atomic biometric withdrawal failed; stored data was not partially updated" }
     }
