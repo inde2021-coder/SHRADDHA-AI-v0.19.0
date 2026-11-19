@@ -106,11 +106,19 @@ object DeviceLinkManager {
     }
 
     fun publishSocialPost(baseUrl: String, gatewayToken: String, platform: String, exactText: String, done: (Result<String>) -> Unit) {
-        if (platform !in setOf("telegram", "mastodon") || exactText.isBlank() || exactText.length > 5000) {
-            done(Result.failure(IllegalArgumentException("Unsupported platform or post length")))
+        val normalizedPlatform = platform.lowercase()
+        val codePointLength = exactText.codePointCount(0, exactText.length)
+        val limit = when (normalizedPlatform) {
+            "bluesky" -> 300
+            "linkedin" -> 3000
+            "telegram", "mastodon" -> 5000
+            else -> 0
+        }
+        if (limit == 0 || exactText.isBlank() || codePointLength > limit) {
+            done(Result.failure(IllegalArgumentException("Unsupported platform or post length (limit: ${if (limit == 0) 0 else limit} characters)")))
             return
         }
-        val body = JSONObject().put("platform", platform).put("text", exactText)
+        val body = JSONObject().put("platform", normalizedPlatform).put("text", exactText)
             .put("preview", exactText).put("confirmed", true)
         postAuthenticated(baseUrl, "/api/social/publish", gatewayToken, body, done)
     }
