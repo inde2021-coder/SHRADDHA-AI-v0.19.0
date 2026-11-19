@@ -7,6 +7,7 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAcce
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.learning.AppProfileStore
 import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
+import `in`.shraddha.ai.operator.learning.WorkflowCheckpointStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -277,11 +278,26 @@ object ActionExecutor {
                 val array = JSONArray()
                 profiles.forEach { profile ->
                     val workflows = JSONArray()
-                    profile.workflows.keys.forEach { workflows.put(it) }
+                    val resumable = JSONArray()
+                    val checkpointStore = WorkflowCheckpointStore(context.applicationContext)
+                    profile.workflows.forEach { (workflowName, steps) ->
+                        workflows.put(workflowName)
+                        checkpointStore.get(profile.packageName, workflowName)?.let { checkpoint ->
+                            val valid = checkpoint.workflowHash == checkpointStore.fingerprint(steps) &&
+                                checkpoint.totalSteps == steps.size &&
+                                checkpoint.state in setOf("READY", "PAUSED", "WAITING_CONFIRMATION")
+                            if (valid) resumable.put(JSONObject()
+                                .put("workflow_name", workflowName)
+                                .put("state", checkpoint.state)
+                                .put("next_step", checkpoint.nextStep + 1)
+                                .put("total_steps", checkpoint.totalSteps))
+                        }
+                    }
                     array.put(JSONObject()
                         .put("app_name", profile.displayName)
                         .put("package_name", profile.packageName)
-                        .put("workflows", workflows))
+                        .put("workflows", workflows)
+                        .put("resumable_checkpoints", resumable))
                 }
                 result.put("status", "success")
                 result.put("profiles", array)
