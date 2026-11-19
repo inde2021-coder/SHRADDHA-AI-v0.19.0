@@ -10,6 +10,7 @@ import `in`.shraddha.ai.operator.learning.AppTrainingActivity
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
 import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.NaturalLanguageWorkflowRouter
+import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -81,7 +82,7 @@ class OperatorActivity : Activity() {
         val route = result.route
         if (route == null) { log.text = result.message; return }
         val steps = route.profile.workflows[route.workflowName].orEmpty()
-        val destructive = steps.any { it.destructive }
+        val destructive = steps.any { it.destructive || OperatorSafetyPolicy.assess(it.action, it.targetLabel, it.inputTemplate).risk == OperatorSafetyPolicy.Risk.CONFIRM }
         val variables = EditText(this).apply { hint = "अन्य मान: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
@@ -108,7 +109,7 @@ class OperatorActivity : Activity() {
             android.app.AlertDialog.Builder(this).setTitle("Workflow: $name").setMessage("ऐप: ${profile.displayName}\nचरण: ${steps.size}\nहर चरण पर स्क्रीन दोबारा पढ़ी जाएगी। संवेदनशील/पासवर्ड फ़ील्ड ब्लॉक रहेंगे।")
                 .setView(container).setNegativeButton("रद्द") { _, _ -> }.setPositiveButton("चलाएँ") { _, _ ->
                     val map = vars.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                    val needsConfirm = steps.any { it.destructive }
+                    val needsConfirm = steps.any { it.destructive || OperatorSafetyPolicy.assess(it.action, it.targetLabel, it.inputTemplate).risk == OperatorSafetyPolicy.Risk.CONFIRM }
                     if (needsConfirm) android.app.AlertDialog.Builder(this).setTitle("संवेदनशील कार्रवाई").setMessage("इस Workflow में संदेश/भुगतान/हटाने जैसी कार्रवाई हो सकती है। क्या आप अनुमति देते हैं?").setNegativeButton("नहीं", null).setPositiveButton("हाँ, चलाएँ") { _, _ -> runLearned(profile, name, map, true) }.show()
                     else runLearned(profile, name, map, false)
                 }.show()
