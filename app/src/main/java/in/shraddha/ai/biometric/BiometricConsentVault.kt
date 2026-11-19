@@ -80,23 +80,31 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         require(kind == "face" || kind == "speaker")
         require(calibratedThreshold in -1f..1f)
         val normalized = BiometricMath.unitNormalize(probe)
-        var best: Match? = null
-        val ids = readIndex()
-        for (i in 0 until ids.length()) {
-            val personId = ids.optString(i)
-            if (onlyPersonId != null && personId != onlyPersonId) continue
-            val person = readPerson(personId) ?: continue
-            if (!person.optBoolean("consent")) continue
-            val templates = person.optJSONArray(kind) ?: continue
-            for (j in 0 until templates.length()) {
-                val template = templates.optJSONObject(j) ?: continue
-                if (template.optInt("dimension") != normalized.size) continue
-                val vector = decode(template.optString("vector"), normalized.size)
-                val score = BiometricMath.cosineSimilarity(normalized, vector)
-                if (best == null || score > best.similarity) best = Match(person.optString("id"), person.optString("name"), kind, score)
+        try {
+            var best: Match? = null
+            val ids = readIndex()
+            for (i in 0 until ids.length()) {
+                val personId = ids.optString(i)
+                if (onlyPersonId != null && personId != onlyPersonId) continue
+                val person = readPerson(personId) ?: continue
+                if (!person.optBoolean("consent")) continue
+                val templates = person.optJSONArray(kind) ?: continue
+                for (j in 0 until templates.length()) {
+                    val template = templates.optJSONObject(j) ?: continue
+                    if (template.optInt("dimension") != normalized.size) continue
+                    val vector = decode(template.optString("vector"), normalized.size)
+                    val score = try {
+                        BiometricMath.cosineSimilarity(normalized, vector)
+                    } finally {
+                        vector.fill(0f)
+                    }
+                    if (best == null || score > best.similarity) best = Match(person.optString("id"), person.optString("name"), kind, score)
+                }
             }
+            return best?.takeIf { BiometricMath.isMatch(it.similarity, calibratedThreshold) }
+        } finally {
+            normalized.fill(0f)
         }
-        return best?.takeIf { BiometricMath.isMatch(it.similarity, calibratedThreshold) }
     }
 
     private fun readIndex(): JSONArray {
