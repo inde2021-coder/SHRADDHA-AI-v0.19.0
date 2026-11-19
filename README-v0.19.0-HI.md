@@ -46,7 +46,7 @@ Voice operator tools: screen पढ़ना, unique label पर tap, safe fiel
 
 - Enroll a face or speaker only after the person gives explicit consent. Templates are encrypted locally with Android Keystore-backed AES-GCM; raw camera frames and PCM samples are discarded after inference.
 - **Match** checks one selected profile. **Identify** searches all separately consented profiles and returns the best passing result or Unknown.
-- Face capture uses SFace, five-point alignment, quality checks and a randomized blink/head-turn challenge. The still must be captured within 8 seconds after the challenge passes.
+- Face capture uses SFace, five-point alignment, quality checks and a randomized blink/head-turn challenge. CameraX provider resolution runs off the UI thread and binding occurs on the UI thread. The still must be captured within 8 seconds after the challenge passes.
 - Speaker capture uses ECAPA embeddings and Android on-device phrase recognition followed by a separate 5-second voice sample. Because phrase verification and the sample are two separate microphone steps, a handoff between them remains possible.
 - Threshold calibration needs at least two separately consented people with multiple samples. Adding a sample or withdrawing a person invalidates the relevant threshold.
 - Blink/head-turn and spoken-phrase challenges are heuristics, not certified anti-spoofing. Do not use biometric matching as device unlock, payment approval, access control or other high-stakes authentication. See `docs/BIOMETRIC-DEVICE-VALIDATION.md` before real-person testing.
