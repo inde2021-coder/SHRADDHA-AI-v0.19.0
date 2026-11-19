@@ -1115,13 +1115,13 @@ class MainActivity : AppCompatActivity() {
                 `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("workflow_preview","created",name)
             })
         }
-        section(root, "AUTHORIZED SOCIAL PUBLISHING", "Telegram channel/chat या Mastodon पर post भेजें। Server credentials केवल backend environment में रहेंगी; publish से पहले exact preview की पुष्टि जरूरी है।") {
+        section(root, "AUTHORIZED SOCIAL PUBLISHING", "Telegram, Mastodon, Bluesky या LinkedIn पर user-confirmed post भेजें। Credentials केवल backend environment में रहेंगी; publish से पहले exact preview की पुष्टि जरूरी है।") {
             val endpoint = edit("Secure backend URL (HTTPS)", "https://your-domain.example")
             val tokenField = edit("Gateway token", "Server gateway token").apply {
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
             val platform = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("telegram", "mastodon"))
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("telegram", "mastodon", "bluesky", "linkedin"))
             }
             val post = edit("Post text", "यहाँ अपना संदेश लिखें").apply {
                 minLines = 4; maxLines = 8; isSingleLine = false
@@ -1159,7 +1159,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             addView(TextView(this@MainActivity).apply {
-                text = "Server setup: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, or MASTODON_BASE_URL + MASTODON_ACCESS_TOKEN. Mastodon default visibility is unlisted. Instagram/Facebook/YouTube publishing is not enabled by this connector."
+                text = "Server setup: Telegram = TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID; Mastodon = MASTODON_BASE_URL + MASTODON_ACCESS_TOKEN; Bluesky = BLUESKY_IDENTIFIER + BLUESKY_APP_PASSWORD (app password only); LinkedIn = LINKEDIN_ACCESS_TOKEN + LINKEDIN_AUTHOR_URN + LINKEDIN_VERSION. Mastodon defaults to unlisted. LinkedIn requires approved API access and the matching member/page posting permission. Media upload and Instagram/Facebook/YouTube are not enabled here."
                 textSize = 11f; setTextColor(0xFF9EABC2.toInt()); setPadding(0, dp(8), 0, 0)
             })
         }
