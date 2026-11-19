@@ -82,6 +82,6 @@ Start the companion with your local model:
 python shraddha_pc_companion.py --offline-model "C:\\Models\\assistant-instruct-q4.gguf"
 ```
 
-The first startup loads the model into memory and may take time. CPU speed and memory depend on the model size and quantization. The Android Devices workspace can send a prompt to the paired PC; the PC console asks for local confirmation before inference. The answer returns over the authenticated, paired-device relay. This is PC-local inference, not Android on-device inference. If no model path is configured, the offline action is unavailable.
+The first startup loads the model into memory and may take time. CPU speed and memory depend on the model size and quantization. The Android Devices workspace can send a prompt to the paired PC; the PC console asks for local confirmation before inference. The answer returns over the authenticated, paired-device relay. This is PC-local inference, not Android on-device inference. The model generation itself makes no cloud AI request, but sending a prompt from Android to a paired PC still needs the authenticated device relay network; it is not a fully disconnected phone-to-PC workflow. If no model path is configured, the offline action is unavailable.
 
 The companion binds no inference HTTP port and exposes no unauthenticated local model server.
