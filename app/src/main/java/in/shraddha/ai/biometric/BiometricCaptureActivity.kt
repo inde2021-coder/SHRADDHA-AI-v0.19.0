@@ -98,11 +98,14 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val modelDirectory = File(filesDir, "biometric-models")
         val model = File(modelDirectory, if (kind == "face") "sface.onnx" else "ecapa-any-length.onnx")
         if (!model.isFile) { finishWith("Required local biometric model is not imported."); return }
-        try {
-            if (kind == "face") engine.loadFaceModel(model.absolutePath) else engine.loadSpeakerModel(model.absolutePath)
-        } catch (error: Exception) { finishWith("Biometric model could not load: ${error.message}"); return }
-        if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold)
-        else buildFaceScreen(mode, id, name, threshold)
+        message = TextView(this).apply { text = "Local biometric model loading…"; setTextColor(android.graphics.Color.WHITE) }
+        setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
+        Thread({
+            try {
+                if (kind == "face") engine.loadFaceModel(model.absolutePath) else engine.loadSpeakerModel(model.absolutePath)
+                runOnUiThread { if (!isFinishing) { if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold) else buildFaceScreen(mode, id, name, threshold) } }
+            } catch (error: Exception) { finishWith("Biometric model could not load: ${error.message}") }
+        }, "BiometricModelLoad").start()
     }
 
     private fun baseLayout(title: String, detail: String): LinearLayout {
@@ -255,7 +258,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
         require(kotlin.math.abs(face.headEulerAngleY) <= 22f && kotlin.math.abs(face.headEulerAngleX) <= 22f) { "सीधे camera की ओर देखें" }
         require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
-        val landmarks = listOf(FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_LEFT, FaceLandmark.MOUTH_RIGHT)
+        val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
             .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
         val source = FloatArray(10)
         landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
