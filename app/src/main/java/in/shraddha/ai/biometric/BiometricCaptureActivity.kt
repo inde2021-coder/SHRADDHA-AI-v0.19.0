@@ -91,7 +91,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var activePersonName = ""
     private var activeThreshold = Float.NaN
     private var faceTrackingFailed = false
-    private val engine by lazy { LocalBiometricModelEngine() }
+    private val engineLazy = lazy { LocalBiometricModelEngine() }
+    private val engine by engineLazy
     private val vault by lazy { BiometricConsentVault(EncryptedFeatureStore(this)) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -528,11 +529,15 @@ class BiometricCaptureActivity : AppCompatActivity() {
             runCatching { if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop() }
         }
         runCatching { speechRecognizer?.destroy() }
-        runCatching { detector?.close() }
+        speechRecognizer = null
+        imageAnalysis?.clearAnalyzer()
         runCatching { cameraProvider?.unbindAll() }
         cameraProvider = null
-        Thread { runCatching { engine.close() } }.start()
+        runCatching { detector?.close() }
+        detector = null
+        cacheDir.listFiles()?.filter { it.name.startsWith("biometric-frame-") }?.forEach { it.delete() }
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
+        if (engineLazy.isInitialized()) Thread { runCatching { engine.close() } }.start()
         super.onDestroy()
     }
 }
