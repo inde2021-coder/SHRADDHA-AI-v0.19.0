@@ -139,6 +139,12 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     }
 
     @Synchronized
+    fun clearThreshold(kind: String): Boolean {
+        require(kind == "face" || kind == "speaker")
+        return store.remove(thresholdKey(kind))
+    }
+
+    @Synchronized
     fun loadThreshold(kind: String): Result<Float?> = runCatching {
         require(kind == "face" || kind == "speaker")
         val raw = store.get(thresholdKey(kind)).getOrThrow()
