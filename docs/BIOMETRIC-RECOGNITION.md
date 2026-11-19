@@ -47,3 +47,7 @@ Threshold calibration is only a small-sample separation check, not a statistical
 - Confirm temporary JPEG deletion, no raw PCM persistence, encrypted template deletion on consent withdrawal and cloud-backup retention behavior.
 
 Physical Android phones and spoof artefacts are not available to GitHub CI. Passing automated tests must not be described as completed physical-device or security certification. For certified PAD, integrate a licensed SDK/product with an independently published ISO/IEC 30107-3 test report for the exact product/version and validate it on the supported phone fleet. The current repository does not contain such a licensed SDK or certification evidence. SFace's model directory declares Apache-2.0, but the exact pretrained checkpoint's training-data provenance and downstream redistribution questions remain subject to rights-holder clarification; see `BIOMETRIC-MODELS-LICENSES.md`.
+
+## Physical-device validation
+
+The real-phone and consenting-participant validation protocol is in `docs/BIOMETRIC-DEVICE-VALIDATION.md`. It covers the Android/device matrix, genuine and impostor trials, photo/video/audio replay attacks, FAR/FRR/EER and release gates. It is a protocol only; no physical-device accuracy or spoof-resistance results are claimed.
