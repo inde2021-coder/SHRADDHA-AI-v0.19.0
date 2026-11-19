@@ -1438,6 +1438,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestScreenShare() {
+        val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
+        if (target.isBlank() || peerOnline[target] != true) {
+            status.text = "पहले Device Control में एक paired और online device चुनें। Screen किसी भी device पर स्वतः broadcast नहीं होगी।"
+            return
+        }
+        pendingShareTarget = target
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
         @Suppress("DEPRECATION")
         startActivityForResult(manager.createScreenCaptureIntent(), screenShareRequest)
@@ -1461,10 +1467,21 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == screenShareRequest) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                val service = Intent(this, ScreenShareService::class.java).putExtra(ScreenShareService.EXTRA_RESULT_CODE, resultCode).putExtra(ScreenShareService.EXTRA_DATA, data)
+                val target = pendingShareTarget.orEmpty()
+                if (target.isBlank() || peerOnline[target] != true) {
+                    status.text = "Selected device is no longer online. Screen sharing was not started."
+                    pendingShareTarget = null
+                    return
+                }
+                val service = Intent(this, ScreenShareService::class.java)
+                    .putExtra(ScreenShareService.EXTRA_RESULT_CODE, resultCode)
+                    .putExtra(ScreenShareService.EXTRA_DATA, data)
+                    .putExtra(ScreenShareService.EXTRA_TARGET_DEVICE_ID, target)
                 if (Build.VERSION.SDK_INT >= 26) ContextCompat.startForegroundService(this, service) else startService(service)
-                status.text = "Screen sharing started. Android will show its active-sharing notification."
+                status.text = "Screen sharing started for the selected device only. Android shows an active-sharing notification."
+                pendingShareTarget = null
             } else status.text = "Screen sharing cancelled."
+            pendingShareTarget = null
             return
         }
         if (requestCode == backupFileRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
