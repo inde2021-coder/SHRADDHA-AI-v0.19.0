@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { canShareVisualFrame } from './relay-policy.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -319,9 +320,7 @@ wss.on('connection', (ws, ctx) => {
       if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
       const frameType = clientFrame[0];
       // A paired socket is not implicit permission to watch another device.
-      // The sender must explicitly enable the matching screen/camera share toggle.
-      const shareCategory = frameType === 1 ? 'screen' : 'camera';
-      if (device.sharePermissions?.[shareCategory] !== true) return;
+      if (!canShareVisualFrame(device.sharePermissions, frameType)) return;
       const targetLength = clientFrame[1];
       if (clientFrame.length < 2 + targetLength + 1) return;
       const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
