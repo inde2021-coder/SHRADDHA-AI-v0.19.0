@@ -21,12 +21,17 @@ The default provider is attempted first, followed by the comma-separated order a
 
 If all configured providers fail, the gateway returns an error describing provider names and bounded error messages; it never reports a fabricated answer.
 
-## AI task plan safety\n\nThe task planner output is normalized server-side. Device controls, app launches, text entry, camera/screen viewing, and data sharing are always marked as requiring user approval even if a model incorrectly returns `requiresApproval: false`. Unknown tools, malformed steps, oversized fields, and steps beyond the first eight are discarded.\n\n## Tests
+## AI task plan safety
+
+The task planner output is normalized server-side. Device controls, app launches, text entry, camera/screen viewing, and data sharing are always marked as requiring user approval even if a model incorrectly returns `requiresApproval: false`. Unknown tools, malformed steps, oversized fields, and steps beyond the first eight are discarded.
+
+## Tests
 
 Run:
 
 ```sh
-node --test backend/provider-routing.test.js\nnode --test backend/plan-safety.test.js
+node --test backend/provider-routing.test.js
+node --test backend/plan-safety.test.js
 node --check backend/server.js
 ```
 
