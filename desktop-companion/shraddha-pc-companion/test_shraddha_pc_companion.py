@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
@@ -33,6 +33,20 @@ class PcCompanionPolicyTests(unittest.TestCase):
         minimized = SimpleNamespace(title="Notepad", isMinimized=True, left=20, top=30, width=800, height=600)
         self.assertIsNone(safe_active_window_region(minimized))
         self.assertIsNone(safe_active_window_region(None))
+
+    def test_click_text_requires_bounded_exact_label(self):
+        self.assertTrue(validate_action({"kind": "click_text", "label": "Save"}))
+        self.assertFalse(validate_action({"kind": "click_text", "label": " Save"}))
+        self.assertFalse(validate_action({"kind": "click_text", "label": ""}))
+        self.assertFalse(validate_action({"kind": "click_text", "label": "x" * 121}))
+
+    def test_text_target_requires_one_visible_allowed_exact_match(self):
+        button = {"name": "Save", "control_type": "Button", "visible": True}
+        self.assertEqual(resolve_unique_text_target([button], "Save"), button)
+        self.assertIsNone(resolve_unique_text_target([button, button], "Save"))
+        self.assertIsNone(resolve_unique_text_target([{**button, "visible": False}], "Save"))
+        self.assertIsNone(resolve_unique_text_target([{**button, "control_type": "Text"}], "Save"))
+        self.assertIsNone(resolve_unique_text_target([button], "Save now"))
 
     def test_invalid_coordinates_and_unknown_actions_are_rejected(self):
         self.assertFalse(validate_action({"kind": "tap", "x": 5, "y": 0.5}))
