@@ -49,10 +49,9 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
             templates.put(JSONObject().put("dimension", normalized.size).put("vector", encoded)
                 .put("createdAt", consentAt).put("consentAt", consentAt).put("consentVersion", CONSENT_VERSION))
             person.put(kind, templates)
-            check(store.put(key, person.toString()).isSuccess) { "Encrypted biometric save failed" }
-            if ((0 until ids.length()).none { ids.optString(it) == personId }) {
-                ids.put(personId)
-                check(store.put(INDEX, ids.toString()).isSuccess) { "Biometric index save failed" }
+            if ((0 until ids.length()).none { ids.optString(it) == personId }) ids.put(personId)
+            check(store.putAll(mapOf(key to person.toString(), INDEX to ids.toString())).isSuccess) {
+                "Atomic encrypted biometric profile/index save failed"
             }
         } finally {
             normalized.fill(0f)
