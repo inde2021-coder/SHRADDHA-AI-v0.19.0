@@ -23,6 +23,7 @@ class VoiceForegroundService : Service() {
         const val ACTION_STOP = "com.Lia.assistant.action.STOP_VOICE"
         private const val CHANNEL_ID = "lia_voice_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val EXTRA_EXPECTED_SESSION_EPOCH = "expected_session_epoch"
 
         fun start(context: Context) {
             val intent = Intent(context, VoiceForegroundService::class.java).apply { action = ACTION_START }
@@ -30,8 +31,11 @@ class VoiceForegroundService : Service() {
             else context.startService(intent)
         }
 
-        fun stop(context: Context) {
-            val intent = Intent(context, VoiceForegroundService::class.java).apply { action = ACTION_STOP }
+        fun stop(context: Context, expectedSessionEpoch: Long? = null) {
+            val intent = Intent(context, VoiceForegroundService::class.java).apply {
+                action = ACTION_STOP
+                expectedSessionEpoch?.let { putExtra(EXTRA_EXPECTED_SESSION_EPOCH, it) }
+            }
             context.startService(intent)
         }
     }
@@ -41,7 +45,12 @@ class VoiceForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ACTION_STOP -> {
-                VoiceSessionManager.stop()
+                val expectedEpoch = intent.getLongExtra(EXTRA_EXPECTED_SESSION_EPOCH, -1L)
+                if (expectedEpoch >= 0L && !VoiceSessionManager.isCurrentSession(expectedEpoch)) {
+                    // An old connection failure must not stop a newer user-started session.
+                    return START_NOT_STICKY
+                }
+                if (VoiceSessionManager.isActiveNow()) VoiceSessionManager.stop()
                 OverlayEdgeGlowController.stop(this)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
                 else {
@@ -107,7 +116,7 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        VoiceSessionManager.stop()
+        if (VoiceSessionManager.isActiveNow()) VoiceSessionManager.stop()
         OverlayEdgeGlowController.stop(this)
         super.onDestroy()
     }
