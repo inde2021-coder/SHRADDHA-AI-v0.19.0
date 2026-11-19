@@ -1747,10 +1747,8 @@ class MainActivity : AppCompatActivity() {
             refreshProfileList = { refreshProfiles() }
             addView(TextView(this@MainActivity).apply { text = "CONSENTED PERSON"; setTextColor(0xFFB9C8E4.toInt()) })
             addView(profileSpinner)
-            val faceThreshold = edit("Face cosine threshold (calibrated 0–1)", "")
-            faceThreshold.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-            val speakerThreshold = edit("Speaker cosine threshold (calibrated 0–1)", "")
-            speakerThreshold.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            val faceThreshold = edit("Face cosine threshold (auto-calibrated)", "").apply { keyListener = null; isFocusable = false; isFocusableInTouchMode = false }
+            val speakerThreshold = edit("Speaker cosine threshold (auto-calibrated)", "").apply { keyListener = null; isFocusable = false; isFocusableInTouchMode = false }
             addView(faceThreshold); addView(speakerThreshold)
             addView(actionButton("CALIBRATE FACE THRESHOLD", "कम-से-कम 2 consented लोगों के 2-2 face samples से genuine/impostor score separation जाँचें") {
                 biometricVault.calibrateThreshold("face").onSuccess { result -> faceThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold)); status.text = "Face threshold calibrated: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs) }
