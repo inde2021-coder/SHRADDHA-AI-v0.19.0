@@ -51,7 +51,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "read_screen",
-                description = "Inspects and returns visible elements, labels, and text on the current screen."
+                description = "Inspects visible UI elements and labels. If the user explicitly enabled On-device OCR Screen Reading, it may also run local Hindi/English OCR when Accessibility exposes too little text. Secure screens remain unavailable."
             )
         )
 
