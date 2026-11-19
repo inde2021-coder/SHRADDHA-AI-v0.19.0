@@ -8,7 +8,7 @@
 - Face flow uses CameraX front-camera preview and ML Kit face tracking. A randomized active challenge asks for a blink and head turns to one side and then the opposite side. Only after all steps pass can the user capture one still frame.
 - Face capture rejects multiple/no faces, small faces, excessive head pose, closed eyes, poor brightness and low sharpness. Five landmarks align the face to 112×112 before SFace embedding.
 - Speaker flow uses Android on-device speech recognition to verify a random Hindi or English phrase (matching the selected phrase locale). If on-device recognition is unavailable, it fails closed and does not use cloud speech recognition. It then records 5 seconds of mono 16 kHz PCM and checks silence/activity and clipping before ECAPA inference.
-- Enrollment stores only normalized embeddings in the Android Keystore AES-GCM encrypted feature store. Temporary face image files are deleted after processing; raw speaker PCM remains in memory and is discarded.
+- Enrollment stores only normalized embeddings in the Android Keystore AES-GCM encrypted feature store. Temporary face image files are deleted after processing; raw speaker PCM and normalized audio buffers are zeroed after inference or when capture is cancelled.
 - Enrollment is attached to the selected consented person. Live matching is scoped to the selected consented person only and returns a match for that profile, or Unknown if that person's template does not pass the calibrated threshold. The consent switch is reset after each capture/match launch so it must be confirmed again for the next session.
 - Threshold calibration requires at least two consented people with at least two templates each. It computes genuine within-person and impostor cross-person cosine scores. If the distributions overlap or lack a minimum 0.02 margin, calibration fails closed.
 - Consent withdrawal deletes the selected profile and its local face/speaker templates. A previously created encrypted cloud backup may still contain an older copy and must be separately replaced/deleted.
@@ -35,15 +35,15 @@ Threshold calibration is only a small-sample separation check, not a statistical
 
 ## Automated checks
 
-`BiometricMathTest` verifies embedding normalization, cosine scores and fail-closed threshold separation. `BiometricLivenessGateTest` verifies that a static face and multi-face frames cannot advance the randomized blink/turn sequence. These are unit tests only; they do not establish real camera accuracy or spoof resistance.
+`BiometricMathTest`, `FaceAlignmentMathTest` and `BiometricLivenessGateTest` cover embedding math, five-point similarity alignment, challenge order, timeout and invalid-frame resets. `BiometricModelSmokeTest` runs both bundled ONNX models on an Android emulator with synthetic inputs to validate model loading, tensor contracts and normalized outputs. These are automated smoke/unit tests only; they do not establish real camera accuracy or spoof resistance.
 
 ## Physical-device test checklist
 
-- Install a debug APK on each target Android version/chipset and import the exact licensed model weights.
+- Install a debug APK on each target Android version/chipset; the two pinned models are bundled and installed automatically.
 - Verify front-camera permission denial, camera unavailable, app backgrounding, rotation and low-light failure handling.
 - Test printed photo, still image on another screen, prerecorded video, replayed audio, synthesized voice and live deepfake attempts. Confirm all results remain non-authoritative.
 - Run consenting same-person and different-person trials, calibrate per-device thresholds and measure FAR/FRR.
 - Test on-device ASR availability and verify network traffic is not used for biometric capture or speech challenge.
 - Confirm temporary JPEG deletion, no raw PCM persistence, encrypted template deletion on consent withdrawal and cloud-backup retention behavior.
 
-Physical Android phones and spoof artefacts are not available to GitHub CI. Passing automated tests must not be described as completed physical-device or security certification. For certified PAD, integrate a licensed SDK/product with an independently published ISO/IEC 30107-3 test report for the exact product/version and validate it on the supported phone fleet. The current repository does not contain such a licensed SDK or certification evidence.
+Physical Android phones and spoof artefacts are not available to GitHub CI. Passing automated tests must not be described as completed physical-device or security certification. For certified PAD, integrate a licensed SDK/product with an independently published ISO/IEC 30107-3 test report for the exact product/version and validate it on the supported phone fleet. The current repository does not contain such a licensed SDK or certification evidence. SFace's model directory declares Apache-2.0, but the exact pretrained checkpoint's training-data provenance and downstream redistribution questions remain subject to rights-holder clarification; see `BIOMETRIC-MODELS-LICENSES.md`.
