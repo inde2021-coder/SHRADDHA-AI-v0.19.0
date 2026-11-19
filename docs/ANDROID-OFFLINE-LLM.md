@@ -42,4 +42,4 @@ Acceleration is device- and model-dependent. Selecting GPU or NPU does not guara
 - [LiteRT Android runtime and accelerators](https://developer.android.com/ai/custom)
 - [LiteRT hardware backends](https://developers.google.com/edge/litert)
 
-The Gradle dependency is `com.google.ai.edge.litertlm:litertlm-android:latest.release`.
+The Gradle dependency is pinned in `app/build.gradle.kts` to `com.google.ai.edge.litertlm:litertlm-android:0.19.1` for reproducible builds. Check the project's version catalog before upgrading it.

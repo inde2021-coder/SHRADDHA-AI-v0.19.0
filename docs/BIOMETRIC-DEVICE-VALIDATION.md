@@ -34,10 +34,12 @@ Test separately and record pass/fail for:
 - Replayed video with screen brightness/refresh variations
 - Mask, partial occlusion and face cut-out
 - Recorded voice replay of the challenge phrase
+- Handoff attack: one person speaks the phrase, then a different person provides the 5-second voice sample
 - Loudspeaker replay and altered-speed replay
 - Text-to-speech and voice-conversion/deepfake samples
 - Multiple faces entering/leaving the frame
 - Camera obstruction, lost frames, poor lighting and microphone interruption
+- Waiting more than 8 seconds after face liveness passes before tapping capture; the app must restart the challenge
 
 A successful challenge on any replay or synthetic sample is a security finding. The current blink/head-turn + phrase flow is heuristic and is not certified PAD; it must not be represented as replay-proof.
 

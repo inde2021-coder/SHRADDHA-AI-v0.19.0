@@ -67,7 +67,7 @@ test("Firebase Storage accepts only owner-scoped encrypted backup objects", asyn
   };
   const bytes = new Uint8Array([1, 2, 3, 4]);
   const uploaded = await assertSucceeds(uploadBytes(ref(alice, path), bytes, metadata));
-  assert.equal(uploaded.metadata.size, "4");
+  assert.equal(uploaded.metadata.size, 4);
   await assertSucceeds(getBytes(ref(alice, path), 16));
   await assertFails(getBytes(ref(bob, path), 16));
   await assertFails(uploadBytes(ref(alice, "users/bob/backups/backup_1770000000000_deadbeef.enc"), bytes, metadata));

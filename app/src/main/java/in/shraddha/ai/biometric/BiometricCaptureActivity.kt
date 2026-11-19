@@ -161,7 +161,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun buildFaceScreen(mode: String, id: String, name: String, threshold: Float) {
         val root = baseLayout(
             when (mode) { "enroll" -> "Face enrollment • $name"; "identify" -> "Identify consented person"; else -> "Live face match • $name" },
-            "Selected consented profile • front camera • randomized blink/head-turn challenge • on-device processing"
+            if (mode == "identify") "Search all separately consented profiles • current subject must consent • fresh capture within 8 seconds"
+            else "Selected consented profile • front camera • randomized blink/head-turn challenge • on-device processing"
         )
         previewView = PreviewView(this).also { root.addView(it, LinearLayout.LayoutParams(-1, 0, 1f)) }
         activeMode = mode
