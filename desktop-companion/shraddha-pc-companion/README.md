@@ -85,3 +85,11 @@ python shraddha_pc_companion.py --offline-model "C:\\Models\\assistant-instruct-
 The first startup loads the model into memory and may take time. CPU speed and memory depend on the model size and quantization. The Android Devices workspace can send a prompt to the paired PC; the PC console asks for local confirmation before inference. The answer returns over the authenticated, paired-device relay. This is PC-local inference, not Android on-device inference. The model generation itself makes no cloud AI request, but sending a prompt from Android to a paired PC still needs the authenticated device relay network; it is not a fully disconnected phone-to-PC workflow. If no model path is configured, the offline action is unavailable.
 
 The companion binds no inference HTTP port and exposes no unauthenticated local model server.
+
+
+## OCR privacy and approved-folder search
+
+- Active-window OCR requires `--allow-ocr` and a separate local PC confirmation for each request.
+- OCR output is redacted before it is returned to the paired device: credential-labelled lines, nearby value lines, and long numeric identifiers are hidden. This is a defensive filter, not a guarantee that every secret can be detected; avoid OCR on sensitive screens.
+- Optional file browsing uses only the folder explicitly selected with `--file-root`. Listing, reading, and text search each require local PC confirmation.
+- File search is restricted to text/code formats, skips hidden files and symlinks, and enforces depth, file-count, file-size, result-count, and total-read limits. It does not modify or delete files.
