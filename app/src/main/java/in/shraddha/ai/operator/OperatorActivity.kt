@@ -10,7 +10,6 @@ import `in`.shraddha.ai.operator.learning.AppTrainingActivity
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
 import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.NaturalLanguageWorkflowRouter
-import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -81,18 +80,14 @@ class OperatorActivity : Activity() {
         val result = NaturalLanguageWorkflowRouter.route(commandInput.text.toString(), profile)
         val route = result.route
         if (route == null) { log.text = result.message; return }
-        val steps = route.profile.workflows[route.workflowName].orEmpty()
-        val destructive = steps.any { it.destructive || OperatorSafetyPolicy.assess(it.action, it.targetLabel, it.inputTemplate).risk == OperatorSafetyPolicy.Risk.CONFIRM }
         val variables = EditText(this).apply { hint = "अन्य मान: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
-            .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा।")
+            .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा। जोखिम वाले चरण पर अलग से अनुमति माँगी जाएगी।")
             .setView(panel).setNegativeButton("रद्द", null)
-            .setPositiveButton(if (destructive) "पुष्टि करके चलाएँ" else "चलाएँ") { _, _ ->
+            .setPositiveButton("चलाएँ") { _, _ ->
                 val extra = variables.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                val allValues = route.values + extra
-                if (destructive) android.app.AlertDialog.Builder(this).setTitle("अंतिम अनुमति").setMessage("इस Workflow में बाहरी/संवेदनशील प्रभाव हो सकता है। क्या आगे बढ़ें?").setNegativeButton("नहीं", null).setPositiveButton("हाँ") { _, _ -> runLearned(route.profile, route.workflowName, allValues, true) }.show()
-                else runLearned(route.profile, route.workflowName, allValues, false)
+                runLearned(route.profile, route.workflowName, route.values + extra, false)
             }.show()
     }
 
@@ -109,18 +104,26 @@ class OperatorActivity : Activity() {
             android.app.AlertDialog.Builder(this).setTitle("Workflow: $name").setMessage("ऐप: ${profile.displayName}\nचरण: ${steps.size}\nहर चरण पर स्क्रीन दोबारा पढ़ी जाएगी। संवेदनशील/पासवर्ड फ़ील्ड ब्लॉक रहेंगे।")
                 .setView(container).setNegativeButton("रद्द") { _, _ -> }.setPositiveButton("चलाएँ") { _, _ ->
                     val map = vars.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                    val needsConfirm = steps.any { it.destructive || OperatorSafetyPolicy.assess(it.action, it.targetLabel, it.inputTemplate).risk == OperatorSafetyPolicy.Risk.CONFIRM }
-                    if (needsConfirm) android.app.AlertDialog.Builder(this).setTitle("संवेदनशील कार्रवाई").setMessage("इस Workflow में संदेश/भुगतान/हटाने जैसी कार्रवाई हो सकती है। क्या आप अनुमति देते हैं?").setNegativeButton("नहीं", null).setPositiveButton("हाँ, चलाएँ") { _, _ -> runLearned(profile, name, map, true) }.show()
-                    else runLearned(profile, name, map, false)
+                    runLearned(profile, name, map, false)
                 }.show()
         }.show()
     }
 
     private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, confirmed: Boolean) {
-        Thread { AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+        val runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
             val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
             log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
-        } }.run(profile, name, values, confirmed) }.start()
+            if (event.state == OperatorTaskState.WAITING_CONFIRMATION) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("इस चरण की अनुमति")
+                    .setMessage("${event.message}\n\nयह अनुमति केवल इसी एक चरण के लिए होगी। अगले जोखिम वाले चरण पर फिर पूछा जाएगा।")
+                    .setNegativeButton("नहीं", null)
+                    .setPositiveButton("हाँ, केवल यह चरण") { _, _ ->
+                        Thread { runner.run(profile, name, values, confirmed = true, resume = true) }.start()
+                    }.show()
+            }
+        } }
+        Thread { runner.run(profile, name, values, confirmed = false, resume = false) }.start()
     }
 
     private fun field(hintText: String) = EditText(this).apply {
