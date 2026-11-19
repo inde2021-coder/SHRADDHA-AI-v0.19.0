@@ -32,12 +32,20 @@ def is_sensitive_window(title: str) -> bool:
     return bool(SENSITIVE_WINDOW.search(title or ""))
 
 
-def validate_action(action: dict, allow_typing: bool = False) -> bool:
+def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = False, file_root: str = "") -> bool:
     kind = action.get("kind")
     if kind not in SUPPORTED_ACTIONS:
         return False
     if kind == "type" and not allow_typing:
         return False
+    if kind == "ocr" and not allow_ocr:
+        return False
+    if kind in {"file_list", "file_read"} and not file_root:
+        return False
+    if kind == "file_list":
+        return isinstance(action.get("path", ""), str) and len(action.get("path", "")) <= 500
+    if kind == "file_read":
+        return isinstance(action.get("path"), str) and 0 < len(action["path"]) <= 500
     if kind in {"tap", "swipe"}:
         keys = ("x", "y") if kind == "tap" else ("x1", "y1", "x2", "y2")
         try:
@@ -52,7 +60,7 @@ def validate_action(action: dict, allow_typing: bool = False) -> bool:
     if kind == "scroll":
         amount = action.get("amount", -3)
         return isinstance(amount, (int, float)) and not isinstance(amount, bool) and -10 <= amount <= 10 and amount != 0
-    return True
+    return kind in {"back", "home", "ocr"}
 
 
 def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | None:
@@ -80,8 +88,7 @@ def safe_relative_path(root: str, relative: str):
 
 
 def list_safe_files(root: str, relative: str = "") -> list[dict]:
-    from pathlib import Path
-    base, folder = safe_relative_path(root, relative or ".")
+    _, folder = safe_relative_path(root, relative or ".")
     if not folder.exists() or not folder.is_dir():
         raise ValueError("Folder does not exist")
     results = []
@@ -104,8 +111,7 @@ def read_safe_text_file(root: str, relative: str) -> str:
     return candidate.read_text(encoding="utf-8", errors="replace")[:256_000]
 
 
-def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = False, file_root: str = "") -> bool:
-    kind = action.get("kind")
+def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
     target = target_device_id.encode("utf-8")
     if not jpeg or len(jpeg) > 2_500_000 or len(target) > 255:
         raise ValueError("Screen frame is empty or exceeds relay limits")
@@ -187,8 +193,8 @@ def confirm(prompt: str) -> bool:
     return answer in {"y", "yes"}
 
 
-async def execute_action(action: dict, allow_typing: bool) -> str:
-    if not validate_action(action, allow_typing):
+async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = False, file_root: str = "") -> str:
+    if not validate_action(action, allow_typing, allow_ocr, file_root):
         return "blocked_unsupported_or_invalid_action"
 
     import pyautogui
@@ -259,6 +265,37 @@ async def execute_action(action: dict, allow_typing: bool) -> str:
             return "blocked_ui_target_disappeared"
         except Exception:
             return "blocked_ui_automation_unavailable"
+    if kind in {"ocr", "file_list", "file_read"}:
+        if kind == "ocr":
+            try:
+                import pygetwindow
+                active = pygetwindow.getActiveWindow()
+                title = active.title if active else ""
+            except Exception:
+                active, title = None, ""
+            if not active or is_sensitive_window(title):
+                return "blocked_unknown_or_sensitive_window"
+            if not await asyncio.to_thread(confirm, f"Read visible text from active PC window {title!r}?"):
+                return "ocr_rejected_by_pc_user"
+            jpeg = await asyncio.to_thread(capture_screen_jpeg)
+            if not jpeg:
+                return "ocr_capture_unavailable"
+            try:
+                import pytesseract
+                from PIL import Image
+                image = Image.open(io.BytesIO(jpeg))
+                text = await asyncio.to_thread(pytesseract.image_to_string, image, lang="eng+hin")
+                return json.dumps({"status": "ocr_complete", "window": title[:120], "text": text[:12000]}, ensure_ascii=False)
+            except Exception as exc:
+                return "ocr_unavailable_install_tesseract_and_pytesseract: " + str(exc)[:180]
+        if not await asyncio.to_thread(confirm, f"Allow {kind} within approved folder {file_root!r}?"):
+            return "file_access_rejected_by_pc_user"
+        try:
+            if kind == "file_list":
+                return json.dumps({"status": "file_list", "items": list_safe_files(file_root, action.get("path", ""))}, ensure_ascii=False)
+            return json.dumps({"status": "file_read", "path": action["path"], "text": read_safe_text_file(file_root, action["path"])}, ensure_ascii=False)
+        except Exception as exc:
+            return "file_access_blocked: " + str(exc)[:180]
     if kind == "type":
         try:
             import pygetwindow
@@ -362,8 +399,10 @@ async def run(args) -> None:
                         print("Blocked remote action: local PC approval expired.")
                         continue
                     action = message.get("action") or {}
-                    result = await execute_action(action, args.allow_typing)
-                    print("Remote action:", action.get("kind"), "=>", result)
+                    result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root)
+                    print("Remote action:", action.get("kind"), "=>", result[:500])
+                    if action.get("kind") in {"ocr", "file_list", "file_read"}:
+                        await ws.send(json.dumps({"type": "remote_action_result", "targetDeviceId": message.get("fromDeviceId", ""), "actionKind": action.get("kind"), "result": result[:14000]}))
                 elif kind == "peer_status":
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
