@@ -77,3 +77,11 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Encrypted backup covers only the selected app-managed records listed above. It does not yet export Android Keystore-protected vault ciphertext, Firebase cloud vault, installed app data, contacts, messages, device pairing secrets or media.
 - Voice response playback, microphone barge-in timing and TTS latency require physical-device validation with actual Hindi/English model files.
 - OCR/canvas fallback, durable resume checkpoints, Windows live screen streaming, native offline LLM inference, biometric identity models, smart-home connectors, generic social-media publishing and rendered video/CAD pipelines remain integration work rather than shipped capability.
+
+
+## Advanced OCR and PC streaming follow-up
+- Added optional on-device Hindi/English OCR using bundled ML Kit Latin + Devanagari recognizers. User must enable it in Settings; OCR is processed locally, sensitive labels and adjacent lines are omitted, and long numeric strings are redacted.
+- Added unique OCR text tapping with normalized screenshot coordinates. It is opt-in, refuses ambiguous/sensitive targets, and applies the same destructive-action confirmation policy as Accessibility text taps. It still cannot reliably interact with every canvas or protected Android surface.
+- Added live PC screen streaming to the Windows companion. The PC user must opt in with `--share-screen` and confirm locally; stream permission is explicitly sent to the relay, frame rate is capped at 2 FPS, JPEG payloads are bounded, optional target device ID is supported, and likely sensitive active-window titles pause capture.
+- Fixed PC companion reconnect when using saved Windows Credential Manager pairing without re-entering the base URL.
+- Added unit tests for the PC frame protocol and payload bounds; CI now validates OCR dependencies and Kotlin compile.
