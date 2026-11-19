@@ -16,7 +16,8 @@ import kotlin.math.sqrt
 
 class LiveAudioIO(
     private val onMicChunk: (ByteArray) -> Unit,
-    private val onMicAmplitude: (Float) -> Unit
+    private val onMicAmplitude: (Float) -> Unit,
+    private val onRecordingError: (String) -> Unit = {}
 ) {
     companion object {
         const val MIC_SAMPLE_RATE = 16000
@@ -59,6 +60,10 @@ class LiveAudioIO(
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
+        if (minBuf == AudioRecord.ERROR || minBuf == AudioRecord.ERROR_BAD_VALUE) {
+            onRecordingError("This device does not support the required 16 kHz microphone format.")
+            return
+        }
         val bufSize = max(minBuf, 4096)
 
         try {
@@ -92,6 +97,11 @@ class LiveAudioIO(
             }
 
             record.startRecording()
+            if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                record.release()
+                onRecordingError("Android did not start microphone recording.")
+                return
+            }
             audioRecord = record
             isRecording.set(true)
 
@@ -104,11 +114,17 @@ class LiveAudioIO(
                         val amp = calculateRms(chunk)
                         onMicAmplitude(amp)
                         onMicChunk(chunk)
+                    } else if (read == AudioRecord.ERROR_DEAD_OBJECT || read == AudioRecord.ERROR_INVALID_OPERATION || read == AudioRecord.ERROR_BAD_VALUE) {
+                        if (isRecording.get()) onRecordingError("Microphone recording stopped unexpectedly (AudioRecord error $read).")
+                        break
                     }
                 }
             }, "LiveAudioIO-MicThread").apply { start() }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             isRecording.set(false)
+            try { audioRecord?.release() } catch (_: Exception) {}
+            audioRecord = null
+            onRecordingError(error.localizedMessage ?: "Unable to open the microphone.")
         }
     }
 
