@@ -1,6 +1,6 @@
 package `in`.shraddha.ai.future
 
-import android.util.Base64
+import java.util.Base64
 import org.json.JSONObject
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -28,9 +28,9 @@ object EncryptedBackupCodec {
             .put("kdf", "PBKDF2-HMAC-SHA256")
             .put("iterations", ITERATIONS)
             .put("cipher", "AES-256-GCM")
-            .put("salt", Base64.encodeToString(salt, Base64.NO_WRAP))
-            .put("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
-            .put("payload", Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .put("salt", Base64.getEncoder().encodeToString(salt))
+            .put("iv", Base64.getEncoder().encodeToString(iv))
+            .put("payload", Base64.getEncoder().encodeToString(encrypted))
             .toString(2)
     }
 
@@ -42,9 +42,9 @@ object EncryptedBackupCodec {
         require(json.optString("kdf") == "PBKDF2-HMAC-SHA256" && json.optString("cipher") == "AES-256-GCM") { "Unsupported backup encryption" }
         val iterations = json.optInt("iterations", -1)
         require(iterations in 150_000..500_000) { "Backup KDF settings are invalid" }
-        val salt = Base64.decode(json.getString("salt"), Base64.NO_WRAP)
-        val iv = Base64.decode(json.getString("iv"), Base64.NO_WRAP)
-        val payload = Base64.decode(json.getString("payload"), Base64.NO_WRAP)
+        val salt = Base64.getDecoder().decode(json.getString("salt"))
+        val iv = Base64.getDecoder().decode(json.getString("iv"))
+        val payload = Base64.getDecoder().decode(json.getString("payload"))
         require(salt.size == 16 && iv.size == 12 && payload.size in 16..MAX_PLAINTEXT + 16) { "Backup envelope is malformed" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, derive(passphrase, salt, iterations), GCMParameterSpec(128, iv))
