@@ -1829,7 +1829,7 @@ class MainActivity : AppCompatActivity() {
                 if (!consent.isChecked) { status.text = "चुने हुए व्यक्ति की इस capture/match session के लिए स्पष्ट consent की पुष्टि करें।"; return }
                 val thresholdText = if (kind == "face") faceThreshold.text.toString().trim() else speakerThreshold.text.toString().trim()
                 val threshold = if (mode == "match") thresholdText.toFloatOrNull() else Float.NaN
-                if (mode == "match" && (threshold == null || threshold !in 0f..1f)) { status.text = "Match के लिए पहले locally calibrated threshold 0 से 1 के बीच भरें।"; return }
+                if (mode == "match" && (threshold == null || threshold !in -1f..1f)) { status.text = "Match के लिए पहले locally calibrated threshold -1 से 1 के बीच भरें।"; return }
                 val request = Intent(this@MainActivity, BiometricCaptureActivity::class.java)
                     .putExtra(BiometricCaptureActivity.EXTRA_KIND, kind)
                     .putExtra(BiometricCaptureActivity.EXTRA_MODE, mode)
