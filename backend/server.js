@@ -6,7 +6,7 @@ import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps } from './plan-safety.js';
-import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility } from './social-publishing.js';
+import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
 import { buildVisionPrompt } from './vision-analysis.js';
 
 const PORT = Number(process.env.PORT || 8787);
@@ -180,6 +180,47 @@ const server = http.createServer(async (req, res) => {
         const result = await upstream.json().catch(() => ({}));
         if (!upstream.ok || result.ok !== true) return json(res, 502, { error: 'Telegram did not accept the post' });
         return json(res, 200, { ok: true, platform: 'telegram', messageId: result.result?.message_id || null, confirmedPreview: true });
+      }
+      if (intent.platform === 'bluesky') {
+        let credentials;
+        try { credentials = validateBlueskyCredentials(process.env.BLUESKY_IDENTIFIER || '', process.env.BLUESKY_APP_PASSWORD || ''); }
+        catch (error) { return json(res, 503, { error: error.message }); }
+        let session;
+        try {
+          const login = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ identifier: credentials.identifier, password: credentials.appPassword })
+          });
+          session = await login.json().catch(() => ({}));
+          if (!login.ok || typeof session.accessJwt !== 'string' || typeof session.did !== 'string') return json(res, 502, { error: 'Bluesky authentication failed; check the app password and identifier' });
+          const post = await fetch('https://bsky.social/xrpc/com.atproto.repo.createRecord', {
+            method: 'POST', headers: { authorization: 'Bearer ' + session.accessJwt, 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ repo: session.did, collection: 'app.bsky.feed.post', record: { '$type': 'app.bsky.feed.post', text: intent.text, createdAt: new Date().toISOString() } })
+          });
+          const result = await post.json().catch(() => ({}));
+          if (!post.ok || typeof result.uri !== 'string') return json(res, 502, { error: 'Bluesky did not accept the post' });
+          return json(res, 200, { ok: true, platform: 'bluesky', postId: result.uri, url: result.uri, confirmedPreview: true });
+        } catch { return json(res, 502, { error: 'Bluesky service could not be reached' }); }
+      }
+      if (intent.platform === 'linkedin') {
+        const accessToken = process.env.LINKEDIN_ACCESS_TOKEN || '';
+        let author, version;
+        try { author = validateLinkedInAuthor(process.env.LINKEDIN_AUTHOR_URN || ''); version = validateLinkedInVersion(process.env.LINKEDIN_VERSION || ''); }
+        catch (error) { return json(res, 503, { error: error.message }); }
+        if (!accessToken || accessToken.length > 8192) return json(res, 503, { error: 'LINKEDIN_ACCESS_TOKEN is not configured on the server' });
+        let upstream;
+        try {
+          upstream = await fetch('https://api.linkedin.com/rest/posts', {
+            method: 'POST',
+            headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json', 'Linkedin-Version': version, 'X-Restli-Protocol-Version': '2.0.0' },
+            signal: AbortSignal.timeout(20000),
+            body: JSON.stringify({ author, commentary: intent.text, visibility: 'PUBLIC', distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] }, lifecycleState: 'PUBLISHED', isReshare: false })
+          });
+        } catch { return json(res, 502, { error: 'LinkedIn service could not be reached' }); }
+        const result = await upstream.json().catch(() => ({}));
+        const postId = upstream.headers.get('x-restli-id') || result.id || result.urn;
+        if (!upstream.ok || typeof postId !== 'string') return json(res, 502, { error: 'LinkedIn did not accept the post', status: upstream.status });
+        return json(res, 200, { ok: true, platform: 'linkedin', postId, confirmedPreview: true });
       }
       const base = process.env.MASTODON_BASE_URL || '';
       const accessToken = process.env.MASTODON_ACCESS_TOKEN || '';
