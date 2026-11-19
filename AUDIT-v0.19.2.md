@@ -76,7 +76,7 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Self-hosted Piper is a CPU/GPU service and should run on a persistent HTTPS host; Vercel serverless is not the intended inference host.
 - Encrypted backup covers only the selected app-managed records listed above. It does not yet export Android Keystore-protected vault ciphertext, Firebase cloud vault, installed app data, contacts, messages, device pairing secrets or media.
 - Voice response playback, microphone barge-in timing and TTS latency require physical-device validation with actual Hindi/English model files. SMS and WhatsApp sending now require exact recipient + exact message confirmation; tests cover the approval policy.
-- OCR reading and unique text-target tapping are now implemented with opt-in local ML Kit; arbitrary non-text canvas controls, OCR-driven gestures and custom visual-target tracking remain limited. Encrypted workflow checkpoints and explicit resume at verified step boundaries are implemented; an interrupted in-flight action is intentionally not replayed. Native offline LLM inference, biometric identity models, smart-home connectors, generic social-media publishing and rendered video/CAD pipelines remain integration work rather than shipped capability.
+- OCR reading and unique text-target tapping are now implemented with opt-in local ML Kit; arbitrary non-text canvas controls, OCR-driven gestures and custom visual-target tracking remain limited. Encrypted workflow checkpoints and explicit resume at verified step boundaries are implemented; an interrupted in-flight action is intentionally not replayed. Native offline LLM inference, smart-home connectors, generic social-media publishing and rendered video/CAD pipelines remain integration work rather than shipped capability. People Memory biometric capture/enrollment/matching now has a source implementation, but remains unverified until Android CI and target-phone tests complete.
 
 
 ## Advanced OCR and PC streaming follow-up
@@ -122,3 +122,12 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - The first People Memory capture installs both models on a worker thread; the app does not copy the large model files at every ordinary startup.
 - Active blink/head-turn challenge now requires stable consecutive frames and expires after 45 seconds. It remains a heuristic, not certified PAD. A certified claim still requires a licensed PAD SDK/product and independent ISO/IEC 30107-3 evidence for the exact deployed version, plus physical-device validation.
 - Android CI must complete the full model download, checksum validation, unit tests and APK packaging before the updated APK can be marked verified.
+
+
+## People Memory live capture and model smoke-test follow-up (2026-11-19)
+- CameraX face enrollment now runs a randomized blink + opposite head-turn challenge, rejects ambiguous/multiple-face frames, resets progress on missing/invalid frames, requires a centered face before capture, aligns five landmarks using a similarity transform, checks brightness/sharpness and discards the temporary image.
+- Microphone enrollment now runs an on-device Hindi/English phrase challenge, records five seconds of mono 16 kHz PCM, checks voice activity/clipping, creates an ECAPA embedding and zeroes raw PCM/normalized buffers after inference or cancellation.
+- People Memory requires an explicit per-session consent confirmation, resets the switch after each capture/match launch and limits matching to the selected consented profile. Encrypted vault read failures fail closed; deletion covers indexed and orphaned templates.
+- Added unit coverage for liveness sequencing/expiry/invalid frames and five-point similarity alignment, plus an Android instrumentation smoke test that loads both bundled ONNX models and runs synthetic-input inference.
+- Added GitHub Actions Android emulator step for connected instrumentation tests. The GitHub connector currently reports no run/status for the latest branch commits, so this CI is configured but not yet verified.
+- Physical Android camera/microphone, consenting-person accuracy, FAR/FRR/ROC/EER and spoof/replay testing remain outstanding; the active challenge is not certified PAD.
