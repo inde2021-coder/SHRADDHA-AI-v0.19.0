@@ -41,4 +41,15 @@ class BiometricLivenessGateTest {
     fun challengeSequenceMustContainEachActionOnce() {
         BiometricLivenessGate(listOf(BiometricLivenessGate.Step.BLINK, BiometricLivenessGate.Step.BLINK, BiometricLivenessGate.Step.TURN_SIDE))
     }
+    @Test(expected = IllegalArgumentException::class)
+    fun oppositeTurnCannotBeRequestedBeforeFirstSide() {
+        BiometricLivenessGate(listOf(BiometricLivenessGate.Step.TURN_OPPOSITE, BiometricLivenessGate.Step.TURN_SIDE, BiometricLivenessGate.Step.BLINK))
+    }
+
+    @Test fun randomizedDefaultSequenceAlwaysHasValidTurnOrder() {
+        repeat(100) {
+            val gate = BiometricLivenessGate()
+            assertTrue(gate.currentStep != null)
+        }
+    }
 }
