@@ -1742,14 +1742,37 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(0xFFB9C8E4.toInt()); textSize = 12f
             })
             val profileSpinner = Spinner(this@MainActivity)
+            val profileStatus = TextView(this@MainActivity).apply {
+                textSize = 12f
+                setTextColor(0xFF9CB4D7.toInt())
+                setPadding(0, dp(4), 0, dp(8))
+            }
+            fun refreshBiometricStatus() {
+                val selected = people().getOrNull(profileSpinner.selectedItemPosition)
+                if (selected == null) {
+                    profileStatus.text = if (directoryReadFailed) "Person Memory सुरक्षित रूप से पढ़ा नहीं जा सका।" else "पहले consented person profile बनाएँ।"
+                    return
+                }
+                biometricVault.templateCounts(selected.optString("id"))
+                    .onSuccess { counts -> profileStatus.text = "Saved samples • Face: ${counts.face}/8 • Voice: ${counts.speaker}/8" }
+                    .onFailure { profileStatus.text = "Biometric template status unavailable: ${it.message}" }
+            }
             fun refreshProfiles() {
+                val selectedPosition = profileSpinner.selectedItemPosition
                 val labels = people().map { it.optString("name") + " • " + it.optString("relation") }
                 profileSpinner.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, if (labels.isEmpty()) listOf("No consented people") else labels)
+                if (selectedPosition in labels.indices) profileSpinner.setSelection(selectedPosition)
+                profileSpinner.post { refreshBiometricStatus() }
+            }
+            profileSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) = refreshBiometricStatus()
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) { profileStatus.text = "Select a consented person profile." }
             }
             refreshProfiles()
             refreshProfileList = { refreshProfiles() }
             addView(TextView(this@MainActivity).apply { text = "CONSENTED PERSON"; setTextColor(0xFFB9C8E4.toInt()) })
             addView(profileSpinner)
+            addView(profileStatus)
             val faceThreshold = edit("Face cosine threshold (auto-calibrated)", "").apply { keyListener = null; isFocusable = false; isFocusableInTouchMode = false }
             val speakerThreshold = edit("Speaker cosine threshold (auto-calibrated)", "").apply { keyListener = null; isFocusable = false; isFocusableInTouchMode = false }
             addView(faceThreshold); addView(speakerThreshold)
@@ -2034,6 +2057,7 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode == faceCaptureRequest || requestCode == speakerCaptureRequest) {
             status.text = data?.getStringExtra(BiometricCaptureActivity.EXTRA_RESULT) ?: "Biometric capture cancelled or did not complete."
+            refreshProfileList?.invoke()
             return
         }
 
