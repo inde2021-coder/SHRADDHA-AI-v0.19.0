@@ -46,8 +46,12 @@ class FirebaseCloudVault(private val context: Context) {
             .build()
         // FirebaseMessagingService is dispatched through the default FirebaseApp. Initialize
         // it explicitly because this project injects FirebaseOptions instead of google-services.json.
-        if (FirebaseApp.getApps(context).none { it.name == FirebaseApp.DEFAULT_APP_NAME }) {
-            FirebaseApp.initializeApp(context, options)
+        val defaultApp = FirebaseApp.getApps(context).firstOrNull { it.name == FirebaseApp.DEFAULT_APP_NAME }
+            ?: FirebaseApp.initializeApp(context, options)
+            ?: error("Default Firebase initialization failed")
+        require(defaultApp.options.applicationId == BuildConfig.FIREBASE_APP_ID &&
+            defaultApp.options.projectId == BuildConfig.FIREBASE_PROJECT_ID) {
+            "The default FirebaseApp belongs to a different project; correct the Firebase configuration before enabling FCM."
         }
         return FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
             ?: FirebaseApp.initializeApp(context, options, APP_NAME)
