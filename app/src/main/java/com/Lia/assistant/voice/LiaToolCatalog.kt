@@ -59,7 +59,7 @@ object LiaToolCatalog {
             GeminiToolUtils.functionDecl(
                 name = "tap_text",
                 description = "Taps a visible UI element containing the specified text or label.",
-                params = mapOf("text" to "Text or label of the button or element to tap"),
+                params = mapOf("text" to "Text or label of the button or element to tap", "user_confirmed" to "Optional yes only after the user explicitly confirms this action in conversation"),
                 required = listOf("text")
             )
         )
