@@ -21,6 +21,7 @@ object DeviceLinkManager {
     @Volatile var onScreenFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onCameraFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onPeerMessage: ((JSONObject) -> Unit)? = null
+    @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
@@ -49,6 +50,10 @@ object DeviceLinkManager {
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optJSONObject("action") ?: JSONObject())
+                        "remote_action_result" -> {
+                            onRemoteActionResult?.invoke(msg.optString("fromDeviceId"), msg.optString("actionKind"), msg.optString("result"))
+                            onPeerMessage?.invoke(msg)
+                        }
                         else -> onPeerMessage?.invoke(msg)
                     }
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
