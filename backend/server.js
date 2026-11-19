@@ -429,8 +429,21 @@ wss.on('connection', (ws, ctx) => {
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
       if (!target || targetIdIsSelf(targetId, deviceId) || expiresAt < Date.now()) return;
       if (session.controlMode === 'master' && device.role !== 'owner') return;
-      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll'].includes(msg.action.kind)) return;
+      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll', 'ocr', 'file_list', 'file_read'].includes(msg.action.kind)) return;
       send(targetId, JSON.stringify({ type: 'remote_action', fromDeviceId: deviceId, action: msg.action }));
+    } else if (msg.type === 'remote_action_result') {
+      const requesterId = String(msg.targetDeviceId || '');
+      const requester = session.devices.get(requesterId);
+      const expiresAt = device.controlGrants?.get(requesterId) || 0;
+      if (!requester || requesterId === deviceId || expiresAt < Date.now()) return;
+      const result = typeof msg.result === 'string' ? msg.result.slice(0, 14000) : '';
+      if (!result) return;
+      send(requesterId, JSON.stringify({
+        type: 'remote_action_result',
+        fromDeviceId: deviceId,
+        actionKind: String(msg.actionKind || '').slice(0, 32),
+        result
+      }));
     } else if (msg.type === 'set_control_mode') {
       if (device.role !== 'owner' || !['master', 'mutual'].includes(msg.mode)) return;
       session.controlMode = msg.mode;
