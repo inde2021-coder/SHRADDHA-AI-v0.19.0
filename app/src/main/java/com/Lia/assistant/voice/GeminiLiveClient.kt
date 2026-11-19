@@ -44,11 +44,6 @@ class GeminiLiveClient(private val listener: Listener) {
     fun isLive(): Boolean = isConnected.get()
 
     fun connect(ephemeralToken: String, systemInstruction: String, voiceName: String = "Aoede") {
-        if (apiKey.isBlank()) {
-            listener.onError("Missing Gemini API Key. Please configure it in Settings.")
-            return
-        }
-
         disconnect()
         deduplicator.clear()
 
