@@ -402,31 +402,15 @@ object ActionExecutor {
                 val action = args.optString("action", "TEXT_POST").trim().uppercase()
                 val mode = args.optString("mode", "DRAFT").trim().uppercase()
                 val text = args.optString("text").ifBlank { args.optString("caption") }.trim()
-                val supportedPlatforms = setOf("telegram", "mastodon", "bluesky", "linkedin")
-                val maxLength = when (platform) {
-                    "bluesky" -> 300
-                    "linkedin" -> 3000
-                    "telegram", "mastodon" -> 5000
-                    else -> 0
-                }
-                val textLength = text.codePointCount(0, text.length)
+                val validationError = SocialPublishApprovalPolicy.validate(platform, action, text)
+                val maxLength = SocialPublishApprovalPolicy.maxCharacters(platform)
                 when {
-                    platform !in supportedPlatforms -> {
+                    validationError != null -> {
                         result.put("status", "error")
-                        result.put("action", "unsupported_social_platform")
-                        result.put("message", "Supported text publishing platforms: Telegram, Mastodon, Bluesky and LinkedIn.")
-                    }
-                    action !in setOf("TEXT_POST", "CREATE_POST") -> {
-                        result.put("status", "unsupported")
-                        result.put("action", "social_media_format_unsupported")
-                        result.put("message", "Only text posts are supported. Media uploads, Reels, Stories and scheduled publishing are not implemented.")
-                    }
-                    text.isBlank() || textLength > maxLength -> {
-                        result.put("status", "error")
-                        result.put("action", "invalid_social_post")
+                        result.put("action", if (maxLength == 0) "unsupported_social_platform_or_format" else "invalid_social_post")
                         result.put("platform", platform)
                         result.put("character_limit", maxLength)
-                        result.put("message", "Post text is required and must fit the selected platform's character limit.")
+                        result.put("message", validationError)
                     }
                     mode == "DRAFT" -> {
                         result.put("status", "draft")
@@ -440,9 +424,13 @@ object ActionExecutor {
                         result.put("action", "invalid_social_publish_mode")
                         result.put("message", "mode must be DRAFT or PUBLISH.")
                     }
-                    !args.optString("user_confirmed", "").equals("yes", true) ||
-                        !args.optString("confirmed_platform", "").trim().equals(platform, true) ||
-                        args.optString("confirmed_text", "") != text -> {
+                    !SocialPublishApprovalPolicy.isApproved(
+                        platform = platform,
+                        exactText = text,
+                        userConfirmed = args.optString("user_confirmed", "").equals("yes", true),
+                        confirmedPlatform = args.optString("confirmed_platform", ""),
+                        confirmedText = args.optString("confirmed_text", "")
+                    ) -> {
                         result.put("status", "confirmation_required")
                         result.put("action", "social_publish_confirmation_required")
                         result.put("platform", platform)
