@@ -16,4 +16,12 @@ class BiometricVoiceChallengeTest {
     @Test fun doesNotAcceptPartialPhrase() {
         assertFalse(BiometricVoiceChallenge.matches("silver mango twenty", "silver mango"))
     }
+    @Test fun acceptsHindiPhraseWithoutStrippingDevanagari() {
+        assertTrue(BiometricVoiceChallenge.matches("नीला आसमान सात", "नीला आसमान सात।"))
+    }
+
+    @Test fun rejectsDifferentHindiPhrase() {
+        assertFalse(BiometricVoiceChallenge.matches("नीला आसमान सात", "नीला आसमान आठ"))
+    }
+
 }
