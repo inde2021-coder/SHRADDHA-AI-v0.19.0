@@ -39,4 +39,12 @@ class EncryptedFeatureStore(context: Context) {
         String(c.doFinal(Base64.decode(p[1], Base64.NO_WRAP)), Charsets.UTF_8)
     }
     @Synchronized fun remove(name: String): Boolean = prefs.edit().remove(name).commit()
+
+    /** Atomically remove all encrypted entries in one namespaced feature family. */
+    @Synchronized fun removeAllWithPrefix(prefix: String): Boolean {
+        require(prefix.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
+        return editor.commit()
+    }
 }
