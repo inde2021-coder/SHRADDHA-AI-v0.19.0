@@ -172,6 +172,16 @@ object DeviceLinkManager {
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun respondRemoteControl(requesterDeviceId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_response").put("requesterDeviceId", requesterDeviceId).put("approved", approved).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun sendAction(targetDeviceId: String, action: JSONObject): Boolean = socket?.send(JSONObject().put("type", "remote_action").put("targetDeviceId", targetDeviceId).put("action", action).toString()) == true
+    fun requestPcOcr(targetDeviceId: String): Boolean =
+        sendAction(targetDeviceId, JSONObject().put("kind", "ocr"))
+
+    fun requestPcFileList(targetDeviceId: String, relativePath: String = ""): Boolean =
+        sendAction(targetDeviceId, JSONObject().put("kind", "file_list").put("path", relativePath.take(500)))
+
+    fun requestPcTextPreview(targetDeviceId: String, relativePath: String): Boolean =
+        if (relativePath.isBlank()) false else sendAction(targetDeviceId,
+            JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
+
     fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
     fun sendTaskHandoff(targetDeviceId: String, title: String, description: String, steps: List<String>): Boolean {
         if (targetDeviceId.isBlank() || title.isBlank() || description.isBlank()) return false
