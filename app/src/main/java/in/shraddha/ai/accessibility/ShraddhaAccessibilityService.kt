@@ -28,11 +28,21 @@ class ShraddhaAccessibilityService : AccessibilityService() {
 
     private fun isSensitiveNode(node: AccessibilityNodeInfo): Boolean {
         if (node.isPassword) return true
-        val labels = listOfNotNull(
-            node.text?.toString(), node.contentDescription?.toString(), node.hintText?.toString(),
-            node.viewIdResourceName, node.parent?.contentDescription?.toString()
-        ).joinToString(" ").lowercase()
-        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(labels)
+        // Labels are often attached to a TextInputLayout/container rather than the EditText.
+        // Inspect a short ancestor chain so the value cannot leak when only the child is captured.
+        val labels = mutableListOf<String>()
+        var current: AccessibilityNodeInfo? = node
+        repeat(4) {
+            val item = current ?: return@repeat
+            if (item.isPassword) return true
+            labels += listOfNotNull(
+                item.text?.toString(), item.contentDescription?.toString(), item.hintText?.toString(),
+                item.viewIdResourceName
+            )
+            current = item.parent
+        }
+        val combined = labels.joinToString(" ").lowercase()
+        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(combined)
     }
 
     private fun captureOcrTargetsInternal(done: (Result<List<ScreenOcrEngine.OcrLine>>) -> Unit) {
