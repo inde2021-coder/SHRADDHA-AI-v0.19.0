@@ -28,7 +28,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             node.text?.toString(), node.contentDescription?.toString(), node.hintText?.toString(),
             node.viewIdResourceName, node.parent?.contentDescription?.toString()
         ).joinToString(" ").lowercase()
-        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\\bupi\\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(labels)
+        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(labels)
     }
 
     private fun setFocusedText(value: String): Boolean {
