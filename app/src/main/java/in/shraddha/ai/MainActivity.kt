@@ -664,6 +664,22 @@ class MainActivity : AppCompatActivity() {
                 dataPermissionSwitches[key] = toggle
                 addView(toggle)
             }
+            addView(TextView(this@MainActivity).apply {
+                text = "LIVE VISUAL SHARING • अलग-अलग स्पष्ट अनुमति"
+                setTextColor(0xFFB9A9FF.toInt()); textSize = 13f; setPadding(0, dp(12), 0, dp(4))
+            })
+            listOf("screen" to "इस फोन की स्क्रीन साझा करने दें", "camera" to "इस फोन का कैमरा साझा करने दें").forEach { (key, label) ->
+                val toggle = Switch(this@MainActivity).apply {
+                    text = label; setTextColor(-1)
+                    isChecked = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean(key, false)
+                    setOnCheckedChangeListener { _, checked ->
+                        getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).edit().putBoolean(key, checked).apply()
+                        publishDataPermissions()
+                    }
+                }
+                dataPermissionSwitches[key] = toggle
+                addView(toggle)
+            }
             addView(actionButton("Publish My Sharing Permissions", "दूसरे paired devices को मेरी चुनी अनुमति बताएँ") { publishDataPermissions() })
             val categoryPicker = Spinner(this@MainActivity).apply {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categories.map { it.first })
