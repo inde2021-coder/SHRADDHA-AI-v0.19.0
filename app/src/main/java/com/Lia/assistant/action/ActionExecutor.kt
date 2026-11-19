@@ -119,6 +119,20 @@ object ActionExecutor {
                     }
                 }
 
+                val userConfirmed = args.optString("user_confirmed", "").equals("yes", true)
+                val confirmedRecipient = args.optString("confirmed_recipient", "").trim()
+                val confirmedMessage = args.optString("confirmed_message", "")
+                // Bind approval to the exact resolved recipient and exact message body.
+                // A generic yes must never authorize a changed recipient or edited text.
+                if (!userConfirmed || confirmedRecipient != phoneNumber || confirmedMessage != messageText) {
+                    result.put("status", "confirmation_required")
+                    result.put("action", "message_confirmation_required")
+                    result.put("recipient", phoneNumber)
+                    result.put("message_preview", messageText.take(1000))
+                    result.put("message", "भेजने से पहले उपयोगकर्ता को यही प्राप्तकर्ता और यही पूरा संदेश दिखाएँ। स्पष्ट हाँ मिलने के बाद user_confirmed=yes, confirmed_recipient में यही नंबर और confirmed_message में यही अक्षरशः संदेश दें। अभी कोई SMS/WhatsApp नहीं भेजा गया।")
+                    return result
+                }
+
                 val isWhatsApp = targetApp == "whatsapp"
                 val sendStatus = if (isWhatsApp) {
                     val service = NovaAccessibilityService.instance
