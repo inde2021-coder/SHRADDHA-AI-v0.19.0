@@ -17,7 +17,12 @@ import `in`.shraddha.ai.brain.EncryptedFeatureStore
 class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         if (token.isNotBlank() && token.length <= 4096) {
-            EncryptedFeatureStore(applicationContext).put("firebase_fcm_token", token)
+            val store = EncryptedFeatureStore(applicationContext)
+            val previous = store.get("firebase_fcm_token").getOrNull().orEmpty()
+            if (previous.isNotBlank() && previous != token) {
+                store.put("firebase_fcm_previous_token", previous)
+            }
+            store.put("firebase_fcm_token", token)
         }
     }
 
