@@ -196,6 +196,37 @@ object ActionExecutor {
                 }
             }
 
+            "tap_ocr_text" -> {
+                val text = args.optString("text", "").trim()
+                val enabled = context.getSharedPreferences("shraddha_privacy", Context.MODE_PRIVATE)
+                    .getBoolean("on_device_screen_ocr", false)
+                val decision = OperatorSafetyPolicy.assess("tap", target = text)
+                val confirmed = args.optString("user_confirmed", "").equals("yes", true)
+                if (!enabled) {
+                    result.put("status", "blocked")
+                    result.put("action", "ocr_opt_in_required")
+                    result.put("message", "पहले Settings में On-device OCR Screen Reading को ON करें।")
+                } else if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
+                    result.put("status", "blocked")
+                    result.put("action", "sensitive_action_blocked")
+                    result.put("message", decision.reason)
+                } else if (decision.risk == OperatorSafetyPolicy.Risk.CONFIRM && !confirmed) {
+                    result.put("status", "confirmation_required")
+                    result.put("action", "waiting_for_user_confirmation")
+                    result.put("message", "इस OCR target पर tap करने से पहले उपयोगकर्ता की स्पष्ट पुष्टि लें।")
+                } else {
+                    val targets = DeviceAccessibilityService.captureOcrTargets().orEmpty()
+                    val exact = targets.filter { !it.sensitive && it.text.equals(text, true) }
+                    val matches = if (exact.isNotEmpty()) exact else targets.filter { !it.sensitive && it.text.contains(text, true) }
+                    val tapped = if (text.isNotBlank() && matches.size == 1) {
+                        DeviceAccessibilityService.remoteTap(matches.single().centerX, matches.single().centerY)
+                    } else false
+                    result.put("status", if (tapped) "success" else "error")
+                    result.put("action", if (tapped) "ocr_target_tapped" else "ocr_target_missing_or_ambiguous")
+                    result.put("message", if (tapped) "Unique OCR target tapped; inspect the screen again to verify the result." else "OCR target was not unique or could not be tapped. Ask the user to clarify.")
+                }
+            }
+
             "type_text" -> {
                 val text = args.optString("text", "")
                 val typed = DeviceAccessibilityService.fillFocusedField(text)
