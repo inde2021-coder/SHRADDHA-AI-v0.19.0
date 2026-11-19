@@ -15,6 +15,7 @@ PowerShell में:
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 py -m pip install -r requirements.txt
+# click_text के लिए Windows UI Automation dependency pywinauto भी requirements में शामिल है
 py shraddha_pc_companion.py --base-url https://YOUR-RELAY-DOMAIN --pairing-code 123456 --device-name "Office PC"
 ```
 
