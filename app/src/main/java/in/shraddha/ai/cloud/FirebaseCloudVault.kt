@@ -7,6 +7,8 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
 import java.security.SecureRandom
@@ -16,6 +18,8 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import android.util.Base64
+
+data class CloudBackupRevision(val id: String, val updatedAt: Long)
 
 /** Firebase owner-scoped vault. Client-side AES-GCM means Firestore receives ciphertext only. */
 class FirebaseCloudVault(private val context: Context) {
@@ -82,11 +86,64 @@ class FirebaseCloudVault(private val context: Context) {
         }
     }
 
-    fun signInAndSaveBundle(email: String, password: String, bundleJson: String): Result<String> =
-        signInAndSave(email, password, "selected_device_backup_v1", bundleJson)
+    fun signInAndSaveBundle(email: String, password: String, bundleJson: String): Result<String> = runCatching {
+        require(bundleJson.length <= 100000) { "Encrypted cloud backup is limited to 100,000 characters" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val collection = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault")
+            val encrypted = encrypt(bundleJson, password)
+            val now = System.currentTimeMillis()
+            val record = mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to now)
+            val revisionId = "selected_device_backup_v1_${now}_${UUID.randomUUID().toString().take(8)}"
+            collection.document(revisionId).set(record).await()
+            // Keep a stable latest pointer for older app versions and the one-tap restore flow.
+            collection.document("selected_device_backup_v1").set(record).await()
+            val history = collection.orderBy("updatedAt", Query.Direction.DESCENDING).get().await()
+            history.documents.filter { it.id.startsWith("selected_device_backup_v1_") && it.id != "selected_device_backup_v1" }
+                .drop(10).forEach { it.reference.delete().await() }
+            user.uid
+        }
+    }
 
     fun signInAndLoadBundle(email: String, password: String): Result<String?> =
         signInAndLoad(email, password, "selected_device_backup_v1")
+
+    fun signInAndListBundleRevisions(email: String, password: String): Result<List<CloudBackupRevision>> = runCatching {
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault")
+                .orderBy("updatedAt", Query.Direction.DESCENDING).get().await().documents
+                .filter { it.id.startsWith("selected_device_backup_v1_") }
+                .take(10)
+                .map { CloudBackupRevision(it.id, it.getLong("updatedAt") ?: 0L) }
+        }
+    }
+
+    fun signInAndLoadBundleRevision(email: String, password: String, revisionId: String): Result<String?> = runCatching {
+        require(revisionId.matches(Regex("^selected_device_backup_v1_[0-9]{10,}_[a-f0-9]{8}$"))) { "Invalid recovery revision ID" }
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val document = FirebaseFirestore.getInstance(app).collection("users").document(user.uid)
+                .collection("vault").document(revisionId).get().await()
+            val payload = document.getString("payload") ?: return@runBlocking null
+            decrypt(payload, password)
+        }
+    }
 
     private fun encrypt(value: String, password: String): String {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
