@@ -53,8 +53,10 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     @Synchronized
     fun withdraw(personId: String): Result<Unit> = runCatching {
         require(personId.matches(Regex("[A-Za-z0-9_-]{8,64}")))
-        check(store.remove(PREFIX + personId)) { "Could not delete biometric templates" }
         val old = readIndex()
+        val wasIndexed = (0 until old.length()).any { old.optString(it) == personId }
+        if (wasIndexed) check(store.remove(PREFIX + personId)) { "Could not delete biometric templates" }
+        else store.remove(PREFIX + personId)
         val updated = JSONArray()
         for (i in 0 until old.length()) if (old.optString(i) != personId) updated.put(old.optString(i))
         check(store.put(INDEX, updated.toString()).isSuccess) { "Could not update biometric index" }
