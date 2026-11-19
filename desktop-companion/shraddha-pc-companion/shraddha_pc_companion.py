@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import json
 import re
+import io
 import sys
 import time
 import urllib.request
@@ -46,6 +47,43 @@ def validate_action(action: dict, allow_typing: bool = False) -> bool:
     if kind == "type":
         return isinstance(action.get("text"), str) and 0 < len(action["text"]) <= 500
     return True
+
+
+def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
+    target = target_device_id.encode("utf-8")
+    if not jpeg or len(jpeg) > 2_500_000 or len(target) > 255:
+        raise ValueError("Screen frame is empty or exceeds relay limits")
+    return bytes((1, len(target))) + target + jpeg
+
+
+def capture_screen_jpeg(max_width: int = 960, quality: int = 48) -> bytes | None:
+    try:
+        import pygetwindow
+        title = pygetwindow.getActiveWindowTitle() or ""
+    except Exception:
+        title = ""
+    if is_sensitive_window(title):
+        return None
+    import mss
+    from PIL import Image
+    with mss.mss() as capture:
+        monitor = capture.monitors[1]
+        shot = capture.grab(monitor)
+        image = Image.frombytes("RGB", shot.size, shot.rgb)
+        image.thumbnail((max_width, 540))
+        output = io.BytesIO()
+        image.save(output, format="JPEG", quality=max(25, min(70, quality)), optimize=True)
+        payload = output.getvalue()
+        return payload if len(payload) <= 2_500_000 else None
+
+
+async def share_screen_loop(ws, fps: float, target_device_id: str) -> None:
+    interval = 1.0 / max(0.5, min(2.0, fps))
+    while True:
+        jpeg = await asyncio.to_thread(capture_screen_jpeg)
+        if jpeg:
+            await ws.send(encode_screen_frame(jpeg, target_device_id))
+        await asyncio.sleep(interval)
 
 
 def join_device(base_url: str, pairing_code: str, device_name: str) -> dict:
@@ -160,45 +198,56 @@ async def run(args) -> None:
 
     print(f"Paired PC device ID: {device_id}")
     allow_control = await asyncio.to_thread(confirm, "Allow this paired phone to request temporary control of this PC?")
-    async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=2**20) as ws:
-        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control}}))
-        print("Relay connected. Remote control permission:", "ON" if allow_control else "OFF")
+    share_screen = bool(args.share_screen and await asyncio.to_thread(confirm, "Share this PC screen with paired Shraddha devices? Sensitive active windows will pause sharing."))
+    async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
+        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen}}))
+        print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
         approved_until = 0.0
-        async for raw in ws:
-            if isinstance(raw, bytes):
-                continue
-            try:
-                message = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            kind = message.get("type")
-            if kind == "connected":
-                print("Connected to Shraddha AI device session.")
-            elif kind == "control_request":
-                if not allow_control:
-                    approved = False
-                else:
-                    approved = await asyncio.to_thread(
-                        confirm,
-                        f"Allow {message.get('requesterName', 'paired phone')} to control this PC for up to {message.get('requestedMinutes', 5)} minutes?"
-                    )
-                approved_until = time.time() + min(5, max(1, int(message.get("requestedMinutes", 5)))) * 60 if approved else 0
-                await ws.send(json.dumps({
-                    "type": "control_response",
-                    "requesterDeviceId": message.get("fromDeviceId", ""),
-                    "approved": approved,
-                    "minutes": 5 if approved else 0
-                }))
-                print("PC control", "approved" if approved else "denied")
-            elif kind == "remote_action":
-                if time.time() >= approved_until:
-                    print("Blocked remote action: local PC approval expired.")
+        screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
+        try:
+            async for raw in ws:
+                if isinstance(raw, bytes):
+                        continue
+                try:
+                    message = json.loads(raw)
+                except json.JSONDecodeError:
                     continue
-                action = message.get("action") or {}
-                result = await execute_action(action, args.allow_typing)
-                print("Remote action:", action.get("kind"), "=>", result)
-            elif kind == "peer_status":
-                print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
+                kind = message.get("type")
+                if kind == "connected":
+                    print("Connected to Shraddha AI device session.")
+                elif kind == "control_request":
+                    if not allow_control:
+                        approved = False
+                    else:
+                        approved = await asyncio.to_thread(
+                            confirm,
+                            f"Allow {message.get('requesterName', 'paired phone')} to control this PC for up to {message.get('requestedMinutes', 5)} minutes?"
+                        )
+                    approved_until = time.time() + min(5, max(1, int(message.get("requestedMinutes", 5)))) * 60 if approved else 0
+                    await ws.send(json.dumps({
+                        "type": "control_response",
+                        "requesterDeviceId": message.get("fromDeviceId", ""),
+                        "approved": approved,
+                        "minutes": 5 if approved else 0
+                    }))
+                    print("PC control", "approved" if approved else "denied")
+                elif kind == "remote_action":
+                    if time.time() >= approved_until:
+                        print("Blocked remote action: local PC approval expired.")
+                        continue
+                    action = message.get("action") or {}
+                    result = await execute_action(action, args.allow_typing)
+                    print("Remote action:", action.get("kind"), "=>", result)
+                elif kind == "peer_status":
+                    print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
+        finally:
+            if screen_task:
+                screen_task.cancel()
+                try:
+                    await screen_task
+                except asyncio.CancelledError:
+                    pass
+
 
 
 def main() -> int:
@@ -207,6 +256,9 @@ def main() -> int:
     parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
     parser.add_argument("--device-name", default="My Windows PC")
     parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")
+    parser.add_argument("--share-screen", action="store_true", help="Offer optional live PC screen sharing; still requires a separate local confirmation")
+    parser.add_argument("--screen-fps", type=float, default=1.0, help="PC screen share frame rate, clamped to 0.5–2 FPS")
+    parser.add_argument("--screen-target", default="", help="Optional paired device ID; blank broadcasts to paired devices")
     parser.add_argument("--forget-pairing", action="store_true", help="Delete saved PC pairing from Windows Credential Manager and exit")
     args = parser.parse_args()
     if args.forget_pairing:
