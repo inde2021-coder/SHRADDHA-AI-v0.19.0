@@ -318,6 +318,10 @@ wss.on('connection', (ws, ctx) => {
       const clientFrame = Buffer.from(data);
       if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
       const frameType = clientFrame[0];
+      // A paired socket is not implicit permission to watch another device.
+      // The sender must explicitly enable the matching screen/camera share toggle.
+      const shareCategory = frameType === 1 ? 'screen' : 'camera';
+      if (device.sharePermissions?.[shareCategory] !== true) return;
       const targetLength = clientFrame[1];
       if (clientFrame.length < 2 + targetLength + 1) return;
       const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
