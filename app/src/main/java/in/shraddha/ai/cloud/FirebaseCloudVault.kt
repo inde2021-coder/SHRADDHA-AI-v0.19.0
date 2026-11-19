@@ -53,7 +53,7 @@ class FirebaseCloudVault(private val context: Context) {
 
     fun signInAndSave(email: String, password: String, key: String, plaintext: String): Result<String> = runCatching {
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
-        require(plaintext.length <= 16000) { "Cloud memory is limited to 16,000 characters" }
+        require(plaintext.length <= 100000) { "Encrypted cloud backup is limited to 100,000 characters" }
         val normalizedEmail = email.trim()
         require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
         require(password.length >= 8) { "Password must contain at least 8 characters" }
@@ -81,6 +81,12 @@ class FirebaseCloudVault(private val context: Context) {
             decrypt(payload, password)
         }
     }
+
+    fun signInAndSaveBundle(email: String, password: String, bundleJson: String): Result<String> =
+        signInAndSave(email, password, "selected_device_backup_v1", bundleJson)
+
+    fun signInAndLoadBundle(email: String, password: String): Result<String?> =
+        signInAndLoad(email, password, "selected_device_backup_v1")
 
     private fun encrypt(value: String, password: String): String {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
