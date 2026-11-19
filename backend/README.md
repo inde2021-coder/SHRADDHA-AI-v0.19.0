@@ -46,3 +46,8 @@ Server-only configuration:
 - Mastodon: `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`, optional `MASTODON_VISIBILITY` (defaults to `unlisted`).
 
 The Mastodon host must be a public HTTPS origin. Tokens are never returned to the app or logged. This connector does not implement Instagram, Facebook, YouTube, or X publishing. Telegram bot posting is limited to the configured destination; Mastodon account scopes and visibility remain subject to the token owner's grants.
+
+
+## Visual Lens analysis modes
+
+The authenticated `POST /api/vision` route accepts `mode` values `general`, `objects`, `document`, and `machine`. Object mode structures visible objects/counts/relationships without identifying people. Document mode transcribes legible content and marks uncertain text. Machine mode separates visible observations from possible causes and includes electrical/mechanical safety boundaries. These are model-guidance modes, not calibrated measurement, guaranteed OCR, or a certified equipment diagnosis. Image quality and provider capability affect results.
