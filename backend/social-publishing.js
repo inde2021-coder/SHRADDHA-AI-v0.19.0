@@ -33,7 +33,6 @@ export function validateLinkedInVersion(value) {
   if (month < 1 || month > 12) throw new Error('LINKEDIN_VERSION month must be 01-12');
   return value;
 }
-}
 
 export function validateMastodonOrigin(value) {
   let url;
