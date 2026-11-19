@@ -1727,12 +1727,26 @@ class MainActivity : AppCompatActivity() {
                     val selected = list[index]
                     android.app.AlertDialog.Builder(this@MainActivity).setTitle("Withdraw ${names[index]}?").setMessage("Local profile और सभी biometric templates मिटेंगे। पहले से बने encrypted cloud backups में पुरानी copy अलग से रह सकती है।")
                         .setNegativeButton("Cancel", null).setPositiveButton("Withdraw & Delete") { _, _ ->
-                            val deleted = biometricVault.withdraw(selected.optString("id"))
+                            if (directoryReadFailed) {
+                                status.text = "Person directory could not be read safely; withdrawal was not attempted. Resolve the storage error first."
+                                return@setPositiveButton
+                            }
                             val updated = JSONArray()
                             val all = readPeople()
-                            for (i in 0 until all.length()) { val p = all.optJSONObject(i) ?: continue; if (p.optString("id") != selected.optString("id")) updated.put(p) }
-                            if (deleted.isSuccess) store.put("person_directory", updated.toString()).onSuccess { status.text = "Consent withdrawn; local profile and face/voice templates deleted."; refreshProfileList?.invoke() }.onFailure { status.text = "Profile delete failed: ${it.message}" }
-                            else status.text = "Biometric delete failed: ${deleted.exceptionOrNull()?.message}"
+                            for (i in 0 until all.length()) {
+                                val person = all.optJSONObject(i) ?: continue
+                                if (person.optString("id") != selected.optString("id")) updated.put(person)
+                            }
+                            if (directoryReadFailed) {
+                                status.text = "Person directory became unreadable; withdrawal was not attempted."
+                                return@setPositiveButton
+                            }
+                            biometricVault.withdraw(selected.optString("id"), updated.toString())
+                                .onSuccess {
+                                    status.text = "Consent withdrawn; local profile, face templates, voice templates and thresholds deleted."
+                                    refreshProfileList?.invoke()
+                                }
+                                .onFailure { status.text = "Atomic consent withdrawal failed: ${it.message}" }
                         }.show()
                 }.show()
             })
