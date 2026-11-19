@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
@@ -71,8 +71,12 @@ fun SettingsScreen(
     val colors = LocalNovaColors.current
     val context = LocalContext.current
 
-    var showApiKeyDialog by remember { mutableStateOf(false) }
-    var apiKeyInput by remember { mutableStateOf(ApiKeyStore.getKey(context)) }
+    var showGatewayDialog by remember { mutableStateOf(false) }
+    val savedGateway = remember { VoiceGatewaySettings.get(context) }
+    var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl) }
+    var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
+    var gatewaySaveError by remember { mutableStateOf<String?>(null) }
+    var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -155,10 +159,16 @@ fun SettingsScreen(
         ) {
             Column {
                 NovaSettingsRow(
-                    title = "Gemini API Key",
-                    subtitle = if (ApiKeyStore.hasKey(context)) "Configured locally" else "Tap to configure",
-                    icon = Icons.Default.Key,
-                    onClick = { showApiKeyDialog = true }
+                    title = "Secure Voice Backend",
+                    subtitle = if (gatewayConfigured) "HTTPS backend configured • token encrypted" else "Required for secure Live Voice",
+                    icon = Icons.Default.Security,
+                    onClick = {
+                        val current = VoiceGatewaySettings.get(context)
+                        gatewayUrlInput = current.baseUrl
+                        gatewayTokenInput = current.gatewayToken
+                        gatewaySaveError = null
+                        showGatewayDialog = true
+                    }
                 )
                 NovaSettingsRow(
                     title = "Assistant Name",
@@ -268,39 +278,61 @@ fun SettingsScreen(
         }
     }
 
-    // API Key Dialog
-    if (showApiKeyDialog) {
+    // Secure Voice Gateway Dialog
+    if (showGatewayDialog) {
         AlertDialog(
-            onDismissRequest = { showApiKeyDialog = false },
-            title = { Text(text = "Gemini API Key", color = colors.textPrimary) },
+            onDismissRequest = { showGatewayDialog = false },
+            title = { Text(text = "Secure Gemini Live Backend", color = colors.textPrimary) },
             text = {
                 Column {
                     Text(
-                        text = "Enter your Google Gemini API key. It is stored securely on your device only.",
+                        text = "Voice sessions request a one-use, short-lived Gemini token from your HTTPS backend. Keep GATEWAY_TOKEN private. The permanent Gemini API key stays on the server.",
                         fontSize = 13.sp,
                         color = colors.textSecondary
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     NovaTextField(
-                        value = apiKeyInput,
-                        onValueChange = { apiKeyInput = it },
-                        placeholder = "AIzaSy..."
+                        value = gatewayUrlInput,
+                        onValueChange = { gatewayUrlInput = it },
+                        placeholder = "https://your-backend.example"
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NovaTextField(
+                        value = gatewayTokenInput,
+                        onValueChange = { gatewayTokenInput = it },
+                        placeholder = "Backend GATEWAY_TOKEN"
+                    )
+                    if (gatewaySaveError != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(gatewaySaveError!!, color = colors.error, fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
                 NovaButton(
-                    text = "Save Key",
+                    text = "Save Secure Backend",
                     onClick = {
-                        ApiKeyStore.saveKey(context, apiKeyInput)
-                        showApiKeyDialog = false
+                        val result = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
+                        result.onSuccess {
+                            gatewayConfigured = true
+                            gatewaySaveError = null
+                            showGatewayDialog = false
+                        }.onFailure {
+                            gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                        }
                     }
                 )
             },
             dismissButton = {
                 NovaButton(
-                    text = "Cancel",
-                    onClick = { showApiKeyDialog = false },
+                    text = "Clear",
+                    onClick = {
+                        VoiceGatewaySettings.clear(context)
+                        gatewayUrlInput = ""
+                        gatewayTokenInput = ""
+                        gatewayConfigured = false
+                        showGatewayDialog = false
+                    },
                     type = NovaButtonType.TEXT
                 )
             },
