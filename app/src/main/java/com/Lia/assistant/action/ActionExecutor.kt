@@ -91,27 +91,34 @@ object ActionExecutor {
                 val lookup = ContactResolver.lookup(context, contactName)
                 val phoneNumber = when (lookup) {
                     is ContactLookupResult.Found -> lookup.phoneNumber
-                    else -> contactName
+                    ContactLookupResult.NoPermission -> {
+                        result.put("status", "error")
+                        result.put("action", "contacts_permission_required")
+                        result.put("message", "Contacts permission is required to resolve this name. You can provide a full phone number instead.")
+                        return result
+                    }
+                    ContactLookupResult.NotFound -> {
+                        if (ContactResolver.isDirectPhoneNumber(contactName)) contactName else {
+                            result.put("status", "error")
+                            result.put("action", "recipient_not_found")
+                            result.put("message", "Recipient was not found in contacts. Provide a full phone number.")
+                            return result
+                        }
+                    }
                 }
 
                 val isWhatsApp = targetApp == "whatsapp"
-                val status = if (isWhatsApp) {
+                val composerStatus = if (isWhatsApp) {
                     CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
                 } else {
                     CommIntents.openSmsComposer(context, phoneNumber, messageText)
                 }
 
-                // If accessibility service is active, auto-tap Send
-                val service = NovaAccessibilityService.instance
-                val finalStatus = if (service != null && status == "composer_opened") {
-                    service.autoTapSend(isWhatsApp)
-                } else {
-                    status
-                }
-
-                result.put("status", "success")
-                result.put("action", finalStatus)
+                // Never auto-press Send. The user reviews the recipient and message in the target app.
+                result.put("status", if (composerStatus == "composer_opened") "pending_user_confirmation" else "error")
+                result.put("action", composerStatus)
                 result.put("recipient", phoneNumber)
+                result.put("message", if (composerStatus == "composer_opened") "Draft opened. Review it and tap Send yourself; nothing has been sent by Shraddha AI." else "Could not open the message composer.")
             }
 
             "read_screen" -> {
@@ -197,31 +204,50 @@ object ActionExecutor {
                 }
             }
 
-            "execute_social_media_task" -> {
-                result.put("status", "success")
-                result.put("task_id", "task_${System.currentTimeMillis()}")
-                result.put("action", "social_task_queued")
-                result.put("message", "Social agent initialized. Confirmation will be requested before publishing.")
-            }
-
-            "social_media_task_control" -> {
-                val cmd = args.optString("command", "STATUS")
-                result.put("status", "success")
-                result.put("action", "command_executed")
-                result.put("command", cmd)
+            "execute_social_media_task", "social_media_task_control" -> {
+                result.put("status", "unsupported")
+                result.put("action", "social_publishing_not_implemented")
+                result.put("message", "Social publishing automation is not implemented in this build. No post or task was created.")
             }
 
             "execute_whatsapp_task" -> {
-                result.put("status", "success")
-                result.put("task_id", "wa_${System.currentTimeMillis()}")
-                result.put("action", "whatsapp_task_queued")
+                val action = args.optString("action", "").uppercase()
+                if (action != "SEND_MESSAGE") {
+                    result.put("status", "unsupported")
+                    result.put("action", "whatsapp_action_not_implemented")
+                    result.put("message", "Only SEND_MESSAGE draft preparation is supported. Reading/searching chats and chat management are not implemented.")
+                } else {
+                    val recipient = args.optString("phone_number").ifBlank { args.optString("contact_name") }.trim()
+                    val message = args.optString("message").trim()
+                    if (recipient.isBlank() || message.isBlank()) {
+                        result.put("status", "error")
+                        result.put("message", "A recipient and message body are required.")
+                    } else {
+                        val lookup = ContactResolver.lookup(context, recipient)
+                        val number = when (lookup) {
+                            is ContactLookupResult.Found -> lookup.phoneNumber
+                            ContactLookupResult.NoPermission -> if (ContactResolver.isDirectPhoneNumber(recipient)) recipient else ""
+                            ContactLookupResult.NotFound -> if (ContactResolver.isDirectPhoneNumber(recipient)) recipient else ""
+                        }
+                        if (number.isBlank()) {
+                            result.put("status", "error")
+                            result.put("action", "recipient_not_found")
+                            result.put("message", "Provide a full phone number or grant Contacts permission.")
+                        } else {
+                            val opened = CommIntents.openWhatsAppComposer(context, number, message)
+                            result.put("status", if (opened == "composer_opened") "pending_user_confirmation" else "error")
+                            result.put("action", opened)
+                            result.put("recipient", number)
+                            result.put("message", "Review the WhatsApp draft and tap Send yourself. No message was sent automatically.")
+                        }
+                    }
+                }
             }
 
             "whatsapp_task_control" -> {
-                val cmd = args.optString("command", "STATUS")
-                result.put("status", "success")
-                result.put("action", "command_executed")
-                result.put("command", cmd)
+                result.put("status", "unsupported")
+                result.put("action", "manual_confirmation_only")
+                result.put("message", "Shraddha AI will not auto-send or auto-confirm messages. Review and send the draft inside WhatsApp.")
             }
 
             else -> {
