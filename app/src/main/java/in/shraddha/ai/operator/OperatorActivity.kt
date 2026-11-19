@@ -110,7 +110,8 @@ class OperatorActivity : Activity() {
     }
 
     private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>) {
-        val runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+        lateinit var runner: AdaptiveWorkflowRunner
+        runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
             val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
             log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
             if (event.state == OperatorTaskState.WAITING_CONFIRMATION) {
