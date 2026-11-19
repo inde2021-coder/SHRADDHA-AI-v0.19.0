@@ -297,7 +297,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                         finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.")
                     } else {
                         val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
-                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.")
+                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold • SFace inference ${engine.lastFaceInferenceMs} ms.")
                     }
                 } catch (error: Exception) {
                     file.delete()
@@ -511,11 +511,11 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
                 val id = extras.getStringExtra(EXTRA_PERSON_ID).orEmpty()
                 val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
-                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
+                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. ECAPA inference ${engine.lastSpeakerInferenceMs} ms • model load ${engine.speakerModelLoadMs} ms • raw audio discarded.") }
                 else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
                     val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
-                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
+                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.")
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
             finally {
