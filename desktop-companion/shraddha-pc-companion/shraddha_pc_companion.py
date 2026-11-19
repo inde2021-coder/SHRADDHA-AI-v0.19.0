@@ -18,7 +18,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "offline_chat"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "offline_chat"}
 
 
 def normalize_point(value: object) -> float:
@@ -44,12 +44,16 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return False
     if kind == "offline_chat":
         return isinstance(action.get("prompt"), str) and 0 < len(action["prompt"].strip()) <= 4000
-    if kind in {"file_list", "file_read"} and not file_root:
+    if kind in {"file_list", "file_read", "file_search"} and not file_root:
         return False
     if kind == "file_list":
         return isinstance(action.get("path", ""), str) and len(action.get("path", "")) <= 500
     if kind == "file_read":
         return isinstance(action.get("path"), str) and 0 < len(action["path"]) <= 500
+    if kind == "file_search":
+        query = action.get("query")
+        limit = action.get("limit", 20)
+        return isinstance(query, str) and 0 < len(query.strip()) <= 120 and isinstance(limit, int) and not isinstance(limit, bool) and 1 <= limit <= 50
     if kind in {"tap", "swipe"}:
         keys = ("x", "y") if kind == "tap" else ("x1", "y1", "x2", "y2")
         try:
@@ -113,6 +117,78 @@ def read_safe_text_file(root: str, relative: str) -> str:
     if candidate.stat().st_size > 256_000:
         raise ValueError("File exceeds 256 KB preview limit")
     return candidate.read_text(encoding="utf-8", errors="replace")[:256_000]
+
+
+
+def redact_ocr_text(raw: str) -> str:
+    """Redact likely credentials and long identifiers before OCR leaves the PC."""
+    if not isinstance(raw, str):
+        return ""
+    sensitive = re.compile(
+        r"(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|"
+        r"account number|card number|expiry|expiration|पासवर्ड|ओटीपी|पिन|गुप्त कोड|"
+        r"सत्यापन कोड|खाता संख्या|कार्ड नंबर|यूपीआई"
+    )
+    long_number = re.compile(r"(?<!\d)(?:\d[ -]?){4,}(?!\d)")
+    output = []
+    hide_next = 0
+    for line in raw[:24000].splitlines()[:200]:
+        value = line.strip()[:500]
+        if not value:
+            continue
+        if sensitive.search(value):
+            output.append("[संवेदनशील OCR पंक्ति छिपाई गई]")
+            hide_next = 2
+            continue
+        if hide_next:
+            output.append("[संवेदनशील जानकारी छिपाई गई]")
+            hide_next -= 1
+            continue
+        value = long_number.sub("[अंक छिपाए गए]", value)
+        output.append(value)
+    return "\n".join(output)[:12000]
+
+
+def search_safe_text_files(root: str, relative: str, query: str, limit: int = 20) -> list[dict]:
+    """Search approved text files only, with traversal, depth, count and size limits."""
+    from pathlib import Path
+    _, folder = safe_relative_path(root, relative or ".")
+    if not folder.exists() or not folder.is_dir():
+        raise ValueError("Folder does not exist")
+    needle = query.strip().casefold()
+    if not needle or len(needle) > 120:
+        raise ValueError("Search query must be 1-120 characters")
+    allowed = {".txt", ".md", ".csv", ".json", ".log", ".py", ".js", ".kt", ".html", ".css", ".xml", ".yaml", ".yml"}
+    matches, visited, total_bytes = [], 0, 0
+    for current, dirs, files in __import__("os").walk(folder, followlinks=False):
+        current_path = Path(current)
+        depth = len(current_path.relative_to(folder).parts)
+        dirs[:] = [name for name in dirs if not name.startswith(".") and not (current_path / name).is_symlink()]
+        if depth >= 3:
+            dirs[:] = []
+        for name in sorted(files, key=str.casefold):
+            path = current_path / name
+            if name.startswith(".") or path.is_symlink() or path.suffix.lower() not in allowed:
+                continue
+            visited += 1
+            if visited > 2000:
+                return matches
+            try:
+                size = path.stat().st_size
+                if size > 256_000 or total_bytes + size > 4_000_000:
+                    continue
+                total_bytes += size
+                content = path.read_text(encoding="utf-8", errors="replace")
+                index = content.casefold().find(needle)
+                if index >= 0:
+                    start, end = max(0, index - 100), min(len(content), index + len(needle) + 180)
+                    matches.append({"path": str(path.relative_to(Path(root).expanduser().resolve()))[:500],
+                                    "snippet": redact_ocr_text(content[start:end])[:400]})
+                    if len(matches) >= limit:
+                        return matches
+            except (OSError, ValueError):
+                continue
+    return matches
 
 
 def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
@@ -290,7 +366,7 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             return json.dumps({"status": "offline_inference_complete", "answer": answer[:10000]}, ensure_ascii=False)
         except Exception as exc:
             return "offline_inference_failed: " + str(exc)[:180]
-    if kind in {"ocr", "file_list", "file_read"}:
+    if kind in {"ocr", "file_list", "file_read", "file_search"}:
         if kind == "ocr":
             try:
                 import pygetwindow
@@ -310,7 +386,8 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                 from PIL import Image
                 image = Image.open(io.BytesIO(jpeg))
                 text = await asyncio.to_thread(pytesseract.image_to_string, image, lang="eng+hin")
-                return json.dumps({"status": "ocr_complete", "window": title[:120], "text": text[:12000]}, ensure_ascii=False)
+                safe_text = redact_ocr_text(text)
+                return json.dumps({"status": "ocr_complete", "window": title[:120], "text": safe_text}, ensure_ascii=False)
             except Exception as exc:
                 return "ocr_unavailable_install_tesseract_and_pytesseract: " + str(exc)[:180]
         if not await asyncio.to_thread(confirm, f"Allow {kind} within approved folder {file_root!r}?"):
@@ -318,6 +395,8 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
         try:
             if kind == "file_list":
                 return json.dumps({"status": "file_list", "items": list_safe_files(file_root, action.get("path", ""))}, ensure_ascii=False)
+            if kind == "file_search":
+                return json.dumps({"status": "file_search", "matches": search_safe_text_files(file_root, action.get("path", ""), action["query"], action.get("limit", 20))}, ensure_ascii=False)
             return json.dumps({"status": "file_read", "path": action["path"], "text": read_safe_text_file(file_root, action["path"])}, ensure_ascii=False)
         except Exception as exc:
             return "file_access_blocked: " + str(exc)[:180]
