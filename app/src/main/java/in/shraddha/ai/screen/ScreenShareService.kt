@@ -27,12 +27,17 @@ class ScreenShareService : Service() {
     private var display: VirtualDisplay? = null
     private var thread: HandlerThread? = null
     private var lastFrameAt = 0L
+    private var targetDeviceId: String = ""
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
         @Suppress("DEPRECATION")
         val data: Intent? = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java) else intent?.getParcelableExtra(EXTRA_DATA)
-        if (resultCode != Activity.RESULT_OK || data == null) { stopSelf(); return START_NOT_STICKY }
+        targetDeviceId = intent?.getStringExtra(EXTRA_TARGET_DEVICE_ID).orEmpty()
+        if (resultCode != Activity.RESULT_OK || data == null || targetDeviceId.isBlank()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         createNotification()
         try {
             val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -52,7 +57,7 @@ class ScreenShareService : Service() {
         }
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("Shraddha AI screen sharing is active")
-            .setContentText("Your screen is being shared with paired devices. Tap Stop in Shraddha AI to end.")
+            .setContentText("Your screen is being shared with the selected paired device. Stop it in Shraddha AI to end.")
             .setSmallIcon(android.R.drawable.ic_menu_view).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(41, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         else startForeground(41, notification)
@@ -82,7 +87,7 @@ class ScreenShareService : Service() {
                 val cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height)
                 val out = ByteArrayOutputStream()
                 cropped.compress(Bitmap.CompressFormat.JPEG, 48, out)
-                DeviceLinkManager.sendFrame(out.toByteArray(), 1)
+                DeviceLinkManager.sendFrame(out.toByteArray(), 1, targetDeviceId)
                 bitmap.recycle(); if (cropped !== bitmap) cropped.recycle(); lastFrameAt = now
             } catch (_: Exception) { /* A dropped frame is safer than stopping the share session. */ }
             finally { image.close() }
@@ -97,5 +102,5 @@ class ScreenShareService : Service() {
     }
     override fun onBind(intent: Intent?): IBinder? = null
 
-    companion object { const val EXTRA_RESULT_CODE = "resultCode"; const val EXTRA_DATA = "projectionData" }
+    companion object { const val EXTRA_RESULT_CODE = "resultCode"; const val EXTRA_DATA = "projectionData"; const val EXTRA_TARGET_DEVICE_ID = "targetDeviceId" }
 }
