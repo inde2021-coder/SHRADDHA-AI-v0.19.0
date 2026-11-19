@@ -146,28 +146,18 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "execute_social_media_task",
-                description = "Social publishing is not implemented in this build. Do not claim to create or publish posts.",
+                description = "Prepares a text post for Telegram, Mastodon, Bluesky or LinkedIn. mode defaults to DRAFT and never publishes. For PUBLISH, the first call returns the exact platform and text preview with confirmation_required. Show that exact preview to the user and ask for explicit approval. Only after approval call again with user_confirmed=yes, confirmed_platform equal to the preview platform, and confirmed_text byte-for-byte equal to the preview text. A changed platform or text requires new approval. Only text posts are supported; no media upload, Reels, Stories or scheduled posts.",
                 params = mapOf(
-                    "platform" to "Platform: 'INSTAGRAM' or 'FACEBOOK'",
-                    "action" to "Action: 'CREATE_POST', 'CREATE_REEL', 'CREATE_STORY', or 'TEXT_POST'",
-                    "media_uri" to "Optional local content:// URI of the media to share",
-                    "caption" to "Caption or text content for the post",
-                    "mode" to "'DRAFT' (prepare only) or 'PUBLISH' (requires explicit confirmation before final publish)",
-                    "target_account" to "Optional account handle or name"
+                    "platform" to "One of: 'telegram', 'mastodon', 'bluesky', 'linkedin'",
+                    "action" to "Use 'TEXT_POST' or 'CREATE_POST' for a text-only post",
+                    "text" to "Exact text to prepare or publish",
+                    "caption" to "Optional alias for text when text is omitted",
+                    "mode" to "'DRAFT' (default, no network publication) or 'PUBLISH' (requires exact-preview approval)",
+                    "user_confirmed" to "yes only after the user explicitly approves the exact platform and complete preview",
+                    "confirmed_platform" to "Exact platform shown in the confirmation preview",
+                    "confirmed_text" to "Exact text shown in the confirmation preview; must match byte-for-byte"
                 ),
-                required = listOf("platform", "action")
-            )
-        )
-
-        array.put(
-            GeminiToolUtils.functionDecl(
-                name = "social_media_task_control",
-                description = "Social publishing tasks are not implemented in this build.",
-                params = mapOf(
-                    "command" to "Control command: 'CONFIRM', 'REJECT', 'RESUME', 'CANCEL', or 'STATUS'",
-                    "task_id" to "Task ID returned from execute_social_media_task"
-                ),
-                required = listOf("command", "task_id")
+                required = listOf("platform", "action", "text")
             )
         )
 
