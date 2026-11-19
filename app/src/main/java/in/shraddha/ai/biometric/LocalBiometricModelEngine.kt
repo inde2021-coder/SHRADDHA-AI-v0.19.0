@@ -114,6 +114,7 @@ class LocalBiometricModelEngine : Closeable {
                 }
             }
         } finally {
+            values.fill(0f)
             lastFaceInferenceMs = (System.nanoTime() - started) / 1_000_000L
         }
     }
