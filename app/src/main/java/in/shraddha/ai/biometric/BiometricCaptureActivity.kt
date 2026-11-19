@@ -191,10 +191,20 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
-        val media = proxy.image ?: run { proxy.close(); return }
+        val media = proxy.image ?: run {
+            livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
+            proxy.close()
+            if (livenessGate.isExpired) showChallengeRestart("Live challenge expired. Restart it to continue.")
+            return
+        }
         val input = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
         val task = detector?.process(input)
-        if (task == null) { proxy.close(); return }
+        if (task == null) {
+            livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
+            proxy.close()
+            if (livenessGate.isExpired) showChallengeRestart("Live challenge expired. Restart it to continue.")
+            return
+        }
         task.addOnSuccessListener { faces ->
             if (livenessPassed.get()) return@addOnSuccessListener
             if (faces.size != 1) {
