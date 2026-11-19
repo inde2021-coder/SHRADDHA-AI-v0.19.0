@@ -130,8 +130,8 @@ class LocalBiometricModelEngine : Closeable {
         val started = System.nanoTime()
         try {
             val wav = OnnxTensor.createTensor(environment, nativeFloatBuffer(monoPcm16k), longArrayOf(1, monoPcm16k.size.toLong()))
-            val lens = OnnxTensor.createTensor(environment, nativeFloatBuffer(floatArrayOf(1f)), longArrayOf(1))
             wav.use { w ->
+                val lens = OnnxTensor.createTensor(environment, nativeFloatBuffer(floatArrayOf(1f)), longArrayOf(1))
                 lens.use { l ->
                     val result = session.run(mapOf("wav" to w, "lens" to l))
                     result.use {
