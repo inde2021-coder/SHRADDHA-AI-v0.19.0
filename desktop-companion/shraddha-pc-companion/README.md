@@ -18,6 +18,19 @@ py -m pip install -r requirements.txt
 py shraddha_pc_companion.py --base-url https://YOUR-RELAY-DOMAIN --pairing-code 123456 --device-name "Office PC"
 ```
 
+पहली pairing के बाद device credentials Windows Credential Manager में सुरक्षित रखे जाते हैं। अगली बार केवल यह चलाएँ:
+
+```powershell
+py shraddha_pc_companion.py
+```
+
+Pairing हटाने के लिए:
+
+```powershell
+py shraddha_pc_companion.py --forget-pairing
+
+```
+
 Text entry enable करना हो तो `--allow-typing` जोड़ें। Text paste के लिए हर बार PC पर अलग confirmation आएगा।
 
 ## Consent & limits
