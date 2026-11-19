@@ -547,7 +547,6 @@ class BiometricCaptureActivity : AppCompatActivity() {
         cameraProvider = null
         runCatching { detector?.close() }
         detector = null
-        cacheDir.listFiles()?.filter { it.name.startsWith("biometric-frame-") }?.forEach { it.delete() }
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
         Thread({
             val modelFinished = runCatching { modelLoadThread?.join(); true }.getOrDefault(false)
@@ -555,8 +554,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val cameraFinished = if (::cameraExecutor.isInitialized) {
                 runCatching { cameraExecutor.awaitTermination(30, TimeUnit.SECONDS) }.getOrDefault(false)
             } else true
-            if (modelFinished && captureFinished && cameraFinished && engineLazy.isInitialized()) {
-                runCatching { engine.close() }
+            if (modelFinished && captureFinished && cameraFinished) {
+                cacheDir.listFiles()?.filter { it.name.startsWith("biometric-frame-") }?.forEach { it.delete() }
+                if (engineLazy.isInitialized()) runCatching { engine.close() }
             }
         }, "BiometricCleanup").start()
         super.onDestroy()
