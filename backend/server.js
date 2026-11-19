@@ -199,7 +199,7 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const body = await readBody(req);
       if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 12000) return json(res, 400, { error: 'prompt must be 1-12000 characters' });
-      const provider = ['openai', 'gemini', 'anthropic', 'groq', 'perplexity'].includes(body.provider) ? body.provider : 'gemini';
+      const provider = ['auto', 'openai', 'gemini', 'anthropic', 'groq', 'perplexity'].includes(body.provider) ? body.provider : 'gemini';
       const result = await askProviderDetailed(provider, body.prompt.trim());\n      return json(res, 200, { provider: result.provider, requestedProvider: provider, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
     }
     if (req.method === 'POST' && req.url === '/api/agent/plan') {
@@ -271,7 +271,7 @@ const server = http.createServer(async (req, res) => {
       const domain = domains.includes(body.domain) ? body.domain : 'general';
       const mode = modes.includes(body.mode) ? body.mode : 'learn';
       if (typeof body.question !== 'string' || !body.question.trim() || body.question.length > 16000) return json(res, 400, { error: 'question must be 1-16000 characters' });
-      const provider = ['openai','gemini','anthropic','groq','perplexity'].includes(body.provider) ? body.provider : 'gemini';
+      const provider = ['auto','openai','gemini','anthropic','groq','perplexity'].includes(body.provider) ? body.provider : 'gemini';
       const domainRules = {
         electronics: 'Teach electronics: circuit theory, components, PCB, sensors, embedded systems, diagnostics. Never advise live mains probing or bypassing fuses/interlocks. Ask for voltage/current/model and insist on isolation before repair.',
         electrical: 'Teach electrical engineering: power systems, machines, wiring concepts, protection and calculations. Treat mains/high voltage as lethal; give conceptual guidance only for hazardous work and require a licensed electrician.',
