@@ -85,8 +85,17 @@ class MainActivity : AppCompatActivity() {
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
+        val startupPermissions = mutableListOf(
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.SEND_SMS
+        )
+        if (Build.VERSION.SDK_INT >= 33) startupPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        val missingStartupPermissions = startupPermissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missingStartupPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missingStartupPermissions.toTypedArray(), 11)
         }
 
         pageRoot = LinearLayout(this).apply {
