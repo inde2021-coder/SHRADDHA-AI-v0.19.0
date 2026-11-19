@@ -37,6 +37,8 @@ Settings → Encrypted Voice Memory default में OFF है। ON करन
 5. फिर exact app और workflow नाम के साथ चलाने को कहें। Shraddha हर चरण पर स्क्रीन फिर पढ़ेगी, target दोबारा खोजेगी और परिणाम verify करेगी।
 6. Send/Delete/Pay/Publish/Submit जैसे जोखिम वाले workflow के लिए पहले आपसे स्पष्ट पुष्टि ली जाएगी। OTP/PIN/password/UPI security fields block रहेंगे।
 7. किसी ऐप के UI में बदलाव हो तो उसका workflow फिर से train/verify करें; पुराने coordinates replay नहीं किए जाते।
+8. Operator Console में workflow चुनने पर यदि सुरक्षित checkpoint उपलब्ध है तो **Checkpoint से Resume** चुनें; अन्यथा **शुरू से चलाएँ**। Voice में saved workflows सूचीबद्ध कराकर उसी exact workflow को `resume=true` के साथ आगे बढ़ाया जा सकता है।
+9. Resume केवल पहले से सत्यापित चरण के बाद से होता है। जिस चरण की कार्रवाई बीच में रुक गई हो, उसे सुरक्षा के लिए अपने-आप दोबारा नहीं चलाया जाता। हर अगले जोखिम वाले चरण पर अलग पुष्टि माँगी जाती है।
 
 Voice operator tools: screen पढ़ना, unique label पर tap, safe field में text भरना, scroll, directional swipe, Back और Home। Accessibility text कम होने पर opt-in local OCR fallback उपलब्ध है; OCR-only custom canvas पर tap अभी उपलब्ध नहीं है।
 
