@@ -113,3 +113,12 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Resume continues from the verified checkpoint rather than restarting the previous action. Declining leaves the plan stopped; it does not execute.
 
 - Resource-ID text entry now also requires exactly one visible, editable, non-sensitive field; duplicate IDs are refused rather than filling the first match.
+
+
+## People Memory model packaging follow-up (2026-11-19)
+- Android Gradle now downloads the real OpenCV Zoo SFace 2021dec and ECAPA-TDNN ONNX weights from pinned upstream revisions.
+- Build-time SHA-256 checks reject unexpected or corrupted model files. The weights are packaged in APK assets; the app verifies them again when copying into app-private storage before inference.
+- Third-party notices and Apache-2.0 text are packaged alongside the model assets.
+- The first People Memory capture installs both models on a worker thread; the app does not copy the large model files at every ordinary startup.
+- Active blink/head-turn challenge now requires stable consecutive frames and expires after 45 seconds. It remains a heuristic, not certified PAD. A certified claim still requires a licensed PAD SDK/product and independent ISO/IEC 30107-3 evidence for the exact deployed version, plus physical-device validation.
+- Android CI must complete the full model download, checksum validation, unit tests and APK packaging before the updated APK can be marked verified.
