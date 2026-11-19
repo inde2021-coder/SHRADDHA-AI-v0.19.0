@@ -105,3 +105,9 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Workflow resume confirmation is scoped to the single checkpointed waiting step. A single confirmation can no longer authorize later destructive steps in the same workflow.
 - Added unit tests for sensitive-field blocking, payment-security fields, external side-effect confirmation, security-setting blocks and normal navigation.
 - CI verification for these follow-up changes is pending; these source changes still require real-device accessibility validation.
+
+
+## Per-step workflow approval UI (2026-11-19)
+- Connected the workflow runner's WAITING_CONFIRMATION state to a real Android confirmation dialog.
+- The dialog approves only the current checkpointed step; each later risky step prompts again.
+- Resume continues from the verified checkpoint rather than restarting the previous action. Declining leaves the plan stopped; it does not execute.
