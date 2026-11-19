@@ -647,34 +647,53 @@ class MainActivity : AppCompatActivity() {
             addView(request)
             val output = TextView(this@MainActivity).apply { text = "Generated work यहाँ दिखाई देगा। इसे local project library में save या Android share sheet से export कर सकते हैं।"; setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(14), dp(14), dp(14), dp(14)); background = rounded(0xFF111B2D.toInt(), 16); minHeight = dp(110) }
             addView(output)
-            val library = getSharedPreferences("shraddha_expert_library", MODE_PRIVATE)
+            val library = `in`.shraddha.ai.future.ExpertProjectLibrary(this@MainActivity)
             var lastTitle = "Shraddha AI Project"
             var lastOutput = ""
+            var lastWorkspace = ""
+            var lastTask = ""
+            var lastProvider = ""
             addView(actionButton("✦ Generate with Expert Hub", "Real server-side AI request • selected provider key required") {
                 val base = relayUrl.text.toString().trim(); val text = request.text.toString().trim()
                 if (!validRelay(base) || text.isBlank()) { status.text = "पहले HTTPS relay URL और अपना काम लिखें।"; return@actionButton }
                 output.text = "${workspaces[workspacePicker.selectedItemPosition].second} तैयार कर रहा है…"
                 lastTitle = "${workspaces[workspacePicker.selectedItemPosition].second} — ${tasks[taskPicker.selectedItemPosition].second}"
-                DeviceLinkManager.studioWork(base, gatewayToken.text.toString(), providerPicker.selectedItem.toString(), workspaces[workspacePicker.selectedItemPosition].first, tasks[taskPicker.selectedItemPosition].first, text) { response -> runOnUiThread {
+                lastWorkspace = workspaces[workspacePicker.selectedItemPosition].first
+                lastTask = tasks[taskPicker.selectedItemPosition].first
+                lastProvider = providerPicker.selectedItem.toString()
+                DeviceLinkManager.studioWork(base, gatewayToken.text.toString(), lastProvider, lastWorkspace, lastTask, text) { response -> runOnUiThread {
                     val raw = response.getOrElse { "Request failed: ${it.message}" }
                     lastOutput = runCatching { JSONObject(raw).optString("answer").ifBlank { raw } }.getOrDefault(raw)
                     output.text = lastOutput
                     status.text = if (response.isSuccess) "Expert Hub response ready. Review before using safety-critical output." else "Expert Hub request failed. Check backend/provider setup."
                 } }
             })
-            addView(actionButton("Save to My Project Library", "Locally saved on this phone; no automatic cloud sync") {
+            addView(actionButton("Save to My Project Library", "Android Keystore encrypted • included in consented recovery backups") {
                 if (lastOutput.isBlank()) { status.text = "पहले कोई AI output generate करें।"; return@actionButton }
-                val entries = library.getStringSet("items", emptySet())?.toMutableList() ?: mutableListOf()
-                val record = JSONObject().put("title", lastTitle).put("content", lastOutput.take(12000)).put("savedAt", System.currentTimeMillis()).toString()
-                entries.add(0, record); library.edit().putStringSet("items", entries.take(12).toSet()).apply()
-                status.text = "Project इस फोन की local library में save हुआ।"
+                val saved = library.save(lastTitle, lastOutput, lastWorkspace, lastTask, lastProvider)
+                status.text = saved.fold(
+                    { "Project encrypted library में save हुआ। कुल ${it.size} saved projects." },
+                    { "Project save failed safely: ${it.message}" }
+                )
             })
-            addView(actionButton("Open Saved Projects", "पिछले 20 locally saved outputs देखें") {
-                val entries = library.getStringSet("items", emptySet())?.toList().orEmpty().sortedByDescending { runCatching { JSONObject(it).optLong("savedAt") }.getOrDefault(0L) }
+            addView(actionButton("Open Saved Projects", "पिछले 20 encrypted projects देखें") {
+                val loaded = library.load()
+                if (loaded.isFailure) { status.text = "Project library नहीं खुली: ${loaded.exceptionOrNull()?.message}"; return@actionButton }
+                val entries = loaded.getOrDefault(emptyList())
                 if (entries.isEmpty()) { Toast.makeText(this@MainActivity, "अभी कोई saved project नहीं है।", Toast.LENGTH_SHORT).show(); return@actionButton }
-                val titles = entries.map { runCatching { JSONObject(it).optString("title", "Saved project") }.getOrDefault("Saved project") }
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("My Project Library").setItems(titles.toTypedArray()) { _, index ->
-                    val item = JSONObject(entries[index]); lastTitle = item.optString("title"); lastOutput = item.optString("content"); output.text = lastOutput
+                val labels = entries.map { entry ->
+                    val date = java.text.SimpleDateFormat("dd MMM, HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(entry.savedAt))
+                    "${entry.title} • $date"
+                }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("My Encrypted Project Library").setItems(labels.toTypedArray()) { _, index ->
+                    val item = entries[index]
+                    lastTitle = item.title
+                    lastOutput = item.content
+                    lastWorkspace = item.workspace
+                    lastTask = item.task
+                    lastProvider = item.provider
+                    output.text = lastOutput
                 }.setNegativeButton("Close", null).show()
             })
             addView(actionButton("Share Current Work", "Android share sheet • text/document compatible apps") {
