@@ -259,8 +259,12 @@ class FirebaseCloudVault(private val context: Context) {
             require(storagePath == "users/${user.uid}/backups/${revisionId}.enc")
             val size = metadata.getLong("sizeBytes") ?: error("Storage backup size is missing")
             require(size in 1..(2L * 1024 * 1024)) { "Storage backup size is invalid" }
-            val bytes = FirebaseStorage.getInstance(app).reference.child(storagePath)
-                .getBytes(2L * 1024 * 1024).await()
+            val storageRef = FirebaseStorage.getInstance(app).reference.child(storagePath)
+            val objectMetadata = storageRef.metadata.await()
+            require(objectMetadata.contentType == "application/octet-stream")
+            require(objectMetadata.getCustomMetadata("format") == "AES-256-GCM/PBKDF2-SHA256-v1")
+            require(objectMetadata.sizeBytes == size) { "Storage object metadata does not match Firestore metadata" }
+            val bytes = storageRef.getBytes(2L * 1024 * 1024).await()
             try {
                 require(bytes.size.toLong() == size) { "Downloaded backup size does not match metadata" }
                 decrypt(String(bytes, Charsets.UTF_8), password)
