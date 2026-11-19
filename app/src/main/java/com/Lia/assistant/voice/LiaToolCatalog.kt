@@ -19,7 +19,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "call_contact",
-                description = "Opens the Android dialer with a matched contact or number. The user must review and tap Call; never place a call silently.",
+                description = "Finds the named contact and starts a direct phone call after Android Phone permission has been granted. If multiple contacts match, ask the user which one.",
                 params = mapOf("contact_name" to "The contact name or phone number to call"),
                 required = listOf("contact_name")
             )
@@ -28,7 +28,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "message_contact",
-                description = "Prepares an SMS or WhatsApp message draft. The user must review and tap Send; never send automatically.",
+                description = "Finds the named contact and sends the dictated SMS or WhatsApp message automatically after the required Android permissions are granted. Ask for message text if missing and clarify ambiguous contacts.",
                 params = mapOf(
                     "contact_name" to "Name or phone number of the recipient",
                     "message" to "Text body of the message",
@@ -128,7 +128,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "execute_whatsapp_task",
-                description = "Prepares a WhatsApp SEND_MESSAGE draft for manual review only. Reading/searching chats and chat management are not supported.",
+                description = "Sends a WhatsApp SEND_MESSAGE after verifying the foreground WhatsApp recipient and exact dictated message using the enabled accessibility service. Other chat management actions are unsupported.",
                 params = mapOf(
                     "action" to "Action: 'READ_UNREAD', 'SEND_MESSAGE', 'READ_CHAT', 'SEARCH_CHAT', 'MUTE_CHAT', 'UNMUTE_CHAT', or 'MARK_READ'",
                     "contact_name" to "Name of contact",
@@ -143,7 +143,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "whatsapp_task_control",
-                description = "Reports draft status only. Never auto-confirms or sends WhatsApp messages; user must tap Send in WhatsApp.",
+                description = "Reports the result of a voice-authorized WhatsApp send action.",
                 params = mapOf(
                     "command" to "Control command: 'CONFIRM', 'REJECT', 'CANCEL', or 'STATUS'",
                     "task_id" to "Task ID"
