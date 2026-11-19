@@ -3,6 +3,7 @@ import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
+import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -12,7 +13,7 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare','/api/voice/synthesize']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
@@ -125,6 +126,18 @@ const server = http.createServer(async (req, res) => {
       const provider = ['openai', 'gemini', 'anthropic'].includes(body.provider) ? body.provider : 'gemini';
       const answer = await askVision(provider, body.prompt.trim(), body.imageBase64, mimeType);
       return json(res, 200, { provider, answer });
+    }
+    if (req.method === 'POST' && req.url === '/api/voice/synthesize') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const body = await readBody(req, 16 * 1024);
+      const pcm = await synthesizeShraddhaPcm(body);
+      res.writeHead(200, {
+        'content-type': 'audio/pcm;rate=24000;channels=1;format=s16le',
+        'content-length': String(pcm.length),
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff'
+      });
+      return res.end(pcm);
     }
     if (req.method === 'POST' && req.url === '/api/ai/gemini-live-token') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
