@@ -4,6 +4,7 @@ import android.content.Context
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.SecureMemoryVault
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
+import `in`.shraddha.ai.operator.learning.AppProfileStore
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -46,6 +47,8 @@ object DeviceRecoveryBundle {
         require(maxCharacters in 100_000..MAX_BUNDLE_CHARS) { "Recovery bundle size limit is invalid" }
         val app = context.applicationContext
         val store = EncryptedFeatureStore(app)
+        // Migrate any older plaintext app-training profiles before taking the encrypted snapshot.
+        AppProfileStore(app).all()
         val records = store.getAllWithPrefixes(prefixes).getOrThrow()
         val memory = SecureMemoryVault(app).load().getOrThrow()
         val project = app.getSharedPreferences("shraddha_projects", Context.MODE_PRIVATE)
