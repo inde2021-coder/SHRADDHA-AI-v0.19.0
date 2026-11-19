@@ -29,7 +29,7 @@ Settings → Encrypted Voice Memory default में OFF है। ON करन
 Voice call Android dialer खोलती है; अंतिम Call user करता है। SMS/WhatsApp केवल draft composer खोलते हैं; Send user को खुद दबाना होता है। WhatsApp chat reading/search, social media publishing और background auto-send अभी implemented नहीं हैं।
 
 ## Required device permissions
-Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable Accessibility manually in Android Settings for cross-app automation. PC control needs a paired MYRA desktop companion.
+Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable “Shraddha AI — Device Control” manually in Android Settings for voice-driven app control. The optional “Advanced App Operator” service is currently used only for WhatsApp send verification. Android secure screens, OTP/PIN/password fields and apps that block Accessibility remain unavailable. PC control needs a paired MYRA desktop companion.
 
 ## Important
 Source integration is not a claim that every capability works without credentials, permissions, network, desktop companion, or external provider APIs. See `docs/BUILD-TEST-REPORT-v0.19.0.md` for what was and was not verified.
