@@ -2178,11 +2178,18 @@ class MainActivity : AppCompatActivity() {
             try {
                 if(payload.isNullOrBlank()) error("Encrypted backup payload missing")
                 contentResolver.openOutputStream(data.data!!)?.use { it.write(payload.toByteArray(Charsets.UTF_8)) } ?: error("Could not open destination")
-                getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().remove("payload").apply()
+                check(getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().remove("payload").commit()) { "Could not clear temporary encrypted backup payload" }
                 `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_export","completed","encrypted user-selected backup")
                 status.text="Encrypted backup export complete. Keep the passphrase and file separately."
             } catch(e:Exception) { status.text="Backup export failed: ${e.message}" }
             return
+        }
+        if (requestCode == backupFileRequest) {
+            getSharedPreferences("shraddha_backup_pending", MODE_PRIVATE).edit().remove("payload").commit()
+            if (resultCode != Activity.RESULT_OK || data?.data == null) {
+                status.text = "Backup export cancelled. Temporary encrypted payload cleared."
+                return
+            }
         }
         if (requestCode == backupImportRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
             try {
