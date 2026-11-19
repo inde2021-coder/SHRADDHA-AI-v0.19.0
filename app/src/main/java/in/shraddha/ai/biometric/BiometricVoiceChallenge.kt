@@ -3,8 +3,8 @@ package `in`.shraddha.ai.biometric
 import java.util.Locale
 
 object BiometricVoiceChallenge {
-    fun normalizeTranscript(value: String): String = value.lowercase(Locale.US)
-        .replace(Regex("[^a-z0-9 ]"), " ")
+    fun normalizeTranscript(value: String): String = value.lowercase(Locale.ROOT)
+        .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
         .replace(Regex("\\s+"), " ").trim()
 
     fun matches(expectedPhrase: String, recognizedText: String): Boolean {
