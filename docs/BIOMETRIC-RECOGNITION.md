@@ -3,7 +3,7 @@
 ## Implemented Android workflow
 
 - People Memory profiles receive stable random IDs and a consent timestamp. The person must confirm the consent switch again before each capture session.
-- The user imports compatible ONNX weights locally. Face model: OpenCV Zoo SFace; speaker model: SpeechBrain ECAPA-TDNN ONNX.
+- The Android build downloads fixed-revision SFace and ECAPA-TDNN ONNX assets, checks SHA-256, packages them in the APK, and verifies them again when copying to app-private storage. The app does not ask the user to manually import these two bundled models.
 - Model sessions are loaded off the UI thread and are recreated inside the foreground capture activity.
 - Face flow uses CameraX front-camera preview and ML Kit face tracking. A randomized active challenge asks for a blink and head turns to one side and then the opposite side. Only after all steps pass can the user capture one still frame.
 - Face capture rejects multiple/no faces, small faces, excessive head pose, closed eyes, poor brightness and low sharpness. Five landmarks align the face to 112×112 before SFace embedding.
@@ -25,7 +25,7 @@ On first use, the app copies the bundled models into app-private storage on a wo
 
 ## Important security boundary
 
-The randomized blink/head-turn challenge now requires multiple consecutive frames for each head turn and expires after 45 seconds. The spoken random phrase remains a separate voice challenge. These are still **heuristic active challenge-response checks, not certified presentation-attack detection (PAD)**. They may deter simple static-photo attempts but cannot reliably stop replay video, masks, deepfakes, voice conversion or real-time synthetic media. No certification is claimed. Android on-device speech recognition availability varies by device and language pack.
+The randomized blink/head-turn challenge now requires multiple consecutive frames for each head turn and expires after 45 seconds. The spoken random phrase remains a separate voice challenge. These are still **heuristic active challenge-response checks, not certified presentation-attack detection (PAD)**. Invalid/multiple-face frames reset the in-progress step stability so a challenge cannot complete by accumulating non-consecutive detections. They may deter simple static-photo attempts but cannot reliably stop replay video, masks, deepfakes, voice conversion or real-time synthetic media. No certification is claimed. Android on-device speech recognition availability varies by device and language pack.
 
 Biometric similarity is not proof of identity. Do not use it to unlock a device, authorize payments, approve transactions, grant access, place calls, or replace Android system authentication. Do not run background or covert identification. Camera and microphone operate only after a user tap and visible system permission.
 
