@@ -87,7 +87,7 @@ class OperatorActivity : Activity() {
             .setView(panel).setNegativeButton("रद्द", null)
             .setPositiveButton("चलाएँ") { _, _ ->
                 val extra = variables.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                runLearned(route.profile, route.workflowName, route.values + extra, false)
+                runLearned(route.profile, route.workflowName, route.values + extra)
             }.show()
     }
 
@@ -104,12 +104,12 @@ class OperatorActivity : Activity() {
             android.app.AlertDialog.Builder(this).setTitle("Workflow: $name").setMessage("ऐप: ${profile.displayName}\nचरण: ${steps.size}\nहर चरण पर स्क्रीन दोबारा पढ़ी जाएगी। संवेदनशील/पासवर्ड फ़ील्ड ब्लॉक रहेंगे।")
                 .setView(container).setNegativeButton("रद्द") { _, _ -> }.setPositiveButton("चलाएँ") { _, _ ->
                     val map = vars.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                    runLearned(profile, name, map, false)
+                    runLearned(profile, name, map)
                 }.show()
         }.show()
     }
 
-    private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, confirmed: Boolean) {
+    private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>) {
         val runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
             val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
             log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
