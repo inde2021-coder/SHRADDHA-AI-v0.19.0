@@ -1687,14 +1687,25 @@ class MainActivity : AppCompatActivity() {
         val notes = edit("Optional notes", "Only information you are allowed to store")
         val consent = Switch(this).apply { text = "इस व्यक्ति की स्पष्ट सहमति प्राप्त है"; setTextColor(-1); textSize = 13f; setPadding(0, dp(8), 0, dp(10)) }
         var refreshProfileList: (() -> Unit)? = null
+        var directoryReadFailed = false
         fun readPeople(): JSONArray {
-            val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("[]")) }.getOrElse { JSONArray() }
+            val arr = try {
+                val raw = store.get("person_directory").getOrThrow()
+                if (raw.isBlank()) JSONArray() else JSONArray(raw)
+            } catch (error: Exception) {
+                directoryReadFailed = true
+                status.text = "Person Memory data सुरक्षित रूप से पढ़ा नहीं जा सका। मौजूदा डेटा overwrite नहीं किया गया: ${error.message}"
+                return JSONArray()
+            }
             var changed = false
             for (i in 0 until arr.length()) {
                 val person = arr.optJSONObject(i) ?: continue
                 if (person.optString("id").isBlank()) { person.put("id", java.util.UUID.randomUUID().toString().replace("-", "")); changed = true }
             }
-            if (changed) store.put("person_directory", arr.toString())
+            if (changed) store.put("person_directory", arr.toString()).onFailure {
+                directoryReadFailed = true
+                status.text = "Person Memory migration save failed; editing is blocked: ${it.message}"
+            }
             return arr
         }
         fun people(): List<JSONObject> {
@@ -1704,6 +1715,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "PERSON DIRECTORY", "परिचित व्यक्तियों के consent-based profiles • encrypted, local-only") {
             addView(personName); addView(relation); addView(notes); addView(consent)
             addView(actionButton("Save Person Profile", "व्यक्ति की स्पष्ट अनुमति के बाद profile सुरक्षित करें") {
+                if (directoryReadFailed) { status.text = "Person Memory data पढ़ने में समस्या है; overwrite से बचने के लिए save रोक दिया गया है।"; return@actionButton }
                 val name = personName.text.toString().trim()
                 if (name.isBlank() || !consent.isChecked) { status.text = "नाम और व्यक्ति की स्पष्ट सहमति आवश्यक है।"; return@actionButton }
                 val arr = readPeople()
@@ -1735,7 +1747,7 @@ class MainActivity : AppCompatActivity() {
         }
         section(root, "FACE & SPEAKER RECOGNITION", "On-device SFace + ECAPA • randomized live challenge • encrypted local templates") {
             addView(TextView(this@MainActivity).apply {
-                text = "पहले दोनों compatible ONNX models import करें। हर enrollment से पहले व्यक्ति की स्पष्ट सहमति switch ON करनी होगी। Camera में blink + head-turn challenge और speaker के लिए on-device random phrase challenge चलेगा। Match केवल manually calibrated threshold पर होगा; Unknown default है।"
+                text = "SFace और ECAPA models सामान्य build में bundled और checksum-verified हैं; पहली capture पर app उन्हें private storage में install करेगा। जरूरत पड़ने पर compatible ONNX file manually import कर सकते हैं। हर enrollment से पहले व्यक्ति की स्पष्ट सहमति switch ON करनी होगी। Camera में blink + head-turn challenge और speaker के लिए on-device random phrase challenge चलेगा। Match केवल locally calibrated threshold पर होगा; Unknown default है। यह certified anti-spoofing नहीं है।"
                 setTextColor(0xFFB9C8E4.toInt()); textSize = 12f
             })
             val profileSpinner = Spinner(this@MainActivity)
