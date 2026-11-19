@@ -102,10 +102,21 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         if (wanted.isBlank()) return false
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val matches = packageManager.queryIntentActivities(launcher, 0)
-        val match = matches.firstOrNull { it.loadLabel(packageManager).toString().equals(wanted, ignoreCase = true) }
-            ?: matches.firstOrNull { it.loadLabel(packageManager).toString().contains(wanted, ignoreCase = true) }
-            ?: return false
-        val launch = packageManager.getLaunchIntentForPackage(match.activityInfo.packageName) ?: return false
+        val exactPackages = matches.filter {
+            it.loadLabel(packageManager).toString().trim().equals(wanted, ignoreCase = true)
+        }.map { it.activityInfo.packageName }.distinct()
+        val selectedPackage = when {
+            exactPackages.size == 1 -> exactPackages.single()
+            exactPackages.size > 1 -> return false
+            else -> {
+                val partialPackages = matches.filter {
+                    it.loadLabel(packageManager).toString().contains(wanted, ignoreCase = true)
+                }.map { it.activityInfo.packageName }.distinct()
+                if (partialPackages.size != 1) return false
+                partialPackages.single()
+            }
+        }
+        val launch = packageManager.getLaunchIntentForPackage(selectedPackage) ?: return false
         return try { launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(launch); true } catch (_: Exception) { false }
     }
 
@@ -123,7 +134,12 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             var node: AccessibilityNodeInfo? = candidate
             while (node != null && !node.isClickable) node = node.parent
             node
-        }.distinctBy { it.viewIdResourceName.orEmpty() + ":" + it.text?.toString().orEmpty() + ":" + it.contentDescription?.toString().orEmpty() }
+        }.distinctBy { node ->
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            listOf(node.viewIdResourceName.orEmpty(), node.className?.toString().orEmpty(),
+                node.text?.toString().orEmpty(), node.contentDescription?.toString().orEmpty(),
+                bounds.left, bounds.top, bounds.right, bounds.bottom).joinToString(":")
+        }
         // Ambiguous labels are refused; the agent must inspect the screen and ask which one.
         if (candidates.size != 1) return false
         return candidates.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -133,9 +149,10 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
         val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList())
-        val node = nodes.firstOrNull { it.isVisibleToUser && it.isEnabled && it.isClickable }
-            ?: nodes.firstOrNull { it.isVisibleToUser && it.isEnabled }
-        return node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        val candidates = nodes.filter { it.isVisibleToUser && it.isEnabled && it.isClickable }
+        // A repeated resource ID is not enough to identify a unique control.
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun selectFileInPicker(fileName: String): Boolean {
