@@ -9,6 +9,7 @@ import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
 import com.Lia.assistant.forge.ForgeController
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -25,6 +26,8 @@ object VoiceSessionManager {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val sessionMutex = Mutex()
     private val clientLock = Any()
+    private val toolJobsLock = Any()
+    private val toolJobs = mutableSetOf<Job>()
     private val sessionEpoch = AtomicLong(0)
 
     private val _state = MutableStateFlow(NovaOrbState.IDLE)
@@ -113,6 +116,7 @@ object VoiceSessionManager {
     private suspend fun connectSession(isResuming: Boolean) {
         val currentContext = appContext ?: return
         val currentEpoch = sessionEpoch.incrementAndGet()
+        cancelToolJobs()
 
         synchronized(clientLock) {
             client?.disconnect()
@@ -226,12 +230,21 @@ object VoiceSessionManager {
                     return
                 }
 
-                scope.launch {
+                val toolJob = scope.launch(start = CoroutineStart.LAZY) {
                     val result = ActionExecutor.execute(currentContext, name, args)
-                    if (sessionEpoch.get() == currentEpoch) {
+                    if (sessionEpoch.get() == currentEpoch && _isActive.value) {
                         client?.sendToolResponse(id, name, result)
                         _state.value = NovaOrbState.LISTENING
                         _statusText.value = "Listening..."
+                    }
+                }
+                synchronized(toolJobsLock) {
+                    if (_isActive.value && sessionEpoch.get() == currentEpoch) {
+                        toolJobs.add(toolJob)
+                        toolJob.invokeOnCompletion { synchronized(toolJobsLock) { toolJobs.remove(toolJob) } }
+                        toolJob.start()
+                    } else {
+                        toolJob.cancel()
                     }
                 }
             }
@@ -376,9 +389,17 @@ object VoiceSessionManager {
         _statusText.value = if (next) "Microphone muted" else "Listening..."
     }
 
+    private fun cancelToolJobs() {
+        synchronized(toolJobsLock) {
+            toolJobs.forEach { it.cancel() }
+            toolJobs.clear()
+        }
+    }
+
     fun stop() {
         _isActive.value = false
         sessionEpoch.incrementAndGet()
+        cancelToolJobs()
         reconnectJob?.cancel()
         reconnectJob = null
         silenceWatchdogJob?.cancel()
