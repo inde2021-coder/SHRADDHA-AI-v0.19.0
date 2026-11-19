@@ -75,6 +75,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var speechRecognizer: SpeechRecognizer? = null
     private val randomPhrase = listOf("blue river seven", "silver mango twenty", "quiet garden five", "orange window nine").random()
     private var busy = false
+    private var activeMode = "enroll"
+    private var activePersonId = ""
+    private var activePersonName = ""
+    private var activeThreshold = Float.NaN
     private val engine by lazy { LocalBiometricModelEngine() }
     private val vault by lazy { BiometricConsentVault(EncryptedFeatureStore(this)) }
 
@@ -118,12 +122,18 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun buildFaceScreen(mode: String, id: String, name: String, threshold: Float) {
         val root = baseLayout(if (mode == "enroll") "Face enrollment" else "Live face match", "Front camera • randomized blink and head-turn challenge • processing remains on this phone")
         previewView = PreviewView(this).also { root.addView(it, LinearLayout.LayoutParams(-1, 0, 1f)) }
+        activeMode = mode
+        activePersonId = id
+        activePersonName = name
+        activeThreshold = threshold
         message.text = challengeText()
         action.text = "Start live face check"
         action.setOnClickListener {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
-            } else startCamera()
+            if (imageCapture == null) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
+                } else startCamera()
+            } else if (livenessPassed.get()) captureFace(activeMode, activePersonId, activePersonName, activeThreshold)
         }
         setContentView(root)
         action.isEnabled = true
@@ -276,7 +286,6 @@ class BiometricCaptureActivity : AppCompatActivity() {
             startSpeakerChallenge()
         }
         setContentView(root)
-        action.tag = Triple(mode, id, name) to threshold
     }
 
     private fun startSpeakerChallenge() {
@@ -293,6 +302,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
+                runCatching { speechRecognizer?.destroy() }
+                speechRecognizer = null
                 val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().lowercase(Locale.US).replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
                 val expected = randomPhrase.lowercase(Locale.US)
                 if (heard.contains(expected)) recordSpeaker() else finishWith("Voice challenge phrase did not match. No biometric sample was saved.")
@@ -346,6 +357,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun finishWith(text: String) {
         runOnUiThread {
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_RESULT, text))
+            if (!::action.isInitialized) { finish(); return@runOnUiThread }
             messageOrStatus(text)
             action.text = "Close"
             action.isEnabled = true
