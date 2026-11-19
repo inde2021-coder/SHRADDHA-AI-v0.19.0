@@ -88,6 +88,11 @@ object VoiceSessionManager {
                     _amplitude.value = amp
                     _vadActive.value = amp > 0.05f
                 }
+            },
+            onRecordingError = { message ->
+                _lastError.value = message
+                _state.value = NovaOrbState.ERROR
+                _statusText.value = "Microphone unavailable"
             }
         )
 
