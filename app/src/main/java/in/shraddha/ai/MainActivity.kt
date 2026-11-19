@@ -1443,6 +1443,7 @@ class MainActivity : AppCompatActivity() {
             addView(email); addView(password); addView(note); addView(consent); addView(result)
             val pushConsent = CheckBox(this@MainActivity).apply {
                 text = "मैं इस device पर Shraddha AI के non-sensitive push notifications प्राप्त करने की अनुमति देता/देती हूँ।"
+                isChecked = EncryptedFeatureStore(this@MainActivity).get("firebase_fcm_consent").getOrDefault("false") == "true"
                 setTextColor(0xFFE4E9F5.toInt())
             }
             addView(pushConsent)
