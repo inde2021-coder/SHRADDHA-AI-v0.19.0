@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.File
 
 plugins {
     id("com.android.application")
@@ -34,6 +35,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    androidResources { noCompress += "onnx" }
 }
 
 kotlin {
@@ -87,3 +89,56 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20240303")
 }
+
+
+import java.security.MessageDigest
+import java.net.URL
+
+data class BiometricModelAsset(val fileName: String, val url: String, val sha256: String, val expectedBytes: Long)
+val biometricModelAssets = listOf(
+    BiometricModelAsset("sface.onnx", "https://huggingface.co/opencv/opencv_zoo/resolve/39a1451/models/face_recognition_sface/face_recognition_sface_2021dec.onnx", "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79", 38_696_353L),
+    BiometricModelAsset("ecapa-any-length.onnx", "https://huggingface.co/kenrunio/transcriber-speaker-onnx/resolve/4467ef1/ecapa-any-length.onnx", "700b63064ee98981186f59f247d28e56f7f6ab265d8b50ebb450db5a8ce21dc7", 84_300_000L)
+)
+fun biometricSha256(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().buffered().use { input ->
+        val buffer = ByteArray(1024 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+val downloadBiometricModels by tasks.registering {
+    val outputDir = layout.projectDirectory.dir("src/main/assets/biometric-models")
+    outputs.files(biometricModelAssets.map { outputDir.file(it.fileName) })
+    doLast {
+        val directory = outputDir.asFile
+        directory.mkdirs()
+        biometricModelAssets.forEach { model ->
+            val target = File(directory, model.fileName)
+            if (target.isFile && target.length() == model.expectedBytes && biometricSha256(target) == model.sha256) {
+                logger.lifecycle("Verified cached biometric model: ${model.fileName}")
+            } else {
+                target.delete()
+                val temporary = File(directory, model.fileName + ".part")
+                temporary.delete()
+                logger.lifecycle("Downloading ${model.fileName}; large model download may take several minutes")
+                URL(model.url).openConnection().apply {
+                    connectTimeout = 30_000
+                    readTimeout = 180_000
+                    setRequestProperty("User-Agent", "ShraddhaAI-Build/0.19.2")
+                }.getInputStream().use { input ->
+                    temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+                }
+                check(temporary.length() == model.expectedBytes) { "Unexpected model size: ${model.fileName}" }
+                val actual = biometricSha256(temporary)
+                check(actual == model.sha256) { "Model SHA-256 mismatch for ${model.fileName}: $actual" }
+                check(temporary.renameTo(target)) { "Could not install ${model.fileName}" }
+            }
+        }
+    }
+}
+tasks.named("preBuild").configure { dependsOn(downloadBiometricModels) }
