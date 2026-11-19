@@ -56,7 +56,14 @@ class LocalBiometricModelEngine : Closeable {
     fun faceEmbedding(alignedRgb112: ByteArray): FloatArray {
         require(alignedRgb112.size == 112 * 112 * 3) { "Expected an aligned 112x112 RGB face" }
         val session = faceSession ?: error("Face model is not loaded")
-        val values = FloatArray(alignedRgb112.size) { i -> (alignedRgb112[i].toInt() and 0xff).toFloat() }
+        // Camera input is interleaved RGB; the SFace ONNX graph consumes NCHW.
+        val plane = 112 * 112
+        val values = FloatArray(alignedRgb112.size)
+        for (pixel in 0 until plane) {
+            values[pixel] = (alignedRgb112[pixel * 3].toInt() and 0xff).toFloat()
+            values[plane + pixel] = (alignedRgb112[pixel * 3 + 1].toInt() and 0xff).toFloat()
+            values[2 * plane + pixel] = (alignedRgb112[pixel * 3 + 2].toInt() and 0xff).toFloat()
+        }
         val tensor = OnnxTensor.createTensor(
             environment, FloatBuffer.wrap(values), longArrayOf(1, 3, 112, 112)
         )
