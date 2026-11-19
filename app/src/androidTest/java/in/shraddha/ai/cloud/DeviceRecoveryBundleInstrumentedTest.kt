@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.SecureMemoryVault
 import `in`.shraddha.ai.future.ExpertProjectLibrary
+import `in`.shraddha.ai.future.ExpertProjectLibrary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -65,7 +66,7 @@ class DeviceRecoveryBundleInstrumentedTest {
             assertEquals("Test expert project", projectLibrary.load().getOrThrow().single().title)
             assertEquals("private recovery note", mirrorPrefs.getString("notes", ""))
         } finally {
-            listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint_", "app_profile_")
+            listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint_", "app_profile_", "expert_project_library")
                 .forEach { store.removeAllWithPrefix(it) }
             memory.clear()
             projectPrefs.edit().clear().commit()
