@@ -3,6 +3,7 @@ package com.Lia.assistant.action
 import android.content.Context
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
+import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -137,86 +138,67 @@ object ActionExecutor {
             }
 
             "read_screen" -> {
-                val service = NovaAccessibilityService.instance
-                if (service == null) {
+                val snapshot = DeviceAccessibilityService.captureVisibleScreen()
+                if (snapshot == null) {
                     result.put("status", "error")
-                    result.put("action", "accessibility_not_enabled")
-                    result.put("message", "Accessibility Service is not enabled. Please enable Lia AI in Accessibility Settings.")
+                    result.put("action", "device_accessibility_not_enabled")
+                    result.put("message", "Enable Shraddha AI — Device Control in Android Accessibility settings, then retry.")
                 } else {
-                    val elements = service.readScreen()
                     result.put("status", "success")
                     result.put("action", "screen_read")
+                    result.put("package", snapshot.packageName)
                     val array = JSONArray()
-                    elements.forEach { array.put(it) }
+                    snapshot.elements.forEach { element ->
+                        // Sensitive values are redacted by the Accessibility service before reaching this layer.
+                        array.put(JSONObject()
+                            .put("text", element.text)
+                            .put("description", element.description)
+                            .put("type", element.className)
+                            .put("clickable", element.clickable)
+                            .put("editable", element.editable && !element.password)
+                            .put("sensitive", element.password))
+                    }
                     result.put("elements", array)
                 }
             }
 
             "tap_text" -> {
-                val service = NovaAccessibilityService.instance
                 val text = args.optString("text", "").trim()
-                if (service == null) {
-                    result.put("status", "error")
-                    result.put("action", "accessibility_not_enabled")
-                } else if (text.isEmpty()) {
-                    result.put("status", "error")
-                    result.put("message", "Target text is empty")
-                } else {
-                    val res = service.tapText(text)
-                    result.put("status", if (res == "tapped") "success" else "error")
-                    result.put("action", res)
-                    result.put("target", text)
-                }
+                val tapped = text.isNotBlank() && DeviceAccessibilityService.clickVisibleText(text)
+                result.put("status", if (tapped) "success" else "error")
+                result.put("action", if (tapped) "tapped" else "target_missing_or_ambiguous")
+                result.put("message", if (tapped) "Visible target tapped." else "Target not found uniquely. Ask the user to clarify or inspect the screen again.")
             }
 
             "type_text" -> {
-                val service = NovaAccessibilityService.instance
                 val text = args.optString("text", "")
-                if (service == null) {
-                    result.put("status", "error")
-                    result.put("action", "accessibility_not_enabled")
-                } else {
-                    val res = service.typeText(text)
-                    result.put("status", if (res == "typed") "success" else "error")
-                    result.put("action", res)
-                }
+                val typed = DeviceAccessibilityService.fillFocusedField(text)
+                result.put("status", if (typed) "success" else "error")
+                result.put("action", if (typed) "typed" else "field_missing_or_sensitive")
+                result.put("message", if (typed) "Text entered into the focused non-sensitive field." else "No safe focused field found. Password, OTP, PIN and sensitive fields are blocked.")
             }
 
             "scroll_screen" -> {
-                val service = NovaAccessibilityService.instance
-                val direction = args.optString("direction", "forward")
-                if (service == null) {
-                    result.put("status", "error")
-                    result.put("action", "accessibility_not_enabled")
-                } else {
-                    val res = service.scroll(direction)
-                    result.put("status", if (res == "scrolled") "success" else "error")
-                    result.put("action", res)
+                val direction = args.optString("direction", "forward").lowercase()
+                val scrolled = when (direction) {
+                    "backward", "up" -> DeviceAccessibilityService.scrollBackward()
+                    "forward", "down" -> DeviceAccessibilityService.scrollForward()
+                    else -> false
                 }
+                result.put("status", if (scrolled) "success" else "error")
+                result.put("action", if (scrolled) "scrolled" else "no_scrollable_target")
             }
 
             "go_back" -> {
-                val service = NovaAccessibilityService.instance
-                if (service == null) {
-                    result.put("status", "error")
-                    result.put("action", "accessibility_not_enabled")
-                } else {
-                    val res = service.performBack()
-                    result.put("status", if (res == "done") "success" else "error")
-                    result.put("action", res)
-                }
+                val ok = DeviceAccessibilityService.goBack()
+                result.put("status", if (ok) "success" else "error")
+                result.put("action", if (ok) "done" else "accessibility_not_enabled")
             }
 
             "go_home" -> {
-                val service = NovaAccessibilityService.instance
-                if (service == null) {
-                    result.put("status", "error")
-                    result.put("action", "accessibility_not_enabled")
-                } else {
-                    val res = service.performHome()
-                    result.put("status", if (res == "done") "success" else "error")
-                    result.put("action", res)
-                }
+                val ok = DeviceAccessibilityService.goHome()
+                result.put("status", if (ok) "success" else "error")
+                result.put("action", if (ok) "done" else "accessibility_not_enabled")
             }
 
             "execute_social_media_task", "social_media_task_control" -> {
