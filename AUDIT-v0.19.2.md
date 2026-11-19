@@ -85,3 +85,14 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Added live PC screen streaming to the Windows companion. The PC user must opt in with `--share-screen` and confirm locally; stream permission is explicitly sent to the relay, frame rate is capped at 2 FPS, JPEG payloads are bounded, optional target device ID is supported, and likely sensitive active-window titles pause capture.
 - Fixed PC companion reconnect when using saved Windows Credential Manager pairing without re-entering the base URL.
 - Added unit tests for the PC frame protocol and payload bounds; CI now validates OCR dependencies and Kotlin compile.
+
+
+## Paired-device task handoff (2026-11-19)
+- Added expiring 15-minute task-plan relay between paired devices. The sender explicitly chooses a target and confirms sharing; receiver must accept or reject.
+- Server bounds task title, description and steps, relays only within the authenticated device session, and does not execute the plan.
+- Receiver stores accepted plans in an Android Keystore AES-GCM encrypted Task Inbox (maximum 10 tasks); sender receives an acknowledgement.
+- Task handoff is online-only and does not queue tasks for offline devices. Plans are informational and do not auto-run app actions.
+
+## Latest verification
+- GitHub Actions run 44482262665 succeeded for code commit d357b1db10a345cccbfb33a7de3b238f6063669c: Android unit tests, Debug APK build, backend checks, custom voice proxy tests, Python companion tests and artifact upload.
+- Artifact: shraddha-ai-debug-apk, 44,598,886 bytes; SHA-256 e60a761f31ec4647f1392c7e9db03c640aedda7c7731e459968aa028f3284081.
