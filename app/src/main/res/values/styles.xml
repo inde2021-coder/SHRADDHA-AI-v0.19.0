@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.ShraddhaAI" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#8B5CF6</item>
+        <item name="colorSecondary">#22D3EE</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:statusBarColor">#090D16</item>
+        <item name="android:navigationBarColor">#090D16</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
