@@ -107,11 +107,12 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload debug APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: shraddha-ai-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
 
   windows-companion:
     name: Windows PC companion native checks
