@@ -867,7 +867,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "03  •  REMOTE APP CONTROL", "चुने हुए paired phone पर अनुमत gestures और data entry") {
             val handoffTitle = edit("Task handoff title", "उदाहरण: Prepare project report")
             val handoffDescription = edit("Task description", "दूसरे paired device को भेजने वाला काम")
-            val handoffSteps = edit("Task steps (one per line)", "1. Review files\\n2. Prepare summary\\n3. Send result").apply {
+            val handoffSteps = edit("Task steps (one per line)", "1. Review files\n2. Prepare summary\n3. Send result").apply {
                 minLines = 3
                 maxLines = 5
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -883,7 +883,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     android.app.AlertDialog.Builder(this@MainActivity)
                         .setTitle("Share task with paired device?")
-                        .setMessage(title + "\\n\\n" + description + "\\n\\nयह केवल task plan भेजेगा; कोई app action अपने-आप execute नहीं होगा।")
+                        .setMessage(title + "\n\n" + description + "\n\nयह केवल task plan भेजेगा; कोई app action अपने-आप execute नहीं होगा।")
                         .setNegativeButton("Cancel", null)
                         .setPositiveButton("Share") { _, _ ->
                             status.text = if (DeviceLinkManager.sendTaskHandoff(target, title, description, steps))
@@ -902,9 +902,9 @@ class MainActivity : AppCompatActivity() {
                         .setItems(labels) { _, index ->
                             val task = tasks.optJSONObject(index) ?: return@setItems
                             val stepArray = task.optJSONArray("steps")
-                            val stepText = (0 until (stepArray?.length() ?: 0)).joinToString("\\n") { n -> stepArray?.optString(n).orEmpty() }
+                            val stepText = (0 until (stepArray?.length() ?: 0)).joinToString("\n") { n -> stepArray?.optString(n).orEmpty() }
                             android.app.AlertDialog.Builder(this@MainActivity).setTitle(task.optString("title"))
-                                .setMessage(task.optString("description") + "\\n\\n" + stepText)
+                                .setMessage(task.optString("description") + "\n\n" + stepText)
                                 .setPositiveButton("OK", null).setNegativeButton("Remove") { _, _ ->
                                     val updated = JSONArray()
                                     for (i in 0 until tasks.length()) if (i != index) updated.put(tasks.optJSONObject(i))
@@ -1223,7 +1223,7 @@ class MainActivity : AppCompatActivity() {
             addView(enabled); addView(events); addView(result)
             addView(actionButton("ANALYZE OPTED-IN ACTIVITY","Suggestions only; nothing is scheduled automatically") {
                 getSharedPreferences("shraddha_predictive",MODE_PRIVATE).edit().putBoolean("enabled",enabled.isChecked).apply()
-                val suggestions=`in`.shraddha.ai.future.PredictiveSuggestionEngine.suggest(enabled.isChecked,events.text.toString().split(Regex("[,\\n]")))
+                val suggestions=`in`.shraddha.ai.future.PredictiveSuggestionEngine.suggest(enabled.isChecked,events.text.toString().split(Regex("[,\n]")))
                 result.text=if(!enabled.isChecked) "Opt-in बंद है; कोई suggestion नहीं।" else if(suggestions.isEmpty()) "तीन बार या अधिक manually repeat हुई activity नहीं मिली।" else suggestions.joinToString("\n") { "• ${it.title}\n  ${it.reason}" }
             })
         }
@@ -1534,7 +1534,7 @@ class MainActivity : AppCompatActivity() {
                     } else runOnUiThread {
                         android.app.AlertDialog.Builder(this@MainActivity)
                             .setTitle("Task from " + fromName)
-                            .setMessage(task.optString("title") + "\\n\\n" + task.optString("description") + "\\n\\nAccepting saves the plan only. It will NOT run app actions.")
+                            .setMessage(task.optString("title") + "\n\n" + task.optString("description") + "\n\nAccepting saves the plan only. It will NOT run app actions.")
                             .setPositiveButton("Accept & Save") { _, _ ->
                                 val prefs = getSharedPreferences("shraddha_task_inbox", MODE_PRIVATE)
                                 val inbox = runCatching { JSONArray(prefs.getString("tasks", "[]")) }.getOrDefault(JSONArray())
