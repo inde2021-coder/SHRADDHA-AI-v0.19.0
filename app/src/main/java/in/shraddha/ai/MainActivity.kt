@@ -1403,8 +1403,13 @@ class MainActivity : AppCompatActivity() {
                 startActivityForResult(intent,backupImportRequest)
             })
         }
-        section(root, "OFFLINE MODEL VAULT STATUS", "Model integrity verifier तैयार है; model execution के लिए native inference runtime, supported model format और device-memory benchmark अभी आवश्यक हैं।") {
-            addView(TextView(this@MainActivity).apply { text="SHA-256 verification: available in local engine.\nModel loading / inference: not enabled.\nNo model is silently downloaded or executed."; setTextColor(0xFFDCE5F6.toInt()); textSize=12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background=rounded(0xFF0C1525.toInt(),14) })
+        section(root, "ANDROID ON-DEVICE LLM", "LiteRT-LM CPU inference उपलब्ध है। compatible .litertlm model को AI Assistant workspace से import करें; model APK में bundled नहीं है।") {
+            val model = java.io.File(filesDir, "offline-models/shraddha.litertlm")
+            addView(TextView(this@MainActivity).apply {
+                text = if (model.isFile) "Imported local model: ${model.length() / 1_000_000} MB\\nInference: on-device CPU\\nCloud fallback: disabled"
+                    else "Model status: not installed\\nChoose a compatible .litertlm file in AI Assistant workspace."
+                setTextColor(0xFFDCE5F6.toInt()); textSize=12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background=rounded(0xFF0C1525.toInt(),14)
+            })
         }
     }
 
@@ -1512,6 +1517,64 @@ class MainActivity : AppCompatActivity() {
                                     result.text = if (failures.isEmpty()) "Recovery complete: ${keys.size} collections and local memory restored." else "Partial restore. Failed: " + failures.joinToString()
                                 }.show()
                         }.onFailure { result.text = "Recovery failed: ${it.message}" }
+                    }
+                }.start()
+            })
+            addView(actionButton("RECOVERY HISTORY • RESTORE OLDER SNAPSHOT", "पिछले अधिकतम 10 encrypted device backups में से चुनें") {
+                if (!bundleConsent.isChecked) { result.text = "पहले selected-data restore consent दें।"; return@actionButton }
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                result.text = "Encrypted recovery history खोजी जा रही है…"
+                Thread {
+                    val vault = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                    val listed = vault.signInAndListBundleRevisions(emailValue, passwordValue)
+                    runOnUiThread {
+                        if (listed.isFailure) {
+                            result.text = "Recovery history failed: ${listed.exceptionOrNull()?.message}"
+                        } else {
+                            val revisions = listed.getOrDefault(emptyList())
+                            if (revisions.isEmpty()) {
+                                result.text = "इस account में पुराने recovery snapshots नहीं मिले।"
+                            } else {
+                                val labels = revisions.map { revision ->
+                                    java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+                                        .format(java.util.Date(revision.updatedAt))
+                                }.toTypedArray()
+                                android.app.AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Choose encrypted recovery snapshot")
+                                    .setItems(labels) { _, which ->
+                                        val selected = revisions[which]
+                                        result.text = "Selected snapshot decrypt हो रहा है…"
+                                        Thread {
+                                            val loaded = vault.signInAndLoadBundleRevision(emailValue, passwordValue, selected.id)
+                                            runOnUiThread {
+                                                loaded.onSuccess { raw ->
+                                                    if (raw.isNullOrBlank()) { result.text = "Selected snapshot खाली है।"; return@onSuccess }
+                                                    val parsed = runCatching { JSONObject(raw) }.getOrNull()
+                                                    val items = parsed?.optJSONObject("items")
+                                                    if (parsed?.optInt("version") != 1 || items == null) { result.text = "Snapshot format unsupported या corrupt है।"; return@onSuccess }
+                                                    val keys = items.keys().asSequence().toList().filter { it in bundleKeys }
+                                                    android.app.AlertDialog.Builder(this@MainActivity)
+                                                        .setTitle("Restore older snapshot?")
+                                                        .setMessage("यह snapshot इन local collections को replace करेगा:\n\n" + keys.joinToString("\n") + "\n\nCurrent local values पहले अपने आप overwrite नहीं होंगे; केवल आपकी पुष्टि पर restore होगा।")
+                                                        .setNegativeButton("CANCEL", null)
+                                                        .setPositiveButton("RESTORE") { _, _ ->
+                                                            val failures = mutableListOf<String>()
+                                                            keys.forEach { key -> if (featureStore.put(key, items.optString(key)).isFailure) failures.add(key) }
+                                                            val memory = parsed.optString("memory", "")
+                                                            if (memory.isNotBlank()) {
+                                                                if (localVault.save(memory).isFailure) failures.add("personal_memory")
+                                                                else getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", memory).apply()
+                                                            }
+                                                            result.text = if (failures.isEmpty()) "Older snapshot restored: ${keys.size} collections + local memory." else "Partial restore. Failed: " + failures.joinToString()
+                                                        }.show()
+                                                }.onFailure { result.text = "Snapshot restore failed: ${it.message}" }
+                                            }
+                                        }.start()
+                                    }.setNegativeButton("CLOSE", null).show()
+                            }
+                        }
                     }
                 }.start()
             })
