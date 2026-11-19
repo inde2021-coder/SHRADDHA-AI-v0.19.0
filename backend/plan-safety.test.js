@@ -4,7 +4,7 @@ import { normalizePlanSteps } from './plan-safety.js';
 
 test('device, camera, screen and data actions always require approval', () => {
   const tools = ['open_app', 'click_text', 'type', 'tap', 'swipe', 'scroll', 'back', 'home', 'camera_view', 'screen_view', 'share_file'];
-  const steps = normalizePlanSteps(tools.map(tool => ({ title: tool, detail: 'Do action', tool, requiresApproval: false, risk: 'low' })));
+  const steps = [...normalizePlanSteps(tools.slice(0, 8).map(tool => ({ title: tool, detail: 'Do action', tool, requiresApproval: false, risk: 'low' }))), ...normalizePlanSteps(tools.slice(8).map(tool => ({ title: tool, detail: 'Do action', tool, requiresApproval: false, risk: 'low' })))];
   assert.equal(steps.length, tools.length);
   for (const step of steps) {
     assert.equal(step.requiresApproval, true, step.tool);
