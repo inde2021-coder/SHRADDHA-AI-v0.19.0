@@ -113,12 +113,13 @@ object DeviceLinkManager {
         userConfirmed: Boolean,
         confirmedPlatform: String,
         confirmedText: String,
-        done: (Result<String>) -> Unit
-    ) {
+        done: (Result<String>) -> Unit,
+        onCall: ((Call) -> Unit)? = null
+    ): Call? {
         val normalizedPlatform = platform.trim().lowercase()
         if (!userConfirmed || !confirmedPlatform.trim().equals(normalizedPlatform, true) || confirmedText != exactText) {
             done(Result.failure(IllegalStateException("Exact social post preview approval is required")))
-            return
+            return null
         }
         val characterLength = if (normalizedPlatform == "bluesky") exactText.codePointCount(0, exactText.length) else exactText.length
         val limit = when (normalizedPlatform) {
@@ -129,11 +130,11 @@ object DeviceLinkManager {
         }
         if (limit == 0 || exactText.isBlank() || characterLength > limit) {
             done(Result.failure(IllegalArgumentException("Unsupported platform or post length (limit: ${if (limit == 0) 0 else limit} characters)")))
-            return
+            return null
         }
         val body = JSONObject().put("platform", normalizedPlatform).put("text", exactText)
             .put("preview", exactText).put("confirmed", true)
-        postAuthenticated(baseUrl, "/api/social/publish", gatewayToken, body, done)
+        return postAuthenticated(baseUrl, "/api/social/publish", gatewayToken, body, done, onCall)
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
@@ -167,15 +168,31 @@ object DeviceLinkManager {
         postAuthenticated(baseUrl, "/api/ai/compare", gatewayToken, JSONObject().put("providers", org.json.JSONArray(providers.distinct().take(3))).put("prompt", prompt.take(4000)), done)
     }
 
-    private fun postAuthenticated(baseUrl: String, path: String, gatewayToken: String, body: JSONObject, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path).post(body.toString().toRequestBody("application/json".toMediaType()))
+    private fun postAuthenticated(
+        baseUrl: String,
+        path: String,
+        gatewayToken: String,
+        body: JSONObject,
+        done: (Result<String>) -> Unit,
+        onCall: ((Call) -> Unit)? = null
+    ): Call {
+        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        client.newCall(builder.build()).enqueue(object : Callback {
+        val call = client.newCall(builder.build())
+        onCall?.invoke(call)
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
-                response.use { val raw = it.body?.string().orEmpty(); if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")))) else done(Result.success(raw)) }
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(
+                        runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")
+                    ))) else done(Result.success(raw))
+                }
             }
         })
+        return call
     }
 
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
