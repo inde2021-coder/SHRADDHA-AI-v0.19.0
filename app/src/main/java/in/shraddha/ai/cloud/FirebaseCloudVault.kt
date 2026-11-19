@@ -183,6 +183,7 @@ class FirebaseCloudVault(private val context: Context) {
             val storage = FirebaseStorage.getInstance(app)
             val objectRef = storage.reference.child(storagePath)
             var uploaded = false
+            var metadataSaved = false
             try {
                 val metadata = StorageMetadata.Builder()
                     .setContentType("application/octet-stream")
@@ -198,17 +199,21 @@ class FirebaseCloudVault(private val context: Context) {
                     "updatedAt" to now,
                     "sizeBytes" to bytes.size.toLong()
                 )).await()
-                val history = collection.orderBy("updatedAt", Query.Direction.DESCENDING).get().await()
-                history.documents.filter { it.id.startsWith("backup_") }.drop(10).forEach { old ->
-                    val oldPath = old.getString("storagePath")
-                    if (oldPath != null && oldPath.startsWith("users/${user.uid}/backups/")) {
-                        storage.reference.child(oldPath).delete().await()
+                metadataSaved = true
+                // Retention cleanup must never invalidate a successfully saved new revision.
+                runCatching {
+                    val history = collection.orderBy("updatedAt", Query.Direction.DESCENDING).get().await()
+                    history.documents.filter { it.id.startsWith("backup_") }.drop(10).forEach { old ->
+                        val oldPath = old.getString("storagePath")
+                        if (oldPath != null && oldPath.startsWith("users/${user.uid}/backups/")) {
+                            storage.reference.child(oldPath).delete().await()
+                        }
+                        old.reference.delete().await()
                     }
-                    old.reference.delete().await()
                 }
                 revisionId
             } catch (error: Exception) {
-                if (uploaded) runCatching { objectRef.delete().await() }
+                if (uploaded && !metadataSaved) runCatching { objectRef.delete().await() }
                 throw error
             } finally {
                 bytes.fill(0)
