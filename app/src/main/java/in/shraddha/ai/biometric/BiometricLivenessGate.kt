@@ -43,19 +43,21 @@ class BiometricLivenessGate(
             expired = true
             return false
         }
-        if (faceCount != 1 || !leftEyeOpen.isFinite() || !rightEyeOpen.isFinite() || !yawDegrees.isFinite()) {
+        if (faceCount != 1 || !leftEyeOpen.isFinite() || !rightEyeOpen.isFinite() ||
+            leftEyeOpen !in 0f..1f || rightEyeOpen !in 0f..1f || !yawDegrees.isFinite()) {
             stableFrames = 0
             if (currentStep == Step.BLINK) blinkClosed = false
             return false
         }
-        val eyeOpen = minOf(leftEyeOpen, rightEyeOpen)
+        val bothEyesClosed = maxOf(leftEyeOpen, rightEyeOpen) < 0.25f
+        val bothEyesOpen = minOf(leftEyeOpen, rightEyeOpen) > 0.65f
         val passed = when (currentStep) {
             Step.BLINK -> {
-                if (eyeOpen < 0.25f) {
+                if (bothEyesClosed) {
                     blinkClosed = true
                     stableFrames = 0
                     false
-                } else if (blinkClosed && eyeOpen > 0.65f) {
+                } else if (blinkClosed && bothEyesOpen) {
                     stableFrames++
                     stableFrames >= REQUIRED_STABLE_FRAMES
                 } else {
