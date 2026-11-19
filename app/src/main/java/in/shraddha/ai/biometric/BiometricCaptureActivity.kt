@@ -44,6 +44,7 @@ import java.io.File
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
 
@@ -63,6 +64,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private lateinit var message: TextView
     private lateinit var action: Button
     private lateinit var cameraExecutor: ExecutorService
+    @Volatile private var modelLoadThread: Thread? = null
+    @Volatile private var captureThread: Thread? = null
     private var livenessGate = BiometricLivenessGate()
     private val livenessPassed = AtomicBoolean(false)
     private val captureCancelled = AtomicBoolean(false)
@@ -112,7 +115,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
         message = TextView(this).apply { text = "Installing and verifying bundled biometric models…"; setTextColor(android.graphics.Color.WHITE) }
         setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
-        Thread({
+        modelLoadThread = Thread({
             try {
                 BiometricModelInstaller.ensureInstalled(applicationContext)
                 val modelDirectory = File(filesDir, "biometric-models")
@@ -121,7 +124,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 if (kind == "face") engine.loadFaceModel(model.absolutePath) else engine.loadSpeakerModel(model.absolutePath)
                 runOnUiThread { if (!isFinishing) { if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold) else buildFaceScreen(mode, id, name, threshold) } }
             } catch (error: Exception) { finishWith("Biometric model installation/loading failed: ${error.message}") }
-        }, "BiometricModelLoad").start()
+        }, "BiometricModelLoad").apply { start() }
     }
 
     private fun baseLayout(title: String, detail: String): LinearLayout {
@@ -452,7 +455,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun recordSpeaker() {
         message.text = "Phrase verified locally. अब 5 सेकंड वही phrase दोहराएँ…"
-        Thread({
+        captureThread = Thread({
             var recorder: AudioRecord? = null
             var rawPcm: ShortArray? = null
             var normalizedPcm: FloatArray? = null
@@ -516,7 +519,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 runCatching { recorder?.release() }
                 activeRecorder = null
             }
-        }, "SpeakerCapture").start()
+        }, "SpeakerCapture").apply { start() }
     }
 
     private fun finishWith(text: String) {
@@ -546,7 +549,16 @@ class BiometricCaptureActivity : AppCompatActivity() {
         detector = null
         cacheDir.listFiles()?.filter { it.name.startsWith("biometric-frame-") }?.forEach { it.delete() }
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
-        if (engineLazy.isInitialized()) Thread { runCatching { engine.close() } }.start()
+        Thread({
+            val modelFinished = runCatching { modelLoadThread?.join(); true }.getOrDefault(false)
+            val captureFinished = runCatching { captureThread?.join(); true }.getOrDefault(false)
+            val cameraFinished = if (::cameraExecutor.isInitialized) {
+                runCatching { cameraExecutor.awaitTermination(30, TimeUnit.SECONDS) }.getOrDefault(false)
+            } else true
+            if (modelFinished && captureFinished && cameraFinished && engineLazy.isInitialized()) {
+                runCatching { engine.close() }
+            }
+        }, "BiometricCleanup").start()
         super.onDestroy()
     }
 }
