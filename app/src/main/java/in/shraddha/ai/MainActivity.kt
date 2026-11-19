@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private val screenShareRequest = 42
     private val dataFileRequest = 43
     private val backupFileRequest = 45
+    private val backupImportRequest = 46
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
@@ -1220,16 +1221,30 @@ class MainActivity : AppCompatActivity() {
                 val info="Battery: ${if(battery>=0) "$battery%" else "Unavailable"}\nApp storage volume: $free MB free / $total MB total\nAndroid: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nNetwork status and thermal sensors are not sampled in background."
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Device Health Snapshot").setMessage(info).setPositiveButton("OK",null).show()
             })
-            addView(actionButton("EXPORT USER DATA BACKUP","JSON export of selected app-managed notes and settings") {
-                val backup=JSONObject().put("schema","shraddha-backup-v1").put("createdAt",System.currentTimeMillis())
+            addView(actionButton("EXPORT ENCRYPTED BACKUP","AES-256-GCM • passphrase protected • selected user data only") {
+                val backup=JSONObject().put("schema","shraddha-backup-v2").put("createdAt",System.currentTimeMillis())
                     .put("knowledgeGraph",getSharedPreferences("shraddha_knowledge_graph",MODE_PRIVATE).getString("nodes","[]"))
                     .put("activeProject",getSharedPreferences("shraddha_projects",MODE_PRIVATE).getString("active_project",""))
+                    .put("localNotes",getSharedPreferences("shraddha_local_memory",MODE_PRIVATE).getString("notes",""))
                     .put("digitalTwin",JSONObject().put("name",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("name","")).put("language",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("language","Hindi")).put("style",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("style","step-by-step")))
-                    .put("auditTrail",`in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).exportText())
-                val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json"; putExtra(Intent.EXTRA_TITLE,"shraddha-ai-backup-${System.currentTimeMillis()}.json") }
-                getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().putString("payload",backup.toString(2)).apply()
+                val password=EditText(this@MainActivity).apply { hint="Backup passphrase (12+ characters)"; inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt Shraddha backup").setMessage("Use a strong passphrase and keep it safe. It cannot be recovered if lost. API keys, pairing tokens, permissions and biometric data are excluded.")
+                    .setView(password).setNegativeButton("Cancel",null).setPositiveButton("Encrypt & Save") { _,_ ->
+                        val secret=password.text.toString().toCharArray()
+                        try {
+                            val encrypted=`in`.shraddha.ai.future.EncryptedBackupCodec.encrypt(backup.toString(),secret)
+                            getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().putString("payload",encrypted).apply()
+                            val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json"; putExtra(Intent.EXTRA_TITLE,"shraddha-ai-encrypted-backup-${System.currentTimeMillis()}.json") }
+                            @Suppress("DEPRECATION")
+                            startActivityForResult(intent,backupFileRequest)
+                        } catch(e:Exception) { status.text="Backup encryption failed: ${e.message}" }
+                        finally { secret.fill('\u0000') }
+                    }.show()
+            })
+            addView(actionButton("RESTORE ENCRYPTED BACKUP","Choose a Shraddha encrypted backup file and enter its passphrase") {
+                val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json" }
                 @Suppress("DEPRECATION")
-                startActivityForResult(intent,backupFileRequest)
+                startActivityForResult(intent,backupImportRequest)
             })
         }
         section(root, "OFFLINE MODEL VAULT STATUS", "Model integrity verifier तैयार है; model execution के लिए native inference runtime, supported model format और device-memory benchmark अभी आवश्यक हैं।") {
@@ -1573,9 +1588,46 @@ class MainActivity : AppCompatActivity() {
         }
         if (requestCode == backupFileRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
             val payload=getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).getString("payload",null)
-            try { if(payload.isNullOrBlank()) error("Backup payload missing"); contentResolver.openOutputStream(data.data!!)?.use { it.write(payload.toByteArray(Charsets.UTF_8)) } ?: error("Could not open destination")
-                `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_export","completed","user-selected JSON backup"); status.text="Backup export complete. Keep the file in a secure location."
+            try {
+                if(payload.isNullOrBlank()) error("Encrypted backup payload missing")
+                contentResolver.openOutputStream(data.data!!)?.use { it.write(payload.toByteArray(Charsets.UTF_8)) } ?: error("Could not open destination")
+                getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().remove("payload").apply()
+                `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_export","completed","encrypted user-selected backup")
+                status.text="Encrypted backup export complete. Keep the passphrase and file separately."
             } catch(e:Exception) { status.text="Backup export failed: ${e.message}" }
+            return
+        }
+        if (requestCode == backupImportRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
+            try {
+                val bytes=contentResolver.openInputStream(data.data!!)?.use { it.readBytes() } ?: error("Could not read backup file")
+                if(bytes.isEmpty() || bytes.size > 2_100_000) error("Backup file is empty or too large")
+                val envelope=String(bytes,Charsets.UTF_8)
+                val password=EditText(this).apply { hint="Backup passphrase"; inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
+                android.app.AlertDialog.Builder(this).setTitle("Decrypt and restore backup").setMessage("Restore replaces the selected local notes, knowledge graph, project and digital twin values. Review the source file before continuing.")
+                    .setView(password).setNegativeButton("Cancel",null).setPositiveButton("Decrypt & Restore") { _,_ ->
+                        val secret=password.text.toString().toCharArray()
+                        try {
+                            val plain=`in`.shraddha.ai.future.EncryptedBackupCodec.decrypt(envelope,secret)
+                            val backup=JSONObject(plain)
+                            require(backup.optString("schema")=="shraddha-backup-v2") { "Unsupported backup data schema" }
+                            val graph=backup.optString("knowledgeGraph","[]")
+                            JSONArray(graph)
+                            val project=backup.optString("activeProject","").take(100_000)
+                            val notes=backup.optString("localNotes","").take(8_000)
+                            val twin=backup.optJSONObject("digitalTwin") ?: JSONObject()
+                            val graphPrefs=getSharedPreferences("shraddha_knowledge_graph",MODE_PRIVATE)
+                            val projectPrefs=getSharedPreferences("shraddha_projects",MODE_PRIVATE)
+                            val twinPrefs=getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE)
+                            graphPrefs.edit().putString("nodes",graph).commit()
+                            projectPrefs.edit().putString("active_project",project).commit()
+                            getSharedPreferences("shraddha_local_memory",MODE_PRIVATE).edit().putString("notes",notes).commit()
+                            twinPrefs.edit().putString("name",twin.optString("name","")).putString("language",twin.optString("language","Hindi")).putString("style",twin.optString("style","step-by-step")).commit()
+                            `in`.shraddha.ai.future.LocalAuditTrail(this).append("backup_restore","completed","encrypted backup v2")
+                            status.text="Backup decrypted and restored successfully."
+                        } catch(e:Exception) { status.text="Restore failed; backup was not accepted: ${e.message}" }
+                        finally { secret.fill('\u0000') }
+                    }.show()
+            } catch(e:Exception) { status.text="Backup file could not be opened: ${e.message}" }
             return
         }
         if (requestCode == dataFileRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
