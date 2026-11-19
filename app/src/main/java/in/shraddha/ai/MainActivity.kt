@@ -1145,7 +1145,10 @@ class MainActivity : AppCompatActivity() {
                         .setMessage("यह exact text बाहरी platform पर भेजा जाएगा:\n\n$exact\n\nPublish करने के बाद इसे platform से हटाना अलग action होगा।")
                         .setPositiveButton("PUBLISH NOW") { _, _ ->
                             result.text = "Publishing request भेजी जा रही है…"
-                            DeviceLinkManager.publishSocialPost(base, secret, selected, exact) { response ->
+                            DeviceLinkManager.publishSocialPost(
+                                base, secret, selected, exact,
+                                userConfirmed = true, confirmedPlatform = selected, confirmedText = exact
+                            ) { response ->
                                 runOnUiThread {
                                     response.onSuccess { raw ->
                                         val body = runCatching { JSONObject(raw) }.getOrNull()
