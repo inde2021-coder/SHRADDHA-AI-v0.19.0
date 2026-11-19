@@ -96,3 +96,12 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 ## Latest verification
 - GitHub Actions run 44482262665 succeeded for code commit d357b1db10a345cccbfb33a7de3b238f6063669c: Android unit tests, Debug APK build, backend checks, custom voice proxy tests, Python companion tests and artifact upload.
 - Artifact: shraddha-ai-debug-apk, 44,598,886 bytes; SHA-256 e60a761f31ec4647f1392c7e9db03c640aedda7c7731e459968aa028f3284081.
+
+
+## Safety hardening follow-up (2026-11-19)
+- Installed-app launch now requires a unique exact label match, or a unique package among partial matches; ambiguous names are refused.
+- Accessibility text targeting now preserves separate same-label controls by including screen bounds in candidate identity.
+- Resource-ID clicks now require exactly one visible, enabled, clickable node instead of selecting the first duplicate ID.
+- Workflow resume confirmation is scoped to the single checkpointed waiting step. A single confirmation can no longer authorize later destructive steps in the same workflow.
+- Added unit tests for sensitive-field blocking, payment-security fields, external side-effect confirmation, security-setting blocks and normal navigation.
+- CI verification for these follow-up changes is pending; these source changes still require real-device accessibility validation.
