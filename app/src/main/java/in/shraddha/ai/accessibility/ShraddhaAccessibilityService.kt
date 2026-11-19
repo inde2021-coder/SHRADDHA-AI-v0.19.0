@@ -41,16 +41,18 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             return
         }
         try {
-            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
-                override fun onSuccess(screenshot: ScreenshotResult) {
-                    val bitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
-                    screenshot.hardwareBuffer.close()
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                    val buffer = screenshot.hardwareBuffer
+                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
                     if (bitmap == null) {
+                        buffer.close()
                         done(Result.failure(IllegalStateException("Android screenshot buffer unavailable")))
                         return
                     }
                     ScreenOcrEngine.recognize(bitmap) { result ->
                         bitmap.recycle()
+                        buffer.close()
                         done(result)
                     }
                 }
