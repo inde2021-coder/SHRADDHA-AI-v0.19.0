@@ -944,6 +944,15 @@ class MainActivity : AppCompatActivity() {
                 if (relative.isBlank()) status.text = "पहले approved folder के अंदर relative file path लिखें।"
                 else sendRemote(JSONObject().put("kind", "file_read").put("path", relative))
             })
+            val offlinePrompt = edit("Offline AI prompt for paired Windows PC", "बिना इंटरनेट local model से सवाल पूछें").apply {
+                minLines = 3; maxLines = 5; isSingleLine = false
+            }
+            addView(offlinePrompt)
+            addView(actionButton("ASK LOCAL OFFLINE AI ON WINDOWS", "PC companion को --offline-model के साथ GGUF model से शुरू करें; prompt पर PC confirmation आएगी") {
+                val prompt = offlinePrompt.text.toString().trim()
+                if (prompt.isBlank() || prompt.length > 4000) status.text = "Offline prompt 1-4000 characters का होना चाहिए।"
+                else sendRemote(JSONObject().put("kind", "offline_chat").put("prompt", prompt))
+            })
             addView(actionButton("Send Remote Home", "फोन की Home screen पर जाएँ") { sendRemote(JSONObject().put("kind", "home")) })
             addView(actionButton("Send Remote Back", "पिछली screen पर जाएँ") { sendRemote(JSONObject().put("kind", "back")) })
             addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें") { DeviceLinkManager.disconnect(); status.text = "This phone disconnected." })
