@@ -1750,6 +1750,14 @@ class MainActivity : AppCompatActivity() {
             val speakerThreshold = edit("Speaker cosine threshold (calibrated 0–1)", "")
             speakerThreshold.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             addView(faceThreshold); addView(speakerThreshold)
+            addView(actionButton("CALIBRATE FACE THRESHOLD", "कम-से-कम 2 consented लोगों के 2-2 face samples से genuine/impostor score separation जाँचें") {
+                biometricVault.calibrateThreshold("face").onSuccess { result -> faceThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold)); status.text = "Face threshold calibrated: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs) }
+                    .onFailure { status.text = "Face calibration blocked: ${it.message}" }
+            })
+            addView(actionButton("CALIBRATE SPEAKER THRESHOLD", "कम-से-कम 2 consented लोगों के 2-2 voice samples से threshold निकालें") {
+                biometricVault.calibrateThreshold("speaker").onSuccess { result -> speakerThreshold.setText("%.4f".format(java.util.Locale.US, result.threshold)); status.text = "Speaker threshold calibrated: %.4f • genuine min %.3f • impostor max %.3f • %d/%d pairs".format(java.util.Locale.US, result.threshold, result.minimumGenuine, result.maximumImpostor, result.genuinePairs, result.impostorPairs) }
+                    .onFailure { status.text = "Speaker calibration blocked: ${it.message}" }
+            })
             fun launchCapture(kind: String, mode: String) {
                 val selected = people().getOrNull(profileSpinner.selectedItemPosition)
                 if (selected == null) { status.text = "पहले consent वाला Person Profile बनाएँ।"; return }
@@ -2026,6 +2034,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        if (requestCode == faceCaptureRequest || requestCode == speakerCaptureRequest) {
+            status.text = data?.getStringExtra(BiometricCaptureActivity.EXTRA_RESULT) ?: "Biometric capture cancelled or did not complete."
+            return
+        }
+
         if ((requestCode == faceBiometricModelRequest || requestCode == speakerBiometricModelRequest) && resultCode == Activity.RESULT_OK && data?.data != null) {
             val isFace = requestCode == faceBiometricModelRequest
             val expectedName = if (isFace) "sface.onnx" else "ecapa-any-length.onnx"
@@ -2061,7 +2074,7 @@ class MainActivity : AppCompatActivity() {
                         if (isFace) biometricEngine.loadFaceModel(target.absolutePath)
                         else biometricEngine.loadSpeakerModel(target.absolutePath)
                     }.onSuccess {
-                        runOnUiThread { status.text = (if (isFace) "SFace face embedding model" else "ECAPA speaker embedding model") + " loaded locally. Capture/enrollment pipeline is not yet enabled." }
+                        runOnUiThread { status.text = (if (isFace) "SFace face embedding model" else "ECAPA speaker embedding model") + " loaded locally. Live capture is available in People Memory." }
                     }.onFailure { error ->
                         target.delete()
                         runOnUiThread { status.text = "Biometric model rejected: " + (error.message ?: "unknown error") }
