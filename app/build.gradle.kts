@@ -21,8 +21,8 @@ android {
         applicationId = "in.shraddha.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.19.1"
+        versionCode = 22
+        versionName = "0.19.2"
         buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseConfigValue("FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${firebaseConfigValue("FIREBASE_APP_ID")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseConfigValue("FIREBASE_PROJECT_ID")}\"")
