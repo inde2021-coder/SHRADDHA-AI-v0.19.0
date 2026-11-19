@@ -131,3 +131,37 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Added unit coverage for liveness sequencing/expiry/invalid frames and five-point similarity alignment, plus an Android instrumentation smoke test that loads both bundled ONNX models and runs synthetic-input inference.
 - Added GitHub Actions Android emulator step for connected instrumentation tests. The GitHub connector currently reports no run/status for the latest branch commits, so this CI is configured but not yet verified.
 - Physical Android camera/microphone, consenting-person accuracy, FAR/FRR/ROC/EER and spoof/replay testing remain outstanding; the active challenge is not certified PAD.
+
+
+## 2026-11-19 — People Memory hardening, real model diagnostics and recovery transactions
+- Face and speaker enrollment/matching now reports calibrated similarity/threshold and measured model load/inference latency.
+- SFace/ECAPA inference clears direct native input buffers and temporary output embeddings after inference. The vault clears normalized enrollment/probe/template arrays after save, matching and calibration.
+- Enrollment saves the encrypted person profile and index in one SharedPreferences commit. Consent withdrawal atomically removes face/voice templates, both thresholds, and the person directory entry.
+- Added an Android instrumentation test for encrypted multi-key write/delete atomicity and an end-to-end People Memory consent/calibration/selected-profile/withdrawal flow.
+- Liveness requires consecutive same-direction head-turn frames and monotonic timestamps. The voice challenge now creates fresh three-word Hindi/English phrases rather than choosing from a short fixed list. This reduces trivial replay but is not certified PAD.
+- Added a physical-device validation protocol covering device matrix, consenting participants, genuine/impostor trials, FAR/FRR/EER, replay and deepfake attacks. It is a protocol only, not measured results.
+
+## 2026-11-19 — App-training privacy and full recovery
+- Legacy plaintext app-training profiles are migrated to the Android Keystore-backed encrypted feature store; corrupt migration fails closed and leaves the old records intact.
+- EncryptedFeatureStore now supports family-scoped decrypted snapshots and atomic replace/delete transactions.
+- New recovery bundle v2 includes selected person/child/task records, app-training profiles, workflow checkpoints, active project, digital twin, knowledge graph and private memory. It excludes biometric templates, API credentials, pairing tokens, OTPs and payment data.
+- Recovery validates allowed keys and data shapes, previews overwrite scope, and attempts rollback of all selected collections/preferences if a restore operation fails.
+- Local passphrase-protected backup v3 and Firebase Firestore/Storage restore share the same validated recovery format. Firestore supports 100 KB plaintext bundles; Firebase Storage supports up to 1.4 MB plaintext / 2 MB encrypted objects with 10 retained revisions.
+
+## 2026-11-19 — Firebase Storage, App Check and FCM
+- Firebase Storage encrypted upload/download and timestamped revision history are wired to owner-scoped Firestore metadata and storage.rules.
+- Firestore rules now include owner-only Storage metadata and device-token records; emulator rules tests cover owner isolation and invalid object metadata.
+- Firebase App Check is installed on both Firebase app instances: Debug provider for debug builds and Play Integrity provider for release builds. Debug tokens must be registered; Play Integrity signing/configuration is required before enforcing production App Check.
+- FCM auto-init is disabled in the manifest until explicit opt-in. Tokens are stored encrypted locally and in the owner's private Firestore device collection. Token rotation cleanup, generic-only notifications and user revocation are implemented.
+- Outbound FCM sending is not part of this Android client; use Firebase Console data-only messages or a separately secured trusted sender. Notification payloads containing sensitive content must not be sent.
+
+## 2026-11-19 — Voice social publishing
+- The voice tool now publishes user-approved text posts to Telegram, Mastodon, Bluesky and LinkedIn through the authenticated backend.
+- Draft mode is non-publishing. Publish mode first returns an exact platform/text preview and requires explicit approval with exact matching platform and text. Media, Reels, Stories and scheduled posts remain unsupported.
+- Platform length rules match backend counting semantics; cancellation of the voice task cancels the in-flight HTTP request.
+
+## Verification status
+- These source changes are committed to redesign-v0.19.2; the GitHub connector still reports no workflow run or commit status for the latest branch head. Android compilation, unit tests, emulator ONNX smoke tests, Firebase emulator rules tests and APK artifact creation therefore remain **not verified**.
+- Real Android camera/microphone tests, participant accuracy, FAR/FRR/EER and spoof evaluation require physical devices and consenting participants. No certified PAD claim is made.
+- Firebase cloud tests require the user's Firebase project, bucket, App Check configuration and published owner-only rules. No credentials or live cloud account were used in this source audit.
+- PR #2 remains open/unmerged and is one commit behind main; no direct changes were made to main.
