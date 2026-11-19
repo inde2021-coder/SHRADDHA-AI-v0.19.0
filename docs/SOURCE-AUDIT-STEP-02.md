@@ -39,7 +39,7 @@ This report records source-level findings; it does not claim an APK build or dev
 
 6. **Release verification is incomplete.**
    - The existing v0.19.0 build report explicitly records Gradle/Kotlin compile, APK build/install, runtime tests, provider tests and MYRA pairing as NOT RUN / NOT VERIFIED.
-   - CI workflow was added in Step 1, but no successful workflow result has been established in this audit.
+   - CI workflow was added in Step 1. The first observed run (#55, commit `b6a2d1d`) failed during `Run unit tests`; the APK build step was skipped. The available run metadata does not expose the failing assertion/stack trace, so the exact unit-test cause remains to be retrieved from Actions logs and fixed.
    - Gradle wrapper is configured for Gradle 8.11.1; AGP is 8.9.1 and JDK 17 is specified. Compatibility appears intentionally aligned, but only CI can confirm resolution and compilation.
 
 ## Existing Step 1 changes rechecked
