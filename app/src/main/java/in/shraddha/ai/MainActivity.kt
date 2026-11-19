@@ -1686,6 +1686,7 @@ class MainActivity : AppCompatActivity() {
         val relation = edit("Relationship / introduction", "Friend, family, colleague…")
         val notes = edit("Optional notes", "Only information you are allowed to store")
         val consent = Switch(this).apply { text = "इस व्यक्ति की स्पष्ट सहमति प्राप्त है"; setTextColor(-1); textSize = 13f; setPadding(0, dp(8), 0, dp(10)) }
+        var refreshProfileList: (() -> Unit)? = null
         fun readPeople(): JSONArray {
             val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("[]")) }.getOrElse { JSONArray() }
             var changed = false
@@ -1708,7 +1709,7 @@ class MainActivity : AppCompatActivity() {
                 val arr = readPeople()
                 val id = java.util.UUID.randomUUID().toString().replace("-", "")
                 arr.put(JSONObject().put("id", id).put("name", name.take(80)).put("relation", relation.text.toString().take(100)).put("notes", notes.text.toString().take(500)).put("consent", true).put("consentAt", System.currentTimeMillis()).put("createdAt", System.currentTimeMillis()))
-                store.put("person_directory", arr.toString()).onSuccess { status.text = "Person profile सुरक्षित रूप से सेव हुआ।"; personName.text.clear(); relation.text.clear(); notes.text.clear(); consent.isChecked = false }.onFailure { status.text = "Save error: ${it.message}" }
+                store.put("person_directory", arr.toString()).onSuccess { status.text = "Person profile सुरक्षित रूप से सेव हुआ।"; personName.text.clear(); relation.text.clear(); notes.text.clear(); consent.isChecked = false; refreshProfileList?.invoke() }.onFailure { status.text = "Save error: ${it.message}" }
             })
             addView(actionButton("View Saved People", "परिचय और profiles देखें") {
                 val rows = people().map { "${it.optString("name")} — ${it.optString("relation")}\n${it.optString("notes")}" }
@@ -1726,7 +1727,7 @@ class MainActivity : AppCompatActivity() {
                             val updated = JSONArray()
                             val all = readPeople()
                             for (i in 0 until all.length()) { val p = all.optJSONObject(i) ?: continue; if (p.optString("id") != selected.optString("id")) updated.put(p) }
-                            if (deleted.isSuccess) store.put("person_directory", updated.toString()).onSuccess { status.text = "Consent withdrawn; local profile and face/voice templates deleted." }.onFailure { status.text = "Profile delete failed: ${it.message}" }
+                            if (deleted.isSuccess) store.put("person_directory", updated.toString()).onSuccess { status.text = "Consent withdrawn; local profile and face/voice templates deleted."; refreshProfileList?.invoke() }.onFailure { status.text = "Profile delete failed: ${it.message}" }
                             else status.text = "Biometric delete failed: ${deleted.exceptionOrNull()?.message}"
                         }.show()
                 }.show()
@@ -1743,6 +1744,7 @@ class MainActivity : AppCompatActivity() {
                 profileSpinner.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, if (labels.isEmpty()) listOf("No consented people") else labels)
             }
             refreshProfiles()
+            refreshProfileList = { refreshProfiles() }
             addView(TextView(this@MainActivity).apply { text = "CONSENTED PERSON"; setTextColor(0xFFB9C8E4.toInt()) })
             addView(profileSpinner)
             val faceThreshold = edit("Face cosine threshold (calibrated 0–1)", "")
