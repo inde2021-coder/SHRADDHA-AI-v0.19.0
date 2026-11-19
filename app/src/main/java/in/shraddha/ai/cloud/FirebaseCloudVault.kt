@@ -70,7 +70,7 @@ class FirebaseCloudVault(private val context: Context) {
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
-            registerStoredPushToken(app, user.uid)
+            runCatching { registerStoredPushToken(app, user.uid) }
             val encrypted = encrypt(plaintext, password)
             FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
                 .set(mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis()))
@@ -270,23 +270,21 @@ class FirebaseCloudVault(private val context: Context) {
         }
     }
 
-    private fun registerStoredPushToken(app: FirebaseApp, userId: String) {
-        val token = EncryptedFeatureStore(context).get("firebase_fcm_token").getOrThrow()
+    private suspend fun registerStoredPushToken(app: FirebaseApp, userId: String) {
+        val token = EncryptedFeatureStore(context).get("firebase_fcm_token").getOrNull().orEmpty()
         if (token.isNotBlank()) registerDeviceToken(app, userId, token, android.os.Build.MODEL.take(80))
     }
 
-    private fun registerDeviceToken(app: FirebaseApp, userId: String, token: String, deviceName: String) {
+    private suspend fun registerDeviceToken(app: FirebaseApp, userId: String, token: String, deviceName: String) {
         val deviceId = MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        runBlocking {
-            FirebaseFirestore.getInstance(app).collection("users").document(userId).collection("devices")
-                .document(deviceId).set(mapOf(
-                    "fcmToken" to token,
-                    "updatedAt" to System.currentTimeMillis(),
-                    "platform" to "android",
-                    "deviceName" to deviceName.take(80)
-                )).await()
-        }
+        FirebaseFirestore.getInstance(app).collection("users").document(userId).collection("devices")
+            .document(deviceId).set(mapOf(
+                "fcmToken" to token,
+                "updatedAt" to System.currentTimeMillis(),
+                "platform" to "android",
+                "deviceName" to deviceName.take(80)
+            )).await()
     }
 
     private fun encrypt(value: String, password: String): String {
