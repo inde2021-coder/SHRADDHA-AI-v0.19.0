@@ -79,7 +79,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.1")
     implementation("androidx.camera:camera-lifecycle:1.4.1")
     implementation("androidx.camera:camera-view:1.4.1")
-    implementation("com.google.guava:listenablefuture:1.0")
+    implementation("com.google.guava:guava:33.3.1-android")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.1")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")

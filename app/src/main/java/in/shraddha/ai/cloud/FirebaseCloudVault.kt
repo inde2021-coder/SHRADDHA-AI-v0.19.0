@@ -63,7 +63,7 @@ class FirebaseCloudVault(private val context: Context) {
         val store = EncryptedFeatureStore(context)
         val pushConsent = store.get("firebase_fcm_consent").getOrNull() == "true" &&
             store.get("firebase_push_consent").getOrNull() == "true"
-        FirebaseMessaging.getInstance(defaultApp).isAutoInitEnabled = pushConsent
+        FirebaseMessaging.getInstance().isAutoInitEnabled = pushConsent
         val cloudApp = FirebaseApp.getApps(context).firstOrNull { it.name == APP_NAME }
             ?: FirebaseApp.initializeApp(context, options, APP_NAME)
             ?: error("Firebase initialization failed")
@@ -308,7 +308,7 @@ class FirebaseCloudVault(private val context: Context) {
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
                 ?: error("Sign-in failed")
             val store = EncryptedFeatureStore(context)
-            val messaging = FirebaseMessaging.getInstance(FirebaseApp.getInstance())
+            val messaging = FirebaseMessaging.getInstance()
             // Persist both consent flags before allowing FCM to create or rotate a token.
             store.put("firebase_fcm_consent", "true").getOrThrow()
             store.put("firebase_push_consent", "true").getOrThrow()
@@ -364,7 +364,7 @@ class FirebaseCloudVault(private val context: Context) {
             // keep auto-init, token callbacks or queued notifications enabled.
             store.put("firebase_push_consent", "false").getOrThrow()
             store.put("firebase_fcm_consent", "false").getOrThrow()
-            val messaging = FirebaseMessaging.getInstance(FirebaseApp.getInstance())
+            val messaging = FirebaseMessaging.getInstance()
             messaging.isAutoInitEnabled = false
             val current = store.get("firebase_fcm_token").getOrNull().orEmpty()
             val previous = store.get("firebase_fcm_previous_token").getOrNull().orEmpty()
