@@ -2,6 +2,7 @@ import java.util.Properties
 import java.io.File
 import java.security.MessageDigest
 import java.net.URL
+import java.net.HttpURLConnection
 
 plugins {
     id("com.android.application")
@@ -124,18 +125,45 @@ val downloadBiometricModels by tasks.registering {
             } else {
                 target.delete()
                 val temporary = File(directory, model.fileName + ".part")
-                temporary.delete()
                 logger.lifecycle("Downloading ${model.fileName}; large model download may take several minutes")
-                URL(model.url).openConnection().apply {
-                    connectTimeout = 30_000
-                    readTimeout = 180_000
-                    setRequestProperty("User-Agent", "ShraddhaAI-Build/0.19.2")
-                }.getInputStream().use { input ->
-                    temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+                var downloaded = false
+                var lastError: Exception? = null
+                for (attempt in 1..3) {
+                    try {
+                        temporary.delete()
+                        val connection = URL(model.url).openConnection() as HttpURLConnection
+                        try {
+                            connection.connectTimeout = 30_000
+                            connection.readTimeout = 180_000
+                            connection.instanceFollowRedirects = true
+                            connection.setRequestProperty("User-Agent", "ShraddhaAI-Build/0.19.2")
+                            check(connection.responseCode == HttpURLConnection.HTTP_OK) {
+                                "HTTP ${connection.responseCode} while downloading ${model.fileName}"
+                            }
+                            connection.inputStream.use { input ->
+                                temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+                            }
+                        } finally {
+                            connection.disconnect()
+                        }
+                        check(temporary.isFile && temporary.length() > 1024L * 1024L) {
+                            "Downloaded model is empty or unexpectedly small: ${model.fileName}"
+                        }
+                        val actual = biometricSha256(temporary)
+                        check(actual == model.sha256) { "Model SHA-256 mismatch for ${model.fileName}: $actual" }
+                        if (target.exists()) check(target.delete()) { "Could not replace invalid cached model: ${model.fileName}" }
+                        check(temporary.renameTo(target)) { "Could not install ${model.fileName}" }
+                        downloaded = true
+                        lastError = null
+                        break
+                    } catch (error: Exception) {
+                        lastError = error
+                        temporary.delete()
+                        logger.warn("Model download attempt $attempt/3 failed for ${model.fileName}: ${error.message}")
+                        if (attempt < 3) Thread.sleep(2_000L * attempt)
+                    }
                 }
-                val actual = biometricSha256(temporary)
-                check(actual == model.sha256) { "Model SHA-256 mismatch for ${model.fileName}: $actual" }
-                check(temporary.renameTo(target)) { "Could not install ${model.fileName}" }
+                check(downloaded) { "Could not download and verify ${model.fileName} after 3 attempts: ${lastError?.message}" }
             }
         }
     }
