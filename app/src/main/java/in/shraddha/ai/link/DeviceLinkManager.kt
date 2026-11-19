@@ -90,7 +90,11 @@ object DeviceLinkManager {
                 response.use {
                     val raw = it.body?.string().orEmpty()
                     if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).getString("answer") })
+                    else done(runCatching { JSONObject(raw).let { body ->
+                        val actual = body.optString("provider", provider)
+                        val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
+                        "$route\n\n${body.getString("answer")}"
+                    } })
                 }
             }
         })
