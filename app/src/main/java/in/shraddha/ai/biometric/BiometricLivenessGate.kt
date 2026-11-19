@@ -75,7 +75,7 @@ class BiometricLivenessGate(
                 }
             }
             Step.TURN_OPPOSITE -> {
-                val opposite = firstTurnSign != 0 && if (firstTurnSign < 0) yawDegrees > 18f else yawDegrees < -18f
+                val opposite = firstTurnSign != 0 && (if (firstTurnSign < 0) yawDegrees > 18f else yawDegrees < -18f)
                 if (opposite) {
                     stableFrames++
                     stableFrames >= REQUIRED_STABLE_FRAMES
