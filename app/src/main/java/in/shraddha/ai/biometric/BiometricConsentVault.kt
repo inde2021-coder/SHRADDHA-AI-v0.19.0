@@ -107,5 +107,42 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
         return FloatArray(dimension) { buffer.float }
     }
 
+    data class CalibrationResult(val threshold: Float, val minimumGenuine: Float, val maximumImpostor: Float, val genuinePairs: Int, val impostorPairs: Int)
+
+    @Synchronized
+    fun calibrateThreshold(kind: String): Result<CalibrationResult> = runCatching {
+        require(kind == "face" || kind == "speaker")
+        val groups = mutableListOf<Pair<String, List<FloatArray>>>()
+        val ids = readIndex()
+        for (i in 0 until ids.length()) {
+            val person = readPerson(ids.optString(i)) ?: continue
+            if (!person.optBoolean("consent")) continue
+            val templates = person.optJSONArray(kind) ?: continue
+            val vectors = (0 until templates.length()).mapNotNull { index ->
+                val item = templates.optJSONObject(index) ?: return@mapNotNull null
+                val dimension = item.optInt("dimension")
+                runCatching { decode(item.optString("vector"), dimension) }.getOrNull()
+            }
+            if (vectors.size >= 2) groups.add(person.optString("id") to vectors)
+        }
+        require(groups.size >= 2) { "कम-से-कम 2 अलग consented लोगों के 2-2 samples जरूरी हैं" }
+        val genuine = mutableListOf<Float>()
+        val impostor = mutableListOf<Float>()
+        for ((_, vectors) in groups) for (a in vectors.indices) for (b in a + 1 until vectors.size) {
+            genuine.add(BiometricMath.cosineSimilarity(vectors[a], vectors[b]))
+        }
+        for (a in groups.indices) for (b in a + 1 until groups.size) {
+            for (left in groups[a].second) for (right in groups[b].second) {
+                if (left.size == right.size) impostor.add(BiometricMath.cosineSimilarity(left, right))
+            }
+        }
+        require(genuine.isNotEmpty() && impostor.isNotEmpty()) { "Calibration samples are insufficient" }
+        val minGenuine = genuine.minOrNull() ?: error("No genuine scores")
+        val maxImpostor = impostor.maxOrNull() ?: error("No impostor scores")
+        require(minGenuine > maxImpostor + 0.02f) { "Samples overlap; safe threshold cannot be calibrated. Add clearer samples or do not enable matching." }
+        val threshold = (minGenuine + maxImpostor) / 2f
+        CalibrationResult(threshold, minGenuine, maxImpostor, genuine.size, impostor.size)
+    }
+
     data class Match(val personId: String, val name: String, val kind: String, val similarity: Float)
 }
