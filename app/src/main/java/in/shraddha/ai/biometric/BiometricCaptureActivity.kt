@@ -297,7 +297,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         require(faces.size == 1) { "एक ही स्पष्ट चेहरा चाहिए; group/ambiguous frame स्वीकार नहीं है" }
         val face = faces.first()
         require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
-        require(kotlin.math.abs(face.headEulerAngleY) <= 22f && kotlin.math.abs(face.headEulerAngleX) <= 22f) { "सीधे camera की ओर देखें" }
+        require(kotlin.math.abs(face.headEulerAngleY) <= 12f && kotlin.math.abs(face.headEulerAngleX) <= 12f) { "चेहरा सीधा camera की ओर रखें; head pose center में होना चाहिए" }
         require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
         val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
             .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
