@@ -7,7 +7,7 @@ object CapabilityCatalog {
     val all = listOf(
         Capability("app_learning","Automation","Per-app Training Profiles","User-taught semantic anchors and named workflows saved by app package.",CapabilityState.AVAILABLE),
         Capability("semantic_ui","Automation","Semantic UI Understanding","Resource ID, text, hint and content-description matching; optional local Hindi/English ML Kit OCR can read custom UI text on Android 11+, but cannot yet click OCR-only canvas targets.",CapabilityState.PERMISSION_REQUIRED),
-        Capability("adaptive_workflow","Automation","Adaptive Workflow Execution","Re-observes each screen and verifies every learned step; requires Accessibility and target-app cooperation.",CapabilityState.PERMISSION_REQUIRED),
+        Capability("adaptive_workflow","Automation","Adaptive Workflow Execution","Re-observes each screen and verifies every learned step; encrypted checkpoints allow explicit resume only after verified boundaries. Requires Accessibility and target-app cooperation.",CapabilityState.PERMISSION_REQUIRED),
         Capability("file_locator","Automation","Authorized Device File Locator","Exact-name search in MediaStore and user-granted folder trees; Android scoped storage respected.",CapabilityState.PERMISSION_REQUIRED),
         Capability("voice_operator","Automation","Voice-to-Workflow Routing","Hindi voice command routes to a saved workflow; speech recognition and prior training required.",CapabilityState.PERMISSION_REQUIRED),
         Capability("operator_audit","Security","Operator Audit Journal","Metadata-only action outcomes without screen images or secrets.",CapabilityState.AVAILABLE),
