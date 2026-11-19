@@ -44,7 +44,7 @@ object LocalOfflineLlm {
         val lowRam = activityManager.isLowRamDevice || memory.lowMemory
         val allowed = !lowRam && memory.availMem >= requiredBytes && freeStorage >= 256L * 1024L * 1024L
         val report = "Device RAM: %.2f GB • Available now: %.2f GB • Model: %.2f GB • Estimated safe headroom: %.2f GB • Free storage: %.2f GB • Java heap: %.0f/%.0f MB • Native heap: %.0f MB • Low-RAM mode: %s".format(
-            ramGb, availableGb, modelGb, requiredGb / (1024.0 * 1024.0 * 1024.0), storageGb,
+            ramGb, availableGb, modelGb, requiredGb, storageGb,
             heapUsed / (1024.0 * 1024.0), heapMax / (1024.0 * 1024.0), nativeHeap / (1024.0 * 1024.0), lowRam
         ) + if (allowed) "\nMemory pre-check: PASS (runtime may still need additional memory)." else "\nMemory pre-check: BLOCKED — close background apps or import a smaller quantized model."
         return DeviceCheck(allowed, report)
