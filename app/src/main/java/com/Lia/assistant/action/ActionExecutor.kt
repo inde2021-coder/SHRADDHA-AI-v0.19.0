@@ -144,26 +144,34 @@ object ActionExecutor {
 
             "read_screen" -> {
                 val snapshot = DeviceAccessibilityService.captureVisibleScreen()
-                if (snapshot == null) {
+                val ocrEnabled = context.getSharedPreferences("shraddha_privacy", Context.MODE_PRIVATE)
+                    .getBoolean("on_device_screen_ocr", false)
+                val needsOcr = ocrEnabled && (snapshot == null || snapshot.elements.size < 4)
+                val ocrText = if (needsOcr) DeviceAccessibilityService.captureOcrText() else null
+                if (snapshot == null && ocrText.isNullOrBlank()) {
                     result.put("status", "error")
-                    result.put("action", "device_accessibility_not_enabled")
-                    result.put("message", "Enable Shraddha AI — Device Control in Android Accessibility settings, then retry.")
+                    result.put("action", "screen_unavailable")
+                    result.put("message", "Enable Shraddha AI — Device Control. Optional OCR also requires Settings → On-device OCR Screen Reading and Android 11+. Secure/protected screens cannot be captured.")
                 } else {
                     result.put("status", "success")
-                    result.put("action", "screen_read")
-                    result.put("package", snapshot.packageName)
-                    val array = JSONArray()
-                    snapshot.elements.forEach { element ->
-                        // Sensitive values are redacted by the Accessibility service before reaching this layer.
-                        array.put(JSONObject()
-                            .put("text", element.text)
-                            .put("description", element.description)
-                            .put("type", element.className)
-                            .put("clickable", element.clickable)
-                            .put("editable", element.editable && !element.password)
-                            .put("sensitive", element.password))
+                    result.put("action", if (ocrText.isNullOrBlank()) "screen_read" else "screen_read_with_local_ocr")
+                    snapshot?.let {
+                        result.put("package", it.packageName)
+                        val array = JSONArray()
+                        it.elements.forEach { element ->
+                            array.put(JSONObject()
+                                .put("text", element.text)
+                                .put("description", element.description)
+                                .put("type", element.className)
+                                .put("clickable", element.clickable)
+                                .put("editable", element.editable && !element.password)
+                                .put("sensitive", element.password))
+                        }
+                        result.put("elements", array)
                     }
-                    result.put("elements", array)
+                    if (!ocrText.isNullOrBlank()) result.put("ocr_text", ocrText)
+                    result.put("ocr_used", !ocrText.isNullOrBlank())
+                    result.put("ocr_local_only", true)
                 }
             }
 
