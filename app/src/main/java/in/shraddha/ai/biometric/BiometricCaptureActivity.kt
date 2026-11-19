@@ -124,7 +124,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
         val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in -1f..1f))) {
+        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match", "identify") || (mode != "enroll" && (!threshold.isFinite() || threshold !in -1f..1f))) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
@@ -158,7 +158,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun buildFaceScreen(mode: String, id: String, name: String, threshold: Float) {
         val root = baseLayout(
-            if (mode == "enroll") "Face enrollment • $name" else "Live face match • $name",
+            when (mode) { "enroll" -> "Face enrollment • $name"; "identify" -> "Identify consented person"; else -> "Live face match • $name" },
             "Selected consented profile • front camera • randomized blink/head-turn challenge • on-device processing"
         )
         previewView = PreviewView(this).also { root.addView(it, LinearLayout.LayoutParams(-1, 0, 1f)) }
@@ -312,8 +312,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
                             vault.enroll(id, name, "face", embedding, true).getOrThrow()
                             finishWith("Face template encrypted and saved for $name. SFace inference ${engine.lastFaceInferenceMs} ms • model load ${engine.faceModelLoadMs} ms • original camera frame discarded.")
                         } else {
-                            val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
-                            finishWith(match?.let { "Face match: ${it.name} • similarity %.3f / threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown person. No face template passed threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms.".format(threshold))
+                            val match = vault.match("face", embedding, threshold, if (mode == "identify") null else id.takeIf { it.isNotBlank() })
+                            finishWith(match?.let { "${if (mode == "identify") "Identified among consented profiles" else "Face match"}: ${it.name} • similarity %.3f / threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown person. No consented face template passed threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms.".format(threshold))
                         }
                     } finally {
                         embedding.fill(0f)
@@ -419,7 +419,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun buildSpeakerScreen(mode: String, id: String, name: String, threshold: Float) {
         val root = baseLayout(
-            if (mode == "enroll") "Speaker enrollment • $name" else "Live speaker match • $name",
+            when (mode) { "enroll" -> "Speaker enrollment • $name"; "identify" -> "Identify consented speaker"; else -> "Live speaker match • $name" },
             "Selected consented profile • on-device speech challenge • raw audio is processed in memory and discarded"
         )
         val phrase = TextView(this).apply { text = "Read this phrase clearly:  $randomPhrase"; textSize = 18f; setTextColor(Color.WHITE); setPadding(0, 20, 0, 20) }
@@ -545,8 +545,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
                         finishWith("Speaker voiceprint encrypted locally for $name. ECAPA inference ${engine.lastSpeakerInferenceMs} ms • model load ${engine.speakerModelLoadMs} ms • raw audio discarded.")
                     } else {
                         val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-                        val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
-                        finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f / threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown speaker. No voiceprint passed threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.".format(threshold))
+                        val match = vault.match("speaker", embedding, threshold, if (mode == "identify") null else id.takeIf { it.isNotBlank() })
+                        finishWith(match?.let { "${if (mode == "identify") "Identified among consented profiles" else "Speaker match"}: ${it.name} • similarity %.3f / threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown speaker. No consented voiceprint passed threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.".format(threshold))
                     }
                 } finally {
                     embedding.fill(0f)
