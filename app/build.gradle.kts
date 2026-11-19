@@ -2,7 +2,6 @@ import java.util.Properties
 import java.io.File
 import java.security.MessageDigest
 import java.net.URL
-import java.io.File
 
 plugins {
     id("com.android.application")
