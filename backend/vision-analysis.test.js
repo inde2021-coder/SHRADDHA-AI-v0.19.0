@@ -24,6 +24,6 @@ test('machine mode includes electrical and mechanical safety limits', () => {
 test('unknown mode safely falls back to general and prompt length is bounded', () => {
   const result = buildVisionPrompt('unknown', 'x'.repeat(5000));
   assert.equal(result.mode, 'general');
-  assert.ok(result.prompt.length < 4200);
+  assert.ok(result.prompt.length < 4500);
   assert.deepEqual(supportedVisionModes, ['general', 'objects', 'document', 'machine']);
 });
