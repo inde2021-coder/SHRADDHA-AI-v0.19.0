@@ -1058,6 +1058,54 @@ class MainActivity : AppCompatActivity() {
                 `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("workflow_preview","created",name)
             })
         }
+        section(root, "AUTHORIZED SOCIAL PUBLISHING", "Telegram channel/chat या Mastodon पर post भेजें। Server credentials केवल backend environment में रहेंगी; publish से पहले exact preview की पुष्टि जरूरी है।") {
+            val endpoint = edit("Secure backend URL (HTTPS)", "https://your-domain.example")
+            val tokenField = edit("Gateway token", "Server gateway token").apply {
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            val platform = Spinner(this@MainActivity).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("telegram", "mastodon"))
+            }
+            val post = edit("Post text", "यहाँ अपना संदेश लिखें").apply {
+                minLines = 4; maxLines = 8; isSingleLine = false
+            }
+            val result = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(10), dp(12), dp(10)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            addView(endpoint); addView(tokenField); addView(platform); addView(post); addView(result)
+            addView(actionButton("REVIEW EXACT POST & PUBLISH", "External publication • final confirmation required") {
+                val base = endpoint.text.toString().trim().trimEnd("/")
+                val secret = tokenField.text.toString().trim()
+                val exact = post.text.toString()
+                val selected = platform.selectedItem?.toString().orEmpty()
+                if (!base.startsWith("https://") || secret.isBlank() || exact.isBlank() || exact.length > 5000) {
+                    result.text = "HTTPS backend URL, gateway token और 1-5000 character post जरूरी हैं।"
+                } else {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Confirm $selected publication")
+                        .setMessage("यह exact text बाहरी platform पर भेजा जाएगा:\n\n$exact\n\nPublish करने के बाद इसे platform से हटाना अलग action होगा।")
+                        .setPositiveButton("PUBLISH NOW") { _, _ ->
+                            result.text = "Publishing request भेजी जा रही है…"
+                            DeviceLinkManager.publishSocialPost(base, secret, selected, exact) { response ->
+                                runOnUiThread {
+                                    response.onSuccess { raw ->
+                                        val body = runCatching { JSONObject(raw) }.getOrNull()
+                                        result.text = if (body?.optBoolean("ok") == true) "Published on $selected. Reference: " + body.optString("postId", body.optString("messageId", "accepted")) else "Platform response: $raw"
+                                        if (body?.optBoolean("ok") == true) `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("social_publish", selected, "User-confirmed external post")
+                                    }.onFailure { result.text = "Publish failed: " + (it.message ?: "Unknown error") }
+                                }
+                            }
+                        }
+                        .setNegativeButton("CANCEL", null)
+                        .show()
+                }
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Server setup: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, or MASTODON_BASE_URL + MASTODON_ACCESS_TOKEN. Mastodon default visibility is unlisted. Instagram/Facebook/YouTube publishing is not enabled by this connector."
+                textSize = 11f; setTextColor(0xFF9EABC2.toInt()); setPadding(0, dp(8), 0, 0)
+            })
+        }
         section(root, "SECURITY AUDIT TRAIL", "इस फोन पर सीमित metadata log; passwords, API keys, screen recordings या biometric data log नहीं होते") {
             val audit=`in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity)
             addView(actionButton("View local audit log","Recent workflow events") { val log=audit.exportText(); android.app.AlertDialog.Builder(this@MainActivity).setTitle("Security Audit Trail").setMessage(log.ifBlank { "अभी कोई audit event नहीं है।" }).setPositiveButton("OK",null).setNeutralButton("Clear") { _,_ -> audit.clear(); status.text="Audit log cleared." }.show() })
