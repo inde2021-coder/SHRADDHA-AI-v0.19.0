@@ -18,7 +18,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text"}
 
 
 def normalize_point(value: object) -> float:
@@ -46,10 +46,27 @@ def validate_action(action: dict, allow_typing: bool = False) -> bool:
             return False
     if kind == "type":
         return isinstance(action.get("text"), str) and 0 < len(action["text"]) <= 500
+    if kind == "click_text":
+        label = action.get("label")
+        return isinstance(label, str) and 0 < len(label.strip()) <= 120 and label.strip() == label
     if kind == "scroll":
         amount = action.get("amount", -3)
         return isinstance(amount, (int, float)) and not isinstance(amount, bool) and -10 <= amount <= 10 and amount != 0
     return True
+
+
+def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | None:
+    """Resolve one exact, visible UIA label; ambiguity always fails closed."""
+    wanted = " ".join(label.casefold().split())
+    if not wanted:
+        return None
+    matches = []
+    allowed = {"Button", "Hyperlink", "TabItem", "MenuItem", "CheckBox", "RadioButton"}
+    for item in candidates:
+        name = " ".join(str(item.get("name", "")).casefold().split())
+        if item.get("control_type") in allowed and item.get("visible") is True and name == wanted:
+            matches.append(item)
+    return matches[0] if len(matches) == 1 else None
 
 
 def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
@@ -158,6 +175,54 @@ async def execute_action(action: dict, allow_typing: bool) -> str:
     if kind == "home":
         pyautogui.hotkey("win", "d")
         return "desktop_shown"
+    if kind == "click_text":
+        try:
+            import pygetwindow
+            active = pygetwindow.getActiveWindow()
+            title = active.title if active else ""
+        except Exception:
+            active, title = None, ""
+        if not active or is_sensitive_window(title):
+            return "blocked_unknown_or_sensitive_window"
+        try:
+            from pywinauto import Desktop
+            root = Desktop(backend="uia").get_active()
+            candidates = []
+            controls = root.descendants()
+            for control in controls[:1500]:
+                try:
+                    info = control.element_info
+                    candidates.append({
+                        "name": str(info.name or ""),
+                        "control_type": str(info.control_type or ""),
+                        "visible": bool(info.visible and info.enabled)
+                    })
+                except Exception:
+                    continue
+            target = resolve_unique_text_target(candidates, action["label"])
+            if target is None:
+                return "blocked_missing_or_ambiguous_text"
+            if not await asyncio.to_thread(confirm, f"Click the unique PC control labelled {action['label']!r} in {title!r}?"):
+                return "text_click_rejected_by_pc_user"
+            # Re-resolve immediately before acting so a changed UI cannot redirect the click.
+            fresh = root.descendants()
+            live = []
+            for control in fresh[:1500]:
+                try:
+                    info = control.element_info
+                    live.append((control, {"name": str(info.name or ""), "control_type": str(info.control_type or ""), "visible": bool(info.visible and info.enabled)}))
+                except Exception:
+                    continue
+            current = resolve_unique_text_target([item for _, item in live], action["label"])
+            if current is None:
+                return "blocked_ui_changed_or_ambiguous"
+            for control, item in live:
+                if item == current:
+                    control.click_input()
+                    return "unique_text_click_executed_after_confirmation"
+            return "blocked_ui_target_disappeared"
+        except Exception:
+            return "blocked_ui_automation_unavailable"
     if kind == "type":
         try:
             import pygetwindow
