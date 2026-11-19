@@ -245,6 +245,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun restartFaceChallenge() {
+        imageAnalysis?.clearAnalyzer()
         runCatching { cameraProvider?.unbindAll() }
         imageCapture = null
         imageAnalysis = null
