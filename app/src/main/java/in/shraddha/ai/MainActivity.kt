@@ -77,6 +77,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = 0xFF070B14.toInt()
+        window.navigationBarColor = 0xFF0B1220.toInt()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
         requestAudioPermission()
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
@@ -168,7 +174,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        heroTop.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(124), dp(124)))
+        heroTop.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(138), dp(138)))
         heroBody.addView(heroTop)
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Tap to speak") { startVoiceInput() })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
@@ -213,25 +219,62 @@ class MainActivity : AppCompatActivity() {
 
     private fun workspaceTile(title: String, subtitle: String, action: () -> Unit): LinearLayout {
         val tile = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(15), dp(16), dp(15))
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(11), dp(13), dp(11))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1A2540.toInt(), 0xFF111B2D.toInt())
-            ).apply { cornerRadius = dp(19).toFloat(); setStroke(dp(1), 0xFF34466B.toInt()) }
-            elevation = dp(3).toFloat()
-            isClickable = true; isFocusable = true
+                intArrayOf(0xFF1C2945.toInt(), 0xFF101A2D.toInt())
+            ).apply {
+                cornerRadius = dp(20).toFloat()
+                setStroke(dp(1), 0xFF35496F.toInt())
+            }
+            foreground = android.util.TypedValue().let { value ->
+                context.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
+                ContextCompat.getDrawable(context, value.resourceId)
+            }
+            elevation = dp(4).toFloat()
+            minimumHeight = dp(78)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "$title. $subtitle"
             setOnClickListener { action() }
         }
-        tile.addView(TextView(this).apply {
-            text = title; textSize = 14f; letterSpacing = .035f
-            setTextColor(0xFFE8E9FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+        val accent = View(this).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF9D7BFF.toInt(), 0xFF35C9DF.toInt())
+            ).apply { cornerRadius = dp(4).toFloat() }
+        }
+        tile.addView(accent, LinearLayout.LayoutParams(dp(4), dp(42)))
+        val copy = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(2), dp(8), dp(2))
+        }
+        copy.addView(TextView(this).apply {
+            text = title
+            textSize = 13.5f
+            letterSpacing = .02f
+            maxLines = 2
+            setTextColor(0xFFF0F1FF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
         })
-        tile.addView(TextView(this).apply {
-            text = subtitle; textSize = 11f; setTextColor(0xFF9EADC8.toInt())
-            setPadding(0, dp(6), 0, 0)
+        copy.addView(TextView(this).apply {
+            text = subtitle
+            textSize = 10.5f
+            maxLines = 2
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setTextColor(0xFFAAB8D1.toInt())
+            setPadding(0, dp(4), 0, 0)
         })
-        tile.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) }
+        tile.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+        tile.addView(TextView(this).apply {
+            text = "›"
+            textSize = 27f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(0xFFBCA9FF.toInt())
+        }, LinearLayout.LayoutParams(dp(22), -1))
+        tile.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
         return tile
     }
 
@@ -1476,11 +1519,51 @@ class MainActivity : AppCompatActivity() {
         setSingleLine(true); setPadding(dp(14), dp(13), dp(14), dp(13)); background = rounded(0xFF0B1220.toInt(), 14)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }
-    private fun actionButton(label: String, hint: String, action: () -> Unit) = Button(this).apply {
-        text = "$label\n$hint"; isAllCaps = false; textSize = 13f; gravity = android.view.Gravity.CENTER_VERTICAL
-        setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF283454.toInt())
-        minHeight = dp(56); setPadding(dp(16), dp(10), dp(16), dp(10)); setOnClickListener { action() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) }
+    private fun actionButton(label: String, hint: String, action: () -> Unit): LinearLayout {
+        val button = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(15), dp(11), dp(14), dp(11))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF493B80.toInt(), 0xFF26385C.toInt())
+            ).apply {
+                cornerRadius = dp(17).toFloat()
+                setStroke(dp(1), 0xFF7464B8.toInt())
+            }
+            foreground = android.util.TypedValue().let { value ->
+                context.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
+                ContextCompat.getDrawable(context, value.resourceId)
+            }
+            elevation = dp(3).toFloat()
+            minimumHeight = dp(58)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "$label. $hint"
+            setOnClickListener { action() }
+        }
+        val textColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        textColumn.addView(TextView(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(0xFFFFFFFF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        })
+        textColumn.addView(TextView(this).apply {
+            text = hint
+            textSize = 10.5f
+            setTextColor(0xFFD0D5EA.toInt())
+            setPadding(0, dp(3), 0, 0)
+        })
+        button.addView(textColumn, LinearLayout.LayoutParams(0, -2, 1f))
+        button.addView(TextView(this).apply {
+            text = "↗"
+            textSize = 18f
+            setTextColor(0xFFE0D8FF.toInt())
+            gravity = android.view.Gravity.CENTER
+        }, LinearLayout.LayoutParams(dp(24), -1))
+        button.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
+        return button
     }
 
     private fun requestAudioPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 10) }
