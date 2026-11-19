@@ -76,7 +76,7 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 - Self-hosted Piper is a CPU/GPU service and should run on a persistent HTTPS host; Vercel serverless is not the intended inference host.
 - Encrypted backup covers only the selected app-managed records listed above. It does not yet export Android Keystore-protected vault ciphertext, Firebase cloud vault, installed app data, contacts, messages, device pairing secrets or media.
 - Voice response playback, microphone barge-in timing and TTS latency require physical-device validation with actual Hindi/English model files.
-- OCR reading and unique text-target tapping are now implemented with opt-in local ML Kit; arbitrary non-text canvas controls, OCR-driven gestures and custom visual-target tracking remain limited. Durable resume checkpoints, native offline LLM inference, biometric identity models, smart-home connectors, generic social-media publishing and rendered video/CAD pipelines remain integration work rather than shipped capability.
+- OCR reading and unique text-target tapping are now implemented with opt-in local ML Kit; arbitrary non-text canvas controls, OCR-driven gestures and custom visual-target tracking remain limited. Encrypted workflow checkpoints and explicit resume at verified step boundaries are implemented; an interrupted in-flight action is intentionally not replayed. Native offline LLM inference, biometric identity models, smart-home connectors, generic social-media publishing and rendered video/CAD pipelines remain integration work rather than shipped capability.
 
 
 ## Advanced OCR and PC streaming follow-up
