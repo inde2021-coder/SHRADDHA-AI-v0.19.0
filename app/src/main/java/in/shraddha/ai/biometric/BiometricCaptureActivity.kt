@@ -292,12 +292,16 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 try {
                     val embedding = faceEmbeddingFromFile(file)
                     file.delete()
-                    if (mode == "enroll") {
-                        vault.enroll(id, name, "face", embedding, true).getOrThrow()
-                        finishWith("Face template encrypted and saved for $name. SFace inference ${engine.lastFaceInferenceMs} ms • model load ${engine.faceModelLoadMs} ms • original camera frame discarded.")
-                    } else {
-                        val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
-                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f / threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown person. No face template passed threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms.".format(threshold))
+                    try {
+                        if (mode == "enroll") {
+                            vault.enroll(id, name, "face", embedding, true).getOrThrow()
+                            finishWith("Face template encrypted and saved for $name. SFace inference ${engine.lastFaceInferenceMs} ms • model load ${engine.faceModelLoadMs} ms • original camera frame discarded.")
+                        } else {
+                            val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
+                            finishWith(match?.let { "Face match: ${it.name} • similarity %.3f / threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown person. No face template passed threshold %.3f • SFace inference ${engine.lastFaceInferenceMs} ms.".format(threshold))
+                        }
+                    } finally {
+                        embedding.fill(0f)
                     }
                 } catch (error: Exception) {
                     file.delete()
@@ -507,15 +511,21 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 require(rms > 0.008f && activeWindows >= 3) { "आवाज़ बहुत धीमी/रुकी हुई है; शांत जगह में पूरा phrase दोहराएँ" }
                 require(peak < 0.999f && clipped < samples.size / 100) { "Audio clipping/distortion है; microphone से थोड़ा दूर बोलें" }
                 val embedding = engine.speakerEmbedding(samples)
-                val extras = intent
-                val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
-                val id = extras.getStringExtra(EXTRA_PERSON_ID).orEmpty()
-                val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
-                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. ECAPA inference ${engine.lastSpeakerInferenceMs} ms • model load ${engine.speakerModelLoadMs} ms • raw audio discarded.") }
-                else {
-                    val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-                    val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
-                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f / threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown speaker. No voiceprint passed threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.".format(threshold))
+                try {
+                    val extras = intent
+                    val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
+                    val id = extras.getStringExtra(EXTRA_PERSON_ID).orEmpty()
+                    val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
+                    if (mode == "enroll") {
+                        vault.enroll(id, name, "speaker", embedding, true).getOrThrow()
+                        finishWith("Speaker voiceprint encrypted locally for $name. ECAPA inference ${engine.lastSpeakerInferenceMs} ms • model load ${engine.speakerModelLoadMs} ms • raw audio discarded.")
+                    } else {
+                        val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
+                        val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
+                        finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f / threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms. This is not proof of identity.".format(it.similarity, threshold) } ?: "Unknown speaker. No voiceprint passed threshold %.3f • ECAPA inference ${engine.lastSpeakerInferenceMs} ms.".format(threshold))
+                    }
+                } finally {
+                    embedding.fill(0f)
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
             finally {
