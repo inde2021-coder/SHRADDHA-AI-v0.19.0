@@ -970,6 +970,14 @@ class MainActivity : AppCompatActivity() {
                 if (relative.isBlank()) status.text = "पहले approved folder के अंदर relative file path लिखें।"
                 else sendRemote(JSONObject().put("kind", "file_read").put("path", relative))
             })
+            val pcSearchQuery = edit("Search text inside approved Windows folder", "उदाहरण: invoice number या project title")
+            addView(pcSearchQuery)
+            addView(actionButton("SEARCH APPROVED WINDOWS FILES", "केवल सीमित text/code files; snippets से संभावित credentials भी redact होंगे") {
+                val query = pcSearchQuery.text.toString().trim()
+                if (query.isBlank() || query.length > 120) status.text = "Search query 1-120 characters की होनी चाहिए।"
+                else sendRemote(JSONObject().put("kind", "file_search").put("path", pcRelativePath.text.toString().trim())
+                    .put("query", query).put("limit", 20))
+            })
             val offlinePrompt = edit("Offline AI prompt for paired Windows PC", "बिना इंटरनेट local model से सवाल पूछें").apply {
                 minLines = 3; maxLines = 5; isSingleLine = false
             }
