@@ -14,6 +14,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -75,6 +77,16 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private var detector: com.google.mlkit.vision.face.FaceDetector? = null
     private var previewView: PreviewView? = null
     private var speechRecognizer: SpeechRecognizer? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val speechTimeout = Runnable {
+        if (busy && speechRecognizer != null) {
+            runCatching { speechRecognizer?.cancel() }
+            runCatching { speechRecognizer?.destroy() }
+            speechRecognizer = null
+            busy = false
+            finishWith("Voice challenge timed out. No sample was saved; restart the capture.")
+        }
+    }
     @Volatile private var activeRecorder: AudioRecord? = null
     private val randomChallenge = listOf(
         "blue river seven" to "en-US",
@@ -454,9 +466,11 @@ class BiometricCaptureActivity : AppCompatActivity() {
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
+        mainHandler.postDelayed(speechTimeout, 20_000L)
         try {
             recognizer.startListening(request)
         } catch (error: Exception) {
+            mainHandler.removeCallbacks(speechTimeout)
             runCatching { recognizer.destroy() }
             speechRecognizer = null
             finishWith("Voice challenge could not start: ${error.message}")
@@ -556,6 +570,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         activeRecorder?.let { recorder ->
             runCatching { if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop() }
         }
+        mainHandler.removeCallbacks(speechTimeout)
         runCatching { speechRecognizer?.destroy() }
         speechRecognizer = null
         imageAnalysis?.clearAnalyzer()
