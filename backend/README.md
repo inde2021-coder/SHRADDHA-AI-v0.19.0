@@ -36,3 +36,13 @@ node --check backend/server.js
 ```
 
 Automatic routing requires a deployed gateway and at least one provider API key. Provider API usage and billing remain subject to each provider account.
+
+## Authorized social publishing
+
+`POST /api/social/publish` is protected by the gateway token and rate limit. It supports Telegram Bot API and Mastodon only. The Android UI shows the exact post and requires the user to confirm before sending. The backend independently requires `confirmed: true` and an exact `preview === text` match.
+
+Server-only configuration:
+- Telegram: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+- Mastodon: `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`, optional `MASTODON_VISIBILITY` (defaults to `unlisted`).
+
+The Mastodon host must be a public HTTPS origin. Tokens are never returned to the app or logged. This connector does not implement Instagram, Facebook, YouTube, or X publishing. Telegram bot posting is limited to the configured destination; Mastodon account scopes and visibility remain subject to the token owner's grants.
