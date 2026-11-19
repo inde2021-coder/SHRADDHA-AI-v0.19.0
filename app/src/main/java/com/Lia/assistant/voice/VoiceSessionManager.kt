@@ -270,9 +270,14 @@ object VoiceSessionManager {
 
         val count = VoiceLatencyTracker.reconnectCount.value
         if (count >= 5) {
+            // Fail closed: after exhausting reconnect attempts, stop microphone capture
+            // rather than silently recording audio that cannot be delivered to the AI.
+            audioIO?.stopRecording()
+            _amplitude.value = 0f
+            _vadActive.value = false
             _state.value = NovaOrbState.ERROR
-            _statusText.value = "Connection lost - tap Stop and reopen Voice Mode"
-            _lastError.value = "Connection lost after 5 attempts"
+            _statusText.value = "Connection lost — microphone paused. Tap Stop, then restart Voice Mode."
+            _lastError.value = "Connection lost after 5 attempts; microphone capture paused."
             return
         }
 
