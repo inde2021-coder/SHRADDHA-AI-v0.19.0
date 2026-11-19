@@ -105,8 +105,21 @@ object DeviceLinkManager {
         })
     }
 
-    fun publishSocialPost(baseUrl: String, gatewayToken: String, platform: String, exactText: String, done: (Result<String>) -> Unit) {
-        val normalizedPlatform = platform.lowercase()
+    fun publishSocialPost(
+        baseUrl: String,
+        gatewayToken: String,
+        platform: String,
+        exactText: String,
+        userConfirmed: Boolean,
+        confirmedPlatform: String,
+        confirmedText: String,
+        done: (Result<String>) -> Unit
+    ) {
+        val normalizedPlatform = platform.trim().lowercase()
+        if (!userConfirmed || !confirmedPlatform.trim().equals(normalizedPlatform, true) || confirmedText != exactText) {
+            done(Result.failure(IllegalStateException("Exact social post preview approval is required")))
+            return
+        }
         val characterLength = if (normalizedPlatform == "bluesky") exactText.codePointCount(0, exactText.length) else exactText.length
         val limit = when (normalizedPlatform) {
             "bluesky" -> 300
