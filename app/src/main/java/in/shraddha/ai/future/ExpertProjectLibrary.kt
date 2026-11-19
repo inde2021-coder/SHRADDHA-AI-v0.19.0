@@ -87,7 +87,20 @@ class ExpertProjectLibrary(context: Context) {
             return
         }
         val oldEntries = legacy.getStringSet("items", emptySet()).orEmpty()
-            .map { Entry.fromJson(JSONObject(it)) }
+            .map { raw ->
+                val json = JSONObject(raw)
+                Entry(
+                    json.optString("id").ifBlank { UUID.randomUUID().toString().replace("-", "") },
+                    json.optString("title"),
+                    json.optString("content"),
+                    json.optLong("savedAt", System.currentTimeMillis()),
+                    json.optString("workspace"),
+                    json.optString("task"),
+                    json.optString("provider")
+                ).also {
+                    require(it.title.isNotBlank() && it.content.isNotBlank())
+                }
+            }
             .sortedByDescending { it.savedAt }
             .take(MAX_ITEMS)
         val encoded = encode(oldEntries)
