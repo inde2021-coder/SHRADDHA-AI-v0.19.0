@@ -52,8 +52,9 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return isinstance(action.get("path"), str) and 0 < len(action["path"]) <= 500
     if kind == "file_search":
         query = action.get("query")
+        relative = action.get("path", "")
         limit = action.get("limit", 20)
-        return isinstance(query, str) and 0 < len(query.strip()) <= 120 and isinstance(limit, int) and not isinstance(limit, bool) and 1 <= limit <= 50
+        return isinstance(relative, str) and len(relative) <= 500 and isinstance(query, str) and 0 < len(query.strip()) <= 120 and isinstance(limit, int) and not isinstance(limit, bool) and 1 <= limit <= 50
     if kind in {"tap", "swipe"}:
         keys = ("x", "y") if kind == "tap" else ("x1", "y1", "x2", "y2")
         try:
