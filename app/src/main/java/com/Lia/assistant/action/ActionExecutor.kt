@@ -423,13 +423,28 @@ object ActionExecutor {
                             result.put("action", "recipient_not_found")
                             result.put("message", "Provide a full phone number or grant Contacts permission.")
                         } else {
-                            val service = NovaAccessibilityService.instance
-                            val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
-                            val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
-                            result.put("status", if (sent == "whatsapp_sent") "success" else "error")
-                            result.put("action", sent)
-                            result.put("recipient", number)
-                            result.put("message", if (sent == "whatsapp_sent") "WhatsApp message sent." else "Message not sent: $sent")
+                            val approved = MessageApprovalPolicy.isApproved(
+                                actualRecipient = number,
+                                actualMessage = message,
+                                userConfirmed = args.optString("user_confirmed", "").equals("yes", true),
+                                approvedRecipient = args.optString("confirmed_recipient", "").trim(),
+                                approvedMessage = args.optString("confirmed_message", "")
+                            )
+                            if (!approved) {
+                                result.put("status", "confirmation_required")
+                                result.put("action", "message_confirmation_required")
+                                result.put("recipient", number)
+                                result.put("message_preview", message.take(1000))
+                                result.put("message", "उपयोगकर्ता को यही नंबर और यही पूरा संदेश दिखाकर स्पष्ट अनुमति लें। अभी WhatsApp नहीं भेजा गया।")
+                            } else {
+                                val service = NovaAccessibilityService.instance
+                                val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
+                                val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
+                                result.put("status", if (sent == "whatsapp_sent") "success" else "error")
+                                result.put("action", sent)
+                                result.put("recipient", number)
+                                result.put("message", if (sent == "whatsapp_sent") "WhatsApp message sent." else "Message not sent: $sent")
+                            }
                         }
                     }
                 }
