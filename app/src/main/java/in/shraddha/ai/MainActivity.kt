@@ -972,7 +972,7 @@ class MainActivity : AppCompatActivity() {
                 setText(VoiceGatewaySettings.get(this@MainActivity).gatewayToken)
             }
             addView(gatewayToken)
-            visionProvider = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("gemini", "openai", "anthropic")) }
+            visionProvider = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic")) }
             addView(visionProvider)
             visionPrompt = edit("Ask AI about this screen", "Visible form fields, labels and safe next step")
             visionPrompt.setText("इस स्क्रीन पर दिख रहे ऐप और फॉर्म को समझो। दिखाई दे रहे फील्ड के नाम पढ़ो और बताओ कि कौन-सी जानकारी कहाँ भरनी है। बिना मेरी पुष्टि कोई कार्रवाई मत करना।")
