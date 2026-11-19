@@ -10,7 +10,7 @@ import org.junit.Test
 import org.json.JSONObject
 
 class DeviceRecoveryBundleInstrumentedTest {
-    @Test fun selectedDataSnapshotRestoresProfilesWorkflowsPreferencesAndMemory() {
+    @Test fun selectedDataSnapshotRestoresPersonWorkflowsPreferencesAndMemory() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = EncryptedFeatureStore(context)
         val memory = SecureMemoryVault(context)
@@ -22,8 +22,13 @@ class DeviceRecoveryBundleInstrumentedTest {
             listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint_", "app_profile_")
                 .forEach { store.removeAllWithPrefix(it) }
             store.put("person_directory", "[]").getOrThrow()
-            store.put("workflow_checkpoint_0123456789abcdef", JSONObject().put("state", "READY").toString()).getOrThrow()
-            store.put("app_profile_0123456789abcdef", JSONObject().put("packageName", "com.example.app").toString()).getOrThrow()
+            store.put("workflow_checkpoint_0123456789abcdef0123456789abcdef", JSONObject()
+                .put("packageName", "com.example.app")
+                .put("workflowName", "test")
+                .put("workflowHash", "a".repeat(64))
+                .put("nextStep", 0)
+                .put("totalSteps", 1)
+                .put("state", "READY").toString()).getOrThrow()
             memory.save("private recovery note").getOrThrow()
             projectPrefs.edit().putString("active_project", "{\"title\":\"Test project\"}").commit()
             twinPrefs.edit().putString("name", "Shraddha").putString("language", "Hindi").putString("style", "step-by-step").commit()
@@ -31,8 +36,8 @@ class DeviceRecoveryBundleInstrumentedTest {
 
             val bundle = DeviceRecoveryBundle.capture(context).getOrThrow()
             val preview = DeviceRecoveryBundle.preview(bundle).getOrThrow()
-            assertEquals(3, preview.recordCount)
-            assertEquals(1, preview.appProfileCount)
+            assertEquals(2, preview.recordCount)
+            assertEquals(0, preview.appProfileCount)
             assertEquals(1, preview.workflowCheckpointCount)
             assertTrue(preview.hasMemory)
             assertTrue(preview.hasActiveProject)
