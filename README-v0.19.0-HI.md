@@ -38,7 +38,7 @@ Settings → Encrypted Voice Memory default में OFF है। ON करन
 6. Send/Delete/Pay/Publish/Submit जैसे जोखिम वाले workflow के लिए पहले आपसे स्पष्ट पुष्टि ली जाएगी। OTP/PIN/password/UPI security fields block रहेंगे।
 7. किसी ऐप के UI में बदलाव हो तो उसका workflow फिर से train/verify करें; पुराने coordinates replay नहीं किए जाते।
 
-Voice operator tools: screen पढ़ना, unique label पर tap, safe field में text भरना, scroll, directional swipe, Back और Home। जिन ऐप्स में Accessibility nodes उपलब्ध नहीं हैं, वहाँ OCR/canvas fallback अभी नहीं है।
+Voice operator tools: screen पढ़ना, unique label पर tap, safe field में text भरना, scroll, directional swipe, Back और Home। Accessibility text कम होने पर opt-in local OCR fallback उपलब्ध है; OCR-only custom canvas पर tap अभी उपलब्ध नहीं है।
 
 ## Windows PC companion
 `desktop-companion/shraddha-pc-companion/README.md` देखें। यह Windows Credential Manager में pairing credentials रखता है, remote control के लिए PC पर explicit approval माँगता है, और text paste default में disabled रखता है।
