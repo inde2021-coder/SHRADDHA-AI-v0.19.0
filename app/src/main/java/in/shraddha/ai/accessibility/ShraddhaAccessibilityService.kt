@@ -169,8 +169,12 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     private fun fillByResourceId(resourceId: String, value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
-        val node = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList()).firstOrNull { it.isVisibleToUser && it.isEditable && !isSensitiveNode(it) } ?: return false
-        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+        val candidates = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }
+            .getOrDefault(emptyList())
+            .filter { it.isVisibleToUser && it.isEditable && !isSensitiveNode(it) }
+        // Never type into the first of several fields sharing the same resource ID.
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value.take(4000))
         })
     }
