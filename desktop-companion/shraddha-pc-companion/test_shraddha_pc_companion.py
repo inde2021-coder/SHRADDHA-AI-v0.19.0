@@ -36,6 +36,7 @@ class PcCompanionPolicyTests(unittest.TestCase):
 
     def test_click_text_requires_bounded_exact_label(self):
         self.assertTrue(validate_action({"kind": "click_text", "label": "Save"}))
+        self.assertTrue(validate_action({"kind": "click_text", "text": "Save"}))
         self.assertFalse(validate_action({"kind": "click_text", "label": " Save"}))
         self.assertFalse(validate_action({"kind": "click_text", "label": ""}))
         self.assertFalse(validate_action({"kind": "click_text", "label": "x" * 121}))
