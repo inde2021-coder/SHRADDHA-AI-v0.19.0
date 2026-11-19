@@ -3,6 +3,8 @@ package com.Lia.assistant.action
 import android.content.Context
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
+import com.Lia.assistant.data.VoiceGatewaySettings
+import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.learning.AppProfileStore
@@ -10,6 +12,8 @@ import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.WorkflowCheckpointStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -393,10 +397,89 @@ object ActionExecutor {
                 }
             }
 
-            "execute_social_media_task", "social_media_task_control" -> {
-                result.put("status", "unsupported")
-                result.put("action", "social_publishing_not_implemented")
-                result.put("message", "Social publishing automation is not implemented in this build. No post or task was created.")
+            "execute_social_media_task" -> {
+                val platform = args.optString("platform", "").trim().lowercase()
+                val action = args.optString("action", "TEXT_POST").trim().uppercase()
+                val mode = args.optString("mode", "DRAFT").trim().uppercase()
+                val text = args.optString("text").ifBlank { args.optString("caption") }.trim()
+                val supportedPlatforms = setOf("telegram", "mastodon", "bluesky", "linkedin")
+                val maxLength = when (platform) {
+                    "bluesky" -> 300
+                    "linkedin" -> 3000
+                    "telegram", "mastodon" -> 5000
+                    else -> 0
+                }
+                val textLength = text.codePointCount(0, text.length)
+                when {
+                    platform !in supportedPlatforms -> {
+                        result.put("status", "error")
+                        result.put("action", "unsupported_social_platform")
+                        result.put("message", "Supported text publishing platforms: Telegram, Mastodon, Bluesky and LinkedIn.")
+                    }
+                    action !in setOf("TEXT_POST", "CREATE_POST") -> {
+                        result.put("status", "unsupported")
+                        result.put("action", "social_media_format_unsupported")
+                        result.put("message", "Only text posts are supported. Media uploads, Reels, Stories and scheduled publishing are not implemented.")
+                    }
+                    text.isBlank() || textLength > maxLength -> {
+                        result.put("status", "error")
+                        result.put("action", "invalid_social_post")
+                        result.put("platform", platform)
+                        result.put("character_limit", maxLength)
+                        result.put("message", "Post text is required and must fit the selected platform's character limit.")
+                    }
+                    mode == "DRAFT" -> {
+                        result.put("status", "draft")
+                        result.put("action", "social_post_draft_ready")
+                        result.put("platform", platform)
+                        result.put("text_preview", text)
+                        result.put("message", "Draft prepared only. Nothing was sent. Set mode=PUBLISH to request the exact-preview confirmation.")
+                    }
+                    mode != "PUBLISH" -> {
+                        result.put("status", "error")
+                        result.put("action", "invalid_social_publish_mode")
+                        result.put("message", "mode must be DRAFT or PUBLISH.")
+                    }
+                    !args.optString("user_confirmed", "").equals("yes", true) ||
+                        !args.optString("confirmed_platform", "").trim().equals(platform, true) ||
+                        args.optString("confirmed_text", "") != text -> {
+                        result.put("status", "confirmation_required")
+                        result.put("action", "social_publish_confirmation_required")
+                        result.put("platform", platform)
+                        result.put("text_preview", text)
+                        result.put("message", "इस exact post को ${platform} पर प्रकाशित करने से पहले उपयोगकर्ता को पूरा preview दिखाएँ। केवल स्पष्ट अनुमति मिलने पर user_confirmed=yes, confirmed_platform और confirmed_text को इसी preview के अक्षरशः बराबर देकर दोबारा call करें। अभी कुछ प्रकाशित नहीं हुआ है।")
+                    }
+                    else -> {
+                        val config = VoiceGatewaySettings.get(context)
+                        if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) {
+                            result.put("status", "error")
+                            result.put("action", "social_backend_not_configured")
+                            result.put("message", "पहले Settings में HTTPS backend URL और gateway token configure करें। Social platform credentials केवल backend environment में रखें।")
+                        } else {
+                            val response = publishSocialPost(config.baseUrl, config.gatewayToken, platform, text)
+                            response.onSuccess { raw ->
+                                val body = runCatching { JSONObject(raw) }.getOrNull()
+                                if (body?.optBoolean("ok") == true && body.optString("platform") == platform) {
+                                    val postId = body.optString("postId").ifBlank { body.optString("messageId") }
+                                    result.put("status", "success")
+                                    result.put("action", "social_post_published")
+                                    result.put("platform", platform)
+                                    result.put("post_id", postId)
+                                    result.put("message", "Post accepted by ${platform}. Reference: ${postId.ifBlank { "accepted" }}. Verify it on the platform.")
+                                    runCatching { `in`.shraddha.ai.future.LocalAuditTrail(context).append("social_publish", platform, "User-confirmed text post") }
+                                } else {
+                                    result.put("status", "error")
+                                    result.put("action", "social_publish_rejected")
+                                    result.put("message", body?.optString("error")?.ifBlank { "Platform did not confirm publication." } ?: "Backend returned an unreadable publication response.")
+                                }
+                            }.onFailure {
+                                result.put("status", "error")
+                                result.put("action", "social_publish_failed")
+                                result.put("message", "Publication failed: ${it.message ?: "backend or platform error"}. Check the platform before retrying to avoid duplicate posts.")
+                            }
+                        }
+                    }
+                }
             }
 
             "execute_whatsapp_task" -> {
@@ -463,4 +546,12 @@ object ActionExecutor {
 
         return result
     }
+
+    private suspend fun publishSocialPost(baseUrl: String, gatewayToken: String, platform: String, exactText: String): Result<String> =
+        suspendCancellableCoroutine { continuation ->
+            DeviceLinkManager.publishSocialPost(baseUrl, gatewayToken, platform, exactText) { response ->
+                if (continuation.isActive) continuation.resume(response)
+            }
+        }
+
 }
