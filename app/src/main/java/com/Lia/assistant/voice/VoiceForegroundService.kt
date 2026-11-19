@@ -130,7 +130,7 @@ class VoiceForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(assistantName)
-            .setContentText("$assistantName is listening...")
+            .setContentText("Voice session active • Tap Stop to end")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
