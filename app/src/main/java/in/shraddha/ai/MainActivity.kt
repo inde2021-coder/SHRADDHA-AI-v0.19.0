@@ -1208,8 +1208,12 @@ class MainActivity : AppCompatActivity() {
         section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "पहले Firebase Console में Android app register करें और local.properties में config भरें। Cloud backup केवल आपकी सहमति से होगा।") {
             val email = edit("Email", "name@example.com")
             val password = edit("Password (कम-से-कम 8 अक्षर)", "Firebase account password").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
-            val note = edit("Cloud memory note", "यह note encrypted रूप में sync होगा").apply { minLines = 3; isSingleLine = false }
-            val consent = CheckBox(this@MainActivity).apply { text = "मैं इस note को अपने Firebase खाते में encrypted रूप में sync करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
+            val localVault = SecureMemoryVault(this@MainActivity)
+            val note = edit("Private memory to sync", "स्थानीय encrypted memory से notes यहाँ आएँगे").apply {
+                minLines = 3; isSingleLine = false
+                setText(localVault.load().getOrElse { "" })
+            }
+            val consent = CheckBox(this@MainActivity).apply { text = "मैं इस private memory note को अपने Firebase खाते में encrypted रूप में sync/restore करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val result = TextView(this@MainActivity).apply { setTextColor(0xFFBFE8D2.toInt()); textSize = 13f }
             addView(email); addView(password); addView(note); addView(consent); addView(result)
             addView(actionButton("Create Firebase Account", "Email/password authentication") {
@@ -1225,8 +1229,10 @@ class MainActivity : AppCompatActivity() {
                 if (email.text.isNullOrBlank() || password.text.length < 8 || note.text.isNullOrBlank()) { result.text = "Email, password और memory note भरें।"; return@actionButton }
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val noteValue = note.text.toString()
                 result.text = "Sign-in और encrypted upload चल रहा है…"
-                Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSave(emailValue, passwordValue, "personal_memory", noteValue)
-                    runOnUiThread { result.text = r.fold({ "Encrypted cloud backup saved for account ${it}." }, { "Sync failed: ${it.message}" }) }
+                Thread {
+                    val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSave(emailValue, passwordValue, "personal_memory", noteValue)
+                    if (r.isSuccess) localVault.save(noteValue)
+                    runOnUiThread { result.text = r.fold({ "Encrypted cloud backup saved and local encrypted vault updated for account ${it}." }, { "Sync failed: ${it.message}" }) }
                 }.start()
             })
             addView(actionButton("Restore Encrypted Memory", "उसी email और password से दूसरे device पर restore करें") {
@@ -1235,7 +1241,15 @@ class MainActivity : AppCompatActivity() {
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
                 result.text = "Encrypted backup download और decrypt हो रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory")
-                    runOnUiThread { result.text = r.fold({ value -> if (value == null) "इस account में backup नहीं मिला।" else { getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", value).apply(); "Memory restore होकर इस phone में save हुई।" } }, { "Restore failed: ${it.message}" }) }
+                    runOnUiThread { result.text = r.fold({ value -> if (value == null) "इस account में backup नहीं मिला।" else {
+                    val localSave = localVault.save(value)
+                    if (localSave.isFailure) "Cloud data decrypt हुई, लेकिन local vault save नहीं हुई: ${localSave.exceptionOrNull()?.message}"
+                    else {
+                        getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", value).apply()
+                        note.setText(value)
+                        "Encrypted memory cloud से restore होकर local vault में save हुई।"
+                    }
+                } }, { "Restore failed: ${it.message}" }) }
                 }.start()
             })
             addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase client config secret नहीं होता, लेकिन database rules जरूरी हैं। Password किसी server पर नहीं भेजा जाता; उससे client पर encryption key बनती है। Face/voice biometric templates इस backup में शामिल नहीं हैं। Firebase project config सेट किए बिना cloud buttons काम नहीं करेंगे।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
