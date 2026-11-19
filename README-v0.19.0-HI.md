@@ -10,7 +10,7 @@
 - `desktop-companion/README-SHRADDHA-MYRA-PAIRING-HI.md` — MYRA PC setup.
 
 ## Build
-Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `:app:assembleDebug`. Latest GitHub Actions run 44482262665 passed Android unit tests and debug APK build for commit d357b1db10a345cccbfb33a7de3b238f6063669c. Debug APK artifact is available from the linked Actions run. Physical-device testing is still required. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
+Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `./gradlew testDebugUnitTest assembleDebug`. GitHub Actions now includes backend policy tests, Firebase Firestore/Storage emulator rules tests, Android unit tests, debug APK build and emulator ONNX smoke tests. The last attempted run on commit `77c4383` stopped at the Firebase Storage emulator assertion (the emulator returned numeric size `4`, while the test expected string `"4"`); the assertion is corrected in commit `30cb7aa`, but that commit has not yet received a successful full build. Do not treat older APK artifacts as verification of the current source. Physical Android camera/microphone and accuracy tests are still required. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
 
 ## Secure Gemini Live Voice setup (v0.19.2)
 1. Backend में `GATEWAY_TOKEN` और `GEMINI_API_KEY` server environment variables में set करें। Permanent Gemini key APK में न डालें।
@@ -42,6 +42,15 @@ Settings → Encrypted Voice Memory default में OFF है। ON करन
 
 Voice operator tools: screen पढ़ना, unique label पर tap, safe field में text भरना, scroll, directional swipe, Back और Home। Accessibility text कम होने पर opt-in local OCR fallback उपलब्ध है; OCR-only custom canvas पर tap अभी उपलब्ध नहीं है।
 
+## People Memory — Face and Speaker Recognition
+
+- Enroll a face or speaker only after the person gives explicit consent. Templates are encrypted locally with Android Keystore-backed AES-GCM; raw camera frames and PCM samples are discarded after inference.
+- **Match** checks one selected profile. **Identify** searches all separately consented profiles and returns the best passing result or Unknown.
+- Face capture uses SFace, five-point alignment, quality checks and a randomized blink/head-turn challenge. The still must be captured within 8 seconds after the challenge passes.
+- Speaker capture uses ECAPA embeddings and Android on-device phrase recognition followed by a separate 5-second voice sample. Because phrase verification and the sample are two separate microphone steps, a handoff between them remains possible.
+- Threshold calibration needs at least two separately consented people with multiple samples. Adding a sample or withdrawing a person invalidates the relevant threshold.
+- Blink/head-turn and spoken-phrase challenges are heuristics, not certified anti-spoofing. Do not use biometric matching as device unlock, payment approval, access control or other high-stakes authentication. See `docs/BIOMETRIC-DEVICE-VALIDATION.md` before real-person testing.
+
 ## Windows PC companion
 `desktop-companion/shraddha-pc-companion/README.md` देखें। यह Windows Credential Manager में pairing credentials रखता है, remote control के लिए PC पर explicit approval माँगता है, और text paste default में disabled रखता है।
 
@@ -49,7 +58,7 @@ Voice operator tools: screen पढ़ना, unique label पर tap, safe fiel
 Voice-authorized call के लिए Contacts/Phone permissions आवश्यक हैं। SMS या WhatsApp भेजने से पहले श्रद्धा resolved phone number और पूरा message preview देती है। उपयोगकर्ता की स्पष्ट अनुमति के बाद ही वही exact number और exact message दोबारा भेजने पर स्वीकार होता है; recipient या message बदलने पर नई पुष्टि आवश्यक है। SMS permission और WhatsApp Accessibility verification भी आवश्यक हैं। WhatsApp chat reading/search उपलब्ध नहीं है। Social publishing में Telegram, Mastodon, Bluesky और LinkedIn पर केवल text post supported है; पहले exact platform और पूरा text preview दिखाकर आपकी स्पष्ट अनुमति जरूरी है। Media uploads, Reels, Stories, Instagram, Facebook, YouTube और X अभी connected नहीं हैं।
 
 ## Required device permissions
-Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable “Shraddha AI — Device Control” manually in Android Settings for voice-driven app control. The optional “Advanced App Operator” service is currently used only for WhatsApp send verification. Android secure screens, OTP/PIN/password fields and apps that block Accessibility remain unavailable. PC control needs a paired MYRA desktop companion.
+Microphone, notifications, Accessibility Service, overlay, camera, media access, Contacts, Phone and SMS permissions are requested only for features that need them. Voice calling and SMS permissions can be granted from the in-app Permissions page; they are not requested at startup. Enable “Shraddha AI — Device Control” manually in Android Settings for voice-driven app control. The optional “Advanced App Operator” service is currently used only for WhatsApp send verification. Android secure screens, OTP/PIN/password fields and apps that block Accessibility remain unavailable. PC control needs a paired MYRA desktop companion.
 
 ## Important
 Source integration is not a claim that every capability works without credentials, permissions, network, desktop companion, or external provider APIs. See `docs/BUILD-TEST-REPORT-v0.19.0.md` for what was and was not verified.
