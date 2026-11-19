@@ -123,6 +123,7 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "file_search", "query": ""}, file_root="C:/Approved"))
         self.assertFalse(validate_action({"kind": "file_search", "query": "x" * 121}, file_root="C:/Approved"))
         self.assertFalse(validate_action({"kind": "file_search", "query": "x", "limit": 51}, file_root="C:/Approved"))
+        self.assertFalse(validate_action({"kind": "file_search", "path": "x" * 501, "query": "x"}, file_root="C:/Approved"))
 
 
 if __name__ == "__main__":
