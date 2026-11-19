@@ -30,6 +30,9 @@
         android:roundIcon="@drawable/ic_shraddha"
         android:theme="@style/Theme.ShraddhaAI"
         android:supportsRtl="true">
+        <activity android:name=".operator.OperatorActivity" android:exported="false" />
+        <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
+        <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
