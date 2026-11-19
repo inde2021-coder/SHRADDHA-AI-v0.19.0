@@ -113,8 +113,8 @@ object DeviceLinkManager {
         userConfirmed: Boolean,
         confirmedPlatform: String,
         confirmedText: String,
-        done: (Result<String>) -> Unit,
-        onCall: ((Call) -> Unit)? = null
+        onCall: ((Call) -> Unit)? = null,
+        done: (Result<String>) -> Unit
     ): Call? {
         val normalizedPlatform = platform.trim().lowercase()
         if (!userConfirmed || !confirmedPlatform.trim().equals(normalizedPlatform, true) || confirmedText != exactText) {
