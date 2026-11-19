@@ -15,6 +15,7 @@ object CapabilityCatalog {
         Capability("twin","Intelligence","Personal Digital Twin","User-authored editable preferences saved locally; no hidden inference.",CapabilityState.AVAILABLE),
         Capability("predict","Intelligence","Predictive intelligence","Opt-in suggestions from manually entered activity only; no background tracking.",CapabilityState.AVAILABLE),
         Capability("offline","Intelligence","Hybrid offline AI runtime","SHA-256 model integrity helper exists; native model inference runtime and device benchmark still required.",CapabilityState.ROADMAP),
+        Capability("shraddha_voice","Voice","Shraddha custom bilingual voice","Gemini text responses are routed to a self-hosted non-Google TTS engine; licensed matching Hindi and English voice models and backend endpoint are required.",CapabilityState.CONFIGURATION_REQUIRED),
         Capability("device","Devices","Universal device control","Paired device relay and scoped remote-control approval; target OS permissions remain mandatory.",CapabilityState.PERMISSION_REQUIRED),
         Capability("handoff","Devices","Cross-device task transfer","Secure paired-device messaging exists; resumable task-state synchronization is not complete.",CapabilityState.COMPANION_REQUIRED),
         Capability("screen","Vision","Live screen understanding","Screen share and AI screenshot analysis require user-started MediaProjection and provider configuration.",CapabilityState.PERMISSION_REQUIRED),
@@ -43,7 +44,7 @@ object CapabilityCatalog {
         Capability("testing","Engineering","Automated app testing lab","Test-plan creation available through AI; device farm and automated test execution not shipped.",CapabilityState.ROADMAP),
         Capability("guardian","Security","Permission guardian","Local audit trail and per-session approval; Android OS permission screens remain authoritative.",CapabilityState.AVAILABLE),
         Capability("lock","Security","Emergency lock","Manual disconnect/revoke controls exist in device link; global remote kill-switch across all companions is not complete.",CapabilityState.COMPANION_REQUIRED),
-        Capability("backup","Security","Encrypted backup and recovery","User-triggered JSON export of selected app-managed records; encrypted restore and full vault export remain incomplete.",CapabilityState.CONFIGURATION_REQUIRED),
+        Capability("backup","Security","Encrypted backup and recovery","User-triggered PBKDF2 + AES-256-GCM passphrase-protected export/restore for selected local notes, knowledge graph, project and digital twin data; full vault and cloud export remain excluded.",CapabilityState.AVAILABLE),
         Capability("plugins","Platform","Plugin sandbox and registry","Plugin manifest and scope validation; signed package verification and sandbox execution not shipped.",CapabilityState.AVAILABLE),
         Capability("healing","Platform","Self-healing and recovery","Error reporting and recovery guidance; autonomous code modification is not enabled.",CapabilityState.ROADMAP),
         Capability("scheduler","Automation","Task scheduler and reminders","User-created one-shot local reminders using Android AlarmManager; Android may delay delivery.",CapabilityState.AVAILABLE)
