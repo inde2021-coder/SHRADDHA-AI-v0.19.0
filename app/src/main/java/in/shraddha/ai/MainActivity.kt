@@ -35,6 +35,7 @@ import `in`.shraddha.ai.vision.RemoteCameraService
 import org.json.JSONObject
 import org.json.JSONArray
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import `in`.shraddha.ai.biometric.LocalBiometricModelEngine
 import com.Lia.assistant.data.VoiceGatewaySettings
 
 class MainActivity : AppCompatActivity() {
@@ -76,6 +77,9 @@ class MainActivity : AppCompatActivity() {
     private val backupFileRequest = 45
     private val backupImportRequest = 46
     private val offlineModelImportRequest = 47
+    private val faceBiometricModelRequest = 48
+    private val speakerBiometricModelRequest = 49
+    private val biometricEngine by lazy { LocalBiometricModelEngine() }
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
@@ -1695,9 +1699,20 @@ class MainActivity : AppCompatActivity() {
                     }.show()
             })
         }
-        section(root, "FACE & VOICE RECOGNITION — INTEGRATION STATUS", "बिना अनुमति biometric enrollment या पहचान नहीं होगी") {
-            addView(TextView(this@MainActivity).apply { text = "अभी इस build में नाम/रिश्ते वाला encrypted Person Directory कार्यशील है। वास्तविक face identity matching और speaker voiceprint matching के लिए vetted on-device recognition models, explicit biometric consent, liveness / spoof checks और accuracy evaluation जोड़ना बाकी है। Android face detection या speech-to-text अकेले किसी व्यक्ति की पहचान प्रमाणित नहीं करते। इसलिए यह build किसी फोटो/आवाज़ को देखकर व्यक्ति का नाम बताने का झूठा दावा नहीं करेगा।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
-            addView(actionButton("Delete Person Memory", "सभी सेव किए गए person profiles हटाएँ") {
+        section(root, "FACE & SPEAKER RECOGNITION", "Local ONNX models • biometric consent • encrypted templates") {
+            addView(TextView(this@MainActivity).apply {
+                text = "Face: OpenCV SFace • Speaker: SpeechBrain ECAPA-TDNN. दोनों मॉडल इस फोन पर ONNX Runtime से चलते हैं। पहले compatible model file import करें। अभी camera face alignment और microphone enrollment UI बाकी है; इसलिए केवल model load होने को पहचान की सफलता न समझें।"
+                setTextColor(0xFFB9C8E4.toInt()); textSize = 12f
+            })
+            addView(actionButton("IMPORT FACE MODEL • SFace ONNX", "sface.onnx • aligned 112×112 RGB face → 128D embedding") {
+                val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
+                startActivityForResult(pick, faceBiometricModelRequest)
+            })
+            addView(actionButton("IMPORT SPEAKER MODEL • ECAPA ONNX", "ecapa-any-length.onnx • mono 16 kHz audio → 192D voiceprint") {
+                val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
+                startActivityForResult(pick, speakerBiometricModelRequest)
+            })
+            addView(actionButton("Delete Person Memory", "सभी स्थानीय person profiles हटाएँ") {
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete person memory?").setMessage("सभी स्थानीय person profiles हटेंगे।").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> store.remove("person_directory"); status.text = "Person memory हटाई गई।" }.show()
             })
         }
@@ -1938,6 +1953,53 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        if ((requestCode == faceBiometricModelRequest || requestCode == speakerBiometricModelRequest) && resultCode == Activity.RESULT_OK && data?.data != null) {
+            val isFace = requestCode == faceBiometricModelRequest
+            val expectedName = if (isFace) "sface.onnx" else "ecapa-any-length.onnx"
+            try {
+                val uri = data.data!!
+                val directory = java.io.File(filesDir, "biometric-models").apply { mkdirs() }
+                val target = java.io.File(directory, expectedName)
+                val temporary = java.io.File(directory, expectedName + ".part")
+                val freeBytes = android.os.StatFs(directory.absolutePath).availableBytes
+                contentResolver.openInputStream(uri)?.use { input ->
+                    java.io.FileOutputStream(temporary).use { output ->
+                        val buffer = ByteArray(1024 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            val cap = if (isFace) 150_000_000L else 250_000_000L
+                            if (total > cap || total + 100_000_000L > freeBytes) error("Model size/storage limit exceeded")
+                            output.write(buffer, 0, count)
+                        }
+                        output.fd.sync()
+                    }
+                } ?: error("Model file could not be read")
+                if (temporary.length() < 500_000L) error("ONNX file is too small")
+                try {
+                    java.nio.file.Files.move(temporary.toPath(), target.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                    java.nio.file.Files.move(temporary.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                }
+                Thread({
+                    runCatching {
+                        if (isFace) biometricEngine.loadFaceModel(target.absolutePath)
+                        else biometricEngine.loadSpeakerModel(target.absolutePath)
+                    }.onSuccess {
+                        runOnUiThread { status.text = (if (isFace) "SFace face embedding model" else "ECAPA speaker embedding model") + " loaded locally. Capture/enrollment pipeline is not yet enabled." }
+                    }.onFailure { error ->
+                        target.delete()
+                        runOnUiThread { status.text = "Biometric model rejected: " + (error.message ?: "unknown error") }
+                    }
+                }, "BiometricModelLoad").start()
+            } catch (error: Exception) {
+                java.io.File(filesDir, "biometric-models/" + expectedName + ".part").delete()
+                status.text = "Biometric model import failed: " + (error.message ?: "unknown error")
+            }
+            return
+        }
         if (requestCode == offlineModelImportRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
             try {
                 val uri = data.data!!
