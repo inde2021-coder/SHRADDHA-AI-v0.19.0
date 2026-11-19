@@ -92,7 +92,7 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "x" * 4001}, offline_model=object()))
 
     def test_ocr_redacts_credentials_adjacent_values_and_long_numbers(self):
-        raw = "\n".join(["Account number", "123456789012", "Public heading", "OTP: 123456", "654321", "Visible note"])
+        raw = chr(10).join(["Account number", "123456789012", "Public heading", "OTP: 123456", "654321", "Visible note"])
         safe = redact_ocr_text(raw)
         self.assertNotIn("123456789012", safe)
         self.assertNotIn("OTP: 123456", safe)
