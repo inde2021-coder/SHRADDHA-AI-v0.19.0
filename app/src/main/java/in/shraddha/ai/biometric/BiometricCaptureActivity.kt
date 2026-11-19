@@ -89,7 +89,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
         val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || id.isBlank() || name.isBlank() || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
+        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
@@ -213,7 +213,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                         vault.enroll(id, name, "face", embedding, true).getOrThrow()
                         finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.")
                     } else {
-                        val match = vault.match("face", embedding, threshold, id)
+                        val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
                         finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.")
                     }
                 } catch (error: Exception) { file.delete(); finishWith("Face capture failed: ${error.message}") }
@@ -389,7 +389,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
                 else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-                    val match = vault.match("speaker", embedding, threshold, id)
+                    val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
                     finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
