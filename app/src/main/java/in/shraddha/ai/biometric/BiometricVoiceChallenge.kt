@@ -10,6 +10,6 @@ object BiometricVoiceChallenge {
     fun matches(expectedPhrase: String, recognizedText: String): Boolean {
         val expected = normalizeTranscript(expectedPhrase)
         val actual = normalizeTranscript(recognizedText)
-        return expected.isNotBlank() && actual.contains(expected)
+        return expected.isNotBlank() && actual == expected
     }
 }
