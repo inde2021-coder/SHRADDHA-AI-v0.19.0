@@ -1399,7 +1399,7 @@ class MainActivity : AppCompatActivity() {
                         val secret=password.text.toString().toCharArray()
                         password.text?.clear()
                         if (secret.size < 12) {
-                            secret.fill('\\u0000')
+                            secret.fill('\u0000')
                             status.text = "Backup passphrase must contain at least 12 characters."
                             return@setPositiveButton
                         }
@@ -1421,7 +1421,7 @@ class MainActivity : AppCompatActivity() {
                             } catch(e:Exception) {
                                 runOnUiThread { status.text = "Backup preparation failed: ${e.message}" }
                             } finally {
-                                secret.fill('\\u0000')
+                                secret.fill('\u0000')
                             }
                         }.start()
                     }.show()
