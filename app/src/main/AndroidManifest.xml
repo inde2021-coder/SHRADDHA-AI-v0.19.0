@@ -61,6 +61,9 @@
         <service android:name=".screen.ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".vision.RemoteCameraService" android:exported="false" android:foregroundServiceType="camera" />
         <receiver android:name=".future.ReminderReceiver" android:exported="false" />
+        <service android:name=".cloud.ShraddhaFirebaseMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
         <service android:name="com.Lia.assistant.voice.VoiceForegroundService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name="com.Lia.assistant.agent.NovaAccessibilityService" android:label="Shraddha AI — Advanced App Operator (optional)" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
