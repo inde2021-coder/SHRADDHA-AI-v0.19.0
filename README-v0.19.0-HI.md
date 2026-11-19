@@ -46,7 +46,7 @@ Voice operator tools: screen पढ़ना, unique label पर tap, safe fiel
 `desktop-companion/shraddha-pc-companion/README.md` देखें। यह Windows Credential Manager में pairing credentials रखता है, remote control के लिए PC पर explicit approval माँगता है, और text paste default में disabled रखता है।
 
 ## Communication safety
-Voice-authorized direct call और SMS के लिए Contacts/Phone/SMS permissions आवश्यक हैं। WhatsApp auto-send optional Accessibility verification पर निर्भर है और हर WhatsApp version/device पर real-phone validation आवश्यक है। WhatsApp chat reading/search और social-media publishing अभी उपलब्ध नहीं हैं।
+Voice-authorized call के लिए Contacts/Phone permissions आवश्यक हैं। SMS या WhatsApp भेजने से पहले श्रद्धा resolved phone number और पूरा message preview देती है। उपयोगकर्ता की स्पष्ट अनुमति के बाद ही वही exact number और exact message दोबारा भेजने पर स्वीकार होता है; recipient या message बदलने पर नई पुष्टि आवश्यक है। SMS permission और WhatsApp Accessibility verification भी आवश्यक हैं। WhatsApp chat reading/search और social-media publishing अभी उपलब्ध नहीं हैं।
 
 ## Required device permissions
 Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable “Shraddha AI — Device Control” manually in Android Settings for voice-driven app control. The optional “Advanced App Operator” service is currently used only for WhatsApp send verification. Android secure screens, OTP/PIN/password fields and apps that block Accessibility remain unavailable. PC control needs a paired MYRA desktop companion.
