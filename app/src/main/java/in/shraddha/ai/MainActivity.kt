@@ -1422,6 +1422,65 @@ class MainActivity : AppCompatActivity() {
                 } }, { "Restore failed: ${it.message}" }) }
                 }.start()
             })
+            val bundleConsent = CheckBox(this@MainActivity).apply {
+                text = "मैं person/child profiles, task inbox और चुनी हुई app memory को encrypted Firebase backup/restore करने की अनुमति देता/देती हूँ।"
+                setTextColor(0xFFE4E9F5.toInt())
+            }
+            addView(bundleConsent)
+            val featureStore = EncryptedFeatureStore(this@MainActivity)
+            val bundleKeys = listOf("person_directory", "kids_profile", "kids_care_log", "task_inbox", "workflow_checkpoint", "active_project", "digital_twin")
+            addView(actionButton("BACK UP SELECTED DEVICE MEMORY", "Selected local records का client-side AES-GCM encrypted bundle") {
+                if (!bundleConsent.isChecked) { result.text = "पहले selected-data backup consent दें।"; return@actionButton }
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val items = JSONObject()
+                var count = 0
+                bundleKeys.forEach { key ->
+                    val value = featureStore.get(key).getOrDefault("")
+                    if (value.isNotBlank()) { items.put(key, value); count++ }
+                }
+                val memory = localVault.load().getOrDefault("")
+                val bundle = JSONObject().put("version", 1).put("createdAt", System.currentTimeMillis())
+                    .put("items", items).put("memory", memory).toString()
+                if (bundle.length() > 100000) { result.text = "Selected data 100 KB limit से अधिक है; पहले पुराने records कम करें।"; return@actionButton }
+                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
+                result.text = "Selected records encrypt करके Firebase पर भेजे जा रहे हैं…"
+                Thread {
+                    val saved = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSaveBundle(emailValue, passwordValue, bundle)
+                    runOnUiThread { result.text = saved.fold({ "Encrypted device recovery backup saved. $count feature collections + local memory." }, { "Backup failed: ${it.message}" }) }
+                }.start()
+            })
+            addView(actionButton("RESTORE SELECTED DEVICE MEMORY", "दूसरे device पर login करके चुने records recover करें; restore से पहले overwrite preview आएगा") {
+                if (!bundleConsent.isChecked) { result.text = "पहले selected-data restore consent दें।"; return@actionButton }
+                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
+                result.text = "Encrypted recovery bundle download हो रहा है…"
+                Thread {
+                    val restored = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoadBundle(emailValue, passwordValue)
+                    runOnUiThread {
+                        restored.onSuccess { raw ->
+                            if (raw.isNullOrBlank()) { result.text = "इस Firebase account में device recovery backup नहीं मिला।"; return@onSuccess }
+                            val parsed = runCatching { JSONObject(raw) }.getOrNull()
+                            val items = parsed?.optJSONObject("items")
+                            if (parsed?.optInt("version") != 1 || items == null) { result.text = "Backup format unsupported या corrupt है।"; return@onSuccess }
+                            val keys = items.keys().asSequence().toList().filter { it in bundleKeys }
+                            android.app.AlertDialog.Builder(this@MainActivity)
+                                .setTitle("Restore ${keys.size} collections?")
+                                .setMessage("यह backup इन local collections को replace करेगा:\n\n" + keys.joinToString("\n") + "\n\nLocal encrypted memory भी restore होगी।")
+                                .setNegativeButton("CANCEL", null)
+                                .setPositiveButton("RESTORE") { _, _ ->
+                                    val failures = mutableListOf<String>()
+                                    keys.forEach { key -> if (featureStore.put(key, items.optString(key)).isFailure) failures.add(key) }
+                                    val memory = parsed.optString("memory", "")
+                                    if (memory.isNotBlank()) {
+                                        if (localVault.save(memory).isFailure) failures.add("personal_memory")
+                                        else getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", memory).apply()
+                                    }
+                                    result.text = if (failures.isEmpty()) "Recovery complete: ${keys.size} collections and local memory restored." else "Partial restore. Failed: " + failures.joinToString()
+                                }.show()
+                        }.onFailure { result.text = "Recovery failed: ${it.message}" }
+                    }
+                }.start()
+            })
             addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase client config secret नहीं होता, लेकिन database rules जरूरी हैं। Password किसी server पर नहीं भेजा जाता; उससे client पर encryption key बनती है। Face/voice biometric templates इस backup में शामिल नहीं हैं। Firebase project config सेट किए बिना cloud buttons काम नहीं करेंगे।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
         }
     }
