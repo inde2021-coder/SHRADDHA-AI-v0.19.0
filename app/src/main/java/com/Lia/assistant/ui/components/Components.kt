@@ -99,17 +99,25 @@ fun NovaButton(
     val reducedMotion = LocalNovaReducedMotion.current
     val scale = remember { Animatable(1f) }
 
+    val buttonShape = RoundedCornerShape(50)
     val bgModifier = when (type) {
         NovaButtonType.PRIMARY -> Modifier
-            .background(if (enabled) colors.accent else colors.surfaceBorder)
+            .depthSurface(shape = buttonShape, elevation = if (enabled) 4.dp else 0.dp, rimColor = colors.rimLight)
+            .background(
+                brush = Brush.linearGradient(
+                    if (enabled) listOf(colors.accent, colors.accentSecondary)
+                    else listOf(colors.surfaceBorder, colors.surfaceRaised)
+                ),
+                shape = buttonShape
+            )
         NovaButtonType.SECONDARY -> Modifier
-            .depthSurface(shape = RoundedCornerShape(50), elevation = 2.dp)
-            .background(colors.surfaceGlass)
+            .depthSurface(shape = buttonShape, elevation = 3.dp, rimColor = colors.rimLight)
+            .background(colors.surfaceGlass, buttonShape)
         NovaButtonType.TEXT -> Modifier
     }
 
     val contentColor = when (type) {
-        NovaButtonType.PRIMARY -> colors.onAccent
+        NovaButtonType.PRIMARY -> if (enabled) colors.onAccent else colors.textTertiary
         NovaButtonType.SECONDARY -> colors.textPrimary
         NovaButtonType.TEXT -> colors.accent
     }
@@ -118,7 +126,7 @@ fun NovaButton(
         modifier = modifier
             .scale(scale.value)
             .defaultMinSize(minWidth = 84.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(50))
+            .clip(buttonShape)
             .then(bgModifier)
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
@@ -154,7 +162,7 @@ fun NovaButton(
                 text = text,
                 color = contentColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
+                fontSize = 14.sp
             )
         }
     }
