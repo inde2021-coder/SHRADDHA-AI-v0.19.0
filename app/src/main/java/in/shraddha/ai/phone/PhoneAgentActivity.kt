@@ -4,6 +4,10 @@ import android.app.role.RoleManager
 import android.Manifest
 import android.content.Context
 import android.net.Uri
+import android.provider.ContactsContract
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.os.Build
@@ -22,7 +26,10 @@ class PhoneAgentActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("phone_agent", Context.MODE_PRIVATE) }
     private lateinit var status: TextView
     private lateinit var history: TextView
-    private lateinit var numberInput: EditText
+    private lateinit var voiceStatus: TextView
+    private var tts: TextToSpeech? = null
+    private val voiceCallRequest = 903
+    private val contactsPermissionRequest = 904
     private val roleRequest = 901
     private val callPermissionRequest = 902
 
@@ -51,15 +58,14 @@ class PhoneAgentActivity : AppCompatActivity() {
             setPadding(0, 12, 0, 20)
         }
         root.addView(status)
-        numberInput = EditText(this).apply {
-            hint = "Phone number"
-            setSingleLine(true)
-            inputType = android.text.InputType.TYPE_CLASS_PHONE
-            setTextColor(-1)
-            setHintTextColor(0xFF8291AA.toInt())
+        voiceStatus = TextView(this).apply {
+            text = "बोलें: ‘श्रद्धा, अमित को फोन लगाओ’"
+            textSize = 14f
+            setTextColor(0xFFB8C5DD.toInt())
+            setPadding(0, 18, 0, 18)
         }
-        root.addView(numberInput)
-        root.addView(actionButton("Call number") { placeCall() })
+        root.addView(voiceStatus)
+        root.addView(actionButton("🎙  बोलकर Contact खोजें और Call करें") { startVoiceCall() })
         root.addView(actionButton("Set Shraddha as default phone app") { requestDialerRole() })
         root.addView(actionButton("Refresh phone status") { refreshStatus() })
         root.addView(TextView(this).apply {
@@ -83,6 +89,7 @@ class PhoneAgentActivity : AppCompatActivity() {
             setPadding(0, 20, 0, 0)
         })
         setContentView(ScrollView(this).apply { addView(root) })
+        tts = TextToSpeech(this) { result -> if (result == TextToSpeech.SUCCESS) tts?.language = Locale("hi", "IN") }
         handleDialIntent(intent)
         refreshStatus()
     }
@@ -95,12 +102,87 @@ class PhoneAgentActivity : AppCompatActivity() {
 
     private fun handleDialIntent(source: Intent?) {
         val number = source?.data?.takeIf { it.scheme == "tel" }?.schemeSpecificPart
-        if (!number.isNullOrBlank()) numberInput.setText(number)
+        if (!number.isNullOrBlank()) {
+            voiceStatus.text = "Dial request received: $number"
+            placeCall(number)
+        }
     }
 
-    private fun placeCall() {
-        val number = numberInput.text.toString().trim()
-        if (number.isBlank()) { numberInput.error = "Enter a phone number"; return }
+    private fun startVoiceCall() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), contactsPermissionRequest)
+            return
+        }
+        launchCallRecognition()
+    }
+
+    private fun launchCallRecognition() {
+        val speech = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "किसे फोन करना है? नाम बोलें, जैसे अमित को फोन लगाओ")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        }
+        runCatching { startActivityForResult(speech, voiceCallRequest) }
+            .onFailure { voiceStatus.text = "इस फोन पर Speech Recognition उपलब्ध नहीं है: ${it.message}" }
+    }
+
+    private fun normalizeContactText(value: String): String =
+        value.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+
+    private fun findContactNumbers(spoken: String): List<Pair<String, String>> {
+        val cleaned = spoken
+            .replace(Regex("(?i)\\b(shraddha|please|call|phone|lagao|laga do|milao|ko|se)\\b"), " ")
+            .replace(Regex("(श्रद्धा|प्लीज|कृपया|फोन लगाओ|फोन लगा दो|कॉल करो|कॉल लगाओ|को फोन|को कॉल|को|से)"), " ")
+            .trim()
+        val query = normalizeContactText(cleaned)
+        if (query.isBlank()) return emptyList()
+        val matches = mutableListOf<Pair<String, String>>()
+        val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER)
+        contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, projection, null, null,
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE NOCASE ASC")?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(nameIndex).orEmpty()
+                val number = cursor.getString(numberIndex).orEmpty()
+                val normalizedName = normalizeContactText(name)
+                if (name.isNotBlank() && number.isNotBlank() &&
+                    (normalizedName == query || normalizedName.contains(query) || query.contains(normalizedName))) {
+                    matches.add(name to number)
+                }
+            }
+        }
+        return matches.distinctBy { it.second }
+    }
+
+    private fun handleVoiceCallResult(spoken: String) {
+        val matches = runCatching { findContactNumbers(spoken) }.getOrElse {
+            voiceStatus.text = "Contacts पढ़ने में समस्या: ${it.message}"
+            return
+        }
+        when (matches.size) {
+            0 -> {
+                voiceStatus.text = "‘$spoken’ नाम से कोई Contact नहीं मिला। Contact का नाम फिर बोलें।"
+                tts?.speak("इस नाम का contact नहीं मिला। कृपया नाम दोबारा बोलें।", TextToSpeech.QUEUE_FLUSH, null, "contact-not-found")
+            }
+            1 -> {
+                val (name, number) = matches.first()
+                voiceStatus.text = "$name मिला। कॉल शुरू की जा रही है।"
+                tts?.speak("$name को कॉल लगा रही हूँ।", TextToSpeech.QUEUE_FLUSH, null, "calling-contact")
+                placeCall(number)
+            }
+            else -> {
+                val names = matches.take(5).joinToString(", ") { it.first }
+                voiceStatus.text = "एक से अधिक Contact मिले: $names। अभी कॉल नहीं लगाई; सही पूरा नाम बोलें।"
+                tts?.speak("एक से अधिक contact मिले हैं। कृपया पूरा नाम बोलें।", TextToSpeech.QUEUE_FLUSH, null, "ambiguous-contact")
+            }
+        }
+    }
+
+    private fun placeCall(number: String) {
+        if (number.isBlank()) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), callPermissionRequest)
             return
@@ -108,13 +190,29 @@ class PhoneAgentActivity : AppCompatActivity() {
         runCatching {
             val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
             telecom.placeCall(Uri.fromParts("tel", number, null), Bundle())
-        }.onFailure { status.text = "Call could not be started: " + it.message }
+        }.onFailure {
+            voiceStatus.text = "कॉल शुरू नहीं हो सकी: " + it.message
+            status.text = voiceStatus.text
+        }
+    }
+
+    @Deprecated("Compatibility with starter project")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == voiceCallRequest) {
+            val spoken = if (resultCode == RESULT_OK) data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() else null
+            if (!spoken.isNullOrBlank()) handleVoiceCallResult(spoken)
+            else voiceStatus.text = "Voice command नहीं मिला। दोबारा बोलें।"
+        } else if (requestCode == roleRequest) refreshStatus()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == callPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) placeCall()
-        else if (requestCode == callPermissionRequest) status.text = "Phone-call permission was not granted."
+        if (requestCode == callPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            voiceStatus.text = "Call permission मिली। फिर से voice command दें।"
+        } else if (requestCode == callPermissionRequest) status.text = "Phone-call permission was not granted."
+        if (requestCode == contactsPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) launchCallRecognition()
+        else if (requestCode == contactsPermissionRequest) voiceStatus.text = "Contacts permission के बिना नाम खोजकर कॉल नहीं हो सकती।"
     }
 
     override fun onResume() {
