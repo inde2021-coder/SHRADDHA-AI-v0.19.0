@@ -34,6 +34,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Validate backend JavaScript syntax
+        run: node --check backend/server.js
+
       - name: Build, test and package
         run: |
           chmod +x ./gradlew
