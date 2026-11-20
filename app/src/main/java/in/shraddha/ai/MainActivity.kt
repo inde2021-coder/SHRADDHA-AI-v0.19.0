@@ -245,7 +245,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "COMMAND CENTER", "अपने सभी AI systems और workspaces एक जगह से खोलें") {
             val items = listOf(
                 Triple("✦  AI BRAIN + VOICE", "Hindi / English • Live audio • Memory", { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) }),
-                Triple("◈  MYRA PC CENTER", "Windows / Linux • PC automation", { showPage("devices") }),
+                Triple("◈  WINDOWS PC CENTER", "Windows companion • remote screen • local approval", { showPage("devices") }),
                 Triple("◈  EXPERT STUDIO", "Engineering • Agriculture • Law", { showPage("expert") }),
                 Triple("⌘  DEVICE UNIVERSE", "Paired phones • PC • Remote screen", { showPage("devices") }),
                 Triple("▣  APP OPERATOR", "Visual UI • Workflow • Verification", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
@@ -784,7 +784,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addDeviceLinkSection(root: LinearLayout) {
-        section(root, "01  •  WORLDWIDE DEVICE LINK", "दुनिया में कहीं से भी इंटरनेट के जरिए pair करें — दोनों phones पर $assistantDisplayName और आपका HTTPS relay जरूरी है") {
+        section(root, "01  •  WORLDWIDE DEVICE LINK", "Main Android phone यहाँ session बनाएगा; Windows PC Companion या दूसरा phone इसी HTTPS relay और pairing code से join कर सकता है।") {
             relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
             deviceName = edit("This phone name", "e.g. Main Phone")
             addView(relayUrl); addView(deviceName)
@@ -795,6 +795,10 @@ class MainActivity : AppCompatActivity() {
                     result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "Pairing code: ${it.code}\nदूसरे फोन में यह code डालें। Code 5 मिनट में expire होगा।" }
                         .onFailure { status.text = "Pairing error: ${it.message}" }
                 } }
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "WINDOWS PC: Shraddha AI PC Companion.exe चलाएँ, यही HTTPS relay URL और ऊपर बना 6-digit code डालें। PC पर remote control और screen sharing अलग-अलग opt-in हैं; हर control request PC पर approve करनी होगी।"
+                setTextColor(0xFFB9C8E6.toInt()); textSize = 12f; setPadding(0, dp(8), 0, dp(10))
             })
             pairingCode = edit("Pairing code", "6-digit code दूसरे फोन से")
             addView(pairingCode)

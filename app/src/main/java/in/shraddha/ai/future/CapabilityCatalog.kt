@@ -21,6 +21,7 @@ object CapabilityCatalog {
         Capability("predict","Intelligence","Predictive intelligence","Opt-in suggestions from manually entered activity only; no background tracking.",CapabilityState.AVAILABLE),
         Capability("offline","Intelligence","Hybrid offline AI runtime","SHA-256 model integrity helper exists; native model inference runtime and device benchmark still required.",CapabilityState.ROADMAP),
         Capability("device","Devices","Universal device control","Paired device relay and scoped remote-control approval; target OS permissions remain mandatory.",CapabilityState.PERMISSION_REQUIRED),
+        Capability("pc_companion","Devices","Windows PC companion","Separate Windows desktop executable joins the same HTTPS relay; screen share and mouse/keyboard control require local PC opt-in and approval for each control session.",CapabilityState.COMPANION_REQUIRED),
         Capability("handoff","Devices","Cross-device task transfer","Secure paired-device messaging exists; resumable task-state synchronization is not complete.",CapabilityState.COMPANION_REQUIRED),
         Capability("screen","Vision","Live screen understanding","Screen share and AI screenshot analysis require user-started MediaProjection and provider configuration.",CapabilityState.PERMISSION_REQUIRED),
         Capability("voice_action","Automation","Voice-to-action automation","Speech recognition and limited command parser; full natural-language action planner requires App Operator permission.",CapabilityState.PERMISSION_REQUIRED),
