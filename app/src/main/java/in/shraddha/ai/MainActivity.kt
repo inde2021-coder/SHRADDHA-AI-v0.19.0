@@ -1849,16 +1849,55 @@ class MainActivity : AppCompatActivity() {
                 val expiresAt = prefs.getLong("remote_control_grant_expires_at", 0L)
                 val grantActive = enabled && fromDeviceId.isNotBlank() &&
                     approvedPeer == fromDeviceId && System.currentTimeMillis() < expiresAt
-                if (grantActive) {
-                    ShraddhaAccessibilityService.applyRemoteAction(action)
-                } else {
-                    // A persistent opt-in switch is not a live authorization. Every peer
-                    // must have a fresh, explicit, time-limited approval before commands run.
+                if (!grantActive) {
                     if (approvedPeer == fromDeviceId && System.currentTimeMillis() >= expiresAt) {
                         prefs.edit().remove("remote_control_grant_peer").remove("remote_control_grant_expires_at").apply()
                     }
-                    status.text = "Remote action blocked: no active 5-minute approval for this paired device."
+                    status.text = "Remote action blocked: no active approval for this paired device."
+                    return@post
                 }
+
+                // A time-limited pairing grant is not blanket consent to execute every
+                // command. Require a fresh, action-bound user decision for every command.
+                val kind = action.optString("kind", "unknown").take(40)
+                val detail = when (kind) {
+                    "type" -> "Text entry (content hidden)"
+                    "click_text" -> "Tap text: ${action.optString("text").take(80)}"
+                    "open_app" -> "Open app: ${action.optString("appName").take(80)}"
+                    "tap" -> "Tap screen coordinates"
+                    "swipe" -> "Swipe on screen"
+                    "home" -> "Go to Home screen"
+                    "back" -> "Press Back"
+                    "scroll" -> "Scroll screen"
+                    else -> "Unsupported action"
+                }
+                val risk = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess(
+                    kind.uppercase(), target = action.optString("text"), value = action.optString("text")
+                )
+                if (risk.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK) {
+                    status.text = "Remote action blocked by safety policy: ${risk.reason}"
+                    return@post
+                }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Shraddha AI • Remote action approval")
+                    .setMessage("Device: $fromDeviceId\\nAction: $detail\\n\\nक्या इस एक कार्रवाई की अनुमति दें?")
+                    .setNegativeButton("Deny") { _, _ ->
+                        status.text = "Remote action denied by you."
+                    }
+                    .setPositiveButton("Allow once") { _, _ ->
+                        val stillAuthorized = prefs.getBoolean("remote_control_consent", false) &&
+                            prefs.getString("remote_control_grant_peer", null) == fromDeviceId &&
+                            System.currentTimeMillis() < prefs.getLong("remote_control_grant_expires_at", 0L)
+                        if (!stillAuthorized) {
+                            status.text = "Remote action blocked: approval expired before confirmation."
+                        } else {
+                            val applied = ShraddhaAccessibilityService.applyRemoteAction(action)
+                            status.text = if (applied) "Approved remote action executed." else
+                                "Approved action could not be completed; Accessibility service may be unavailable."
+                        }
+                    }
+                    .setOnCancelListener { status.text = "Remote action dismissed; no action was executed." }
+                    .show()
             }
         }
         DeviceLinkManager.onScreenFrame = { sourceId, bytes ->
