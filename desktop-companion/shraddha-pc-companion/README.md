@@ -6,7 +6,7 @@
 - Windows 10/11
 - Python 3.10+
 - Deployed Shraddha relay with HTTPS/WSS
-- Android Shraddha AI app में Device Universe से बनाया गया छह-अंकों का pairing code
+- Android Shraddha AI app में Device Universe से बनाया गया single-use QR / छह-अंकों का pairing code
 
 ## Install & run
 PowerShell में:
@@ -17,6 +17,10 @@ py -m venv .venv
 py -m pip install -r requirements.txt
 # click_text के लिए Windows UI Automation dependency pywinauto भी requirements में शामिल है
 py shraddha_pc_companion.py --base-url https://YOUR-RELAY-DOMAIN --pairing-code 123456 --device-name "Office PC"
+
+# या Android Shraddha AI के QR को PC camera से scan करें
+py -m pip install -r requirements-qr.txt
+py shraddha_pc_companion.py --scan-pairing-qr --device-name "Office PC"
 ```
 
 पहली pairing के बाद device credentials Windows Credential Manager में सुरक्षित रखे जाते हैं। अगली बार केवल यह चलाएँ:
