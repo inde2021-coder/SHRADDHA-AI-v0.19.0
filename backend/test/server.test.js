@@ -169,6 +169,9 @@ test('screen frames are blocked until the sending device explicitly enables scre
     await waitForPermission(true);
     // A sender must not bypass the Android client's 2.5 MB image limit.
     ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), Buffer.alloc(2_500_001)]));
+    // Reject unknown frame types and oversized target-device routing headers.
+    ownerSocket.send(Buffer.from([3, 0, 0xff, 0xd8]));
+    ownerSocket.send(Buffer.concat([Buffer.from([1, 65]), Buffer.alloc(65, 0x61), Buffer.from([0xff, 0xd8])]));
     const allowedJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x55]);
     ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), allowedJpeg]));
 
