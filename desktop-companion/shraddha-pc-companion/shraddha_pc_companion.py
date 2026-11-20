@@ -345,6 +345,14 @@ def verify_transfer_file(path: str, expected_size: int, expected_sha256: str) ->
         for block in iter(lambda: stream.read(1024 * 1024), b''): digest.update(block)
     return digest.hexdigest() == expected_sha256.lower()
 
+async def send_file_chunks(ws, target: str, transfer_id: str, path: str, indexes: list[int]) -> None:
+    import base64
+    for position, index in enumerate(indexes):
+        data = await asyncio.to_thread(read_file_chunk, path, index)
+        await ws.send(json.dumps({"type": "file_transfer_chunk", "targetDeviceId": target, "transferId": transfer_id, "index": index, "payload": base64.b64encode(data).decode('ascii')}))
+        if position % 20 == 0: print(f"Sending file chunks: {position + 1}/{len(indexes)}")
+        await asyncio.sleep(0.01)
+
 
 def sanitize_clipboard_text(value: str) -> str:
     if not isinstance(value, str) or not value or len(value) > 20000: raise ValueError('Clipboard accepts 1–20,000 characters')
@@ -847,11 +855,77 @@ async def run_once(args) -> None:
                     if phone_action_sent and message.get("fromDeviceId") == args.control_phone:
                         print("Android action result:", str(message.get("result", "no result"))[:1000])
                         break
+                elif kind == "data_share_request":
+                    requester_id = str(message.get("fromDeviceId", ""))
+                    category = str(message.get("category", ""))
+                    request_id = str(message.get("requestId", ""))
+                    allowed = (category == "documents" and allow_file_receive) or (category == "clipboard" and allow_control)
+                    approved = bool(allowed and await asyncio.to_thread(confirm, f"Allow one-time {category} share request from paired device {requester_id}?"))
+                    await ws.send(json.dumps({"type": "data_share_response", "requesterDeviceId": requester_id, "category": category, "requestId": request_id, "approved": approved, "minutes": 5 if approved else 0}))
                 elif kind == "data_share_result" and clipboard_send and message.get("requestId") == clipboard_send[0]:
                     if message.get("approved") is True and message.get("category") == "clipboard":
                         await ws.send(json.dumps({"type": "data_share_payload", "targetDeviceId": args.send_clipboard_to, "category": "clipboard", "requestId": clipboard_send[0], **clipboard_send[1]}))
                         print("Clipboard text sent after explicit device approval.")
                     else: print("Clipboard sync was denied.")
+                elif kind == "data_share_result" and file_send and message.get("requestId") == file_send["requestId"]:
+                    if message.get("approved") is True and message.get("category") == "documents":
+                        manifest = file_send["manifest"]
+                        await ws.send(json.dumps({"type": "file_transfer_start", "targetDeviceId": file_send["target"], "requestId": file_send["requestId"], "transferId": file_send["transferId"], "fileName": manifest["name"], "sizeBytes": manifest["size"], "chunkCount": manifest["chunks"], "sha256": manifest["sha256"]}))
+                        print("Receiver approved. Sending file manifest and chunks…")
+                        await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], list(range(manifest["chunks"])))
+                    else: print("File transfer permission denied.")
+                elif kind == "file_transfer_start":
+                    source_id = str(message.get("fromDeviceId", ""))
+                    transfer_id = str(message.get("transferId", ""))
+                    name = str(message.get("fileName", "incoming-file"))[:120]
+                    size = int(message.get("sizeBytes", 0)); chunks = int(message.get("chunkCount", 0)); digest = str(message.get("sha256", ""))
+                    if not allow_file_receive or size < 1 or size > MAX_TRANSFER_BYTES or chunks < 1 or chunks > 2200 or not re.fullmatch(r"[a-f0-9]{64}", digest):
+                        await ws.send(json.dumps({"type": "file_transfer_cancel", "targetDeviceId": source_id, "transferId": transfer_id, "reason": "invalid_manifest_or_permission"}))
+                        continue
+                    approved = await asyncio.to_thread(confirm, f"Receive {name} ({size} bytes) from {source_id}?")
+                    destination = await asyncio.to_thread(windows_save_file, name) if approved else ""
+                    if not destination:
+                        await ws.send(json.dumps({"type": "file_transfer_cancel", "targetDeviceId": source_id, "transferId": transfer_id, "reason": "receiver_cancelled"}))
+                        continue
+                    temporary = destination + ".shraddha-part"
+                    stream = open(temporary, "w+b"); stream.truncate(size)
+                    incoming_transfer = {"id": transfer_id, "source": source_id, "name": name, "size": size, "chunks": chunks, "sha256": digest, "path": destination, "temp": temporary, "stream": stream, "received": set()}
+                    print(f"Receiving {name}: 0/{chunks} chunks (0%).")
+                elif kind == "file_transfer_chunk" and incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
+                    try:
+                        import base64
+                        index = int(message.get("index", -1)); data = validate_transfer_chunk(index, incoming_transfer["chunks"], str(message.get("payload", "")))
+                        expected = incoming_transfer["size"] - index * FILE_CHUNK_BYTES if index == incoming_transfer["chunks"] - 1 else FILE_CHUNK_BYTES
+                        if len(data) != expected: raise ValueError("Chunk size mismatch")
+                        if index not in incoming_transfer["received"]:
+                            incoming_transfer["stream"].seek(index * FILE_CHUNK_BYTES); incoming_transfer["stream"].write(data); incoming_transfer["received"].add(index)
+                        await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"], "index": index, "complete": False, "ok": True}))
+                        count = len(incoming_transfer["received"]); total = incoming_transfer["chunks"]
+                        print(f"Receiving {incoming_transfer[\"name\"]}: {count}/{total} chunks ({count*100//total}%).", end="\\r", flush=True)
+                        if count == total:
+                            incoming_transfer["stream"].flush(); incoming_transfer["stream"].close()
+                            if not verify_transfer_file(incoming_transfer["temp"], incoming_transfer["size"], incoming_transfer["sha256"]):
+                                import os
+                                os.remove(incoming_transfer["temp"]); raise ValueError("Final SHA-256 verification failed")
+                            import os
+                            os.replace(incoming_transfer["temp"], incoming_transfer["path"])
+                            await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"], "index": -1, "complete": True, "ok": True}))
+                            print(f"\\nSaved and SHA-256 verified: {incoming_transfer[\"path\"]}")
+                            incoming_transfer = None
+                    except Exception as exc: print("File receive error:", str(exc)[:200])
+                elif kind == "file_transfer_resume" and file_send and message.get("transferId") == file_send["transferId"]:
+                    missing = message.get("missingIndexes") or []
+                    safe_missing = [int(i) for i in missing if isinstance(i, int) and 0 <= i < file_send["manifest"]["chunks"]]
+                    print(f"Resume requested: retransmitting {len(safe_missing)} missing chunks.")
+                    await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], safe_missing)
+                elif kind == "file_transfer_ack" and file_send and message.get("transferId") == file_send["transferId"]:
+                    if message.get("complete"): print("Receiver confirmed file save and SHA-256 verification.")
+                elif kind == "file_transfer_cancel":
+                    if incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
+                        try: incoming_transfer["stream"].close()
+                        except Exception: pass
+                        print("Incoming transfer cancelled by peer.")
+                        incoming_transfer = None
                 elif kind == "data_share_payload" and message.get("category") == "clipboard" and message.get("contentType") == "clipboard_text":
                     text_value = decode_clipboard_payload(message)
                     if await asyncio.to_thread(confirm, "Copy approved paired-device clipboard text onto this Windows PC?"):
@@ -903,6 +977,9 @@ def main() -> int:
     parser.add_argument("--control-phone", default="", help="Paired Android device ID to control after its owner approves")
     parser.add_argument("--voice-control-phone", default="", help="Listen for one allowlisted offline voice command for this paired Android device")
     parser.add_argument("--send-clipboard-to", default="", help="Request one-time permission then send current Windows clipboard text to this paired device")
+    parser.add_argument("--send-file-to", default="", help="Choose a Windows file and request one-time Documents permission before sending it")
+    parser.add_argument("--send-file", default="", help="Optional exact source path used with --send-file-to; otherwise open a Windows file picker")
+    parser.add_argument("--allow-file-receive", action="store_true", help="Offer Windows file receive permission; each incoming file still requires confirmation and a save picker")
     parser.add_argument("--vosk-model", default="", help="Local Vosk model folder used for offline voice commands")
     parser.add_argument("--no-auto-reconnect", action="store_true", help="Exit instead of retrying after relay disconnection")
     parser.add_argument("--phone-action", choices=["tap", "swipe", "type", "click_text", "open_app", "scroll", "back", "home"], default="back")
