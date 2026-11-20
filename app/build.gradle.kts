@@ -1,10 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val firebaseLocalProperties = java.util.Properties().apply {
+val firebaseLocalProperties = Properties().apply {
     val configFile = rootProject.file("local.properties")
     if (configFile.exists()) configFile.inputStream().use { load(it) }
 }
@@ -19,8 +21,8 @@ android {
         applicationId = "in.shraddha.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.19.0"
+        versionCode = 21
+        versionName = "0.19.1"
         buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseConfigValue("FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${firebaseConfigValue("FIREBASE_APP_ID")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseConfigValue("FIREBASE_PROJECT_ID")}\"")

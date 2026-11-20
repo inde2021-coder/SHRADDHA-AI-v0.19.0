@@ -16,7 +16,8 @@ import kotlin.math.sqrt
 
 class LiveAudioIO(
     private val onMicChunk: (ByteArray) -> Unit,
-    private val onMicAmplitude: (Float) -> Unit
+    private val onMicAmplitude: (Float) -> Unit,
+    private val onRecordingError: (String) -> Unit = {}
 ) {
     companion object {
         const val MIC_SAMPLE_RATE = 16000
@@ -59,7 +60,12 @@ class LiveAudioIO(
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
+        if (minBuf <= 0) {
+            onRecordingError("Android returned an invalid microphone buffer size ($minBuf).")
+            return
+        }
         val bufSize = max(minBuf, 4096)
+        var createdRecord: AudioRecord? = null
 
         try {
             val record = AudioRecord(
@@ -69,6 +75,10 @@ class LiveAudioIO(
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufSize
             )
+            createdRecord = record
+            check(record.state == AudioRecord.STATE_INITIALIZED) {
+                "Microphone could not be initialized. Check microphone permission and device availability."
+            }
 
             val sessionId = record.audioSessionId
             if (sessionId != 0) {
@@ -92,34 +102,51 @@ class LiveAudioIO(
             }
 
             record.startRecording()
+            check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                "Android did not start microphone recording."
+            }
             audioRecord = record
             isRecording.set(true)
 
             recordThread = Thread({
                 val buffer = ByteArray(MIC_CHUNK_SIZE)
-                while (isRecording.get()) {
-                    val read = record.read(buffer, 0, MIC_CHUNK_SIZE)
-                    if (read > 0) {
-                        val chunk = if (read == MIC_CHUNK_SIZE) buffer.clone() else buffer.copyOf(read)
-                        val amp = calculateRms(chunk)
-                        onMicAmplitude(amp)
-                        onMicChunk(chunk)
+                try {
+                    while (isRecording.get() && !Thread.currentThread().isInterrupted) {
+                        val read = record.read(buffer, 0, MIC_CHUNK_SIZE)
+                        if (read > 0) {
+                            val chunk = if (read == MIC_CHUNK_SIZE) buffer.clone() else buffer.copyOf(read)
+                            val amp = calculateRms(chunk)
+                            onMicAmplitude(amp)
+                            onMicChunk(chunk)
+                        } else if (read < 0 && isRecording.get()) {
+                            throw IllegalStateException("Microphone read failed (AudioRecord code $read).")
+                        }
+                    }
+                } catch (error: Exception) {
+                    if (isRecording.get()) {
+                        isRecording.set(false)
+                        onRecordingError(error.localizedMessage ?: "Microphone recording stopped unexpectedly.")
                     }
                 }
             }, "LiveAudioIO-MicThread").apply { start() }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             isRecording.set(false)
+            audioRecord = null
+            runCatching { createdRecord?.release() }
+            onRecordingError(error.localizedMessage ?: "Unable to start microphone recording.")
         }
     }
 
     fun stopRecording() {
         isRecording.set(false)
-        recordThread?.interrupt()
+        val threadToStop = recordThread
+        try { audioRecord?.stop() } catch (_: Exception) {}
+        threadToStop?.interrupt()
+        if (threadToStop != null && threadToStop !== Thread.currentThread()) {
+            try { threadToStop.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        }
         recordThread = null
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (_: Exception) {}
+        try { audioRecord?.release() } catch (_: Exception) {}
         audioRecord = null
 
         try { echoCanceler?.release() } catch (_: Exception) {}
