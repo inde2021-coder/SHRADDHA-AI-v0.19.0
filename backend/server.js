@@ -576,7 +576,13 @@ telephonyWss.on('connection', carrier => {
     finalize();
     pendingAudio.length = 0;
     pendingAudioBytes = 0;
-    if (live && live.readyState === WebSocket.OPEN) live.close();
+    if (live && live.readyState === WebSocket.OPEN) {
+      live.send(JSON.stringify({ type: 'session.close' }));
+      const closeTimer = setTimeout(() => {
+        if (live.readyState === WebSocket.OPEN) live.close();
+      }, 1500);
+      live.once('close', () => clearTimeout(closeTimer));
+    }
     if (carrier.readyState === WebSocket.OPEN) carrier.close();
   };
 
@@ -598,6 +604,7 @@ telephonyWss.on('connection', carrier => {
   live.on('message', raw => {
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
+    if (event.type === 'session.closed') { live.close(); return; }
     if (event.type === 'session.started') {
       ready = true;
       while (pendingAudio.length && live.readyState === WebSocket.OPEN) {
