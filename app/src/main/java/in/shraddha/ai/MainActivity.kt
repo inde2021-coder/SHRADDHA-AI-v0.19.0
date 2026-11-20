@@ -38,8 +38,12 @@ import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.biometric.BiometricConsentVault
 import `in`.shraddha.ai.biometric.BiometricCaptureActivity
 import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 
 class MainActivity : AppCompatActivity() {
+    private val assistantDisplayName: String
+        get() = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
     private lateinit var status: TextView
     private lateinit var pageRoot: LinearLayout
     private lateinit var shell: LinearLayout
@@ -108,7 +112,7 @@ class MainActivity : AppCompatActivity() {
         shell.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(shell)
         status = TextView(this).apply {
-            text = "Ready • Shraddha AI तैयार है। अपनी जरूरत का एक workspace खोलें।"
+            text = "Ready • $assistantDisplayName तैयार है। अपनी जरूरत का एक workspace खोलें।"
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
             background = rounded(0xFF111B2D.toInt(), 16)
         }
