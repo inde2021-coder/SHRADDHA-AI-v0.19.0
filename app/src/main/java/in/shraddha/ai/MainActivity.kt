@@ -635,8 +635,9 @@ class MainActivity : AppCompatActivity() {
                 addView(toggle)
             }
             addView(actionButton("Publish My Sharing Permissions", "दूसरे paired devices को मेरी चुनी अनुमति बताएँ") { publishDataPermissions() })
+            val shareableCategories = categories.filter { it.first !in setOf("screen", "camera") }
             val categoryPicker = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categories.map { it.first })
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, shareableCategories.map { it.first })
             }
             addView(categoryPicker)
             addView(actionButton("Request Data from Selected Phone", "Target phone पर approval dialog आएगा") {
