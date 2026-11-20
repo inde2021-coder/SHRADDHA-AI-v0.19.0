@@ -27,7 +27,7 @@ These are debug builds, not signed release APKs. A successful CI build does not 
 ## Current integration branch verification
 - Backend syntax check: successful.
 - Backend unit tests: successful.
-- Android unit tests + debug APK: latest run is pending/in progress at the time this file was authored. Do not call this branch build-verified until that job completes successfully.
+- Android unit tests + debug APK: **FAILED** on the latest run. The copied home UI references missing integration modules (`UserBackupManager`, `PersistentChatMemory`, `TaskPlannerActivity`, `PersistentKnowledgeGraph`, `BiometricModelDownloader`, `FIREBASE_DATABASE_URL`). This branch is not build-verified and must not be merged. The redesign-based candidate is the active phone-integration path.
 - Previous Android attempts exposed and fixed: Gradle Properties import, duplicate accessibility resource, missing biometric source/dependencies, incorrect `R` package imports and old Android UI source compile errors. The latest run will confirm whether further compile errors remain.
 
 ## Still not complete
