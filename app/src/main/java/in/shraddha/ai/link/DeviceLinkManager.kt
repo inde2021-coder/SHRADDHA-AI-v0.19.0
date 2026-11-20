@@ -81,6 +81,7 @@ object DeviceLinkManager {
                             val correlation = when (kind) {
                                 "remote_action", "remote_action_result" -> actionId
                                 "file_transfer_chunk" -> "$transferId:$index"
+                                "clipboard_payload" -> msg.optString("requestId")
                                 else -> ""
                             }
                             val aad = "$sessionId|$peerId|$deviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
@@ -100,6 +101,11 @@ object DeviceLinkManager {
                                     payload.put("type", "file_transfer_chunk").put("fromDeviceId", peerId)
                                         .put("transferId", transferId).put("index", index)
                                     onFileTransferMessage?.invoke(payload)
+                                }
+                                "clipboard_payload" -> {
+                                    payload.put("type", "data_share_payload").put("fromDeviceId", peerId)
+                                        .put("category", "clipboard").put("requestId", msg.optString("requestId"))
+                                    onPeerMessage?.invoke(payload)
                                 }
                                 else -> onStatus?.invoke("Unsupported encrypted peer message blocked.")
                             }
@@ -327,7 +333,14 @@ object DeviceLinkManager {
     fun updateSharePermissions(permissions: JSONObject): Boolean = socket?.send(JSONObject().put("type", "permission_update").put("permissions", permissions).toString()) == true
     fun requestDataShare(targetDeviceId: String, category: String, requestId: String, itemLabel: String = ""): Boolean = socket?.send(JSONObject().put("type", "data_share_request").put("targetDeviceId", targetDeviceId).put("category", category).put("itemLabel", itemLabel).put("requestId", requestId).toString()) == true
     fun respondDataShare(requesterDeviceId: String, category: String, requestId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "data_share_response").put("requesterDeviceId", requesterDeviceId).put("category", category).put("requestId", requestId).put("approved", approved).put("minutes", minutes).toString()) == true
-    fun sendSharedPayload(targetDeviceId: String, category: String, requestId: String, fileName: String, mimeType: String, base64Payload: String, sizeBytes: Long, sha256: String, contentType: String = "file"): Boolean { if (requestId.isBlank() || sizeBytes !in 1L..650_000L || !sha256.matches(Regex("[a-fA-F0-9]{64}")) || base64Payload.length > 900_000 || contentType !in setOf("file", "clipboard_text")) return false; return socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("requestId", requestId).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload).toString()) == true }
+    fun sendSharedPayload(targetDeviceId: String, category: String, requestId: String, fileName: String, mimeType: String, base64Payload: String, sizeBytes: Long, sha256: String, contentType: String = "file"): Boolean {
+        if (requestId.isBlank() || sizeBytes !in 1L..650_000L || !sha256.matches(Regex("[a-fA-F0-9]{64}")) || base64Payload.length > 900_000 || contentType !in setOf("file", "clipboard_text")) return false
+        val payload = JSONObject().put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100))
+            .put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload)
+        if (category == "clipboard" && contentType == "clipboard_text")
+            return sendEncryptedPeerMessage(targetDeviceId, "clipboard_payload", payload, requestId)
+        return socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("requestId", requestId).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload).toString()) == true
+    }
     fun sendClipboardText(targetDeviceId: String, requestId: String, text: String): Boolean {
         if (text.isBlank() || text.length > 20000) return false
         val bytes = text.toByteArray(Charsets.UTF_8)
@@ -387,6 +400,7 @@ object DeviceLinkManager {
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
+        if (kind == "clipboard_payload") message.put("requestId", correlationId)
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
         return socket?.send(message.toString()) == true
     }
