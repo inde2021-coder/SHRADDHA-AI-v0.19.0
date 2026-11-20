@@ -264,7 +264,7 @@ class MainActivity : AppCompatActivity() {
     private fun workspaceGrid(root: LinearLayout) {
         section(root, "WORKSPACES", "") {
             val items = listOf(
-                Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) }),
+                Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { showPage("assistant") }),
                 Triple("◈  WINDOWS PC", "Pair • Screen • Control", { showPage("devices") }),
                 Triple("◈  EXPERT STUDIO", "Research • Expert answers", { showPage("expert") }),
                 Triple("⌘  DEVICES", "Phones • PC • Pairing", { showPage("devices") }),
