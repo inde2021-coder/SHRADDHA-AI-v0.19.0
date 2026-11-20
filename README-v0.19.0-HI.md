@@ -12,7 +12,7 @@
 ## Build और वर्तमान सत्यापन
 - JDK 17 / Android SDK 35 के साथ GitHub Actions पर Android unit tests सफल हुए।
 - Debug APK build सफल हुआ; CI ने ARM-specific `arm64-v8a` और `armeabi-v7a` APK बनाए और उनके SHA-256 checksums verify किए।
-- Artifact: GitHub Actions run #203, `shraddha-ai-debug-apks-arm` (14 दिन तक उपलब्ध)।
+- Artifact: GitHub Actions run #205, `shraddha-ai-debug-apks-arm` (14 दिन तक उपलब्ध)।
 - यह **debug build** है, Play Store release-signed APK नहीं। फोन पर installation और वास्तविक hardware/runtime tests अभी अलग से करने होंगे।
 - Android Studio में root खोलकर `:app:assembleDebug` चलाया जा सकता है। JDK 17 और Android SDK 35 आवश्यक हैं।
 - Firebase और AI provider credentials को local configuration में रखें; private secrets GitHub में commit न करें।
