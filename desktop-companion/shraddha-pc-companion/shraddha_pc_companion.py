@@ -78,6 +78,8 @@ async def send_e2e_message(ws, peer_keys: dict, session_id: str, sender_id: str,
                 "ciphertext": base64.b64encode(ciphertext).decode("ascii")}
     if kind == "file_transfer_chunk":
         envelope.update({"transferId": correlation, "index": index})
+    elif kind == "clipboard_payload":
+        envelope.update({"requestId": correlation})
     else:
         envelope.update({"actionId": correlation, "actionKind": action_kind[:32]})
     await ws.send(json.dumps(envelope))
@@ -94,7 +96,7 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
     action_id = str(message.get("actionId", ""))
     transfer_id = str(message.get("transferId", ""))
     index = int(message.get("index", -1))
-    correlation = f"{transfer_id}:{index}" if kind == "file_transfer_chunk" else action_id
+    correlation = f"{transfer_id}:{index}" if kind == "file_transfer_chunk" else (str(message.get("requestId", "")) if kind == "clipboard_payload" else action_id)
     aad = e2e_associated_data(session_id, peer_id, local_id, kind, correlation)
     nonce_text = str(message.get("nonce", ""))
     ciphertext_text = str(message.get("ciphertext", ""))
@@ -113,6 +115,8 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
                            "actionKind": str(message.get("actionKind", ""))})
     elif kind == "file_transfer_chunk":
         normalized.update({"type": "file_transfer_chunk", "transferId": transfer_id, "index": index})
+    elif kind == "clipboard_payload":
+        normalized.update({"type": "data_share_payload", "category": "clipboard", "requestId": correlation})
     else:
         raise ValueError("Unsupported encrypted message kind")
     return normalized
@@ -1034,8 +1038,9 @@ async def run_once(args) -> None:
                     await ws.send(json.dumps({"type": "data_share_response", "requesterDeviceId": requester_id, "category": category, "requestId": request_id, "approved": approved, "minutes": 5 if approved else 0}))
                 elif kind == "data_share_result" and clipboard_send and message.get("requestId") == clipboard_send[0]:
                     if message.get("approved") is True and message.get("category") == "clipboard":
-                        await ws.send(json.dumps({"type": "data_share_payload", "targetDeviceId": args.send_clipboard_to, "category": "clipboard", "requestId": clipboard_send[0], **clipboard_send[1]}))
-                        print("Clipboard text sent after explicit device approval.")
+                        await send_e2e_message(ws, peer_keys, session_id, device_id, args.send_clipboard_to,
+                                               "clipboard_payload", clipboard_send[0], clipboard_send[1])
+                        print("Clipboard text sent with end-to-end encryption after explicit device approval.")
                     else: print("Clipboard sync was denied.")
                 elif kind == "data_share_result" and file_send and message.get("requestId") == file_send["requestId"]:
                     if message.get("approved") is True and message.get("category") == "documents":
