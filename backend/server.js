@@ -140,7 +140,8 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       if (!knowlarityConfigured()) return json(res, 503, { error: 'Knowlarity credentials are not configured on the server' });
       const body = await readBody(req, 8 * 1024);
-      const channel = KNOWLARITY_CHANNELS.has(body.channel) ? body.channel : (process.env.KNOWLARITY_CHANNEL || 'Basic');
+      const configuredChannel = KNOWLARITY_CHANNELS.has(process.env.KNOWLARITY_CHANNEL) ? process.env.KNOWLARITY_CHANNEL : 'Basic';
+      const channel = KNOWLARITY_CHANNELS.has(body.channel) ? body.channel : configuredChannel;
       if (!normalizeE164(body.agentNumber) || !normalizeE164(body.customerNumber)) return json(res, 400, { error: 'agentNumber and customerNumber must be E.164 numbers such as +919876543210' });
       const response = await fetch(`https://kpi.knowlarity.com/${channel}/v1/account/call/makecall`, {
         method: 'POST',
