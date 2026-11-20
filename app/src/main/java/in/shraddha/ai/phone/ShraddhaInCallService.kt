@@ -1,8 +1,11 @@
 package `in`.shraddha.ai.phone
 
 import android.content.Context
+import android.content.Intent
+import android.media.AudioManager
 import android.telecom.Call
 import android.telecom.InCallService
+import android.telecom.VideoProfile
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -12,26 +15,32 @@ class ShraddhaInCallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        activeCall = call
+        service = this
         val callback = object : Call.Callback() {
             override fun onStateChanged(call: Call, state: Int) {
+                activeCall = call
                 saveEvent(call, state)
+                sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
             }
         }
         callbacks[call] = callback
         call.registerCallback(callback)
         saveEvent(call, call.state)
+        sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
 
-        val prefs = getSharedPreferences("phone_agent", Context.MODE_PRIVATE)
-        if (call.state == Call.STATE_RINGING &&
-            prefs.getBoolean(PhoneAgentActivity.KEY_AUTO_ANSWER, false)) {
-            // Answer control only. Android does not grant this service cellular-call audio.
-            call.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+        if (call.state == Call.STATE_RINGING) {
+            val screen = Intent(this, InCallActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            runCatching { startActivity(screen) }
         }
     }
 
     override fun onCallRemoved(call: Call) {
         callbacks.remove(call)?.let { call.unregisterCallback(it) }
-        saveEvent(call, call.state)
+        saveEvent(call, Call.STATE_DISCONNECTED)
+        if (activeCall === call) activeCall = null
+        sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
         super.onCallRemoved(call)
     }
 
@@ -40,15 +49,50 @@ class ShraddhaInCallService : InCallService() {
         val stateText = when (state) {
             Call.STATE_RINGING -> "Ringing"
             Call.STATE_DIALING -> "Dialing"
-            Call.STATE_ACTIVE -> "Active"
+            Call.STATE_ACTIVE -> "Answered"
             Call.STATE_HOLDING -> "On hold"
             Call.STATE_DISCONNECTED -> "Ended"
             Call.STATE_CONNECTING -> "Connecting"
             else -> "Call state $state"
         }
         val time = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
-        getSharedPreferences("phone_agent", Context.MODE_PRIVATE).edit()
-            .putString(PhoneAgentActivity.KEY_LAST_CALL, "$stateText • $handle • $time")
-            .apply()
+        val prefs = getSharedPreferences("phone_agent", Context.MODE_PRIVATE)
+        val entry = "$stateText • $handle • $time"
+        prefs.edit().putString(PhoneAgentActivity.KEY_LAST_CALL, entry).apply()
+        val old = prefs.getString(KEY_CALL_HISTORY, "").orEmpty().lines().filter { it.isNotBlank() }
+        val updated = (listOf(entry) + old).distinct().take(50)
+        prefs.edit().putString(KEY_CALL_HISTORY, updated.joinToString("\n")).apply()
+    }
+
+    companion object {
+        const val ACTION_CALL_STATE = "in.shraddha.ai.phone.CALL_STATE"
+        const val KEY_CALL_HISTORY = "call_history"
+        @Volatile var activeCall: Call? = null
+            private set
+        @Volatile var service: ShraddhaInCallService? = null
+            private set
+        @Volatile var isMuted: Boolean = false
+            private set
+
+        fun toggleMute() {
+            isMuted = !isMuted
+            service?.setMuted(isMuted)
+        }
+
+        fun toggleSpeaker() {
+            val current = service ?: return
+            val audio = current.callAudioState
+            val route = if (audio?.route == CallAudioState.ROUTE_SPEAKER) {
+                CallAudioState.ROUTE_EARPIECE
+            } else {
+                CallAudioState.ROUTE_SPEAKER
+            }
+            current.setAudioRoute(route)
+        }
+    }
+
+    override fun onDestroy() {
+        if (service === this) service = null
+        super.onDestroy()
     }
 }
