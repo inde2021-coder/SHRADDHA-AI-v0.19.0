@@ -558,7 +558,7 @@ wss.on('connection', (ws, ctx) => {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const fingerprint = String(msg.fingerprint || '');
-      if (!target || targetId === deviceId || !/^(?:[A-F0-9]{4}-){3}[A-F0-9]{4}$/.test(fingerprint)) return;
+      if (!target || targetId === deviceId || !/^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$/.test(fingerprint)) return;
       send(targetId, JSON.stringify({ type: 'e2e_key_confirm', fromDeviceId: deviceId, fingerprint }));
     } else if (msg.type === 'e2e_message') {
       const targetId = String(msg.targetDeviceId || '');
