@@ -13,7 +13,7 @@ Main branch: untouched.
 - Added unit tests for voice conversation-memory trimming, role-aware recap, blank-turn handling and clearing.
 
 ### Not yet verified / remaining
-- Latest GitHub Actions run is still in progress at the time of this report; no passing APK build is claimed.
+- CI run `44665245546` on commit `6181d5f` passed both `testDebugUnitTest` and `assembleDebug`. A later workflow change adds APK artifact publishing; that workflow change and later source fixes require a fresh passing run.
 - Runtime mic permission and Android 14/15 microphone foreground-service lifecycle need physical-device tests.
 - Confirm service is started only from an eligible visible user action and that Stop/Mute work consistently.
 - Verify Gemini Live model availability, API response schema, reconnect/resume and quota behavior against a real configured key.
@@ -30,7 +30,7 @@ Main branch: untouched.
 - Embeddings are stored in the encrypted local vault; profile deletion also deletes that person's biometric templates.
 - No SFace/ECAPA weights are bundled. Imported model license, exact preprocessing/tensor contract and thresholds still need independent validation. Blink/head-turn is not certified anti-spoofing and must not be used as sole authentication.
 - Speaker recognition is blocked when on-device speech recognition is unavailable; cloud speech upload is not used for this challenge.
-- Physical-device capture, model compatibility, accuracy, false-accept/false-reject and spoof evaluation remain mandatory before calling this step complete.
+- Capture now cancels microphone recording and blocks biometric enrollment if the activity is exited mid-capture; failures return `RESULT_CANCELED` rather than false success. Physical-device capture, model compatibility, accuracy, false-accept/false-reject and spoof evaluation remain mandatory before calling this step complete.
 
 ## Step 5 — Device Universe (relay hardening implemented; end-to-end validation pending)
 
@@ -46,12 +46,13 @@ Main branch: untouched.
 - Provider preference is persisted and validated for Gemini, OpenAI, Groq, Claude and Perplexity. Non-Gemini provider keys are stored in the Android Keystore-backed encrypted feature store and only sent to the selected provider.
 - Text chat adapters are implemented for OpenAI-compatible chat APIs, Anthropic Messages and Perplexity. Chat history is bounded to 40 turns / 8,000 characters per turn; system instruction is capped at 8,000 characters. Compose state is snapshotted before background requests.
 - Backend includes authenticated expert-domain and multi-provider council endpoints with bounded input, provider allowlists, per-IP rate limiting and explicit advice-only output (no external actions executed).
-- Current adapters are text-only: streaming, image/audio multimodality, browsing, citations, tool execution, automatic failover and offline model routing are not implemented. Provider model IDs and live API compatibility still require current-provider verification with real user keys.
+- Current adapters are text-only: streaming, image/audio multimodality, browsing, citations, tool execution, automatic failover and offline model routing are not implemented. Claude default model ID was updated to `claude-sonnet-5-5`; live API compatibility still requires real user keys.
 
 ## Step 7 — Premium UI (not yet fully audited)
 
 - Existing application screens and design-system documentation are present, but this implementation pass has not completed a screen-by-screen visual/accessibility audit.
-- Remaining: verify dynamic assistant-name replacement across every screen/notification/shortcut, responsive layouts, navigation consistency, animation performance, reduced-motion support, contrast, TalkBack labels and real-device rendering. Do not claim premium UI completion until these checks pass.
+- Main native shell now reads the editable assistant name from the shared `nova_prefs` setting for its greeting, assistant heading, voice prompt, orb description, reminder default and export labels.
+- Remaining: verify dynamic name replacement across every Compose screen, notifications, shortcuts and third-party integrations; complete responsive layout, navigation, animation performance, reduced-motion, contrast, TalkBack and real-device audits. Do not claim premium UI completion until these checks pass.
 
 ## Step 8 — Firebase and Security (source rules implemented; deployment/integration pending)
 
