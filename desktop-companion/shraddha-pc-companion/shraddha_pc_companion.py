@@ -21,6 +21,102 @@ SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|
 SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "offline_chat"}
 
 
+def create_e2e_identity():
+    """Create a fresh P-256 identity for this live paired-device connection."""
+    import base64
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization
+    private = ec.generate_private_key(ec.SECP256R1())
+    public = private.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    return private, base64.b64encode(public).decode("ascii")
+
+
+def derive_e2e_peer_key(private, peer_public_b64: str, local_id: str, peer_id: str):
+    import base64, hashlib
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    if not local_id or not peer_id or local_id == peer_id:
+        raise ValueError("Invalid E2E peer identity")
+    encoded = base64.b64decode(peer_public_b64, validate=True)
+    if not 80 <= len(encoded) <= 256:
+        raise ValueError("Invalid E2E public key")
+    public = serialization.load_der_public_key(encoded)
+    if not isinstance(public, ec.EllipticCurvePublicKey) or not isinstance(public.curve, ec.SECP256R1):
+        raise ValueError("Only P-256 peer keys are accepted")
+    shared = private.exchange(ec.ECDH(), public)
+    salt = (min(local_id, peer_id) + "|" + max(local_id, peer_id)).encode("utf-8")
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=b"shraddha-device-e2e-v1").derive(shared)
+    from cryptography.hazmat.primitives import serialization as ser
+    own_public = private.public_key().public_bytes(ser.Encoding.DER, ser.PublicFormat.SubjectPublicKeyInfo)
+    digest = hashlib.sha256(b"".join(sorted((own_public, encoded)))).digest()[:16]
+    fingerprint = "-".join(digest.hex().upper()[i:i+4] for i in range(0, 32, 4))
+    return key, fingerprint
+
+
+def e2e_associated_data(session_id: str, sender_id: str, receiver_id: str, kind: str, correlation: str) -> bytes:
+    return f"{session_id}|{sender_id}|{receiver_id}|{kind}|{correlation}".encode("utf-8")
+
+
+async def send_e2e_message(ws, peer_keys: dict, session_id: str, sender_id: str, target_id: str,
+                           kind: str, correlation: str, payload: dict, action_kind: str = "", index: int = -1):
+    import base64, json, secrets
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    state = peer_keys.get(target_id)
+    if not state or not state.get("local_confirmed") or not state.get("remote_confirmed"):
+        raise RuntimeError("E2E peer fingerprint is not mutually verified")
+    aad_correlation = f"{correlation}:{index}" if kind == "file_transfer_chunk" else correlation
+    nonce = secrets.token_bytes(12)
+    ciphertext = AESGCM(state["key"]).encrypt(
+        nonce, json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
+        e2e_associated_data(session_id, sender_id, target_id, kind, aad_correlation)
+    )
+    envelope = {"type": "e2e_message", "targetDeviceId": target_id, "messageKind": kind,
+                "nonce": base64.b64encode(nonce).decode("ascii"),
+                "ciphertext": base64.b64encode(ciphertext).decode("ascii")}
+    if kind == "file_transfer_chunk":
+        envelope.update({"transferId": correlation, "index": index})
+    else:
+        envelope.update({"actionId": correlation, "actionKind": action_kind[:32]})
+    await ws.send(json.dumps(envelope))
+
+
+def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_id: str) -> dict:
+    import base64, json
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    peer_id = str(message.get("fromDeviceId", ""))
+    kind = str(message.get("messageKind", ""))
+    state = peer_keys.get(peer_id)
+    if not state or not state.get("local_confirmed") or not state.get("remote_confirmed"):
+        raise ValueError("E2E peer is not mutually verified")
+    action_id = str(message.get("actionId", ""))
+    transfer_id = str(message.get("transferId", ""))
+    index = int(message.get("index", -1))
+    correlation = f"{transfer_id}:{index}" if kind == "file_transfer_chunk" else action_id
+    aad = e2e_associated_data(session_id, peer_id, local_id, kind, correlation)
+    nonce = base64.b64decode(str(message.get("nonce", "")), validate=True)
+    ciphertext = base64.b64decode(str(message.get("ciphertext", "")), validate=True)
+    plain = AESGCM(state["key"]).decrypt(nonce, ciphertext, aad)
+    payload = json.loads(plain.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Encrypted peer payload must be an object")
+    normalized = {"fromDeviceId": peer_id, **payload}
+    if kind == "remote_action":
+        normalized.update({"type": "remote_action", "actionId": action_id, "action": payload,
+                           "requiresPerActionApproval": True})
+    elif kind == "remote_action_result":
+        normalized.update({"type": "remote_action_result", "actionId": action_id,
+                           "actionKind": str(message.get("actionKind", ""))})
+    elif kind == "file_transfer_chunk":
+        normalized.update({"type": "file_transfer_chunk", "transferId": transfer_id, "index": index})
+    else:
+        raise ValueError("Unsupported encrypted message kind")
+    return normalized
+
+
+
 def normalize_point(value: object) -> float:
     try:
         return max(0.0, min(1.0, float(value)))
@@ -345,7 +441,8 @@ def verify_transfer_file(path: str, expected_size: int, expected_sha256: str) ->
         for block in iter(lambda: stream.read(1024 * 1024), b''): digest.update(block)
     return digest.hexdigest() == expected_sha256.lower()
 
-async def send_file_chunks(ws, target: str, transfer_id: str, path: str, indexes: list[int]) -> None:
+async def send_file_chunks(ws, target: str, transfer_id: str, path: str, indexes: list[int],
+                           peer_keys: dict, session_id: str, sender_id: str) -> None:
     import base64
     paused = False
     try:
@@ -361,7 +458,8 @@ async def send_file_chunks(ws, target: str, transfer_id: str, path: str, indexes
                 while msvcrt.kbhit():
                     if msvcrt.getwch().lower() == 'p': paused = not paused; print('File transfer', 'PAUSED' if paused else 'RESUMING')
         data = await asyncio.to_thread(read_file_chunk, path, index)
-        await ws.send(json.dumps({"type": "file_transfer_chunk", "targetDeviceId": target, "transferId": transfer_id, "index": index, "payload": base64.b64encode(data).decode('ascii')}))
+        await send_e2e_message(ws, peer_keys, session_id, sender_id, target, "file_transfer_chunk",
+                               transfer_id, {"payload": base64.b64encode(data).decode('ascii')}, index=index)
         if position % 20 == 0: print(f"Sending file chunks: {position + 1}/{len(indexes)}")
         await asyncio.sleep(0.01)
     if msvcrt: print("Press P during transfer to pause/resume sending.")
@@ -730,6 +828,8 @@ async def run_once(args) -> None:
     ws_base = base_url.replace("https://", "wss://", 1)
     url = f"{ws_base}/ws?sessionId={quote(session_id)}&deviceId={quote(device_id)}"
     headers = {"Authorization": "Bearer " + device_token}
+    e2e_private, e2e_public_b64 = create_e2e_identity()
+    peer_keys = {}
 
     print(f"Paired PC device ID: {device_id}")
     offline_model = None
@@ -822,8 +922,42 @@ async def run_once(args) -> None:
                 except json.JSONDecodeError:
                     continue
                 kind = message.get("type")
+                if kind == "e2e_key_offer":
+                    peer_id = str(message.get("fromDeviceId", ""))
+                    try:
+                        key, fingerprint = derive_e2e_peer_key(e2e_private, str(message.get("publicKey", "")), device_id, peer_id)
+                        trusted = await asyncio.to_thread(confirm,
+                            f"Verify Android peer {peer_id}. Compare this fingerprint with the Android screen over a separate trusted channel:\n{fingerprint}\n\nDo both devices show exactly the same fingerprint?")
+                        peer_keys[peer_id] = {"key": key, "fingerprint": fingerprint,
+                                              "local_confirmed": bool(trusted), "remote_confirmed": False}
+                        if trusted:
+                            await ws.send(json.dumps({"type": "e2e_key_confirm", "targetDeviceId": peer_id, "fingerprint": fingerprint}))
+                        else:
+                            print("E2E peer was not trusted; encrypted actions and transfers remain blocked.")
+                    except Exception as exc:
+                        print("Rejected invalid E2E key offer:", str(exc)[:160])
+                elif kind == "e2e_key_confirm":
+                    peer_id = str(message.get("fromDeviceId", ""))
+                    state = peer_keys.get(peer_id)
+                    if state and state["fingerprint"] == str(message.get("fingerprint", "")):
+                        state["remote_confirmed"] = True
+                        print("End-to-end encryption verified with", peer_id)
+                    else:
+                        if state: state["remote_confirmed"] = False
+                        print("E2E fingerprint mismatch; peer is NOT trusted.")
+                elif kind == "e2e_message":
+                    try:
+                        message = decrypt_e2e_message(message, peer_keys, session_id, device_id)
+                        kind = message.get("type")
+                    except Exception as exc:
+                        print("Blocked invalid/untrusted encrypted peer message:", str(exc)[:160])
+                        continue
                 if kind == "connected":
                     print("Connected to Shraddha AI device session.")
+                    for peer in message.get("devices") or []:
+                        peer_id = str(peer.get("id", ""))
+                        if peer_id and peer_id != device_id:
+                            await ws.send(json.dumps({"type": "e2e_key_offer", "targetDeviceId": peer_id, "publicKey": e2e_public_b64}))
                     if incoming_transfer:
                         await ws.send(json.dumps({"type": "file_transfer_resume", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"]}))
                 elif kind == "control_request":
@@ -864,16 +998,15 @@ async def run_once(args) -> None:
                         except Exception as exc:
                             result = "action_error:" + type(exc).__name__
                     print("Remote action:", action_kind, "=>", result[:500])
-                    await ws.send(json.dumps({
-                        "type": "remote_action_result",
-                        "targetDeviceId": sender_id,
-                        "actionId": action_id,
-                        "actionKind": action_kind,
-                        "result": result[:14000]
-                    }))
+                    await send_e2e_message(ws, peer_keys, session_id, device_id, sender_id,
+                                           "remote_action_result", action_id, {"result": result[:14000]},
+                                           action_kind=action_kind)
                 elif kind == "control_result":
                     if phone_action and message.get("targetDeviceId") == args.control_phone and message.get("approved") is True:
-                        await ws.send(json.dumps({"type": "remote_action", "targetDeviceId": args.control_phone, "actionId": __import__("secrets").token_urlsafe(18), "action": phone_action}))
+                        action_id = __import__("secrets").token_urlsafe(18)
+                        await send_e2e_message(ws, peer_keys, session_id, device_id, args.control_phone,
+                                               "remote_action", action_id, phone_action,
+                                               action_kind=str(phone_action.get("kind", "unknown")))
                         phone_action_sent = True
                         print("Android owner approved. Sending one locally-confirmed action…")
                     elif phone_action:
@@ -950,13 +1083,13 @@ async def run_once(args) -> None:
                     missing = message.get("missingIndexes") or []
                     safe_missing = [int(i) for i in missing if isinstance(i, int) and 0 <= i < file_send["manifest"]["chunks"]]
                     print(f"Resume requested: retransmitting {len(safe_missing)} missing chunks.")
-                    await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], safe_missing)
+                    await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], safe_missing, peer_keys, session_id, device_id)
                 elif kind == "file_transfer_ack" and file_send and message.get("transferId") == file_send["transferId"]:
                     if message.get("complete"): print("Receiver confirmed file save and SHA-256 verification.")
                     elif message.get("index") == -1 and message.get("ok") is True:
                         manifest = file_send["manifest"]
                         print("Receiver selected a save location. Starting transfer…")
-                        await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], list(range(manifest["chunks"])))
+                        await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], list(range(manifest["chunks"])), peer_keys, session_id, device_id)
                 elif kind == "file_transfer_cancel":
                     if incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
                         try: incoming_transfer["stream"].close()
