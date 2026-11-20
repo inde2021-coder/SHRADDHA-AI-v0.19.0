@@ -71,7 +71,7 @@ test("Realtime Database encrypted vault is owner-only and rejects plaintext", as
   await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/plaintext"), {
     format, payload: "ciphertext", updatedAt: Date.now(), plaintext: "must-not-be-accepted"
   }));
-  await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/invalid.key"), encryptedRecord));
+  await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/invalid key"), encryptedRecord));
 });
 
 test("Firebase Storage accepts only owner-scoped encrypted backup objects", async () => {
