@@ -1342,6 +1342,9 @@ class MainActivity : AppCompatActivity() {
                 launchBiometricMatch("face")
             })
             addView(actionButton("Enroll Voice Template", "On-device speech challenge और voice sample capture") { launchBiometricEnrollment(personName.text.toString(), consent.isChecked, "speaker") })
+            addView(actionButton("Compare saved voice similarity", "Consent-based local ECAPA comparison • score only, no uncalibrated identity verdict") {
+                launchBiometricMatch("speaker")
+            })
             addView(actionButton("Delete Person Memory", "सभी profiles और encrypted biometric templates हटाएँ") {
                 val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
                 val labels = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { it.optString("name") + " • " + it.optString("id") } }
@@ -1393,7 +1396,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun launchBiometricMatch(kind: String) {
-        if (kind != "face") { status.text = "इस model के लिए validated speaker similarity threshold अभी उपलब्ध नहीं है।"; return }
+        if (kind !in setOf("face", "speaker")) { status.text = "Unsupported biometric comparison type."; return }
         val store = EncryptedFeatureStore(this)
         val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
         val profiles = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
@@ -1408,16 +1411,20 @@ class MainActivity : AppCompatActivity() {
                 val name = profile.optString("name")
                 android.app.AlertDialog.Builder(this)
                     .setTitle("Live face comparison consent")
-                    .setMessage("क्या $name ने अभी सामने कैमरे पर अपना चेहरा scan करके saved template से compare करने की स्पष्ट अनुमति दी है? SFace का 0.363 cosine cutoff OpenCV का published reference है; इसे इस फोन पर calibrated या authentication-grade न मानें।")
+                    .setMessage(if (kind == "face") {
+                        "क्या $name ने अभी सामने कैमरे पर अपना चेहरा scan करके saved template से compare करने की स्पष्ट अनुमति दी है? SFace का 0.363 cosine cutoff OpenCV का published reference है; इसे इस फोन पर calibrated या authentication-grade न मानें।"
+                    } else {
+                        "क्या $name ने अभी random phrase बोलकर अपना voice sample saved template से compare करने की स्पष्ट अनुमति दी है? यह raw similarity score देगा; कोई calibrated same-speaker verdict या authentication claim नहीं होगा।"
+                    })
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("I have consent") { _, _ ->
                         val intent = Intent(this, `in`.shraddha.ai.biometric.BiometricCaptureActivity::class.java)
-                            .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_KIND, "face")
-                            .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_MODE, "match")
+                            .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_KIND, kind)
+                            .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_MODE, if (kind == "face") "match" else "compare")
                             .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_PERSON_ID, id)
                             .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_PERSON_NAME, name)
-                            .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_THRESHOLD, 0.363f)
                             .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_CONSENT, true)
+                        if (kind == "face") intent.putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_THRESHOLD, 0.363f)
                         startActivity(intent)
                     }.show()
             }.setNegativeButton("Cancel", null).show()
