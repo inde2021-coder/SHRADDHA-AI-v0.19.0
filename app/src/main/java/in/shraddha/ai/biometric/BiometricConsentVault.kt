@@ -56,6 +56,11 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     }
 
     @Synchronized
+    fun clearAll(): Result<Unit> = runCatching {
+        store.put(KEY, JSONObject().put("templates", JSONArray()).toString()).getOrThrow()
+    }
+
+    @Synchronized
     fun deletePerson(personId: String): Result<Unit> = runCatching {
         val root = readRoot()
         val old = root.optJSONArray("templates") ?: JSONArray()
