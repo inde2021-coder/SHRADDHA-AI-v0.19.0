@@ -59,15 +59,26 @@ object ActionExecutor {
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
-                        result.put("status", "success")
+                        result.put("status", if (callStatus == "calling" || callStatus == "dialer_opened_no_permission") "success" else "error")
                         result.put("action", callStatus)
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
+                        if (callStatus != "calling") {
+                            result.put("message", "The phone dialer was opened, but the call was not placed automatically.")
+                        }
                     }
                     is ContactLookupResult.NoPermission -> {
                         result.put("status", "error")
                         result.put("action", "no_contacts_permission")
                         result.put("message", "Please grant Contacts permission in Settings.")
+                    }
+                    is ContactLookupResult.Ambiguous -> {
+                        result.put("status", "needs_clarification")
+                        result.put("action", "ambiguous_contact")
+                        result.put("candidates", JSONArray().apply {
+                            lookup.candidates.forEach { (name, _) -> put(name) }
+                        })
+                        result.put("message", "Multiple contacts match. Ask the user to say the full contact name; do not place a call yet.")
                     }
                     is ContactLookupResult.NotFound -> {
                         result.put("status", "error")
