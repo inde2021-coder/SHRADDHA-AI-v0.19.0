@@ -44,6 +44,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -174,7 +175,8 @@ fun NovaTextField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    secret: Boolean = false
 ) {
     val colors = LocalNovaColors.current
     val shape = RoundedCornerShape(16.dp)
@@ -203,6 +205,7 @@ fun NovaTextField(
                 color = colors.textPrimary,
                 fontSize = 15.sp
             ),
+            visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             cursorBrush = SolidColor(colors.accent),
             modifier = Modifier.fillMaxWidth()
         )
