@@ -174,7 +174,7 @@ object MultiProviderChatClient {
                         val url = result.optString("url").trim()
                         val title = result.optString("title").trim().ifBlank { url }
                         if (url.startsWith("https://") || url.startsWith("http://")) {
-                            sources.putIfAbsent(url, title)
+                            if (!sources.containsKey(url)) sources[url] = title
                         }
                     }
                 }
