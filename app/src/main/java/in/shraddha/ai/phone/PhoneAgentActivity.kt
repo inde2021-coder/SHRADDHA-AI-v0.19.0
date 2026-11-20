@@ -32,6 +32,7 @@ class PhoneAgentActivity : AppCompatActivity() {
     private val contactsPermissionRequest = 904
     private val roleRequest = 901
     private val callPermissionRequest = 902
+    private var pendingContactQuery: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +92,7 @@ class PhoneAgentActivity : AppCompatActivity() {
         setContentView(ScrollView(this).apply { addView(root) })
         tts = TextToSpeech(this) { result -> if (result == TextToSpeech.SUCCESS) tts?.language = Locale("hi", "IN") }
         handleDialIntent(intent)
+        handlePendingContactIntent(intent)
         refreshStatus()
     }
 
@@ -98,6 +100,20 @@ class PhoneAgentActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleDialIntent(intent)
+        handlePendingContactIntent(intent)
+    }
+
+    private fun handlePendingContactIntent(source: Intent?) {
+        val query = source?.getStringExtra(EXTRA_PENDING_CONTACT_QUERY)?.trim().orEmpty()
+        if (query.isBlank()) return
+        pendingContactQuery = query
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            pendingContactQuery = null
+            handleVoiceCallResult(query)
+        } else {
+            voiceStatus.text = "कॉल से पहले Contacts permission जरूरी है। अनुमति दें।"
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), contactsPermissionRequest)
+        }
     }
 
     private fun handleDialIntent(source: Intent?) {
