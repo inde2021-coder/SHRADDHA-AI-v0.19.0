@@ -30,6 +30,16 @@ android {
         buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${firebaseConfigValue("FIREBASE_STORAGE_BUCKET").ifBlank { "shraddha-ai-1d3bf.firebasestorage.app" }}\"")
         buildConfigField("String", "FIREBASE_DATABASE_URL", "\"${firebaseConfigValue("FIREBASE_DATABASE_URL").ifBlank { "https://shraddha-ai-1d3bf-default-rtdb.firebaseio.com" }}\"")
     }
+    // Produce device-native APKs instead of one oversized universal APK containing
+    // four copies of native ONNX/ML Kit libraries. Android phones use ARM ABIs.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
+    }
     buildFeatures { buildConfig = true; compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
