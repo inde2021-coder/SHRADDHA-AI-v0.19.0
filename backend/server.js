@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
@@ -583,7 +583,7 @@ wss.on('connection', (ws, ctx) => {
       if (!target || target.sharePermissions?.[category] !== true ||
           !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
           payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
-          !/^[a-f0-9]{64}$/.test(digest) || (contentType === 'clipboard_text' && (category !== 'clipboard' || sizeBytes > 80_000)) || (contentType === 'file' && category === 'clipboard')) return;
+          !/^[a-f0-9]{64}$/.test(digest) || !isAllowedSharedPayloadType(category, contentType, sizeBytes)) return;
       if (!validateSharedFileEnvelope(payload, sizeBytes, digest)) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
