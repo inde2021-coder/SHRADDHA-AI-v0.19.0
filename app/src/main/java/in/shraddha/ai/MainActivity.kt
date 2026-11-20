@@ -2356,6 +2356,11 @@ class MainActivity : AppCompatActivity() {
                         approvedShareTarget = msg.optString("targetDeviceId")
                         approvedShareCategory = msg.optString("category")
                         approvedShareExpiresAt = System.currentTimeMillis() + msg.optLong("expiresInMinutes", 0L) * 60_000L
+                    } else {
+                        approvedShareRequestId = null
+                        approvedShareTarget = null
+                        approvedShareCategory = null
+                        approvedShareExpiresAt = 0L
                     }
                     status.text = if (approved) "Permission approved for ${msg.optString("category")}. अब चुनी file भेज सकते हैं।" else "Data sharing request अस्वीकार हुई।"
                     if (approved) Toast.makeText(this, "इस exact request के लिए one-time permission मिली।", Toast.LENGTH_LONG).show()
