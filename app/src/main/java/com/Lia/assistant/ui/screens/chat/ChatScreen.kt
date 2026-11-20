@@ -136,7 +136,12 @@ fun ChatScreen(
             return
         }
 
-        // Call Gemini
+        // Snapshot Compose state on the main thread; never read the mutable UI list
+        // from the IO dispatcher. Keep a bounded context window for every provider.
+        val historySnapshot = messages.takeLast(40)
+            .map { ChatTurn(isUser = it.isUser, text = it.text.take(8_000)) }
+
+        // Call the selected AI provider
         isTyping = true
         scope.launch(Dispatchers.IO) {
             val systemInstruction = ChatPromptBuilder.build(
@@ -145,11 +150,11 @@ fun ChatScreen(
                 assistantName = appState.assistantName
             )
 
-            val history = messages.map { ChatTurn(isUser = it.isUser, text = it.text) }
+            val boundedInstruction = systemInstruction.take(8_000)
             val result = if (appState.aiProvider == "GEMINI") {
-                GeminiTextClient.reply(ApiKeyStore.getKey(context), systemInstruction, history)
+                GeminiTextClient.reply(ApiKeyStore.getKey(context), boundedInstruction, historySnapshot)
             } else {
-                MultiProviderChatClient.reply(context, appState.aiProvider, systemInstruction, history)
+                MultiProviderChatClient.reply(context, appState.aiProvider, boundedInstruction, historySnapshot)
             }
 
             withContext(Dispatchers.Main) {
