@@ -21,6 +21,13 @@ test('downsamples 24 kHz PCM to 16 kHz using linear interpolation', () => {
   assert.deepEqual(values(result), [0, 1500, 3000, 4500]);
 });
 
+test('supports 8 kHz Edesy streams in both directions', () => {
+  const up = resamplePcm16(pcm([0, 3000, 6000]), 8000, 24000);
+  assert.deepEqual(values(up), [0, 1000, 2000, 3000, 4000, 5000, 6000, 6000, 6000]);
+  const down = resamplePcm16(pcm([0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]), 24000, 8000);
+  assert.deepEqual(values(down), [0, 3000, 6000]);
+});
+
 test('same sample rate returns an equal independent buffer', () => {
   const source = pcm([-32768, -1, 0, 1, 32767]);
   const result = resamplePcm16(source, 16000, 16000);
