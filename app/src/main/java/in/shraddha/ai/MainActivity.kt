@@ -705,7 +705,20 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Remote control permission")
                 .setMessage("$requester इस फोन को अधिकतम 5 मिनट तक नियंत्रित करना चाहता है। केवल भरोसेमंद व्यक्ति को अनुमति दें।")
                 .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondRemoteControl(from, false) }
-                .setPositiveButton("Allow for 5 minutes") { _, _ -> DeviceLinkManager.respondRemoteControl(from, true, 5) }
+                .setPositiveButton("Allow for 5 minutes") { _, _ ->
+                    val prefs = getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
+                    val granted = DeviceLinkManager.respondRemoteControl(from, true, 5)
+                    if (granted) {
+                        prefs.edit()
+                            .putString("remote_control_grant_peer", from)
+                            .putLong("remote_control_grant_expires_at", System.currentTimeMillis() + 5 * 60 * 1000L)
+                            .apply()
+                        status.text = "इस paired device को 5 मिनट के लिए remote control की अनुमति दी गई है।"
+                    } else {
+                        prefs.edit().remove("remote_control_grant_peer").remove("remote_control_grant_expires_at").apply()
+                        status.text = "Remote control अनुमति relay तक नहीं पहुँच सकी।"
+                    }
+                }
                 .setOnCancelListener { DeviceLinkManager.respondRemoteControl(from, false) }
                 .show()
         }
@@ -757,6 +770,12 @@ class MainActivity : AppCompatActivity() {
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, checked ->
                     getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putBoolean("remote_control_consent", checked).apply()
+                    if (!checked) {
+                        getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                            .remove("remote_control_grant_peer")
+                            .remove("remote_control_grant_expires_at")
+                            .apply()
+                    }
                     if (DeviceLinkManager.sessionId != null) publishDataPermissions()
                 }
             }
@@ -1408,10 +1427,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val appContext = applicationContext
-        DeviceLinkManager.onRemoteAction = { _, action ->
+        DeviceLinkManager.onRemoteAction = { fromDeviceId, action ->
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                val allowed = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
-                if (allowed) ShraddhaAccessibilityService.applyRemoteAction(action)
+                val prefs = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
+                val enabled = prefs.getBoolean("remote_control_consent", false)
+                val approvedPeer = prefs.getString("remote_control_grant_peer", null)
+                val expiresAt = prefs.getLong("remote_control_grant_expires_at", 0L)
+                val grantActive = enabled && fromDeviceId.isNotBlank() &&
+                    approvedPeer == fromDeviceId && System.currentTimeMillis() < expiresAt
+                if (grantActive) {
+                    ShraddhaAccessibilityService.applyRemoteAction(action)
+                } else {
+                    // A persistent opt-in switch is not a live authorization. Every peer
+                    // must have a fresh, explicit, time-limited approval before commands run.
+                    if (approvedPeer == fromDeviceId && System.currentTimeMillis() >= expiresAt) {
+                        prefs.edit().remove("remote_control_grant_peer").remove("remote_control_grant_expires_at").apply()
+                    }
+                    status.text = "Remote action blocked: no active 5-minute approval for this paired device."
+                }
             }
         }
         DeviceLinkManager.onScreenFrame = { sourceId, bytes ->
