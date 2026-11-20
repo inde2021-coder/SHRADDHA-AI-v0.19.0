@@ -18,3 +18,11 @@ export function matchesOneTimeShareGrant(grant, requestId, now = Date.now()) {
   return !!grant && typeof grant.requestId === 'string' && typeof requestId === 'string' &&
     grant.requestId === requestId && Number.isFinite(grant.expiresAt) && grant.expiresAt >= now;
 }
+
+/** Keep clipboard payloads text-only and smaller than ordinary document transfers. */
+export function isAllowedSharedPayloadType(category, contentType, sizeBytes) {
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_SHARED_FILE_BYTES) return false;
+  if (contentType === 'clipboard_text') return category === 'clipboard' && sizeBytes <= 80_000;
+  if (contentType === 'file') return category !== 'clipboard';
+  return false;
+}
