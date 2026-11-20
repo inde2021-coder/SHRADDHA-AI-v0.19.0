@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -58,4 +58,22 @@ test('file transfer chunks must have exact bounded lengths', () => {
   assert.equal(validFileTransferChunk(1, 2, 848, 50000), true);
   assert.equal(validFileTransferChunk(1, 2, 847, 50000), false);
   assert.equal(validFileTransferChunk(2, 2, 10, 50000), false);
+});
+
+test('remote action envelopes require a unique opaque id and allowlisted action', () => {
+  assert.equal(validRemoteActionEnvelope('action_12345678', { kind: 'tap' }), true);
+  assert.equal(validRemoteActionEnvelope('../bad', { kind: 'tap' }), false);
+  assert.equal(validRemoteActionEnvelope('action_12345678', { kind: 'shell' }), false);
+});
+
+test('only the owner can revoke another paired device and revocation clears grants', () => {
+  const owner = { role: 'owner' }, member = { role: 'member' };
+  const grants = new Map([['peer', { expiresAt: Date.now() + 1000 }]]);
+  const target = { role: 'member', grants, controlGrants: new Map([['peer', Date.now()+1000]]), pendingControlRequests: new Map([['peer', {}]]), incomingTransfers: new Map(), socket: { close() {} } };
+  const session = { devices: new Map([['owner', owner], ['member', target]]) };
+  assert.equal(revokePairedDevice(session, 'member', 'member'), false);
+  assert.equal(revokePairedDevice(session, 'owner', 'member'), false);
+  assert.equal(revokePairedDevice(session, 'member', 'owner'), true);
+  assert.equal(session.devices.has('member'), false);
+  assert.equal(grants.size, 0);
 });
