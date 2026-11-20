@@ -34,22 +34,63 @@ async function askProvider(provider, prompt) {
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
-  if (provider === 'groq' || provider === 'perplexity') {
-    const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.PERPLEXITY_API_KEY;
-    if (!apiKey) throw new Error(`${provider.toUpperCase()}_API_KEY is not configured`);
-    const endpoint = provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.perplexity.ai/chat/completions';
-    const model = provider === 'groq' ? (process.env.GROQ_MODEL || 'llama-3.3-70b-versatile') : (process.env.PERPLEXITY_MODEL || 'sonar');
-    const r = await fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || `${provider} request failed`); return d.choices?.[0]?.message?.content || '';
+  if (provider === 'groq') {
+    if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
+    const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(45_000),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Groq request failed');
+    return d.choices?.[0]?.message?.content || '';
+  }
+  if (provider === 'perplexity') {
+    if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY is not configured');
+    const r = await fetch('https://api.perplexity.ai/v1/agent', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(90_000),
+      body: JSON.stringify({
+        effort: process.env.PERPLEXITY_EFFORT || 'fast',
+        input: prompt.slice(0, 12000),
+        max_output_tokens: 2048
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'Perplexity Agent request failed');
+    if (d.status === 'failed' || d.status === 'cancelled') throw new Error(d.error?.message || `Perplexity request ${d.status}`);
+    const answer = [];
+    const sources = new Map();
+    for (const item of Array.isArray(d.output) ? d.output : []) {
+      if (item?.type === 'message') {
+        for (const part of Array.isArray(item.content) ? item.content : []) {
+          if (part?.type === 'output_text' && typeof part.text === 'string' && part.text.trim()) answer.push(part.text);
+          for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
+            const url = typeof annotation?.url === 'string' ? annotation.url.trim() : '';
+            if (/^https?:\/\//i.test(url)) sources.set(url, String(annotation.title || url).slice(0, 180));
+          }
+        }
+      } else if (item?.type === 'search_results') {
+        for (const result of Array.isArray(item.results) ? item.results : []) {
+          const url = typeof result?.url === 'string' ? result.url.trim() : '';
+          if (/^https?:\/\//i.test(url)) sources.set(url, String(result.title || url).slice(0, 180));
+        }
+      }
+    }
+    if (!answer.length) throw new Error('Perplexity returned no answer text.');
+    const footer = [...sources.entries()].slice(0, 5).map(([url, title]) => `• ${title} — ${url}`).join('\n');
+    return answer.join('\n\n') + (footer ? `\n\nSources:\n${footer}` : '');
   }
   throw new Error('Unsupported provider');
 }
@@ -62,13 +103,13 @@ async function askVision(provider, prompt, imageBase64, mimeType) {
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
-    const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini vision request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic vision request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
   throw new Error('Unsupported provider');
