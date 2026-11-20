@@ -62,6 +62,7 @@ import com.Lia.assistant.voice.ChatPromptBuilder
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
+import com.Lia.assistant.voice.MultiProviderChatClient
 import com.Lia.assistant.voice.NovaOrbState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
