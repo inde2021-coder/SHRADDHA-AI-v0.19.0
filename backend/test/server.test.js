@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { once } from 'node:events';
+import WebSocket from 'ws';
 
 const TOKEN = 'shraddha-ci-test-token';
 let child;
@@ -15,6 +16,26 @@ async function freePort() {
   const port = server.address().port;
   await new Promise(resolve => server.close(resolve));
   return port;
+}
+
+
+function nextWsMessage(socket, predicate, timeoutMs = 5_000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for WebSocket message')); }, timeoutMs);
+    const onMessage = (data, isBinary) => {
+      if (!predicate(data, isBinary)) return;
+      cleanup();
+      resolve([data, isBinary]);
+    };
+    const onClose = () => { cleanup(); reject(new Error('WebSocket closed before expected message')); };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off('message', onMessage);
+      socket.off('close', onClose);
+    };
+    socket.on('message', onMessage);
+    socket.once('close', onClose);
+  });
 }
 
 before(async () => {
@@ -102,3 +123,63 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.match(body.pairingCode, /^\d{6}$/);
   assert.equal(body.expiresInSeconds, 300);
 });
+
+test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Frame Owner' })
+  });
+  const owner = await ownerResponse.json();
+  assert.equal(ownerResponse.status, 201);
+
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Frame Viewer', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  assert.equal(memberResponse.status, 200);
+
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const ownerSocket = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(owner.sessionId)}&deviceId=${encodeURIComponent(owner.deviceId)}`, {
+    headers: { authorization: `Bearer ${owner.deviceToken}` }
+  });
+  const memberSocket = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(member.sessionId)}&deviceId=${encodeURIComponent(member.deviceId)}`, {
+    headers: { authorization: `Bearer ${member.deviceToken}` }
+  });
+
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const waitForPermission = expected => nextWsMessage(memberSocket, (data, isBinary) => {
+      if (isBinary) return false;
+      try {
+        const message = JSON.parse(data.toString());
+        return message.type === 'permission_status' && message.deviceId === owner.deviceId &&
+          message.permissions?.screen === expected;
+      } catch { return false; }
+    });
+
+    const firstFrame = nextWsMessage(memberSocket, (_data, isBinary) => isBinary);
+    ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: false, camera: false } }));
+    await waitForPermission(false);
+    const deniedJpeg = Buffer.from([0xff, 0xd8, 0x00, 0x11]);
+    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), deniedJpeg]));
+
+    ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: false } }));
+    await waitForPermission(true);
+    const allowedJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x55]);
+    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), allowedJpeg]));
+
+    const [frameData, isBinary] = await firstFrame;
+    assert.equal(isBinary, true);
+    const frame = Buffer.from(frameData);
+    const sourceLength = frame[0];
+    assert.equal(frame.subarray(1, 1 + sourceLength).toString('utf8'), owner.deviceId);
+    assert.equal(frame[1 + sourceLength], 1);
+    assert.deepEqual(frame.subarray(2 + sourceLength), allowedJpeg,
+      'a frame sent while screen permission was false must never reach the paired viewer');
+  } finally {
+    ownerSocket.close();
+    memberSocket.close();
+  }
+});
+
