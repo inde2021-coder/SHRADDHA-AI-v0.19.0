@@ -49,8 +49,8 @@ export function normalizeOperatorActions(rawSteps) {
     if (!OPERATOR_ACTIONS.has(action) || !title || title.length > 100) continue;
     if (target.length > 120 || value.length > 500 || expectedVisibleText.length > 120) continue;
     if (SECRET_INPUT.test(`${title} ${target} ${value}`)) continue;
-    if (action === 'OPEN_APP' && !target) continue;
-    if (action === 'CLICK_TEXT' && !target) continue;
+    if (action === 'OPEN_APP' && (!target || value)) continue;
+    if (action === 'CLICK_TEXT' && (!target || value)) continue;
     if (action === 'TYPE_TEXT' && (!value.trim() || target)) continue;
     if (!['OPEN_APP','CLICK_TEXT','TYPE_TEXT'].includes(action) && (target || value)) continue;
     seen.add(id);
