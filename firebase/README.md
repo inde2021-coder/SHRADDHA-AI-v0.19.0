@@ -1,9 +1,9 @@
 # Firebase setup for Shraddha AI
 
 1. Create a Firebase project and register Android package `in.shraddha.ai`.
-2. Enable **Authentication → Email/Password**, **Cloud Firestore**, **Cloud Storage**, and **Cloud Messaging**.
-3. Publish `firestore.rules` and `storage.rules` from the repository root. Do not use test mode in production. The rules enforce owner-only access, exact encrypted backup paths/metadata, size limits and hashed device IDs.
-4. Copy `local.properties.example` to `local.properties` in the Android project root and replace every placeholder with the values from Firebase Project settings, including the Storage bucket.
+2. Enable **Authentication → Email/Password**, **Cloud Firestore**, **Realtime Database**, **Cloud Storage**, and **Cloud Messaging**.
+3. Publish `firestore.rules`, `storage.rules`, and `firebase/database.rules.json` from the repository root. The Realtime Database rules allow each signed-in user to access only their own encrypted vault. Do not use test mode in production. The rules enforce owner-only access, exact encrypted backup paths/metadata, size limits and hashed device IDs.
+4. Copy `local.properties.example` to `local.properties` in the Android project root and replace every placeholder with the values from Firebase Project settings, including the Storage bucket and `FIREBASE_DATABASE_URL` (the Realtime Database URL).
 5. Firebase App Check is installed on both Firebase app instances: debug builds use the Debug provider (register its debug token in Firebase Console), and release builds use Play Integrity. Configure the correct SHA-256 signing certificate and Play Integrity project linkage before enforcing App Check in production.
 6. In Shraddha AI → Firebase Account & Encrypted Cloud Vault, create/sign in to the owner account. Explicitly opt in before backup/restore.
 7. For small recovery snapshots, use Firestore backup (100 KB plaintext limit). For larger selected snapshots, use Firebase Storage (up to 1.4 MB plaintext; encrypted object size capped at 2 MB). Both retain up to 10 timestamped revisions. Restore always shows an overwrite preview and asks for confirmation.
@@ -22,11 +22,11 @@ Storage objects are owner-scoped under `users/{uid}/backups/`, use `application/
 
 ## Security-rules tests
 
-The repository includes Firebase Emulator tests for Firestore and Storage ownership, backup metadata, invalid paths, and FCM device records. From the repository root run:
+The repository includes Firebase Emulator tests for Firestore, Realtime Database and Storage ownership, backup metadata, invalid paths, and FCM device records. From the repository root run:
 
 ```sh
 npm install --prefix firebase/rules-tests --no-audit --no-fund
-./firebase/rules-tests/node_modules/.bin/firebase emulators:exec --project demo-shraddha-ai --only firestore,storage "npm --prefix firebase/rules-tests test"
+./firebase/rules-tests/node_modules/.bin/firebase emulators:exec --project demo-shraddha-ai --only firestore,storage,database "npm --prefix firebase/rules-tests test"
 ```
 
 The Android GitHub Actions workflow runs these tests before the Android build. Emulator tests validate the rules source; production deployment and App Check still need to be verified in the target Firebase project.
