@@ -1106,6 +1106,9 @@ async def run_once(args) -> None:
                         await asyncio.to_thread(pyperclip.copy, text_value)
                         print("Clipboard text copied locally.")
                 elif kind == "peer_status":
+                    peer_id = str(message.get("deviceId", ""))
+                    if message.get("online") is True and peer_id and peer_id != device_id and peer_id not in peer_keys:
+                        await ws.send(json.dumps({"type": "e2e_key_offer", "targetDeviceId": peer_id, "publicKey": e2e_public_b64}))
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
             if screen_task:
