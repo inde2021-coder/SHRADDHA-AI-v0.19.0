@@ -39,7 +39,10 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     fun signInAndSave(email: String, password: String, key: String, plaintext: String): Result<String> = runCatching {
-        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
+        require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter a valid email address." }
+        require(password.isNotEmpty()) { "Account password is required." }
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Backup key format is invalid." }
+        require(plaintext.toByteArray(Charsets.UTF_8).size <= 150_000) { "Backup is too large (maximum 150 KB)." }
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email, password).await().user ?: error("Sign-in failed")
@@ -52,6 +55,9 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     fun signInAndLoad(email: String, password: String, key: String): Result<String?> = runCatching {
+        require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter a valid email address." }
+        require(password.isNotEmpty()) { "Account password is required." }
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Backup key format is invalid." }
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email, password).await().user ?: error("Sign-in failed")
@@ -72,11 +78,13 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     private fun decrypt(payload: String, password: String): String {
+        require(payload.length <= 200_000) { "Encrypted backup is too large." }
         val parts = payload.split('.')
         require(parts.size == 3) { "Encrypted backup format is invalid" }
         val salt = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
         val iv = Base64.decode(parts[1], Base64.NO_WRAP or Base64.URL_SAFE)
         val encrypted = Base64.decode(parts[2], Base64.NO_WRAP or Base64.URL_SAFE)
+        require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
         return String(cipher.doFinal(encrypted), Charsets.UTF_8)
