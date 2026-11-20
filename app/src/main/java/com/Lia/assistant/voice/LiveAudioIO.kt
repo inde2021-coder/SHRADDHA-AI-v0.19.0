@@ -62,6 +62,7 @@ class LiveAudioIO(
     fun startRecording() {
         synchronized(recordingLock) {
             if (isRecording.get()) return
+            recordingErrorReported.set(false)
 
             val minBuf = AudioRecord.getMinBufferSize(
                 MIC_SAMPLE_RATE,
