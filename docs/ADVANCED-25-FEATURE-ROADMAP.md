@@ -102,3 +102,18 @@ JVM policy tests cover explicit cloud consent and record bounds. This adapter
 does not yet automatically synchronize the live ConversationMemory,
 KnowledgeGraph or People Memory stores; those sources need explicit export/
 import mapping and UI consent before they can share records.
+
+
+### Voice AI ↔ AI Brain ↔ Multi-Agent Council adapter
+
+The live Gemini voice tool catalog now exposes `plan_multi_agent_task`.
+`VoiceSessionManager` handles this tool directly and routes the spoken goal
+through `AgentCouncil`, then converts the council roles into a dependency-ordered
+`ShraddhaIntegrationHub` plan. The resulting roles, ordered tasks, guardrails
+and explicit `execution=not_started` status are returned to the live voice
+session and saved in the Android Keystore-backed encrypted feature store.
+
+This is a real voice-to-local-planner integration. It deliberately does not
+claim to contact five independent remote AI agents or execute phone actions;
+those require separately configured model workers and permission-aware
+platform executors.
