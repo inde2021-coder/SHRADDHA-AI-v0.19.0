@@ -1444,8 +1444,49 @@ class MainActivity : AppCompatActivity() {
                 troubleOutput.text = steps.mapIndexed { index, step -> "${index + 1}. ${step.instruction}\\n   Expected: ${step.expectedObservation}" }.joinToString("\\n\\n")
             })
 
+            val notificationPrefs = getSharedPreferences(`in`.shraddha.ai.future.ShraddhaNotificationListener.PREFS, MODE_PRIVATE)
+            val notificationConsent = CheckBox(this@MainActivity).apply {
+                text = "मैं केवल notification metadata (app, category, समय) को locally save करने की अनुमति देता/देती हूँ।"
+                setTextColor(0xFFE4E9F5.toInt())
+                isChecked = notificationPrefs.getBoolean(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_ENABLED, false)
+            }
+            val quietHoursConsent = CheckBox(this@MainActivity).apply {
+                text = "Quiet hours metadata flag: 22:00–07:00"
+                setTextColor(0xFFE4E9F5.toInt())
+                isChecked = notificationPrefs.getBoolean(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_QUIET_ENABLED, false)
+            }
+            val notificationStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
+            fun refreshNotificationStatus() {
+                val enabledListeners = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
+                val component = android.content.ComponentName(this@MainActivity, `in`.shraddha.ai.future.ShraddhaNotificationListener::class.java)
+                val access = enabledListeners.split(':').any { it.equals(component.flattenToString(), true) }
+                val events = runCatching { org.json.JSONArray(notificationPrefs.getString(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_EVENTS, "[]")).length() }.getOrDefault(0)
+                notificationStatus.text = "OS notification access: ${if (access) "GRANTED" else "NOT GRANTED"}\nMetadata capture: ${if (notificationConsent.isChecked) "ON" else "OFF"}\nStored metadata events: $events / 100\nNotification content is never read; notifications are never dismissed."
+            }
+            addView(TextView(this@MainActivity).apply { text = "19 • SMART NOTIFICATION MANAGER"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(notificationConsent); addView(quietHoursConsent); addView(notificationStatus)
+            addView(actionButton("SAVE NOTIFICATION PRIVACY SETTINGS", "Metadata-only, local, bounded history; off by default") {
+                notificationPrefs.edit()
+                    .putBoolean(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_ENABLED, notificationConsent.isChecked)
+                    .putBoolean(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_QUIET_ENABLED, quietHoursConsent.isChecked)
+                    .apply()
+                refreshNotificationStatus()
+            })
+            addView(actionButton("GRANT ANDROID NOTIFICATION ACCESS", "Android system settings • you can revoke access any time") {
+                startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            })
+            addView(actionButton("CLEAR STORED NOTIFICATION METADATA", "Permanent local deletion") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Clear notification history?")
+                    .setMessage("Only locally stored app/category/time metadata will be deleted.")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
+                        notificationPrefs.edit().remove(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_EVENTS).apply()
+                        refreshNotificationStatus()
+                    }.show()
+            })
+            refreshNotificationStatus()
+
             addView(TextView(this@MainActivity).apply {
-                text = "COVERAGE NOTE: Meeting extraction, task DAG, self-review, daily briefing, encrypted timeline, approved skill examples, routine proposals, provider text translation and troubleshooting playbooks now have working controls. Wake-word acoustic detection, live camera translation, sensor-based 3D mapping, cross-device clipboard transport, full file transfer and notification-listener automation still require their respective model/OS/companion integrations."
+                text = "COVERAGE NOTE: Meeting extraction, task DAG, self-review, daily briefing, encrypted timeline, approved skill examples, routine proposals, provider text translation and troubleshooting playbooks now have working controls. Wake-word acoustic detection, live camera translation, sensor-based 3D mapping, cross-device clipboard transport and resumable encrypted file transfer still require their respective model/OS/companion integrations. Notification Intelligence now has an opt-in Android listener with metadata-only local history; it never reads notification text or dismisses alerts."
                 textSize = 11f; setTextColor(0xFFFFC98A.toInt()); setPadding(0, dp(12), 0, 0)
             })
         }
