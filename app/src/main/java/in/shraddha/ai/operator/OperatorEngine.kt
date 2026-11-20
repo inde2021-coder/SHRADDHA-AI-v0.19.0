@@ -51,7 +51,9 @@ class OperatorEngine(
             OperatorActionType.CLICK_TEXT -> {
                 val match = before.elements.firstOrNull { e ->
                     e.clickable && (e.text.equals(step.target, true) || e.description.equals(step.target, true))
-                } ?: before.elements.firstOrNull { e -> e.text.contains(step.target, true) || e.description.contains(step.target, true) }
+                } ?: before.elements.firstOrNull { e ->
+                    e.clickable && (e.text.contains(step.target, true) || e.description.contains(step.target, true))
+                }
                 match != null && ShraddhaAccessibilityService.clickVisibleText(step.target)
             }
             OperatorActionType.TYPE_TEXT -> {
