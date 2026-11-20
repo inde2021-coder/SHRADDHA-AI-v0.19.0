@@ -327,6 +327,21 @@ def sanitize_clipboard_text(value: str) -> str:
     if re.search(r'(?i)password|passcode|otp|one.time.code|cvv|pin|recovery phrase|seed phrase|पासवर्ड|ओटीपी|पिन|गुप्त कोड', value): raise ValueError('Sensitive clipboard content blocked')
     return value
 
+def build_clipboard_payload(value: str) -> dict:
+    import base64, hashlib
+    clean = sanitize_clipboard_text(value)
+    raw = clean.encode('utf-8')
+    return {'payload': base64.b64encode(raw).decode('ascii'), 'sizeBytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(), 'contentType': 'clipboard_text', 'fileName': 'clipboard.txt', 'mimeType': 'text/plain'}
+
+def decode_clipboard_payload(message: dict) -> str:
+    import base64, hashlib
+    encoded = message.get('payload', '')
+    if not isinstance(encoded, str) or len(encoded) > 30000: raise ValueError('Clipboard payload too large')
+    raw = base64.b64decode(encoded, validate=True)
+    if len(raw) != message.get('sizeBytes') or len(raw) > 20000: raise ValueError('Clipboard size mismatch')
+    if hashlib.sha256(raw).hexdigest() != str(message.get('sha256', '')).lower(): raise ValueError('Clipboard integrity check failed')
+    return sanitize_clipboard_text(raw.decode('utf-8'))
+
 def parse_voice_device_command(transcript: str) -> dict:
     text = ' '.join(str(transcript or '').casefold().strip().split())
     commands = {'go back': {'kind': 'back'}, 'वापस जाओ': {'kind': 'back'}, 'go home': {'kind': 'home'}, 'होम खोलो': {'kind': 'home'}, 'scroll down': {'kind': 'scroll', 'amount': -3}, 'नीचे स्क्रॉल करो': {'kind': 'scroll', 'amount': -3}, 'scroll up': {'kind': 'scroll', 'amount': 3}, 'ऊपर स्क्रॉल करो': {'kind': 'scroll', 'amount': 3}}
@@ -694,6 +709,11 @@ async def run_once(args) -> None:
         args.control_phone = args.voice_control_phone
         args.phone_action_payload = await asyncio.to_thread(listen_voice_device_command, args.vosk_model)
     phone_action = getattr(args, 'phone_action_payload', None) or build_phone_action(args)
+    clipboard_send = None
+    if args.send_clipboard_to:
+        import pyperclip, secrets
+        request_id = secrets.token_urlsafe(18)
+        clipboard_send = (request_id, build_clipboard_payload(await asyncio.to_thread(pyperclip.paste)))
     if phone_action and not await asyncio.to_thread(confirm, f"Ask the selected Android phone for permission to run {phone_action['kind']}?"):
         phone_action = None
     phone_action_sent = False
@@ -705,6 +725,9 @@ async def run_once(args) -> None:
         if phone_action:
             await ws.send(json.dumps({"type": "control_request", "targetDeviceId": args.control_phone, "minutes": 2}))
             print("Waiting for the Android phone owner to approve remote control…")
+        if clipboard_send:
+            await ws.send(json.dumps({"type": "data_share_request", "targetDeviceId": args.send_clipboard_to, "category": "clipboard", "requestId": clipboard_send[0], "itemLabel": "Clipboard text"}))
+            print("Waiting for the Android device owner to approve clipboard sync…")
         approved_until = 0.0
         approved_device_id = ""
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
@@ -777,6 +800,17 @@ async def run_once(args) -> None:
                     if phone_action_sent and message.get("fromDeviceId") == args.control_phone:
                         print("Android action result:", str(message.get("result", "no result"))[:1000])
                         break
+                elif kind == "data_share_result" and clipboard_send and message.get("requestId") == clipboard_send[0]:
+                    if message.get("approved") is True and message.get("category") == "clipboard":
+                        await ws.send(json.dumps({"type": "data_share_payload", "targetDeviceId": args.send_clipboard_to, "category": "clipboard", "requestId": clipboard_send[0], **clipboard_send[1]}))
+                        print("Clipboard text sent after explicit device approval.")
+                    else: print("Clipboard sync was denied.")
+                elif kind == "data_share_payload" and message.get("category") == "clipboard" and message.get("contentType") == "clipboard_text":
+                    text_value = decode_clipboard_payload(message)
+                    if await asyncio.to_thread(confirm, "Copy approved paired-device clipboard text onto this Windows PC?"):
+                        import pyperclip
+                        await asyncio.to_thread(pyperclip.copy, text_value)
+                        print("Clipboard text copied locally.")
                 elif kind == "peer_status":
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
@@ -821,6 +855,7 @@ def main() -> int:
     parser.add_argument("--scan-pairing-qr", action="store_true", help="Use the PC camera to scan a Shraddha pairing QR; requires requirements-qr.txt")
     parser.add_argument("--control-phone", default="", help="Paired Android device ID to control after its owner approves")
     parser.add_argument("--voice-control-phone", default="", help="Listen for one allowlisted offline voice command for this paired Android device")
+    parser.add_argument("--send-clipboard-to", default="", help="Request one-time permission then send current Windows clipboard text to this paired device")
     parser.add_argument("--vosk-model", default="", help="Local Vosk model folder used for offline voice commands")
     parser.add_argument("--no-auto-reconnect", action="store_true", help="Exit instead of retrying after relay disconnection")
     parser.add_argument("--phone-action", choices=["tap", "swipe", "type", "click_text", "open_app", "scroll", "back", "home"], default="back")
