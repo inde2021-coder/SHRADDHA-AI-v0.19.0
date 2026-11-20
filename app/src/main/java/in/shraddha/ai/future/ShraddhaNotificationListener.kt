@@ -27,6 +27,8 @@ class ShraddhaNotificationListener : NotificationListenerService() {
             .put("quietHours", isQuietHours())
         synchronized(LOCK) {
             val prefs = preferences()
+            // Remove any legacy plaintext before attempting encrypted storage.
+            prefs.edit().remove(KEY_EVENTS).commit()
             val store = EncryptedFeatureStore(this)
             // Android Keystore AES-GCM; never fall back to plaintext if encryption fails.
             val items = runCatching {
