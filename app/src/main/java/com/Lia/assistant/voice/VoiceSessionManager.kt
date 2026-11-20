@@ -228,6 +228,58 @@ object VoiceSessionManager {
                 _state.value = NovaOrbState.THINKING
                 _statusText.value = "Working on it..."
 
+                if (name == "plan_multi_agent_task") {
+                    runCatching {
+                        val goal = args.optString("goal").trim()
+                        require(goal.isNotBlank() && goal.length <= 1000) { "Goal must contain 1-1000 characters" }
+                        val council = `in`.shraddha.ai.future.AgentCouncil.plan(goal)
+                        val actions = council.roles.mapIndexed { index, role ->
+                            `in`.shraddha.ai.future.ShraddhaIntegrationHub.Action(
+                                id = role.name.lowercase().replace(Regex("[^a-z0-9_-]"), "_"),
+                                title = role.responsibility,
+                                dependsOn = if (index == 0) emptySet() else setOf(council.roles[index - 1].name.lowercase().replace(Regex("[^a-z0-9_-]"), "_")),
+                                priority = if (role.name == "Verifier" || role.name == "Critic") 1 else 2,
+                                estimatedMinutes = 10
+                            )
+                        }
+                        val hub = `in`.shraddha.ai.future.ShraddhaIntegrationHub()
+                        val session = hub.createPlan(
+                            workflowId = "voice-council-" + java.util.UUID.randomUUID().toString().take(8),
+                            title = goal.take(120),
+                            actions = actions
+                        )
+                        val roles = org.json.JSONArray()
+                        council.roles.forEach { role ->
+                            roles.put(JSONObject().put("name", role.name).put("responsibility", role.responsibility).put("output", role.output))
+                        }
+                        val ordered = org.json.JSONArray()
+                        session.plan.ordered.forEachIndexed { index, task ->
+                            ordered.put(JSONObject().put("step", index + 1).put("id", task.id).put("title", task.title).put("estimatedMinutes", task.estimatedMinutes))
+                        }
+                        val guardrails = org.json.JSONArray()
+                        council.guardrails.forEach { guardrails.put(it) }
+                        val response = JSONObject()
+                            .put("status", "plan_created")
+                            .put("goal", goal)
+                            .put("roles", roles)
+                            .put("orderedTasks", ordered)
+                            .put("guardrails", guardrails)
+                            .put("execution", "not_started")
+                        val saved = `in`.shraddha.ai.brain.EncryptedFeatureStore(currentContext)
+                            .put("voice_agent_council_latest", response.toString())
+                        response.put("encryptedLocalSave", saved.isSuccess)
+                        if (saved.isFailure) response.put("storageWarning", saved.exceptionOrNull()?.localizedMessage ?: "Encrypted local save failed")
+                        response
+                    }.getOrElse { error ->
+                        JSONObject().put("status", "error").put("message", error.localizedMessage ?: "Multi-agent planning failed")
+                    }.also { response ->
+                        client?.sendToolResponse(id, name, response)
+                        _state.value = NovaOrbState.LISTENING
+                        _statusText.value = "Listening..."
+                    }
+                    return
+                }
+
                 if (name == "build_website") {
                     val forgePrompt = args.optString("prompt", "")
                     ForgeController.start(currentContext, forgePrompt)
