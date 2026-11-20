@@ -277,8 +277,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val face = faces.first()
         require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
         val padScores = miniFasNetScores(bitmap, face)
-        require(padScores[0] >= 0.70f && padScores[0] > padScores[1] && padScores[0] > padScores[2]) {
-            "MiniFASNet ने live-face score पर्याप्त नहीं पाया (%.2f)। कैमरा सामने रखें; photo/screen replay reject हुआ। यह certified anti-spoofing नहीं है.".format(padScores[0])
+        require(LocalBiometricModelEngine.isLiveFace(padScores)) {
+            "MiniFASNet ने live-face score पर्याप्त नहीं पाया (%.2f)। कैमरा सामने रखें; photo/screen replay reject हुआ। यह certified anti-spoofing नहीं है.".format(padScores[1])
         }
         require(kotlin.math.abs(face.headEulerAngleY) <= 22f && kotlin.math.abs(face.headEulerAngleX) <= 22f) { "सीधे camera की ओर देखें" }
         require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }

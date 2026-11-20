@@ -6,6 +6,13 @@ import org.junit.Test
 
 class LocalBiometricModelEngineTest {
     @Test
+    fun miniFasNetUsesUpstreamClassOneAsRealFace() {
+        assertEquals(true, LocalBiometricModelEngine.isLiveFace(floatArrayOf(0.10f, 0.82f, 0.08f)))
+        assertEquals(false, LocalBiometricModelEngine.isLiveFace(floatArrayOf(0.82f, 0.10f, 0.08f)))
+        assertEquals(false, LocalBiometricModelEngine.isLiveFace(floatArrayOf(0.10f, 0.20f, 0.70f)))
+    }
+
+    @Test
     fun miniFasNetPreprocessingProducesBgrNchwAndNormalizesToZeroOne() {
         val bgr = ByteArray(80 * 80 * 3)
         bgr[0] = 255.toByte()

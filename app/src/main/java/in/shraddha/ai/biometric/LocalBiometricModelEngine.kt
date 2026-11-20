@@ -25,6 +25,11 @@ class LocalBiometricModelEngine : AutoCloseable {
             return data
         }
 
+        internal fun isLiveFace(scores: FloatArray, minLiveScore: Float = 0.70f): Boolean {
+            require(scores.size == 3 && scores.all { it.isFinite() } && minLiveScore in 0f..1f)
+            return scores[1] >= minLiveScore && scores[1] > scores[0] && scores[1] > scores[2]
+        }
+
         internal fun softmax(scores: FloatArray): FloatArray {
             require(scores.isNotEmpty() && scores.all { it.isFinite() })
             val max = scores.maxOrNull() ?: return FloatArray(0)
@@ -84,7 +89,7 @@ class LocalBiometricModelEngine : AutoCloseable {
         antiSpoofSession = session
     }
 
-    /** Returns [live, print, replay] probabilities; supplementary PAD signal only. */
+    /** Returns [print, live, replay] probabilities; class 1 is the upstream real-face class. Supplementary PAD signal only. */
     @Synchronized fun antiSpoofScores(bgr80: ByteArray): FloatArray {
         require(bgr80.size == 80 * 80 * 3) { "Expected 80x80 BGR crop." }
         val session = antiSpoofSession ?: error("MiniFASNet anti-spoof model is not loaded.")
