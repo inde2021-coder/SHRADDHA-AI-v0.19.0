@@ -135,7 +135,15 @@ object DeviceLinkManager {
                             peerKeys.remove(revokedId)?.key?.fill(0)
                             onPeerMessage?.invoke(msg)
                         }
-                        "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
+                        "peer_status" -> {
+                            val peerId = msg.optString("deviceId")
+                            if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) {
+                                peerKeys.remove(peerId)?.key?.fill(0)
+                                sendE2EKeyOffer(peerId)
+                            }
+                            onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}")
+                            onPeerMessage?.invoke(msg)
+                        }
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> onStatus?.invoke("Blocked plaintext remote action. End-to-end encryption is mandatory.")
                         "remote_action_result" -> onStatus?.invoke("Blocked plaintext remote action result. End-to-end encryption is mandatory.")
