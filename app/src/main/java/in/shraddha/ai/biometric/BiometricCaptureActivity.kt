@@ -197,7 +197,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val complete = livenessGate.observe(1, face.leftEyeOpenProbability ?: 1f, face.rightEyeOpenProbability ?: 1f, face.headEulerAngleY)
             if (complete) {
                 livenessPassed.set(true)
-                runOnUiThread { message.text = "Active liveness challenge passed. सीधे camera की ओर वापस आएँ, फिर capture करें."; action.text = "Capture and continue"; action.isEnabled = true }
+                runOnUiThread { message.text = "Blink, head-turn और camera की ओर वापसी जाँची गई। अब capture करें। यह certified anti-spoofing नहीं है."; action.text = "Capture and continue"; action.isEnabled = true }
                 imageAnalysis?.clearAnalyzer()
             } else runOnUiThread { message.text = challengeText() }
         }.addOnFailureListener { runOnUiThread { message.text = "Face tracking error: ${it.message}" } }
