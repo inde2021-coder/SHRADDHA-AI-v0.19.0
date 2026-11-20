@@ -109,11 +109,13 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val modelDirectory = File(filesDir, "biometric-models")
         val model = File(modelDirectory, if (kind == "face") "sface.onnx" else "ecapa-any-length.onnx")
         if (!model.isFile) { finishWith("Required local biometric model is not imported."); return }
-        message = TextView(this).apply { text = "Local biometric model loading…"; setTextColor(android.graphics.Color.WHITE) }
+        val antiSpoofModel = File(modelDirectory, "minifasnet-v2.onnx")
+        if (kind == "face" && !antiSpoofModel.isFile) { finishWith("Verified MiniFASNet anti-spoof model is required for face capture. Download it in People Memory first."); return }
+        message = TextView(this).apply { text = "Local biometric models loading…"; setTextColor(android.graphics.Color.WHITE) }
         setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
         Thread({
             try {
-                if (kind == "face") engine.loadFaceModel(model.absolutePath) else engine.loadSpeakerModel(model.absolutePath)
+                if (kind == "face") { engine.loadFaceModel(model.absolutePath); engine.loadAntiSpoofModel(antiSpoofModel.absolutePath) } else engine.loadSpeakerModel(model.absolutePath)
                 runOnUiThread { if (!isFinishing) { if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold) else buildFaceScreen(mode, id, name, threshold) } }
             } catch (error: Exception) { finishWith("Biometric model could not load: ${error.message}") }
         }, "BiometricModelLoad").start()
@@ -238,6 +240,29 @@ class BiometricCaptureActivity : AppCompatActivity() {
         })
     }
 
+    private fun miniFasNetScores(bitmap: Bitmap, face: Face): FloatArray {
+        val box = face.boundingBox
+        val cropWidth = (box.width() * 2.7f).toInt().coerceAtLeast(1)
+        val cropHeight = (box.height() * 2.7f).toInt().coerceAtLeast(1)
+        val left = (box.centerX() - cropWidth / 2).coerceIn(0, bitmap.width - 1)
+        val top = (box.centerY() - cropHeight / 2).coerceIn(0, bitmap.height - 1)
+        val right = (box.centerX() + cropWidth / 2).coerceIn(left + 1, bitmap.width)
+        val bottom = (box.centerY() + cropHeight / 2).coerceIn(top + 1, bitmap.height)
+        val crop = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+        val resized = Bitmap.createScaledBitmap(crop, 80, 80, true)
+        if (crop !== bitmap) crop.recycle()
+        val bgr = ByteArray(80 * 80 * 3)
+        var offset = 0
+        for (y in 0 until 80) for (x in 0 until 80) {
+            val pixel = resized.getPixel(x, y)
+            bgr[offset++] = Color.blue(pixel).toByte()
+            bgr[offset++] = Color.green(pixel).toByte()
+            bgr[offset++] = Color.red(pixel).toByte()
+        }
+        resized.recycle()
+        return engine.antiSpoofScores(bgr)
+    }
+
     private fun faceEmbeddingFromFile(file: File): FloatArray {
         var bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: error("Camera image could not be decoded")
         val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
@@ -251,6 +276,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
         require(faces.size == 1) { "एक ही स्पष्ट चेहरा चाहिए; group/ambiguous frame स्वीकार नहीं है" }
         val face = faces.first()
         require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
+        val padScores = miniFasNetScores(bitmap, face)
+        require(padScores[0] >= 0.70f && padScores[0] > padScores[1] && padScores[0] > padScores[2]) {
+            "MiniFASNet ने live-face score पर्याप्त नहीं पाया (%.2f)। कैमरा सामने रखें; photo/screen replay reject हुआ। यह certified anti-spoofing नहीं है.".format(padScores[0])
+        }
         require(kotlin.math.abs(face.headEulerAngleY) <= 22f && kotlin.math.abs(face.headEulerAngleX) <= 22f) { "सीधे camera की ओर देखें" }
         require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
         val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)

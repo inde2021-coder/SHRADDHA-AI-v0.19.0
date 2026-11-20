@@ -1392,6 +1392,21 @@ class MainActivity : AppCompatActivity() {
                         }
                     }.show()
             })
+            addView(actionButton("Download verified MiniFASNet anti-spoof • 1.74 MB", "Apache-2.0 ONNX • SHA-256 verification • local-only storage") {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Download MiniFASNet anti-spoof model?")
+                    .setMessage("यह Apache-2.0 licensed MiniFASNet V2 ONNX export है। यह photo/screen-replay के विरुद्ध एक अतिरिक्त passive PAD signal देता है। यह certified/iBeta/ISO 30107-3 evaluated नहीं है, mask/deepfake/injection attacks को नहीं रोकता और अकेले identity authentication के लिए उपयोग नहीं होगा। Model card के अनुसार input BGR 80×80 और classes [live, print, replay] हैं। SHA-256 verification के बाद ही local model रखा जाएगा.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Download and verify") { _, _ ->
+                        status.text = "MiniFASNet anti-spoof model download शुरू…"
+                        `in`.shraddha.ai.biometric.BiometricModelDownloader.downloadAntiSpoofModel(this@MainActivity) { result ->
+                            runOnUiThread {
+                                result.onSuccess { status.text = "MiniFASNet model डाउनलोड और SHA-256 verify हो गया (${it.length()} bytes)।" }
+                                    .onFailure { status.text = "MiniFASNet model download असफल: ${it.message}" }
+                            }
+                        }
+                    }.show()
+            })
             addView(actionButton("Import ECAPA ONNX Model", "अपना verified waveform-input compatible model चुनें") { pickBiometricModel(speakerModelRequest) })
             addView(actionButton("Download verified ECAPA model • 42 MB", "Pinned Apache-2.0 ONNX export • SHA-256 verification • local-only storage") {
                 android.app.AlertDialog.Builder(this@MainActivity)

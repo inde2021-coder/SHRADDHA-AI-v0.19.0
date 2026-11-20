@@ -6,6 +6,27 @@ import org.junit.Test
 
 class LocalBiometricModelEngineTest {
     @Test
+    fun miniFasNetPreprocessingProducesBgrNchwAndNormalizesToZeroOne() {
+        val bgr = ByteArray(80 * 80 * 3)
+        bgr[0] = 255.toByte()
+        bgr[1] = 128.toByte()
+        bgr[2] = 64
+        val tensor = LocalBiometricModelEngine.preprocessMiniFasNetBgr(bgr)
+        val plane = 80 * 80
+        assertEquals(3 * plane, tensor.size)
+        assertEquals(1f, tensor[0], 0f)
+        assertEquals(128f / 255f, tensor[plane], 0.0001f)
+        assertEquals(64f / 255f, tensor[2 * plane], 0.0001f)
+    }
+
+    @Test
+    fun miniFasNetSoftmaxIsStableAndSumsToOne() {
+        val p = LocalBiometricModelEngine.softmax(floatArrayOf(1000f, 999f, -1000f))
+        assertEquals(1f, p.sum(), 0.0001f)
+        assertEquals(true, p[0] > p[1] && p[1] > p[2])
+    }
+
+    @Test
     fun sfacePreprocessingProducesRgbNchwWithRawPixelRange() {
         val rgb = ByteArray(112 * 112 * 3)
         rgb[0] = 1

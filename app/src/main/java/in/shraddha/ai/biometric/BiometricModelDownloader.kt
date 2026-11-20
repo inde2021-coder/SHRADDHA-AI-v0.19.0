@@ -20,6 +20,11 @@ object BiometricModelDownloader {
         "https://huggingface.co/Pawls2theWall/equivl-ecapa-voxceleb-onnx/resolve/dd6e443/model_fp16.onnx"
     private const val SPEAKER_SHA256 =
         "c59760b0a30dd905e3757cbb9ddf5dde22f9a099dc3e74de77c263cbb202e67c"
+    private const val PAD_URL =
+        "https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx/resolve/d29c87568ca9b5662da803b10f217c4db20b142b/minifasnet_v2.onnx"
+    private const val PAD_SHA256 =
+        "d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b"
+    private const val PAD_BYTES = 1_744_116L
     private const val MAX_BYTES = 100L * 1024L * 1024L
 
     private val downloadLock = Any()
@@ -35,6 +40,9 @@ object BiometricModelDownloader {
 
     fun downloadSpeakerModel(context: Context, onComplete: (Result<File>) -> Unit) =
         downloadVerified(context, SPEAKER_URL, "ecapa-any-length.onnx", SPEAKER_SHA256, null, onComplete)
+
+    fun downloadAntiSpoofModel(context: Context, onComplete: (Result<File>) -> Unit) =
+        downloadVerified(context, PAD_URL, "minifasnet-v2.onnx", PAD_SHA256, PAD_BYTES, onComplete)
 
     private fun downloadVerified(
         context: Context,
