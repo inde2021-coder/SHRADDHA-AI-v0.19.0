@@ -1,15 +1,15 @@
 # SHRADDHA AI v0.19.0 — Android + Windows PC Companion
 
-यह v0.18.0 का updated source है। Android पर केवल SHRADDHA AI app/launcher है। LIA का Android voice/Compose experience उसी APK में internal Activity के रूप में जोड़ा गया है।
+यह v0.18.0 का updated source है। Android पर केवल SHRADDHA AI app/launcher है। Shraddha AI का voice और Compose अनुभव उसी APK में internal Activity के रूप में जोड़ा गया है।
 
 ## मुख्य स्थान
 - `app/src/main/java/in/shraddha/ai/` — SHRADDHA core, Universal App Operator, security, Firebase, device link और vision.
-- `app/src/main/java/com/Lia/assistant/` — उसी APK में merged LIA voice, Compose UI, live audio, memory/personality, Forge और accessibility agent.
+- `app/src/main/java/com/Lia/assistant/` — उसी APK में merged Shraddha AI voice और Compose UI, live audio, memory/personality, Forge और accessibility agent.
 - `pc_companion/` — SHRADDHA AI का अलग Windows PC Companion; Android Device Universe से HTTPS relay के जरिए pair होता है।
-- `desktop-companion/MYRA_ULTRA_APP/` — MYRA desktop assistant/Coder/Website Forge source. यह Windows PC Companion executable से अलग codebase है।
-- `docs/integration/LIA-MYRA-FULL-MERGE-v0.19.0-HI.md` — merge ledger और boundaries.
+- `desktop-companion/Shraddha AI_ULTRA_APP/` — Shraddha AI desktop assistant/Coder/Website Forge source. यह Windows PC Companion executable से अलग codebase है।
+- `docs/integration/Shraddha AI-Shraddha AI-FULL-MERGE-v0.19.0-HI.md` — merge ledger और boundaries.
 - `pc_companion/README.md` — Windows companion setup और safety boundaries.
-- `desktop-companion/README-SHRADDHA-MYRA-PAIRING-HI.md` — MYRA source/architecture notes.
+- `desktop-companion/README-SHRADDHA-Shraddha AI-PAIRING-HI.md` — Shraddha AI source/architecture notes.
 
 ## नवीनतम सत्यापित build
 
