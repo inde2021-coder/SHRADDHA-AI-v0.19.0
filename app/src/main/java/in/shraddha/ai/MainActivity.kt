@@ -2834,6 +2834,29 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) { status.text = "File share error: ${e.message}" }
             return
         }
+        if (requestCode == windowsVoiceRequest && resultCode == Activity.RESULT_OK) {
+            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty().trim()
+            val normalized = spoken.lowercase()
+            val action = when {
+                normalized in listOf("वापस जाओ", "go back", "back") -> JSONObject().put("kind", "back")
+                normalized in listOf("होम", "डेस्कटॉप दिखाओ", "show desktop", "go home") -> JSONObject().put("kind", "home")
+                normalized in listOf("नीचे स्क्रॉल करो", "scroll down") -> JSONObject().put("kind", "scroll").put("amount", -4)
+                normalized in listOf("ऊपर स्क्रॉल करो", "scroll up") -> JSONObject().put("kind", "scroll").put("amount", 4)
+                normalized.startsWith("सेव पर क्लिक करो") -> JSONObject().put("kind", "click_text").put("label", "Save")
+                normalized.startsWith("क्लिक करो ") -> JSONObject().put("kind", "click_text").put("label", spoken.substringAfter("क्लिक करो ").trim())
+                normalized.startsWith("click ") -> JSONObject().put("kind", "click_text").put("label", spoken.substringAfter("click ").trim())
+                normalized.startsWith("लिखो ") -> JSONObject().put("kind", "type").put("text", spoken.substringAfter("लिखो ").take(500))
+                normalized.startsWith("type ") -> JSONObject().put("kind", "type").put("text", spoken.substringAfter("type ").take(500))
+                else -> null
+            }
+            if (action == null) { status.text = "आवाज़ समझ नहीं आई या command allowlist में नहीं है: $spoken"; return }
+            val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
+            if (target.isBlank()) { status.text = "पहले Windows PC चुनें।"; return }
+            pendingWindowsVoiceAction = action; pendingWindowsVoiceTarget = target
+            status.text = "Windows command: $spoken. PC से permission माँगी जा रही है…"
+            if (!DeviceLinkManager.requestRemoteControl(target, 2)) { pendingWindowsVoiceAction = null; status.text = "Relay disconnected; command नहीं भेजा गया।" }
+            return
+        }
         if (requestCode == speechRequest && resultCode == Activity.RESULT_OK) {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
             status.text = "आपने कहा: $spoken"
