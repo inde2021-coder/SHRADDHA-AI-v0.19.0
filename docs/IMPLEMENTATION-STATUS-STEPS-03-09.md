@@ -56,16 +56,16 @@ Main branch: untouched.
 - Main native shell now reads the editable assistant name from the shared `nova_prefs` setting for its greeting, assistant heading, voice prompt, orb description, reminder default and export labels.
 - Remaining: verify dynamic name replacement across every Compose screen, notifications, shortcuts and third-party integrations; complete responsive layout, navigation, animation performance, reduced-motion, contrast, TalkBack and real-device audits. Do not claim premium UI completion until these checks pass.
 
-## Step 8 — Firebase and Security (source rules implemented; deployment/integration pending)
+## Step 8 — Firebase and Security (runtime configuration and recap sync integrated; production deployment pending)
 
 - Firestore vault reads/writes are scoped to the authenticated user's UID; document IDs, exact field allowlist, ciphertext format/type, payload size and integer timestamp are validated. All other document paths are denied.
 - Storage rules scope paths to the authenticated user's UID, cap uploads below 50 MB, allow only image/video/PDF/JSON/plain-text content types and deny all other paths. Storage upload code is not yet integrated into the app.
-- Root firebase.json points Firebase CLI deployment at the checked-in Firestore and Storage rules. Firebase config is supplied via local.properties/BuildConfig; no service-account credential is committed.
+- Root firebase.json points Firebase CLI deployment at the checked-in Firestore and Storage rules. Firebase can be configured in-app with public Android client identifiers or supplied via local.properties/BuildConfig; no service-account credential is committed.
 - Cloud Vault signs in with Firebase Email/Password, encrypts backup text client-side using AES-256-GCM with a PBKDF2-HMAC-SHA256-derived key (210,000 iterations), and validates encrypted payload structure/size on restore.
-- Remaining: run Firebase Emulator rules tests, deploy rules to the user's actual Firebase project, verify App Check/Auth providers/authorized domains, account deletion/export, token lifecycle and backup recovery. Checked-in rules do not prove production deployment.
+- Cloud & Data can load an opt-in encrypted local conversation recap into a reviewable draft, sync only after consent, and restore it to the local Keystore vault when memory is enabled. Remaining: run Firebase Emulator rules tests, deploy rules to the user's actual Firebase project, verify Email/Password Auth and App Check, account deletion/export, token lifecycle and backup recovery. Checked-in rules do not prove production deployment.
 
 ## Step 9 — Final Testing
-Not started. Requires successful unit tests, lint/static checks, debug and release APK builds, install/upgrade tests, physical-device tests, crash/performance checks and final artifact checksums.
+Automated unit tests, backend syntax checks and debug APK builds have passed on recent working-branch CI runs. Remaining: lint/static checks, release-signed APK, install/upgrade tests, physical-device tests, crash/performance checks, model execution/accuracy tests and final artifact checksums.
 
 ### People Memory model integration — 2026-11-20
 - Added a separately pinned Apache-2.0 MiniFASNet V2 ONNX model (1,744,116 bytes, SHA-256 verified) as an opt-in download. Face capture now requires this model and runs a 2.7× face crop through BGR 80×80 preprocessing before SFace embedding. The score is a supplementary print/screen-replay risk gate; it is not certified/iBeta/ISO 30107-3 PAD and does not defend against masks, deepfakes or injection attacks. The upstream Minivision test.py confirms class index 1 is the real-face class; the implementation uses [print, live, replay] ordering. A third-party model-card label order conflicts, so upstream label semantics are authoritative here. Thresholds still require device/dataset calibration.
@@ -86,12 +86,20 @@ Not started. Requires successful unit tests, lint/static checks, debug and relea
 ## Truthful completion gate
 A step is complete only when its source changes are committed, tests pass, relevant device/integration checks are performed, limitations are documented and artifacts are reproducible. A GitHub CI run alone does not prove hardware behavior.
 
+## Update — 2026-11-20 integrated implementation pass
+- Full-resolution Visual Lens camera capture uses FileProvider and an explicit HTTPS vision request; screen and remote-camera previews are sampled at up to four frames/second.
+- Face capture now uses pinned MiniFASNet V2 as a supplementary PAD score; upstream label index 1 is the live class. It is not certified or calibrated on target phones.
+- Calls open the dialer; SMS/WhatsApp open reviewable drafts. Social publishing stubs were removed from the exposed tool catalog rather than reporting fake success.
+- Voice sessions auto-reconnect indefinitely with bounded backoff, pause microphone capture while disconnected, persist opt-in encrypted recap and hold a partial wake lock while foreground voice is active.
+- Firebase Cloud Vault supports runtime client configuration and explicit encrypted recap backup/restore; only the selected note/recap is synced.
+- Relay now rate-limits session creation, caps active sessions, cleans rate-limit maps and sends Gemini API keys in headers.
+
 ## Update — 2026-11-19 implementation pass
 
 ### Step 3 — Voice AI source changes
 - Added fatal AudioRecord error handling and resource cleanup; failed microphone capture no longer leaves its capture loop marked active.
 - Propagated microphone errors into the voice session state and clears VAD/amplitude indicators.
-- When all five reconnect attempts are exhausted, microphone capture is paused (fail-closed) instead of continuing to collect audio while disconnected.
+- Voice reconnect retries continue with exponential backoff capped at 30 seconds; microphone capture pauses while disconnected and resumes only after the live session is ready. Manual retry is available for missing credentials or local microphone errors.
 - Foreground notification wording no longer falsely claims that the assistant is actively listening while it may still be connecting or recovering.
 - Added conversation-memory tests (12-turn retention, role-aware recap, blank input filtering and clear).
 - Still requires a passing latest CI run and physical-device checks for actual continuous listening, Android microphone foreground-service restrictions, lock-screen/OEM behavior, Bluetooth/audio focus and real Gemini Live API connectivity.
@@ -102,12 +110,11 @@ A step is complete only when its source changes are committed, tests pass, relev
 - Added an encrypted local biometric template vault backed by Android Keystore AES-GCM, with explicit enrollment consent, person deletion and cosine similarity threshold matching.
 - Added a strict ONNX adapter that checks input tensor contracts and refuses unknown model shapes rather than generating fake embeddings.
 - Added a basic randomized blink/head-turn interaction gate and voice phrase normalization tests.
-- Important limitations: blink/head-turn is not certified anti-spoofing; ECAPA exports with mel-feature inputs are rejected until exact preprocessing is validated; no licensed SFace/ECAPA model weights are bundled; no benchmark or physical-device biometric accuracy test has been performed. The current capture flow must not be treated as secure identity proof.
+- Important limitations: blink/head-turn plus MiniFASNet are supplementary, not certified/iBeta/ISO 30107-3 anti-spoofing; masks, deepfakes and camera injection are not covered. SFace and ECAPA weights are not bundled but are available through pinned HTTPS downloads with SHA-256 verification; MiniFASNet is a separately downloaded optional model. No benchmark or physical-device biometric accuracy test has been performed. The current capture flow must not be treated as secure identity proof.
 
 ### Build verification — 2026-11-20
-- Latest observed run `44664745187` (`dbc413b…`) had a successful backend-check job, but the Android verify job was cancelled during unit tests and the APK build was skipped. This is not a passing Android build.
-- Earlier run `44664268684` was superseded/cancelled as additional commits were pushed. Do not treat a cancelled run as a test pass.
-- No physical-device validation, certified biometric spoof testing, Firebase Emulator test or production Firebase rules deployment has been performed.
+- Working-branch run `44673430564` for commit `1f03240a73b28bc1f7812fc18b91c4281d9cee3c` completed successfully: backend-check, Android unit tests, debug APK build and artifact publication all passed.
+- Physical-device validation, certified biometric spoof testing, Firebase Emulator rules tests and production Firebase rules deployment have not been performed.
 
 
 ## Update — 2026-11-20 workflow safety pass
