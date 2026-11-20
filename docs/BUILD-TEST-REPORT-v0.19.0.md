@@ -54,3 +54,15 @@
 - Social publishing, scheduled posts, analytics and account management are not implemented; only a user-confirmed share draft is supported.
 
 CI success proves source compilation and the listed automated checks only. It does not prove that every hardware, provider, permission or account-dependent capability works on every device.
+
+
+## Latest verification update — 2026-11-20 (Android CI #288)
+- Tested commit: `c66e7c1970849e7b3b5db6166570a379de6bcadb` (includes masked Gemini and non-Gemini provider-key entry).
+- Backend syntax and security/API tests: **PASS**.
+- Android unit tests: **PASS**.
+- ARM64/ARMv7 debug APK build: **PASS**.
+- ABI verification and SHA-256 manifest verification: **PASS**.
+- Artifact: `shraddha-ai-debug-apks-arm`; ID `14604401663`; artifact digest `sha256:7206fa42c51e3e6c4e75f54ed5f2c6903cd492991997eced977458bdf469ab3b`.
+- APK SHA-256: ARM64 `1f0aecd69a4229d73a13ed2c0ce4ee7c209f8a0a1d248611deea300a14406c09`; ARMv7 `3460feabf3cc5212ca63ef587fa5ada279b4d723f6b17ede26abec40bfcff9f1`.
+- [Android CI run #288](https://github.com/inde2021-coder/SHRADDHA-AI-v0.19.0/actions/runs/44681099078)
+- The #288 APK artifact was downloaded and both APK checksums and ABI contents were independently verified in the current work session.
