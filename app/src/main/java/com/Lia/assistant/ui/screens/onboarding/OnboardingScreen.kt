@@ -56,7 +56,7 @@ fun OnboardingScreen(
     val pages = listOf(
         OnboardingPageData(
             title = "A Pearl of Light in the Night",
-            description = "Welcome to Lia AI. Real-time, full-duplex spoken intelligence that listens, understands, and accompanies you.",
+            description = "Welcome to Shraddha AI. Hindi, Hinglish and English voice intelligence with personal memory and device assistance.",
             orbStyle = NovaOrbStyle.NOVA,
             orbState = NovaOrbState.IDLE
         ),
