@@ -251,6 +251,55 @@ async def share_screen_loop(ws, fps: float, target_device_id: str) -> None:
         await asyncio.sleep(interval)
 
 
+
+def parse_pairing_qr(payload: str) -> tuple[str, str]:
+    """Validate a Shraddha pairing QR deep link without trusting its contents."""
+    from urllib.parse import parse_qs, urlparse
+    parsed = urlparse(str(payload or "").strip())
+    values = parse_qs(parsed.query, strict_parsing=True)
+    relay = values.get("relay", [""])[0].rstrip("/")
+    code = values.get("code", [""])[0]
+    if parsed.scheme != "shraddha" or parsed.netloc != "pair":
+        raise ValueError("QR is not a Shraddha device-pairing invitation")
+    if not relay.startswith("https://") or len(relay) > 300:
+        raise ValueError("Pairing QR must contain a valid HTTPS relay URL")
+    if not re.fullmatch(r"[0-9]{6}", code):
+        raise ValueError("Pairing QR code is invalid or expired")
+    return relay, code
+
+
+def scan_pairing_qr(timeout_seconds: int = 60) -> tuple[str, str]:
+    """Scan a QR only after a local PC user explicitly starts the camera scan."""
+    if not confirm("Open the PC camera to scan a Shraddha pairing QR?"):
+        raise RuntimeError("Pairing QR scan cancelled by PC user")
+    try:
+        import cv2
+    except ImportError as exc:
+        raise RuntimeError("Install QR scanner dependency: python -m pip install -r requirements-qr.txt") from exc
+    camera = cv2.VideoCapture(0, cv2.CAP_DSHOW if sys.platform == "win32" else 0)
+    if not camera.isOpened():
+        camera.release()
+        raise RuntimeError("Could not open a camera for QR scanning")
+    detector = cv2.QRCodeDetector()
+    deadline = time.monotonic() + max(5, min(180, timeout_seconds))
+    try:
+        while time.monotonic() < deadline:
+            ok, frame = camera.read()
+            if not ok:
+                continue
+            payload, _, _ = detector.detectAndDecode(frame)
+            cv2.putText(frame, "Scan Shraddha pairing QR - ESC to cancel", (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (40, 230, 180), 2)
+            cv2.imshow("Shraddha AI secure pairing", frame)
+            if cv2.waitKey(1) & 0xFF == 27:
+                raise RuntimeError("Pairing QR scan cancelled")
+            if payload:
+                return parse_pairing_qr(payload)
+        raise RuntimeError("Pairing QR scan timed out")
+    finally:
+        camera.release()
+        cv2.destroyAllWindows()
+
+
 def join_device(base_url: str, pairing_code: str, device_name: str) -> dict:
     url = base_url.rstrip("/") + "/api/device/join"
     payload = json.dumps({"pairingCode": pairing_code.strip(), "deviceName": device_name[:48]}).encode()
@@ -454,12 +503,14 @@ async def run(args) -> None:
     except ImportError as exc:
         raise RuntimeError("Install requirements first: python -m pip install -r requirements.txt") from exc
 
-    saved = load_saved_pairing() if not args.pairing_code else None
-    base_url = (args.base_url or (saved or {}).get("baseUrl") or "").rstrip("/")
+    qr_invite = await asyncio.to_thread(scan_pairing_qr) if args.scan_pairing_qr else None
+    pairing_code = args.pairing_code or (qr_invite[1] if qr_invite else "")
+    saved = load_saved_pairing() if not pairing_code else None
+    base_url = (args.base_url or (qr_invite[0] if qr_invite else "") or (saved or {}).get("baseUrl") or "").rstrip("/")
     if not base_url.startswith("https://"):
-        raise RuntimeError("Use --base-url with the HTTPS URL of your deployed Shraddha relay.")
-    if args.pairing_code:
-        pair = await asyncio.to_thread(join_device, base_url, args.pairing_code, args.device_name)
+        raise RuntimeError("Use --base-url or scan a Shraddha HTTPS pairing QR.")
+    if pairing_code:
+        pair = await asyncio.to_thread(join_device, base_url, pairing_code, args.device_name)
         save_pairing(pair, base_url)
         print("Pairing credentials saved in Windows Credential Manager.")
         session_id, device_id, device_token = pair["sessionId"], pair["deviceId"], pair["deviceToken"]
@@ -562,6 +613,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Consent-gated Shraddha AI Windows PC companion")
     parser.add_argument("--base-url", default="", help="HTTPS URL of your Shraddha relay (saved after pairing)")
     parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
+    parser.add_argument("--scan-pairing-qr", action="store_true", help="Use the PC camera to scan a Shraddha pairing QR; requires requirements-qr.txt")
     parser.add_argument("--device-name", default="My Windows PC")
     parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")
     parser.add_argument("--allow-ocr", action="store_true", help="Enable active-window OCR; each request asks PC user")
