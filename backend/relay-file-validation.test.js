@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 
 test('accepts a bounded base64 file with the correct SHA-256', () => {
   const bytes = Buffer.from('Shraddha secure file transfer');
@@ -39,4 +39,11 @@ test('clipboard payload policy accepts only bounded text in clipboard category',
   assert.equal(isAllowedSharedPayloadType('clipboard', 'file', 20), false);
   assert.equal(isAllowedSharedPayloadType('documents', 'file', 650_000), true);
   assert.equal(isAllowedSharedPayloadType('documents', 'unknown', 20), false);
+});
+
+test('clipboard is an explicitly supported one-time share category', () => {
+  assert.equal(isAllowedShareCategory('clipboard'), true);
+  assert.equal(isAllowedShareCategory('documents'), true);
+  assert.equal(isAllowedShareCategory('remote_control'), false);
+  assert.equal(isAllowedShareCategory('unknown'), false);
 });
