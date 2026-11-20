@@ -138,13 +138,11 @@ object VoiceSessionManager {
         } catch (error: Exception) {
             if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
             val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
-            _isActive.value = false
-            _state.value = NovaOrbState.ERROR
-            _statusText.value = "Secure voice setup required"
             _lastError.value = message
-            audioIO?.release()
-            audioIO = null
-            VoiceForegroundService.stop(currentContext, currentEpoch)
+            _state.value = NovaOrbState.CONNECTING
+            _statusText.value = "Voice connection unavailable; retrying automatically"
+            audioIO?.stopRecording()
+            retryAfterCurrentAttempt()
             return
         }
 
@@ -305,6 +303,7 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 _lastError.value = message
                 if (_isActive.value) {
+                    audioIO?.stopRecording()
                     scheduleReconnect()
                 }
             }
@@ -312,6 +311,7 @@ object VoiceSessionManager {
             override fun onClosed() {
                 if (sessionEpoch.get() != currentEpoch) return
                 if (_isActive.value) {
+                    audioIO?.stopRecording()
                     scheduleReconnect()
                 }
             }
@@ -359,29 +359,29 @@ object VoiceSessionManager {
         }
     }
 
+    private fun retryAfterCurrentAttempt() {
+        scope.launch {
+            delay(1_200)
+            if (_isActive.value && reconnectJob?.isActive != true) scheduleReconnect()
+        }
+    }
+
     private fun scheduleReconnect() {
         if (!_isActive.value) return
         if (reconnectJob?.isActive == true) return
 
         val count = VoiceLatencyTracker.reconnectCount.value
-        if (count >= 5) {
-            _state.value = NovaOrbState.ERROR
-            _statusText.value = "Connection lost after 5 attempts. Check network/API access and start Voice again."
-            _lastError.value = "Connection lost after 5 attempts"
-            appContext?.let { VoiceForegroundService.stop(it) }
-            return
-        }
-
+        val backoffMs = (1_200L * (1L shl count.coerceAtMost(5))).coerceAtMost(30_000L)
         VoiceLatencyTracker.incrementReconnect()
         _state.value = NovaOrbState.CONNECTING
-        _statusText.value = "Reconnecting (attempt ${count + 1}/5)..."
+        _statusText.value = "Reconnecting (attempt ${count + 1})..."
 
+        // Keep the user-started voice session alive through transient network/API failures.
+        // Backoff is capped at 30 seconds and the session stops only on explicit user stop.
         reconnectJob = scope.launch {
-            delay(1200)
+            delay(backoffMs)
             sessionMutex.withLock {
-                if (_isActive.value) {
-                    connectSession(isResuming = true)
-                }
+                if (_isActive.value) connectSession(isResuming = true)
             }
         }
     }
