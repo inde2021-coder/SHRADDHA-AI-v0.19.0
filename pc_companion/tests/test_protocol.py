@@ -21,6 +21,17 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(validate_remote_action({"kind": "type", "text": "x" * 2001}))
         self.assertIsNone(validate_remote_action({"kind": "click_text", "text": "x" * 121}))
 
+    def test_type_rejects_password_otp_pin_and_cvv_content(self):
+        for text in (
+            "Password: example123",
+            "OTP 123456",
+            "UPI PIN 1234",
+            "CVV 123",
+            "यह ओटीपी 654321 है",
+            "पासवर्ड बदलें"
+        ):
+            self.assertIsNone(validate_remote_action({"kind": "type", "text": text}))
+
     def test_open_app_rejects_paths_and_shell_fragments(self):
         self.assertIsNotNone(validate_remote_action({"kind": "open_app", "appName": "Notepad"}))
         self.assertIsNone(validate_remote_action({"kind": "open_app", "appName": "..\\evil.exe"}))
