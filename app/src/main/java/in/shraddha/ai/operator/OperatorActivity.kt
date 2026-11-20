@@ -10,6 +10,10 @@ import `in`.shraddha.ai.operator.learning.AppTrainingActivity
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
 import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.NaturalLanguageWorkflowRouter
+import `in`.shraddha.ai.future.Risk
+import `in`.shraddha.ai.future.LocalAuditTrail
+import `in`.shraddha.ai.future.ShraddhaIntegrationHub
+import `in`.shraddha.ai.future.WorkflowStatus
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -32,6 +36,7 @@ class OperatorActivity : Activity() {
         root.addView(commandInput)
         root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
         root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
+        root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
@@ -55,6 +60,61 @@ class OperatorActivity : Activity() {
 
 
 
+    /** Builds an explicit plan from the operator fields; every mutating step is approved separately. */
+    private fun runPlannedOperator() {
+        val planned = mutableListOf<PlannedOperatorAction>()
+        var previous: String? = null
+        val app = appName.text.toString().trim()
+        val label = target.text.toString().trim()
+        val value = typed.text.toString()
+        if (app.isNotBlank()) {
+            val id = "open_app"
+            planned += PlannedOperatorAction(id, "Open $app", OperatorStep(OperatorActionType.OPEN_APP, target = app),
+                dependsOn = previous?.let { setOf(it) } ?: emptySet(), risk = Risk.READ_ONLY)
+            previous = id
+        }
+        if (label.isNotBlank()) {
+            val id = "click_target"
+            planned += PlannedOperatorAction(id, "Click $label", OperatorStep(OperatorActionType.CLICK_TEXT, target = label, requiresConfirmation = true),
+                dependsOn = previous?.let { setOf(it) } ?: emptySet(), risk = Risk.SENSITIVE, requiresApproval = true)
+            previous = id
+        }
+        if (value.isNotBlank()) {
+            val id = "type_value"
+            planned += PlannedOperatorAction(id, "Enter supplied text", OperatorStep(OperatorActionType.TYPE_TEXT, value = value, requiresConfirmation = true),
+                dependsOn = previous?.let { setOf(it) } ?: emptySet(), risk = Risk.SENSITIVE, requiresApproval = true)
+        }
+        if (planned.isEmpty()) { log.text = "पहले ऐप का नाम, target text या सामान्य text भरें।"; return }
+        Thread {
+            val engine = OperatorEngine(
+                emit = { event -> runOnUiThread {
+                    val detail = event.snapshot?.let { "\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
+                    log.text = "${event.state}: ${event.message}$detail\n\n" + log.text.take(5000)
+                } },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+            )
+            val bridge = TaskPlannerOperatorBridge(
+                executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+            )
+            val id = "operator-" + java.util.UUID.randomUUID().toString().take(8)
+            bridge.createPlan(id, "Manual Operator Task", planned)
+            val session = bridge.start()
+            runOnUiThread { showPlannedSession(bridge, session) }
+        }.start()
+    }
+
+    private fun showPlannedSession(bridge: TaskPlannerOperatorBridge, session: ShraddhaIntegrationHub.Session) {
+        val step = session.workflow.steps.getOrNull(session.workflow.currentStep)
+        log.text = "Planner: ${session.workflow.status}\n${session.workflow.message}\n" + log.text.take(4500)
+        if (session.workflow.status == WorkflowStatus.WAITING_FOR_APPROVAL && step != null) {
+            android.app.AlertDialog.Builder(this).setTitle("इस Planner चरण की अनुमति")
+                .setMessage("कार्य: ${step.title}\n\nयह अनुमति केवल इसी चरण के लिए है। मना करने पर अगला action नहीं चलेगा।")
+                .setNegativeButton("मना करें") { _, _ -> Thread { val result = bridge.approveCurrentStep(false); runOnUiThread { showPlannedSession(bridge, result) } }.start() }
+                .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ -> Thread { val result = bridge.approveCurrentStep(true); runOnUiThread { showPlannedSession(bridge, result) } }.start() }
+                .show()
+        }
+    }
     private fun captureVoiceCommand() {
         val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
