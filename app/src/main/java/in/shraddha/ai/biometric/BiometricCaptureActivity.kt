@@ -82,6 +82,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private val randomPhrase get() = randomChallenge.first
     private val randomPhraseLocale get() = randomChallenge.second
     private var busy = false
+    @Volatile private var captureCancelled = false
+    @Volatile private var activeRecorder: AudioRecord? = null
+    @Volatile private var cameraProvider: ProcessCameraProvider? = null
     private var activeMode = "enroll"
     private var activePersonId = ""
     private var activePersonName = ""
@@ -99,18 +102,20 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
         val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
+        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || (mode in setOf("match", "compare") && id.isBlank()) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match", "compare") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f)) || (mode == "compare" && kind != "speaker")) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
         val modelDirectory = File(filesDir, "biometric-models")
         val model = File(modelDirectory, if (kind == "face") "sface.onnx" else "ecapa-any-length.onnx")
         if (!model.isFile) { finishWith("Required local biometric model is not imported."); return }
-        message = TextView(this).apply { text = "Local biometric model loading…"; setTextColor(android.graphics.Color.WHITE) }
+        val antiSpoofModel = File(modelDirectory, "minifasnet-v2.onnx")
+        if (kind == "face" && !antiSpoofModel.isFile) { finishWith("Verified MiniFASNet anti-spoof model is required for face capture. Download it in People Memory first."); return }
+        message = TextView(this).apply { text = "Local biometric models loading…"; setTextColor(android.graphics.Color.WHITE) }
         setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
         Thread({
             try {
-                if (kind == "face") engine.loadFaceModel(model.absolutePath) else engine.loadSpeakerModel(model.absolutePath)
+                if (kind == "face") { engine.loadFaceModel(model.absolutePath); engine.loadAntiSpoofModel(antiSpoofModel.absolutePath) } else engine.loadSpeakerModel(model.absolutePath)
                 runOnUiThread { if (!isFinishing) { if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold) else buildFaceScreen(mode, id, name, threshold) } }
             } catch (error: Exception) { finishWith("Biometric model could not load: ${error.message}") }
         }, "BiometricModelLoad").start()
@@ -152,6 +157,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun challengeText(): String = livenessGate.prompt()
 
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     private fun startCamera() {
         val view = previewView ?: return
         val options = FaceDetectorOptions.Builder().setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -162,6 +168,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         providerFuture.addListener({
             try {
                 val provider = providerFuture.get()
+                if (captureCancelled || isFinishing || isDestroyed) return@addListener
+                cameraProvider = provider
                 val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
                 val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
                 imageCapture = capture
@@ -178,6 +186,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run { proxy.close(); return }
         val input = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
@@ -190,7 +199,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
             val complete = livenessGate.observe(1, face.leftEyeOpenProbability ?: 1f, face.rightEyeOpenProbability ?: 1f, face.headEulerAngleY)
             if (complete) {
                 livenessPassed.set(true)
-                runOnUiThread { message.text = "Active liveness challenge passed. सीधे camera की ओर वापस आएँ, फिर capture करें."; action.text = "Capture and continue"; action.isEnabled = true }
+                runOnUiThread { message.text = "Blink, head-turn और camera की ओर वापसी जाँची गई। अब capture करें। यह certified anti-spoofing नहीं है."; action.text = "Capture and continue"; action.isEnabled = true }
                 imageAnalysis?.clearAnalyzer()
             } else runOnUiThread { message.text = challengeText() }
         }.addOnFailureListener { runOnUiThread { message.text = "Face tracking error: ${it.message}" } }
@@ -219,12 +228,13 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 try {
                     val embedding = faceEmbeddingFromFile(file)
                     file.delete()
+                    check(!captureCancelled && !isFinishing && !isDestroyed) { "Capture cancelled; no biometric template was saved." }
                     if (mode == "enroll") {
                         vault.enroll(id, name, "face", embedding, true).getOrThrow()
-                        finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.")
+                        finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.", successful = true)
                     } else {
                         val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
-                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.")
+                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.", successful = true)
                     }
                 } catch (error: Exception) { file.delete(); finishWith("Face capture failed: ${error.message}") }
             }
@@ -232,59 +242,101 @@ class BiometricCaptureActivity : AppCompatActivity() {
         })
     }
 
-    private fun faceEmbeddingFromFile(file: File): FloatArray {
-        var bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: error("Camera image could not be decoded")
-        val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
-        }
-        if (rotation != 0f) { val matrix = Matrix().apply { postRotate(rotation) }; bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) }
-        val faces = try { Tasks.await(detector!!.process(InputImage.fromBitmap(bitmap, 0))) } catch (error: Exception) { bitmap.recycle(); throw error }
-        require(faces.size == 1) { "एक ही स्पष्ट चेहरा चाहिए; group/ambiguous frame स्वीकार नहीं है" }
-        val face = faces.first()
-        require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
-        require(kotlin.math.abs(face.headEulerAngleY) <= 22f && kotlin.math.abs(face.headEulerAngleX) <= 22f) { "सीधे camera की ओर देखें" }
-        require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
-        val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
-            .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
-        val source = FloatArray(10)
-        landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
-        val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
-        val transform = affineFromFivePoints(source, target)
-        val aligned = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
-        Canvas(aligned).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
-        val gray = IntArray(112 * 112)
-        var brightness = 0.0
-        for (y in 0 until 112) for (x in 0 until 112) {
-            val pixel = aligned.getPixel(x, y)
-            val value = (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114).toInt()
-            gray[y * 112 + x] = value
-            brightness += value
-        }
-        val meanBrightness = brightness / gray.size
-        var lapSum = 0.0
-        var lapSquare = 0.0
-        var lapCount = 0
-        for (y in 1 until 111) for (x in 1 until 111) {
-            val i = y * 112 + x
-            val lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - 112] - gray[i + 112]
-            lapSum += lap
-            lapSquare += lap.toDouble() * lap
-            lapCount++
-        }
-        val sharpness = lapSquare / lapCount - (lapSum / lapCount) * (lapSum / lapCount)
-        require(meanBrightness in 35.0..220.0) { "रोशनी कम/ज्यादा है; समान रोशनी में फिर से capture करें" }
-        require(sharpness > 18.0) { "चेहरा धुंधला है; फोन स्थिर रखकर दोबारा capture करें" }
-        val rgb = ByteArray(112 * 112 * 3)
+    private fun miniFasNetScores(bitmap: Bitmap, face: Face): FloatArray {
+        val box = face.boundingBox
+        val cropWidth = (box.width() * 2.7f).toInt().coerceAtLeast(1)
+        val cropHeight = (box.height() * 2.7f).toInt().coerceAtLeast(1)
+        val left = (box.centerX() - cropWidth / 2).coerceIn(0, bitmap.width - 1)
+        val top = (box.centerY() - cropHeight / 2).coerceIn(0, bitmap.height - 1)
+        val right = (box.centerX() + cropWidth / 2).coerceIn(left + 1, bitmap.width)
+        val bottom = (box.centerY() + cropHeight / 2).coerceIn(top + 1, bitmap.height)
+        val crop = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+        val resized = Bitmap.createScaledBitmap(crop, 80, 80, true)
+        if (crop !== bitmap) crop.recycle()
+        val bgr = ByteArray(80 * 80 * 3)
         var offset = 0
-        for (y in 0 until 112) for (x in 0 until 112) {
-            val pixel = aligned.getPixel(x, y)
-            rgb[offset++] = Color.red(pixel).toByte(); rgb[offset++] = Color.green(pixel).toByte(); rgb[offset++] = Color.blue(pixel).toByte()
+        for (y in 0 until 80) for (x in 0 until 80) {
+            val pixel = resized.getPixel(x, y)
+            bgr[offset++] = Color.blue(pixel).toByte()
+            bgr[offset++] = Color.green(pixel).toByte()
+            bgr[offset++] = Color.red(pixel).toByte()
         }
-        bitmap.recycle(); aligned.recycle()
-        return engine.faceEmbedding(rgb)
+        resized.recycle()
+        return engine.antiSpoofScores(bgr)
+    }
+
+    private fun faceEmbeddingFromFile(file: File): FloatArray {
+        val originalBitmap = BitmapFactory.decodeFile(file.absolutePath)
+            ?: error("Camera image could not be decoded")
+        var bitmap = originalBitmap
+        var alignedBitmap: Bitmap? = null
+        try {
+            val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            if (rotation != 0f) {
+                val matrix = Matrix().apply { postRotate(rotation) }
+                bitmap = Bitmap.createBitmap(originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true)
+                originalBitmap.recycle()
+            }
+            val faces = Tasks.await(detector!!.process(InputImage.fromBitmap(bitmap, 0)))
+            require(faces.size == 1) { "एक ही स्पष्ट चेहरा चाहिए; group/ambiguous frame स्वीकार नहीं है" }
+            val face = faces.first()
+            require(face.boundingBox.width() >= 120 && face.boundingBox.height() >= 120) { "चेहरा camera में और पास लाएँ" }
+            val padScores = miniFasNetScores(bitmap, face)
+            require(LocalBiometricModelEngine.isLiveFace(padScores)) {
+                "MiniFASNet ने live-face score पर्याप्त नहीं पाया (%.2f)। कैमरा सामने रखें; photo/screen replay reject हुआ। यह certified anti-spoofing नहीं है.".format(padScores[1])
+            }
+            require(kotlin.math.abs(face.headEulerAngleY) <= 22f && kotlin.math.abs(face.headEulerAngleX) <= 22f) { "सीधे camera की ओर देखें" }
+            require((face.leftEyeOpenProbability ?: 0f) > 0.45f && (face.rightEyeOpenProbability ?: 0f) > 0.45f) { "आँखें साफ दिखाई देनी चाहिए" }
+            val landmarks = listOf(FaceLandmark.RIGHT_EYE, FaceLandmark.LEFT_EYE, FaceLandmark.NOSE_BASE, FaceLandmark.MOUTH_RIGHT, FaceLandmark.MOUTH_LEFT)
+                .map { type -> face.getLandmark(type)?.position ?: error("Face alignment landmark missing: $type") }
+            val source = FloatArray(10)
+            landmarks.forEachIndexed { index, point -> source[index * 2] = point.x; source[index * 2 + 1] = point.y }
+            val target = floatArrayOf(38.2946f, 51.6963f, 73.5318f, 51.5014f, 56.0252f, 71.7366f, 41.5493f, 92.3655f, 70.7299f, 92.2041f)
+            val transform = affineFromFivePoints(source, target)
+            val aligned = Bitmap.createBitmap(112, 112, Bitmap.Config.ARGB_8888)
+            alignedBitmap = aligned
+            Canvas(aligned).drawBitmap(bitmap, transform, Paint(Paint.FILTER_BITMAP_FLAG))
+            val gray = IntArray(112 * 112)
+            var brightness = 0.0
+            for (y in 0 until 112) for (x in 0 until 112) {
+                val pixel = aligned.getPixel(x, y)
+                val value = (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114).toInt()
+                gray[y * 112 + x] = value
+                brightness += value
+            }
+            val meanBrightness = brightness / gray.size
+            var lapSum = 0.0
+            var lapSquare = 0.0
+            var lapCount = 0
+            for (y in 1 until 111) for (x in 1 until 111) {
+                val i = y * 112 + x
+                val lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - 112] - gray[i + 112]
+                lapSum += lap
+                lapSquare += lap.toDouble() * lap
+                lapCount++
+            }
+            val sharpness = lapSquare / lapCount - (lapSum / lapCount) * (lapSum / lapCount)
+            require(meanBrightness in 35.0..220.0) { "रोशनी कम/ज्यादा है; समान रोशनी में फिर से capture करें" }
+            require(sharpness > 18.0) { "चेहरा धुंधला है; फोन स्थिर रखकर दोबारा capture करें" }
+            val rgb = ByteArray(112 * 112 * 3)
+            var offset = 0
+            for (y in 0 until 112) for (x in 0 until 112) {
+                val pixel = aligned.getPixel(x, y)
+                rgb[offset++] = Color.red(pixel).toByte()
+                rgb[offset++] = Color.green(pixel).toByte()
+                rgb[offset++] = Color.blue(pixel).toByte()
+            }
+            return engine.faceEmbedding(rgb)
+        } finally {
+            alignedBitmap?.takeIf { !it.isRecycled }?.recycle()
+            if (!bitmap.isRecycled) bitmap.recycle()
+            if (originalBitmap !== bitmap && !originalBitmap.isRecycled) originalBitmap.recycle()
+        }
     }
 
     /** Least-squares 5-point affine warp; Android Matrix.setPolyToPoly accepts at most 4 pairs. */
@@ -325,7 +377,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun buildSpeakerScreen(mode: String, id: String, name: String, threshold: Float) {
-        val root = baseLayout(if (mode == "enroll") "Speaker enrollment" else "Live speaker match", "On-device speech challenge • raw audio is processed in memory and discarded")
+        val root = baseLayout(
+            when (mode) { "enroll" -> "Speaker enrollment"; "compare" -> "Voice similarity comparison"; else -> "Live speaker match" },
+            "On-device speech challenge • raw audio is processed in memory and discarded"
+        )
         val phrase = TextView(this).apply { text = "इसे साफ़ बोलें / Say clearly:  $randomPhrase"; textSize = 18f; setTextColor(Color.WHITE); setPadding(0, 20, 0, 20) }
         root.addView(phrase, 1)
         message.text = "A random phrase is generated for this session. On-device speech recognition must verify it before the biometric sample is recorded."
@@ -338,11 +393,18 @@ class BiometricCaptureActivity : AppCompatActivity() {
         setContentView(root)
     }
 
+    @androidx.annotation.RequiresApi(31)
+    private fun createOnDeviceRecognizer(): SpeechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+
     private fun startSpeakerChallenge() {
         if (busy) return
         busy = true
         action.isEnabled = false
-        val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        val recognizer = if (android.os.Build.VERSION.SDK_INT >= 31) createOnDeviceRecognizer() else {
+            busy = false
+            finishWith("On-device speech recognition requires Android 12 or newer.")
+            return
+        }
         speechRecognizer = recognizer
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -376,15 +438,21 @@ class BiometricCaptureActivity : AppCompatActivity() {
             var recorder: AudioRecord? = null
             try {
                 val rate = 16000
+                if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    throw SecurityException("Microphone permission was revoked before speaker capture.")
+                }
                 val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(minBuffer > 0) { "Microphone unavailable" }
                 recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 16384))
+                activeRecorder = recorder
+                require(!captureCancelled) { "Capture cancelled." }
                 require(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone initialization failed" }
                 val pcm = ShortArray(rate * 5)
                 recorder.startRecording()
                 var offset = 0
-                while (offset < pcm.size) { val n = recorder.read(pcm, offset, pcm.size - offset); require(n > 0) { "Microphone read failed" }; offset += n }
+                while (offset < pcm.size) { require(!captureCancelled) { "Capture cancelled." }; val n = recorder.read(pcm, offset, pcm.size - offset); require(n > 0) { "Microphone read failed" }; offset += n }
                 recorder.stop()
+                require(!captureCancelled) { "Capture cancelled." }
                 val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
                 val rms = sqrt(samples.map { it * it }.average()).toFloat()
                 val peak = samples.maxOf { kotlin.math.abs(it) }
@@ -397,20 +465,27 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
                 val id = extras.getStringExtra(EXTRA_PERSON_ID).orEmpty()
                 val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
-                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
-                else {
+                if (mode == "enroll") {
+                    vault.enroll(id, name, "speaker", embedding, true).getOrThrow()
+                    finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.", successful = true)
+                } else if (mode == "compare") {
+                    val score = vault.similarityForPerson("speaker", id, embedding)
+                    finishWith(score?.let { "Saved voice similarity for $name: %.3f. यह केवल model similarity है; calibrated same-speaker verdict नहीं।".format(it) }
+                        ?: "इस व्यक्ति का voice template नहीं मिला या model dimensions अलग हैं।", successful = true)
+                } else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
                     val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
-                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
+                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.", successful = true)
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
-            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() } }
+            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() }; if (activeRecorder === recorder) activeRecorder = null }
         }, "SpeakerCapture").start()
     }
 
-    private fun finishWith(text: String) {
+    private fun finishWith(text: String, successful: Boolean = false) {
         runOnUiThread {
-            setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_RESULT, text))
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            setResult(if (successful) Activity.RESULT_OK else Activity.RESULT_CANCELED, Intent().putExtra(EXTRA_RESULT, text))
             if (!::action.isInitialized) { finish(); return@runOnUiThread }
             messageOrStatus(text)
             action.text = "Close"
@@ -421,9 +496,14 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun messageOrStatus(text: String) { if (::message.isInitialized) message.text = text }
 
     override fun onDestroy() {
+        captureCancelled = true
+        runCatching { speechRecognizer?.cancel() }
         runCatching { speechRecognizer?.destroy() }
+        speechRecognizer = null
+        runCatching { activeRecorder?.stop() }
         runCatching { detector?.close() }
-        runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
+        runCatching { cameraProvider?.unbindAll() }
+        cameraProvider = null
         Thread { runCatching { engine.close() } }.start()
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
         super.onDestroy()
