@@ -1,6 +1,8 @@
 package com.Lia.assistant.action
 
 import android.content.Context
+import android.content.Intent
+import `in`.shraddha.ai.phone.PhoneAgentActivity
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
 import org.json.JSONArray
@@ -68,9 +70,20 @@ object ActionExecutor {
                         }
                     }
                     is ContactLookupResult.NoPermission -> {
-                        result.put("status", "error")
-                        result.put("action", "no_contacts_permission")
-                        result.put("message", "Please grant Contacts permission in Settings.")
+                        try {
+                            val permissionIntent = Intent(context, PhoneAgentActivity::class.java).apply {
+                                putExtra(PhoneAgentActivity.EXTRA_PENDING_CONTACT_QUERY, query)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(permissionIntent)
+                            result.put("status", "needs_user_action")
+                            result.put("action", "contacts_permission_requested")
+                            result.put("message", "The phone agent opened the Android Contacts permission prompt. Wait for the user to grant it, then retry the call.")
+                        } catch (error: Exception) {
+                            result.put("status", "error")
+                            result.put("action", "contacts_permission_unavailable")
+                            result.put("message", error.message ?: "Open Phone Agent and grant Contacts permission.")
+                        }
                     }
                     is ContactLookupResult.Ambiguous -> {
                         result.put("status", "needs_clarification")
