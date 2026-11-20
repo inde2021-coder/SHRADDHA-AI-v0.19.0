@@ -1728,7 +1728,7 @@ private class ShraddhaOrbView(context: android.content.Context) : View(context) 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         animator.start()
-        contentDescription = "$assistantDisplayName animated orb. Tap to start voice input."
+        contentDescription = "Animated assistant orb. Tap to start voice input."
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
