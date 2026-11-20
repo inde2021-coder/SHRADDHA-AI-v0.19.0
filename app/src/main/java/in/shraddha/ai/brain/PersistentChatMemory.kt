@@ -36,11 +36,14 @@ object PersistentChatMemory {
         synchronized(lock) {
             val vault = SecureMemoryVault(context.applicationContext)
             val existing = vault.load().getOrElse { "" }
-            val turns = existing.lineSequence().filter { it.isNotBlank() }.toMutableList()
-            turns.add("$role: $safeText")
-            val bounded = turns.takeLast(MAX_TURNS).joinToString("\n").takeLast(12_000)
-            vault.save(bounded).getOrThrow()
+            vault.save(mergeRecap(existing, role, safeText)).getOrThrow()
         }
+    }
+
+    internal fun mergeRecap(existing: String, role: String, text: String): String {
+        val turns = existing.lineSequence().filter { it.isNotBlank() }.toMutableList()
+        turns.add("$"+"role: $"+"{text.trim().take(MAX_TURN_CHARS)}")
+        return turns.takeLast(MAX_TURNS).joinToString("\n").takeLast(12_000)
     }
 
     fun clear(context: Context): Boolean =
