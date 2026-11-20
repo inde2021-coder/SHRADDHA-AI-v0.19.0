@@ -1161,7 +1161,7 @@ class MainActivity : AppCompatActivity() {
         }
         section(root, "SECURITY AUDIT TRAIL", "इस फोन पर सीमित metadata log; passwords, API keys, screen recordings या biometric data log नहीं होते") {
             val audit=`in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity)
-            addView(actionButton("View local audit log","Recent workflow events") { val log=audit.exportText(); android.app.AlertDialog.Builder(this@MainActivity).setTitle("Security Audit Trail").setMessage(log.ifBlank { "अभी कोई audit event नहीं है।" }).setPositiveButton("OK",null).setNeutralButton("Clear") { _,_ -> audit.clear(); status.text="Audit log cleared." }.show() })
+            addView(actionButton("View local audit log","Recent workflow events") { val log=audit.exportText().getOrElse { "Audit log unavailable: ${it.message}" }; android.app.AlertDialog.Builder(this@MainActivity).setTitle("Security Audit Trail").setMessage(log.ifBlank { "अभी कोई audit event नहीं है।" }).setPositiveButton("OK",null).setNeutralButton("Clear") { _,_ -> audit.clear(); status.text="Audit log cleared." }.show() })
         }
         section(root, "LOCAL COUNCIL PLAN TEMPLATE", "बिना इंटरनेट के पाँच भूमिकाओं वाला planning template तैयार करें। वास्तविक provider calls के लिए ऊपर LIVE MULTI-AI COUNCIL उपयोग करें।") {
             val goal=edit("Council goal","उदाहरण: मेरी दुकान के लिए inventory system बनाना")
