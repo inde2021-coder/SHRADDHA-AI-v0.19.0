@@ -82,6 +82,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private val randomPhrase get() = randomChallenge.first
     private val randomPhraseLocale get() = randomChallenge.second
     private var busy = false
+    @Volatile private var captureCancelled = false
+    @Volatile private var activeRecorder: AudioRecord? = null
+    @Volatile private var cameraProvider: ProcessCameraProvider? = null
     private var activeMode = "enroll"
     private var activePersonId = ""
     private var activePersonName = ""
@@ -162,6 +165,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         providerFuture.addListener({
             try {
                 val provider = providerFuture.get()
+                if (captureCancelled || isFinishing || isDestroyed) return@addListener
+                cameraProvider = provider
                 val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
                 val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
                 imageCapture = capture
@@ -219,6 +224,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 try {
                     val embedding = faceEmbeddingFromFile(file)
                     file.delete()
+                    check(!captureCancelled && !isFinishing && !isDestroyed) { "Capture cancelled; no biometric template was saved." }
                     if (mode == "enroll") {
                         vault.enroll(id, name, "face", embedding, true).getOrThrow()
                         finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.", successful = true)
@@ -382,12 +388,15 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(minBuffer > 0) { "Microphone unavailable" }
                 recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 16384))
+                activeRecorder = recorder
+                require(!captureCancelled) { "Capture cancelled." }
                 require(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone initialization failed" }
                 val pcm = ShortArray(rate * 5)
                 recorder.startRecording()
                 var offset = 0
-                while (offset < pcm.size) { val n = recorder.read(pcm, offset, pcm.size - offset); require(n > 0) { "Microphone read failed" }; offset += n }
+                while (offset < pcm.size) { require(!captureCancelled) { "Capture cancelled." }; val n = recorder.read(pcm, offset, pcm.size - offset); require(n > 0) { "Microphone read failed" }; offset += n }
                 recorder.stop()
+                require(!captureCancelled) { "Capture cancelled." }
                 val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
                 val rms = sqrt(samples.map { it * it }.average()).toFloat()
                 val peak = samples.maxOf { kotlin.math.abs(it) }
@@ -413,12 +422,13 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.", successful = true)
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
-            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() } }
+            finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() }; if (activeRecorder === recorder) activeRecorder = null }
         }, "SpeakerCapture").start()
     }
 
     private fun finishWith(text: String, successful: Boolean = false) {
         runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
             setResult(if (successful) Activity.RESULT_OK else Activity.RESULT_CANCELED, Intent().putExtra(EXTRA_RESULT, text))
             if (!::action.isInitialized) { finish(); return@runOnUiThread }
             messageOrStatus(text)
@@ -430,9 +440,14 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private fun messageOrStatus(text: String) { if (::message.isInitialized) message.text = text }
 
     override fun onDestroy() {
+        captureCancelled = true
+        runCatching { speechRecognizer?.cancel() }
         runCatching { speechRecognizer?.destroy() }
+        speechRecognizer = null
+        runCatching { activeRecorder?.stop() }
         runCatching { detector?.close() }
-        runCatching { ProcessCameraProvider.getInstance(this).get().unbindAll() }
+        runCatching { cameraProvider?.unbindAll() }
+        cameraProvider = null
         Thread { runCatching { engine.close() } }.start()
         if (::cameraExecutor.isInitialized) cameraExecutor.shutdown()
         super.onDestroy()
