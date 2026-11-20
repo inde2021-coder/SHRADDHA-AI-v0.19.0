@@ -61,3 +61,6 @@ jobs:
       - name: Check relay JavaScript syntax
         working-directory: backend
         run: npm run check
+      - name: Run relay security and API tests
+        working-directory: backend
+        run: npm test
