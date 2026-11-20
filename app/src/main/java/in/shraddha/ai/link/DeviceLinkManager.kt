@@ -58,7 +58,7 @@ object DeviceLinkManager {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
-                    if (msg.optString("type").startsWith("file_transfer_") || msg.optString("type") == "data_share_result") onFileTransferMessage?.invoke(msg)
+                    if (msg.optString("type").startsWith("file_transfer_") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
                     when (msg.optString("type")) {
                         "connected" -> { onStatus?.invoke("Connected • ${msg.optJSONArray("devices")?.length() ?: 0} paired device(s)"); onPeerMessage?.invoke(msg) }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
