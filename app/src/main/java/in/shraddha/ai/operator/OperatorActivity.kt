@@ -157,7 +157,7 @@ class OperatorActivity : Activity() {
                 log.text = "${event.state}: ${event.message}$detail\n\n" + log.text.take(5000)
             } },
                 audit = { event, outcome, detail ->
-                    in.shraddha.ai.future.LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail)
+                    `in`.shraddha.ai.future.LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail)
                 }
             )
             work(engine)
