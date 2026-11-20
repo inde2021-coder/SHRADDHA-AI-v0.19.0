@@ -138,7 +138,6 @@ fun ChatScreen(
         // Call Gemini
         isTyping = true
         scope.launch(Dispatchers.IO) {
-            val apiKey = ApiKeyStore.getKey(context)
             val systemInstruction = ChatPromptBuilder.build(
                 personality = appState.personality,
                 language = appState.language,
@@ -146,7 +145,11 @@ fun ChatScreen(
             )
 
             val history = messages.map { ChatTurn(isUser = it.isUser, text = it.text) }
-            val result = GeminiTextClient.reply(apiKey, systemInstruction, history)
+            val result = if (appState.aiProvider == "GEMINI") {
+                GeminiTextClient.reply(ApiKeyStore.getKey(context), systemInstruction, history)
+            } else {
+                MultiProviderChatClient.reply(context, appState.aiProvider, systemInstruction, history)
+            }
 
             withContext(Dispatchers.Main) {
                 isTyping = false
