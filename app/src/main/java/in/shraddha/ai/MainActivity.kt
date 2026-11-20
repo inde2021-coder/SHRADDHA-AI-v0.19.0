@@ -1297,9 +1297,218 @@ class MainActivity : AppCompatActivity() {
             })
         }
         addAdvancedFeatureStudios(root)
+        addAdvanced25FeatureWorkspace(root)
         section(root, "FUTURE EXPANSION PRIORITIES", "वे क्षमताएँ जिनके लिए external runtime, verified models या companion integration अभी बाकी है") {
             listOf("1. On-device face and speaker identity models with consent, anti-spoofing and accuracy validation", "2. Native offline LLM inference runtime and hardware-aware model manager", "3. Signed plugin packages with real sandbox isolation and revocation", "4. Durable project execution, resumable tasks and verified rollback", "5. Complete Shraddha AI and PC Companion integration", "6. Smart-home connectors with local-first allowlists and manual override", "7. Actual image, video, audio and CAD generation/export pipelines", "8. Full encrypted backup restore including supported encrypted vault data", "9. Research retrieval with live source citations and verification", "10. Automated device test runner and global emergency access revocation").forEach { item -> addView(TextView(this@MainActivity).apply { text=item; textSize=12f; setTextColor(0xFFDCE5F6.toInt()); setPadding(0,dp(5),0,dp(5)) }) }
         }
+    }
+
+
+    private fun addAdvanced25FeatureWorkspace(root: LinearLayout) {
+        val encryptedStore = EncryptedFeatureStore(this@MainActivity)
+
+        section(root, "25 ADVANCED SYSTEMS • LIVE WORKSPACE", "नए engines को सुरक्षित local storage और वास्तविक UI controls से जोड़ना। जिन systems को external model, sensor या companion चाहिए, उनकी सीमा साफ दिखाई जाएगी।") {
+            val meetingText = edit("Meeting transcript / notes", "DECISION: launch after QA\\nACTION: @team: test Android release\\nQUESTION: who owns deployment?").apply { isSingleLine = false; minLines = 4 }
+            val meetingOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
+            addView(TextView(this@MainActivity).apply { text = "09 • MEETING INTELLIGENCE"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f })
+            addView(meetingText); addView(meetingOutput)
+            addView(actionButton("EXTRACT DECISIONS & ACTION ITEMS", "Only explicit DECISION:, ACTION: and QUESTION: transcript markers are extracted") {
+                runCatching { `in`.shraddha.ai.future.MeetingIntelligence.parse(meetingText.text.toString()) }
+                    .onSuccess { notes ->
+                        val display = buildString {
+                            append("SUMMARY\\n").append(notes.summary.ifBlank { "No unmarked summary text." })
+                            append("\\n\\nDECISIONS\\n").append(notes.decisions.joinToString("\\n") { "• $it" }.ifBlank { "None" })
+                            append("\\n\\nACTION ITEMS\\n").append(notes.actions.joinToString("\\n") { "• ${it.owner?.let { owner -> "@$owner: " }.orEmpty()}${it.task}" }.ifBlank { "None" })
+                            append("\\n\\nOPEN QUESTIONS\\n").append(notes.openQuestions.joinToString("\\n") { "• $it" }.ifBlank { "None" })
+                        }
+                        meetingOutput.text = display
+                        val saved = encryptedStore.put("advanced25_meeting_latest", display)
+                        status.text = if (saved.isSuccess) "Meeting notes encrypted and saved on this device." else "Meeting extraction ready, but encrypted save failed: ${saved.exceptionOrNull()?.message}"
+                    }.onFailure { meetingOutput.text = it.message ?: "Transcript could not be parsed." }
+            })
+
+            val taskLines = edit("Task plan • one per line: id|title|dependency IDs|priority 1-5|minutes", "research|Research requirements||2|30\\nbuild|Build feature|research|1|90\\ntest|Test feature|build|1|45").apply { isSingleLine = false; minLines = 4 }
+            val taskOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
+            addView(TextView(this@MainActivity).apply { text = "02 • AUTONOMOUS TASK PLANNER + SELF-REVIEW"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(taskLines); addView(taskOutput)
+            addView(actionButton("BUILD DEPENDENCY-AWARE TASK PLAN", "DAG ordering, cycle detection and estimated duration • planning only, no automatic actions") {
+                runCatching {
+                    val tasks = taskLines.text.toString().lineSequence().map { it.trim() }.filter { it.isNotBlank() }.map { line ->
+                        val parts = line.split('|')
+                        require(parts.size == 5) { "हर task में 5 fields दें: id|title|dependencies|priority|minutes" }
+                        `in`.shraddha.ai.future.AutonomousTaskPlanner.Task(
+                            parts[0].trim(), parts[1].trim(),
+                            parts[2].split(',').map { it.trim() }.filter { it.isNotBlank() }.toSet(),
+                            parts[3].trim().toInt(), parts[4].trim().toInt()
+                        )
+                    }.toList()
+                    `in`.shraddha.ai.future.AutonomousTaskPlanner.plan(tasks)
+                }.onSuccess { plan ->
+                    val display = "EXECUTION ORDER (PROPOSAL)\\n" + plan.ordered.mapIndexed { index, task -> "${index + 1}. ${task.title} [${task.id}] • ${task.estimatedMinutes} min" }.joinToString("\\n") + "\\n\\nTotal estimate: ${plan.totalEstimatedMinutes} minutes\\nNo task has been executed."
+                    taskOutput.text = display
+                    val saved = encryptedStore.put("advanced25_task_plan", display)
+                    status.text = if (saved.isSuccess) "Task plan encrypted and saved." else "Plan ready, but encrypted save failed."
+                }.onFailure { taskOutput.text = "Plan rejected: ${it.message}" }
+            })
+            addView(actionButton("RUN SELF-REVIEW CHECKLIST", "Checks explicit acceptance criteria; it does not pretend to test external systems") {
+                val checks = planReviewChecks(taskOutput.text.toString())
+                if (checks.isEmpty()) { taskOutput.text = "पहले task plan बनाएं।"; return@actionButton }
+                val review = `in`.shraddha.ai.future.SelfReviewEngine.review(checks)
+                taskOutput.text = taskOutput.text.toString() + "\\n\\nSELF REVIEW: ${review.scorePercent}%\\n${review.summary}\\n" + review.failedChecks.joinToString("\\n") { "• ${it.description}" }
+            })
+
+            val briefingLines = edit("Daily briefing items • priority|kind|time|title", "1|task|09:00|Review release build\\n2|event|11:30|Project meeting\\n3|reminder|17:00|Call supplier").apply { isSingleLine = false; minLines = 3 }
+            val briefingOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
+            addView(TextView(this@MainActivity).apply { text = "10 • SMART DAILY BRIEFING"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(briefingLines); addView(briefingOutput)
+            addView(actionButton("GENERATE DAILY BRIEFING", "Uses only the tasks/events you enter; no calendar is read without a connector") {
+                runCatching {
+                    val items = briefingLines.text.toString().lineSequence().filter { it.isNotBlank() }.map { line ->
+                        val p = line.split('|', limit = 4); require(p.size == 4)
+                        `in`.shraddha.ai.future.DailyBriefingEngine.Item(p[3].trim(), p[2].trim(), p[0].trim().toInt(), p[1].trim())
+                    }.toList()
+                    `in`.shraddha.ai.future.DailyBriefingEngine.compose(items)
+                }.onSuccess { b ->
+                    val display = "${b.headline}\\n\\nURGENT\\n" + b.urgent.joinToString("\\n") { "• ${it.title}" }.ifBlank { "None" } + "\\n\\nSCHEDULE\\n" + b.schedule.joinToString("\\n") { "• ${it.timeLabel} — ${it.title}" }.ifBlank { "None" } + "\\n\\nREMINDERS\\n" + b.reminders.joinToString("\\n") { "• ${it.timeLabel} — ${it.title}" }.ifBlank { "None" }
+                    briefingOutput.text = display
+                    encryptedStore.put("advanced25_briefing_latest", display)
+                }.onFailure { briefingOutput.text = "Briefing input invalid: ${it.message}" }
+            })
+
+            val timelineTitle = edit("Life Timeline • event title", "उदाहरण: Shraddha AI milestone")
+            val timelineCategory = edit("Event category", "work / personal / project")
+            val timelineNote = edit("Event note", "केवल वही जानकारी जो आप खुद सेव करना चाहते हैं")
+            val timelineQuery = edit("Search timeline", "keyword")
+            val timelineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
+            addView(TextView(this@MainActivity).apply { text = "21 • LIFE TIMELINE + 22 • CONTEXT RECALL"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(timelineTitle); addView(timelineCategory); addView(timelineNote); addView(timelineQuery); addView(timelineOutput)
+            fun loadTimeline(): org.json.JSONArray = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_timeline").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
+            addView(actionButton("SAVE TIMELINE EVENT", "Explicit user-entered event • encrypted with Android Keystore") {
+                runCatching {
+                    require(timelineTitle.text.isNotBlank() && timelineCategory.text.isNotBlank())
+                    val array = loadTimeline()
+                    array.put(JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("title", timelineTitle.text.toString().take(120)).put("category", timelineCategory.text.toString().take(40)).put("note", timelineNote.text.toString().take(1000)).put("time", System.currentTimeMillis()))
+                    require(array.length() <= 500)
+                    encryptedStore.put("advanced25_timeline", array.toString()).getOrThrow()
+                    timelineOutput.text = "Encrypted timeline event saved. Total: ${array.length()}"
+                }.onFailure { timelineOutput.text = "Save failed: ${it.message}" }
+            })
+            addView(actionButton("SEARCH CONTEXT TIMELINE", "Search only your saved timeline events") {
+                val query = timelineQuery.text.toString().trim()
+                val array = loadTimeline()
+                val hits = (0 until array.length()).mapNotNull { array.optJSONObject(it) }.filter { it.optString("title").contains(query, true) || it.optString("note").contains(query, true) || it.optString("category").contains(query, true) }.sortedByDescending { it.optLong("time") }
+                timelineOutput.text = if (hits.isEmpty()) "No matching saved events." else hits.joinToString("\\n\\n") { "${it.optString("title")} • ${it.optString("category")}\\n${it.optString("note")}" }
+            })
+            addView(actionButton("DELETE ALL TIMELINE EVENTS", "Permanent local deletion • requires confirmation") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete timeline?").setMessage("सभी locally saved timeline events हटेंगे। यह undo नहीं होगा।").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                    val removed = encryptedStore.remove("advanced25_timeline")
+                    timelineOutput.text = if (removed) "Timeline events deleted." else "Could not delete timeline."
+                }.show()
+            })
+
+            val skillName = edit("Personal skill name", "उदाहरण: My Hindi writing style")
+            val skillInput = edit("Example input", "Example request")
+            val skillOutputText = edit("Your approved output", "वह उत्तर जो आपने सही माना").apply { isSingleLine = false; minLines = 2 }
+            val skillConsent = CheckBox(this@MainActivity).apply { text = "मैं इस example को future personalization के लिए save करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
+            val skillStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
+            addView(TextView(this@MainActivity).apply { text = "23 • PERSONAL SKILL LEARNING"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(skillName); addView(skillInput); addView(skillOutputText); addView(skillConsent); addView(skillStatus)
+            addView(actionButton("SAVE APPROVED SKILL EXAMPLE", "Explicit consent • encrypted local storage • user can delete") {
+                runCatching {
+                    require(skillConsent.isChecked) { "पहले learning consent checkbox चुनें।" }
+                    val learning = `in`.shraddha.ai.future.PersonalSkillLearning()
+                    learning.add(true, skillName.text.toString(), skillInput.text.toString(), skillOutputText.text.toString())
+                    val array = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_skills").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
+                    array.put(JSONObject().put("skill", skillName.text.toString().take(60)).put("input", skillInput.text.toString().take(2000)).put("approvedOutput", skillOutputText.text.toString().take(4000)).put("approvedAt", System.currentTimeMillis()))
+                    require(array.length() <= 200)
+                    encryptedStore.put("advanced25_skills", array.toString()).getOrThrow()
+                    skillStatus.text = "Approved example encrypted and saved. Examples: ${array.length()}"
+                }.onFailure { skillStatus.text = "Not saved: ${it.message}" }
+            })
+            addView(actionButton("FORGET ALL LEARNED SKILL EXAMPLES", "Permanent deletion of this feature's encrypted examples") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Forget learned examples?").setMessage("All saved personal skill examples will be deleted.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                    skillStatus.text = if (encryptedStore.remove("advanced25_skills")) "All saved skill examples deleted." else "Could not delete examples."
+                }.show()
+            })
+
+            val routineTrigger = edit("Routine trigger phrase", "When I say: prepare morning briefing")
+            val routineAction = edit("Proposed routine action", "Prepare briefing draft and show it for review")
+            val routineConsent = CheckBox(this@MainActivity).apply { text = "इस routine को enabled proposal के रूप में save करें; actions फिर भी approval माँगेंगे।"; setTextColor(0xFFE4E9F5.toInt()) }
+            val routineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
+            addView(TextView(this@MainActivity).apply { text = "24 • SMART ROUTINE AUTOMATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(routineTrigger); addView(routineAction); addView(routineConsent); addView(routineOutput)
+            addView(actionButton("SAVE APPROVAL-GATED ROUTINE", "Routine proposal only; no background action is executed") {
+                runCatching {
+                    require(routineConsent.isChecked && routineTrigger.text.isNotBlank() && routineAction.text.isNotBlank())
+                    val routine = `in`.shraddha.ai.future.SmartRoutineEngine.Routine("routine-${System.currentTimeMillis()}", routineTrigger.text.toString(), routineTrigger.text.toString(), routineAction.text.toString(), true, true)
+                    val proposal = `in`.shraddha.ai.future.SmartRoutineEngine.propose(routine, routineTrigger.text.toString()) ?: error("Routine did not match its trigger")
+                    encryptedStore.put("advanced25_routine_latest", JSONObject().put("id", proposal.routineId).put("summary", proposal.summary).put("requiresApproval", proposal.requiresApproval).toString()).getOrThrow()
+                    routineOutput.text = "Routine saved. Trigger: ${routine.trigger}\\nAction proposal: ${proposal.summary}\\nFresh user approval required: YES"
+                }.onFailure { routineOutput.text = "Routine not saved: ${it.message}" }
+            })
+
+            val wakePhrase = edit("Wake phrase", "Hey Shraddha")
+            val wakeConsent = CheckBox(this@MainActivity).apply { text = "मैं microphone wake phrase detection के लिए स्पष्ट अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
+            val wakeStatus = TextView(this@MainActivity).apply { setTextColor(0xFFFFC98A.toInt()); textSize = 12f }
+            val wakeGate = runCatching { `in`.shraddha.ai.future.WakePhraseGate("Hey Shraddha") }.getOrNull()
+            addView(TextView(this@MainActivity).apply { text = "07 • WAKE PHRASE FOUNDATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(wakePhrase); addView(wakeConsent); addView(wakeStatus)
+            addView(actionButton("ARM WAKE PHRASE STATE", "This validates consent/state only. Acoustic wake-word model is not bundled or running.") {
+                runCatching {
+                    require(wakeConsent.isChecked) { "Microphone consent is required." }
+                    val gate = `in`.shraddha.ai.future.WakePhraseGate(wakePhrase.text.toString())
+                    gate.arm(true)
+                    wakeStatus.text = "Consent recorded for this session. State: ${gate.state}. Acoustic model integration is still required; no background wake detection is running."
+                }.onFailure { wakeStatus.text = it.message ?: "Could not arm wake phrase." }
+            })
+            addView(actionButton("DEACTIVATE WAKE PHRASE", "Stop this local wake phrase state") {
+                wakeGate?.deactivate()
+                wakeConsent.isChecked = false
+                wakeStatus.text = "Wake phrase state deactivated. Microphone is not started by this control."
+            })
+
+            val translationSource = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("hi", "en", "mr", "es", "fr", "de")) }
+            val translationTarget = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("en", "hi", "mr", "es", "fr", "de")) }
+            val translationText = edit("Text to translate", "यहाँ text लिखें").apply { isSingleLine = false; minLines = 2 }
+            val translationOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
+            addView(TextView(this@MainActivity).apply { text = "12 • AI TRANSLATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(translationSource); addView(translationTarget); addView(translationText); addView(translationOutput)
+            addView(actionButton("TRANSLATE USING CONFIGURED AI", "Provider-based text translation • live camera overlay is not yet connected") {
+                runCatching { `in`.shraddha.ai.future.LiveTranslationEngine.prepare(translationText.text.toString(), translationSource.selectedItem.toString(), translationTarget.selectedItem.toString()) }
+                    .onSuccess { request ->
+                        val url = VoiceGatewaySettings.get(this@MainActivity).baseUrl
+                        val token = VoiceGatewaySettings.get(this@MainActivity).gatewayToken
+                        if (!validRelay(url)) { translationOutput.text = "पहले Settings में secure AI backend configure करें।"; return@onSuccess }
+                        translationOutput.text = "Translating…"
+                        DeviceLinkManager.askChat(url, token, "auto", "Translate the following text from ${request.sourceLanguage} to ${request.targetLanguage}. Preserve meaning and formatting. Return only the translation:\\n\\n${request.text}") { result ->
+                            runOnUiThread { translationOutput.text = result.getOrElse { "Translation failed: ${it.message}" } }
+                        }
+                    }.onFailure { translationOutput.text = "Translation request invalid: ${it.message}" }
+            })
+
+            val troubleCategory = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("network", "battery", "electrical", "general")) }
+            val troubleOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
+            addView(TextView(this@MainActivity).apply { text = "13 • VISUAL TROUBLESHOOTING PLAYBOOKS"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(troubleCategory); addView(troubleOutput)
+            addView(actionButton("SHOW SAFE TROUBLESHOOTING STEPS", "Safety-first guide; not a diagnosis or automatic device repair") {
+                val steps = `in`.shraddha.ai.future.VisualTroubleshootingEngine.playbook(troubleCategory.selectedItem.toString())
+                troubleOutput.text = steps.mapIndexed { index, step -> "${index + 1}. ${step.instruction}\\n   Expected: ${step.expectedObservation}" }.joinToString("\\n\\n")
+            })
+
+            addView(TextView(this@MainActivity).apply {
+                text = "COVERAGE NOTE: Meeting extraction, task DAG, self-review, daily briefing, encrypted timeline, approved skill examples, routine proposals, provider text translation and troubleshooting playbooks now have working controls. Wake-word acoustic detection, live camera translation, sensor-based 3D mapping, cross-device clipboard transport, full file transfer and notification-listener automation still require their respective model/OS/companion integrations."
+                textSize = 11f; setTextColor(0xFFFFC98A.toInt()); setPadding(0, dp(12), 0, 0)
+            })
+        }
+    }
+
+    private fun planReviewChecks(planText: String): List<`in`.shraddha.ai.future.SelfReviewEngine.Check> {
+        if (planText.isBlank() || planText.startsWith("पहले")) return emptyList()
+        return listOf(
+            `in`.shraddha.ai.future.SelfReviewEngine.Check("has_order", "Dependency-aware task order was generated", planText.contains("EXECUTION ORDER")),
+            `in`.shraddha.ai.future.SelfReviewEngine.Check("has_estimate", "Estimated total duration is present", planText.contains("Total estimate:")),
+            `in`.shraddha.ai.future.SelfReviewEngine.Check("no_execution", "Planner did not execute external actions", planText.contains("No task has been executed."))
+        )
     }
 
     private fun addAdvancedFeatureStudios(root: LinearLayout) {
