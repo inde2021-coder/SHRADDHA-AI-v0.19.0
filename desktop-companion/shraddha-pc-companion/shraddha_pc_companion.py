@@ -96,8 +96,10 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
     index = int(message.get("index", -1))
     correlation = f"{transfer_id}:{index}" if kind == "file_transfer_chunk" else action_id
     aad = e2e_associated_data(session_id, peer_id, local_id, kind, correlation)
-    nonce = base64.b64decode(str(message.get("nonce", "")), validate=True)
-    ciphertext = base64.b64decode(str(message.get("ciphertext", "")), validate=True)
+    nonce_text = str(message.get("nonce", ""))
+    ciphertext_text = str(message.get("ciphertext", ""))
+    nonce = base64.b64decode(nonce_text + ("=" * (-len(nonce_text) % 4)), validate=True)
+    ciphertext = base64.b64decode(ciphertext_text + ("=" * (-len(ciphertext_text) % 4)), validate=True)
     plain = AESGCM(state["key"]).decrypt(nonce, ciphertext, aad)
     payload = json.loads(plain.decode("utf-8"))
     if not isinstance(payload, dict):
