@@ -16,6 +16,22 @@ const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
+function validRemoteAction(action) {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) return false;
+  const finiteCoordinate = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10000;
+  switch (action.kind) {
+    case 'tap': return finiteCoordinate(action.x) && finiteCoordinate(action.y);
+    case 'swipe': return ['x1','y1','x2','y2'].every(key => finiteCoordinate(action[key]));
+    case 'type': return typeof action.text === 'string' && action.text.length > 0 && action.text.length <= 2000;
+    case 'click_text': return typeof action.text === 'string' && action.text.trim().length > 0 && action.text.length <= 120;
+    case 'open_app': return typeof action.appName === 'string' && action.appName.trim().length > 0 && action.appName.length <= 80;
+    case 'home':
+    case 'back':
+    case 'scroll': return true;
+    default: return false;
+  }
+}
+
 const clientIp = req => {
   // Trust forwarded IPs only when the deployment's reverse proxy overwrites them.
   if (process.env.TRUST_PROXY === 'true') {
@@ -119,7 +135,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0 }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -166,7 +182,7 @@ const server = http.createServer(async (req, res) => {
       const session = sessions.get(pair.sessionId);
       if (!session || session.devices.size >= 8) return json(res, 409, { error: 'Session unavailable or device limit reached' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0 });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
@@ -417,7 +433,20 @@ wss.on('connection', (ws, ctx) => {
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
       if (!target || targetIdIsSelf(targetId, deviceId) || expiresAt < Date.now()) return;
       if (session.controlMode === 'master' && device.role !== 'owner') return;
-      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll'].includes(msg.action.kind)) return;
+      if (!validRemoteAction(msg.action)) {
+        send(deviceId, JSON.stringify({ type: 'remote_action_result', targetDeviceId: targetId, ok: false, reason: 'Remote action payload is invalid.' }));
+        return;
+      }
+      const now = Date.now();
+      if (now - device.remoteActionWindowStart >= 10_000) {
+        device.remoteActionWindowStart = now;
+        device.remoteActionCount = 0;
+      }
+      device.remoteActionCount += 1;
+      if (device.remoteActionCount > 20) {
+        send(deviceId, JSON.stringify({ type: 'remote_action_result', targetDeviceId: targetId, ok: false, reason: 'Remote action rate limit reached.' }));
+        return;
+      }
       send(targetId, JSON.stringify({ type: 'remote_action', fromDeviceId: deviceId, action: msg.action }));
     } else if (msg.type === 'set_control_mode') {
       if (device.role !== 'owner' || !['master', 'mutual'].includes(msg.mode)) return;
