@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validateTransferChunk } from './relay-file-validation.js';
 
 test('accepts a bounded base64 file with the correct SHA-256', () => {
   const bytes = Buffer.from('Shraddha secure file transfer');
@@ -46,4 +46,15 @@ test('clipboard is an explicitly supported one-time share category', () => {
   assert.equal(isAllowedShareCategory('documents'), true);
   assert.equal(isAllowedShareCategory('remote_control'), false);
   assert.equal(isAllowedShareCategory('unknown'), false);
+});
+
+test('transfer chunk envelope verifies index, bounds, canonical base64 and SHA-256', () => {
+  const bytes = Buffer.from('bounded chunk payload');
+  const payload = bytes.toString('base64');
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(validateTransferChunk(payload, 'transfer_123456', 0, 1, bytes.length, digest), true);
+  assert.equal(validateTransferChunk(payload, 'transfer_123456', 1, 1, bytes.length, digest), false);
+  assert.equal(validateTransferChunk(payload, 'bad', 0, 1, bytes.length, digest), false);
+  assert.equal(validateTransferChunk(payload, 'transfer_123456', 0, 1, bytes.length, '0'.repeat(64)), false);
+  assert.equal(validateTransferChunk(payload, 'transfer_123456', 0, 0, bytes.length, digest), false);
 });
