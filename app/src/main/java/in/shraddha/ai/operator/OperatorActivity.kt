@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.graphics.Color
 import android.view.Gravity
 import android.widget.*
+import org.json.JSONObject
+import org.json.JSONArray
 import `in`.shraddha.ai.operator.learning.AppProfileStore
 import `in`.shraddha.ai.operator.learning.AppTrainingActivity
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
@@ -55,10 +57,78 @@ class OperatorActivity : Activity() {
         val scroll = ScrollView(this); scroll.addView(log); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(action("← वापस") { finish() })
         setContentView(root)
+        handleCouncilOperatorPlan(intent)
     }
 
 
 
+
+
+    /** Accepts a validated Council proposal only after a human reviews the complete action list. */
+    private fun handleCouncilOperatorPlan(source: android.content.Intent?) {
+        val raw = source?.getStringExtra("council_operator_plan") ?: return
+        val plan = runCatching { JSONObject(raw) }.getOrNull() ?: run {
+            log.text = "Council plan JSON अमान्य है। कोई action नहीं चलाया गया।"; return
+        }
+        val array = plan.optJSONArray("steps") ?: JSONArray()
+        if (array.length() !in 1..12 || plan.optString("mode") != "council_operator_plan_proposal") {
+            log.text = "Council plan में सुरक्षित, supported steps नहीं हैं।"; return
+        }
+        val planned = mutableListOf<PlannedOperatorAction>()
+        var previous: String? = null
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val id = item.optString("id")
+            val title = item.optString("title")
+            val action = runCatching { OperatorActionType.valueOf(item.optString("action")) }.getOrNull() ?: continue
+            val target = item.optString("target")
+            val value = item.optString("value")
+            val expected = item.optString("expectedVisibleText")
+            if (!id.matches(Regex("[A-Za-z0-9_-]{1,48}")) || title.isBlank() || title.length > 100) continue
+            if (target.length > 120 || value.length > 500 || expected.length > 120) continue
+            if (action == OperatorActionType.OPEN_APP && target.isBlank()) continue
+            if (action == OperatorActionType.CLICK_TEXT && target.isBlank()) continue
+            if (action == OperatorActionType.TYPE_TEXT && (value.isBlank() || target.isNotBlank())) continue
+            if (action !in setOf(OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT) && (target.isNotBlank() || value.isNotBlank())) continue
+            val risk = if (action in setOf(OperatorActionType.OPEN_APP, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD)) Risk.READ_ONLY else Risk.SENSITIVE
+            planned += PlannedOperatorAction(
+                id, title, OperatorStep(action, target, value, expected, requiresConfirmation = true),
+                dependsOn = previous?.let { setOf(it) } ?: emptySet(),
+                risk = risk, requiresApproval = true
+            )
+            previous = id
+        }
+        if (planned.size != array.length()) {
+            log.text = "Council plan में unsupported या invalid step मिला। सुरक्षा के लिए पूरा plan reject किया गया।"; return
+        }
+        val summary = planned.mapIndexed { i, action -> "${i + 1}. ${action.title} [${action.step.action}]" }.joinToString("\n")
+        android.app.AlertDialog.Builder(this)
+            .setTitle("AI Council का प्रस्तावित Operator plan")
+            .setMessage("Goal: ${plan.optString("goal")}\n\n$summary\n\nयह AI का प्रस्ताव है, verified instruction नहीं। हर step चलाने से पहले अलग अनुमति माँगी जाएगी। किसी step को अस्वीकार करने पर workflow रुक जाएगा।")
+            .setNegativeButton("रद्द करें") { _, _ -> log.text = "Council plan रद्द। कोई action execute नहीं हुआ।" }
+            .setPositiveButton("Plan स्वीकार करें") { _, _ -> runCouncilPlan(planned, plan.optString("goal")) }
+            .show()
+    }
+
+    private fun runCouncilPlan(planned: List<PlannedOperatorAction>, goal: String) {
+        Thread {
+            val engine = OperatorEngine(
+                emit = { event -> runOnUiThread {
+                    val detail = event.snapshot?.let { "\\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
+                    log.text = "${event.state}: ${event.message}$detail\\n\\n" + log.text.take(5000)
+                } },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+            )
+            val bridge = TaskPlannerOperatorBridge(
+                executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("council_${event}", outcome, detail) }
+            )
+            val workflowId = "council-" + java.util.UUID.randomUUID().toString().take(8)
+            bridge.createPlan(workflowId, goal.take(120).ifBlank { "AI Council Operator plan" }, planned)
+            val session = bridge.start()
+            runOnUiThread { showPlannedSession(bridge, session) }
+        }.start()
+    }
 
     /** Builds an explicit plan from the operator fields; every mutating step is approved separately. */
     private fun runPlannedOperator() {
