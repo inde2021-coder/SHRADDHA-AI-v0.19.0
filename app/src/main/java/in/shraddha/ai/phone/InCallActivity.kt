@@ -72,8 +72,11 @@ class InCallActivity : AppCompatActivity() {
         })
         setContentView(root)
         val filter = IntentFilter(ShraddhaInCallService.ACTION_CALL_STATE)
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(stateReceiver, filter, RECEIVER_NOT_EXPORTED)
-        else @Suppress("DEPRECATION") registerReceiver(stateReceiver, filter)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(stateReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(stateReceiver, filter)
+        }
         renderState()
     }
 
