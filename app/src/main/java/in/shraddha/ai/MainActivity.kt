@@ -88,6 +88,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingShareTarget: String? = null
     private var refreshBiometricStatus: (() -> Unit)? = null
     private var pendingShareCategory: String? = null
+    private var approvedShareRequestId: String? = null
+    private var approvedShareTarget: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -723,7 +725,9 @@ class MainActivity : AppCompatActivity() {
                 val target = targetDevice.text.toString().trim()
                 val category = categoryPicker.selectedItem?.toString().orEmpty()
                 if (target.isBlank()) { status.text = "पहले paired target device चुनें।"; return@actionButton }
-                val sent = DeviceLinkManager.requestDataShare(target, category, "User requested $category")
+                val requestId = java.util.UUID.randomUUID().toString().replace("-", "")
+                approvedShareRequestId = null; approvedShareTarget = null
+                val sent = DeviceLinkManager.requestDataShare(target, category, requestId, "User requested $category")
                 status.text = if (sent) "$category sharing request भेजी गई। Target की अनुमति जरूरी है।" else "Relay connected नहीं है।"
             })
             addView(actionButton("Send a Selected Document / Photo", "पहले target से category permission approve करवाएँ") {
@@ -772,7 +776,7 @@ class MainActivity : AppCompatActivity() {
         val allowed = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean(category, false)
         runOnUiThread {
             if (!allowed) {
-                DeviceLinkManager.respondDataShare(from, category, false)
+                DeviceLinkManager.respondDataShare(from, category, msg.optString("requestId"), false)
                 Toast.makeText(this, "$category sharing इस फोन पर बंद है।", Toast.LENGTH_LONG).show()
                 return@runOnUiThread
             }
@@ -2615,7 +2619,7 @@ class MainActivity : AppCompatActivity() {
                 val mime = contentResolver.getType(uri) ?: "application/octet-stream"
                 val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
                 val payload = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                val sent = DeviceLinkManager.sendSharedPayload(target, category, name, mime, payload, bytes.size.toLong(), digest)
+                val requestId = approvedShareRequestId\n                if (requestId.isNullOrBlank() || approvedShareTarget != target) { status.text = "पहले इसी target के लिए नया one-time sharing approval लें।"; return }\n                val sent = DeviceLinkManager.sendSharedPayload(target, category, requestId, name, mime, payload, bytes.size.toLong(), digest)\n                if (sent) { approvedShareRequestId = null; approvedShareTarget = null }
                 status.text = if (sent) "File integrity digest सहित $target को भेजी गई। Receiver पर SHA-256 verify होगा।" else "File भेजने के लिए relay disconnected है या permission grant expire हो गया।"
             } catch (e: Exception) { status.text = "File share error: ${e.message}" }
             return
