@@ -82,7 +82,10 @@ class VoiceForegroundService : Service() {
         OverlayEdgeGlowController.start(this)
         VoiceSessionManager.start(this)
 
-        return START_STICKY
+        // Android may kill a microphone FGS while the app is backgrounded. Do not
+        // resurrect a user-visible microphone session silently after process death;
+        // the user must explicitly activate it again from the app.
+        return START_NOT_STICKY
     }
 
     private fun acquireVoiceWakeLock() {
