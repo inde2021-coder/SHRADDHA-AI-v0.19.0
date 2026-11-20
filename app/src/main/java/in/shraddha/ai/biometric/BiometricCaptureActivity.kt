@@ -157,7 +157,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun challengeText(): String = livenessGate.prompt()
 
-    @OptIn(androidx.camera.core.ExperimentalGetImage::class)
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     private fun startCamera() {
         val view = previewView ?: return
         val options = FaceDetectorOptions.Builder().setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
