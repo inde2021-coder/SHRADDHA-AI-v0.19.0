@@ -42,12 +42,15 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.LocalNovaReducedMotion
 import com.Lia.assistant.ui.theme.depthSurface
@@ -100,7 +103,7 @@ fun NovaButton(
     val reducedMotion = LocalNovaReducedMotion.current
     val scale = remember { Animatable(1f) }
 
-    val buttonShape = RoundedCornerShape(50)
+    val buttonShape = RoundedCornerShape(18.dp)
     val bgModifier = when (type) {
         NovaButtonType.PRIMARY -> Modifier
             .depthSurface(shape = buttonShape, elevation = if (enabled) 4.dp else 0.dp, rimColor = colors.rimLight)
@@ -126,7 +129,7 @@ fun NovaButton(
     Box(
         modifier = modifier
             .scale(scale.value)
-            .defaultMinSize(minWidth = 84.dp, minHeight = 48.dp)
+            .defaultMinSize(minWidth = 96.dp, minHeight = 50.dp)
             .clip(buttonShape)
             .then(bgModifier)
             .pointerInput(enabled) {
@@ -135,15 +138,17 @@ fun NovaButton(
                     onPress = {
                         if (!reducedMotion) {
                             scale.animateTo(0.96f, tween(80))
-                            tryAwaitRelease()
+                            val released = tryAwaitRelease()
                             scale.animateTo(1f, tween(100))
+                            if (released) onClick()
+                        } else {
+                            onClick()
                         }
-                        onClick()
                     }
                 )
             }
             .padding(horizontal = 20.dp, vertical = 12.dp)
-            .semantics { contentDescription = text },
+            .semantics { contentDescription = text; role = Role.Button; if (!enabled) disabled() },
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -163,7 +168,10 @@ fun NovaButton(
                 text = text,
                 color = contentColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp
+                fontSize = 13.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
