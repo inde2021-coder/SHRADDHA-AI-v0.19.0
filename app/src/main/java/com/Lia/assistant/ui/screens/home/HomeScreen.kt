@@ -82,13 +82,13 @@ fun HomeScreen(
             .fillMaxSize()
             .nightSky()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 112.dp),
+            .padding(bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -211,14 +211,8 @@ fun HomeScreen(
                     )
                 }
                 Text(
-                    text = "Your intelligent companion",
-                    fontFamily = SerifFontFamily,
-                    fontSize = 17.sp,
-                    color = colors.textPrimary
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
                     text = voiceStatus.takeIf { it.isNotBlank() } ?: "Tap the orb to start a voice session",
+                    maxLines = 2,
                     fontSize = 11.sp,
                     color = colors.textSecondary
                 )
@@ -268,12 +262,6 @@ fun HomeScreen(
                     color = colors.textPrimary
                 )
             }
-            Text(
-                text = "06 SYSTEMS",
-                fontSize = 9.sp,
-                letterSpacing = 0.8.sp,
-                color = colors.textTertiary
-            )
         }
 
         Spacer(Modifier.height(12.dp))
@@ -319,12 +307,5 @@ fun HomeScreen(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
-        Text(
-            text = "Private by design  •  You stay in control",
-            fontSize = 10.sp,
-            color = colors.textTertiary,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-        )
     }
 }
