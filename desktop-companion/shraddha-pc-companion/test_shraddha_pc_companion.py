@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
@@ -124,6 +124,14 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "file_search", "query": "x" * 121}, file_root="C:/Approved"))
         self.assertFalse(validate_action({"kind": "file_search", "query": "x", "limit": 51}, file_root="C:/Approved"))
         self.assertFalse(validate_action({"kind": "file_search", "path": "x" * 501, "query": "x"}, file_root="C:/Approved"))
+
+    def test_pc_control_grant_is_bound_to_one_approved_device_and_expiry(self):
+        self.assertTrue(control_grant_allows(True, 200.0, 100.0, "device_A", "device_A"))
+        self.assertFalse(control_grant_allows(True, 200.0, 100.0, "device_A", "device_B"))
+        self.assertFalse(control_grant_allows(True, 100.0, 100.0, "device_A", "device_A"))
+        self.assertFalse(control_grant_allows(False, 200.0, 100.0, "device_A", "device_A"))
+        self.assertFalse(control_grant_allows(True, 200.0, 100.0, "", "device_A"))
+        self.assertFalse(control_grant_allows(True, 200.0, 100.0, "device_A", ""))
 
 
 if __name__ == "__main__":
