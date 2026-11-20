@@ -669,7 +669,6 @@ wss.on('connection', (ws, ctx) => {
       if (!raw.length || raw.length > 48 * 1024 || raw.toString('base64') !== encoded) return;
       const expected = index === transfer.chunkCount - 1 ? transfer.sizeBytes - index * 48 * 1024 : 48 * 1024;
       if (raw.length !== expected) return;
-      transfer.chunks.set(index, true);
       send(targetId, JSON.stringify({ type: 'file_transfer_chunk', fromDeviceId: deviceId, transferId, index, payload: encoded }));
     } else if (msg.type === 'file_transfer_resume') {
       const sourceId = String(msg.targetDeviceId || '');
