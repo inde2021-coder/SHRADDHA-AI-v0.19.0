@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -256,7 +257,7 @@ fun ChatScreen(
                 Text(
                     text = if (isTyping) "Typing..." else "Here to help",
                     fontSize = 12.sp,
-                    color = colors.textSecondary
+                    color = colors.textTertiary
                 )
             }
         }
@@ -267,7 +268,8 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(messages, key = { it.id }) { msg ->
                 NovaMessageBubble(
@@ -317,8 +319,8 @@ fun ChatScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(colors.accent)
-                    .clickable { sendMessage(inputText) },
+                    .background(Brush.linearGradient(listOf(colors.accent, colors.accentSecondary)))
+                    .clickable(enabled = inputText.isNotBlank() && !isTyping) { sendMessage(inputText) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
