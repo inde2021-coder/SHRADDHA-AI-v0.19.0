@@ -166,6 +166,15 @@ object MultiProviderChatClient {
                                 answer.append(text)
                             }
                         }
+                        val annotations = part.optJSONArray("annotations") ?: JSONArray()
+                        for (k in 0 until annotations.length()) {
+                            val annotation = annotations.optJSONObject(k) ?: continue
+                            val url = annotation.optString("url").trim()
+                            val title = annotation.optString("title").trim().ifBlank { url }
+                            if (url.startsWith("https://") || url.startsWith("http://")) {
+                                if (!sources.containsKey(url)) sources[url] = title
+                            }
+                        }
                     }
                 }
                 "search_results" -> {
@@ -176,21 +185,6 @@ object MultiProviderChatClient {
                         val title = result.optString("title").trim().ifBlank { url }
                         if (url.startsWith("https://") || url.startsWith("http://")) {
                             if (!sources.containsKey(url)) sources[url] = title
-                        }
-                    }
-                }
-                "message" -> {
-                    val content = item.optJSONArray("content") ?: JSONArray()
-                    for (j in 0 until content.length()) {
-                        val part = content.optJSONObject(j) ?: continue
-                        val annotations = part.optJSONArray("annotations") ?: JSONArray()
-                        for (k in 0 until annotations.length()) {
-                            val annotation = annotations.optJSONObject(k) ?: continue
-                            val url = annotation.optString("url").trim()
-                            val title = annotation.optString("title").trim().ifBlank { url }
-                            if (url.startsWith("https://") || url.startsWith("http://")) {
-                                if (!sources.containsKey(url)) sources[url] = title
-                            }
                         }
                     }
                 }
