@@ -117,3 +117,33 @@ This is a real voice-to-local-planner integration. It deliberately does not
 claim to contact five independent remote AI agents or execute phone actions;
 those require separately configured model workers and permission-aware
 platform executors.
+
+
+### Shared Security / Permission / Audit integration update (2026-11-20)
+
+- `LocalAuditTrail` now stores bounded metadata in the Android Keystore-backed
+  AES-GCM feature store. It purges the previous plaintext audit preference
+  before writing and has no plaintext fallback. Export decrypts on-device;
+  clear removes the encrypted record and legacy key.
+- The live OperatorActivity wires OperatorEngine outcomes to this encrypted
+  audit trail. The adaptive learned-workflow runner already uses the same
+  LocalAuditTrail class, so both operator paths now share the same storage.
+- MainActivity records biometric capture start/end, remote camera share
+  lifecycle, Visual Lens request/result, and translation request/result.
+  Content, prompts, raw frames, typed text and biometric samples are not logged.
+- Remote camera service startup and every frame dispatch now re-check Android
+  CAMERA permission, explicit camera-sharing consent, target-device ID shape,
+  and front/back facing. Relay send failures are audited without including
+  frame content. A policy unit test covers consent, permission and invalid targets.
+- Instrumentation tests verify audit data is encrypted at rest, legacy plaintext
+  is purged, export works, and clear removes the encrypted record.
+
+Remaining integration work: durable workflow-hub state across process death;
+full task planner dispatch through OperatorEngine and learned workflows;
+end-to-end encrypted phone/Windows command channel and device test matrix;
+live streaming translation with timestamped partial segments; and Android/Firebase/
+backend/Windows integration tests on real devices and a Windows host. Face and
+speaker capture already have user-started on-device sample capture, model
+inference, consent-gated encrypted templates and match/identify flows, but
+threshold calibration and anti-spoof certification/device accuracy testing
+remain release blockers.
