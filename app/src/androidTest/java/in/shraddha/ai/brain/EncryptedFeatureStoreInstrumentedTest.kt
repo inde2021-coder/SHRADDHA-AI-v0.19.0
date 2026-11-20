@@ -37,4 +37,21 @@ class EncryptedFeatureStoreInstrumentedTest {
             store.remove(third)
         }
     }
+    @Test fun notificationHistoryIsEncryptedAndCanBeDeleted() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = EncryptedFeatureStore(context)
+        val key = "notification_history_instrumented_test"
+        val sample = "[{\"package\":\"example.app\",\"postedAt\":123}]"
+        try {
+            assertTrue(store.put(key, sample).isSuccess)
+            assertEquals(sample, store.get(key).getOrThrow())
+            val raw = context.getSharedPreferences("shraddha_feature_store", Context.MODE_PRIVATE).getString(key, null)
+            assertTrue(raw != null)
+            assertFalse(raw!!.contains("example.app"))
+            assertTrue(store.remove(key))
+            assertEquals("", store.get(key).getOrThrow())
+        } finally {
+            store.remove(key)
+        }
+    }
 }
