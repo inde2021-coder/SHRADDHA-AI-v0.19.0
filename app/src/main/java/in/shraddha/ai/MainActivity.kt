@@ -36,6 +36,7 @@ import `in`.shraddha.ai.screen.ScreenShareService
 import `in`.shraddha.ai.vision.RemoteCameraService
 import org.json.JSONObject
 import org.json.JSONArray
+import `in`.shraddha.ai.future.UserBackupManager
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.PersistentChatMemory
 
@@ -78,6 +79,7 @@ class MainActivity : AppCompatActivity() {
     private val screenShareRequest = 42
     private val dataFileRequest = 43
     private val backupFileRequest = 45
+    private val backupImportRequest = 49
     private val faceModelRequest = 46
     private val speakerModelRequest = 47
     private val localVisionRequest = 48
@@ -1348,16 +1350,48 @@ class MainActivity : AppCompatActivity() {
                 val info="Battery: ${if(battery>=0) "$battery%" else "Unavailable"}\nApp storage volume: $free MB free / $total MB total\nAndroid: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\nDevice: ${Build.MANUFACTURER} ${Build.MODEL}\nNetwork status and thermal sensors are not sampled in background."
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Device Health Snapshot").setMessage(info).setPositiveButton("OK",null).show()
             })
-            addView(actionButton("EXPORT USER DATA BACKUP","JSON export of selected app-managed notes and settings") {
-                val backup=JSONObject().put("schema","shraddha-backup-v1").put("createdAt",System.currentTimeMillis())
-                    .put("knowledgeGraph",getSharedPreferences("shraddha_knowledge_graph",MODE_PRIVATE).getString("nodes","[]"))
-                    .put("activeProject",getSharedPreferences("shraddha_projects",MODE_PRIVATE).getString("active_project",""))
-                    .put("digitalTwin",JSONObject().put("name",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("name","")).put("language",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("language","Hindi")).put("style",getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE).getString("style","step-by-step")))
-                    .put("auditTrail",`in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).exportText())
-                val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json"; putExtra(Intent.EXTRA_TITLE,"shraddha-ai-backup-${System.currentTimeMillis()}.json") }
-                getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().putString("payload",backup.toString(2)).apply()
+            addView(actionButton("EXPORT PASSWORD-PROTECTED BACKUP", "AES-256-GCM + PBKDF2 • selected memory, tasks, project and preferences") {
+                val password = EditText(this@MainActivity).apply {
+                    hint = "Backup passphrase (12+ characters)"
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
+                val confirm = EditText(this@MainActivity).apply {
+                    hint = "Confirm passphrase"
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
+                val panel = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0)
+                    addView(password); addView(confirm)
+                    addView(TextView(this@MainActivity).apply {
+                        text = "API keys, Firebase passwords, biometrics and device-pairing secrets are excluded. Keep the passphrase safe; it cannot be recovered."
+                        textSize = 12f; setTextColor(0xFFB8C5DA.toInt())
+                    })
+                }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Create encrypted backup").setView(panel)
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Encrypt & choose file") { _, _ ->
+                        val pass = password.text.toString()
+                        if (pass.length < 12 || pass != confirm.text.toString()) {
+                            status.text = "Passphrase कम-से-कम 12 अक्षर का हो और दोनों fields समान हों।"; return@setPositiveButton
+                        }
+                        runCatching { UserBackupManager(this@MainActivity).export(pass.toCharArray()) }
+                            .onSuccess { envelope ->
+                                getSharedPreferences("shraddha_backup_pending", MODE_PRIVATE).edit().putString("payload", envelope).apply()
+                                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+                                    putExtra(Intent.EXTRA_TITLE, "shraddha-ai-encrypted-backup-" + System.currentTimeMillis() + ".json")
+                                }
+                                @Suppress("DEPRECATION")
+                                startActivityForResult(intent, backupFileRequest)
+                            }.onFailure { status.text = "Backup encryption failed: " + it.message }
+                    }.show()
+            })
+            addView(actionButton("IMPORT ENCRYPTED BACKUP", "Decrypt locally; selected app data will be replaced only after your confirmation") {
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+                }
                 @Suppress("DEPRECATION")
-                startActivityForResult(intent,backupFileRequest)
+                startActivityForResult(intent, backupImportRequest)
             })
         }
         section(root, "OFFLINE MODEL VAULT STATUS", "Model integrity verifier तैयार है; model execution के लिए native inference runtime, supported model format और device-memory benchmark अभी आवश्यक हैं।") {
@@ -1870,6 +1904,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Compatibility with starter project")
+    private fun importEncryptedBackup(uri: Uri) {
+        val envelope = runCatching {
+            val stream = contentResolver.openInputStream(uri) ?: error("Backup file could not be opened")
+            stream.use {
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                var total = 0
+                while (true) {
+                    val count = it.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    require(total <= 2_100_000) { "Encrypted backup exceeds the 2.1 MB import limit" }
+                    output.write(buffer, 0, count)
+                }
+                String(output.toByteArray(), Charsets.UTF_8)
+            }
+        }.getOrElse { status.text = "Backup read failed: " + it.message; return }
+        val password = EditText(this).apply {
+            hint = "Backup passphrase"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val panel = LinearLayout(this).apply { setPadding(dp(20), dp(8), dp(20), 0); addView(password) }
+        android.app.AlertDialog.Builder(this).setTitle("Restore encrypted backup")
+            .setMessage("यह Knowledge Graph, Tasks, Project, Digital Twin, Assistant Name और opt-in Conversation Memory को backup वाली स्थिति से replace करेगा। API keys, Firebase login, biometrics और device pairing secrets शामिल नहीं हैं।")
+            .setView(panel).setNegativeButton("Keep current data", null)
+            .setPositiveButton("Decrypt & restore") { _, _ ->
+                val result = UserBackupManager(this@MainActivity).restore(envelope, password.text.toString().toCharArray())
+                result.fold(
+                    { status.text = "Encrypted backup restored. Pending task reminders पुनः schedule किए गए। सभी screens refresh करने के लिए app restart करें।" },
+                    { status.text = "Backup restore failed: " + it.message }
+                )
+                password.setText("")
+            }.show()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == localVisionRequest) {
@@ -1948,6 +2017,10 @@ class MainActivity : AppCompatActivity() {
                 if (Build.VERSION.SDK_INT >= 26) ContextCompat.startForegroundService(this, service) else startService(service)
                 status.text = "Screen sharing started. Android will show its active-sharing notification."
             } else status.text = "Screen sharing cancelled or its permission was revoked."
+            return
+        }
+        if (requestCode == backupImportRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
+            importEncryptedBackup(data.data!!)
             return
         }
         if (requestCode == backupFileRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
