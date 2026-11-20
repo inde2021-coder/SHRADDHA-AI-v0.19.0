@@ -1,9 +1,36 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
+    def test_file_transfer_manifest_and_chunk_bounds(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'sample.bin'
+            path.write_bytes(b'x' * 50000)
+            manifest = file_transfer_manifest(str(path))
+            self.assertEqual(manifest['size'], 50000)
+            self.assertEqual(manifest['chunks'], 2)
+            self.assertEqual(len(read_file_chunk(str(path), 0)), 48 * 1024)
+            with self.assertRaises(ValueError): read_file_chunk(str(path), 2)
+
+    def test_clipboard_sensitive_text_is_blocked(self):
+        self.assertEqual(sanitize_clipboard_text('hello'), 'hello')
+        with self.assertRaises(ValueError): sanitize_clipboard_text('OTP: 123456')
+
+    def test_voice_command_parser_is_allowlisted(self):
+        self.assertEqual(parse_voice_device_command('go back'), {'kind': 'back'})
+        self.assertEqual(parse_voice_device_command('ऐप खोलो settings'), {'kind': 'open_app', 'appName': 'settings'})
+        with self.assertRaises(ValueError): parse_voice_device_command('send all passwords')
+
+    def test_reconnect_backoff_is_bounded(self):
+        self.assertEqual(reconnect_delay(0), 1.0)
+        self.assertEqual(reconnect_delay(6), 60.0)
+        self.assertEqual(reconnect_delay(99), 60.0)
+
+
     def test_android_screen_frame_protocol_is_decoded_and_validated(self):
         packet = bytes([6]) + b"phone1" + bytes([1]) + b"\xff\xd8jpeg"
         self.assertEqual(decode_screen_frame(packet), ("phone1", 1, b"\xff\xd8jpeg"))
