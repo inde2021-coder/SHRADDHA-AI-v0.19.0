@@ -31,6 +31,7 @@ object DeviceLinkManager {
     @Volatile var onScreenFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onCameraFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onPeerMessage: ((JSONObject) -> Unit)? = null
+    @Volatile var onFileTransferMessage: ((JSONObject) -> Unit)? = null
     @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
@@ -57,6 +58,7 @@ object DeviceLinkManager {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
+                    if (msg.optString("type").startsWith("file_transfer_")) onFileTransferMessage?.invoke(msg)
                     when (msg.optString("type")) {
                         "connected" -> { onStatus?.invoke("Connected • ${msg.optJSONArray("devices")?.length() ?: 0} paired device(s)"); onPeerMessage?.invoke(msg) }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
