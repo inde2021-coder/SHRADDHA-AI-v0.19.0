@@ -36,6 +36,9 @@ import org.json.JSONArray
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 
 class MainActivity : AppCompatActivity() {
+    private val assistantDisplayName: String
+        get() = getSharedPreferences("nova_prefs", MODE_PRIVATE)
+            .getString("assistant_name", "Shraddha AI")?.trim()?.takeIf { it.isNotEmpty() } ?: "Shraddha AI"
     private lateinit var status: TextView
     private lateinit var pageRoot: LinearLayout
     private lateinit var shell: LinearLayout
@@ -100,7 +103,7 @@ class MainActivity : AppCompatActivity() {
         shell.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(shell)
         status = TextView(this).apply {
-            text = "Ready • Shraddha AI तैयार है। अपनी जरूरत का एक workspace खोलें।"
+            text = "Ready • $assistantDisplayName तैयार है। अपनी जरूरत का एक workspace खोलें।"
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
             background = rounded(0xFF111B2D.toInt(), 16)
         }
@@ -253,11 +256,11 @@ class MainActivity : AppCompatActivity() {
             }
             assistantHero.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(188), dp(188)))
             assistantHero.addView(TextView(this).apply {
-                text = "SHRADDHA  /  PERSONAL AI"
+                text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
                 setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
             })
-            assistantHero.addView(actionButton("🎙  Speak to Shraddha", "Hindi / English • आपके बोलने पर ही voice recognition शुरू होगा") { startVoiceInput() })
+            assistantHero.addView(actionButton("🎙  Speak to $assistantDisplayName", "Hindi / English • आपके बोलने पर ही voice recognition शुरू होगा") { startVoiceInput() })
             pageRoot.addView(assistantHero)
         }
         pageRoot.addView(status, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
@@ -564,7 +567,7 @@ class MainActivity : AppCompatActivity() {
             val output = TextView(this@MainActivity).apply { text = "Generated work यहाँ दिखाई देगा। इसे local project library में save या Android share sheet से export कर सकते हैं।"; setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(14), dp(14), dp(14), dp(14)); background = rounded(0xFF111B2D.toInt(), 16); minHeight = dp(110) }
             addView(output)
             val library = getSharedPreferences("shraddha_expert_library", MODE_PRIVATE)
-            var lastTitle = "Shraddha AI Project"
+            var lastTitle = "$assistantDisplayName Project"
             var lastOutput = ""
             addView(actionButton("✦ Generate with Expert Hub", "Real server-side AI request • selected provider key required") {
                 val base = relayUrl.text.toString().trim(); val text = request.text.toString().trim()
@@ -596,7 +599,7 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Share Current Work", "Android share sheet • text/document compatible apps") {
                 if (lastOutput.isBlank()) { status.text = "पहले output generate या saved project open करें।"; return@actionButton }
                 val share = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, lastTitle); putExtra(Intent.EXTRA_TEXT, "$lastTitle\n\n$lastOutput") }
-                startActivity(Intent.createChooser(share, "Export Shraddha AI work"))
+                startActivity(Intent.createChooser(share, "Export $assistantDisplayName work"))
             })
             addView(TextView(this@MainActivity).apply {
                 text = "यह workspace वास्तविक AI backend से काम करता है। Saved Projects अभी इसी फोन पर local हैं। CAD/PCB/building outputs conceptual या text-based हैं; automatic professional CAD rendering, PCB fabrication approval, medical diagnosis, legal representation और structural certification शामिल नहीं हैं। Live research citations के लिए अलग verified browsing integration चाहिए।"
@@ -740,7 +743,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addDeviceLinkSection(root: LinearLayout) {
-        section(root, "01  •  WORLDWIDE DEVICE LINK", "दुनिया में कहीं से भी इंटरनेट के जरिए pair करें — दोनों phones पर Shraddha AI और आपका HTTPS relay जरूरी है") {
+        section(root, "01  •  WORLDWIDE DEVICE LINK", "दुनिया में कहीं से भी इंटरनेट के जरिए pair करें — दोनों phones पर $assistantDisplayName और आपका HTTPS relay जरूरी है") {
             relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
             deviceName = edit("This phone name", "e.g. Main Phone")
             addView(relayUrl); addView(deviceName)
@@ -1148,7 +1151,7 @@ class MainActivity : AppCompatActivity() {
                         if(whenAt<=System.currentTimeMillis()) { Toast.makeText(this@MainActivity,"Future date/time चुनें।",Toast.LENGTH_LONG).show(); return@TimePickerDialog }
                         val id=(whenAt % Int.MAX_VALUE).toInt()
                         val alarm=getSystemService(ALARM_SERVICE) as android.app.AlarmManager
-                        val pi=android.app.PendingIntent.getBroadcast(this@MainActivity,id,Intent(this@MainActivity,`in`.shraddha.ai.future.ReminderReceiver::class.java).putExtra("title",reminderTitle.text.toString().ifBlank { "Shraddha AI reminder" }).putExtra("note",reminderNote.text.toString()),android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+                        val pi=android.app.PendingIntent.getBroadcast(this@MainActivity,id,Intent(this@MainActivity,`in`.shraddha.ai.future.ReminderReceiver::class.java).putExtra("title",reminderTitle.text.toString().ifBlank { "$assistantDisplayName reminder" }).putExtra("note",reminderNote.text.toString()),android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
                         alarm.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP,whenAt,pi)
                         `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("reminder","scheduled",reminderTitle.text.toString().take(80))
                         Toast.makeText(this@MainActivity,"Reminder scheduled. Android battery policy may delay delivery.",Toast.LENGTH_LONG).show()
@@ -1699,7 +1702,7 @@ class MainActivity : AppCompatActivity() {
     private fun requestAudioPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 10) }
     private fun startVoiceInput() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { requestAudioPermission(); return }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha AI को अपना आदेश बोलें"); putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3) }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_PROMPT, "$assistantDisplayName को अपना आदेश बोलें"); putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3) }
         try { startActivityForResult(intent, speechRequest) } catch (_: Exception) { Toast.makeText(this, "इस डिवाइस पर Speech Recognition उपलब्ध नहीं है।", Toast.LENGTH_LONG).show() }
     }
 }
@@ -1725,7 +1728,7 @@ private class ShraddhaOrbView(context: android.content.Context) : View(context) 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         animator.start()
-        contentDescription = "Shraddha AI animated orb. Tap to start voice input."
+        contentDescription = "$assistantDisplayName animated orb. Tap to start voice input."
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
