@@ -57,9 +57,10 @@ class InCallActivity : AppCompatActivity() {
         root.addView(action("Answer call") { ShraddhaInCallService.activeCall?.answer(VideoProfile.STATE_AUDIO_ONLY) })
         root.addView(action("Decline / End call") { ShraddhaInCallService.activeCall?.disconnect(); finish() })
         root.addView(action("Mute / Unmute") {
-            val call = ShraddhaInCallService.activeCall ?: return@action
-            ShraddhaInCallService.toggleMute()
-            stateLabel.text = if (ShraddhaInCallService.isMuted) "Microphone muted" else "Microphone on"
+            if (ShraddhaInCallService.activeCall != null) {
+                ShraddhaInCallService.toggleMute()
+                stateLabel.text = if (ShraddhaInCallService.isMuted) "Microphone muted" else "Microphone on"
+            }
         })
         root.addView(action("Speaker on / off") { ShraddhaInCallService.toggleSpeaker() })
         root.addView(TextView(this).apply {
