@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { canShareVisualFrame, consumeVisualFrameBudget } from './relay-policy.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -318,6 +319,9 @@ wss.on('connection', (ws, ctx) => {
       const clientFrame = Buffer.from(data);
       if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
       const frameType = clientFrame[0];
+      // Screen and camera streams are opt-in per device; a valid paired socket is not consent.
+      if (!canShareVisualFrame(device.sharePermissions, frameType)) return;
+      if (!consumeVisualFrameBudget(device, Date.now(), 10)) return;
       const targetLength = clientFrame[1];
       if (clientFrame.length < 2 + targetLength + 1) return;
       const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
@@ -368,8 +372,8 @@ wss.on('connection', (ws, ctx) => {
       for (const [grantKey] of device.grants) {
         const category = grantKey.split(':').slice(1).join(':');
         if (next[category] !== true) device.grants.delete(grantKey);
-      if (next.remote_control !== true) device.controlGrants.clear();
       }
+      if (next.remote_control !== true) device.controlGrants.clear();
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
       const targetId = String(msg.targetDeviceId || '');
@@ -400,7 +404,20 @@ wss.on('connection', (ws, ctx) => {
       else for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ ...msg, fromDeviceId: deviceId }));
     }
   });
-  ws.on('close', () => { if (device.socket === ws) device.socket = null; for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false })); });
+  ws.on('close', () => {
+    if (device.socket !== ws) return;
+    device.socket = null;
+    // Disconnect is a privacy boundary: require fresh opt-in after reconnect.
+    device.sharePermissions = {};
+    device.grants.clear();
+    device.controlGrants.clear();
+    for (const [id, peer] of session.devices) {
+      if (id === deviceId) continue;
+      peer.controlGrants?.delete(deviceId);
+      peer.grants?.forEach((_expiry, key) => { if (key.startsWith(deviceId + ':')) peer.grants.delete(key); });
+      if (peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false }));
+    }
+  });
 });
 function targetIdIsSelf(target, self) { return target === self; }
 
