@@ -1398,19 +1398,20 @@ class MainActivity : AppCompatActivity() {
             val wakePhrase = edit("Wake phrase", "Hey Shraddha")
             val wakeConsent = CheckBox(this@MainActivity).apply { text = "मैं microphone wake phrase detection के लिए स्पष्ट अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val wakeStatus = TextView(this@MainActivity).apply { setTextColor(0xFFFFC98A.toInt()); textSize = 12f }
-            val wakeGate = runCatching { `in`.shraddha.ai.future.WakePhraseGate("Hey Shraddha") }.getOrNull()
+            var wakeGate = `in`.shraddha.ai.future.WakePhraseGate("Hey Shraddha")
             addView(TextView(this@MainActivity).apply { text = "07 • WAKE PHRASE FOUNDATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(wakePhrase); addView(wakeConsent); addView(wakeStatus)
             addView(actionButton("ARM WAKE PHRASE STATE", "This validates consent/state only. Acoustic wake-word model is not bundled or running.") {
                 runCatching {
                     require(wakeConsent.isChecked) { "Microphone consent is required." }
-                    val gate = `in`.shraddha.ai.future.WakePhraseGate(wakePhrase.text.toString())
-                    gate.arm(true)
-                    wakeStatus.text = "Consent recorded for this session. State: ${gate.state}. Acoustic model integration is still required; no background wake detection is running."
+                    wakeGate.deactivate()
+                    wakeGate = `in`.shraddha.ai.future.WakePhraseGate(wakePhrase.text.toString())
+                    wakeGate.arm(true)
+                    wakeStatus.text = "Consent recorded for this session. State: ${wakeGate.state}. Acoustic model integration is still required; no background wake detection is running."
                 }.onFailure { wakeStatus.text = it.message ?: "Could not arm wake phrase." }
             })
             addView(actionButton("DEACTIVATE WAKE PHRASE", "Stop this local wake phrase state") {
-                wakeGate?.deactivate()
+                wakeGate.deactivate()
                 wakeConsent.isChecked = false
                 wakeStatus.text = "Wake phrase state deactivated. Microphone is not started by this control."
             })
