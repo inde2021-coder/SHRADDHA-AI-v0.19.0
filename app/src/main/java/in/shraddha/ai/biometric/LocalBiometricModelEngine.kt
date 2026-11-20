@@ -12,6 +12,22 @@ import java.nio.FloatBuffer
  * contract is documented and tested against the supplied licensed model.
  */
 class LocalBiometricModelEngine : AutoCloseable {
+    companion object {
+        /** OpenCV FaceRecognizerSF feature() preprocessing for an already aligned RGB crop. */
+        internal fun preprocessSFaceRgb(rgb112: ByteArray): FloatArray {
+            require(rgb112.size == 112 * 112 * 3) { "Expected aligned 112x112 RGB image." }
+            val data = FloatArray(3 * 112 * 112)
+            var p = 0
+            for (channel in 0..2) for (y in 0 until 112) for (x in 0 until 112) {
+                val index = (y * 112 + x) * 3 + channel
+                // OpenCV blobFromImage(scale=1, mean=0, swapRB=true). The caller
+                // already supplies RGB, so preserve 0..255 values without normalization.
+                data[p++] = (rgb112[index].toInt() and 0xff).toFloat()
+            }
+            return data
+        }
+    }
+
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private var faceSession: OrtSession? = null
     private var speakerSession: OrtSession? = null
@@ -40,15 +56,7 @@ class LocalBiometricModelEngine : AutoCloseable {
         require(rgb112.size == 112 * 112 * 3) { "Expected aligned 112x112 RGB image." }
         val session = faceSession ?: error("SFace model is not loaded.")
         val inputName = session.inputNames.first()
-        val data = FloatArray(3 * 112 * 112)
-        var p = 0
-        for (channel in 0..2) for (y in 0 until 112) for (x in 0 until 112) {
-            val index = (y * 112 + x) * 3 + channel
-            // OpenCV FaceRecognizerSF::feature uses blobFromImage(scale=1, mean=0,
-            // swapRB=true). The caller already supplies RGB bytes, so preserve 0..255
-            // values and do not apply ArcFace-style [-1, 1] normalization here.
-            data[p++] = (rgb112[index].toInt() and 0xff).toFloat()
-        }
+        val data = preprocessSFaceRgb(rgb112)
         return runModel(session, inputName, data, longArrayOf(1, 3, 112, 112))
     }
 
