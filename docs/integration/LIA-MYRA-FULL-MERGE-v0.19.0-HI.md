@@ -38,5 +38,6 @@
 ## Verification status
 - Source merge: done for LIA Android main + direct source sets.
 - Single launcher/app ID: checked in manifest/source.
-- Kotlin/Gradle build: must be run in Android Studio with network/dependencies available; not represented as passed here.
-- Device-level voice, accessibility, call/SMS, Gemini Live and PC pairing: not yet end-to-end tested.
+- Kotlin/Gradle build and Android unit tests: GitHub Actions CI पर PASS; ARM-specific debug APKs प्रकाशित।
+- Device-level voice, accessibility, call/SMS, Gemini Live और PC pairing: अभी physical-device end-to-end testing बाकी है।
+- Production signing और Play Store release: अभी नहीं किया गया।
