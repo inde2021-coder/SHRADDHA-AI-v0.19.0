@@ -265,32 +265,45 @@ object VoiceSessionManager {
     }
 
     private fun scheduleReconnect() {
-        if (!_isActive.value) return
-        if (reconnectJob?.isActive == true) return
+        if (!_isActive.value || reconnectJob?.isActive == true) return
 
         val count = VoiceLatencyTracker.reconnectCount.value
-        if (count >= 5) {
-            // Fail closed: after exhausting reconnect attempts, stop microphone capture
-            // rather than silently recording audio that cannot be delivered to the AI.
-            audioIO?.stopRecording()
-            _amplitude.value = 0f
-            _vadActive.value = false
-            _state.value = NovaOrbState.ERROR
-            _statusText.value = "Connection lost — microphone paused. Tap Stop, then restart Voice Mode."
-            _lastError.value = "Connection lost after 5 attempts; microphone capture paused."
-            return
-        }
-
         VoiceLatencyTracker.incrementReconnect()
+        // Never collect microphone audio while disconnected. Keep the user-started
+        // session alive and reconnect automatically with bounded exponential backoff.
+        audioIO?.stopRecording()
+        _amplitude.value = 0f
+        _vadActive.value = false
         _state.value = NovaOrbState.CONNECTING
-        _statusText.value = "Reconnecting (attempt ${count + 1}/5)..."
+        _statusText.value = "Connection lost • microphone paused • reconnecting (attempt ${count + 1})…"
 
         reconnectJob = scope.launch {
-            delay(1200)
+            delay(VoiceLatencyTracker.reconnectDelayMs(count))
             sessionMutex.withLock {
-                if (_isActive.value) {
-                    connectSession(isResuming = true)
-                }
+                if (_isActive.value) connectSession(isResuming = true)
+            }
+        }
+    }
+
+    /** Manual recovery for missing credentials or a fatal local microphone error. */
+    fun retry(context: Context) {
+        appContext = context.applicationContext
+        if (!_isActive.value) {
+            start(context)
+            return
+        }
+        reconnectJob?.cancel()
+        reconnectJob = null
+        audioIO?.stopRecording()
+        VoiceLatencyTracker.resetReconnect()
+        _lastError.value = null
+        _amplitude.value = 0f
+        _vadActive.value = false
+        _state.value = NovaOrbState.CONNECTING
+        _statusText.value = "Retrying voice connection…"
+        scope.launch {
+            sessionMutex.withLock {
+                if (_isActive.value) connectSession(isResuming = true)
             }
         }
     }
@@ -318,6 +331,7 @@ object VoiceSessionManager {
         sessionEpoch.incrementAndGet()
         reconnectJob?.cancel()
         reconnectJob = null
+        VoiceLatencyTracker.resetReconnect()
         silenceWatchdogJob?.cancel()
         silenceWatchdogJob = null
 
@@ -336,5 +350,6 @@ object VoiceSessionManager {
         _amplitude.value = 0f
         _vadActive.value = false
         _muted.value = false
+        _lastError.value = null
     }
 }

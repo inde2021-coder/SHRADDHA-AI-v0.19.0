@@ -1375,7 +1375,7 @@ class MainActivity : AppCompatActivity() {
             })
         }
         section(root, "ON-DEVICE FACE & VOICE ENROLLMENT", "सहमति-आधारित local capture • मूल फोटो/ऑडियो discard • encrypted template vault") {
-            addView(TextView(this@MainActivity).apply { text = "पहले वैध लाइसेंस वाले SFace और ECAPA ONNX model अलग-अलग import करें। ऐप मॉडल weights उपलब्ध कराए बिना पहचान का दावा नहीं करेगा। Blink/head-turn challenge केवल basic interaction check है, certified anti-spoofing नहीं।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
+            addView(TextView(this@MainActivity).apply { text = "Face enrollment से पहले verified SFace और MiniFASNet model डाउनलोड करें; voice comparison के लिए ECAPA model भी चाहिए। Model files फोन में encrypted template store से अलग local रहती हैं। Blink/head-turn challenge केवल basic interaction check है, certified anti-spoofing नहीं।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
             addView(actionButton("Import SFace ONNX Model", "अपना SFace-compatible model चुनें") { pickBiometricModel(faceModelRequest) })
             addView(actionButton("Download verified SFace model • 38.7 MB", "Pinned OpenCV Zoo ONNX • SHA-256 verification • local-only storage") {
                 android.app.AlertDialog.Builder(this@MainActivity)

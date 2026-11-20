@@ -72,6 +72,7 @@ fun VoiceScreen(
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val muted by VoiceSessionManager.muted.collectAsState()
     val statusText by VoiceSessionManager.statusText.collectAsState()
+    val lastError by VoiceSessionManager.lastError.collectAsState()
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val orbSize = (screenWidth * 0.62f).coerceIn(160.dp, 260.dp)
@@ -213,6 +214,21 @@ fun VoiceScreen(
                         fontSize = 19.sp,
                         color = colors.textPrimary
                     )
+
+                    if (state == NovaOrbState.ERROR) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = lastError.orEmpty(),
+                            fontSize = 12.sp,
+                            color = colors.error
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        NovaButton(
+                            text = "Retry connection",
+                            onClick = { VoiceSessionManager.retry(context) },
+                            type = NovaButtonType.PRIMARY
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
