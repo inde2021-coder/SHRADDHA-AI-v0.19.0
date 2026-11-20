@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
@@ -563,7 +563,7 @@ wss.on('connection', (ws, ctx) => {
       const requester = session.devices.get(requesterId);
       const category = String(msg.category || '');
       const requestId = String(msg.requestId || '').slice(0, 64);
-      if (!requester || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory','clipboard'].includes(category) || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
+      if (!requester || !isAllowedShareCategory(category) || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
       const approved = msg.approved === true && device.sharePermissions?.[category] === true;
       const minutes = Math.min(15, Math.max(1, Number(msg.minutes) || 5));
       if (approved) device.grants.set(`${requesterId}:${category}`, { requestId, expiresAt: Date.now() + minutes * 60_000 });
