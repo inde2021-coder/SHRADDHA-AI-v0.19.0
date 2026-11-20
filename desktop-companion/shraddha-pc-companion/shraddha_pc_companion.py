@@ -871,8 +871,7 @@ async def run_once(args) -> None:
                     if message.get("approved") is True and message.get("category") == "documents":
                         manifest = file_send["manifest"]
                         await ws.send(json.dumps({"type": "file_transfer_start", "targetDeviceId": file_send["target"], "requestId": file_send["requestId"], "transferId": file_send["transferId"], "fileName": manifest["name"], "sizeBytes": manifest["size"], "chunkCount": manifest["chunks"], "sha256": manifest["sha256"]}))
-                        print("Receiver approved. Sending file manifest and chunks…")
-                        await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], list(range(manifest["chunks"])))
+                        print("Receiver approved. Manifest sent; waiting for the receiver to choose a save destination…")
                     else: print("File transfer permission denied.")
                 elif kind == "file_transfer_start":
                     source_id = str(message.get("fromDeviceId", ""))
@@ -890,6 +889,7 @@ async def run_once(args) -> None:
                     temporary = destination + ".shraddha-part"
                     stream = open(temporary, "w+b"); stream.truncate(size)
                     incoming_transfer = {"id": transfer_id, "source": source_id, "name": name, "size": size, "chunks": chunks, "sha256": digest, "path": destination, "temp": temporary, "stream": stream, "received": set()}
+                    await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": source_id, "transferId": transfer_id, "index": -1, "complete": False, "ok": True}))
                     print(f"Receiving {name}: 0/{chunks} chunks (0%).")
                 elif kind == "file_transfer_chunk" and incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
                     try:
@@ -922,6 +922,10 @@ async def run_once(args) -> None:
                     await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], safe_missing)
                 elif kind == "file_transfer_ack" and file_send and message.get("transferId") == file_send["transferId"]:
                     if message.get("complete"): print("Receiver confirmed file save and SHA-256 verification.")
+                    elif message.get("index") == -1 and message.get("ok") is True:
+                        manifest = file_send["manifest"]
+                        print("Receiver selected a save location. Starting transfer…")
+                        await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], list(range(manifest["chunks"])))
                 elif kind == "file_transfer_cancel":
                     if incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
                         try: incoming_transfer["stream"].close()
