@@ -143,7 +143,7 @@ class OperatorActivity : Activity() {
                 .setTitle("संवेदनशील कार्रवाई की पुष्टि")
                 .setMessage(decision.reason + "\\n\\nक्या आप इस चरण को चलाना चाहते हैं?")
                 .setNegativeButton("रद्द", null)
-                .setPositiveButton("हाँ, चलाएँ") { _, _ -> runOperator { it.execute(step, confirmed = true) } }
+                .setPositiveButton("हाँ, चलाएँ") { _, _ -> runOperator { it.execute(step, OperatorConfirmation.afterExplicitUserApproval(step)) } }
                 .show()
         } else {
             runOperator { it.execute(step, confirmed = false) }
