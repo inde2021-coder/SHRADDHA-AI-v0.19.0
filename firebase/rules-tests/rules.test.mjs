@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getBytes } from "firebase/storage";
+import { ref as databaseRef, set as databaseSet, get as databaseGet } from "firebase/database";
 
 const projectId = "demo-shraddha-ai";
 const format = "AES-256-GCM/PBKDF2-SHA256-v1";
@@ -13,7 +14,8 @@ before(async () => {
   env = await initializeTestEnvironment({
     projectId,
     firestore: { rules: fs.readFileSync("../../firestore.rules", "utf8") },
-    storage: { rules: fs.readFileSync("../../storage.rules", "utf8") }
+    storage: { rules: fs.readFileSync("../../storage.rules", "utf8") },
+    database: { rules: fs.readFileSync("../database.rules.json", "utf8") }
   });
 });
 
@@ -55,6 +57,21 @@ test("Firestore Storage metadata and FCM device records are scoped to the owner"
     storagePath: "users/bob/backups/backup_1770000000000_deadbeef.enc",
     format, updatedAt: Date.now(), sizeBytes: 128
   }));
+});
+
+test("Realtime Database encrypted vault is owner-only and rejects plaintext", async () => {
+  const alice = env.database("alice");
+  const bob = env.database("bob");
+  const path = "users/alice/vault/personal_memory";
+  const encryptedRecord = { format, payload: "ciphertext", updatedAt: Date.now() };
+  await assertSucceeds(databaseSet(databaseRef(alice, path), encryptedRecord));
+  await assertSucceeds(databaseGet(databaseRef(alice, path)));
+  await assertFails(databaseGet(databaseRef(bob, path)));
+  await assertFails(databaseSet(databaseRef(alice, "users/bob/vault/personal_memory"), encryptedRecord));
+  await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/plaintext"), {
+    format, payload: "ciphertext", updatedAt: Date.now(), plaintext: "must-not-be-accepted"
+  }));
+  await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/invalid.key"), encryptedRecord));
 });
 
 test("Firebase Storage accepts only owner-scoped encrypted backup objects", async () => {
