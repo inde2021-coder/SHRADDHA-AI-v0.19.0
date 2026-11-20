@@ -321,6 +321,30 @@ def validate_transfer_chunk(index: int, total: int, encoded: str) -> bytes:
     except Exception as exc: raise ValueError('Invalid base64 chunk') from exc
     if not data or len(data) > FILE_CHUNK_BYTES: raise ValueError('Invalid chunk size')
     return data
+def windows_pick_file() -> str:
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True)
+    try: return filedialog.askopenfilename(title='Choose a file to send with Shraddha AI')
+    finally: root.destroy()
+
+def windows_save_file(name: str) -> str:
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True)
+    try: return filedialog.asksaveasfilename(title='Save incoming Shraddha AI file', initialfile=name, defaultextension='')
+    finally: root.destroy()
+
+def verify_transfer_file(path: str, expected_size: int, expected_sha256: str) -> bool:
+    import hashlib
+    from pathlib import Path
+    source = Path(path)
+    if not source.is_file() or source.stat().st_size != expected_size: return False
+    digest = hashlib.sha256()
+    with source.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''): digest.update(block)
+    return digest.hexdigest() == expected_sha256.lower()
+
 
 def sanitize_clipboard_text(value: str) -> str:
     if not isinstance(value, str) or not value or len(value) > 20000: raise ValueError('Clipboard accepts 1–20,000 characters')
@@ -710,6 +734,16 @@ async def run_once(args) -> None:
         args.phone_action_payload = await asyncio.to_thread(listen_voice_device_command, args.vosk_model)
     phone_action = getattr(args, 'phone_action_payload', None) or build_phone_action(args)
     clipboard_send = None
+    file_send = None
+    if args.send_file_to:
+        import secrets
+        selected_path = args.send_file or await asyncio.to_thread(windows_pick_file)
+        if not selected_path: print('File picker cancelled; no file sent.')
+        else:
+            manifest = await asyncio.to_thread(file_transfer_manifest, selected_path)
+            request_id = secrets.token_urlsafe(18)
+            transfer_id = secrets.token_urlsafe(18)
+            file_send = {'path': selected_path, 'manifest': manifest, 'requestId': request_id, 'transferId': transfer_id, 'target': args.send_file_to}
     if args.send_clipboard_to:
         import pyperclip, secrets
         request_id = secrets.token_urlsafe(18)
@@ -718,9 +752,11 @@ async def run_once(args) -> None:
         phone_action = None
     phone_action_sent = False
     allow_control = await asyncio.to_thread(confirm, "Allow this paired phone to request temporary control of this PC?")
+    allow_file_receive = bool(args.allow_file_receive and await asyncio.to_thread(confirm, "Allow this paired phone to request one-time file receive approval? Each transfer still needs your confirmation."))
     share_screen = bool(args.share_screen and await asyncio.to_thread(confirm, "Share this PC screen with paired Shraddha devices? Sensitive active windows will pause sharing."))
+    incoming_transfer = None
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
-        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen}}))
+        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen, "documents": allow_file_receive}}))
         print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
         if phone_action:
             await ws.send(json.dumps({"type": "control_request", "targetDeviceId": args.control_phone, "minutes": 2}))
@@ -728,6 +764,9 @@ async def run_once(args) -> None:
         if clipboard_send:
             await ws.send(json.dumps({"type": "data_share_request", "targetDeviceId": args.send_clipboard_to, "category": "clipboard", "requestId": clipboard_send[0], "itemLabel": "Clipboard text"}))
             print("Waiting for the Android device owner to approve clipboard sync…")
+        if file_send:
+            await ws.send(json.dumps({"type": "data_share_request", "targetDeviceId": file_send["target"], "category": "documents", "requestId": file_send["requestId"], "itemLabel": file_send["manifest"]["name"]}))
+            print("Waiting for Android receiver to approve this file transfer…")
         approved_until = 0.0
         approved_device_id = ""
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
