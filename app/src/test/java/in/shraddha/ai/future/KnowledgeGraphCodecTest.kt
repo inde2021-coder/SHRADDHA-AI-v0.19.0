@@ -35,4 +35,28 @@ class KnowledgeGraphCodecTest {
             throw AssertionError("Dangling edge should fail")
         } catch (_: IllegalArgumentException) { }
     }
+    @Test fun graphRejectsBlankIdsInvalidTitlesAndSelfRelationships() {
+        val graph = KnowledgeGraph()
+        try { graph.upsert(KnowledgeNode("", "Title", "note")); throw AssertionError("Blank ID should fail") } catch (_: IllegalArgumentException) { }
+        try { graph.upsert(KnowledgeNode("id", " ", "note")); throw AssertionError("Blank title should fail") } catch (_: IllegalArgumentException) { }
+        graph.upsert(KnowledgeNode("a", "Alpha", "note"))
+        try { graph.connect("a", "related_to", "a"); throw AssertionError("Self-link should fail") } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun removingNodeAlsoRemovesItsRelationships() {
+        val graph = KnowledgeGraph()
+        graph.upsert(KnowledgeNode("a", "Alpha", "note")); graph.upsert(KnowledgeNode("b", "Beta", "note"))
+        graph.connect("a", "related_to", "b"); graph.remove("a")
+        assertTrue(graph.allNodes().none { it.id == "a" }); assertTrue(graph.allEdges().isEmpty())
+    }
+
+    @Test fun graphEnforcesNodeAndRelationshipLimitsBeforeEncoding() {
+        val graph = KnowledgeGraph()
+        repeat(KnowledgeGraph.MAX_NODES) { graph.upsert(KnowledgeNode("n$it", "Node $it", "note")) }
+        try { graph.upsert(KnowledgeNode("overflow", "Overflow", "note")); throw AssertionError("Node limit should fail") } catch (_: IllegalArgumentException) { }
+        val links = KnowledgeGraph()
+        links.upsert(KnowledgeNode("a", "A", "note")); links.upsert(KnowledgeNode("b", "B", "note"))
+        repeat(KnowledgeGraph.MAX_EDGES) { links.connect("a", "relation_$it", "b") }
+        try { links.connect("a", "overflow", "b"); throw AssertionError("Edge limit should fail") } catch (_: IllegalArgumentException) { }
+    }
 }
