@@ -4,6 +4,23 @@ from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payl
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
+    def test_live_relay_transport_matches_android_kdf_and_aad(self):
+        import base64
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data
+        android_private, android_public = create_e2e_identity()
+        windows_private, windows_public = create_e2e_identity()
+        android_key, android_fp = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
+        windows_key, windows_fp = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
+        self.assertEqual(android_key, windows_key)
+        self.assertEqual(android_fp, windows_fp)
+        aad = e2e_associated_data("session-1", "android-1", "windows-1", "remote_action", "action1234567890")
+        nonce = b"\\x01" * 12
+        encrypted = AESGCM(android_key).encrypt(nonce, b'{"kind":"back"}', aad)
+        self.assertEqual(AESGCM(windows_key).decrypt(nonce, encrypted, aad), b'{"kind":"back"}')
+        with self.assertRaises(Exception):
+            AESGCM(windows_key).decrypt(nonce, encrypted, aad + b"tampered")
+
     def test_p256_key_agreement_and_aes_gcm_roundtrip(self):
         from e2e_crypto import DeviceE2ECrypto
         alice = DeviceE2ECrypto()
