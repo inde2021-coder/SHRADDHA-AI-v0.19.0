@@ -106,9 +106,10 @@ fun SettingsScreen(
                 )
             }
             Text(
-                text = "Settings",
+                text = "SYSTEM CONTROL",
                 style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                color = colors.textPrimary
+                color = colors.textPrimary,
+                fontWeight = FontWeight.Bold
             )
         }
 
