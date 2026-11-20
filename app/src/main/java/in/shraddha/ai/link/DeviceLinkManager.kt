@@ -74,11 +74,18 @@ object DeviceLinkManager {
                 if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                sessionId = null; deviceId = null; deviceToken = null; socket = null
-                onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
+                if (socket === webSocket) {
+                    sessionId = null; deviceId = null; deviceToken = null; socket = null
+                    onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
+                }
                 done(Result.failure(t))
             }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason") }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (socket === webSocket) {
+                    sessionId = null; deviceId = null; deviceToken = null; socket = null
+                    onStatus?.invoke("Disconnected: $reason")
+                }
+            }
         })
     }
 
