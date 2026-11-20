@@ -1,4 +1,4 @@
-package \`in\`.shraddha.ai.operator
+package `in`.shraddha.ai.operator
 
 import java.security.MessageDigest
 import java.util.UUID
