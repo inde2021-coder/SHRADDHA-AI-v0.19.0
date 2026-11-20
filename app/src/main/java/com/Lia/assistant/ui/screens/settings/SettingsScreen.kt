@@ -75,6 +75,7 @@ fun SettingsScreen(
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var apiKeyInput by remember { mutableStateOf(ApiKeyStore.getKey(context)) }
     var showProviderKeyDialog by remember { mutableStateOf(false) }
+    var showProviderSelectionDialog by remember { mutableStateOf(false) }
     var providerKeyInput by remember { mutableStateOf("") }
 
     var showNameDialog by remember { mutableStateOf(false) }
@@ -168,15 +169,7 @@ fun SettingsScreen(
                     subtitle = appState.aiProvider,
                     icon = Icons.Default.Speed,
                     value = "Change",
-                    onClick = {
-                        val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
-                        val next = providers[(providers.indexOf(appState.aiProvider).coerceAtLeast(0) + 1) % providers.size]
-                        appState.applyAiProvider(context, next)
-                        if (next != "GEMINI") {
-                            providerKeyInput = ProviderKeyStore.get(context, next)
-                            showProviderKeyDialog = true
-                        }
-                    }
+                    onClick = { showProviderSelectionDialog = true }
                 )
                 if (appState.aiProvider != "GEMINI") {
                     NovaSettingsRow(
@@ -338,6 +331,49 @@ fun SettingsScreen(
     }
 
     // Non-Gemini provider key dialog
+    if (showProviderSelectionDialog) {
+        val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+        AlertDialog(
+            onDismissRequest = { showProviderSelectionDialog = false },
+            title = { Text(text = "Choose AI provider", color = colors.textPrimary) },
+            text = {
+                Column {
+                    providers.forEach { provider ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    appState.applyAiProvider(context, provider)
+                                    showProviderSelectionDialog = false
+                                    if (provider != "GEMINI") {
+                                        providerKeyInput = ProviderKeyStore.get(context, provider)
+                                        showProviderKeyDialog = true
+                                    }
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (appState.aiProvider == provider) "✓  $provider" else provider,
+                                color = colors.textPrimary,
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                NovaButton(
+                    text = "Close",
+                    onClick = { showProviderSelectionDialog = false },
+                    type = NovaButtonType.TEXT
+                )
+            },
+            containerColor = colors.surfaceRaised
+        )
+    }
+
     if (showProviderKeyDialog) {
         AlertDialog(
             onDismissRequest = { showProviderKeyDialog = false },
