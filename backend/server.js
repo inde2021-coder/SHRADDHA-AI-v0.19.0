@@ -582,7 +582,8 @@ wss.on('connection', (ws, ctx) => {
       const requesterId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(requesterId);
       const pending = device.pendingRemoteActions?.get(String(msg.actionId || ''));
-      if (!requester || requesterId === deviceId || !pending || pending.requesterId !== requesterId || pending.expiresAt < Date.now()) return;
+      const expiresAt = device.controlGrants?.get(requesterId) || 0;
+      if (!requester || requesterId === deviceId || expiresAt < Date.now() || !pending || pending.requesterId !== requesterId || pending.expiresAt < Date.now()) return;
       device.pendingRemoteActions.delete(String(msg.actionId));
       const result = typeof msg.result === 'string' ? msg.result.slice(0, 14000) : '';
       if (!result) return;
