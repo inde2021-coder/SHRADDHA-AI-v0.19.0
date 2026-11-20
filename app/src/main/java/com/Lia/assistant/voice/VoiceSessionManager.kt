@@ -70,6 +70,8 @@ object VoiceSessionManager {
         appContext = context.applicationContext
 
         _isActive.value = true
+        _muted.value = false
+        isTurnActive = false
         _lastError.value = null
         _statusText.value = "Connecting..."
         _state.value = NovaOrbState.CONNECTING
@@ -104,7 +106,8 @@ object VoiceSessionManager {
                 _statusText.value = "Microphone unavailable • tap Start to retry"
                 // Stop capture immediately after a fatal AudioRecord error; never leave a
                 // dead microphone thread running while the UI still reports an active session.
-                audioIO?.stopRecording()
+                audioIO?.release()
+                audioIO = null
             }
         )
 
@@ -125,9 +128,12 @@ object VoiceSessionManager {
 
         val apiKey = ApiKeyStore.getKey(currentContext)
         if (apiKey.isEmpty()) {
+            _isActive.value = false
             _state.value = NovaOrbState.ERROR
             _statusText.value = "API key missing. Enter key in Settings."
             _lastError.value = "Missing Gemini API Key"
+            audioIO?.release()
+            audioIO = null
             return
         }
 
