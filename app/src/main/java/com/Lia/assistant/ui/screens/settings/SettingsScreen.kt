@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.ProviderKeyStore
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
@@ -73,6 +74,8 @@ fun SettingsScreen(
 
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var apiKeyInput by remember { mutableStateOf(ApiKeyStore.getKey(context)) }
+    var showProviderKeyDialog by remember { mutableStateOf(false) }
+    var providerKeyInput by remember { mutableStateOf("") }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -160,6 +163,32 @@ fun SettingsScreen(
                     icon = Icons.Default.Key,
                     onClick = { showApiKeyDialog = true }
                 )
+                NovaSettingsRow(
+                    title = "AI Chat Provider",
+                    subtitle = appState.aiProvider,
+                    icon = Icons.Default.Speed,
+                    value = "Change",
+                    onClick = {
+                        val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+                        val next = providers[(providers.indexOf(appState.aiProvider).coerceAtLeast(0) + 1) % providers.size]
+                        appState.applyAiProvider(context, next)
+                        if (next != "GEMINI") {
+                            providerKeyInput = ProviderKeyStore.get(context, next)
+                            showProviderKeyDialog = true
+                        }
+                    }
+                )
+                if (appState.aiProvider != "GEMINI") {
+                    NovaSettingsRow(
+                        title = "${appState.aiProvider} API Key",
+                        subtitle = if (ProviderKeyStore.has(context, appState.aiProvider)) "Encrypted on this device" else "Required • tap to add",
+                        icon = Icons.Default.Key,
+                        onClick = {
+                            providerKeyInput = ProviderKeyStore.get(context, appState.aiProvider)
+                            showProviderKeyDialog = true
+                        }
+                    )
+                }
                 NovaSettingsRow(
                     title = "Assistant Name",
                     subtitle = appState.assistantName,
@@ -301,6 +330,46 @@ fun SettingsScreen(
                 NovaButton(
                     text = "Cancel",
                     onClick = { showApiKeyDialog = false },
+                    type = NovaButtonType.TEXT
+                )
+            },
+            containerColor = colors.surfaceRaised
+        )
+    }
+
+    // Non-Gemini provider key dialog
+    if (showProviderKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showProviderKeyDialog = false },
+            title = { Text(text = "${appState.aiProvider} API Key", color = colors.textPrimary) },
+            text = {
+                Column {
+                    Text(
+                        text = "The key is encrypted locally using Android Keystore. It is sent only to the selected provider when you send a chat message.",
+                        fontSize = 13.sp,
+                        color = colors.textSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    NovaTextField(
+                        value = providerKeyInput,
+                        onValueChange = { providerKeyInput = it },
+                        placeholder = "Paste provider API key..."
+                    )
+                }
+            },
+            confirmButton = {
+                NovaButton(
+                    text = "Save Securely",
+                    onClick = {
+                        runCatching { ProviderKeyStore.save(context, appState.aiProvider, providerKeyInput) }
+                            .onSuccess { showProviderKeyDialog = false }
+                    }
+                )
+            },
+            dismissButton = {
+                NovaButton(
+                    text = "Cancel",
+                    onClick = { showProviderKeyDialog = false },
                     type = NovaButtonType.TEXT
                 )
             },
