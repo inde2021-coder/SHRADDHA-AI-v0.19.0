@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePlanSteps } from './plan-safety.js';
+import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 
 test('device, camera, screen and data actions always require approval', () => {
   const tools = ['open_app', 'click_text', 'type', 'tap', 'swipe', 'scroll', 'back', 'home', 'camera_view', 'screen_view', 'share_file'];
@@ -37,4 +37,34 @@ test('plan step count and field lengths are bounded', () => {
   assert.equal(steps.length, 8);
   assert.equal(steps[0].title.length, 120);
   assert.equal(steps[0].detail.length, 500);
+});
+
+test('AI operator plans accept only bounded accessibility actions and force approval', () => {
+  const steps = normalizeOperatorActions([
+    { id: 'open', title: 'Open Settings', action: 'OPEN_APP', target: 'Settings', risk: 'LOW', requiresApproval: false },
+    { id: 'type', title: 'Enter search', action: 'TYPE_TEXT', value: 'network settings' },
+    { id: 'shell', title: 'Run shell', action: 'SHELL', target: 'cmd' },
+    { id: 'otp', title: 'Enter OTP', action: 'TYPE_TEXT', value: 'OTP 123456' }
+  ]);
+  assert.deepEqual(steps.map(x => x.action), ['OPEN_APP', 'TYPE_TEXT']);
+  assert.ok(steps.every(x => x.requiresApproval));
+  assert.equal(steps[0].risk, 'READ_ONLY');
+  assert.equal(steps[1].risk, 'SENSITIVE');
+});
+
+test('AI operator plans reject duplicate IDs, invalid fields and unsafe secret input', () => {
+  const steps = normalizeOperatorActions([
+    { id: 'same', title: 'Open', action: 'OPEN_APP', target: 'Settings' },
+    { id: 'same', title: 'Open again', action: 'OPEN_APP', target: 'Chrome' },
+    { id: 'bad action', title: 'Bad', action: 'OPEN_APP', target: 'Settings' },
+    { id: 'secret', title: 'Fill', action: 'TYPE_TEXT', value: 'password: secret' },
+    { id: 'type-target', title: 'Fill', action: 'TYPE_TEXT', target: 'field', value: 'hello' }
+  ]);
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].id, 'same');
+});
+
+test('AI operator plans are capped to twelve steps and reject oversized content', () => {
+  const raw = Array.from({ length: 15 }, (_, i) => ({ id: `s${i}`, title: 'Open app', action: 'OPEN_APP', target: 'A'.repeat(140) }));
+  assert.equal(normalizeOperatorActions(raw).length, 0);
 });
