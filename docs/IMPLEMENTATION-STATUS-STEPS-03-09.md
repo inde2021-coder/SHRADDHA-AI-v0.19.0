@@ -105,3 +105,12 @@ A step is complete only when its source changes are committed, tests pass, relev
 - Latest observed run `44664745187` (`dbc413b…`) had a successful backend-check job, but the Android verify job was cancelled during unit tests and the APK build was skipped. This is not a passing Android build.
 - Earlier run `44664268684` was superseded/cancelled as additional commits were pushed. Do not treat a cancelled run as a test pass.
 - No physical-device validation, certified biometric spoof testing, Firebase Emulator test or production Firebase rules deployment has been performed.
+
+
+## Update — 2026-11-20 workflow safety pass
+- Gemini model discovery and generation requests now send the API key in the `x-goog-api-key` header rather than the URL query string; model discovery cache is keyed by a one-way credential fingerprint so changing providers/keys cannot reuse another key's cached model.
+- Gemini caller-level limits now reject history over 40 turns, any turn over 8,000 characters, and system instructions over 8,000 characters.
+- WorkflowEngine now validates workflow identity, step IDs, titles and current index instead of silently coercing an invalid step index.
+- Added explicit pause, resume and cancel transitions. Resuming a declined sensitive/irreversible step requires fresh approval; cancellation is terminal; failed independent verification stops the workflow.
+- Added unit coverage for approval gates, fresh approval on resume, failed verification, cancellation, duplicate step IDs, invalid indexes and invalid approval transitions.
+- These workflow changes are a deterministic state machine only. They do not grant app/device permissions or execute external actions; the host executor must re-check permissions immediately before each operation.
