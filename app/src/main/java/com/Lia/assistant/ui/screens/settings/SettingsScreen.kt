@@ -90,7 +90,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .nightSky()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 100.dp)
+            .padding(bottom = 24.dp)
     ) {
         // Top Bar
         Row(
