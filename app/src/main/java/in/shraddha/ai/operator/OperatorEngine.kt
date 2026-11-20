@@ -19,13 +19,14 @@ class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
     }
 
     /** Execute one explicitly supplied step at a time. Sensitive actions are deliberately excluded. */
-    fun execute(step: OperatorStep, confirmed: Boolean = false): Boolean {
+    fun execute(step: OperatorStep, confirmation: OperatorConfirmation? = null): Boolean {
         if (cancelled) return false
         val decision = OperatorSafetyPolicy.assess(step.action.name, step.target, step.value)
         if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
             emit(OperatorEvent(OperatorTaskState.FAILED, decision.reason)); return false
         }
-        if ((step.requiresConfirmation || decision.risk == OperatorSafetyPolicy.Risk.CONFIRM) && !confirmed) {
+        if ((step.requiresConfirmation || decision.risk == OperatorSafetyPolicy.Risk.CONFIRM) &&
+            confirmation?.consume(step, System.nanoTime() / 1_000_000L) != true) {
             emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, decision.reason)); return false
         }
         val before = observe() ?: return false
