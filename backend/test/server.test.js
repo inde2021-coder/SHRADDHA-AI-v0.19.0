@@ -195,6 +195,8 @@ test('screen frames are blocked until the sending device explicitly enables scre
     ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), Buffer.from([0xff, 0xd8, 0x00, 0x22])]));
     ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: true } }));
     await waitForCameraPermission(true);
+    // Camera frames use the same strict per-image limit as screen frames.
+    ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), Buffer.alloc(2_500_001)]));
     const allowedCameraJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x66]);
     ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), allowedCameraJpeg]));
     const [cameraData, cameraBinary] = await firstCameraFrame;
