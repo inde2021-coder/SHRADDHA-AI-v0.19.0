@@ -113,7 +113,14 @@ class DeviceTransferActivity : Activity() {
                     }
                 } catch (e: Exception) { runOnUiThread { status.text = "File error: ${e.message}" } }
             }
-        } else if (requestCode == 702) { pendingSaveUri = uri; if (incomingVerified) saveIncoming(uri) else status.text = "Save destination selected. Waiting for verification…" }
+        } else if (requestCode == 702) {
+            pendingSaveUri = uri
+            if (incomingVerified) saveIncoming(uri)
+            else {
+                DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)
+                status.text = "Save destination selected. Receiver ready; waiting for file chunks…"
+            }
+        }
     }
 
     private fun requestReceiverPermission() {
@@ -188,7 +195,10 @@ class DeviceTransferActivity : Activity() {
             "file_transfer_chunk" -> receiveChunk(msg)
             "file_transfer_ack" -> {
                 val index = msg.optInt("index", -1)
-                if (index >= 0) { lastAck = maxOf(lastAck, index); status.text = "Receiver acknowledged chunk ${index + 1}." }
+                if (index == -1 && !msg.optBoolean("complete") && msg.optBoolean("ok") && sourceUri != null) {
+                    status.text = "Receiver selected a destination. Sending file chunks…"
+                    startSending(emptyList())
+                } else if (index >= 0) { lastAck = maxOf(lastAck, index); status.text = "Receiver acknowledged chunk ${index + 1}." }
                 if (msg.optBoolean("complete")) status.text = "Receiver verified and saved file successfully."
             }
             "file_transfer_resume" -> {
