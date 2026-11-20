@@ -69,9 +69,12 @@ object DeviceLinkManager {
                 val frame = bytes.toByteArray()
                 if (frame.isEmpty()) return
                 val idLength = frame[0].toInt() and 0xFF
-                if (idLength <= 0 || frame.size <= 2 + idLength) return
+                if (idLength !in 1..64 || frame.size <= 2 + idLength) return
                 val sourceId = frame.copyOfRange(1, 1 + idLength).toString(Charsets.UTF_8)
                 val frameType = frame[1 + idLength].toInt() and 0xFF
+                if (frameType !in 1..2) return
+                val jpegLength = frame.size - (2 + idLength)
+                if (jpegLength !in 1..2_500_000) return
                 val jpeg = frame.copyOfRange(2 + idLength, frame.size)
                 if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
             }
@@ -219,9 +222,9 @@ object DeviceLinkManager {
     fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
-        if (jpeg.size > 2_500_000 || frameType !in 1..2) return false
+        if (jpeg.isEmpty() || jpeg.size > 2_500_000 || frameType !in 1..2) return false
         val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
-        if (target.size > 255) return false
+        if (target.size > 64) return false
         val packet = ByteArray(2 + target.size + jpeg.size)
         packet[0] = frameType.toByte()
         packet[1] = target.size.toByte()
