@@ -2644,14 +2644,24 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                                 val after = ShraddhaAccessibilityService.captureVisibleScreen()
-                                val visible = after?.elements.orEmpty().asSequence().filterNot { it.password }
-                                    .map { (it.text.ifBlank { it.description }).trim() }.filter { it.isNotBlank() }
-                                    .distinct().take(24).joinToString(" | ").take(1800)
+                                val beforeVisible = before?.elements.orEmpty().asSequence().filterNot { it.password }
+                                    .map { (it.text.ifBlank { it.description }).trim() }.filter { it.isNotBlank() }.toSet()
+                                val afterVisible = after?.elements.orEmpty().asSequence().filterNot { it.password }
+                                    .map { (it.text.ifBlank { it.description }).trim() }.filter { it.isNotBlank() }.toSet()
+                                val visible = afterVisible.take(24).joinToString(" | ").take(1800)
+                                val added = (afterVisible - beforeVisible).take(12).joinToString(" | ").take(700)
+                                val removed = (beforeVisible - afterVisible).take(12).joinToString(" | ").take(700)
+                                val packageChanged = before != null && after != null && before.packageName != after.packageName
+                                val verification = when {
+                                    after == null -> "OUTCOME_UNVERIFIED: screen capture unavailable"
+                                    packageChanged || added.isNotBlank() || removed.isNotBlank() -> "VISIBLE_UI_CHANGE_DETECTED"
+                                    else -> "NO_VISIBLE_UI_CHANGE_DETECTED: action outcome is not proven"
+                                }
                                 val evidence = if (after != null) {
-                                    "ACCESSIBILITY_ACCEPTED; screen_observation_after_action=true; app=${after.packageName.take(120)}; previous_app=${before?.packageName.orEmpty().take(120)}; visible_text=$visible"
-                                } else "ACCESSIBILITY_ACCEPTED; screen_observation_after_action=unavailable; actual UI outcome unverified."
+                                    "$verification; accessibility_dispatch_accepted=true; app=${after.packageName.take(120)}; previous_app=${before?.packageName.orEmpty().take(120)}; added_text=$added; removed_text=$removed; current_visible_text=$visible"
+                                } else "OUTCOME_UNVERIFIED: screen observation unavailable; accessibility dispatch was accepted but the actual UI result is unknown."
                                 DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, evidence)
-                                status.text = "Remote $kind action returned with screen observation."
+                                status.text = "Remote $kind: $verification."
                                 runCatching { `in`.shraddha.ai.future.LocalAuditTrail(appContext).append("remote_control", "action_result_observed", "kind=$kind; source_device_redacted; screen_observed=${after != null}") }
                             }, 900L)
                         }
