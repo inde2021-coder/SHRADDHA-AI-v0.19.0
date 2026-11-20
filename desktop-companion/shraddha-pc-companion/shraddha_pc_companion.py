@@ -287,6 +287,59 @@ async def share_screen_loop(ws, fps: float, target_device_id: str) -> None:
 
 
 
+FILE_CHUNK_BYTES = 48 * 1024
+MAX_TRANSFER_BYTES = 100 * 1024 * 1024
+
+def file_transfer_manifest(path: str) -> dict:
+    from pathlib import Path
+    import hashlib
+    source = Path(path).expanduser().resolve()
+    if source.is_symlink() or not source.is_file(): raise ValueError('Transfer source must be a regular file')
+    size = source.stat().st_size
+    if size < 1 or size > MAX_TRANSFER_BYTES: raise ValueError('File transfer is limited to 1 byte–100 MB')
+    digest = hashlib.sha256()
+    with source.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''): digest.update(block)
+    return {'name': source.name[:120], 'size': size, 'sha256': digest.hexdigest(), 'chunkBytes': FILE_CHUNK_BYTES, 'chunks': (size + FILE_CHUNK_BYTES - 1) // FILE_CHUNK_BYTES}
+
+def read_file_chunk(path: str, index: int) -> bytes:
+    from pathlib import Path
+    if not isinstance(index, int) or index < 0: raise ValueError('Invalid chunk index')
+    source = Path(path).expanduser().resolve()
+    if source.is_symlink() or not source.is_file() or source.stat().st_size > MAX_TRANSFER_BYTES: raise ValueError('Invalid transfer source')
+    with source.open('rb') as stream:
+        stream.seek(index * FILE_CHUNK_BYTES)
+        data = stream.read(FILE_CHUNK_BYTES)
+    if not data: raise ValueError('Chunk outside file')
+    return data
+
+def validate_transfer_chunk(index: int, total: int, encoded: str) -> bytes:
+    import base64
+    if not isinstance(index, int) or not isinstance(total, int) or total < 1 or total > 2200 or not 0 <= index < total: raise ValueError('Invalid chunk index')
+    if not isinstance(encoded, str) or len(encoded) > 70000: raise ValueError('Chunk exceeds relay limit')
+    try: data = base64.b64decode(encoded, validate=True)
+    except Exception as exc: raise ValueError('Invalid base64 chunk') from exc
+    if not data or len(data) > FILE_CHUNK_BYTES: raise ValueError('Invalid chunk size')
+    return data
+
+def sanitize_clipboard_text(value: str) -> str:
+    if not isinstance(value, str) or not value or len(value) > 20000: raise ValueError('Clipboard accepts 1–20,000 characters')
+    if re.search(r'(?i)password|passcode|otp|one.time.code|cvv|pin|recovery phrase|seed phrase|पासवर्ड|ओटीपी|पिन|गुप्त कोड', value): raise ValueError('Sensitive clipboard content blocked')
+    return value
+
+def parse_voice_device_command(transcript: str) -> dict:
+    text = ' '.join(str(transcript or '').casefold().strip().split())
+    commands = {'go back': {'kind': 'back'}, 'वापस जाओ': {'kind': 'back'}, 'go home': {'kind': 'home'}, 'होम खोलो': {'kind': 'home'}, 'scroll down': {'kind': 'scroll', 'amount': -3}, 'नीचे स्क्रॉल करो': {'kind': 'scroll', 'amount': -3}, 'scroll up': {'kind': 'scroll', 'amount': 3}, 'ऊपर स्क्रॉल करो': {'kind': 'scroll', 'amount': 3}}
+    if text in commands: return commands[text]
+    match = re.fullmatch(r'open app ([a-z0-9 ._-]{1,60})', text)
+    if match: return {'kind': 'open_app', 'appName': match.group(1).strip()}
+    match = re.fullmatch(r'ऐप खोलो ([\w .-]{1,60})', text)
+    if match: return {'kind': 'open_app', 'appName': match.group(1).strip()}
+    raise ValueError('Voice command not recognized; no action sent')
+
+def reconnect_delay(attempt: int) -> float:
+    return min(60.0, 2.0 ** max(0, min(6, int(attempt))))
+
 def build_phone_action(args) -> dict | None:
     """Build one bounded action for a paired Android phone; the phone still approves control."""
     target = str(getattr(args, "control_phone", "") or "").strip()
@@ -709,7 +762,8 @@ async def run(args) -> None:
                 try:
                     await screen_task
                 except asyncio.CancelledError:
-                    pass            if args.view_phone_screen:
+                    pass
+            if args.view_phone_screen:
                 try:
                     import cv2
                     cv2.destroyAllWindows()
