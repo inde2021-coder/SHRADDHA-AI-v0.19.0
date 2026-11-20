@@ -2435,6 +2435,15 @@ class MainActivity : AppCompatActivity() {
                 handleIncomingControlRequest(msg)
             } else if (msg.optString("type") == "control_result") {
                 val approved = msg.optBoolean("approved")
+                if (pendingWindowsVoiceAction != null && msg.optString("targetDeviceId") == pendingWindowsVoiceTarget) {
+                    val action = pendingWindowsVoiceAction!!
+                    val target = pendingWindowsVoiceTarget
+                    pendingWindowsVoiceAction = null
+                    if (approved) {
+                        if (DeviceLinkManager.sendAction(target, action)) runOnUiThread { status.text = "PC पर command भेजी गई। Windows की per-action confirmation और परिणाम की प्रतीक्षा है।" }
+                        else runOnUiThread { status.text = "Permission मिली, लेकिन command relay पर नहीं भेजी जा सकी।" }
+                    } else runOnUiThread { status.text = "Windows PC ने control request अस्वीकार की।" }
+                }
                 runOnUiThread {
                     status.text = if (approved) "Remote control की अनुमति मिली (${msg.optInt("expiresInMinutes", 5)} मिनट)।" else "Remote control request अस्वीकार हुई: ${msg.optString("reason", "Target ने अनुमति नहीं दी।")}"
                     Toast.makeText(this, status.text, Toast.LENGTH_LONG).show()
@@ -2553,13 +2562,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val appContext = applicationContext
-        DeviceLinkManager.onRemoteAction = { fromDeviceId, action ->
+        DeviceLinkManager.onRemoteActionWithId = { fromDeviceId, actionId, action ->
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val allowed = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
                 val accepted = allowed && ShraddhaAccessibilityService.applyRemoteAction(action)
                 DeviceLinkManager.sendRemoteActionResult(
-                    fromDeviceId,
-                    action.optString("kind", "unknown"),
+                    fromDeviceId, actionId, action.optString("kind", "unknown"),
                     if (accepted) "accepted_by_android_accessibility" else "rejected_permission_or_action_unavailable"
                 )
                 runCatching {
@@ -2873,6 +2881,7 @@ class MainActivity : AppCompatActivity() {
         liveVisualTranslationSession = null
         DeviceLinkManager.onStatus = null
         DeviceLinkManager.onPeerMessage = null
+        DeviceLinkManager.onRemoteActionWithId = null
         DeviceLinkManager.onScreenFrame = null
         DeviceLinkManager.onCameraFrame = null
         Thread { LocalOfflineLlm.close() }.start()
