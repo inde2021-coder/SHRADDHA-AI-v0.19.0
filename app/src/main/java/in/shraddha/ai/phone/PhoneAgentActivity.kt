@@ -1,19 +1,21 @@
 package `in`.shraddha.ai.phone
 
-import android.app.Activity
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.telecom.TelecomManager
-import android.view.Gravity
-import android.widget.*
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class PhoneAgentActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("phone_agent", Context.MODE_PRIVATE) }
     private lateinit var status: TextView
+    private lateinit var history: TextView
     private val roleRequest = 901
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,45 +27,64 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
         root.addView(TextView(this).apply {
             text = "SHRADDHA AI  /  PHONE AGENT"
-            textSize = 20f; setTextColor(-1); setTypeface(null, android.graphics.Typeface.BOLD)
-        })
-        root.addView(TextView(this).apply {
-            text = "Call control foundation • Hindi / English AI conversation requires a supported carrier/VoIP audio bridge."
-            textSize = 14f; setTextColor(0xFFB8C5DD.toInt()); setPadding(0, 18, 0, 18)
-        })
-        status = TextView(this).apply { textSize = 13f; setTextColor(0xFF70E0C1.toInt()); setPadding(0, 12, 0, 20) }
-        root.addView(status)
-        root.addView(Button(this).apply {
-            text = "Set as default phone app"
-            setOnClickListener { requestDialerRole() }
-        })
-        root.addView(Switch(this).apply {
-            text = "Auto-answer incoming calls"
+            textSize = 20f
             setTextColor(-1)
-            isChecked = prefs.getBoolean(KEY_AUTO_ANSWER, false)
-            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(KEY_AUTO_ANSWER, checked).apply() }
+            setTypeface(null, android.graphics.Typeface.BOLD)
         })
         root.addView(TextView(this).apply {
-            text = "Safety: auto-answer is OFF by default. Turn it on only when you want Shraddha to answer. Android does not expose ordinary cellular-call audio to third-party apps, so this setting does not make the AI speak/listen to the caller."
-            textSize = 12f; setTextColor(0xFFFFC78A.toInt()); setPadding(0, 16, 0, 16)
+            text = "Call controls, caller events and shareable call notes."
+            textSize = 14f
+            setTextColor(0xFFB8C5DD.toInt())
+            setPadding(0, 18, 0, 18)
         })
-        root.addView(Button(this).apply {
-            text = "Share latest call note on WhatsApp"
-            setOnClickListener { shareLatestCallNote() }
+        status = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xFF70E0C1.toInt())
+            setPadding(0, 12, 0, 20)
+        }
+        root.addView(status)
+        root.addView(actionButton("Set Shraddha as default phone app") { requestDialerRole() })
+        root.addView(actionButton("Refresh phone status") { refreshStatus() })
+        root.addView(TextView(this).apply {
+            text = "CALL HISTORY"
+            textSize = 12f
+            setTextColor(0xFFBDA8FF.toInt())
+            setPadding(0, 22, 0, 8)
         })
-        root.addView(Button(this).apply {
-            text = "Refresh call status"
-            setOnClickListener { refreshStatus() }
+        history = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xFFE4E9F5.toInt())
+            setPadding(14, 14, 14, 14)
+            setBackgroundColor(0xFF111B2D.toInt())
+        }
+        root.addView(history)
+        root.addView(actionButton("Share call summary") { shareCallSummary() })
+        root.addView(TextView(this).apply {
+            text = "IMPORTANT: Normal SIM-call audio is not exposed to third-party InCallService apps on standard Android. Shraddha can provide call controls and history here, but live AI listening and speaking requires a supported carrier/OEM integration or a VoIP/SIP calling service. Auto-answer is intentionally unavailable until that voice path is implemented and tested, so calls are never silently answered without an AI response."
+            textSize = 12f
+            setTextColor(0xFFFFC78A.toInt())
+            setPadding(0, 20, 0, 0)
         })
         setContentView(ScrollView(this).apply { addView(root) })
         refreshStatus()
     }
 
+    override fun onResume() {
+        super.onResume()
+        refreshStatus()
+    }
+
+    private fun actionButton(label: String, action: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        setOnClickListener { action() }
+    }
+
     private fun requestDialerRole() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val rm = getSystemService(RoleManager::class.java)
-            if (rm.isRoleAvailable(RoleManager.ROLE_DIALER) && !rm.isRoleHeld(RoleManager.ROLE_DIALER)) {
-                startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_DIALER), roleRequest)
+            val manager = getSystemService(RoleManager::class.java)
+            if (manager.isRoleAvailable(RoleManager.ROLE_DIALER) && !manager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+                startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER), roleRequest)
             } else refreshStatus()
         } else {
             val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
@@ -72,38 +93,31 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Legacy activity result API is retained for minSdk 26 compatibility")
+    @Deprecated("Compatibility with minSdk 26")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == roleRequest) refreshStatus()
     }
 
     private fun refreshStatus() {
-        val tm = getSystemService(TELECOM_SERVICE) as TelecomManager
-        val isDefault = tm.defaultDialerPackage == packageName
-        val last = prefs.getString(KEY_LAST_CALL, "No call event recorded yet")
-        status.text = "Default phone app: ${if (isDefault) "YES" else "NO"}\nAuto-answer: ${if (prefs.getBoolean(KEY_AUTO_ANSWER, false)) "ON" else "OFF"}\nLatest call: $last"
+        val manager = getSystemService(TELECOM_SERVICE) as TelecomManager
+        status.text = "Default phone app: ${if (manager.defaultDialerPackage == packageName) "YES" else "NO"}"
+        history.text = prefs.getString(ShraddhaInCallService.KEY_CALL_HISTORY, null)
+            ?.takeIf { it.isNotBlank() } ?: "No call events recorded yet."
     }
 
-    private fun shareLatestCallNote() {
-        val note = prefs.getString(KEY_LAST_CALL, null)
-            ?: "Shraddha AI: No incoming-call event has been recorded yet."
-        val send = Intent(Intent.ACTION_SEND).apply {
+    private fun shareCallSummary() {
+        val note = prefs.getString(ShraddhaInCallService.KEY_CALL_HISTORY, null)
+            ?.takeIf { it.isNotBlank() } ?: "Shraddha AI: No call events recorded yet."
+        val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, "Shraddha AI call update:\n$note")
-            setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_SUBJECT, "Shraddha AI call summary")
+            putExtra(Intent.EXTRA_TEXT, "Shraddha AI call summary:\n$note")
         }
-        try { startActivity(send) }
-        catch (_: Exception) {
-            val chooser = Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"; putExtra(Intent.EXTRA_TEXT, note)
-            }, "Send call note")
-            startActivity(chooser)
-        }
+        startActivity(Intent.createChooser(intent, "Share call summary"))
     }
 
     companion object {
-        const val KEY_AUTO_ANSWER = "auto_answer"
         const val KEY_LAST_CALL = "last_call_note"
     }
 }
