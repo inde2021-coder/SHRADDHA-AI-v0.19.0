@@ -555,7 +555,7 @@ wss.on('connection', (ws, ctx) => {
       const target = session.devices.get(targetId);
       const category = String(msg.category || '');
       if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
-      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId: String(msg.requestId || randomBytes(12).toString('hex')), itemLabel: String(msg.itemLabel || '').slice(0,120) }));
+      const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 64);\n      if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;\n      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
     } else if (msg.type === 'data_share_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
@@ -573,14 +573,14 @@ wss.on('connection', (ws, ctx) => {
       const payload = typeof msg.payload === 'string' ? msg.payload : '';
       const sizeBytes = Number(msg.sizeBytes);
       const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
-      if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() ||
+      if (!target || target.sharePermissions?.[category] !== true || !grant || grant.expiresAt < Date.now() || !requestId || grant.requestId !== requestId ||
           payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
           !/^[a-f0-9]{64}$/.test(digest)) return;
       if (!validateSharedFileEnvelope(payload, sizeBytes, digest)) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
         fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100),
-        sizeBytes, sha256: digest, payload }));
+        requestId, sizeBytes, sha256: digest, payload }));
     } else if (msg.type === 'task_handoff') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
