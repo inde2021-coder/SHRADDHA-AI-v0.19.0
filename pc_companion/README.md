@@ -34,3 +34,6 @@ py -3.12 -m PyInstaller --noconfirm --clean --onefile --windowed --name Shraddha
 ```
 
 The Windows GitHub Actions workflow builds and publishes the EXE as a separate artifact. The PC companion is not part of the Android APK.
+
+
+CI verification is run on the work branch for the companion's protocol/action unit tests and Windows executable packaging; this does not replace paired physical-device testing.
