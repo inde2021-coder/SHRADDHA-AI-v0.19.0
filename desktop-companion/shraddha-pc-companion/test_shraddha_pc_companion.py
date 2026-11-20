@@ -7,17 +7,24 @@ class DeviceE2ECryptoTests(unittest.TestCase):
     def test_live_relay_transport_matches_android_kdf_and_aad(self):
         import base64
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-        from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data
+        from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data, decrypt_e2e_message
         android_private, android_public = create_e2e_identity()
         windows_private, windows_public = create_e2e_identity()
         android_key, android_fp = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
         windows_key, windows_fp = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
         self.assertEqual(android_key, windows_key)
         self.assertEqual(android_fp, windows_fp)
+        self.assertRegex(android_fp, r"^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$")
         aad = e2e_associated_data("session-1", "android-1", "windows-1", "remote_action", "action1234567890")
-        nonce = b"\\x01" * 12
+        nonce = bytes([1]) * 12
         encrypted = AESGCM(android_key).encrypt(nonce, b'{"kind":"back"}', aad)
         self.assertEqual(AESGCM(windows_key).decrypt(nonce, encrypted, aad), b'{"kind":"back"}')
+        envelope = {"fromDeviceId": "android-1", "messageKind": "remote_action", "actionId": "action1234567890",
+                    "actionKind": "back", "nonce": base64.b64encode(nonce).decode("ascii").rstrip("="),
+                    "ciphertext": base64.b64encode(encrypted).decode("ascii").rstrip("=")}
+        decoded = decrypt_e2e_message(envelope, {"android-1": {"key": windows_key, "local_confirmed": True, "remote_confirmed": True}},
+                                     "session-1", "windows-1")
+        self.assertEqual(decoded["action"]["kind"], "back")
         with self.assertRaises(Exception):
             AESGCM(windows_key).decrypt(nonce, encrypted, aad + b"tampered")
 
