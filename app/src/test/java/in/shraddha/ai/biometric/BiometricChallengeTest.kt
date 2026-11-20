@@ -12,20 +12,22 @@ class BiometricChallengeTest {
         assertFalse(BiometricVoiceChallenge.matches("", ""))
     }
 
-    @Test fun livenessGateRequiresOpenBlinkAndHeadTurn() {
+    @Test fun livenessGateRequiresOpenBlinkTurnAndReturnToCamera() {
         val gate = BiometricLivenessGate()
         assertFalse(gate.observe(1, 0.9f, 0.9f, 0f))
         assertFalse(gate.observe(1, 0.1f, 0.1f, 0f))
         assertFalse(gate.observe(1, 0.9f, 0.9f, 0f))
-        assertTrue(gate.observe(1, 0.9f, 0.9f, 18f))
+        assertFalse(gate.observe(1, 0.9f, 0.9f, 18f))
+        assertTrue(gate.observe(1, 0.9f, 0.9f, 0f))
         assertTrue(gate.observe(1, 0.9f, 0.9f, 0f))
     }
 
-    @Test fun livenessGateRejectsMultipleFacesAndExtremeYaw() {
+    @Test fun livenessGateRejectsMultipleFacesExtremeYawAndNonFiniteSignals() {
         val gate = BiometricLivenessGate()
         assertFalse(gate.observe(2, 0.9f, 0.9f, 0f))
         gate.observe(1, 0.9f, 0.9f, 0f)
         gate.observe(1, 0.1f, 0.1f, 0f)
         assertFalse(gate.observe(1, 0.9f, 0.9f, 80f))
+        assertFalse(gate.observe(1, Float.NaN, 0.9f, 0f))
     }
 }
