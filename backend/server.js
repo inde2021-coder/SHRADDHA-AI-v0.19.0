@@ -421,7 +421,10 @@ telephonyWss.on('connection', carrier => {
       return;
     }
     if (message.type === 'disconnect') return shutdown();
-    if (message.type === 'killAudio' && callRecord) callRecord.lastControl = 'caller-interruption';
+    if (message.type === 'killAudio' && callRecord) {
+      callRecord.lastControl = 'caller-interruption';
+      if (live?.readyState === WebSocket.OPEN) live.send(JSON.stringify({ type: 'response.cancel' }));
+    }
   });
   carrier.on('close', shutdown);
   carrier.on('error', shutdown);
