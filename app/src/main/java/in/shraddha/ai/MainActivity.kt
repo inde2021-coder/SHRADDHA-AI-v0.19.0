@@ -71,6 +71,8 @@ class MainActivity : AppCompatActivity() {
     private val screenShareRequest = 42
     private val dataFileRequest = 43
     private val backupFileRequest = 45
+    private val faceModelRequest = 46
+    private val speakerModelRequest = 47
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
@@ -1252,7 +1254,7 @@ class MainActivity : AppCompatActivity() {
                 val name = personName.text.toString().trim()
                 if (name.isBlank() || !consent.isChecked) { status.text = "नाम और व्यक्ति की स्पष्ट सहमति आवश्यक है।"; return@actionButton }
                 val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
-                arr.put(JSONObject().put("name", name.take(80)).put("relation", relation.text.toString().take(100)).put("notes", notes.text.toString().take(500)).put("consent", true).put("createdAt", System.currentTimeMillis()))
+                arr.put(JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("name", name.take(80)).put("relation", relation.text.toString().take(100)).put("notes", notes.text.toString().take(500)).put("consent", true).put("createdAt", System.currentTimeMillis()))
                 store.put("person_directory", arr.toString()).onSuccess { status.text = "Person profile सुरक्षित रूप से सेव हुआ।"; personName.text.clear(); relation.text.clear(); notes.text.clear(); consent.isChecked = false }.onFailure { status.text = "Save error: ${it.message}" }
             })
             addView(actionButton("View Saved People", "परिचय और प्रोफाइल देखें") {
@@ -1261,12 +1263,60 @@ class MainActivity : AppCompatActivity() {
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Person Memory").setMessage(if (rows.isEmpty()) "कोई प्रोफाइल सेव नहीं है।" else rows.joinToString("\n\n")).setPositiveButton("OK", null).setNeutralButton("Delete all") { _, _ -> store.remove("person_directory"); status.text = "Person directory हटाई गई।" }.show()
             })
         }
-        section(root, "FACE & VOICE RECOGNITION — INTEGRATION STATUS", "बिना अनुमति biometric enrollment या पहचान नहीं होगी") {
-            addView(TextView(this@MainActivity).apply { text = "अभी इस build में नाम/रिश्ते वाला encrypted Person Directory कार्यशील है। वास्तविक face identity matching और speaker voiceprint matching के लिए vetted on-device recognition models, explicit biometric consent, liveness / spoof checks और accuracy evaluation जोड़ना बाकी है। Android face detection या speech-to-text अकेले किसी व्यक्ति की पहचान प्रमाणित नहीं करते। इसलिए यह build किसी फोटो/आवाज़ को देखकर व्यक्ति का नाम बताने का झूठा दावा नहीं करेगा।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
-            addView(actionButton("Delete Person Memory", "सभी सेव किए गए person profiles हटाएँ") {
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete person memory?").setMessage("सभी स्थानीय person profiles हटेंगे।").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> store.remove("person_directory"); status.text = "Person memory हटाई गई।" }.show()
+        section(root, "ON-DEVICE FACE & VOICE ENROLLMENT", "सहमति-आधारित local capture • मूल फोटो/ऑडियो discard • encrypted template vault") {
+            addView(TextView(this@MainActivity).apply { text = "पहले वैध लाइसेंस वाले SFace और ECAPA ONNX model अलग-अलग import करें। ऐप मॉडल weights उपलब्ध कराए बिना पहचान का दावा नहीं करेगा। Blink/head-turn challenge केवल basic interaction check है, certified anti-spoofing नहीं।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
+            addView(actionButton("Import SFace ONNX Model", "केवल लाइसेंस/स्रोत सत्यापित model file चुनें") { pickBiometricModel(faceModelRequest) })
+            addView(actionButton("Import ECAPA ONNX Model", "Verified waveform input वाला compatible model चुनें") { pickBiometricModel(speakerModelRequest) })
+            addView(actionButton("Enroll Face Template", "व्यक्ति की अलग biometric सहमति लेकर front camera capture") { launchBiometricEnrollment(personName.text.toString(), consent.isChecked, "face") })
+            addView(actionButton("Enroll Voice Template", "On-device speech challenge और voice sample capture") { launchBiometricEnrollment(personName.text.toString(), consent.isChecked, "speaker") })
+            addView(actionButton("Delete Person Memory", "सभी profiles और encrypted biometric templates हटाएँ") {
+                val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
+                val labels = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { it.optString("name") + " • " + it.optString("id") } }
+                if (labels.isEmpty()) { status.text = "कोई person profile नहीं है।"; return@actionButton }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("किस व्यक्ति को हटाएँ?").setItems(labels.toTypedArray()) { _, which ->
+                    val selected = arr.optJSONObject(which) ?: return@setItems
+                    val id = selected.optString("id")
+                    val next = JSONArray()
+                    for (i in 0 until arr.length()) if (i != which) next.put(arr.optJSONObject(i))
+                    store.put("person_directory", next.toString())
+                    `in`.shraddha.ai.biometric.BiometricConsentVault(store).deletePerson(id)
+                    status.text = "चुना हुआ profile और biometric templates हटाए गए।"
+                }.setNegativeButton("Cancel", null).show()
             })
         }
+    }
+
+    private fun pickBiometricModel(requestCode: Int) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/octet-stream"
+        }
+        startActivityForResult(intent, requestCode)
+    }
+
+    private fun launchBiometricEnrollment(name: String, directoryConsent: Boolean, kind: String) {
+        val cleanName = name.trim()
+        if (!directoryConsent || cleanName.isBlank()) {
+            status.text = "पहले Person Directory में नाम भरें और consent switch चालू करें।"
+            return
+        }
+        val arr = runCatching { JSONArray(EncryptedFeatureStore(this).get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
+        val profile = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.lastOrNull { it.optString("name") == cleanName }
+        val id = profile?.optString("id").orEmpty()
+        if (id.isBlank()) { status.text = "पहले इसी नाम का Person Profile save करें।"; return }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Biometric consent confirmation")
+            .setMessage("क्या $cleanName ने ${if (kind == "face") "face" else "voice"} biometric template इस फोन पर encrypt करके रखने की स्पष्ट अनुमति दी है?")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("I have consent") { _, _ ->
+                val intent = Intent(this, `in`.shraddha.ai.biometric.BiometricCaptureActivity::class.java)
+                    .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_KIND, kind)
+                    .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_MODE, "enroll")
+                    .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_PERSON_ID, id)
+                    .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_PERSON_NAME, cleanName)
+                    .putExtra(`in`.shraddha.ai.biometric.BiometricCaptureActivity.EXTRA_CONSENT, true)
+                startActivity(intent)
+            }.show()
     }
 
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
@@ -1416,6 +1466,24 @@ class MainActivity : AppCompatActivity() {
     @Deprecated("Compatibility with starter project")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == faceModelRequest || requestCode == speakerModelRequest) {
+            if (resultCode != Activity.RESULT_OK || data?.data == null) { status.text = "Model import cancelled."; return }
+            try {
+                val dir = java.io.File(filesDir, "biometric-models").apply { mkdirs() }
+                val target = java.io.File(dir, if (requestCode == faceModelRequest) "sface.onnx" else "ecapa-any-length.onnx")
+                val temp = java.io.File(dir, target.name + ".importing")
+                contentResolver.openInputStream(data.data!!)?.use { input ->
+                    temp.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024); var total = 0L
+                        while (true) { val count = input.read(buffer); if (count < 0) break; total += count; require(total <= 250L * 1024L * 1024L) { "Model file exceeds 250 MB limit." }; output.write(buffer, 0, count) }
+                    }
+                } ?: error("Could not read selected model.")
+                require(temp.length() > 1024) { "Selected model file is empty or invalid." }
+                if (!temp.renameTo(target)) { temp.delete(); error("Could not finalize model import.") }
+                status.text = "Model imported locally (${target.length()} bytes). License and tensor contract still require verification."
+            } catch (e: Exception) { status.text = "Model import failed: ${e.message}" }
+            return
+        }
         if (requestCode == screenShareRequest) {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 val service = Intent(this, ScreenShareService::class.java).putExtra(ScreenShareService.EXTRA_RESULT_CODE, resultCode).putExtra(ScreenShareService.EXTRA_DATA, data)
