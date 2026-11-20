@@ -152,7 +152,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         fun selectFileInPicker(fileName: String): Boolean = active?.selectFileInPicker(fileName) ?: false
         fun remoteTap(x: Float, y: Float): Boolean = active?.performRemoteTap(x, y) ?: false
         fun remoteSwipe(x1: Float, y1: Float, x2: Float, y2: Float): Boolean = active?.performRemoteSwipe(x1, y1, x2, y2) ?: false
-        fun applyRemoteAction(action: JSONObject): Boolean {
+        fun applyRemoteAction(action: JSONObject, userConfirmed: Boolean = false): Boolean {
             val service = active ?: return false
             return when (action.optString("kind")) {
                 "tap" -> service.performRemoteTap(action.optDouble("x").toFloat(), action.optDouble("y").toFloat())
@@ -160,7 +160,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
                 "type" -> {
                     val text = action.optString("text").take(2000)
                     val decision = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess("TYPE_TEXT", value = text)
-                    decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW && service.setFocusedText(text)
+                    decision.risk != `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK && (decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW || userConfirmed) && service.setFocusedText(text)
                 }
                 "click_text" -> {
                     val label = action.optString("text").trim()
@@ -168,7 +168,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
                     else {
                         val decision = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess("CLICK_TEXT", target = label)
                         // Remote taps cannot satisfy a confirmation dialog on the phone.
-                        decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW && service.clickVisibleText(label)
+                        decision.risk != `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK && (decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW || userConfirmed) && service.clickVisibleText(label)
                     }
                 }
                 "open_app" -> service.openInstalledApp(action.optString("appName").take(80))
