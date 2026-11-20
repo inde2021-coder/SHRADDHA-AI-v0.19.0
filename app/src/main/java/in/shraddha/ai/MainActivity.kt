@@ -1854,6 +1854,7 @@ class MainActivity : AppCompatActivity() {
                         prefs.edit().remove("remote_control_grant_peer").remove("remote_control_grant_expires_at").apply()
                     }
                     status.text = "Remote action blocked: no active approval for this paired device."
+                    DeviceLinkManager.respondRemoteAction(actionId, false, "No active local approval for this paired device")
                     return@post
                 }
 
