@@ -2332,12 +2332,26 @@ class MainActivity : AppCompatActivity() {
                 }
             } else if (msg.optString("type") == "data_share_payload") {
                 runCatching {
-                    val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
+                    val encoded = msg.getString("payload")
+                    require(encoded.length <= 900_000) { "Transfer payload too large" }
+                    val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                    val expectedSize = msg.getLong("sizeBytes")
+                    val expectedHash = msg.getString("sha256").lowercase()
+                    require(expectedSize in 1..650_000 && bytes.size.toLong() == expectedSize) { "File size mismatch" }
+                    require(expectedHash.matches(Regex("[a-f0-9]{64}"))) { "Invalid file digest" }
+                    val actualHash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                        .joinToString("") { "%02x".format(it) }
+                    require(actualHash == expectedHash) { "File integrity verification failed" }
                     val folder = java.io.File(filesDir, "shared").apply { mkdirs() }
-                    val safeName = msg.optString("fileName", "shared_file").replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
-                    java.io.File(folder, safeName).writeBytes(bytes)
-                    runOnUiThread { status.text = "Shared file received: $safeName (${bytes.size} bytes). App storage में सुरक्षित है।" }
-                }.onFailure { runOnUiThread { status.text = "Shared file receive failed: ${it.message}" } }
+                    val safeName = msg.optString("fileName", "shared_file").replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "shared_file" }
+                    val destination = java.io.File(folder, safeName)
+                    val temp = java.io.File(folder, ".${safeName}.${java.util.UUID.randomUUID()}.part")
+                    try {
+                        temp.outputStream().use { it.write(bytes); it.fd.sync() }
+                        require(temp.renameTo(destination)) { "Could not commit verified file" }
+                    } finally { if (temp.exists()) temp.delete() }
+                    runOnUiThread { status.text = "Verified file received: $safeName (${bytes.size} bytes, SHA-256 OK). App storage में सुरक्षित है।" }
+                }.onFailure { runOnUiThread { status.text = "File rejected: ${it.message}" } }
             }
         }
         val appContext = applicationContext
@@ -2586,13 +2600,23 @@ class MainActivity : AppCompatActivity() {
             val target = pendingShareTarget.orEmpty(); val category = pendingShareCategory.orEmpty()
             try {
                 val uri = data.data!!
-                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: byteArrayOf()
-                if (bytes.isEmpty() || bytes.size > 650_000) { status.text = "फाइल खाली है या 650 KB से बड़ी है। अभी छोटे transfer समर्थित हैं।"; return }
+                val bytes = java.io.ByteArrayOutputStream().use { output ->
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        val buffer = ByteArray(16 * 1024); var total = 0
+                        while (true) { val count = input.read(buffer); if (count < 0) break; total += count
+                            if (total > 650_000) throw IllegalArgumentException("File exceeds 650 KB transfer limit")
+                            output.write(buffer, 0, count)
+                        }
+                    } ?: throw IllegalArgumentException("Cannot open selected file")
+                    output.toByteArray()
+                }
+                if (bytes.isEmpty()) { status.text = "फाइल खाली है।"; return }
                 val name = queryDisplayName(uri) ?: "shared_file"
                 val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+                val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
                 val payload = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                val sent = DeviceLinkManager.sendSharedPayload(target, category, name, mime, payload)
-                status.text = if (sent) "चुनी हुई file $target को भेजने का प्रयास किया गया। Receiver पर delivery status जाँचें।" else "File भेजने के लिए relay disconnected है या permission grant expire हो गया।"
+                val sent = DeviceLinkManager.sendSharedPayload(target, category, name, mime, payload, bytes.size.toLong(), digest)
+                status.text = if (sent) "File integrity digest सहित $target को भेजी गई। Receiver पर SHA-256 verify होगा।" else "File भेजने के लिए relay disconnected है या permission grant expire हो गया।"
             } catch (e: Exception) { status.text = "File share error: ${e.message}" }
             return
         }
