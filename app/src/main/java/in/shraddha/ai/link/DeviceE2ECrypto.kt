@@ -24,6 +24,7 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
 
     fun derivePeerKey(peerPublicKeyBase64: String, localDeviceId: String, peerDeviceId: String): Pair<ByteArray, String> {
         require(localDeviceId.isNotBlank() && peerDeviceId.isNotBlank() && localDeviceId != peerDeviceId)
+        require(peerPublicKeyBase64.length in 108..344) { "Invalid ECDH public key encoding size" }
         val encoded = Base64.getDecoder().decode(peerPublicKeyBase64)
         require(encoded.size in 80..256) { "Invalid ECDH public key size" }
         val publicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded))
@@ -52,6 +53,11 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
     }
 
     companion object {
+        private const val MAX_PLAINTEXT_BYTES = 2_500_000
+        private const val MAX_CIPHERTEXT_BYTES = MAX_PLAINTEXT_BYTES + 16
+        private const val MAX_CIPHERTEXT_BASE64_CHARS = 3_333_356
+        private const val MAX_AAD_BYTES = 1_024
+
         fun create(): DeviceE2ECrypto {
             val generator = KeyPairGenerator.getInstance("EC")
             generator.initialize(ECGenParameterSpec("secp256r1"))
@@ -59,7 +65,8 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
         }
 
         fun encrypt(key: ByteArray, plaintext: ByteArray, associatedData: ByteArray): Sealed {
-            require(key.size == 32 && plaintext.size <= 2_500_000)
+            require(key.size == 32 && plaintext.size <= MAX_PLAINTEXT_BYTES)
+            require(associatedData.size <= MAX_AAD_BYTES) { "Associated data is too large" }
             val nonce = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
@@ -70,9 +77,12 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
 
         fun decrypt(key: ByteArray, nonceBase64: String, ciphertextBase64: String, associatedData: ByteArray): ByteArray {
             require(key.size == 32)
+            require(associatedData.size <= MAX_AAD_BYTES) { "Associated data is too large" }
+            require(nonceBase64.length == 16) { "Invalid AES-GCM nonce encoding" }
+            require(ciphertextBase64.length in 22..MAX_CIPHERTEXT_BASE64_CHARS) { "Ciphertext encoding is too large or truncated" }
             val nonce = Base64.getDecoder().decode(nonceBase64)
             val ciphertext = Base64.getDecoder().decode(ciphertextBase64)
-            require(nonce.size == 12 && ciphertext.size in 16..2_500_016)
+            require(nonce.size == 12 && ciphertext.size in 16..MAX_CIPHERTEXT_BYTES)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
             cipher.updateAAD(associatedData)
