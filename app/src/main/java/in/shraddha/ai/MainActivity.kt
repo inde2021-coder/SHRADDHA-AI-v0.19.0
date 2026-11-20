@@ -325,6 +325,11 @@ class MainActivity : AppCompatActivity() {
             "cloud" -> addFirebaseCloudSection(pageRoot)
             "future" -> addFutureIntelligence(pageRoot)
             "permissions" -> section(pageRoot, "APP CONTROL SETUP", "Android permissions को अपनी इच्छा से चालू करें") {
+                addView(actionButton("Allow Contact Lookup", "केवल voice call/message के समय contact नाम और number खोजने की अनुमति") {
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.READ_CONTACTS), 45)
+                    } else status.text = "Contact lookup permission पहले से enabled है।"
+                })
                 addView(actionButton("Enable Accessibility App Control", "Visible UI actions और approved gestures") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
                 addView(actionButton("Enable Floating AI Orb", "दूसरे ऐप्स के ऊपर Shraddha shortcut") {
                     if (!Settings.canDrawOverlays(this@MainActivity)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -1691,6 +1696,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 45) {
+            status.text = if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+                "Contact lookup enabled. Shraddha can now search contacts when you ask."
+            else "Contact lookup permission denied. You can still speak a phone number directly."
+        }
         if (requestCode == 44) {
             if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED &&
                 getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("camera", false)) {

@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlinx.coroutines.delay
 import java.util.LinkedList
 
 class NovaAccessibilityService : AccessibilityService() {
@@ -151,20 +150,6 @@ class NovaAccessibilityService : AccessibilityService() {
             }
         }, null)
         return true
-    }
-
-    suspend fun autoTapSend(isWhatsApp: Boolean): String {
-        for (i in 0 until 12) {
-            delay(400)
-            if (isWhatsApp) {
-                tapText("Continue to chat")
-            }
-            val tappedSend = tapText("Send")
-            if (tappedSend == "tapped") {
-                return "sent"
-            }
-        }
-        return "composer_opened_send_not_found"
     }
 
     private fun findNodeMatchingText(root: AccessibilityNodeInfo, query: String): AccessibilityNodeInfo? {

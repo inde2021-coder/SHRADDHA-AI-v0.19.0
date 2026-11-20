@@ -1,7 +1,6 @@
 package com.Lia.assistant.action
 
 import android.content.Context
-import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
 import org.json.JSONArray
 import org.json.JSONObject
@@ -59,10 +58,11 @@ object ActionExecutor {
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
-                        result.put("status", "success")
+                        result.put("status", if (callStatus == "dialer_opened") "success" else "error")
                         result.put("action", callStatus)
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
+                        result.put("message", "Dialer opened. Review the number and tap Call to place the call.")
                     }
                     is ContactLookupResult.NoPermission -> {
                         result.put("status", "error")
@@ -88,30 +88,37 @@ object ActionExecutor {
                     return result
                 }
 
+                if (messageText.length > 2_000) {
+                    result.put("status", "error")
+                    result.put("message", "Message is too long (maximum 2,000 characters).")
+                    return result
+                }
+                if (targetApp !in setOf("sms", "whatsapp")) {
+                    result.put("status", "error")
+                    result.put("message", "Choose SMS or WhatsApp.")
+                    return result
+                }
                 val lookup = ContactResolver.lookup(context, contactName)
-                val phoneNumber = when (lookup) {
-                    is ContactLookupResult.Found -> lookup.phoneNumber
-                    else -> contactName
+                val found = lookup as? ContactLookupResult.Found
+                if (found == null) {
+                    result.put("status", "error")
+                    result.put("action", if (lookup is ContactLookupResult.NoPermission) "contacts_permission_required" else "contact_not_found")
+                    result.put("message", if (lookup is ContactLookupResult.NoPermission)
+                        "Control & Privacy में Allow Contact Lookup चालू करें, या सीधे phone number बोलें."
+                    else "Contact नहीं मिला। नाम जाँचें या पूरा phone number दें.")
+                    return result
                 }
-
-                val isWhatsApp = targetApp == "whatsapp"
-                val status = if (isWhatsApp) {
-                    CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
+                val draftStatus = if (targetApp == "whatsapp") {
+                    CommIntents.openWhatsAppComposer(context, found.phoneNumber, messageText)
                 } else {
-                    CommIntents.openSmsComposer(context, phoneNumber, messageText)
+                    CommIntents.openSmsComposer(context, found.phoneNumber, messageText)
                 }
-
-                // If accessibility service is active, auto-tap Send
-                val service = NovaAccessibilityService.instance
-                val finalStatus = if (service != null && status == "composer_opened") {
-                    service.autoTapSend(isWhatsApp)
-                } else {
-                    status
-                }
-
-                result.put("status", "success")
-                result.put("action", finalStatus)
-                result.put("recipient", phoneNumber)
+                result.put("status", if (draftStatus == "composer_opened") "success" else "error")
+                result.put("action", if (draftStatus == "composer_opened") "draft_ready" else draftStatus)
+                result.put("recipient", found.displayName)
+                result.put("message", if (draftStatus == "composer_opened")
+                    "Draft opened. Review recipient and message, then tap Send yourself. Shraddha never auto-sends."
+                else "Message composer could not be opened.")
             }
 
             "read_screen" -> {
@@ -197,31 +204,40 @@ object ActionExecutor {
                 }
             }
 
-            "execute_social_media_task" -> {
-                result.put("status", "success")
-                result.put("task_id", "task_${System.currentTimeMillis()}")
-                result.put("action", "social_task_queued")
-                result.put("message", "Social agent initialized. Confirmation will be requested before publishing.")
-            }
-
-            "social_media_task_control" -> {
-                val cmd = args.optString("command", "STATUS")
-                result.put("status", "success")
-                result.put("action", "command_executed")
-                result.put("command", cmd)
+            "execute_social_media_task", "social_media_task_control" -> {
+                result.put("status", "error")
+                result.put("action", "not_implemented")
+                result.put("message", "Social media publishing is not connected in this build. No post or task was created.")
             }
 
             "execute_whatsapp_task" -> {
-                result.put("status", "success")
-                result.put("task_id", "wa_${System.currentTimeMillis()}")
-                result.put("action", "whatsapp_task_queued")
+                val action = args.optString("action", "").uppercase()
+                if (action != "SEND_MESSAGE") {
+                    result.put("status", "error")
+                    result.put("action", "unsupported_whatsapp_action")
+                    result.put("message", "Only WhatsApp message drafts are supported. Chat reading, search and mute controls are not implemented.")
+                } else {
+                    val contact = args.optString("contact_name", "").trim()
+                    val message = args.optString("message", "").trim()
+                    val lookup = ContactResolver.lookup(context, contact)
+                    val found = lookup as? ContactLookupResult.Found
+                    if (contact.isBlank() || message.isBlank() || message.length > 2_000 || found == null) {
+                        result.put("status", "error")
+                        result.put("action", if (lookup is ContactLookupResult.NoPermission) "contacts_permission_required" else "invalid_recipient_or_message")
+                    } else {
+                        val draft = CommIntents.openWhatsAppComposer(context, found.phoneNumber, message)
+                        result.put("status", if (draft == "composer_opened") "success" else "error")
+                        result.put("action", if (draft == "composer_opened") "draft_ready" else draft)
+                        result.put("recipient", found.displayName)
+                        result.put("message", "Draft only. Review and tap Send in WhatsApp; Shraddha will not send automatically.")
+                    }
+                }
             }
 
             "whatsapp_task_control" -> {
-                val cmd = args.optString("command", "STATUS")
-                result.put("status", "success")
-                result.put("action", "command_executed")
-                result.put("command", cmd)
+                result.put("status", "error")
+                result.put("action", "not_implemented")
+                result.put("message", "There is no active WhatsApp automation task in this build.")
             }
 
             else -> {

@@ -8,6 +8,7 @@ import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
 import com.Lia.assistant.forge.ForgeController
+import `in`.shraddha.ai.brain.PersistentChatMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -132,7 +133,7 @@ object VoiceSessionManager {
         _currentPersonality.value = personality
         _currentLanguage.value = language
 
-        val recap = if (isResuming) ConversationMemory.recap() else null
+        val recap = PersistentChatMemory.recap(currentContext) ?: if (isResuming) ConversationMemory.recap() else null
         val prompt = PersonalityPromptBuilder.build(
             personality = personality,
             language = language,
@@ -182,6 +183,7 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 VoiceLatencyTracker.markUserTurnStart()
                 ConversationMemory.recordTurn(MemoryRole.USER, text)
+                scope.launch { PersistentChatMemory.record(currentContext, "User", text) }
                 val detected = LanguageDetector.detect(text)
                 if (detected != "UNKNOWN") {
                     _detectedLanguage.value = detected
@@ -191,6 +193,7 @@ object VoiceSessionManager {
             override fun onOutputTranscript(text: String) {
                 if (sessionEpoch.get() != currentEpoch) return
                 ConversationMemory.recordTurn(MemoryRole.ASSISTANT, text)
+                scope.launch { PersistentChatMemory.record(currentContext, "Assistant", text) }
             }
 
             override fun onToolCall(id: String, name: String, args: JSONObject) {
