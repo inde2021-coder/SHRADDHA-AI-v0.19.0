@@ -845,7 +845,7 @@ async def run_once(args) -> None:
                     }))
                 elif kind == "control_result":
                     if phone_action and message.get("targetDeviceId") == args.control_phone and message.get("approved") is True:
-                        await ws.send(json.dumps({"type": "remote_action", "targetDeviceId": args.control_phone, "action": phone_action}))
+                        await ws.send(json.dumps({"type": "remote_action", "targetDeviceId": args.control_phone, "actionId": __import__("secrets").token_urlsafe(18), "action": phone_action}))
                         phone_action_sent = True
                         print("Android owner approved. Sending one locally-confirmed action…")
                     elif phone_action:
