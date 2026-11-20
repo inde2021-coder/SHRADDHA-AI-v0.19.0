@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { validateSharedFileEnvelope } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
