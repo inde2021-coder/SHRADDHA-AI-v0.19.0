@@ -22,7 +22,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +39,8 @@ jobs:
         run: chmod +x ./gradlew
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
+      - name: Run Android static lint
+        run: ./gradlew lintDebug
       - name: Build debug APK
         run: ./gradlew assembleDebug
       - name: Verify device-specific APKs and generate checksums
