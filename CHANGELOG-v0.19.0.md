@@ -39,3 +39,13 @@
 - Android CI run #280: unit tests, backend tests, debug APK build, ARM ABI split verification and checksums passed.
 - Windows PC Companion CI run #7: 13 Python tests and EXE packaging passed.
 - Physical Android device, real provider/Firebase account, and release-signing tests remain separate requirements.
+
+### UI / UX continuation — 2026-11-20
+- Reworked Android launcher layout for status/navigation bar and keyboard insets.
+- Bottom dock now moves out of the way while the keyboard is visible.
+- Added workspace search across the launcher destinations.
+- Simplified dashboard labels and removed redundant static system-status copy.
+- Standardized native action buttons to compact single-line raised controls with ripple and accessible help text.
+- Refined Compose button shape and touch size; cancelled gestures no longer trigger actions.
+- Reduced unused bottom padding in Home and Settings; floating dock respects navigation-bar insets.
+- Verification: Android CI #299 is running; no phone visual testing is claimed.
