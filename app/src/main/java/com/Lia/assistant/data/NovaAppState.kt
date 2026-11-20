@@ -64,6 +64,19 @@ class NovaAppState(context: Context) {
     )
         private set
 
+    var aiProvider by mutableStateOf(
+        NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
+            .uppercase().takeIf { it in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY") } ?: "GEMINI"
+    )
+        private set
+
+    fun applyAiProvider(context: Context, provider: String) {
+        val normalized = provider.uppercase()
+        require(normalized in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY"))
+        aiProvider = normalized
+        NovaPreferences.putString(context, NovaPreferences.Keys.AI_PROVIDER, normalized)
+    }
+
     var language by mutableStateOf(
         LanguagePreference.fromString(
             NovaPreferences.getString(
