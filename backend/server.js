@@ -538,7 +538,7 @@ wss.on('connection', (ws, ctx) => {
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'control_mode', mode: session.controlMode }));
     } else if (msg.type === 'permission_update') {
       // A device can only publish its own sharing policy. Every category is opt-in.
-      const allowed = ['contacts','media','documents','messages','calendar','location','device_status','ai_memory','screen','camera','remote_control'];
+      const allowed = ['contacts','media','documents','messages','calendar','location','device_status','ai_memory','clipboard','screen','camera','remote_control'];
       const next = {};
       if (!msg.permissions || typeof msg.permissions !== 'object' || Array.isArray(msg.permissions)) return;
       for (const key of allowed) next[key] = msg.permissions[key] === true;
