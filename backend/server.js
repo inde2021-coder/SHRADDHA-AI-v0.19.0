@@ -9,6 +9,7 @@ import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
 import { buildVisionPrompt } from './vision-analysis.js';
+import { resamplePcm16 } from './telephony-audio.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -20,21 +21,7 @@ const councilAttempts = new Map();
 const apiAttempts = new Map();
 const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
-function resamplePcm16(input, fromRate, toRate) {
-  const count = Math.floor(input.length / 2);
-  if (!count || fromRate === toRate) return input;
-  const outCount = Math.max(1, Math.floor(count * toRate / fromRate));
-  const out = Buffer.allocUnsafe(outCount * 2);
-  for (let i = 0; i < outCount; i += 1) {
-    const position = i * fromRate / toRate;
-    const left = Math.min(count - 1, Math.floor(position));
-    const right = Math.min(count - 1, left + 1);
-    const fraction = position - left;
-    const value = input.readInt16LE(left * 2) * (1 - fraction) + input.readInt16LE(right * 2) * fraction;
-    out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(value))), i * 2);
-  }
-  return out;
-}
+
 const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
