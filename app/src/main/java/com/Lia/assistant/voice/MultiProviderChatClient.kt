@@ -29,7 +29,7 @@ object MultiProviderChatClient {
         "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-4o-mini")
         "GROQ" -> Config("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile")
         "PERPLEXITY" -> Config("https://api.perplexity.ai/chat/completions", "sonar")
-        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-3-5-sonnet-latest", true)
+        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5-5", true)
         else -> null
     }
 
