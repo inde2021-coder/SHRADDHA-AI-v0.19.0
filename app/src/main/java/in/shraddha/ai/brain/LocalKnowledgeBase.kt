@@ -1,15 +1,54 @@
 package `in`.shraddha.ai.brain
 
-/** Small on-device keyword retrieval for user-selected notes; no cloud upload or embeddings. */
+/**
+ * On-device retrieval for user-selected notes and encrypted memory recaps.
+ * This is lexical search (not embeddings or semantic AI); content is never uploaded.
+ */
 object LocalKnowledgeBase {
-    data class Hit(val text: String, val score: Int)
+    data class Hit(
+        val text: String,
+        val score: Int,
+        val matchedTerms: List<String> = emptyList()
+    )
+
+    private val stopWords = setOf(
+        "the", "and", "for", "with", "from", "that", "this", "was", "were", "are", "you", "your",
+        "में", "से", "को", "का", "की", "के", "और", "है", "हैं", "था", "थी", "थे", "पर", "एक",
+        "मुझे", "मेरा", "मेरी", "मेरे", "यह", "वह", "कर", "करो", "करना", "था"
+    )
+
+    /** Returns the strongest distinct passages; limit is deliberately bounded for prompt safety. */
     fun search(notes: String, query: String, limit: Int = 4): List<Hit> {
-        val terms = query.lowercase().split(Regex("[^\\p{L}\\p{N}]+" )).filter { it.length > 1 }.toSet()
+        val safeLimit = limit.coerceIn(0, 10)
+        if (safeLimit == 0 || notes.isBlank() || query.isBlank()) return emptyList()
+        val terms = tokens(query).filter { it.length > 1 && it !in stopWords }.distinct()
         if (terms.isEmpty()) return emptyList()
-        return notes.split(Regex("(?<=[.!?।\\n])\\s+")).mapNotNull { sentence ->
-            val words = sentence.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).toSet()
-            val score = terms.count { it in words || words.any { w -> w.startsWith(it) && it.length >= 3 } }
-            if (score > 0) Hit(sentence.trim(), score) else null
-        }.sortedByDescending { it.score }.take(limit)
+        val normalizedQuery = query.trim().lowercase()
+        val seen = hashSetOf<String>()
+
+        return notes.split(Regex("(?<=[.!?।\\n])\\s+|\\n{2,}"))
+            .mapNotNull { raw ->
+                val passage = raw.trim()
+                if (passage.isEmpty()) return@mapNotNull null
+                val identity = passage.lowercase()
+                if (!seen.add(identity)) return@mapNotNull null
+                val words = tokens(passage).toSet()
+                val matched = terms.filter { term ->
+                    words.any { word -> word == term || (term.length >= 3 && word.startsWith(term)) || (word.length >= 4 && term.startsWith(word)) }
+                }
+                if (matched.isEmpty()) return@mapNotNull null
+                var score = matched.sumOf { term ->
+                    if (term in words) 3 else 1
+                }
+                if (identity.contains(normalizedQuery)) score += 5
+                // Prefer passages that cover a larger fraction of the user's query.
+                score += (matched.size * 4 / terms.size)
+                Hit(passage, score, matched)
+            }
+            .sortedWith(compareByDescending<Hit> { it.score }.thenByDescending { it.matchedTerms.size })
+            .take(safeLimit)
     }
+
+    private fun tokens(value: String): List<String> =
+        value.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.isNotBlank() }
 }
