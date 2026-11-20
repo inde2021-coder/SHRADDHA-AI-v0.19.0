@@ -1269,7 +1269,7 @@ class MainActivity : AppCompatActivity() {
                     firebaseProjectId.text.toString(), firebaseSenderId.text.toString(), firebaseBucket.text.toString()
                 )
                 result.text = configured.fold(
-                    { "Firebase config saved. Restart Shraddha AI, then create/sign in to your account." },
+                    { "Firebase config saved. You can now create/sign in to your account. If a previous Firebase config was already initialized, restart the app first." },
                     { "Firebase config error: ${it.message}" }
                 )
             })

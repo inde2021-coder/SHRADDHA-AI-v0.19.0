@@ -10,6 +10,7 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
+const sessionCreateAttempts = new Map();
 const AI_ROUTES = new Set(['/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -34,7 +35,7 @@ async function askProvider(provider, prompt) {
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
@@ -62,7 +63,7 @@ async function askVision(provider, prompt, imageBase64, mimeType) {
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
     const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini vision request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
@@ -98,6 +99,12 @@ const server = http.createServer(async (req, res) => {
   }
   try {
     if (req.method === 'POST' && req.url === '/api/device/session') {
+      const ip = clientIp(req);
+      const now = Date.now(); const usage = sessionCreateAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
+      if (usage.resetAt <= now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
+      usage.count += 1; sessionCreateAttempts.set(ip, usage);
+      if (usage.count > 10) return json(res, 429, { error: 'Too many session creation requests. Wait ten minutes and try again.' });
+      if (sessions.size >= 500) return json(res, 503, { error: 'Relay session capacity reached. Try again later.' });
       const body = await readBody(req);
       const name = typeof body.deviceName === 'string' ? body.deviceName.trim() : '';
       if (!name || name.length > 48) return json(res, 400, { error: 'deviceName must be 1-48 characters' });
@@ -251,7 +258,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { provider, domain, mode, answer, safetyReviewRequired: ['medical','electrical','electronics','mechanical','civil','law','repair'].includes(domain) });
     }
     if (req.method === 'POST' && req.url === '/api/agents/council') {
-      if (!process.env.GATEWAY_TOKEN || req.headers.authorization !== `Bearer ${process.env.GATEWAY_TOKEN}`) return json(res, 401, { error: 'Gateway authentication is required' });
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const caller = clientIp(req);
       const now = Date.now(); const usage = councilAttempts.get(caller) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (usage.resetAt < now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
@@ -463,6 +470,9 @@ setInterval(() => {
   const now = Date.now();
   for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code);
   for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip);
+  for (const [ip, a] of apiAttempts) if (a.resetAt < now) apiAttempts.delete(ip);
+  for (const [ip, a] of councilAttempts) if (a.resetAt < now) councilAttempts.delete(ip);
+  for (const [ip, a] of sessionCreateAttempts) if (a.resetAt < now) sessionCreateAttempts.delete(ip);
   for (const session of sessions.values()) for (const device of session.devices.values()) {
     for (const [id, expiry] of device.pendingControlRequests) if (expiry < now) device.pendingControlRequests.delete(id);
     for (const [key, pending] of device.pendingDataShares) if (pending.expiresAt < now) device.pendingDataShares.delete(key);
