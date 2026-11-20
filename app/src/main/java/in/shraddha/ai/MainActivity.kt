@@ -1374,16 +1374,22 @@ class MainActivity : AppCompatActivity() {
                         if (pass.length < 12 || pass != confirm.text.toString()) {
                             status.text = "Passphrase कम-से-कम 12 अक्षर का हो और दोनों fields समान हों।"; return@setPositiveButton
                         }
-                        runCatching { UserBackupManager(this@MainActivity).export(pass.toCharArray()) }
-                            .onSuccess { envelope ->
-                                getSharedPreferences("shraddha_backup_pending", MODE_PRIVATE).edit().putString("payload", envelope).apply()
-                                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                                    addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
-                                    putExtra(Intent.EXTRA_TITLE, "shraddha-ai-encrypted-backup-" + System.currentTimeMillis() + ".json")
-                                }
-                                @Suppress("DEPRECATION")
-                                startActivityForResult(intent, backupFileRequest)
-                            }.onFailure { status.text = "Backup encryption failed: " + it.message }
+                        status.text = "Backup encrypt हो रहा है…"
+                        val passphrase = pass.toCharArray()
+                        Thread {
+                            val result = runCatching { UserBackupManager(this@MainActivity).export(passphrase) }
+                            runOnUiThread {
+                                result.onSuccess { envelope ->
+                                    getSharedPreferences("shraddha_backup_pending", MODE_PRIVATE).edit().putString("payload", envelope).apply()
+                                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+                                        putExtra(Intent.EXTRA_TITLE, "shraddha-ai-encrypted-backup-" + System.currentTimeMillis() + ".json")
+                                    }
+                                    @Suppress("DEPRECATION")
+                                    startActivityForResult(intent, backupFileRequest)
+                                }.onFailure { status.text = "Backup encryption failed: " + it.message }
+                            }
+                        }.start()
                     }.show()
             })
             addView(actionButton("IMPORT ENCRYPTED BACKUP", "Decrypt locally; selected app data will be replaced only after your confirmation") {
@@ -1903,7 +1909,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Compatibility with starter project")
     private fun importEncryptedBackup(uri: Uri) {
         val envelope = runCatching {
             val stream = contentResolver.openInputStream(uri) ?: error("Backup file could not be opened")
@@ -1930,12 +1935,18 @@ class MainActivity : AppCompatActivity() {
             .setMessage("यह Knowledge Graph, Tasks, Project, Digital Twin, Assistant Name और opt-in Conversation Memory को backup वाली स्थिति से replace करेगा। API keys, Firebase login, biometrics और device pairing secrets शामिल नहीं हैं।")
             .setView(panel).setNegativeButton("Keep current data", null)
             .setPositiveButton("Decrypt & restore") { _, _ ->
-                val result = UserBackupManager(this@MainActivity).restore(envelope, password.text.toString().toCharArray())
-                result.fold(
-                    { status.text = "Encrypted backup restored. Pending task reminders पुनः schedule किए गए। सभी screens refresh करने के लिए app restart करें।" },
-                    { status.text = "Backup restore failed: " + it.message }
-                )
+                status.text = "Backup decrypt और restore हो रहा है…"
+                val passphrase = password.text.toString().toCharArray()
                 password.setText("")
+                Thread {
+                    val result = UserBackupManager(this@MainActivity).restore(envelope, passphrase)
+                    runOnUiThread {
+                        result.fold(
+                            { status.text = "Encrypted backup restored. Pending task reminders पुनः schedule किए गए। सभी screens refresh करने के लिए app restart करें।" },
+                            { status.text = "Backup restore failed: " + it.message }
+                        )
+                    }
+                }.start()
             }.show()
     }
 

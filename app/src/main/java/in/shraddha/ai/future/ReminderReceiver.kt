@@ -39,6 +39,7 @@ class ReminderBootReceiver : BroadcastReceiver() {
         fun restore(context: Context) {
             val preferences = context.getSharedPreferences("shraddha_task_planner", Context.MODE_PRIVATE)
             if (preferences.getBoolean("daily_briefing_enabled", false)) DailyBriefingReceiver.scheduleNext(context)
+            else DailyBriefingReceiver.cancel(context)
             val raw = preferences.getString("tasks", "[]") ?: "[]"
             val now = System.currentTimeMillis()
             runCatching {
@@ -110,6 +111,15 @@ class DailyBriefingReceiver : BroadcastReceiver() {
 
     companion object {
         private const val REQUEST_CODE = 81008
+        fun cancel(context: Context) {
+            val pending = PendingIntent.getBroadcast(
+                context, REQUEST_CODE, Intent(context, DailyBriefingReceiver::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pending)
+            pending.cancel()
+        }
+
         fun scheduleNext(context: Context) {
             val next = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 8); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)

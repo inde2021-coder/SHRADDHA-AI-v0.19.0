@@ -18,7 +18,7 @@ object SecureBackupCodec {
     private const val VERSION = "SBA1"
     private val aad = "ShraddhaAI:$VERSION".toByteArray(StandardCharsets.UTF_8)
 
-    fun encrypt(plaintext: String, passphrase: CharArray): String {
+    fun encrypt(plaintext: String, passphrase: CharArray): String = try {
         require(passphrase.size >= MIN_PASSPHRASE_LENGTH) { "Backup passphrase must contain at least 12 characters" }
         val bytes = plaintext.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty() && bytes.size <= MAX_PLAINTEXT_BYTES) { "Backup payload is empty or exceeds 1.5 MB" }
@@ -29,10 +29,12 @@ object SecureBackupCodec {
         cipher.updateAAD(aad)
         val ciphertext = cipher.doFinal(bytes)
         val encoder = Base64.getUrlEncoder().withoutPadding()
-        return listOf(VERSION, encoder.encodeToString(salt), encoder.encodeToString(iv), encoder.encodeToString(ciphertext)).joinToString(".")
+        listOf(VERSION, encoder.encodeToString(salt), encoder.encodeToString(iv), encoder.encodeToString(ciphertext)).joinToString(".")
+    } finally {
+        passphrase.fill(0.toChar())
     }
 
-    fun decrypt(envelope: String, passphrase: CharArray): String {
+    fun decrypt(envelope: String, passphrase: CharArray): String = try {
         require(passphrase.size >= MIN_PASSPHRASE_LENGTH) { "Backup passphrase must contain at least 12 characters" }
         require(envelope.length in 40..2_100_000) { "Encrypted backup is empty or too large" }
         val parts = envelope.split('.')
@@ -47,11 +49,13 @@ object SecureBackupCodec {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, derive(passphrase, salt), GCMParameterSpec(128, iv))
         cipher.updateAAD(aad)
-        return try {
+        try {
             String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
         } catch (_: AEADBadTagException) {
             throw IllegalArgumentException("Wrong passphrase or backup integrity check failed")
         }
+    } finally {
+        passphrase.fill(0.toChar())
     }
 
     private fun derive(passphrase: CharArray, salt: ByteArray): SecretKeySpec {

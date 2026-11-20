@@ -67,6 +67,12 @@ class OperatorActivity : Activity() {
         runCatching { startActivityForResult(intent, 902) }.onFailure { log.text = "इस डिवाइस पर Speech Recognition उपलब्ध नहीं है।" }
     }
 
+    override fun onDestroy() {
+        activeRunner?.stop()
+        activeRunner = null
+        super.onDestroy()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 902 && resultCode == RESULT_OK) {
