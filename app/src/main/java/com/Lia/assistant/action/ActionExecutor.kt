@@ -59,7 +59,7 @@ object ActionExecutor {
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
-                        result.put("status", if (callStatus == "calling" || callStatus == "dialer_opened_no_permission") "success" else "error")
+                        result.put("status", if (callStatus == "calling") "success" else "needs_user_action")
                         result.put("action", callStatus)
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
