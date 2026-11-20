@@ -22,6 +22,9 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.card.MaterialCardView
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.brain.SecureMemoryVault
@@ -91,12 +94,20 @@ class MainActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
         }
 
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         pageRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(24))
+            setPadding(dp(16), dp(10), dp(16), dp(20))
             setBackgroundColor(0xFF070B14.toInt())
         }
-        pageScroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(pageRoot) }
+        pageScroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            clipChildren = false
+            addView(pageRoot)
+        }
         shell = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xFF070B14.toInt())
@@ -105,6 +116,22 @@ class MainActivity : AppCompatActivity() {
         shell.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         shell.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(shell)
+        ViewCompat.setOnApplyWindowInsetsListener(shell) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            shell.setPadding(0, bars.top, 0, if (keyboardVisible) ime.bottom else 0)
+            bottomNav.visibility = if (keyboardVisible) View.GONE else View.VISIBLE
+            val navParams = bottomNav.layoutParams
+            val targetHeight = dp(68) + if (keyboardVisible) 0 else bars.bottom
+            if (navParams.height != targetHeight) {
+                navParams.height = targetHeight
+                bottomNav.layoutParams = navParams
+            }
+            bottomNav.setPadding(dp(8), dp(5), dp(8), if (keyboardVisible) dp(5) else bars.bottom + dp(5))
+            insets
+        }
+        ViewCompat.requestApplyInsets(shell)
         status = TextView(this).apply {
             text = "Ready • $assistantDisplayName तैयार है। अपनी जरूरत का एक workspace खोलें।"
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -182,37 +209,27 @@ class MainActivity : AppCompatActivity() {
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Tap to speak") { startVoiceInput() })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
 
-        val liveCard = section(pageRoot, "LIVE WORKSPACE", "वास्तविक screen/task activity यहाँ दिखाई जाएगी; connection न होने पर कोई नकली live status नहीं दिखेगा") {
+        section(pageRoot, "LIVE WORKSPACE", "No active task") {
             addView(TextView(this@MainActivity).apply {
                 text = "◉  WAITING FOR AN ACTIVE TASK"
                 textSize = 11f; letterSpacing = .06f; setTextColor(0xFF79DCCB.toInt())
                 setPadding(dp(12), dp(13), dp(12), dp(13))
                 background = rounded(0xFF0D2027.toInt(), 14)
             })
-            addView(TextView(this@MainActivity).apply {
-                text = "Connect App Operator or a paired desktop/phone to stream verified actions, screen previews and task results."
-                textSize = 12f; setTextColor(0xFF9EABC2.toInt()); setPadding(0, dp(10), 0, dp(2))
-            })
-            addView(actionButton("OPEN LIVE APP OPERATOR", "Observe → act → verify") {
+            addView(actionButton("OPEN APP OPERATOR", "View and approve app actions") {
                 startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java))
             })
         }
 
         workspaceGrid(pageRoot)
-        section(pageRoot, "SYSTEM STATUS", "यहाँ केवल app द्वारा ज्ञात वास्तविक स्थिति दिखाई जाएगी") {
-            addView(TextView(this@MainActivity).apply {
-                text = "ON-DEVICE CORE  •  READY\\nCLOUD SYNC  •  CONFIGURATION REQUIRED\\nPC COMPANION  •  PAIRING REQUIRED"
-                textSize = 11f; setLineSpacing(dp(5).toFloat(), 1f); setTextColor(0xFFB8C6DF.toInt())
-                background = rounded(0xFF0B1422.toInt(), 16); setPadding(dp(14), dp(14), dp(14), dp(14))
-            })
-        }
+        // Connection state appears only in its workspace when a real result is available.
     }
 
     private fun workspaceTile(title: String, subtitle: String, action: () -> Unit): LinearLayout {
         val tile = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            minimumHeight = dp(126)
+            minimumHeight = dp(112)
             setPadding(dp(14), dp(14), dp(14), dp(14))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
@@ -234,7 +251,8 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         tile.addView(TextView(this).apply {
-            text = subtitle; textSize = 10.5f; maxLines = 3
+            text = subtitle; textSize = 10.5f; maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(dp(2).toFloat(), 1f); setTextColor(0xFFAAB8D0.toInt())
             setPadding(0, dp(8), 0, 0)
         })
@@ -242,18 +260,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun workspaceGrid(root: LinearLayout) {
-        section(root, "COMMAND CENTER", "अपने सभी AI systems और workspaces एक जगह से खोलें") {
+        section(root, "WORKSPACES", "") {
             val items = listOf(
-                Triple("✦  AI BRAIN + VOICE", "Hindi / English • Live audio • Memory", { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) }),
-                Triple("◈  WINDOWS PC CENTER", "Windows companion • remote screen • local approval", { showPage("devices") }),
-                Triple("◈  EXPERT STUDIO", "Engineering • Agriculture • Law", { showPage("expert") }),
-                Triple("⌘  DEVICE UNIVERSE", "Paired phones • PC • Remote screen", { showPage("devices") }),
-                Triple("▣  APP OPERATOR", "Visual UI • Workflow • Verification", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
-                Triple("◇  AI PROJECT LAB", "Agents • Code • Website • Apps", { showPage("lab") }),
-                Triple("◎  PEOPLE MEMORY", "Consent-based person profiles", { showPage("people") }),
-                Triple("☁  CLOUD & DATA", "Firebase • Secure memory • Sharing", { showPage("cloud") }),
-                Triple("⚙  CONTROL & PRIVACY", "Permissions • Security • Access", { showPage("permissions") }),
-                Triple("✧  FUTURE INTELLIGENCE", "Advanced systems • Workflow safety", { showPage("future") })
+                Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) }),
+                Triple("◈  WINDOWS PC CENTER", "Pair • Screen • Control", { showPage("devices") }),
+                Triple("◈  EXPERT STUDIO", "Research • Expert answers", { showPage("expert") }),
+                Triple("⌘  DEVICE UNIVERSE", "Phones • PC • Pairing", { showPage("devices") }),
+                Triple("▣  APP OPERATOR", "Observe • Approve • Verify", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
+                Triple("◇  AI PROJECT LAB", "Agents • Code • Apps", { showPage("lab") }),
+                Triple("◎  PEOPLE MEMORY", "Consented profiles", { showPage("people") }),
+                Triple("☁  CLOUD & DATA", "Backup • Sync • Sharing", { showPage("cloud") }),
+                Triple("⚙  CONTROL & PRIVACY", "Permissions • Security", { showPage("permissions") }),
+                Triple("✧  FUTURE INTELLIGENCE", "Automation • Safe workflows", { showPage("future") })
             )
             items.chunked(2).forEach { pair ->
                 val row = LinearLayout(this@MainActivity).apply {
@@ -1582,12 +1600,14 @@ class MainActivity : AppCompatActivity() {
             setTextColor(0xFFB9A7FF.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
-        body.addView(TextView(this).apply {
+        if (subtitle.isNotBlank()) body.addView(TextView(this).apply {
             text = subtitle
-            textSize = 12f
+            textSize = 11f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(dp(2).toFloat(), 1f)
             setTextColor(0xFFAAB7CC.toInt())
-            setPadding(0, dp(7), 0, dp(16))
+            setPadding(0, dp(5), 0, dp(10))
         })
         body.content()
         root.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
@@ -1878,26 +1898,38 @@ class MainActivity : AppCompatActivity() {
 
     private fun validRelay(url: String) = url.startsWith("https://") && !url.contains("your-domain")
     private fun edit(label: String, hint: String) = EditText(this).apply {
-        this.hint = "$label  •  $hint"; setHintTextColor(0xFF8291AA.toInt()); setTextColor(-1); textSize = 14f
+        this.hint = label
+        contentDescription = "$label. $hint"
+        tooltipText = hint
+        setHintTextColor(0xFF8291AA.toInt()); setTextColor(-1); textSize = 14f
         setSingleLine(true); setPadding(dp(14), dp(13), dp(14), dp(13)); background = rounded(0xFF0B1220.toInt(), 14)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }
     private fun actionButton(label: String, hint: String, action: () -> Unit) = Button(this).apply {
-        text = "$label\n$hint"
+        text = label
         isAllCaps = false
-        textSize = 12f
-        letterSpacing = .015f
-        gravity = android.view.Gravity.CENTER_VERTICAL
+        maxLines = 1
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        textSize = 13f
+        letterSpacing = .01f
+        gravity = android.view.Gravity.CENTER
         setTextColor(0xFFF5F6FF.toInt())
-        background = android.graphics.drawable.GradientDrawable(
+        val shape = android.graphics.drawable.GradientDrawable(
             android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF51449A.toInt(), 0xFF263D68.toInt())
-        ).apply { cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF7468C5.toInt()) }
-        minHeight = dp(54)
-        setPadding(dp(16), dp(10), dp(16), dp(10))
-        elevation = dp(2).toFloat()
+            intArrayOf(0xFF6255B8.toInt(), 0xFF31517E.toInt())
+        ).apply { cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF8B80D8.toInt()) }
+        background = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(0x447D8CFF),
+            shape,
+            rounded(android.graphics.Color.WHITE, 16)
+        )
+        minHeight = dp(50)
+        setPadding(dp(14), 0, dp(14), 0)
+        elevation = dp(3).toFloat()
+        contentDescription = "$label. $hint"
+        tooltipText = hint
         setOnClickListener { action() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
+        layoutParams = LinearLayout.LayoutParams(-1, dp(50)).apply { bottomMargin = dp(8) }
     }
 
     private fun requestAudioPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 10) }
