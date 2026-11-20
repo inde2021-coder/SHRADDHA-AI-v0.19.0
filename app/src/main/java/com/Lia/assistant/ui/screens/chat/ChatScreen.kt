@@ -59,6 +59,7 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.ChatPromptBuilder
+import `in`.shraddha.ai.brain.PersistentChatMemory
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
@@ -144,19 +145,27 @@ fun ChatScreen(
         // Call the selected AI provider
         isTyping = true
         scope.launch(Dispatchers.IO) {
+            // Persistent memory is opt-in and encrypted locally. If disabled, no recap is read or saved.
+            PersistentChatMemory.record(context, "User", trimmed)
             val systemInstruction = ChatPromptBuilder.build(
                 personality = appState.personality,
                 language = appState.language,
                 assistantName = appState.assistantName
             )
-
-            val boundedInstruction = systemInstruction.take(8_000)
+            val memoryRecap = PersistentChatMemory.recap(context)
+            val memoryInstruction = memoryRecap?.let {
+                "\\n\\nRelevant saved conversation memory (user-approved, may be incomplete):\\n" + it
+            }.orEmpty()
+            val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
             val result = if (appState.aiProvider == "GEMINI") {
                 GeminiTextClient.reply(ApiKeyStore.getKey(context), boundedInstruction, historySnapshot)
             } else {
                 MultiProviderChatClient.reply(context, appState.aiProvider, boundedInstruction, historySnapshot)
             }
 
+            if (result is ChatReplyResult.Success) {
+                PersistentChatMemory.record(context, "Assistant", result.text)
+            }
             withContext(Dispatchers.Main) {
                 isTyping = false
                 when (result) {
