@@ -45,8 +45,13 @@ Not started in this implementation pass. Provider abstraction, capability routin
 ## Step 7 — Premium UI
 Not started in this implementation pass. Full-screen responsive design, navigation, accessibility, animation performance, reduced-motion support and dynamic assistant-name replacement require UI audit and device verification.
 
-## Step 8 — Firebase and Security
-Not started in this implementation pass. Firestore/Storage rules, auth lifecycle, account deletion/export, backup/restore, encryption key recovery, token handling, secret scanning and emulator/rules tests remain open. No credentials should be committed.
+## Step 8 — Firebase and Security (rules hardening in progress)
+
+- Existing Firestore rules scope vault reads/writes to the authenticated user's UID, validate document keys, payload format/type and payload size, and deny all other document paths.
+- Storage rules now scope paths to the authenticated user's UID, cap uploads below 50 MB, allow only image/video/PDF/JSON/plain-text content types, and deny all other paths.
+- Added root firebase.json to point Firebase CLI deployment at the checked-in Firestore and Storage rules.
+- Firebase config is loaded from environment/local.properties into BuildConfig; no service-account credential is committed.
+- Remaining: run Firebase Emulator rules tests, deploy rules to the intended Firebase project, verify Auth providers/authorized domains, account deletion and data export end-to-end, token lifecycle, backup recovery and secret scanning. A checked-in rules file is not proof that production rules have been deployed.
 
 ## Step 9 — Final Testing
 Not started. Requires successful unit tests, lint/static checks, debug and release APK builds, install/upgrade tests, physical-device tests, crash/performance checks and final artifact checksums.
