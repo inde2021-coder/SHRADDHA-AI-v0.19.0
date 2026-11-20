@@ -1220,6 +1220,53 @@ class MainActivity : AppCompatActivity() {
                     } catch (e: Exception) { runOnUiThread { councilOutput.text = "Connection error: ${e.message ?: "Unknown error"}. Backend URL, HTTPS certificate, internet and provider configuration जाँचें।" } }
                 }.start()
             })
+
+            addView(actionButton("GENERATE COUNCIL TO OPERATOR PLAN", "AI proposal को validate करके Operator में review और step-by-step approval के लिए भेजें") {
+                val base = endpoint.text.toString().trim().trimEnd('/')
+                val goalText = councilGoal.text.toString().trim()
+                val providers = providersField.text.toString().split(',').map { it.trim().lowercase() }
+                    .filter { it in listOf("openai","gemini","anthropic","groq","perplexity") }.distinct().take(5)
+                val gatewayTokenValue = tokenField.text.toString().trim()
+                if (!base.startsWith("https://") || goalText.isBlank() || providers.isEmpty() || gatewayTokenValue.isBlank()) {
+                    councilOutput.text = "पहले HTTPS backend, gateway token, goal और कम-से-कम एक valid provider configure करें।"
+                    return@actionButton
+                }
+                councilOutput.text = "AI Council से सीमित accessibility action proposal माँगा जा रहा है… अभी कोई action execute नहीं होगा।"
+                Thread {
+                    try {
+                        val payload = JSONObject().put("goal", goalText).put("providers", JSONArray(providers))
+                            .toString().toByteArray(Charsets.UTF_8)
+                        val connection = (java.net.URL("$base/api/agents/council/operator-plan").openConnection() as java.net.HttpURLConnection).apply {
+                            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 60000; doOutput = true
+                            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                            setRequestProperty("Authorization", "Bearer $gatewayTokenValue")
+                        }
+                        connection.outputStream.use { it.write(payload) }
+                        val code = connection.responseCode
+                        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        connection.disconnect()
+                        val data = JSONObject(raw.ifBlank { "{}" })
+                        if (code !in 200..299 || data.optString("mode") != "council_operator_plan_proposal") {
+                            runOnUiThread { councilOutput.text = "Operator plan नहीं बना: HTTP $code • ${data.optString("error", "invalid response")}. कोई action execute नहीं हुआ।" }
+                        } else {
+                            val steps = data.optJSONArray("steps") ?: JSONArray()
+                            if (steps.length() !in 1..12 || !data.optBoolean("requiresUserReview") || !data.optBoolean("requiresPerStepApproval")) {
+                                runOnUiThread { councilOutput.text = "Council ने सुरक्षित executable plan नहीं दिया। कोई action execute नहीं हुआ।" }
+                            } else {
+                                runOnUiThread {
+                                    councilOutput.text = "Proposal तैयार: ${steps.length()} step(s). पहले पूरा plan review होगा; हर step की अलग अनुमति आवश्यक है।"
+                                    val launch = android.content.Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)
+                                        .putExtra("council_operator_plan", data.toString())
+                                    startActivity(launch)
+                                }
+                            }
+                        }
+                    } catch (error: Exception) {
+                        runOnUiThread { councilOutput.text = "Council Operator plan request failed: ${error.message ?: "network/backend error"}. कोई action execute नहीं हुआ।" }
+                    }
+                }.start()
+            })
         }
         section(root, "AUTONOMOUS PROJECT WORKSPACE", "Milestones और progress फोन में local save होते हैं। यह tracker है, background में अपने-आप काम चलाने वाला executor नहीं।") {
             val projectName=edit("Project name","उदाहरण: Website launch")
