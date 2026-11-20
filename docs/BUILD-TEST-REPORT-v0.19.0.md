@@ -1,7 +1,7 @@
 # v0.19.0 Build/Test Report
 
 ## CI verification
-- Android unit tests: PASS (GitHub Actions run #203, commit `635b2c571326681ef7bcd53268c8162bb1734d5a`)
+- Android unit tests: PASS (GitHub Actions run #205, commit `635b2c571326681ef7bcd53268c8162bb1734d5a`)
 - Android debug APK build: PASS
 - ARM ABI split generation: PASS (`arm64-v8a`, `armeabi-v7a`)
 - APK architecture verification: PASS (each APK contains only its intended ARM native ABI)
