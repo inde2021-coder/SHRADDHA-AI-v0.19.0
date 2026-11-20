@@ -51,7 +51,7 @@ object GeminiTextClient {
         try {
             internalHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    val fallback = "models/gemini-2.0-flash"
+                    val fallback = "models/gemini-3.8-flash"
                     resolvedModels[cacheKey] = fallback
                     return fallback
                 }
@@ -61,7 +61,7 @@ object GeminiTextClient {
                 val models = json.optJSONArray("models") ?: JSONArray()
 
                 var flashCandidate: String? = null
-                var anyGenerateCandidate: String? = null
+                var bestVersionRank = -1
 
                 for (i in 0 until models.length()) {
                     val modelObj = models.getJSONObject(i)
@@ -75,35 +75,37 @@ object GeminiTextClient {
                         }
                     }
 
-                    if (canGenerate) {
-                        if (anyGenerateCandidate == null) {
-                            anyGenerateCandidate = name
-                        }
-                        val lowerName = name.lowercase()
-                        if (lowerName.contains("flash") &&
-                            !lowerName.contains("live") &&
-                            !lowerName.contains("image") &&
-                            !lowerName.contains("tts") &&
-                            !lowerName.contains("native-audio")
-                        ) {
-                            // Prefer gemini-2.0 or newer over older models
-                            if (flashCandidate == null ||
-                                (lowerName.contains("2.0") || lowerName.contains("2.5")) &&
-                                !flashCandidate!!.lowercase().contains("2.0") &&
-                                !flashCandidate!!.lowercase().contains("2.5")
-                            ) {
-                                flashCandidate = name
-                            }
-                        }
+                    if (!canGenerate) continue
+                    val lowerName = name.lowercase()
+                    if (!lowerName.contains("flash") ||
+                        lowerName.contains("live") ||
+                        lowerName.contains("image") ||
+                        lowerName.contains("tts") ||
+                        lowerName.contains("native-audio")
+                    ) continue
+
+                    // New projects may not be entitled to Gemini 2.5 generation even
+                    // when the catalog lists it. Prefer current 3.x Flash models and
+                    // rank by major/minor version (e.g. 3.8 > 3.5 > 3.1).
+                    val version = Regex("gemini-(\\d+)\\.(\\d+)").find(lowerName) ?: continue
+                    val major = version.groupValues[1].toIntOrNull() ?: continue
+                    val minor = version.groupValues[2].toIntOrNull() ?: continue
+                    if (major < 3) continue
+                    val rank = major * 100 + minor
+                    val previewPenalty = if (lowerName.contains("preview")) 0 else 1
+                    val weightedRank = rank * 10 + previewPenalty
+                    if (weightedRank > bestVersionRank) {
+                        bestVersionRank = weightedRank
+                        flashCandidate = name
                     }
                 }
 
-                val chosen = flashCandidate ?: anyGenerateCandidate ?: "models/gemini-2.0-flash"
+                val chosen = flashCandidate ?: "models/gemini-3.8-flash"
                 resolvedModels[cacheKey] = chosen
                 return chosen
             }
         } catch (_: Exception) {
-            val fallback = "models/gemini-2.0-flash"
+            val fallback = "models/gemini-3.8-flash"
             resolvedModels[cacheKey] = fallback
             return fallback
         }
@@ -129,7 +131,7 @@ object GeminiTextClient {
 
         val modelName = runCatching {
             kotlinx.coroutines.runBlocking { resolveModel(apiKey) }
-        }.getOrDefault("models/gemini-2.0-flash")
+        }.getOrDefault("models/gemini-3.8-flash")
 
         val modelEndpoint = if (modelName.startsWith("models/")) modelName else "models/$modelName"
         val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:generateContent"
