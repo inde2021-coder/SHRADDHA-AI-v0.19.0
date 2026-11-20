@@ -207,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         section(pageRoot, "COMMAND CENTER", "सभी systems एक unified dashboard से") {
             addView(workspaceTile("✦  AI BRAIN + ${assistantDisplayName.uppercase()} VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             addView(workspaceTile("◈  ${assistantDisplayName.uppercase()} PC COMPANION", "Windows/Linux companion • Website Forge • PC automation") { showPage("devices") })
-            addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical learning • Agriculture • Law • Creator") { showPage("expert") })
+            addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical information • Agriculture • Law • Creator") { showPage("expert") })
             addView(workspaceTile("⌘  DEVICE UNIVERSE", "Paired phones • PC companion • Remote screen") { showPage("devices") })
             addView(workspaceTile("▣  APP OPERATOR", "Visual UI control • Workflow • Verification") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) })
             addView(workspaceTile("◇  AI PROJECT LAB", "Agents • Code • Website • App • Automation") { showPage("lab") })
@@ -1904,20 +1904,18 @@ class MainActivity : AppCompatActivity() {
         val store = EncryptedFeatureStore(this)
         val ageOptions = listOf("0–6 months", "6–12 months", "1–2 years", "2–3 years", "3–4 years", "4–5 years", "5–6 years")
         val age = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, ageOptions) }
-        val curriculumAge = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, ageOptions) }
         val childName = edit("Child nickname (optional)", "Only stored on this device")
         val parentName = edit("Parent / guardian name", "Optional")
-        val dailyGoal = edit("Daily learning goal (minutes)", "Example: 15")
         val saved = store.get("kids_profile").getOrDefault("")
         val old = runCatching { JSONObject(saved) }.getOrNull()
         if (old != null) {
-            childName.setText(old.optString("child")); parentName.setText(old.optString("guardian")); dailyGoal.setText(old.optString("goal", "15"))
+            childName.setText(old.optString("child")); parentName.setText(old.optString("guardian"))
             val idx = ageOptions.indexOf(old.optString("age")); if (idx >= 0) age.setSelection(idx)
-        } else dailyGoal.setText("15")
+        }
         section(root, "BABY CARE & CHILD PROFILE", "0–6 वर्ष • अभिभावक-नियंत्रित, डिवाइस पर encrypted रिकॉर्ड") {
-            addView(childName); addView(parentName); addView(age); addView(dailyGoal)
+            addView(childName); addView(parentName); addView(age)
             addView(actionButton("Save Child Profile", "जानकारी encrypted local storage में रहेगी") {
-                val obj = JSONObject().put("child", childName.text.toString().take(60)).put("guardian", parentName.text.toString().take(60)).put("age", age.selectedItem.toString()).put("goal", dailyGoal.text.toString().take(4))
+                val obj = JSONObject().put("child", childName.text.toString().take(60)).put("guardian", parentName.text.toString().take(60)).put("age", age.selectedItem.toString())
                 store.put("kids_profile", obj.toString()).onSuccess { status.text = "बच्चे की प्रोफाइल सुरक्षित रूप से सेव हुई।" }.onFailure { status.text = "Save error: ${it.message}" }
             })
         }
@@ -1938,31 +1936,6 @@ class MainActivity : AppCompatActivity() {
                 val lines = (0 until entries.length()).mapNotNull { i -> entries.optJSONObject(i)?.let { "• ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.optLong("at")))} — ${it.optString("note")}" } }
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Baby Care Journal").setMessage(if (lines.isEmpty()) "अभी कोई entry नहीं है।" else lines.joinToString("\n\n")).setPositiveButton("OK", null).show()
             })
-        }
-        val curricula = linkedMapOf(
-            "0–6 months" to listOf("Parent voice & bonding", "Gentle sensory interaction", "Safe tummy-time guidance", "Sleep and feeding journal"),
-            "6–12 months" to listOf("Object permanence play", "Sound and name response games", "Safe grasping activities", "Picture and texture exploration"),
-            "1–2 years" to listOf("First words and naming", "Colors and simple shapes", "Sorting and stacking", "Action songs with caregiver"),
-            "2–3 years" to listOf("Hindi and English vocabulary", "Counting 1–10", "Matching and simple puzzles", "Drawing and pretend play"),
-            "3–4 years" to listOf("Pre-writing strokes", "Alphabet and phonics introduction", "Counting 1–20", "Patterns, stories and GK"),
-            "4–5 years" to listOf("ABC / Hindi letters", "Numbers 1–50", "Abacus introduction and bead values", "Memory, maze and logic games"),
-            "5–6 years" to listOf("Reading readiness and phonics", "Numbers 1–100", "Abacus addition/subtraction foundations", "Science observation and school readiness")
-        )
-        section(root, "AGE-WISE CURRICULUM", "उम्र चुनकर पूरा syllabus देखें • बच्चे की readiness और रुचि के अनुसार गति") {
-            addView(curriculumAge)
-            addView(actionButton("Load Selected Age Syllabus", "पाठ्यक्रम और गतिविधियाँ देखें") {
-                val selectedAge = curriculumAge.selectedItem?.toString() ?: "0–6 months"
-                val lessons = curricula[selectedAge] ?: curricula.values.first()
-                val syllabus = lessons.mapIndexed { i, lesson -> "${i + 1}. $lesson" }.joinToString("\n")
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("$selectedAge • Learning Plan").setMessage(syllabus).setPositiveButton("Start first activity") { _, _ ->
-                    val first = lessons.first()
-                    val detail = if (first.contains("Abacus", true)) "पहले 1-bead और 5-bead का अर्थ समझें। बच्चे को बिना दबाव के मोतियों से गिनने दें।" else "अभिभावक पहले गतिविधि दिखाएँ, फिर बच्चे को सुरक्षित तरीके से कोशिश करने दें। 5–10 मिनट पर्याप्त हो सकते हैं। बच्चे की रुचि खत्म हो तो विराम दें।"
-                    android.app.AlertDialog.Builder(this@MainActivity).setTitle(first).setMessage(detail).setPositiveButton("OK", null).show()
-                }.setNegativeButton("Close", null).show()
-            })
-        }
-        section(root, "ABACUS & MIND ACTIVITIES", "4–6 वर्ष के लिए readiness-based शुरुआत; छोटे बच्चों के लिए play-first activities") {
-            listOf("Level 1 • Abacus introduction and bead values", "Level 2 • Finger technique and number representation", "Level 3 • Single-digit addition", "Level 4 • Single-digit subtraction", "Level 5 • Mixed addition and subtraction", "Level 6 • Two-digit foundations with concrete beads", "Level 7 • Visualization introduction (only when ready)", "Level 8 • Accuracy and gentle timed practice (optional)", "Mind • Picture matching and visual memory", "Mind • Patterns AB / AAB and sorting", "Mind • Simple maze and story completion", "Mind • Listening, rhythm and observation games").forEach { addView(TextView(this@MainActivity).apply { text = "✦  $it"; setTextColor(0xFFE2E8F0.toInt()); textSize = 13f; setPadding(0, dp(6), 0, dp(6)) }) }
         }
         section(root, "PARENT SAFETY NOTES", "बच्चे की सुरक्षा और वास्तविक विकास सबसे पहले") {
             addView(TextView(this@MainActivity).apply { text = "0–2 वर्ष: यह मॉड्यूल माता-पिता के लिए care journal और real-world activity guide है; शिशु को स्क्रीन पर पढ़ाने का विकल्प नहीं। Feeding, sleep, growth और vaccination की जानकारी अभिभावक/चिकित्सक से सत्यापित करें। यह medical advice, diagnosis, cry detection या emergency alert system नहीं है। कैमरा/माइक background में निगरानी नहीं करते।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
