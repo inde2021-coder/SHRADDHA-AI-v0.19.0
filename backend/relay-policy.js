@@ -22,3 +22,18 @@ export function resolveControlApproval(pending, requesterId, approved, now = Dat
   pending.delete(requesterId);
   return Boolean(request && request.expiresAt > now && approved === true);
 }
+
+export function validFileTransferManifest(sizeBytes, chunkCount, sha256, transferId) {
+  return Number.isSafeInteger(sizeBytes) && sizeBytes >= 1 && sizeBytes <= 100 * 1024 * 1024 &&
+    Number.isSafeInteger(chunkCount) && chunkCount >= 1 && chunkCount <= 2200 &&
+    chunkCount === Math.ceil(sizeBytes / (48 * 1024)) &&
+    typeof sha256 === 'string' && /^[a-f0-9]{64}$/i.test(sha256) &&
+    typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId);
+}
+
+export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
+  if (!Number.isSafeInteger(index) || !Number.isSafeInteger(chunkCount) || !Number.isSafeInteger(byteLength) ||
+      !Number.isSafeInteger(totalBytes) || index < 0 || index >= chunkCount || chunkCount < 1 || totalBytes < 1 || totalBytes > 100 * 1024 * 1024) return false;
+  const expected = index === chunkCount - 1 ? totalBytes - index * 48 * 1024 : 48 * 1024;
+  return expected > 0 && byteLength === expected;
+}
