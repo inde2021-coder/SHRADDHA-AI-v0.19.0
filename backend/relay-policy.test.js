@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -21,7 +21,6 @@ test('unknown frame types are always rejected', () => {
 });
 
 
-import { consumePairingCode, resolveControlApproval } from './relay-policy.js';
 
 test('pairing codes are single-use and expire closed', () => {
   const pairs = new Map([['123456', { sessionId: 's1', expiresAt: 200 }]]);
