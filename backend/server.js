@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, timingSafeEqual, createHash } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
@@ -570,9 +570,18 @@ wss.on('connection', (ws, ctx) => {
       const grantKey = `${deviceId}:${category}`;
       const expiresAt = target?.grants?.get(grantKey) || 0;
       const payload = typeof msg.payload === 'string' ? msg.payload : '';
-      if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() || payload.length > 900_000 || !payload) return;
+      const sizeBytes = Number(msg.sizeBytes);
+      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
+      if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() ||
+          payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
+          !/^[a-f0-9]{64}$/.test(digest)) return;
+      const bytes = Buffer.from(payload, 'base64');
+      if (bytes.length !== sizeBytes || bytes.toString('base64') !== payload ||
+          createHash('sha256').update(bytes).digest('hex') !== digest) return;
       target.grants.delete(grantKey);
-      send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category, fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100), payload }));
+      send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
+        fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100),
+        sizeBytes, sha256: digest, payload }));
     } else if (msg.type === 'task_handoff') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
