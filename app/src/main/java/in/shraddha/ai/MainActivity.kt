@@ -148,7 +148,7 @@ class MainActivity : AppCompatActivity() {
         updateBottomNavigation()
         pageRoot.removeAllViews()
 
-        // Premium MYRA/Lia-inspired command cockpit. All live indicators are explicitly
+        // Premium Shraddha AI command cockpit. All live indicators are explicitly
         // labelled; the panel never fabricates activity when no agent is connected.
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
