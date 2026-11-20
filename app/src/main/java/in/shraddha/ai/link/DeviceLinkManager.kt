@@ -74,8 +74,9 @@ object DeviceLinkManager {
                 val frameType = frame[1 + idLength].toInt() and 0xFF
                 if (frameType !in 1..2) return
                 val jpegLength = frame.size - (2 + idLength)
-                if (jpegLength !in 1..2_500_000) return
+                if (jpegLength !in 4..DeviceFrameValidation.MAX_JPEG_BYTES) return
                 val jpeg = frame.copyOfRange(2 + idLength, frame.size)
+                if (!DeviceFrameValidation.isValidJpeg(jpeg)) return
                 if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -222,7 +223,7 @@ object DeviceLinkManager {
     fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
-        if (jpeg.isEmpty() || jpeg.size > 2_500_000 || frameType !in 1..2) return false
+        if (!DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
         val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
         if (target.size > 64) return false
         val packet = ByteArray(2 + target.size + jpeg.size)
