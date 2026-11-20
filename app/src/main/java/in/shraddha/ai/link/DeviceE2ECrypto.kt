@@ -20,7 +20,7 @@ import javax.crypto.spec.SecretKeySpec
 class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
     data class Sealed(val nonce: String, val ciphertext: String)
 
-    fun publicKeyBase64(): String = Base64.getEncoder().withoutPadding().encodeToString(pair.public.encoded)
+    fun publicKeyBase64(): String = Base64.getEncoder().encodeToString(pair.public.encoded)
 
     fun derivePeerKey(peerPublicKeyBase64: String, localDeviceId: String, peerDeviceId: String): Pair<ByteArray, String> {
         require(localDeviceId.isNotBlank() && peerDeviceId.isNotBlank() && localDeviceId != peerDeviceId)
