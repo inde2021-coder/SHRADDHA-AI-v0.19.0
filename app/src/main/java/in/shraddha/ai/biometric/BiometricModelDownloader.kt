@@ -22,6 +22,8 @@ object BiometricModelDownloader {
         "c59760b0a30dd905e3757cbb9ddf5dde22f9a099dc3e74de77c263cbb202e67c"
     private const val MAX_BYTES = 100L * 1024L * 1024L
 
+    private val downloadLock = Any()
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS)
@@ -43,11 +45,17 @@ object BiometricModelDownloader {
         onComplete: (Result<File>) -> Unit
     ) {
         Thread({
+            synchronized(downloadLock) {
             val directory = File(context.applicationContext.filesDir, "biometric-models")
             val target = File(directory, fileName)
             val temporary = File(directory, "$fileName.download")
+            val previous = File(directory, "$fileName.previous")
+            var previousMoved = false
             try {
                 require(directory.exists() || directory.mkdirs()) { "Could not create model directory." }
+                if (!target.exists() && previous.exists()) previous.renameTo(target)
+                if (temporary.exists()) temporary.delete()
+                if (previous.exists()) previous.delete()
                 val request = Request.Builder().url(url).get()
                     .header("User-Agent", "ShraddhaAI-Android/0.19").build()
                 client.newCall(request).execute().use { response ->
@@ -80,12 +88,21 @@ object BiometricModelDownloader {
                         "Model checksum mismatch. The downloaded file was rejected."
                     }
                 }
-                if (target.exists() && !target.delete()) error("Could not replace the previous model.")
-                if (!temporary.renameTo(target)) error("Could not finalize the verified model.")
+                if (target.exists()) {
+                    if (!target.renameTo(previous)) error("Could not preserve the previous verified model.")
+                    previousMoved = true
+                }
+                if (!temporary.renameTo(target)) {
+                    if (previousMoved) previous.renameTo(target)
+                    error("Could not finalize the verified model; the previous model was preserved.")
+                }
+                if (previous.exists()) previous.delete()
                 onComplete(Result.success(target))
             } catch (error: Exception) {
                 temporary.delete()
+                if (!target.exists() && previousMoved && previous.exists()) previous.renameTo(target)
                 onComplete(Result.failure(error))
+            }
             }
         }, "BiometricModelDownload").start()
     }
