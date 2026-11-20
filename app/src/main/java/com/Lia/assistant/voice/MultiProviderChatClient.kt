@@ -31,7 +31,7 @@ object MultiProviderChatClient {
     )
 
     private fun config(provider: String): Config? = when (provider.uppercase()) {
-        "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-4o-mini")
+        "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-4.1-mini")
         // Groq retired llama-3.3-70b-versatile for developer-tier traffic in August 2026.
         "GROQ" -> Config("https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
         "PERPLEXITY" -> Config("https://api.perplexity.ai/v1/agent", "", perplexityAgent = true)
