@@ -80,6 +80,12 @@ object ActionExecutor {
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
                     }
+                    is ContactLookupResult.Ambiguous -> {
+                        result.put("status", "needs_clarification")
+                        result.put("action", "ambiguous_contact")
+                        result.put("candidates", JSONArray().apply { lookup.candidates.forEach { put(it.first) } })
+                        result.put("message", "एक से अधिक contacts मिले। पूरा नाम बताइए; अभी कोई call नहीं किया गया।")
+                    }
                     is ContactLookupResult.NoPermission -> {
                         result.put("status", "error")
                         result.put("action", "no_contacts_permission")
@@ -107,6 +113,13 @@ object ActionExecutor {
                 val lookup = ContactResolver.lookup(context, contactName)
                 val phoneNumber = when (lookup) {
                     is ContactLookupResult.Found -> lookup.phoneNumber
+                    is ContactLookupResult.Ambiguous -> {
+                        result.put("status", "needs_clarification")
+                        result.put("action", "ambiguous_contact")
+                        result.put("candidates", JSONArray().apply { lookup.candidates.forEach { put(it.first) } })
+                        result.put("message", "कई contacts मिले। सही व्यक्ति का पूरा नाम बताइए; कोई संदेश नहीं भेजा गया।")
+                        return result
+                    }
                     ContactLookupResult.NoPermission -> {
                         result.put("status", "error")
                         result.put("action", "contacts_permission_required")
@@ -486,6 +499,13 @@ object ActionExecutor {
                         val lookup = ContactResolver.lookup(context, recipient)
                         val number = when (lookup) {
                             is ContactLookupResult.Found -> lookup.phoneNumber
+                            is ContactLookupResult.Ambiguous -> {
+                                result.put("status", "needs_clarification")
+                                result.put("action", "ambiguous_contact")
+                                result.put("candidates", JSONArray().apply { lookup.candidates.forEach { put(it.first) } })
+                                result.put("message", "कई contacts मिले। सही प्राप्तकर्ता का पूरा नाम बताइए; अभी संदेश नहीं भेजा गया।")
+                                return result
+                            }
                             ContactLookupResult.NoPermission -> if (ContactResolver.isDirectPhoneNumber(recipient)) recipient else ""
                             ContactLookupResult.NotFound -> if (ContactResolver.isDirectPhoneNumber(recipient)) recipient else ""
                         }
