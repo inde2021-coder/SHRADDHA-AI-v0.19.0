@@ -429,6 +429,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
             var recorder: AudioRecord? = null
             try {
                 val rate = 16000
+                if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    throw SecurityException("Microphone permission was revoked before speaker capture.")
+                }
                 val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(minBuffer > 0) { "Microphone unavailable" }
                 recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 16384))
