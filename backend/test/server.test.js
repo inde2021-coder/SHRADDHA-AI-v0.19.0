@@ -183,3 +183,47 @@ test('screen frames are blocked until the sending device explicitly enables scre
   }
 });
 
+
+test('remote control rejects malformed action payloads even after an explicit control grant', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Remote Action Owner' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Remote Action Member', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const ownerSocket = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(owner.sessionId)}&deviceId=${encodeURIComponent(owner.deviceId)}`, {
+    headers: { authorization: `Bearer ${owner.deviceToken}` }
+  });
+  const memberSocket = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(member.sessionId)}&deviceId=${encodeURIComponent(member.deviceId)}`, {
+    headers: { authorization: `Bearer ${member.deviceToken}` }
+  });
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const ownerPermission = nextWsMessage(ownerSocket, (data, binary) => !binary && JSON.parse(data.toString()).type === 'permission_status');
+    ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { remote_control: true } }));
+    await ownerPermission;
+
+    const incomingRequest = nextWsMessage(ownerSocket, (data, binary) => !binary && JSON.parse(data.toString()).type === 'control_request');
+    memberSocket.send(JSON.stringify({ type: 'control_request', targetDeviceId: owner.deviceId, minutes: 1 }));
+    await incomingRequest;
+
+    const granted = nextWsMessage(memberSocket, (data, binary) => !binary && JSON.parse(data.toString()).type === 'control_result');
+    ownerSocket.send(JSON.stringify({ type: 'control_response', requesterDeviceId: member.deviceId, approved: true, minutes: 1 }));
+    assert.equal(JSON.parse((await granted)[0].toString()).approved, true);
+
+    const rejected = nextWsMessage(memberSocket, (data, binary) => !binary && JSON.parse(data.toString()).type === 'remote_action_result');
+    memberSocket.send(JSON.stringify({ type: 'remote_action', targetDeviceId: owner.deviceId, action: { kind: 'tap', x: -1, y: 50 } }));
+    const result = JSON.parse((await rejected)[0].toString());
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /invalid/i);
+  } finally {
+    ownerSocket.close();
+    memberSocket.close();
+  }
+});
+
