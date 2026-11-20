@@ -192,6 +192,40 @@ def search_safe_text_files(root: str, relative: str, query: str, limit: int = 20
     return matches
 
 
+
+def decode_screen_frame(packet: bytes) -> tuple[str, int, bytes]:
+    """Decode relay frame [source-id-length][source-id][frame-type][JPEG]."""
+    if not isinstance(packet, (bytes, bytearray)) or len(packet) < 4:
+        raise ValueError("Invalid or truncated screen frame")
+    source_length = packet[0]
+    frame_offset = 1 + source_length
+    if source_length < 1 or frame_offset >= len(packet):
+        raise ValueError("Screen frame source ID is missing")
+    try:
+        source_id = bytes(packet[1:frame_offset]).decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Screen frame source ID is invalid") from exc
+    frame_type = packet[frame_offset]
+    jpeg = bytes(packet[frame_offset + 1:])
+    if frame_type not in (1, 2) or not jpeg or len(jpeg) > 2_500_000:
+        raise ValueError("Screen frame type or JPEG payload is invalid")
+    return source_id, frame_type, jpeg
+
+
+def show_phone_screen_frame(jpeg: bytes) -> None:
+    """Display a received phone frame locally; requires the optional OpenCV package."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError("Install screen viewer dependency: python -m pip install -r requirements-qr.txt") from exc
+    image = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("Received screen JPEG could not be decoded")
+    cv2.imshow("Shraddha AI - paired Android screen (Q to close preview)", image)
+    cv2.waitKey(1)
+
+
 def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
     target = target_device_id.encode("utf-8")
     if not jpeg or len(jpeg) > 2_500_000 or len(target) > 255:
@@ -601,7 +635,16 @@ async def run(args) -> None:
         try:
             async for raw in ws:
                 if isinstance(raw, bytes):
-                        continue
+                    if args.view_phone_screen:
+                        try:
+                            source_id, frame_type, jpeg = decode_screen_frame(raw)
+                            if frame_type == 1:
+                                show_phone_screen_frame(jpeg)
+                            else:
+                                print("Ignored remote camera frame from", source_id, "(screen viewer only).")
+                        except Exception as exc:
+                            print("Phone screen frame:", str(exc)[:200])
+                    continue
                 try:
                     message = json.loads(raw)
                 except json.JSONDecodeError:
@@ -666,6 +709,11 @@ async def run(args) -> None:
                 try:
                     await screen_task
                 except asyncio.CancelledError:
+                    pass            if args.view_phone_screen:
+                try:
+                    import cv2
+                    cv2.destroyAllWindows()
+                except Exception:
                     pass
 
 
@@ -689,6 +737,7 @@ def main() -> int:
     parser.add_argument("--file-root", default="", help="Optional approved folder for file listing and text previews; each request asks PC user")
     parser.add_argument("--offline-model", default="", help="Local GGUF model file for private offline inference on this PC")
     parser.add_argument("--share-screen", action="store_true", help="Offer optional live PC screen sharing; still requires a separate local confirmation")
+    parser.add_argument("--view-phone-screen", action="store_true", help="Display targeted Android screen frames on this PC; install requirements-qr.txt")
     parser.add_argument("--screen-fps", type=float, default=1.0, help="PC screen share frame rate, clamped to 0.5–2 FPS")
     parser.add_argument("--screen-target", default="", help="Optional paired device ID; blank broadcasts to paired devices")
     parser.add_argument("--forget-pairing", action="store_true", help="Delete saved PC pairing from Windows Credential Manager and exit")
