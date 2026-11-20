@@ -1,7 +1,9 @@
 """Strict validation for remote actions received by the Windows companion."""
 import math
+import re
 
 _ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll"}
+_SECRET_TEXT = re.compile(r"(?i)(?:\\b(?:password|passcode|otp|one[- ]time code|pin|cvv|security code|recovery phrase)\\b|पासवर्ड|ओटीपी|पिन)")
 
 
 def _number(value):
@@ -32,6 +34,8 @@ def validate_remote_action(action):
         text = action.get("text")
         limit = 2000 if kind == "type" else 120
         if not isinstance(text, str) or not text.strip() or len(text) > limit:
+            return None
+        if kind == "type" and _SECRET_TEXT.search(text):
             return None
         clean["text"] = text
     elif kind == "open_app":
