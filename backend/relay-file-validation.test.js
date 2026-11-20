@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType } from './relay-file-validation.js';
 
 test('accepts a bounded base64 file with the correct SHA-256', () => {
   const bytes = Buffer.from('Shraddha secure file transfer');
@@ -30,4 +30,13 @@ test('one-time data grant is bound to the exact request and expiry', () => {
   assert.equal(matchesOneTimeShareGrant(grant, 'different_123456', 4999), false);
   assert.equal(matchesOneTimeShareGrant(grant, 'request_1234567890', 5001), false);
   assert.equal(matchesOneTimeShareGrant(null, 'request_1234567890', 1000), false);
+});
+
+test('clipboard payload policy accepts only bounded text in clipboard category', () => {
+  assert.equal(isAllowedSharedPayloadType('clipboard', 'clipboard_text', 20_000), true);
+  assert.equal(isAllowedSharedPayloadType('clipboard', 'clipboard_text', 80_001), false);
+  assert.equal(isAllowedSharedPayloadType('documents', 'clipboard_text', 20), false);
+  assert.equal(isAllowedSharedPayloadType('clipboard', 'file', 20), false);
+  assert.equal(isAllowedSharedPayloadType('documents', 'file', 650_000), true);
+  assert.equal(isAllowedSharedPayloadType('documents', 'unknown', 20), false);
 });
