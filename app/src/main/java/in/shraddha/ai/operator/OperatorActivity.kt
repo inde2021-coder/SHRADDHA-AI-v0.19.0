@@ -146,7 +146,7 @@ class OperatorActivity : Activity() {
                 .setPositiveButton("हाँ, चलाएँ") { _, _ -> runOperator { it.execute(step, OperatorConfirmation.afterExplicitUserApproval(step)) } }
                 .show()
         } else {
-            runOperator { it.execute(step, confirmed = false) }
+            runOperator { it.execute(step) }
         }
     }
 
