@@ -6,6 +6,8 @@ on:
       - main
       - audit-fixes-v0.19.1
       - redesign-v0.19.2
+      - 'work/**'
+      - 'feature/**'
   pull_request:
     branches:
       - main
@@ -21,7 +23,7 @@ concurrency:
 jobs:
   build:
     name: Compile, unit tests and debug APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -112,7 +114,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 2048 -cores 2
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
