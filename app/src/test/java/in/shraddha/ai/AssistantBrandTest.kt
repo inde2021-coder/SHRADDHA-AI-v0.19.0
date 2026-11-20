@@ -1,6 +1,5 @@
-package in.shraddha.ai
+package com.Lia.assistant.data
 
-import com.Lia.assistant.data.AssistantBrand
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
