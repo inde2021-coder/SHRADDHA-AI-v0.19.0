@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
 import java.security.SecureRandom
@@ -24,19 +25,21 @@ class FirebaseCloudVault(private val context: Context) {
         private const val CONFIG_PREFS = "shraddha_firebase_runtime_config"
 
         /** Firebase client identifiers are public config, not service-account secrets. */
-        fun configure(context: Context, apiKey: String, appId: String, projectId: String, senderId: String, storageBucket: String = ""): Result<Unit> = runCatching {
+        fun configure(context: Context, apiKey: String, appId: String, projectId: String, senderId: String, storageBucket: String = "", databaseUrl: String = BuildConfig.FIREBASE_DATABASE_URL): Result<Unit> = runCatching {
             require(apiKey.trim().length >= 20) { "Firebase API key is invalid." }
             require(appId.trim().matches(Regex("^1:[0-9]+:android:[A-Za-z0-9]+$"))) { "Firebase App ID must be the Android app ID from Firebase Console." }
             require(projectId.trim().matches(Regex("^[a-z0-9][a-z0-9-]{4,28}[a-z0-9]$"))) { "Firebase project ID is invalid." }
             require(senderId.trim().matches(Regex("^[0-9]{5,20}$"))) { "Firebase sender ID must contain 5–20 digits." }
             require(storageBucket.isBlank() || storageBucket.trim().matches(Regex("^[A-Za-z0-9._-]{3,120}$"))) { "Storage bucket format is invalid." }
+            val normalizedDatabaseUrl = databaseUrl.trim().trimEnd('/')
+            require(normalizedDatabaseUrl.startsWith("https://") && normalizedDatabaseUrl.contains("shraddha-ai-1d3bf-default-rtdb")) { "Realtime Database URL does not match the Shraddha AI Firebase project." }
             require(FirebaseApp.getApps(context).none { it.name == APP_NAME }) {
                 "Firebase is already initialized. Restart Shraddha AI before changing its Firebase project."
             }
             val prefs = context.getSharedPreferences(CONFIG_PREFS, Context.MODE_PRIVATE)
             check(prefs.edit().putString("api_key", apiKey.trim()).putString("app_id", appId.trim())
                 .putString("project_id", projectId.trim()).putString("sender_id", senderId.trim())
-                .putString("storage_bucket", storageBucket.trim()).commit()) { "Could not save Firebase configuration." }
+                .putString("storage_bucket", storageBucket.trim()).putString("database_url", normalizedDatabaseUrl).commit()) { "Could not save Firebase configuration." }
         }
     }
 
@@ -48,11 +51,12 @@ class FirebaseCloudVault(private val context: Context) {
         val projectId = prefs.getString("project_id", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.FIREBASE_PROJECT_ID
         val senderId = prefs.getString("sender_id", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.FIREBASE_SENDER_ID
         val storageBucket = prefs.getString("storage_bucket", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.FIREBASE_STORAGE_BUCKET
+        val databaseUrl = prefs.getString("database_url", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.FIREBASE_DATABASE_URL
         require(apiKey.isNotBlank() && appId.isNotBlank() && projectId.isNotBlank() && senderId.isNotBlank()) {
             "Firebase config missing. Enter Android Firebase API key, App ID, Project ID and sender ID in Cloud & Data."
         }
         val options = FirebaseOptions.Builder().setApiKey(apiKey).setApplicationId(appId)
-            .setProjectId(projectId).setGcmSenderId(senderId)
+            .setProjectId(projectId).setGcmSenderId(senderId).setDatabaseUrl(databaseUrl)
             .apply { if (storageBucket.isNotBlank()) setStorageBucket(storageBucket) }.build()
         return FirebaseApp.initializeApp(context, options, APP_NAME) ?: error("Firebase initialization failed")
     }
@@ -72,9 +76,11 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email.trim(), password).await().user ?: error("Sign-in failed")
             val encrypted = encrypt(plaintext, password)
+            val record = mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis())
             FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
-                .set(mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis()))
-                .await()
+                .set(record).await()
+            FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
+                .reference.child("users").child(user.uid).child("vault").child(key).setValue(record).await()
             user.uid
         }
     }
@@ -86,8 +92,12 @@ class FirebaseCloudVault(private val context: Context) {
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email.trim(), password).await().user ?: error("Sign-in failed")
-            val doc = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key).get().await()
-            val payload = doc.getString("payload") ?: return@runBlocking null
+            val dbRef = FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
+                .reference.child("users").child(user.uid).child("vault").child(key)
+            val realtimePayload = runCatching { dbRef.get().await().child("payload").getValue(String::class.java) }.getOrNull()
+            val payload = realtimePayload ?: FirebaseFirestore.getInstance(app).collection("users")
+                .document(user.uid).collection("vault").document(key).get().await().getString("payload")
+                ?: return@runBlocking null
             decrypt(payload, password)
         }
     }

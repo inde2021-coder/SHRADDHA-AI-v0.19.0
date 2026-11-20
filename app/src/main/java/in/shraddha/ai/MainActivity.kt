@@ -1249,12 +1249,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun addFirebaseCloudSection(root: LinearLayout) {
         section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "Firebase Console से Android app की client configuration यहाँ भरें। Email/Password Auth और Firestore चालू करें; sync केवल आपकी सहमति से होगा।") {
-            val firebaseApiKey = edit("Firebase API Key", "AIza…")
-            val firebaseAppId = edit("Firebase Android App ID", "1:123456789:android:abcdef")
-            val firebaseProjectId = edit("Firebase Project ID", "your-project-id")
-            val firebaseSenderId = edit("Firebase Messaging Sender ID", "123456789")
-            val firebaseBucket = edit("Storage bucket (optional)", "your-project.appspot.com")
-            addView(firebaseApiKey); addView(firebaseAppId); addView(firebaseProjectId); addView(firebaseSenderId); addView(firebaseBucket)
+            val firebaseApiKey = edit("Firebase API Key", "AIza…").apply { setText(BuildConfig.FIREBASE_API_KEY) }
+            val firebaseAppId = edit("Firebase Android App ID", "Android App ID").apply { setText(BuildConfig.FIREBASE_APP_ID) }
+            val firebaseProjectId = edit("Firebase Project ID", "project-id").apply { setText(BuildConfig.FIREBASE_PROJECT_ID) }
+            val firebaseSenderId = edit("Firebase Messaging Sender ID", "sender-id").apply { setText(BuildConfig.FIREBASE_SENDER_ID) }
+            val firebaseBucket = edit("Storage bucket (optional)", "project.firebasestorage.app").apply { setText(BuildConfig.FIREBASE_STORAGE_BUCKET) }
+            val firebaseDatabaseUrl = edit("Realtime Database URL", "https://project-default-rtdb.firebaseio.com").apply { setText(BuildConfig.FIREBASE_DATABASE_URL) }
+            addView(firebaseApiKey); addView(firebaseAppId); addView(firebaseProjectId); addView(firebaseSenderId); addView(firebaseBucket); addView(firebaseDatabaseUrl)
             val email = edit("Email", "name@example.com")
             val password = edit("Password (कम-से-कम 8 अक्षर)", "Firebase account password").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
             val note = edit("Cloud memory note", "यह note encrypted रूप में sync होगा").apply { minLines = 3; isSingleLine = false }
@@ -1270,7 +1271,7 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Save Firebase Configuration", "Client config is public; never paste service-account private keys") {
                 val configured = `in`.shraddha.ai.cloud.FirebaseCloudVault.configure(
                     this@MainActivity, firebaseApiKey.text.toString(), firebaseAppId.text.toString(),
-                    firebaseProjectId.text.toString(), firebaseSenderId.text.toString(), firebaseBucket.text.toString()
+                    firebaseProjectId.text.toString(), firebaseSenderId.text.toString(), firebaseBucket.text.toString(), firebaseDatabaseUrl.text.toString()
                 )
                 result.text = configured.fold(
                     { "Firebase config saved. You can now create/sign in to your account. If a previous Firebase config was already initialized, restart the app first." },
