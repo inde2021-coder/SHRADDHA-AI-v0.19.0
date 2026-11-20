@@ -23,6 +23,8 @@ Main branch: untouched.
 
 ## Step 4 — People Memory and Visual Lens (source integration in progress)
 
+- Added a user-triggered local camera capture entry in the Visual Lens panel. The camera app returns a photo preview; the user explicitly starts analysis through the authenticated HTTPS vision gateway. JPEG is bounded to 2.5 MB and provider is limited to Gemini/OpenAI/Anthropic. This uses the external camera app thumbnail contract; full-resolution CameraX capture and physical-device validation remain open.
+
 - CameraX/ML Kit capture activity is registered and reachable from the People Memory screen.
 - Person profiles receive stable local IDs; separate confirmation is required before face or speaker enrollment.
 - Added SAF model import into app-private storage with a 250 MB cap and temporary-file/rename handling.

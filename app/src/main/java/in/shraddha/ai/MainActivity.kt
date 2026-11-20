@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private val backupFileRequest = 45
     private val faceModelRequest = 46
     private val speakerModelRequest = 47
+    private val localVisionRequest = 48
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
@@ -919,6 +920,13 @@ class MainActivity : AppCompatActivity() {
             visionPrompt.setText("इस स्क्रीन पर दिख रहे ऐप और फॉर्म को समझो। दिखाई दे रहे फील्ड के नाम पढ़ो और बताओ कि कौन-सी जानकारी कहाँ भरनी है। बिना मेरी पुष्टि कोई कार्रवाई मत करना।")
             visionPrompt.isSingleLine = false; visionPrompt.minLines = 3
             addView(visionPrompt)
+            addView(actionButton("OPEN CAMERA • VISUAL LENS", "एक फोटो लें; भेजने से पहले आप स्वयं AI analysis शुरू करेंगे") {
+                try {
+                    startActivityForResult(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE), localVisionRequest)
+                } catch (_: android.content.ActivityNotFoundException) {
+                    status.text = "इस फोन में camera app उपलब्ध नहीं है।"
+                }
+            })
             addView(actionButton("Ask Shraddha to Understand Screen", "Latest received screenshot का AI analysis") {
                 val frame = lastScreenJpeg
                 if (frame == null) { status.text = "पहले दूसरे फोन पर Share This Phone Screen चालू करें।"; return@actionButton }
@@ -1670,6 +1678,40 @@ class MainActivity : AppCompatActivity() {
     @Deprecated("Compatibility with starter project")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == localVisionRequest) {
+            if (resultCode != Activity.RESULT_OK) { status.text = "Visual Lens photo capture cancelled."; return }
+            val bitmap = data?.extras?.get("data") as? android.graphics.Bitmap
+            if (bitmap == null) { status.text = "Camera did not return a photo. Please try again."; return }
+            if (!::relayUrl.isInitialized || !::gatewayToken.isInitialized) {
+                status.text = "Visual Lens settings are not ready. Open Device Universe and try again."; return
+            }
+            val url = relayUrl.text.toString().trim()
+            if (!validRelay(url)) { status.text = "Visual Lens के लिए valid HTTPS AI gateway URL जरूरी है।"; return }
+            val output = java.io.ByteArrayOutputStream()
+            var quality = 90
+            do {
+                output.reset()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, output)
+                quality -= 10
+            } while (output.size() > 2_500_000 && quality >= 40)
+            val jpeg = output.toByteArray()
+            if (jpeg.isEmpty() || jpeg.size > 2_500_000) { status.text = "Photo size limit से बड़ी है। छोटा/कम-resolution photo लें."; return }
+            val prompt = if (::visionPrompt.isInitialized && visionPrompt.text.isNotBlank()) visionPrompt.text.toString()
+                else "इस तस्वीर को ध्यान से समझाओ। जो स्पष्ट दिख रहा है वही बताओ और अनिश्चित बातों को अनुमान के रूप में चिह्नित करो।"
+            val provider = if (::visionProvider.isInitialized) visionProvider.selectedItem?.toString() ?: "gemini" else "gemini"
+            if (::visionResult.isInitialized) visionResult.text = "Visual Lens फोटो का विश्लेषण कर रहा है…"
+            status.text = "Photo चुनी गई। सुरक्षित gateway पर AI analysis चल रहा है…"
+            DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), provider, prompt, jpeg) { result -> runOnUiThread {
+                result.onSuccess {
+                    if (::visionResult.isInitialized) visionResult.text = it
+                    status.text = "Visual Lens photo analysis complete."
+                }.onFailure {
+                    if (::visionResult.isInitialized) visionResult.text = "Analysis error: ${it.message}"
+                    status.text = "Visual Lens analysis failed."
+                }
+            } }
+            return
+        }
         if (requestCode == faceModelRequest || requestCode == speakerModelRequest) {
             if (resultCode != Activity.RESULT_OK || data?.data == null) { status.text = "Model import cancelled."; return }
             try {
