@@ -82,6 +82,9 @@ class MainActivity : AppCompatActivity() {
     private var lastPeerId: String? = null
     private var livePreviewSourceId: String? = null
     private val speechRequest = 41
+    private val windowsVoiceRequest = 61
+    private var pendingWindowsVoiceAction: JSONObject? = null
+    private var pendingWindowsVoiceTarget: String = ""
     private val screenShareRequest = 42
     private val dataFileRequest = 43
     private val backupFileRequest = 45
@@ -997,6 +1000,12 @@ class MainActivity : AppCompatActivity() {
             })
             remoteText = edit("Text to enter", "केवल focused, visible, non-password field")
             addView(remoteText)
+            addView(actionButton("🎙  VOICE CONTROL WINDOWS", "बोलें: वापस जाओ, नीचे स्क्रॉल करो, Save पर क्लिक करो, या लिखो hello") {
+                val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
+                if (target.isBlank()) { status.text = "पहले paired Windows PC चुनें।"; return@actionButton }
+                val speech = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN").putExtra(RecognizerIntent.EXTRA_PROMPT, "Windows PC को क्या करना है?")
+                runCatching { startActivityForResult(speech, windowsVoiceRequest) }.onFailure { status.text = "Voice recognition उपलब्ध नहीं है: ${it.message}" }
+            })
             addView(actionButton("Request 5-Minute Remote Control", "Target phone पर हर session के लिए approval dialog आएगा") {
                 val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
                 status.text = if (target.isBlank()) "पहले paired target चुनें।" else if (DeviceLinkManager.requestRemoteControl(target, 5)) "Control request भेजी गई। Target phone की मंजूरी का इंतजार है।" else "पहले relay से connect करें।"
