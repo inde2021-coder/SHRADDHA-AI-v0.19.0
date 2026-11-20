@@ -164,6 +164,7 @@ class DeviceTransferActivity : Activity() {
 
     private fun handleMessage(msg: JSONObject) {
         when (msg.optString("type")) {
+            "connected" -> if (sourcePeer.isNotBlank() && transferId.isNotBlank()) resumeTransfer()
             "data_share_result" -> if (msg.optString("requestId") == requestId) {
                 if (msg.optBoolean("approved")) beginSend() else status.text = "Receiver denied Documents access."
             }
