@@ -671,6 +671,15 @@ wss.on('connection', (ws, ctx) => {
       if (raw.length !== expected) return;
       transfer.chunks.set(index, true);
       send(targetId, JSON.stringify({ type: 'file_transfer_chunk', fromDeviceId: deviceId, transferId, index, payload: encoded }));
+    } else if (msg.type === 'file_transfer_resume') {
+      const sourceId = String(msg.targetDeviceId || '');
+      const source = session.devices.get(sourceId);
+      const transferId = String(msg.transferId || '');
+      const transfer = device.incomingTransfers?.get(transferId);
+      if (!source || sourceId === deviceId || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now()) return;
+      const missing = [];
+      for (let i = 0; i < transfer.chunkCount && missing.length < 2200; i++) if (!transfer.chunks.has(i)) missing.push(i);
+      send(sourceId, JSON.stringify({ type: 'file_transfer_resume', fromDeviceId: deviceId, transferId, missingIndexes: missing }));
     } else if (msg.type === 'file_transfer_ack') {
       const targetId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(targetId);
