@@ -120,7 +120,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -432,7 +432,22 @@ wss.on('connection', (ws, ctx) => {
         send(deviceId, JSON.stringify({ type: 'remote_action_result', targetDeviceId: targetId, ok: false, reason: 'Remote action rate limit reached.' }));
         return;
       }
-      send(targetId, JSON.stringify({ type: 'remote_action', fromDeviceId: deviceId, action: msg.action }));
+      const actionId = randomBytes(12).toString('hex');
+      target.pendingRemoteActions.set(actionId, { requesterId: deviceId, expiresAt: Date.now() + 60_000 });
+      send(targetId, JSON.stringify({ type: 'remote_action', actionId, fromDeviceId: deviceId, action: msg.action }));
+    } else if (msg.type === 'remote_action_result') {
+      const actionId = String(msg.actionId || '');
+      const pending = device.pendingRemoteActions.get(actionId);
+      device.pendingRemoteActions.delete(actionId);
+      const requester = pending && pending.expiresAt >= Date.now() ? session.devices.get(pending.requesterId) : null;
+      if (!requester || typeof msg.ok !== 'boolean') return;
+      send(pending.requesterId, JSON.stringify({
+        type: 'remote_action_result',
+        actionId,
+        targetDeviceId: deviceId,
+        ok: msg.ok,
+        reason: String(msg.reason || '').slice(0, 240)
+      }));
     } else if (msg.type === 'set_control_mode') {
       if (device.role !== 'owner' || !['master', 'mutual'].includes(msg.mode)) return;
       session.controlMode = msg.mode;
@@ -451,6 +466,7 @@ wss.on('connection', (ws, ctx) => {
       if (next.remote_control !== true) {
         device.controlGrants.clear();
         device.pendingControlRequests.clear();
+        device.pendingRemoteActions.clear();
       }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
@@ -498,6 +514,7 @@ wss.on('connection', (ws, ctx) => {
     device.grants.clear();
     device.controlGrants.clear();
     device.pendingControlRequests.clear();
+    device.pendingRemoteActions.clear();
     device.pendingDataShares.clear();
     for (const [id, peer] of session.devices) {
       if (id === deviceId) continue;
