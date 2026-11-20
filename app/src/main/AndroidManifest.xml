@@ -32,7 +32,7 @@
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
-        <activity android:name=".phone.PhoneAgentActivity" android:exported="false">
+        <activity android:name=".phone.PhoneAgentActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
                 <category android:name="android.intent.category.DEFAULT" />
