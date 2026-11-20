@@ -92,7 +92,7 @@ class OperatorActivity : Activity() {
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
             .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा।")
             .setView(panel).setNegativeButton("रद्द", null)
-            .setPositiveButton(if (destructive) "पुष्टि करके चलाएँ" else "चलाएँ") { _, _ ->
+            .setPositiveButton("चरण-दर-चरण चलाएँ") { _, _ ->
                 val extra = variables.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
                 val allValues = route.values + extra
                 // Sensitive actions are confirmed individually immediately before execution.
