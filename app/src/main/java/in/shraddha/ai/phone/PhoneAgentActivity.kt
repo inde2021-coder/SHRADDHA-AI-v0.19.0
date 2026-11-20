@@ -196,15 +196,6 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Compatibility with starter project")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == voiceCallRequest) {
-            val spoken = if (resultCode == RESULT_OK) data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() else null
-            if (!spoken.isNullOrBlank()) handleVoiceCallResult(spoken)
-            else voiceStatus.text = "Voice command नहीं मिला। दोबारा बोलें।"
-        } else if (requestCode == roleRequest) refreshStatus()
-    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -242,7 +233,11 @@ class PhoneAgentActivity : AppCompatActivity() {
     @Deprecated("Compatibility with minSdk 26")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == roleRequest) refreshStatus()
+        if (requestCode == voiceCallRequest) {
+            val spoken = if (resultCode == RESULT_OK) data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() else null
+            if (!spoken.isNullOrBlank()) handleVoiceCallResult(spoken)
+            else voiceStatus.text = "Voice command नहीं मिला। दोबारा बोलें।"
+        } else if (requestCode == roleRequest) refreshStatus()
     }
 
     private fun refreshStatus() {
