@@ -233,10 +233,38 @@ object ActionExecutor {
                 }
             }
 
-            "execute_social_media_task", "social_media_task_control" -> {
+            "execute_social_media_task" -> {
+                val content = args.optString("content", args.optString("text", args.optString("caption", ""))).trim()
+                if (content.isBlank() || content.length > 4_000) {
+                    result.put("status", "error")
+                    result.put("action", "invalid_share_content")
+                    result.put("message", "Share text must contain 1-4,000 characters.")
+                } else {
+                    // Open the Android Sharesheet only. The user chooses the social app,
+                    // reviews the content, and performs the final publish action themselves.
+                    val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, content)
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    runCatching {
+                        context.startActivity(android.content.Intent.createChooser(share, "Review and choose where to share").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.onSuccess {
+                        result.put("status", "success")
+                        result.put("action", "share_draft_opened")
+                        result.put("message", "Share draft opened. Choose the app, review it, and tap Publish/Send yourself. Shraddha does not auto-publish.")
+                    }.onFailure {
+                        result.put("status", "error")
+                        result.put("action", "share_sheet_unavailable")
+                        result.put("message", "Android could not open the share sheet.")
+                    }
+                }
+            }
+
+            "social_media_task_control" -> {
                 result.put("status", "error")
                 result.put("action", "not_implemented")
-                result.put("message", "Social media publishing is not connected in this build. No post or task was created.")
+                result.put("message", "Scheduled publishing, analytics, comments and account management are not connected. No background social task was started.")
             }
 
             "execute_whatsapp_task" -> {
