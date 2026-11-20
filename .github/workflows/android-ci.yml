@@ -37,11 +37,23 @@ jobs:
         run: ./gradlew testDebugUnitTest
       - name: Build debug APK
         run: ./gradlew assembleDebug
-      - name: Publish debug APK artifact
+      - name: Verify device-specific APKs and generate checksums
+        run: |
+          set -euo pipefail
+          cd app/build/outputs/apk/debug
+          test -s app-arm64-v8a-debug.apk
+          test -s app-armeabi-v7a-debug.apk
+          unzip -l app-arm64-v8a-debug.apk | grep -q 'lib/arm64-v8a/'
+          unzip -l app-armeabi-v7a-debug.apk | grep -q 'lib/armeabi-v7a/'
+          if unzip -l app-arm64-v8a-debug.apk | grep -Eq 'lib/(x86|x86_64)/'; then exit 1; fi
+          sha256sum *.apk > SHA256SUMS.txt
+      - name: Publish device-specific debug APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: shraddha-ai-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: shraddha-ai-debug-apks-arm
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
 
