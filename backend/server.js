@@ -1,5 +1,6 @@
 import http from 'node:http';
-import { randomBytes, randomInt, timingSafeEqual, createHash } from 'node:crypto';
+import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { validateSharedFileEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
@@ -575,9 +576,7 @@ wss.on('connection', (ws, ctx) => {
       if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() ||
           payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
           !/^[a-f0-9]{64}$/.test(digest)) return;
-      const bytes = Buffer.from(payload, 'base64');
-      if (bytes.length !== sizeBytes || bytes.toString('base64') !== payload ||
-          createHash('sha256').update(bytes).digest('hex') !== digest) return;
+      if (!validateSharedFileEnvelope(payload, sizeBytes, digest)) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
         fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100),
