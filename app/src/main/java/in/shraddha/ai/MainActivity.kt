@@ -1595,13 +1595,14 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 44) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED &&
+                getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("camera", false)) {
                 val prefs = getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
                 val facing = prefs.getString("pending_camera_facing", "back") ?: "back"
                 val target = prefs.getString("pending_camera_target", "").orEmpty()
                 ContextCompat.startForegroundService(this, Intent(this, RemoteCameraService::class.java).putExtra(RemoteCameraService.EXTRA_FACING, facing).putExtra(RemoteCameraService.EXTRA_TARGET, target))
                 status.text = "Camera permission मिली; $facing camera share शुरू किया गया।"
-            } else status.text = "Camera permission नहीं मिली; Remote Camera शुरू नहीं हुआ।"
+            } else status.text = "Camera permission नहीं मिली या sharing toggle बंद है; Remote Camera शुरू नहीं हुआ।"
         }
     }
 
@@ -1627,11 +1628,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (requestCode == screenShareRequest) {
-            if (resultCode == Activity.RESULT_OK && data != null) {
+            if (resultCode == Activity.RESULT_OK && data != null &&
+                getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) {
                 val service = Intent(this, ScreenShareService::class.java).putExtra(ScreenShareService.EXTRA_RESULT_CODE, resultCode).putExtra(ScreenShareService.EXTRA_DATA, data)
                 if (Build.VERSION.SDK_INT >= 26) ContextCompat.startForegroundService(this, service) else startService(service)
                 status.text = "Screen sharing started. Android will show its active-sharing notification."
-            } else status.text = "Screen sharing cancelled."
+            } else status.text = "Screen sharing cancelled or its permission was revoked."
             return
         }
         if (requestCode == backupFileRequest && resultCode == Activity.RESULT_OK && data?.data != null) {
