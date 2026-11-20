@@ -616,6 +616,7 @@ wss.on('connection', (ws, ctx) => {
       if (approved) device.controlGrants.set(requesterId, Date.now() + Math.min(5, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
       send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request denied or target permission is disabled.' }));
     } else if (msg.type === 'remote_action') {
+      return; // Plaintext remote actions are disabled; use authenticated e2e_message envelopes.
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
@@ -628,6 +629,7 @@ wss.on('connection', (ws, ctx) => {
       target.pendingRemoteActions.set(actionId, { requesterId: deviceId, actionKind: msg.action.kind, expiresAt: Date.now() + 60_000 });
       send(targetId, JSON.stringify({ type: 'remote_action', actionId, fromDeviceId: deviceId, action: msg.action, requiresPerActionApproval: true }));
     } else if (msg.type === 'remote_action_result') {
+      return; // Plaintext action results are disabled; use authenticated e2e_message envelopes.
       const requesterId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(requesterId);
       const pending = device.pendingRemoteActions?.get(String(msg.actionId || ''));
@@ -726,6 +728,7 @@ wss.on('connection', (ws, ctx) => {
       target.incomingTransfers.set(transferId, { fromDeviceId: deviceId, requestId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunks: new Map(), expiresAt: Date.now() + 30 * 60_000 });
       send(targetId, JSON.stringify({ type: 'file_transfer_start', fromDeviceId: deviceId, transferId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunkBytes: 48 * 1024 }));
     } else if (msg.type === 'file_transfer_chunk') {
+      return; // File chunks must be end-to-end encrypted.
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const transferId = String(msg.transferId || '');
