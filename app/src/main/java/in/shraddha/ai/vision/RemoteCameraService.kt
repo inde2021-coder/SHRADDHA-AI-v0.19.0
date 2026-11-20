@@ -33,7 +33,7 @@ class RemoteCameraService : Service() {
         }
         stopCamera()
         getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().putString("active_target", target).putString("active_facing", facing).apply()
-        runCatching { in.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_service", "started", "facing=$facing; target_id_redacted") }
+        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_service", "started", "facing=$facing; target_id_redacted") }
         startCamera(facing, target)
         return START_NOT_STICKY
     }
@@ -81,12 +81,12 @@ class RemoteCameraService : Service() {
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()); buffer.get(bytes)
                     if (!DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)) {
-                        runCatching { in.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "frame_not_sent") }
+                        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "frame_not_sent") }
                     }
                     bytes.fill(0)
                     lastFrameAt = now
                 } catch (_: Exception) {
-                    runCatching { in.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "frame_not_sent") }
+                    runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "frame_not_sent") }
                 }
                 finally { image.close() }
             }, handler)
