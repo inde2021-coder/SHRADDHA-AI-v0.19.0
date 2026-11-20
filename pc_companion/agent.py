@@ -142,14 +142,19 @@ class PcCompanionApp:
             name = self.name_var.get().strip() or "Windows PC"
             joined = join_with_pairing_code(base, name, self.code_var.get().strip())
             token = joined["deviceToken"]
-            keyring.set_password(SERVICE_NAME, joined["deviceId"], token)
+            keyring_saved = True
+            try:
+                keyring.set_password(SERVICE_NAME, joined["deviceId"], token)
+            except Exception:
+                keyring_saved = False
             self.config = {
                 "baseUrl": base, "deviceName": name[:48],
                 "sessionId": joined["sessionId"], "deviceId": joined["deviceId"]
             }
             self._save_config()
             self.device_token = token
-            self.status_var.set("Paired. Connecting to the secure relay…")
+            self.status_var.set("Paired. Token saved in Windows Credential Manager." if keyring_saved else
+                                "Paired for this run only; Windows Credential Manager could not save the token.")
             self.code_var.set("")
             self._connect_socket()
         except Exception as exc:
@@ -207,8 +212,7 @@ class PcCompanionApp:
             return False
 
     def _on_open(self, _ws):
-        self.events.put(("status", "Secure relay connected. Remote control and screen sharing are still off."))
-        self._publish_permissions()
+        self.events.put(("opened", None))
 
     def _on_message(self, _ws, message):
         if not isinstance(message, str):
@@ -248,6 +252,9 @@ class PcCompanionApp:
                     self.status_var.set(payload)
                 elif kind == "message":
                     self._handle_message(payload)
+                elif kind == "opened":
+                    self.status_var.set("Secure relay connected. Remote control and screen sharing are still off.")
+                    self._publish_permissions()
         except queue.Empty:
             pass
         self.root.after(120, self._drain_events)
@@ -290,7 +297,7 @@ class PcCompanionApp:
         try:
             ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut)
             self.status_var.set(message)
-            if not ok and "FailSafe" in message:
+            if not ok and "fail-safe" in message.lower():
                 self.disconnect(emergency=True)
         except Exception as exc:
             self.status_var.set(f"Action failed: {str(exc)[:160]}")
