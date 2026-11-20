@@ -542,6 +542,14 @@ telephonyWss.on('connection', carrier => {
   let closed = false;
   let metadataSeen = false;
   let callRecord = null;
+  const pendingAudio = [];
+  let pendingAudioBytes = 0;
+  const maxPendingAudioBytes = 64 * 1024;
+  const sendAudioToLive = pcm16 => {
+    if (!live || live.readyState !== WebSocket.OPEN) return;
+    const pcm24 = resamplePcm16(pcm16, 16000, 24000);
+    live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+  };
 
   const finalize = () => {
     if (!callRecord) return;
@@ -566,6 +574,8 @@ telephonyWss.on('connection', carrier => {
     if (closed) return;
     closed = true;
     finalize();
+    pendingAudio.length = 0;
+    pendingAudioBytes = 0;
     if (live && live.readyState === WebSocket.OPEN) live.close();
     if (carrier.readyState === WebSocket.OPEN) carrier.close();
   };
@@ -588,15 +598,22 @@ telephonyWss.on('connection', carrier => {
   live.on('message', raw => {
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
-    if (event.type === 'session.started') ready = true;
+    if (event.type === 'session.started') {
+      ready = true;
+      while (pendingAudio.length && live.readyState === WebSocket.OPEN) {
+        const queued = pendingAudio.shift();
+        pendingAudioBytes -= queued.length;
+        sendAudioToLive(queued);
+      }
+    }
     if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) {
       carrier.send(JSON.stringify({ type: 'killAudio' }));
     }
     if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
-      const text = event.delta.slice(0, 2000);
+      const text = event.delta.slice(0, 500);
       if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text, at: new Date().toISOString() });
       if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text, at: new Date().toISOString() });
-      if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
+      if (callRecord.transcript.length > 300) callRecord.transcript.splice(0, callRecord.transcript.length - 300);
     }
     if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) {
       carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, 16000), { binary: true });
@@ -609,9 +626,16 @@ telephonyWss.on('connection', carrier => {
 
   carrier.on('message', (data, binary) => {
     if (binary) {
-      if (!ready || live.readyState !== WebSocket.OPEN || data.length > 65536) return;
-      const pcm24 = resamplePcm16(Buffer.from(data), 16000, 24000);
-      live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+      if (data.length === 0 || data.length > 65536) return;
+      const pcm16 = Buffer.from(data);
+      if (!ready || !live || live.readyState !== WebSocket.OPEN) {
+        if (pendingAudioBytes + pcm16.length <= maxPendingAudioBytes) {
+          pendingAudio.push(pcm16);
+          pendingAudioBytes += pcm16.length;
+        }
+        return;
+      }
+      sendAudioToLive(pcm16);
       return;
     }
     let message;
