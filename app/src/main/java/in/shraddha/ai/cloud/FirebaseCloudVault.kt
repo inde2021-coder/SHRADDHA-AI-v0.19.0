@@ -11,6 +11,7 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.messaging.FirebaseMessaging
@@ -48,6 +49,7 @@ class FirebaseCloudVault(private val context: Context) {
             .setApplicationId(BuildConfig.FIREBASE_APP_ID)
             .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
             .setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
+            .apply { if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) setDatabaseUrl(BuildConfig.FIREBASE_DATABASE_URL) }
             .apply { if (BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) setStorageBucket(BuildConfig.FIREBASE_STORAGE_BUCKET) }
             .build()
         // FirebaseMessagingService is dispatched through the default FirebaseApp. Initialize
@@ -107,9 +109,14 @@ class FirebaseCloudVault(private val context: Context) {
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
             runCatching { registerStoredPushToken(app, user.uid) }
             val encrypted = encrypt(plaintext, password)
+            val record = mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis())
             FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
-                .set(mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis()))
-                .await()
+                .set(record).await()
+            // Optional Realtime Database mirror; Firestore remains authoritative if RTDB is not configured.
+            if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                runCatching { FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault").child(key).setValue(record).await() }
+            }
             user.uid
         }
     }
@@ -123,8 +130,16 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
             runCatching { registerStoredPushToken(app, user.uid) }
-            val doc = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key).get().await()
-            val payload = doc.getString("payload") ?: return@runBlocking null
+            val firestorePayload = runCatching {
+                FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
+                    .get().await().getString("payload")
+            }.getOrNull()
+            val realtimePayload = if (firestorePayload == null && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                runCatching { FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault").child(key).get().await()
+                    .child("payload").getValue(String::class.java) }.getOrNull()
+            } else null
+            val payload = firestorePayload ?: realtimePayload ?: return@runBlocking null
             decrypt(payload, password)
         }
     }
@@ -147,6 +162,11 @@ class FirebaseCloudVault(private val context: Context) {
             collection.document(revisionId).set(record).await()
             // Keep a stable latest pointer for older app versions and the one-tap restore flow.
             collection.document("selected_device_backup_v1").set(record).await()
+            if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                runCatching { FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault").child("selected_device_backup_v1")
+                    .setValue(record).await() }
+            }
             val history = collection.orderBy("updatedAt", Query.Direction.DESCENDING).get().await()
             history.documents.filter { it.id.startsWith("selected_device_backup_v1_") && it.id != "selected_device_backup_v1" }
                 .drop(10).forEach { it.reference.delete().await() }
