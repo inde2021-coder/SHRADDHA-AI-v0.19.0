@@ -427,7 +427,35 @@ wss.on('connection', (ws, ctx) => {
       else for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ ...msg, fromDeviceId: deviceId }));
     }
   });
-  ws.on('close', () => { if (device.socket === ws) device.socket = null; for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false })); });
+  ws.on('close', () => {
+    // Ignore a late close event from a socket replaced by a newer connection.
+    if (device.socket !== ws) return;
+    device.socket = null;
+    // Disconnect is a revocation boundary: all permissions and grants fail closed.
+    device.sharePermissions = {};
+    device.grants.clear();
+    device.controlGrants.clear();
+    device.pendingControlRequests.clear();
+    device.pendingDataShares.clear();
+    for (const [id, peer] of session.devices) {
+      if (id === deviceId) continue;
+      peer.controlGrants.delete(deviceId);
+      peer.pendingControlRequests.delete(deviceId);
+      peer.grants.delete(`${deviceId}:contacts`);
+      peer.grants.delete(`${deviceId}:media`);
+      peer.grants.delete(`${deviceId}:documents`);
+      peer.grants.delete(`${deviceId}:messages`);
+      peer.grants.delete(`${deviceId}:calendar`);
+      peer.grants.delete(`${deviceId}:location`);
+      peer.grants.delete(`${deviceId}:device_status`);
+      peer.grants.delete(`${deviceId}:ai_memory`);
+      for (const key of peer.pendingDataShares.keys()) if (key.startsWith(`${deviceId}:`)) peer.pendingDataShares.delete(key);
+      if (peer.socket?.readyState === WebSocket.OPEN) {
+        peer.socket.send(JSON.stringify({ type: 'permission_status', deviceId, permissions: {} }));
+        peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false }));
+      }
+    }
+  });
 });
 function targetIdIsSelf(target, self) { return target === self; }
 
