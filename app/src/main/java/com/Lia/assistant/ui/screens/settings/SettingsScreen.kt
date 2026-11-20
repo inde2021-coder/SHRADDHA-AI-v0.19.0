@@ -52,6 +52,7 @@ import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
+import `in`.shraddha.ai.brain.PersistentChatMemory
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -79,6 +80,8 @@ fun SettingsScreen(
     var providerKeyInput by remember { mutableStateOf("") }
 
     var showNameDialog by remember { mutableStateOf(false) }
+    var rememberChats by remember { mutableStateOf(PersistentChatMemory.isEnabled(context)) }
+    var showClearMemoryDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
 
     Column(
@@ -182,6 +185,22 @@ fun SettingsScreen(
                         }
                     )
                 }
+                NovaSettingsRow(
+                    title = "Encrypted Conversation Memory",
+                    subtitle = if (rememberChats) "ON • last 12 turns saved on this device" else "OFF • conversations are not saved between sessions",
+                    icon = Icons.Default.Security,
+                    switch = rememberChats,
+                    onCheckedChange = {
+                        rememberChats = it
+                        PersistentChatMemory.setEnabled(context, it)
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Clear Saved Conversation Memory",
+                    subtitle = "Permanently clear the encrypted local recap",
+                    icon = Icons.Default.Security,
+                    onClick = { showClearMemoryDialog = true }
+                )
                 NovaSettingsRow(
                     title = "Assistant Name",
                     subtitle = appState.assistantName,
@@ -444,4 +463,29 @@ fun SettingsScreen(
             containerColor = colors.surfaceRaised
         )
     }
+    if (showClearMemoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearMemoryDialog = false },
+            title = { Text("Clear saved conversation memory?") },
+            text = { Text("This permanently deletes the encrypted conversation recap stored on this device. It does not delete chat messages from other services.") },
+            confirmButton = {
+                NovaButton(
+                    text = "Clear memory",
+                    type = NovaButtonType.DANGER,
+                    onClick = {
+                        PersistentChatMemory.clear(context)
+                        showClearMemoryDialog = false
+                    }
+                )
+            },
+            dismissButton = {
+                NovaButton(
+                    text = "Cancel",
+                    type = NovaButtonType.SECONDARY,
+                    onClick = { showClearMemoryDialog = false }
+                )
+            }
+        )
+    }
+
 }
