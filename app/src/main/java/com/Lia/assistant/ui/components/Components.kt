@@ -42,8 +42,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -100,9 +98,6 @@ fun NovaButton(
     enabled: Boolean = true
 ) {
     val colors = LocalNovaColors.current
-    val reducedMotion = LocalNovaReducedMotion.current
-    val scale = remember { Animatable(1f) }
-
     val buttonShape = RoundedCornerShape(18.dp)
     val bgModifier = when (type) {
         NovaButtonType.PRIMARY -> Modifier
@@ -128,27 +123,12 @@ fun NovaButton(
 
     Box(
         modifier = modifier
-            .scale(scale.value)
             .defaultMinSize(minWidth = 96.dp, minHeight = 50.dp)
             .clip(buttonShape)
             .then(bgModifier)
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                detectTapGestures(
-                    onPress = {
-                        if (!reducedMotion) {
-                            scale.animateTo(0.96f, tween(80))
-                            val released = tryAwaitRelease()
-                            scale.animateTo(1f, tween(100))
-                            if (released) onClick()
-                        } else {
-                            onClick()
-                        }
-                    }
-                )
-            }
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp)
-            .semantics { contentDescription = text; role = Role.Button; if (!enabled) disabled() },
+            .semantics { contentDescription = text },
         contentAlignment = Alignment.Center
     ) {
         Row(
