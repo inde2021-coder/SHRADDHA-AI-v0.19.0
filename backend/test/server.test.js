@@ -178,6 +178,30 @@ test('screen frames are blocked until the sending device explicitly enables scre
     assert.equal(frame[1 + sourceLength], 1);
     assert.deepEqual(frame.subarray(2 + sourceLength), allowedJpeg,
       'a frame sent while screen permission was false must never reach the paired viewer');
+
+    const waitForCameraPermission = expected => nextWsMessage(memberSocket, (data, isBinary) => {
+      if (isBinary) return false;
+      try {
+        const message = JSON.parse(data.toString());
+        return message.type === 'permission_status' && message.deviceId === owner.deviceId &&
+          message.permissions?.camera === expected;
+      } catch { return false; }
+    });
+    const firstCameraFrame = nextWsMessage(memberSocket, (_data, isBinary) => isBinary);
+    ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: false } }));
+    await waitForCameraPermission(false);
+    ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), Buffer.from([0xff, 0xd8, 0x00, 0x22])]));
+    ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: true } }));
+    await waitForCameraPermission(true);
+    const allowedCameraJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x66]);
+    ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), allowedCameraJpeg]));
+    const [cameraData, cameraBinary] = await firstCameraFrame;
+    assert.equal(cameraBinary, true);
+    const cameraFrame = Buffer.from(cameraData);
+    const cameraSourceLength = cameraFrame[0];
+    assert.equal(cameraFrame[cameraSourceLength + 1], 2);
+    assert.deepEqual(cameraFrame.subarray(cameraSourceLength + 2), allowedCameraJpeg,
+      'a camera frame sent while camera permission was false must never reach the paired viewer');
   } finally {
     ownerSocket.close();
     memberSocket.close();
