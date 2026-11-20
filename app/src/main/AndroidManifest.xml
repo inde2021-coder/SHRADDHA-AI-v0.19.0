@@ -33,6 +33,7 @@
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
+        <activity android:name=".biometric.BiometricCaptureActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
