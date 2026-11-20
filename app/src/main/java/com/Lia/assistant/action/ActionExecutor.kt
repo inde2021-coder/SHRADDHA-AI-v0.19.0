@@ -20,6 +20,19 @@ object ActionExecutor {
             return result
         }
 
+        // Draft-only messaging does not auto-send, but sensitive credentials must
+        // never be placed into a message composer by a voice/tool instruction.
+        if (toolName in setOf("message_contact", "execute_whatsapp_task")) {
+            val draftText = args.optString("message", "")
+            val draftDecision = OperatorSafetyPolicy.assess("TYPE_TEXT", value = draftText)
+            if (draftDecision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
+                result.put("status", "error")
+                result.put("action", "blocked_by_safety_policy")
+                result.put("message", draftDecision.reason + " Message draft was not opened.")
+                return result
+            }
+        }
+
         // Direct voice/tool actions may not bypass the Operator safety policy.
         // Message tools only open a draft; the user still taps Send in the target app.
         if (toolName !in setOf("message_contact", "execute_whatsapp_task")) {
