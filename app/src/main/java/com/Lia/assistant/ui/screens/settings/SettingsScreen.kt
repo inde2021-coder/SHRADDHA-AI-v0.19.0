@@ -75,7 +75,7 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     var showApiKeyDialog by remember { mutableStateOf(false) }
-    var apiKeyInput by remember { mutableStateOf(ApiKeyStore.getKey(context)) }
+    var apiKeyInput by remember { mutableStateOf("") }
     var showProviderKeyDialog by remember { mutableStateOf(false) }
     var showProviderSelectionDialog by remember { mutableStateOf(false) }
     var providerKeyInput by remember { mutableStateOf("") }
@@ -182,7 +182,7 @@ fun SettingsScreen(
                         subtitle = if (ProviderKeyStore.has(context, appState.aiProvider)) "Encrypted on this device" else "Required • tap to add",
                         icon = Icons.Default.Key,
                         onClick = {
-                            providerKeyInput = ProviderKeyStore.get(context, appState.aiProvider)
+                            providerKeyInput = ""
                             showProviderKeyDialog = true
                         }
                     )
@@ -327,16 +327,21 @@ fun SettingsScreen(
                     NovaTextField(
                         value = apiKeyInput,
                         onValueChange = { apiKeyInput = it },
-                        placeholder = "AIzaSy..."
+                        placeholder = "Enter new Gemini API key",
+                        secret = true
                     )
                 }
             },
             confirmButton = {
                 NovaButton(
                     text = "Save Key",
+                    enabled = apiKeyInput.isNotBlank(),
                     onClick = {
-                        ApiKeyStore.saveKey(context, apiKeyInput)
-                        showApiKeyDialog = false
+                        runCatching { ApiKeyStore.saveKey(context, apiKeyInput.trim()) }
+                            .onSuccess {
+                                apiKeyInput = ""
+                                showApiKeyDialog = false
+                            }
                     }
                 )
             },
@@ -368,7 +373,7 @@ fun SettingsScreen(
                                     appState.applyAiProvider(context, provider)
                                     showProviderSelectionDialog = false
                                     if (provider != "GEMINI") {
-                                        providerKeyInput = ProviderKeyStore.get(context, provider)
+                                        providerKeyInput = ""
                                         showProviderKeyDialog = true
                                     }
                                 }
@@ -410,16 +415,21 @@ fun SettingsScreen(
                     NovaTextField(
                         value = providerKeyInput,
                         onValueChange = { providerKeyInput = it },
-                        placeholder = "Paste provider API key..."
+                        placeholder = "Enter new provider API key",
+                        secret = true
                     )
                 }
             },
             confirmButton = {
                 NovaButton(
                     text = "Save Securely",
+                    enabled = providerKeyInput.isNotBlank(),
                     onClick = {
-                        runCatching { ProviderKeyStore.save(context, appState.aiProvider, providerKeyInput) }
-                            .onSuccess { showProviderKeyDialog = false }
+                        runCatching { ProviderKeyStore.save(context, appState.aiProvider, providerKeyInput.trim()) }
+                            .onSuccess {
+                                providerKeyInput = ""
+                                showProviderKeyDialog = false
+                            }
                     }
                 )
             },
