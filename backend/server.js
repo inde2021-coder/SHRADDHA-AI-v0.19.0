@@ -10,6 +10,18 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
+const knowlarityEvents = new Map();
+const KNOWLARITY_CHANNELS = new Set(['Basic','Advance','Premium','Enterprise']);
+function knowlarityConfigured() { return Boolean(process.env.KNOWLARITY_API_KEY && process.env.KNOWLARITY_SR_API_KEY && process.env.KNOWLARITY_NUMBER && process.env.KNOWLARITY_WEBHOOK_TOKEN); }
+function normalizeE164(value) { return typeof value === 'string' && /^\\+[1-9]\\d{7,14}$/.test(value); }
+function saveKnowlarityEvent(payload) {
+  const event = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  const id = String(event.uuid || event.call_id || event.id || randomBytes(12).toString('hex')).slice(0, 120);
+  const previous = knowlarityEvents.get(id) || {};
+  knowlarityEvents.set(id, { ...previous, ...event, receivedAt: new Date().toISOString() });
+  while (knowlarityEvents.size > 500) knowlarityEvents.delete(knowlarityEvents.keys().next().value);
+  return id;
+}
 const AI_ROUTES = new Set(['/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -113,6 +125,44 @@ const server = http.createServer(async (req, res) => {
       session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/knowlarity/status') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      return json(res, 200, {
+        provider: 'knowlarity',
+        configured: knowlarityConfigured(),
+        credentialsRemainServerSide: true,
+        capabilities: { outboundClickToCall: Boolean(process.env.KNOWLARITY_API_KEY && process.env.KNOWLARITY_SR_API_KEY && process.env.KNOWLARITY_NUMBER), postCallEvents: Boolean(process.env.KNOWLARITY_WEBHOOK_TOKEN), liveBidirectionalAiAudio: false, automaticTranscript: false, whatsappDelivery: false },
+        limitation: 'Knowlarity API docs currently confirm call initiation, call events and post-call recording URLs; this gateway does not claim live AI audio streaming.'
+      });
+    }
+    if (req.method === 'POST' && req.url === '/api/telephony/knowlarity/call') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      if (!knowlarityConfigured()) return json(res, 503, { error: 'Knowlarity credentials are not configured on the server' });
+      const body = await readBody(req, 8 * 1024);
+      const channel = KNOWLARITY_CHANNELS.has(body.channel) ? body.channel : (process.env.KNOWLARITY_CHANNEL || 'Basic');
+      if (!normalizeE164(body.agentNumber) || !normalizeE164(body.customerNumber)) return json(res, 400, { error: 'agentNumber and customerNumber must be E.164 numbers such as +919876543210' });
+      const response = await fetch(`https://kpi.knowlarity.com/${channel}/v1/account/call/makecall`, {
+        method: 'POST',
+        headers: { authorization: process.env.KNOWLARITY_SR_API_KEY, 'x-api-key': process.env.KNOWLARITY_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ k_number: process.env.KNOWLARITY_NUMBER, agent_number: body.agentNumber, customer_number: body.customerNumber }),
+        signal: AbortSignal.timeout(20_000)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) return json(res, 502, { error: 'Knowlarity call request failed', providerStatus: response.status, details: result });
+      return json(res, 200, { provider: 'knowlarity', accepted: true, result, note: 'This is a two-leg PSTN click-to-call request, not an AI conversation.' });
+    }
+    if (req.method === 'POST' && req.url === '/webhooks/knowlarity') {
+      const supplied = String(req.headers['x-knowlarity-webhook-token'] || '');
+      if (!process.env.KNOWLARITY_WEBHOOK_TOKEN || !safeEqual(supplied, process.env.KNOWLARITY_WEBHOOK_TOKEN)) return json(res, 401, { error: 'Invalid Knowlarity webhook token' });
+      const payload = await readBody(req, 32 * 1024);
+      const id = saveKnowlarityEvent(payload);
+      return json(res, 202, { accepted: true, eventId: id });
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/knowlarity/events') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const events = [...knowlarityEvents.entries()].reverse().slice(0, 100).map(([id, event]) => ({ id, ...event }));
+      return json(res, 200, { events, count: events.length, storage: 'in-memory; events are lost on server restart' });
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
