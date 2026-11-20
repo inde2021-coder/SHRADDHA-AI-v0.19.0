@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.operator
 
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
+import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /** Local, permission-gated observe -> act -> re-observe engine. It never bypasses Android security surfaces. */
 class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
@@ -20,8 +21,12 @@ class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
     /** Execute one explicitly supplied step at a time. Sensitive actions are deliberately excluded. */
     fun execute(step: OperatorStep, confirmed: Boolean = false): Boolean {
         if (cancelled) return false
-        if (step.requiresConfirmation && !confirmed) {
-            emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "इस चरण के लिए आपकी स्पष्ट अनुमति आवश्यक है।")); return false
+        val decision = OperatorSafetyPolicy.assess(step.action.name, step.target, step.value)
+        if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
+            emit(OperatorEvent(OperatorTaskState.FAILED, decision.reason)); return false
+        }
+        if ((step.requiresConfirmation || decision.risk == OperatorSafetyPolicy.Risk.CONFIRM) && !confirmed) {
+            emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, decision.reason)); return false
         }
         val before = observe() ?: return false
         emit(OperatorEvent(OperatorTaskState.EXECUTING, "कार्रवाई: ${step.action}", before))

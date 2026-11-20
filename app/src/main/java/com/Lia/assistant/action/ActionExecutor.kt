@@ -3,6 +3,7 @@ package com.Lia.assistant.action
 import android.content.Context
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
+import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -17,6 +18,20 @@ object ActionExecutor {
             result.put("action", "license_required")
             result.put("message", "A valid access key is required to use this direct capability. Please enter your access key in Profile Settings.")
             return result
+        }
+
+        // Direct voice/tool actions may not bypass the Operator safety policy.
+        // Message tools only open a draft; the user still taps Send in the target app.
+        if (toolName !in setOf("message_contact", "execute_whatsapp_task")) {
+            val target = args.optString("text", args.optString("app_name", args.optString("contact_name", "")))
+            val value = args.optString("text", args.optString("message", ""))
+            val decision = OperatorSafetyPolicy.assess(toolName, target, value)
+            if (decision.risk != OperatorSafetyPolicy.Risk.LOW) {
+                result.put("status", "error")
+                result.put("action", if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) "blocked_by_safety_policy" else "confirmation_required")
+                result.put("message", decision.reason + " Direct voice action stopped; open App Operator to review and confirm.")
+                return result
+            }
         }
 
         when (toolName) {
