@@ -1872,7 +1872,7 @@ class MainActivity : AppCompatActivity() {
                     else -> "Unsupported action"
                 }
                 val risk = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess(
-                    kind.uppercase(), target = action.optString("text"), value = action.optString("text")
+                    (if (kind == "type") "TYPE_TEXT" else kind.uppercase()), target = action.optString("text"), value = action.optString("text")
                 )
                 if (risk.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK) {
                     status.text = "Remote action blocked by safety policy: ${risk.reason}"
@@ -1891,7 +1891,7 @@ class MainActivity : AppCompatActivity() {
                         if (!stillAuthorized) {
                             status.text = "Remote action blocked: approval expired before confirmation."
                         } else {
-                            val applied = ShraddhaAccessibilityService.applyRemoteAction(action)
+                            val applied = ShraddhaAccessibilityService.applyRemoteAction(action, userConfirmed = true)
                             status.text = if (applied) "Approved remote action executed." else
                                 "Approved action could not be completed; Accessibility service may be unavailable."
                         }
