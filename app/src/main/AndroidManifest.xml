@@ -62,6 +62,7 @@
         <service android:name=".screen.ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".vision.RemoteCameraService" android:exported="false" android:foregroundServiceType="camera" />
         <receiver android:name=".future.ReminderReceiver" android:exported="false" />
+        <receiver android:name=".future.DailyBriefingReceiver" android:enabled="true" android:exported="false" />
         <receiver android:name=".future.ReminderBootReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
