@@ -32,26 +32,34 @@ Main branch: untouched.
 - Speaker recognition is blocked when on-device speech recognition is unavailable; cloud speech upload is not used for this challenge.
 - Physical-device capture, model compatibility, accuracy, false-accept/false-reject and spoof evaluation remain mandatory before calling this step complete.
 
-## Step 5 — Device Universe (security hardening in progress)
+## Step 5 — Device Universe (relay hardening implemented; end-to-end validation pending)
 
-- Pairing/session creation and WebSocket relay now reject plain HTTP and require HTTPS/WSS.
-- Relay credentials are validated before opening a session; query parameters are built with OkHttp URL encoding rather than string concatenation.
-- Remaining: server-side one-time pairing expiry/attempt limits, device-token rotation/revocation, per-device capability grants, command allowlists, replay protection, screen/camera consent lifecycle and cross-platform companion validation.
-- Arbitrary control of every app/device is not possible; Android and remote OS restrictions apply.
+- Pairing/session creation and WebSocket relay require HTTPS/WSS; relay credentials are validated before session creation and URL parameters are encoded with OkHttp.
+- Relay control requests require target-side approval, expire after 60 seconds while pending, and produce grants capped at five minutes. Data-share requests require per-category approval, expire after 60 seconds while pending and grants are one-shot with a maximum 15-minute lifetime.
+- Screen/camera frames are relayed only when the sending device has explicitly enabled the matching permission; frame rate is capped at 10/sec. Payloads and chat messages are size-limited.
+- Disconnect now revokes local and peer-side grants, pending requests and share permissions. Reconnect replacement is guarded against a late close event clearing the new socket.
+- Android client requires HTTPS for chat/provider/vision gateway APIs, limits vision payload size, validates remote tap/swipe coordinates and bounds click-text targets. Screen/camera toggles are checked again after OS permission prompts.
+- Remaining: automated protocol tests, token rotation/revocation review, replay protection, Android local authorization verification and cross-platform companion validation. Arbitrary control of every app/device is not possible; Android and remote OS restrictions apply.
 
-## Step 6 — AI Intelligence
-Not started in this implementation pass. Provider abstraction, capability routing, expert knowledge grounding, citations, tool permission boundaries, offline behavior and factuality tests remain to be implemented/verified.
+## Step 6 — AI Intelligence (core provider integration implemented; capability expansion pending)
 
-## Step 7 — Premium UI
-Not started in this implementation pass. Full-screen responsive design, navigation, accessibility, animation performance, reduced-motion support and dynamic assistant-name replacement require UI audit and device verification.
+- Provider preference is persisted and validated for Gemini, OpenAI, Groq, Claude and Perplexity. Non-Gemini provider keys are stored in the Android Keystore-backed encrypted feature store and only sent to the selected provider.
+- Text chat adapters are implemented for OpenAI-compatible chat APIs, Anthropic Messages and Perplexity. Chat history is bounded to 40 turns / 8,000 characters per turn; system instruction is capped at 8,000 characters. Compose state is snapshotted before background requests.
+- Backend includes authenticated expert-domain and multi-provider council endpoints with bounded input, provider allowlists, per-IP rate limiting and explicit advice-only output (no external actions executed).
+- Current adapters are text-only: streaming, image/audio multimodality, browsing, citations, tool execution, automatic failover and offline model routing are not implemented. Provider model IDs and live API compatibility still require current-provider verification with real user keys.
 
-## Step 8 — Firebase and Security (rules hardening in progress)
+## Step 7 — Premium UI (not yet fully audited)
 
-- Existing Firestore rules scope vault reads/writes to the authenticated user's UID, validate document keys, payload format/type and payload size, and deny all other document paths.
-- Storage rules now scope paths to the authenticated user's UID, cap uploads below 50 MB, allow only image/video/PDF/JSON/plain-text content types, and deny all other paths.
-- Added root firebase.json to point Firebase CLI deployment at the checked-in Firestore and Storage rules.
-- Firebase config is loaded from environment/local.properties into BuildConfig; no service-account credential is committed.
-- Remaining: run Firebase Emulator rules tests, deploy rules to the intended Firebase project, verify Auth providers/authorized domains, account deletion and data export end-to-end, token lifecycle, backup recovery and secret scanning. A checked-in rules file is not proof that production rules have been deployed.
+- Existing application screens and design-system documentation are present, but this implementation pass has not completed a screen-by-screen visual/accessibility audit.
+- Remaining: verify dynamic assistant-name replacement across every screen/notification/shortcut, responsive layouts, navigation consistency, animation performance, reduced-motion support, contrast, TalkBack labels and real-device rendering. Do not claim premium UI completion until these checks pass.
+
+## Step 8 — Firebase and Security (source rules implemented; deployment/integration pending)
+
+- Firestore vault reads/writes are scoped to the authenticated user's UID; document IDs, exact field allowlist, ciphertext format/type, payload size and integer timestamp are validated. All other document paths are denied.
+- Storage rules scope paths to the authenticated user's UID, cap uploads below 50 MB, allow only image/video/PDF/JSON/plain-text content types and deny all other paths. Storage upload code is not yet integrated into the app.
+- Root firebase.json points Firebase CLI deployment at the checked-in Firestore and Storage rules. Firebase config is supplied via local.properties/BuildConfig; no service-account credential is committed.
+- Cloud Vault signs in with Firebase Email/Password, encrypts backup text client-side using AES-256-GCM with a PBKDF2-HMAC-SHA256-derived key (210,000 iterations), and validates encrypted payload structure/size on restore.
+- Remaining: run Firebase Emulator rules tests, deploy rules to the user's actual Firebase project, verify App Check/Auth providers/authorized domains, account deletion/export, token lifecycle and backup recovery. Checked-in rules do not prove production deployment.
 
 ## Step 9 — Final Testing
 Not started. Requires successful unit tests, lint/static checks, debug and release APK builds, install/upgrade tests, physical-device tests, crash/performance checks and final artifact checksums.
@@ -92,7 +100,7 @@ A step is complete only when its source changes are committed, tests pass, relev
 - Added a basic randomized blink/head-turn interaction gate and voice phrase normalization tests.
 - Important limitations: blink/head-turn is not certified anti-spoofing; ECAPA exports with mel-feature inputs are rejected until exact preprocessing is validated; no licensed SFace/ECAPA model weights are bundled; no benchmark or physical-device biometric accuracy test has been performed. The current capture flow must not be treated as secure identity proof.
 
-### Build verification
-- CI run 44568205177 completed successfully for the earlier Step 3/4 engine and dependency changes.
-- CI runs for the latest People Memory UI integration (bcd0c3a1…) and HTTPS/WSS relay hardening (a0fe74ad…) were triggered and must be checked separately; do not infer their outcome from the earlier passing run.
-- No physical-device validation or certified biometric spoof testing has been performed.
+### Build verification — 2026-11-20
+- Latest observed run `44664745187` (`dbc413b…`) had a successful backend-check job, but the Android verify job was cancelled during unit tests and the APK build was skipped. This is not a passing Android build.
+- Earlier run `44664268684` was superseded/cancelled as additional commits were pushed. Do not treat a cancelled run as a test pass.
+- No physical-device validation, certified biometric spoof testing, Firebase Emulator test or production Firebase rules deployment has been performed.
