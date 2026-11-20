@@ -1,0 +1,17 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        "vault": {
+          "$key": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && $key.matches(/^[a-zA-Z0-9_-]{1,64}$/)",
+            ".validate": "newData.hasChildren(['format', 'payload', 'updatedAt']) && newData.numChildren() === 3 && newData.child('format').val() === 'AES-256-GCM/PBKDF2-SHA256-v1' && newData.child('payload').isString() && newData.child('payload').val().length <= 140000 && newData.child('updatedAt').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}
