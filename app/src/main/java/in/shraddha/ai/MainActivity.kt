@@ -1305,7 +1305,22 @@ class MainActivity : AppCompatActivity() {
         }
         section(root, "ON-DEVICE FACE & VOICE ENROLLMENT", "सहमति-आधारित local capture • मूल फोटो/ऑडियो discard • encrypted template vault") {
             addView(TextView(this@MainActivity).apply { text = "पहले वैध लाइसेंस वाले SFace और ECAPA ONNX model अलग-अलग import करें। ऐप मॉडल weights उपलब्ध कराए बिना पहचान का दावा नहीं करेगा। Blink/head-turn challenge केवल basic interaction check है, certified anti-spoofing नहीं।"; setTextColor(0xFFFFD7A8.toInt()); textSize = 12f })
-            addView(actionButton("Import SFace ONNX Model", "केवल लाइसेंस/स्रोत सत्यापित model file चुनें") { pickBiometricModel(faceModelRequest) })
+            addView(actionButton("Import SFace ONNX Model", "अपना SFace-compatible model चुनें") { pickBiometricModel(faceModelRequest) })
+            addView(actionButton("Download verified SFace model • 38.7 MB", "Pinned OpenCV Zoo ONNX • SHA-256 verification • local-only storage") {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Download SFace face model?")
+                    .setMessage("यह OpenCV Zoo का SFace ONNX model है। Model directory में Apache-2.0 license दिया गया है। Model weights का training-data provenance model card में पूरी तरह स्पष्ट नहीं है; commercial redistribution से पहले अलग legal review करें। Download लगभग 38.7 MB है; exact size और SHA-256 जाँचे जाएँगे। Face matching similarity-only है, identity/authentication proof नहीं।")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Download and verify") { _, _ ->
+                        status.text = "SFace model download शुरू…"
+                        `in`.shraddha.ai.biometric.BiometricModelDownloader.downloadFaceModel(this@MainActivity) { result ->
+                            runOnUiThread {
+                                result.onSuccess { status.text = "SFace model डाउनलोड और SHA-256 verify हो गया (${it.length()} bytes)।" }
+                                    .onFailure { status.text = "SFace model download असफल: ${it.message}" }
+                            }
+                        }
+                    }.show()
+            })
             addView(actionButton("Import ECAPA ONNX Model", "अपना verified waveform-input compatible model चुनें") { pickBiometricModel(speakerModelRequest) })
             addView(actionButton("Download verified ECAPA model • 42 MB", "Pinned Apache-2.0 ONNX export • SHA-256 verification • local-only storage") {
                 android.app.AlertDialog.Builder(this@MainActivity)
@@ -1314,7 +1329,7 @@ class MainActivity : AppCompatActivity() {
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Download and verify") { _, _ ->
                         status.text = "ECAPA model download शुरू…"
-                        `in`.shraddha.ai.biometric.BiometricModelDownloader.download(this@MainActivity) { result ->
+                        `in`.shraddha.ai.biometric.BiometricModelDownloader.downloadSpeakerModel(this@MainActivity) { result ->
                             runOnUiThread {
                                 result.onSuccess { status.text = "ECAPA model डाउनलोड और SHA-256 verify हो गया (${it.length()} bytes)।" }
                                     .onFailure { status.text = "ECAPA model download असफल: ${it.message}" }
