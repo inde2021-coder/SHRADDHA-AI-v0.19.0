@@ -44,7 +44,7 @@ import com.Lia.assistant.data.AssistantBrand
 class MainActivity : AppCompatActivity() {
     private val assistantDisplayName: String
         get() = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
-    private val securityAudit by lazy { in.shraddha.ai.future.LocalAuditTrail(applicationContext) }
+    private val securityAudit by lazy { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext) }
     private lateinit var status: TextView
     private lateinit var pageRoot: LinearLayout
     private lateinit var shell: LinearLayout
