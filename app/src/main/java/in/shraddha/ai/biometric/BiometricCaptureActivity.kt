@@ -221,10 +221,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
                     file.delete()
                     if (mode == "enroll") {
                         vault.enroll(id, name, "face", embedding, true).getOrThrow()
-                        finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.")
+                        finishWith("Face template encrypted and saved for $name. Original camera frame was discarded.", successful = true)
                     } else {
                         val match = vault.match("face", embedding, threshold, id.takeIf { it.isNotBlank() })
-                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.")
+                        finishWith(match?.let { "Face match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown person. No face template passed the calibrated threshold.", successful = true)
                     }
                 } catch (error: Exception) { file.delete(); finishWith("Face capture failed: ${error.message}") }
             }
@@ -402,24 +402,24 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
                 if (mode == "enroll") {
                     vault.enroll(id, name, "speaker", embedding, true).getOrThrow()
-                    finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.")
+                    finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.", successful = true)
                 } else if (mode == "compare") {
                     val score = vault.similarityForPerson("speaker", id, embedding)
                     finishWith(score?.let { "Saved voice similarity for $name: %.3f. यह केवल model similarity है; calibrated same-speaker verdict नहीं।".format(it) }
-                        ?: "इस व्यक्ति का voice template नहीं मिला या model dimensions अलग हैं।")
+                        ?: "इस व्यक्ति का voice template नहीं मिला या model dimensions अलग हैं।", successful = true)
                 } else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
                     val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
-                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
+                    finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.", successful = true)
                 }
             } catch (error: Exception) { finishWith("Speaker capture failed: ${error.message}") }
             finally { runCatching { recorder?.stop() }; runCatching { recorder?.release() } }
         }, "SpeakerCapture").start()
     }
 
-    private fun finishWith(text: String) {
+    private fun finishWith(text: String, successful: Boolean = false) {
         runOnUiThread {
-            setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_RESULT, text))
+            setResult(if (successful) Activity.RESULT_OK else Activity.RESULT_CANCELED, Intent().putExtra(EXTRA_RESULT, text))
             if (!::action.isInitialized) { finish(); return@runOnUiThread }
             messageOrStatus(text)
             action.text = "Close"
