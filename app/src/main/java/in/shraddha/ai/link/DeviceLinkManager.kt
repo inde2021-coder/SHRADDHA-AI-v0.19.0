@@ -34,6 +34,12 @@ object DeviceLinkManager {
     @Volatile var onFileTransferMessage: ((JSONObject) -> Unit)? = null
     @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
+    @Volatile var onE2EVerification: ((String, String) -> Unit)? = null
+    private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
+    private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
+    private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
+
+
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
     fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
@@ -60,7 +66,32 @@ object DeviceLinkManager {
                     val msg = JSONObject(text)
                     if (msg.optString("type").startsWith("file_transfer_") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
                     when (msg.optString("type")) {
-                        "connected" -> { onStatus?.invoke("Connected • ${msg.optJSONArray("devices")?.length() ?: 0} paired device(s)"); onPeerMessage?.invoke(msg) }
+
+                        "e2e_key_offer" -> {
+                            val peerId = msg.optString("fromDeviceId")
+                            val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), deviceId.orEmpty(), peerId)
+                            peerKeys[peerId] = PeerKeyState(derived.first, derived.second)
+                            onE2EVerification?.invoke(peerId, derived.second)
+                        }
+                        "e2e_key_confirm" -> {
+                            val peerId = msg.optString("fromDeviceId")
+                            val state = peerKeys[peerId]
+                            if (state != null && state.fingerprint == msg.optString("fingerprint")) {
+                                state.remoteConfirmed = true
+                                onStatus?.invoke("Peer fingerprint confirmed: " + peerId)
+                            } else onStatus?.invoke("E2E fingerprint mismatch. Do not trust this peer.")
+                        }
+
+
+                        "connected" -> {
+                            val peers = msg.optJSONArray("devices")
+                            for (i in 0 until (peers?.length() ?: 0)) {
+                                val peerId = peers?.optJSONObject(i)?.optString("id").orEmpty()
+                                if (peerId.isNotBlank() && peerId != deviceId) sendE2EKeyOffer(peerId)
+                            }
+                            onStatus?.invoke("Connected • " + (peers?.length() ?: 0) + " paired device(s)")
+                            onPeerMessage?.invoke(msg)
+                        }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> { val sender = msg.optString("fromDeviceId"); val actionId = msg.optString("actionId"); val action = msg.optJSONObject("action") ?: JSONObject(); if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && msg.optBoolean("requiresPerActionApproval")) onRemoteActionWithId?.invoke(sender, actionId, action) else onStatus?.invoke("Unverified remote action blocked: missing approval metadata") }
@@ -269,6 +300,20 @@ object DeviceLinkManager {
         socket?.send(JSONObject().put("type", "file_transfer_ack").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("index", index).put("complete", complete).put("ok", ok).toString()) == true
     fun cancelFileTransfer(targetDeviceId: String, transferId: String, reason: String = "cancelled"): Boolean =
         socket?.send(JSONObject().put("type", "file_transfer_cancel").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("reason", reason.take(120)).toString()) == true
+
+
+    private fun sendE2EKeyOffer(targetDeviceId: String): Boolean =
+        socket?.send(JSONObject().put("type", "e2e_key_offer").put("targetDeviceId", targetDeviceId).put("publicKey", e2eCrypto.publicKeyBase64()).toString()) == true
+
+    fun confirmE2EPeer(peerId: String, fingerprint: String): Boolean {
+        val state = peerKeys[peerId] ?: return false
+        if (state.fingerprint != fingerprint) return false
+        state.localConfirmed = true
+        return socket?.send(JSONObject().put("type", "e2e_key_confirm").put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
+    }
+
+    fun isE2ETrusted(peerId: String): Boolean =
+        peerKeys[peerId]?.let { it.localConfirmed && it.remoteConfirmed } == true
 
     fun sendSignal(targetDeviceId: String, signal: JSONObject): Boolean = socket?.send(JSONObject().put("type", "signal").put("targetDeviceId", targetDeviceId).put("signal", signal).toString()) == true
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
