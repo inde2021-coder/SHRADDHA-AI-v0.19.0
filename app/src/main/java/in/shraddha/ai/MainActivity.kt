@@ -1227,8 +1227,8 @@ class MainActivity : AppCompatActivity() {
                 val providers = providersField.text.toString().split(',').map { it.trim().lowercase() }
                     .filter { it in listOf("openai","gemini","anthropic","groq","perplexity") }.distinct().take(5)
                 val gatewayTokenValue = tokenField.text.toString().trim()
-                if (!base.startsWith("https://") || goalText.isBlank() || providers.isEmpty() || gatewayTokenValue.isBlank()) {
-                    councilOutput.text = "पहले HTTPS backend, gateway token, goal और कम-से-कम एक valid provider configure करें।"
+                if (!base.startsWith("https://") || goalText.isBlank() || providers.size < 2 || gatewayTokenValue.isBlank()) {
+                    councilOutput.text = "पहले HTTPS backend, gateway token, goal और कम-से-कम दो valid providers configure करें।"
                     return@actionButton
                 }
                 councilOutput.text = "AI Council से सीमित accessibility action proposal माँगा जा रहा है… अभी कोई action execute नहीं होगा।"
