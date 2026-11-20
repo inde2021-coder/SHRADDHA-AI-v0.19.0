@@ -61,6 +61,7 @@ import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.ChatPromptBuilder
 import `in`.shraddha.ai.brain.PersistentChatMemory
+import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
@@ -154,9 +155,13 @@ fun ChatScreen(
                 assistantName = appState.assistantName
             )
             val memoryRecap = PersistentChatMemory.recap(context)
-            val memoryInstruction = memoryRecap?.let {
-                "\n\nRelevant saved conversation memory (user-approved, may be incomplete):\n" + it
+            val relevantMemory = memoryRecap?.let { recap ->
+                LocalKnowledgeBase.search(recap, trimmed, limit = 4).map { it.text }
             }.orEmpty()
+            val memoryInstruction = if (relevantMemory.isNotEmpty()) {
+                "\n\nRelevant saved conversation memories (user-approved, encrypted on this device; may be incomplete):\n" +
+                    relevantMemory.joinToString("\n")
+            } else ""
             val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
             val result = if (appState.aiProvider == "GEMINI") {
                 GeminiTextClient.reply(ApiKeyStore.getKey(context), boundedInstruction, historySnapshot)

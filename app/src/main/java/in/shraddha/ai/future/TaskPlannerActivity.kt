@@ -52,14 +52,14 @@ class TaskPlannerActivity : AppCompatActivity() {
         }
         root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); bottomMargin = dp(14) })
         briefingToggle = android.widget.Switch(this).apply {
-            text = "Daily briefing • 8:00 AM"
+            text = "Daily briefing • around 8:00 AM"
             setTextColor(0xFFE4E9F5.toInt())
             isChecked = prefs.getBoolean("daily_briefing_enabled", false)
             setOnCheckedChangeListener { _, enabled ->
                 prefs.edit().putBoolean("daily_briefing_enabled", enabled).apply()
                 if (enabled) {
                     scheduleDailyBriefing()
-                    toast("Daily briefing enabled for 8:00 AM")
+                    toast("Daily briefing scheduled around 8:00 AM")
                 } else {
                     cancelDailyBriefing()
                     toast("Daily briefing disabled")
