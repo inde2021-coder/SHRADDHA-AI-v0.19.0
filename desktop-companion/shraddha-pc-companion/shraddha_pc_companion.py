@@ -347,11 +347,24 @@ def verify_transfer_file(path: str, expected_size: int, expected_sha256: str) ->
 
 async def send_file_chunks(ws, target: str, transfer_id: str, path: str, indexes: list[int]) -> None:
     import base64
+    paused = False
+    try:
+        import msvcrt
+    except ImportError:
+        msvcrt = None
     for position, index in enumerate(indexes):
+        if msvcrt:
+            while msvcrt.kbhit():
+                if msvcrt.getwch().lower() == 'p': paused = not paused; print('File transfer', 'PAUSED' if paused else 'RESUMING')
+            while paused:
+                await asyncio.sleep(0.15)
+                while msvcrt.kbhit():
+                    if msvcrt.getwch().lower() == 'p': paused = not paused; print('File transfer', 'PAUSED' if paused else 'RESUMING')
         data = await asyncio.to_thread(read_file_chunk, path, index)
         await ws.send(json.dumps({"type": "file_transfer_chunk", "targetDeviceId": target, "transferId": transfer_id, "index": index, "payload": base64.b64encode(data).decode('ascii')}))
         if position % 20 == 0: print(f"Sending file chunks: {position + 1}/{len(indexes)}")
         await asyncio.sleep(0.01)
+    if msvcrt: print("Press P during transfer to pause/resume sending.")
 
 
 def sanitize_clipboard_text(value: str) -> str:
