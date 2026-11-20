@@ -100,7 +100,8 @@ class NovaAccessibilityService : AccessibilityService() {
         node.getBoundsInScreen(bounds)
         val x = bounds.centerX().toFloat()
         val y = bounds.centerY().toFloat()
-        return if (gestureTap(x, y)) "tapped" else "failed"
+        if (bounds.isEmpty) return "failed"
+        return if (gestureTap(x, y)) "gesture_dispatched" else "failed"
     }
 
     fun typeText(text: String): String {
@@ -143,13 +144,9 @@ class NovaAccessibilityService : AccessibilityService() {
         val path = Path().apply { moveTo(x, y) }
         val stroke = GestureDescription.StrokeDescription(path, 0, 50)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        var completed = false
-        dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                completed = true
-            }
-        }, null)
-        return true
+        // dispatchGesture reports whether Android accepted the request, not whether
+        // the gesture has finished. Callers must not report this as a completed tap.
+        return dispatchGesture(gesture, null, null)
     }
 
     private fun findNodeMatchingText(root: AccessibilityNodeInfo, query: String): AccessibilityNodeInfo? {
