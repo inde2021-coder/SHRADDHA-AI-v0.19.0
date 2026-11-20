@@ -1,6 +1,6 @@
 package `in`.shraddha.ai.link
 
-import android.util.Base64
+import java.util.Base64
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -20,11 +20,11 @@ import javax.crypto.spec.SecretKeySpec
 class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
     data class Sealed(val nonce: String, val ciphertext: String)
 
-    fun publicKeyBase64(): String = Base64.encodeToString(pair.public.encoded, Base64.NO_WRAP)
+    fun publicKeyBase64(): String = Base64.getEncoder().withoutPadding().encodeToString(pair.public.encoded)
 
     fun derivePeerKey(peerPublicKeyBase64: String, localDeviceId: String, peerDeviceId: String): Pair<ByteArray, String> {
         require(localDeviceId.isNotBlank() && peerDeviceId.isNotBlank() && localDeviceId != peerDeviceId)
-        val encoded = Base64.decode(peerPublicKeyBase64, Base64.NO_WRAP)
+        val encoded = Base64.getDecoder().decode(peerPublicKeyBase64)
         require(encoded.size in 80..256) { "Invalid ECDH public key size" }
         val publicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded))
         val agreement = KeyAgreement.getInstance("ECDH")
@@ -65,13 +65,13 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
             cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
             cipher.updateAAD(associatedData)
             val sealed = cipher.doFinal(plaintext)
-            return Sealed(Base64.encodeToString(nonce, Base64.NO_WRAP), Base64.encodeToString(sealed, Base64.NO_WRAP))
+            return Sealed(Base64.getEncoder().withoutPadding().encodeToString(nonce), Base64.getEncoder().withoutPadding().encodeToString(sealed))
         }
 
         fun decrypt(key: ByteArray, nonceBase64: String, ciphertextBase64: String, associatedData: ByteArray): ByteArray {
             require(key.size == 32)
-            val nonce = Base64.decode(nonceBase64, Base64.NO_WRAP)
-            val ciphertext = Base64.decode(ciphertextBase64, Base64.NO_WRAP)
+            val nonce = Base64.getDecoder().decode(nonceBase64)
+            val ciphertext = Base64.getDecoder().decode(ciphertextBase64)
             require(nonce.size == 12 && ciphertext.size in 16..2_500_016)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
