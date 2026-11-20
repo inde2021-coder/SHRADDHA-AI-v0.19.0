@@ -44,7 +44,7 @@ class UserBackupManager(context: Context) {
             .put("dailyBriefingEnabled", planner.getBoolean("daily_briefing_enabled", false))
             .put("conversationMemoryEnabled", memoryEnabled)
             .put("conversationRecap", if (memoryEnabled) PersistentChatMemory.recap(app).orEmpty() else "")
-            .put("auditTrail", LocalAuditTrail(app).exportText().let { auditText -> auditText.substring(0, minOf(80_000, auditText.length)) })
+            .put("auditTrail", LocalAuditTrail(app).exportText().getOrThrow().let { auditText -> auditText.substring(0, minOf(80_000, auditText.length)) })
         return SecureBackupCodec.encrypt(payload.toString(), passphrase)
     }
 
