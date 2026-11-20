@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { validateSharedFileEnvelope } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant } from './relay-file-validation.js';
 
 test('accepts a bounded base64 file with the correct SHA-256', () => {
   const bytes = Buffer.from('Shraddha secure file transfer');
@@ -22,4 +22,12 @@ test('rejects malformed base64, unsafe sizes and invalid hashes', () => {
   assert.equal(validateSharedFileEnvelope('YQ==', 650001, 'a'.repeat(64)), false);
   assert.equal(validateSharedFileEnvelope('YQ==', 1, 'bad'), false);
   assert.equal(validateSharedFileEnvelope('YQ==', 0, 'a'.repeat(64)), false);
+});
+
+test('one-time data grant is bound to the exact request and expiry', () => {
+  const grant = { requestId: 'request_1234567890', expiresAt: 5000 };
+  assert.equal(matchesOneTimeShareGrant(grant, 'request_1234567890', 4999), true);
+  assert.equal(matchesOneTimeShareGrant(grant, 'different_123456', 4999), false);
+  assert.equal(matchesOneTimeShareGrant(grant, 'request_1234567890', 5001), false);
+  assert.equal(matchesOneTimeShareGrant(null, 'request_1234567890', 1000), false);
 });
