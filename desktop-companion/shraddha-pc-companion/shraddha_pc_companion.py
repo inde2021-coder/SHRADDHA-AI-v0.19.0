@@ -772,19 +772,27 @@ async def run_once(args) -> None:
                     print("PC control", "approved for " + requester_id if approved else "denied")
                 elif kind == "remote_action":
                     sender_id = str(message.get("fromDeviceId", ""))
+                    action_id = str(message.get("actionId", ""))
+                    if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id) or message.get("requiresPerActionApproval") is not True:
+                        print("Blocked unverified remote action: missing action ID or approval requirement.")
+                        continue
                     if not control_grant_allows(allow_control, approved_until, time.time(), approved_device_id, sender_id):
                         print("Blocked remote action: no active grant for this exact paired requester.")
                         continue
                     action = message.get("action") or {}
                     action_kind = str(action.get("kind", "unknown"))[:32]
-                    try:
-                        result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root, offline_model)
-                    except Exception as exc:
-                        result = "action_error:" + type(exc).__name__
+                    if not await asyncio.to_thread(confirm, f"Allow this remote action ({action_kind}) from paired device {sender_id}?"):
+                        result = "denied_by_local_user"
+                    else:
+                        try:
+                            result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root, offline_model)
+                        except Exception as exc:
+                            result = "action_error:" + type(exc).__name__
                     print("Remote action:", action_kind, "=>", result[:500])
                     await ws.send(json.dumps({
                         "type": "remote_action_result",
                         "targetDeviceId": sender_id,
+                        "actionId": action_id,
                         "actionKind": action_kind,
                         "result": result[:14000]
                     }))
