@@ -566,7 +566,7 @@ wss.on('connection', (ws, ctx) => {
       if (!requester || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category) || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
       const approved = msg.approved === true && device.sharePermissions?.[category] === true;
       const minutes = Math.min(15, Math.max(1, Number(msg.minutes) || 5));
-      if (approved) device.grants.set(`${requesterId}:${category}`, { requestId, expiresAt: Date.now() + minutes * 60_000 });
+      if (approved) device.grants.set(`${requesterId}:${category}`, { requestId, expiresAt: Date.now() + minutes * 60_000 });\n      else device.grants.delete(`${requesterId}:${category}`);
       send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, requestId, approved, expiresInMinutes: approved ? minutes : 0 }));
     } else if (msg.type === 'data_share_payload') {
       const targetId = String(msg.targetDeviceId || '');
