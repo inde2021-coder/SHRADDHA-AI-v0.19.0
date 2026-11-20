@@ -340,6 +340,26 @@ def parse_voice_device_command(transcript: str) -> dict:
 def reconnect_delay(attempt: int) -> float:
     return min(60.0, 2.0 ** max(0, min(6, int(attempt))))
 
+def listen_voice_device_command(model_path: str) -> dict:
+    if not model_path: raise RuntimeError('Offline voice control requires --vosk-model with a downloaded Vosk model folder')
+    try:
+        import sounddevice as sd
+        from vosk import Model, KaldiRecognizer
+    except ImportError as exc:
+        raise RuntimeError('Install optional voice packages: pip install vosk sounddevice') from exc
+    from pathlib import Path
+    model_dir = Path(model_path).expanduser().resolve()
+    if not model_dir.is_dir(): raise RuntimeError('Vosk model folder does not exist')
+    model = Model(str(model_dir))
+    recognizer = KaldiRecognizer(model, 16000)
+    print('Speak one supported command: go back, go home, scroll up/down, open app Settings')
+    audio = sd.rec(int(5 * 16000), samplerate=16000, channels=1, dtype='int16')
+    sd.wait()
+    if not recognizer.AcceptWaveform(audio.tobytes()): raise RuntimeError('Could not recognize a complete voice command')
+    transcript = json.loads(recognizer.Result()).get('text', '')
+    print('Recognized voice command:', transcript[:100])
+    return parse_voice_device_command(transcript)
+
 def build_phone_action(args) -> dict | None:
     """Build one bounded action for a paired Android phone; the phone still approves control."""
     target = str(getattr(args, "control_phone", "") or "").strip()
@@ -626,7 +646,7 @@ def save_pairing(pair: dict, base_url: str) -> None:
         raise RuntimeError(f"Could not store pairing securely in Windows Credential Manager: {exc}") from exc
 
 
-async def run(args) -> None:
+async def run_once(args) -> None:
     try:
         import websockets
     except ImportError as exc:
@@ -670,7 +690,10 @@ async def run(args) -> None:
         )
         print("Local offline inference is ready. No cloud AI provider is used for offline_chat.")
 
-    phone_action = build_phone_action(args)
+    if args.voice_control_phone:
+        args.control_phone = args.voice_control_phone
+        args.phone_action_payload = await asyncio.to_thread(listen_voice_device_command, args.vosk_model)
+    phone_action = getattr(args, 'phone_action_payload', None) or build_phone_action(args)
     if phone_action and not await asyncio.to_thread(confirm, f"Ask the selected Android phone for permission to run {phone_action['kind']}?"):
         phone_action = None
     phone_action_sent = False
@@ -772,12 +795,34 @@ async def run(args) -> None:
 
 
 
+async def run(args) -> None:
+    attempt = 0
+    while True:
+        try:
+            await run_once(args)
+            if args.control_phone or args.voice_control_phone: return
+            attempt = 0
+            print('Relay disconnected. Reconnecting automatically…')
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if args.no_auto_reconnect: raise
+            print('Relay connection interrupted:', str(exc)[:200])
+        if args.no_auto_reconnect: return
+        delay = reconnect_delay(attempt)
+        attempt += 1
+        print(f'Retrying secure relay in {delay:.0f}s. Press Ctrl+C to stop.')
+        await asyncio.sleep(delay)
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Consent-gated Shraddha AI Windows PC companion")
     parser.add_argument("--base-url", default="", help="HTTPS URL of your Shraddha relay (saved after pairing)")
     parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
     parser.add_argument("--scan-pairing-qr", action="store_true", help="Use the PC camera to scan a Shraddha pairing QR; requires requirements-qr.txt")
     parser.add_argument("--control-phone", default="", help="Paired Android device ID to control after its owner approves")
+    parser.add_argument("--voice-control-phone", default="", help="Listen for one allowlisted offline voice command for this paired Android device")
+    parser.add_argument("--vosk-model", default="", help="Local Vosk model folder used for offline voice commands")
+    parser.add_argument("--no-auto-reconnect", action="store_true", help="Exit instead of retrying after relay disconnection")
     parser.add_argument("--phone-action", choices=["tap", "swipe", "type", "click_text", "open_app", "scroll", "back", "home"], default="back")
     parser.add_argument("--phone-x", type=float, default=0.5); parser.add_argument("--phone-y", type=float, default=0.5)
     parser.add_argument("--phone-x1", type=float, default=0.5); parser.add_argument("--phone-y1", type=float, default=0.8)
