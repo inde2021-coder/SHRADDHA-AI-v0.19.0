@@ -574,7 +574,7 @@ wss.on('connection', (ws, ctx) => {
         const actionId = String(msg.actionId || '');
         const actionKind = String(msg.actionKind || '');
         if (grantExpiry < Date.now() || !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
-            !['tap','swipe','type','click_text','open_app','home','back','scroll'].includes(actionKind)) return;
+            !['tap','swipe','type','click_text','open_app','home','back','scroll','ocr','file_list','file_read','file_search','offline_chat'].includes(actionKind)) return;
         target.pendingRemoteActions ||= new Map();
         if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
         target.pendingRemoteActions.set(actionId, { requesterId: deviceId, actionKind, expiresAt: Date.now() + 60_000 });
