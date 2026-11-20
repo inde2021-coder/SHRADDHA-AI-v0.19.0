@@ -94,11 +94,34 @@ class FirebaseCloudVault(private val context: Context) {
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email.trim(), password).await().user ?: error("Sign-in failed")
             val dbRef = FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
                 .reference.child("users").child(user.uid).child("vault").child(key)
-            val realtimePayload = runCatching { dbRef.get().await().child("payload").getValue(String::class.java) }.getOrNull()
-            val payload = realtimePayload ?: FirebaseFirestore.getInstance(app).collection("users")
-                .document(user.uid).collection("vault").document(key).get().await().getString("payload")
-                ?: return@runBlocking null
-            decrypt(payload, password)
+            val restoreErrors = mutableListOf<String>()
+            val realtimePayload = runCatching {
+                dbRef.get().await().child("payload").getValue(String::class.java)
+            }.onFailure { restoreErrors += "Realtime Database: ${it.message ?: "read failed"}" }.getOrNull()
+
+            // A stale/corrupt RTDB copy must not prevent recovery from a valid Firestore
+            // mirror. Authenticate and decrypt each copy independently before choosing it.
+            if (!realtimePayload.isNullOrBlank()) {
+                val restored = runCatching { decrypt(realtimePayload, password) }
+                if (restored.isSuccess) return@runBlocking restored.getOrThrow()
+                restoreErrors += "Realtime Database backup could not be decrypted."
+            }
+
+            val firestorePayload = runCatching {
+                FirebaseFirestore.getInstance(app).collection("users")
+                    .document(user.uid).collection("vault").document(key).get().await().getString("payload")
+            }.onFailure { restoreErrors += "Firestore: ${it.message ?: "read failed"}" }.getOrNull()
+
+            if (!firestorePayload.isNullOrBlank()) {
+                val restored = runCatching { decrypt(firestorePayload, password) }
+                if (restored.isSuccess) return@runBlocking restored.getOrThrow()
+                restoreErrors += "Firestore backup could not be decrypted."
+            }
+
+            if (restoreErrors.isNotEmpty()) {
+                error("Backup restore failed. ${restoreErrors.joinToString(" ")}")
+            }
+            null
         }
     }
 
