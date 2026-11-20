@@ -33,6 +33,8 @@ class PhoneAgentActivity : AppCompatActivity() {
     private val roleRequest = 901
     private val callPermissionRequest = 902
     private var pendingContactQuery: String? = null
+    private var pendingDialNumber: String? = null
+    private lateinit var pendingDialButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +69,14 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
         root.addView(voiceStatus)
         root.addView(actionButton("🎙  बोलकर Contact खोजें और Call करें") { startVoiceCall() })
+        pendingDialButton = actionButton("Review and place dialed number") {
+            pendingDialNumber?.let { number ->
+                pendingDialNumber = null
+                pendingDialButton.visibility = android.view.View.GONE
+                placeCall(number)
+            }
+        }.apply { visibility = android.view.View.GONE }
+        root.addView(pendingDialButton)
         root.addView(actionButton("Set Shraddha as default phone app") { requestDialerRole() })
         root.addView(actionButton("Refresh phone status") { refreshStatus() })
         root.addView(TextView(this).apply {
@@ -119,8 +129,11 @@ class PhoneAgentActivity : AppCompatActivity() {
     private fun handleDialIntent(source: Intent?) {
         val number = source?.data?.takeIf { it.scheme == "tel" }?.schemeSpecificPart
         if (!number.isNullOrBlank()) {
-            voiceStatus.text = "Dial request received: $number"
-            placeCall(number)
+            // ACTION_DIAL displays a number; it is not authorization to place a call.
+            pendingDialNumber = number
+            voiceStatus.text = "Dialed number: $number — review it, then tap the call button."
+            pendingDialButton.text = "📞  Confirm call to $number"
+            pendingDialButton.visibility = android.view.View.VISIBLE
         }
     }
 
