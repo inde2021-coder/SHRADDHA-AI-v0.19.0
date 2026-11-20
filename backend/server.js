@@ -687,6 +687,7 @@ wss.on('connection', (ws, ctx) => {
       const transfer = device.incomingTransfers?.get(transferId);
       if (!requester || !transfer || transfer.fromDeviceId !== targetId || requester === device) return;
       const index = Number(msg.index);
+      if (Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount) transfer.chunks.set(index, true);
       if (msg.complete === true) device.incomingTransfers.delete(transferId);
       send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: Number.isSafeInteger(index) ? index : -1, complete: msg.complete === true, ok: msg.ok === true }));
     } else if (msg.type === 'file_transfer_cancel') {
