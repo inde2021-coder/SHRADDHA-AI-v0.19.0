@@ -357,6 +357,9 @@ object VoiceSessionManager {
     }
 
     fun stop() {
+        val preserveError = _state.value == NovaOrbState.ERROR
+        val previousError = _lastError.value
+        val previousStatus = _statusText.value
         _isActive.value = false
         sessionEpoch.incrementAndGet()
         reconnectJob?.cancel()
@@ -375,11 +378,11 @@ object VoiceSessionManager {
         ConversationMemory.clear()
 
         isTurnActive = false
-        _state.value = NovaOrbState.IDLE
-        _statusText.value = "Ready to talk"
+        _state.value = if (preserveError) NovaOrbState.ERROR else NovaOrbState.IDLE
+        _statusText.value = if (preserveError) previousStatus else "Ready to talk"
         _amplitude.value = 0f
         _vadActive.value = false
         _muted.value = false
-        _lastError.value = null
+        _lastError.value = if (preserveError) previousError else null
     }
 }
