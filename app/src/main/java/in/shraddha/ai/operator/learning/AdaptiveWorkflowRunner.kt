@@ -14,7 +14,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
     private val audit = LocalAuditTrail(context.applicationContext)
     fun stop() { stopped = true; emit(OperatorEvent(OperatorTaskState.CANCELLED, "ऑपरेटर रोक दिया गया।")) }
 
-    fun run(profile: AppTrainingProfile, workflowName: String, values: Map<String, String>, startAt: Int = 0, confirmedStepIndex: Int? = null): Boolean {
+    fun run(profile: AppTrainingProfile, workflowName: String, values: Map<String, String>, startAt: Int = 0, approval: WorkflowStepApproval? = null): Boolean {
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty()) return fail("वर्कफ़्लो खाली है।")
         if (startAt !in steps.indices) return fail("Workflow resume position is invalid.")
@@ -27,7 +27,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val resolvedInput = values[step.inputTemplate] ?: step.inputTemplate
             val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, resolvedInput)
             if (risk.risk == OperatorSafetyPolicy.Risk.BLOCK) return fail(risk.reason)
-            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && confirmedStepIndex != index) {
+            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && approval?.consume(profile.packageName, workflowName, index, step.action, step.targetLabel, resolvedInput, step.expectedText, System.nanoTime() / 1_000_000L) != true) {
                 emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason} इस चरण को चलाने से पहले अलग अनुमति चाहिए।", stepIndex = index))
                 return false
             }
