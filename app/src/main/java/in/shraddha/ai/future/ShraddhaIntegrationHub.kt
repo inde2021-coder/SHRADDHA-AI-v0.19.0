@@ -87,6 +87,16 @@ class ShraddhaIntegrationHub(
         }
     }
 
+    /** Fail closed when the platform adapter cannot execute a planned action. */
+    @Synchronized
+    fun failCurrentStep(reason: String, now: Long = System.currentTimeMillis()): Session {
+        val current = requireSession()
+        require(current.workflow.status == WorkflowStatus.RUNNING || current.workflow.status == WorkflowStatus.VERIFYING) {
+            "No active action can be failed"
+        }
+        return update(now, "ACTION_FAILED") { workflowEngine.markFailed(it, reason) }
+    }
+
     /** Final self-review can downgrade a nominally completed workflow; it never auto-fixes code/actions. */
     @Synchronized
     fun reviewCompletion(checks: List<SelfReviewEngine.Check>, now: Long = System.currentTimeMillis()): Session {
