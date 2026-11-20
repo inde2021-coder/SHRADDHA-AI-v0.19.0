@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,7 +53,7 @@ fun LiaBottomNavigation(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .height(66.dp)
                 .depthSurface(shape = navShape, elevation = 6.dp)
                 .clip(navShape)
                 .background(colors.surfaceGlass)
@@ -120,8 +121,10 @@ private fun NavItem(
     val colors = LocalNovaColors.current
     Column(
         modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isSelected) colors.surfaceRaised else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 11.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -133,7 +136,7 @@ private fun NavItem(
         )
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             color = if (isSelected) colors.accent else colors.textSecondary
         )
     }
