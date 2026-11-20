@@ -263,35 +263,63 @@ class MainActivity : AppCompatActivity() {
         section(root, "WORKSPACES", "") {
             val items = listOf(
                 Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) }),
-                Triple("◈  WINDOWS PC CENTER", "Pair • Screen • Control", { showPage("devices") }),
+                Triple("◈  WINDOWS PC", "Pair • Screen • Control", { showPage("devices") }),
                 Triple("◈  EXPERT STUDIO", "Research • Expert answers", { showPage("expert") }),
-                Triple("⌘  DEVICE UNIVERSE", "Phones • PC • Pairing", { showPage("devices") }),
+                Triple("⌘  DEVICES", "Phones • PC • Pairing", { showPage("devices") }),
                 Triple("▣  APP OPERATOR", "Observe • Approve • Verify", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
-                Triple("◇  AI PROJECT LAB", "Agents • Code • Apps", { showPage("lab") }),
+                Triple("◇  PROJECT LAB", "Agents • Code • Apps", { showPage("lab") }),
                 Triple("◎  PEOPLE MEMORY", "Consented profiles", { showPage("people") }),
                 Triple("☁  CLOUD & DATA", "Backup • Sync • Sharing", { showPage("cloud") }),
-                Triple("⚙  CONTROL & PRIVACY", "Permissions • Security", { showPage("permissions") }),
-                Triple("✧  FUTURE INTELLIGENCE", "Automation • Safe workflows", { showPage("future") })
+                Triple("⚙  PRIVACY", "Permissions • Security", { showPage("permissions") }),
+                Triple("✧  INTELLIGENCE", "Automation • Safe workflows", { showPage("future") })
             )
-            items.chunked(2).forEach { pair ->
-                val row = LinearLayout(this@MainActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = android.view.Gravity.TOP
+            val search = edit("Search workspaces", "Try voice, devices, people or privacy")
+            search.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            addView(search)
+            val grid = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+            addView(grid)
+
+            fun render(query: String) {
+                grid.removeAllViews()
+                val filtered = items.filter {
+                    query.isBlank() || it.first.contains(query, true) || it.second.contains(query, true)
                 }
-                pair.forEachIndexed { index, item ->
-                    val cell = LinearLayout(this@MainActivity).apply {
-                        orientation = LinearLayout.VERTICAL
-                        layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply {
-                            if (index == 0) rightMargin = dp(6) else leftMargin = dp(6)
-                            bottomMargin = dp(12)
-                        }
+                if (filtered.isEmpty()) {
+                    grid.addView(TextView(this@MainActivity).apply {
+                        text = "No matching workspace"
+                        textSize = 13f
+                        setTextColor(0xFFAAB8D0.toInt())
+                        gravity = android.view.Gravity.CENTER
+                        setPadding(0, dp(18), 0, dp(18))
+                    })
+                    return
+                }
+                filtered.chunked(2).forEach { pair ->
+                    val row = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.TOP
                     }
-                    cell.addView(workspaceTile(item.first, item.second, item.third), LinearLayout.LayoutParams(-1, -2))
-                    row.addView(cell)
+                    pair.forEachIndexed { index, item ->
+                        val cell = LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply {
+                                if (index == 0) rightMargin = dp(6) else leftMargin = dp(6)
+                                bottomMargin = dp(10)
+                            }
+                        }
+                        cell.addView(workspaceTile(item.first, item.second, item.third), LinearLayout.LayoutParams(-1, -2))
+                        row.addView(cell)
+                    }
+                    if (pair.size == 1) row.addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                    grid.addView(row)
                 }
-                if (pair.size == 1) row.addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
-                addView(row)
             }
+            render("")
+            search.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = render(s?.toString().orEmpty().trim())
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+            })
         }
     }
 
