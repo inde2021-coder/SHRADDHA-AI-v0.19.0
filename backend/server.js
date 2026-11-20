@@ -520,6 +520,9 @@ wss.on('connection', (ws, ctx) => {
       if (id === deviceId) continue;
       peer.controlGrants.delete(deviceId);
       peer.pendingControlRequests.delete(deviceId);
+      for (const [actionId, pending] of peer.pendingRemoteActions) {
+        if (pending.requesterId === deviceId) peer.pendingRemoteActions.delete(actionId);
+      }
       peer.grants.delete(`${deviceId}:contacts`);
       peer.grants.delete(`${deviceId}:media`);
       peer.grants.delete(`${deviceId}:documents`);
