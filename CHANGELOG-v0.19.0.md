@@ -1,12 +1,12 @@
-# v0.19.0 — LIA + MYRA Integration and reliability hardening
+# v0.19.0 — Shraddha AI unified integration and reliability hardening
 
 ## Unified source
-- Merged LIA Android main + direct source trees into the single SHRADDHA `:app` source set.
-- Renamed the LIA launcher activity to `com.Lia.assistant.MainActivity` (internal Activity); SHRADDHA remains the only launcher/application ID.
+- Merged Shraddha AI Android main + direct source trees into the single SHRADDHA `:app` source set.
+- Renamed the Shraddha AI launcher activity to `com.Lia.assistant.MainActivity` (internal Activity); SHRADDHA remains the only launcher/application ID.
 - Added Compose compiler plugin and required Compose, Navigation, DataStore, WebKit and SplashScreen dependencies.
-- Merged LIA foreground voice service, Accessibility service and share intents into SHRADDHA manifest.
-- Added SHRADDHA home entry for the integrated LIA voice experience and MYRA PC Command Center.
-- Kept MYRA Windows/Linux/Python/Node systems as companion source under `desktop-companion/`.
+- Merged Shraddha AI foreground voice service, Accessibility service and share intents into SHRADDHA manifest.
+- Added SHRADDHA home entry for the integrated Shraddha AI voice experience and Shraddha AI PC Companion.
+- Kept Shraddha AI PC Companion systems as companion source under `desktop-companion/`.
 
 ## Firebase and cloud memory
 - Added Firebase Realtime Database Android SDK and prefilled the supplied public Firebase app configuration.
