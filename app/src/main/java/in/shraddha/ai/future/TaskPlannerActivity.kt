@@ -111,7 +111,7 @@ class TaskPlannerActivity : AppCompatActivity() {
             val b = Calendar.getInstance()
             a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
         }
-        summary.text = "\${openTasks.size} open   •   $dueToday due today   •   $overdue overdue\\n\\n" +
+        summary.text = "${openTasks.size} open   •   $dueToday due today   •   $overdue overdue\n\n" +
             if (openTasks.isEmpty()) "You are all caught up. Add a task to plan your day."
             else "Next: " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(openTasks.minBy { it.dueAt }.dueAt)
         if (tasks.isEmpty()) list.addView(TextView(this).apply {
