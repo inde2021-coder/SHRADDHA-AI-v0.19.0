@@ -12,7 +12,7 @@ object PersistentChatMemory {
     private const val MAX_TURNS = 12
     private const val MAX_TURN_CHARS = 1_000
 
-    @Volatile private var lock = Any()
+    private val lock = Any()
 
     fun isEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -42,7 +42,7 @@ object PersistentChatMemory {
 
     internal fun mergeRecap(existing: String, role: String, text: String): String {
         val turns = existing.lineSequence().filter { it.isNotBlank() }.toMutableList()
-        turns.add("$"+"role: $"+"{text.trim().take(MAX_TURN_CHARS)}")
+        turns.add("$role: ${text.trim().take(MAX_TURN_CHARS)}")
         return turns.takeLast(MAX_TURNS).joinToString("\n").takeLast(12_000)
     }
 
