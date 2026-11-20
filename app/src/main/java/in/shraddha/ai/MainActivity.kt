@@ -205,8 +205,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         section(pageRoot, "COMMAND CENTER", "सभी systems एक unified dashboard से") {
-            addView(workspaceTile("✦  AI BRAIN + SHRADDHA VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
-            addView(workspaceTile("◈  SHRADDHA PC COMPANION", "Windows/Linux companion • Website Forge • PC automation") { showPage("devices") })
+            addView(workspaceTile("✦  AI BRAIN + ${assistantDisplayName.uppercase()} VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
+            addView(workspaceTile("◈  ${assistantDisplayName.uppercase()} PC COMPANION", "Windows/Linux companion • Website Forge • PC automation") { showPage("devices") })
             addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical learning • Agriculture • Law • Creator") { showPage("expert") })
             addView(workspaceTile("⌘  DEVICE UNIVERSE", "Paired phones • PC companion • Remote screen") { showPage("devices") })
             addView(workspaceTile("▣  APP OPERATOR", "Visual UI control • Workflow • Verification") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) })
@@ -302,7 +302,7 @@ class MainActivity : AppCompatActivity() {
             }
             assistantHero.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(188), dp(188)))
             assistantHero.addView(TextView(this).apply {
-                text = "SHRADDHA  /  PERSONAL AI"
+                text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
                 setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
             })
@@ -352,11 +352,11 @@ class MainActivity : AppCompatActivity() {
                     requestFeaturePermissions(arrayOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.SEND_SMS), 13, "SMS sending")
                 })
                 addView(actionButton("Enable Accessibility App Control", "Visible UI actions और approved gestures") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
-                addView(actionButton("Enable Floating AI Orb", "दूसरे ऐप्स के ऊपर Shraddha shortcut") {
+                addView(actionButton("Enable Floating AI Orb", "दूसरे ऐप्स के ऊपर $assistantDisplayName shortcut") {
                     if (!Settings.canDrawOverlays(this@MainActivity)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                     else { startService(Intent(this@MainActivity, ShraddhaOverlayService::class.java)); status.text = "Floating Orb requested." }
                 })
-                addView(actionButton("Enable Shraddha Keyboard", "Voice typing के लिए keyboard settings") { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) })
+                addView(actionButton("Enable $assistantDisplayName Keyboard", "Voice typing के लिए keyboard settings") { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) })
                 addView(TextView(this@MainActivity).apply { text = "Android secure screens, banking/OTP/password screens और कुछ protected apps को control या capture नहीं होने देता।"; textSize = 12f; setTextColor(0xFF9EABC2.toInt()); setPadding(0, dp(8), 0, 0) })
             }
         }
@@ -424,7 +424,7 @@ class MainActivity : AppCompatActivity() {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
             }
             addView(provider)
-            val prompt = edit("Ask Shraddha", "हिंदी या English में अपना सवाल लिखें").apply { isSingleLine = false; minLines = 3 }
+            val prompt = edit("Ask $assistantDisplayName", "हिंदी या English में अपना सवाल लिखें").apply { isSingleLine = false; minLines = 3 }
             addView(prompt)
             val answer = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
             addView(answer)
@@ -517,7 +517,7 @@ class MainActivity : AppCompatActivity() {
                 val proposal = OfflineCommandEngine.recognize(offlineInput.text.toString())
                 offlineResult.text = proposal?.let { "Intent: ${it.intent}\n${it.summary}\nअनुमति/पुष्टि जरूरी: ${it.needsPermission}" } ?: "यह command offline grammar में नहीं मिली। AI provider से पूछने के लिए online chat इस्तेमाल करें।"
             })
-            val localModelPrompt = edit("Local AI prompt (no internet)", "Shraddha, मेरे सवाल का उत्तर दो…").apply { isSingleLine = false; minLines = 2 }
+            val localModelPrompt = edit("Local AI prompt (no internet)", "$assistantDisplayName, मेरे सवाल का उत्तर दो…").apply { isSingleLine = false; minLines = 2 }
             addView(localModelPrompt)
             val localBackend = Spinner(this@MainActivity).apply {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gpu", "npu", "cpu"))
@@ -597,7 +597,7 @@ class MainActivity : AppCompatActivity() {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, domains.map { it.second })
             }
             addView(domainPicker)
-            addView(TextView(this@MainActivity).apply { text = "Choose what Shraddha should do"; setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(0, dp(10), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "Choose what $assistantDisplayName should do"; setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(0, dp(10), 0, dp(4)) })
             val modePicker = Spinner(this@MainActivity).apply {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, modes.map { it.second })
             }
@@ -658,7 +658,7 @@ class MainActivity : AppCompatActivity() {
             val output = TextView(this@MainActivity).apply { text = "Generated work यहाँ दिखाई देगा। इसे local project library में save या Android share sheet से export कर सकते हैं।"; setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(14), dp(14), dp(14), dp(14)); background = rounded(0xFF111B2D.toInt(), 16); minHeight = dp(110) }
             addView(output)
             val library = `in`.shraddha.ai.future.ExpertProjectLibrary(this@MainActivity)
-            var lastTitle = "Shraddha AI Project"
+            var lastTitle = "$assistantDisplayName Project"
             var lastOutput = ""
             var lastWorkspace = ""
             var lastTask = ""
@@ -709,7 +709,7 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Share Current Work", "Android share sheet • text/document compatible apps") {
                 if (lastOutput.isBlank()) { status.text = "पहले output generate या saved project open करें।"; return@actionButton }
                 val share = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, lastTitle); putExtra(Intent.EXTRA_TEXT, "$lastTitle\n\n$lastOutput") }
-                startActivity(Intent.createChooser(share, "Export Shraddha AI work"))
+                startActivity(Intent.createChooser(share, "Export $assistantDisplayName work"))
             })
             addView(TextView(this@MainActivity).apply {
                 text = "यह workspace वास्तविक AI backend से काम करता है। Saved Projects अभी इसी फोन पर local हैं। CAD/PCB/building outputs conceptual या text-based हैं; automatic professional CAD rendering, PCB fabrication approval, medical diagnosis, legal representation और structural certification शामिल नहीं हैं। Live research citations के लिए अलग verified browsing integration चाहिए।"
@@ -858,14 +858,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addDeviceLinkSection(root: LinearLayout) {
-        section(root, "01  •  WORLDWIDE DEVICE LINK", "दुनिया में कहीं से भी इंटरनेट के जरिए pair करें — दोनों phones पर Shraddha AI और आपका HTTPS relay जरूरी है") {
+        section(root, "01  •  WORLDWIDE DEVICE LINK", "दुनिया में कहीं से भी इंटरनेट के जरिए pair करें — दोनों phones पर $assistantDisplayName और आपका HTTPS relay जरूरी है") {
             relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
             deviceName = edit("This phone name", "e.g. Main Phone")
             addView(relayUrl); addView(deviceName)
             addView(actionButton("Create Main Phone Session", "नया secure pairing code बनाएँ") {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "पहले अपना deployed HTTPS relay URL डालें।"; return@actionButton }
-                DeviceLinkManager.createSession(url, deviceName.text.toString().ifBlank { "Shraddha Phone" }) { result -> runOnUiThread {
+                DeviceLinkManager.createSession(url, deviceName.text.toString().ifBlank { "$assistantDisplayName Phone" }) { result -> runOnUiThread {
                     result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "Pairing code: ${it.code}\nदूसरे फोन में यह code डालें। Code 5 मिनट में expire होगा।" }
                         .onFailure { status.text = "Pairing error: ${it.message}" }
                 } }
@@ -875,7 +875,7 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Join Another Phone", "इस फोन को मौजूदा device group में जोड़ें") {
                 val url = relayUrl.text.toString().trim(); val code = pairingCode.text.toString().trim()
                 if (!validRelay(url) || code.length != 6) { status.text = "HTTPS relay URL और 6-digit pairing code जरूरी हैं।"; return@actionButton }
-                DeviceLinkManager.joinSession(url, deviceName.text.toString().ifBlank { "Shraddha Phone" }, code) { result -> runOnUiThread {
+                DeviceLinkManager.joinSession(url, deviceName.text.toString().ifBlank { "$assistantDisplayName Phone" }, code) { result -> runOnUiThread {
                     result.onSuccess { isSessionOwner = false; mainOnlyMode.isEnabled = false; status.text = "Device relay से जुड़ गया। अब paired device चुनें।" }
                         .onFailure { status.text = "Join failed: ${it.message}" }
                 } }
@@ -1065,12 +1065,12 @@ class MainActivity : AppCompatActivity() {
             visionPrompt.setText("इस स्क्रीन पर दिख रहे ऐप और फॉर्म को समझो। दिखाई दे रहे फील्ड के नाम पढ़ो और बताओ कि कौन-सी जानकारी कहाँ भरनी है। बिना मेरी पुष्टि कोई कार्रवाई मत करना।")
             visionPrompt.isSingleLine = false; visionPrompt.minLines = 3
             addView(visionPrompt)
-            addView(actionButton("Ask Shraddha to Understand Screen", "Latest received screenshot का AI analysis") {
+            addView(actionButton("Ask $assistantDisplayName to Understand Screen", "Latest received screenshot का AI analysis") {
                 val frame = lastScreenJpeg
                 if (frame == null) { status.text = "पहले दूसरे फोन पर Share This Phone Screen चालू करें।"; return@actionButton }
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "HTTPS relay URL जरूरी है।"; return@actionButton }
-                visionResult.text = "Shraddha स्क्रीन समझ रही है…"
+                visionResult.text = "$assistantDisplayName स्क्रीन समझ रही है…"
                 DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), visionProvider.selectedItem.toString(), visionPrompt.text.toString(), frame, visionMode.selectedItem?.toString() ?: "general") { result -> runOnUiThread {
                     result.onSuccess { visionResult.text = it; status.text = "Remote screen analysis complete." }
                         .onFailure { visionResult.text = "Analysis error: ${it.message}" }
@@ -1339,7 +1339,7 @@ class MainActivity : AppCompatActivity() {
                     .onSuccess { d -> result.text="${d.title} • ${d.type.uppercase()}\n\n"+d.sections.joinToString("\n\n")+"\n\n${d.disclosure}"; getSharedPreferences("shraddha_creator",MODE_PRIVATE).edit().putString("last_draft",result.text.toString()).apply(); `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("creator_draft","created",d.type) }
                     .onFailure { result.text=it.message ?: "Draft could not be created" }
             })
-            addView(actionButton("COPY CREATIVE BRIEF","Copy generated text") { val text=result.text.toString(); if(text.isNotBlank()) { (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Shraddha Creator Draft",text)); Toast.makeText(this@MainActivity,"Copied",Toast.LENGTH_SHORT).show() } })
+            addView(actionButton("COPY CREATIVE BRIEF","Copy generated text") { val text=result.text.toString(); if(text.isNotBlank()) { (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("$assistantDisplayName Creator Draft",text)); Toast.makeText(this@MainActivity,"Copied",Toast.LENGTH_SHORT).show() } })
         }
         section(root, "DIGITAL TWIN • USER-EDITED PROFILE", "सिर्फ आपकी लिखी हुई पसंद सेव होती है; कोई छिपी निगरानी या संवेदनशील अनुमान नहीं") {
             val prefs=getSharedPreferences("shraddha_digital_twin",MODE_PRIVATE)
@@ -1392,7 +1392,7 @@ class MainActivity : AppCompatActivity() {
                         if(whenAt<=System.currentTimeMillis()) { Toast.makeText(this@MainActivity,"Future date/time चुनें।",Toast.LENGTH_LONG).show(); return@TimePickerDialog }
                         val id=(whenAt % Int.MAX_VALUE).toInt()
                         val alarm=getSystemService(ALARM_SERVICE) as android.app.AlarmManager
-                        val pi=android.app.PendingIntent.getBroadcast(this@MainActivity,id,Intent(this@MainActivity,`in`.shraddha.ai.future.ReminderReceiver::class.java).putExtra("title",reminderTitle.text.toString().ifBlank { "Shraddha AI reminder" }).putExtra("note",reminderNote.text.toString()),android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+                        val pi=android.app.PendingIntent.getBroadcast(this@MainActivity,id,Intent(this@MainActivity,`in`.shraddha.ai.future.ReminderReceiver::class.java).putExtra("title",reminderTitle.text.toString().ifBlank { "$assistantDisplayName reminder" }).putExtra("note",reminderNote.text.toString()),android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
                         alarm.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP,whenAt,pi)
                         `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("reminder","scheduled",reminderTitle.text.toString().take(80))
                         Toast.makeText(this@MainActivity,"Reminder scheduled. Android battery policy may delay delivery.",Toast.LENGTH_LONG).show()
@@ -1409,7 +1409,7 @@ class MainActivity : AppCompatActivity() {
             })
             addView(actionButton("EXPORT ENCRYPTED BACKUP","AES-256-GCM • passphrase protected • selected user data only") {
                 val password=EditText(this@MainActivity).apply { hint="Backup passphrase (12+ characters)"; inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt Shraddha backup")
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Encrypt $assistantDisplayName backup")
                     .setMessage("Use a strong passphrase and keep it safe. It cannot be recovered if lost. Selected encrypted profiles, app workflows, checkpoints, project, digital twin, knowledge graph and memory are included. API keys, pairing tokens, permissions and biometric templates are excluded.")
                     .setView(password).setNegativeButton("Cancel",null).setPositiveButton("Encrypt & Save") { _,_ ->
                         val secret=password.text.toString().toCharArray()
@@ -1442,7 +1442,7 @@ class MainActivity : AppCompatActivity() {
                         }.start()
                     }.show()
             })
-            addView(actionButton("RESTORE ENCRYPTED BACKUP","Choose a Shraddha encrypted backup file and enter its passphrase") {
+            addView(actionButton("RESTORE ENCRYPTED BACKUP","Choose a $assistantDisplayName encrypted backup file and enter its passphrase") {
                 val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json" }
                 @Suppress("DEPRECATION")
                 startActivityForResult(intent,backupImportRequest)
@@ -1471,7 +1471,7 @@ class MainActivity : AppCompatActivity() {
             val result = TextView(this@MainActivity).apply { setTextColor(0xFFBFE8D2.toInt()); textSize = 13f }
             addView(email); addView(password); addView(note); addView(consent); addView(result)
             val pushConsent = CheckBox(this@MainActivity).apply {
-                text = "मैं इस device पर Shraddha AI के non-sensitive push notifications प्राप्त करने की अनुमति देता/देती हूँ।"
+                text = "मैं इस device पर $assistantDisplayName के non-sensitive push notifications प्राप्त करने की अनुमति देता/देती हूँ।"
                 isChecked = EncryptedFeatureStore(this@MainActivity).get("firebase_push_consent").getOrDefault("false") == "true"
                 setTextColor(0xFFE4E9F5.toInt())
             }
@@ -1510,7 +1510,7 @@ class MainActivity : AppCompatActivity() {
                         .signInAndUnregisterPushToken(emailValue, passwordValue)
                     runOnUiThread {
                         result.text = revoked.fold(
-                            { "Push token और owner-only device record हटाए गए। इस device पर Shraddha AI push notifications बंद हैं।" },
+                            { "Push token और owner-only device record हटाए गए। इस device पर $assistantDisplayName push notifications बंद हैं।" },
                             { "Push revocation failed: ${it.message}" }
                         )
                     }
@@ -2506,7 +2506,7 @@ class MainActivity : AppCompatActivity() {
     private fun requestAudioPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 10) }
     private fun startVoiceInput() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { requestAudioPermission(); return }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha AI को अपना आदेश बोलें"); putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3) }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_PROMPT, "$assistantDisplayName को अपना आदेश बोलें"); putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3) }
         try { startActivityForResult(intent, speechRequest) } catch (_: Exception) { Toast.makeText(this, "इस डिवाइस पर Speech Recognition उपलब्ध नहीं है।", Toast.LENGTH_LONG).show() }
     }
 }
@@ -2535,7 +2535,7 @@ private class ShraddhaOrbView(context: android.content.Context) : View(context) 
 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        contentDescription = "Shraddha AI animated energy orb. Microphone state is shown by the voice controls."
+        contentDescription = "$assistantDisplayName animated energy orb. Microphone state is shown by the voice controls."
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
