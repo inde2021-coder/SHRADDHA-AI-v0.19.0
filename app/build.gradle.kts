@@ -1,10 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val firebaseLocalProperties = java.util.Properties().apply {
+val firebaseLocalProperties = Properties().apply {
     val configFile = rootProject.file("local.properties")
     if (configFile.exists()) configFile.inputStream().use { load(it) }
 }
