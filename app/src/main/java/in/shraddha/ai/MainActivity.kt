@@ -121,7 +121,7 @@ class MainActivity : AppCompatActivity() {
         updateBottomNavigation()
         pageRoot.removeAllViews()
 
-        // Premium MYRA/Lia-inspired command cockpit. All live indicators are explicitly
+        // Premium Shraddha AI command cockpit. All live indicators are explicitly
         // labelled; the panel never fabricates activity when no agent is connected.
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -201,8 +201,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         section(pageRoot, "COMMAND CENTER", "सभी systems एक unified dashboard से") {
-            addView(workspaceTile("✦  AI BRAIN + LIA VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
-            addView(workspaceTile("◈  MYRA PC COMMAND CENTER", "Windows/Linux companion • MYRA Coder • Website Forge • PC automation") { showPage("devices") })
+            addView(workspaceTile("✦  AI BRAIN + SHRADDHA VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
+            addView(workspaceTile("◈  SHRADDHA PC COMPANION", "Windows/Linux companion • Website Forge • PC automation") { showPage("devices") })
             addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical learning • Agriculture • Law • Creator") { showPage("expert") })
             addView(workspaceTile("⌘  DEVICE UNIVERSE", "Paired phones • PC companion • Remote screen") { showPage("devices") })
             addView(workspaceTile("▣  APP OPERATOR", "Visual UI control • Workflow • Verification") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) })
@@ -302,7 +302,7 @@ class MainActivity : AppCompatActivity() {
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
                 setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
             })
-            assistantHero.addView(actionButton("🎙  Speak to Shraddha", "Live Hindi / English voice session • Tap to open") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
+            assistantHero.addView(actionButton("🎙  Speak to $assistantDisplayName", "Live Hindi / English voice session • Tap to open") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             pageRoot.addView(assistantHero)
         }
         pageRoot.addView(status, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
@@ -1294,7 +1294,7 @@ class MainActivity : AppCompatActivity() {
         }
         addAdvancedFeatureStudios(root)
         section(root, "FUTURE EXPANSION PRIORITIES", "वे क्षमताएँ जिनके लिए external runtime, verified models या companion integration अभी बाकी है") {
-            listOf("1. On-device face and speaker identity models with consent, anti-spoofing and accuracy validation", "2. Native offline LLM inference runtime and hardware-aware model manager", "3. Signed plugin packages with real sandbox isolation and revocation", "4. Durable project execution, resumable tasks and verified rollback", "5. Full MYRA/Lia runtime integration and PC screen streaming companion", "6. Smart-home connectors with local-first allowlists and manual override", "7. Actual image, video, audio and CAD generation/export pipelines", "8. Full encrypted backup restore including supported encrypted vault data", "9. Research retrieval with live source citations and verification", "10. Automated device test runner and global emergency access revocation").forEach { item -> addView(TextView(this@MainActivity).apply { text=item; textSize=12f; setTextColor(0xFFDCE5F6.toInt()); setPadding(0,dp(5),0,dp(5)) }) }
+            listOf("1. On-device face and speaker identity models with consent, anti-spoofing and accuracy validation", "2. Native offline LLM inference runtime and hardware-aware model manager", "3. Signed plugin packages with real sandbox isolation and revocation", "4. Durable project execution, resumable tasks and verified rollback", "5. Complete Shraddha AI and PC Companion integration", "6. Smart-home connectors with local-first allowlists and manual override", "7. Actual image, video, audio and CAD generation/export pipelines", "8. Full encrypted backup restore including supported encrypted vault data", "9. Research retrieval with live source citations and verification", "10. Automated device test runner and global emergency access revocation").forEach { item -> addView(TextView(this@MainActivity).apply { text=item; textSize=12f; setTextColor(0xFFDCE5F6.toInt()); setPadding(0,dp(5),0,dp(5)) }) }
         }
     }
 
