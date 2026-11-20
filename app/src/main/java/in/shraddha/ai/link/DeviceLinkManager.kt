@@ -138,7 +138,6 @@ object DeviceLinkManager {
                         "peer_status" -> {
                             val peerId = msg.optString("deviceId")
                             if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) {
-                                peerKeys.remove(peerId)?.key?.fill(0)
                                 sendE2EKeyOffer(peerId)
                             }
                             onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}")
