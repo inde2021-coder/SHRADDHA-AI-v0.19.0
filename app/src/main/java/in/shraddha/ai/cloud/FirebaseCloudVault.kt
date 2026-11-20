@@ -77,10 +77,28 @@ class FirebaseCloudVault(private val context: Context) {
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email.trim(), password).await().user ?: error("Sign-in failed")
             val encrypted = encrypt(plaintext, password)
             val record = mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis())
-            FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
-                .set(record).await()
-            FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
-                .reference.child("users").child(user.uid).child("vault").child(key).setValue(record).await()
+            val firestoreWrite = runCatching {
+                FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
+                    .set(record).await()
+            }
+            val realtimeWrite = runCatching {
+                FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault").child(key).setValue(record).await()
+            }
+            if (firestoreWrite.isFailure || realtimeWrite.isFailure) {
+                val savedCopy = when {
+                    firestoreWrite.isSuccess && realtimeWrite.isSuccess -> "both cloud databases"
+                    firestoreWrite.isSuccess -> "Firestore only"
+                    realtimeWrite.isSuccess -> "Realtime Database only"
+                    else -> "no cloud database"
+                }
+                val failedStore = when {
+                    firestoreWrite.isFailure && realtimeWrite.isFailure -> "Firestore and Realtime Database"
+                    firestoreWrite.isFailure -> "Firestore"
+                    else -> "Realtime Database"
+                }
+                error("Encrypted backup saved to $savedCopy; $failedStore mirror failed. Check Firebase rules/network and retry to complete the mirror.")
+            }
             user.uid
         }
     }
