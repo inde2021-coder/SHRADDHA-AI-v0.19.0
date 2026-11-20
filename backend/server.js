@@ -542,12 +542,13 @@ telephonyWss.on('connection', carrier => {
   let closed = false;
   let metadataSeen = false;
   let callRecord = null;
+  let edesySampleRate = 16000;
   const pendingAudio = [];
   let pendingAudioBytes = 0;
   const maxPendingAudioBytes = 64 * 1024;
   const sendAudioToLive = pcm16 => {
     if (!live || live.readyState !== WebSocket.OPEN) return;
-    const pcm24 = resamplePcm16(pcm16, 16000, 24000);
+    const pcm24 = resamplePcm16(pcm16, edesySampleRate, 24000);
     live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
   };
 
@@ -623,7 +624,7 @@ telephonyWss.on('connection', carrier => {
       if (callRecord.transcript.length > 300) callRecord.transcript.splice(0, callRecord.transcript.length - 300);
     }
     if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) {
-      carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, 16000), { binary: true });
+      carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, edesySampleRate), { binary: true });
     }
     if (event.type === 'error') console.error('Live voice error:', String(event.error?.message || 'unknown').slice(0, 180));
   });
@@ -650,6 +651,9 @@ telephonyWss.on('connection', carrier => {
     if (!metadataSeen) {
       metadataSeen = true;
       if (message.direction && message.direction !== 'inbound') return shutdown();
+      const negotiatedRate = Number(message.sampleRate || 16000);
+      if (![8000, 16000].includes(negotiatedRate) || (message.mixType && message.mixType !== 'mono')) return shutdown();
+      edesySampleRate = negotiatedRate;
       const caller = String(message.from || '');
       callRecord = {
         id: String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex')).slice(0, 120),
