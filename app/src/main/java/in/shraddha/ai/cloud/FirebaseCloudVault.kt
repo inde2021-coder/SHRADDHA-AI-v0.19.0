@@ -18,7 +18,7 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import android.util.Base64
 
-/** Firebase owner-scoped vault. Client-side AES-GCM means Firestore receives ciphertext only. */
+/** Firebase owner-scoped vault. Client-side AES-GCM means cloud databases receive ciphertext only. */
 class FirebaseCloudVault(private val context: Context) {
     companion object {
         private const val APP_NAME = "shraddha_cloud_vault"

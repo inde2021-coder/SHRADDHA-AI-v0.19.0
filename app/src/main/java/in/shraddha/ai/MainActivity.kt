@@ -1248,7 +1248,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addFirebaseCloudSection(root: LinearLayout) {
-        section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "Firebase Console से Android app की client configuration यहाँ भरें। Email/Password Auth और Firestore चालू करें; sync केवल आपकी सहमति से होगा।") {
+        section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "Firebase configuration पहले से भरी है। Email/Password Auth, Firestore और Realtime Database चालू रखें; encrypted sync केवल आपकी सहमति से होगा।") {
             val firebaseApiKey = edit("Firebase API Key", "AIza…").apply { setText(BuildConfig.FIREBASE_API_KEY) }
             val firebaseAppId = edit("Firebase Android App ID", "Android App ID").apply { setText(BuildConfig.FIREBASE_APP_ID) }
             val firebaseProjectId = edit("Firebase Project ID", "project-id").apply { setText(BuildConfig.FIREBASE_PROJECT_ID) }
