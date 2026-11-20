@@ -406,32 +406,51 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { provider: result.provider, requestedProvider: provider, domain, mode, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed', safetyReviewRequired: ['medical','electrical','electronics','mechanical','civil','law','repair'].includes(domain) });
     }
     if (req.method === 'POST' && req.url === '/api/agents/council/operator-plan') {
+      const caller = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      const now = Date.now(); const usage = councilAttempts.get(caller) || { count: 0, resetAt: now + 10 * 60 * 1000 };
+      if (usage.resetAt < now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
+      usage.count += 1; councilAttempts.set(caller, usage);
+      if (usage.count > 6) return json(res, 429, { error: 'Council rate limit reached. Try again in ten minutes.' });
       const body = await readBody(req, 12 * 1024);
       if (typeof body.goal !== 'string' || !body.goal.trim() || body.goal.length > 3000) return json(res, 400, { error: 'goal must be 1-3000 characters' });
       const supported = ['openai','gemini','anthropic','groq','perplexity'];
       const providers = [...new Set((Array.isArray(body.providers) ? body.providers : []).filter(x => supported.includes(x)))].slice(0, 5);
-      if (providers.length < 1) return json(res, 400, { error: 'Choose at least one supported AI provider' });
-      const requested = providers[0];
-      const prompt = `Convert the user's goal into a SHORT proposed Android accessibility workflow. Return ONLY one JSON object, no markdown: {"steps":[{"id":"step_1","title":"Open Settings","action":"OPEN_APP","target":"Settings","value":"","expectedVisibleText":"Settings"}]}. Allowed actions ONLY: OPEN_APP, CLICK_TEXT, TYPE_TEXT, BACK, HOME, SCROLL_FORWARD. Maximum 8 steps. Each step must be a small observable UI action, never a general instruction. OPEN_APP requires target app name. CLICK_TEXT requires exact visible target label. TYPE_TEXT uses value only for ordinary non-secret text and must not target password, OTP, PIN, payment or private fields. Never create payment, send, publish, delete, purchase, install, permission changes, account/security changes, or any irreversible action. If goal requires those, return {"steps":[]} and explain no safe operator plan can be generated. Include expectedVisibleText when a reliable post-action label can be expected; otherwise empty string. Do not invent screen labels or claim the app is installed. IDs must be unique simple strings. User goal: ${body.goal.trim()}`;
-      const generated = await askProvider(requested, prompt);
+      if (providers.length < 2) return json(res, 400, { error: 'Choose at least two supported AI providers for Council planning' });
+      const goal = body.goal.trim();
+      const roles = [
+        ['Planner', 'Break the goal into minimal observable Android accessibility steps with dependencies.'],
+        ['Specialist', 'Propose practical app/UI steps, using only exact labels that can reasonably be observed.'],
+        ['Critic', 'Reject unsafe, ambiguous, destructive, financial, privacy-invasive or irreversible actions.'],
+        ['Verifier', 'Check that every proposed step can be independently verified from a fresh Android accessibility screen snapshot.']
+      ];
+      const reviews = await Promise.all(roles.map(async ([role, task], index) => {
+        const provider = providers[index % providers.length];
+        try {
+          const answer = await askProvider(provider, `You are an independent member of Shraddha AI Council. Role: ${role}. ${task} Return concise plain text, no code execution and no claims that an action was performed. User goal: ${goal}`);
+          return { role, provider, answer };
+        } catch (error) {
+          return { role, provider, error: String(error?.message || 'Provider failed').slice(0, 180) };
+        }
+      }));
+      const successful = reviews.filter(x => x.answer);
+      if (successful.length < 2) return json(res, 502, { error: 'Council could not obtain two independent reviews. Nothing was executed.', reviews });
+      const evidence = successful.map(x => `ROLE ${x.role} (${x.provider}):\n${x.answer}`).join('\n\n---\n\n');
+      const prompt = `You are the Council chair. Convert the user goal and independent reviews into a SHORT proposed Android accessibility workflow. Return ONLY one JSON object, no markdown: {"steps":[{"id":"step_1","title":"Open Settings","action":"OPEN_APP","target":"Settings","value":"","expectedVisibleText":"Settings"}]}. Allowed actions ONLY: OPEN_APP, CLICK_TEXT, TYPE_TEXT, BACK, HOME, SCROLL_FORWARD. Maximum 8 steps. Each step must be a small observable UI action, never a general instruction. OPEN_APP requires target app name. CLICK_TEXT requires a concise visible target label; never invent certainty about labels. TYPE_TEXT uses value only for ordinary non-secret text and must not target password, OTP, PIN, payment or private fields. Never create payment, send, publish, delete, purchase, install, permission changes, account/security changes, or any irreversible action. If goal requires those, return {"steps":[]} and explain no safe operator plan can be generated. Include expectedVisibleText only when a reliable label can be checked; otherwise empty string. Do not claim an app is installed. IDs must be unique simple strings. User goal: ${goal}\n\nINDEPENDENT COUNCIL REVIEWS:\n${evidence}`;
+      const generated = await askProvider(providers[0], prompt);
       let parsed;
       try {
-        const start = generated.indexOf('{');
-        const end = generated.lastIndexOf('}');
-        if (start < 0 || end <= start) throw new Error('No JSON object');
-        parsed = JSON.parse(generated.slice(start, end + 1));
+        const first = generated.indexOf('{'); const last = generated.lastIndexOf('}');
+        if (first < 0 || last <= first) throw new Error('No JSON object');
+        parsed = JSON.parse(generated.slice(first, last + 1));
       } catch {
-        return json(res, 422, { error: 'AI did not return a valid structured operator plan. Nothing was executed.' });
+        return json(res, 422, { error: 'Council did not return a valid structured operator plan. Nothing was executed.', reviews });
       }
       const steps = normalizeOperatorActions(parsed.steps);
-      if (!steps.length) return json(res, 422, { error: 'No safe supported operator steps were produced. Nothing was executed.' });
+      if (!steps.length) return json(res, 422, { error: 'Council produced no safe supported operator steps. Nothing was executed.', reviews });
       return json(res, 200, {
-        mode: 'council_operator_plan_proposal',
-        provider: requested,
-        goal: body.goal.trim(),
-        steps,
-        requiresUserReview: true,
-        requiresPerStepApproval: true,
+        mode: 'council_operator_plan_proposal', provider: providers[0], providers,
+        goal, reviews: reviews.map(({ role, provider, answer, error }) => ({ role, provider, summary: (answer || error || '').slice(0, 800) })),
+        steps, requiresUserReview: true, requiresPerStepApproval: true,
         execution: 'proposal_only_no_actions_executed'
       });
     }
