@@ -66,3 +66,13 @@ CI success proves source compilation and the listed automated checks only. It do
 - APK SHA-256: ARM64 `1f0aecd69a4229d73a13ed2c0ce4ee7c209f8a0a1d248611deea300a14406c09`; ARMv7 `3460feabf3cc5212ca63ef587fa5ada279b4d723f6b17ede26abec40bfcff9f1`.
 - [Android CI run #288](https://github.com/inde2021-coder/SHRADDHA-AI-v0.19.0/actions/runs/44681099078)
 - The #288 APK artifact was downloaded and both APK checksums and ABI contents were independently verified in the current work session.
+
+## UI / UX continuation — 2026-11-20
+- Native launcher now applies status-bar, navigation-bar and IME insets explicitly. Bottom navigation hides while the keyboard is open; content and dock reserve the correct system-bar space.
+- Dashboard text has been shortened, redundant static system-status claims removed, workspace descriptions capped, and workspace cards compacted.
+- Added live workspace search/filter over all dashboard workspaces.
+- Native action buttons now use consistent 50dp single-line raised gradient controls, ripple feedback, and accessible descriptions/tooltips instead of two-line blocks of instructional copy.
+- Text fields display concise labels while retaining detailed help in accessibility descriptions/tooltips.
+- Compose buttons now have consistent rounded geometry, larger touch targets, single-line labels and correct cancelled-gesture handling (cancelled presses no longer invoke actions).
+- Compose home/settings bottom whitespace reduced; floating navigation dock respects navigation-bar insets.
+- These changes are source-level changes. Automated CI #297 is the current verification gate; visual confirmation on a physical phone remains outstanding.
