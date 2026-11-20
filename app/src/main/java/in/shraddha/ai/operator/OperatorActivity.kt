@@ -152,7 +152,8 @@ class OperatorActivity : Activity() {
     }
     private fun runOperator(work: (OperatorEngine) -> Unit) {
         Thread {
-            val engine = OperatorEngine(\n                emit = { event -> runOnUiThread {
+            val engine = OperatorEngine(
+                emit = { event -> runOnUiThread {
                 val detail = event.snapshot?.let { "\nApp: ${it.packageName}\nElements: ${it.elements.size}\n" + it.elements.take(35).joinToString("\n") { e -> "• ${(e.text.ifBlank { e.description }).take(90)} ${if (e.clickable) "[click]" else ""}${if (e.editable && !e.password) "[input]" else ""}" } }.orEmpty()
                 log.text = "${event.state}: ${event.message}$detail\n\n" + log.text.take(5000)
             } },
