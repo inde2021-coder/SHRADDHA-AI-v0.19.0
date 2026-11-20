@@ -1294,7 +1294,13 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("View Saved People", "परिचय और प्रोफाइल देखें") {
                 val arr = runCatching { JSONArray(store.get("person_directory").getOrDefault("")) }.getOrElse { JSONArray() }
                 val rows = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { "${it.optString("name")} — ${it.optString("relation")}\n${it.optString("notes")}" } }
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Person Memory").setMessage(if (rows.isEmpty()) "कोई प्रोफाइल सेव नहीं है।" else rows.joinToString("\n\n")).setPositiveButton("OK", null).setNeutralButton("Delete all") { _, _ -> store.remove("person_directory"); status.text = "Person directory हटाई गई।" }.show()
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Person Memory").setMessage(if (rows.isEmpty()) "कोई प्रोफाइल सेव नहीं है।" else rows.joinToString("\n\n")).setPositiveButton("OK", null).setNeutralButton("Delete all") { _, _ ->
+                    val cleared = `in`.shraddha.ai.biometric.BiometricConsentVault(store).clearAll()
+                    if (cleared.isSuccess) {
+                        store.remove("person_directory")
+                        status.text = "सभी person profiles और encrypted face/voice templates हटाए गए।"
+                    } else status.text = "Biometric data पूरी तरह delete नहीं हो सका: ${cleared.exceptionOrNull()?.message}"
+                }.show()
             })
         }
         section(root, "ON-DEVICE FACE & VOICE ENROLLMENT", "सहमति-आधारित local capture • मूल फोटो/ऑडियो discard • encrypted template vault") {
