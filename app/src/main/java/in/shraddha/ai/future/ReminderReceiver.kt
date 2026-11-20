@@ -88,7 +88,8 @@ class DailyBriefingReceiver : BroadcastReceiver() {
             manager.createNotificationChannel(NotificationChannel("shraddha_daily_briefing", "Daily briefing", NotificationManager.IMPORTANCE_DEFAULT))
         }
         val body = lines.joinToString("\n")
-        val appName = prefs.getString("assistant_name", "Shraddha AI")?.take(60) ?: "Shraddha AI"
+        val appName = context.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE)
+            .getString("assistant_name", "Shraddha AI")?.trim()?.take(60)?.ifBlank { "Shraddha AI" } ?: "Shraddha AI"
         val notification = NotificationCompat.Builder(context, "shraddha_daily_briefing")
             .setSmallIcon(context.applicationInfo.icon)
             .setContentTitle("$appName • Good morning")
