@@ -44,7 +44,10 @@ class LocalBiometricModelEngine : AutoCloseable {
         var p = 0
         for (channel in 0..2) for (y in 0 until 112) for (x in 0 until 112) {
             val index = (y * 112 + x) * 3 + channel
-            data[p++] = ((rgb112[index].toInt() and 0xff) - 127.5f) / 128f
+            // OpenCV FaceRecognizerSF::feature uses blobFromImage(scale=1, mean=0,
+            // swapRB=true). The caller already supplies RGB bytes, so preserve 0..255
+            // values and do not apply ArcFace-style [-1, 1] normalization here.
+            data[p++] = (rgb112[index].toInt() and 0xff).toFloat()
         }
         return runModel(session, inputName, data, longArrayOf(1, 3, 112, 112))
     }
