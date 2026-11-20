@@ -37,6 +37,10 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 | 24 | Smart Routine Automation | Reminder scheduling, workflow lifecycle and approval-gated routine proposal added. | Trigger sources, recurrence engine, durable scheduling, execution verification and routine UI. |
 | 25 | Personal Knowledge Vault | SecureMemoryVault, encrypted backup codec and FirebaseCloudVault exist. | Unified vault UI, conflict resolution, restore drills, retention/export controls and complete device-level recovery tests. |
 
+## User-facing workspace integration (20 November 2026)
+
+`MainActivity` now exposes controls for meeting transcript extraction, dependency-aware task planning and self-review, daily briefing composition, encrypted Life Timeline add/search/delete, consent-based Personal Skill Learning examples, approval-gated routine proposals, wake-phrase consent/state, configured-provider text translation and safety-first troubleshooting playbooks. These controls are usable local workflows, but they do not replace the external integrations listed in the table. The wake-phrase ARM/DEACTIVATE controls now operate on the same active gate instance; the UI explicitly states that no acoustic wake-word model or background microphone detection is running.
+
 ## New code in this implementation pass
 
 - `AdvancedPersonalAssistantSuite.kt`: task DAG planning, self-review, meeting transcript marker extraction, daily briefing composition, consent-gated wake phrase lifecycle, voice profile validation, translation request validation, safety-first troubleshooting playbooks, 3D landmark validation, AES-GCM clipboard packets, file transfer manifests/chunk verification, notification quiet-hour policy, searchable life timeline, opt-in skill examples and approval-gated routine proposals.
