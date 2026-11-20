@@ -26,7 +26,7 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 | 13 | Visual Troubleshooting | Safety-first network, battery and electrical troubleshooting playbooks added. | Camera-guided step validation, device-specific trusted manuals and escalation UI. |
 | 14 | 3D Environment Mapping | Validated 3D landmark/coordinate data model added. | Camera/ARCore or depth sensor capture, SLAM, persistence, renderer and device calibration. |
 | 15 | Cross-Device Clipboard | AES-256-GCM expiring text packet added. | Authenticated relay transport, key agreement/rotation, consent, replay protection and device UI. |
-| 16 | Universal File Transfer | Safe manifest, chunk validation and SHA-256 verification added. | Encrypted resumable transport, peer approval, storage quotas, progress UI and malware scanning. |
+| 16 | Universal File Transfer | One-time peer-approved small-file relay now validates canonical Base64, exact byte length and SHA-256 at relay and receiver; receiver commits only verified files atomically. 650 KB cap. | End-to-end encryption, resumable chunks, progress UI, quotas and malware scanning. |
 | 17 | App Workflow Automation | Accessibility Operator, app learning profiles, adaptive workflow runner and checkpoints exist. | Voice-created training, robust OCR fallback for canvas controls, broader app recovery and device matrix. |
 | 18 | Remote Desktop Workspace | Paired-device control and consent-gated screen streaming exist. | Full remote desktop session UX, keyboard/mouse parity, multi-monitor, file transfer and security review. |
 | 19 | Smart Notification Manager | Metadata-only quiet-hour/filter policy added. | Notification-listener permission UI, rules persistence, per-app controls and Android version tests. |
@@ -46,12 +46,12 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 - `AdvancedPersonalAssistantSuite.kt`: task DAG planning, self-review, meeting transcript marker extraction, daily briefing composition, consent-gated wake phrase lifecycle, voice profile validation, translation request validation, safety-first troubleshooting playbooks, 3D landmark validation, AES-GCM clipboard packets, file transfer manifests/chunk verification, notification quiet-hour policy, searchable life timeline, opt-in skill examples and approval-gated routine proposals.
 - `AdvancedPersonalAssistantSuiteTest.kt`: JVM tests for these foundations, including dependency cycles, approval/consent, encryption expiry, chunk integrity, quiet hours and deletion.
 
-## Safety and capability boundaries
+## File-transfer implementation update (20 November 2026)\n\nThe small-file relay now requires a SHA-256 digest and exact byte count, validates canonical Base64 and the digest before consuming the recipient's one-time grant, and forwards the digest to the receiver. Android rejects mismatched size/digest and writes through a temporary file followed by an atomic rename. Files are capped at 650 KB. The relay currently forwards plaintext payload bytes; do not describe this as end-to-end encrypted.\n\n## Safety and capability boundaries
 
 - Sensitive actions (messages, payments, deletion, device control and file writes) must retain explicit confirmation and an auditable result.
 - Wake phrase state logic is not a wake-word acoustic model. No always-listening wake-word accuracy is claimed until an actual model is integrated and tested.
 - Translation request preparation is not a translation engine. Camera/voice streaming translation still requires a provider or offline model.
 - 3D landmark records are not SLAM or a live 3D scanner.
-- Clipboard encryption and file chunk validation are not a network transport. Pairing, authenticated relay, consent, replay protection and end-to-end device tests are still required.
+- Clipboard AES-GCM packets remain a local primitive and are not yet transported cross-device. File relay now verifies integrity and uses a one-time approval grant, but the relay sees the payload: this is not end-to-end encryption. Resumable chunks, malware scanning and end-to-end device tests remain required.
 - Meeting marker extraction is not automatic meeting recording, diarization or speech transcription.
 - Feature status must not be promoted to complete until UI integration, persistence, permission handling, tests and supported-device validation pass.
