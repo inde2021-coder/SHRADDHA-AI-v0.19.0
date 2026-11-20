@@ -1146,24 +1146,95 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { projectView.text=it.message ?: "Update failed" }
             })
         }
-        section(root, "PERSONAL KNOWLEDGE GRAPH", "आप स्वयं जानकारी जोड़ें और खोजें। अभी automatic face/voice identification या hidden sensitive inference नहीं होता।") {
-            val label=edit("Memory title","उदाहरण: मेरी दुकान")
-            val kind=edit("Category","Project / Person / Device / Place")
-            val note=edit("Memory note","इस जानकारी को याद रखने के लिए लिखें") .apply { minLines=2; isSingleLine=false }
-            val query=edit("Search saved memories","दुकान, project, device...")
-            val graphResult=TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize=12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background=rounded(0xFF0C1525.toInt(),14) }
-            addView(label); addView(kind); addView(note); addView(query); addView(graphResult)
-            val memoryPrefs=getSharedPreferences("shraddha_knowledge_graph", MODE_PRIVATE)
-            fun graphArray()=runCatching { JSONArray(memoryPrefs.getString("nodes","[]")) }.getOrElse { JSONArray() }
-            addView(actionButton("Save knowledge node","Explicitly user-entered local memory") {
-                if(label.text.isNullOrBlank()) { graphResult.text="Memory title जरूरी है।"; return@actionButton }
-                val arr=graphArray(); arr.put(JSONObject().put("id","n-${System.currentTimeMillis()}").put("label",label.text.toString().trim()).put("kind",kind.text.toString().trim().ifBlank { "Note" }).put("note",note.text.toString().take(1000)).put("updated",System.currentTimeMillis()))
-                memoryPrefs.edit().putString("nodes",arr.toString()).apply(); `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_node","saved",label.text.toString()); graphResult.text="Memory locally saved. Total nodes: ${arr.length()}"
+        section(root, "PERSONAL KNOWLEDGE GRAPH", "आपकी अनुमति से जोड़ी गई जानकारी Android Keystore के AES-GCM encrypted local vault में सुरक्षित रहती है।") {
+            val graphStore = `in`.shraddha.ai.future.PersistentKnowledgeGraph(this@MainActivity)
+            val initialLoad = graphStore.load()
+            var graph = initialLoad.getOrElse { `in`.shraddha.ai.future.KnowledgeGraph() }
+            var storageReady = initialLoad.isSuccess
+            val label = edit("Memory title", "उदाहरण: मेरी दुकान")
+            val kind = edit("Category", "Project / Person / Device / Place")
+            val note = edit("Memory note", "इस जानकारी को याद रखने के लिए लिखें").apply { minLines = 2; isSingleLine = false }
+            val query = edit("Search saved memories", "दुकान, project, device...")
+            val sourceId = edit("Relationship source ID", "पहले node की ID")
+            val relation = edit("Relationship", "जैसे works_on / owns / located_at")
+            val targetId = edit("Relationship target ID", "दूसरे node की ID")
+            val deleteId = edit("Delete memory ID", "केवल चुनी हुई node ID")
+            val graphResult = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            addView(label); addView(kind); addView(note)
+            addView(query); addView(sourceId); addView(relation); addView(targetId); addView(deleteId); addView(graphResult)
+
+            fun renderGraph(message: String = "") {
+                val nodes = graph.allNodes()
+                val edges = graph.allEdges()
+                val lines = buildList {
+                    if (message.isNotBlank()) add(message)
+                    add("Encrypted local memories: ${nodes.size}/100 • Relationships: ${edges.size}/300")
+                    nodes.forEach { add("ID: ${it.id}\n${it.label} [${it.kind}]\n${it.note}") }
+                    edges.forEach { add("LINK: ${it.fromId} —${it.relation}→ ${it.toId}") }
+                }
+                graphResult.text = lines.joinToString("\n\n")
+            }
+            renderGraph(if (storageReady) "Encrypted knowledge graph loaded." else "Vault could not be decrypted/read. Existing data is protected; clear/reset is required before writing.")
+            addView(actionButton("Save encrypted knowledge node", "Explicitly user-entered memory • AES-GCM • Android Keystore") {
+                if (!storageReady) { graphResult.text = "Memory save रोक दिया गया: पुराना encrypted vault पढ़ा नहीं जा सका। पहले कारण ठीक करें या नीचे से स्पष्ट रूप से graph reset करें।"; return@actionButton }
+                val title = label.text.toString().trim()
+                if (title.isBlank()) { graphResult.text = "Memory title जरूरी है।"; return@actionButton }
+                val id = "n-" + java.util.UUID.randomUUID().toString()
+                runCatching {
+                    graph.upsert(`in`.shraddha.ai.future.KnowledgeNode(id, title, kind.text.toString().trim().ifBlank { "Note" }, note.text.toString().take(1000)))
+                    graphStore.save(graph).getOrThrow()
+                    `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_node", "saved", title)
+                    renderGraph("Encrypted memory saved. New node ID: $id")
+                    label.setText(""); note.setText("")
+                }.onFailure { graphResult.text = "Encrypted save failed: ${it.message}" }
             })
-            addView(actionButton("Search knowledge graph","Search titles, categories and notes") {
-                val q=query.text.toString().trim(); val arr=graphArray()
-                val hits=(0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.filter { it.optString("label").contains(q,true) || it.optString("kind").contains(q,true) || it.optString("note").contains(q,true) }
-                graphResult.text=if(hits.isEmpty()) "कोई matching memory नहीं मिली।" else hits.joinToString("\n\n") { "${it.optString("label")} [${it.optString("kind")}]\n${it.optString("note")}" }
+            addView(actionButton("Search knowledge graph", "Search titles, categories and notes in encrypted local memory") {
+                val q = query.text.toString().trim()
+                val hits = graph.allNodes().filter { q.isBlank() || it.label.contains(q, true) || it.kind.contains(q, true) || it.note.contains(q, true) }
+                    .sortedByDescending { it.updatedAt }
+                graphResult.text = if (hits.isEmpty()) "कोई matching memory नहीं मिली।" else hits.joinToString("\n\n") { "ID: ${it.id}\n${it.label} [${it.kind}]\n${it.note}\nLinks: ${graph.linksFor(it.id).joinToString { edge -> "${edge.relation} → ${if (edge.fromId == it.id) edge.toId else edge.fromId}" }}" }
+            })
+            addView(actionButton("Connect two memories", "Explicit relationship • दोनों node ID ऊपर से चुनें") {
+                if (!storageReady) { graphResult.text = "Encrypted vault उपलब्ध नहीं है।"; return@actionButton }
+                runCatching {
+                    graph.connect(sourceId.text.toString().trim(), relation.text.toString().trim(), targetId.text.toString().trim())
+                    graphStore.save(graph).getOrThrow()
+                    `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_edge", "saved", relation.text.toString().take(80))
+                    renderGraph("Relationship encrypted and saved.")
+                }.onFailure { graphResult.text = "Relationship save failed: ${it.message}" }
+            })
+            addView(actionButton("Delete selected memory", "Node और उससे जुड़े relationships स्थायी रूप से हटेंगे") {
+                if (!storageReady) { graphResult.text = "Encrypted vault उपलब्ध नहीं है।"; return@actionButton }
+                val id = deleteId.text.toString().trim()
+                if (graph.allNodes().none { it.id == id }) { graphResult.text = "इस ID की memory नहीं मिली।"; return@actionButton }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Memory delete करें?")
+                    .setMessage("यह node और उससे जुड़े links हटेंगे। यह काम वापस नहीं होगा।")
+                    .setNegativeButton("रद्द करें", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        graph.remove(id)
+                        graphStore.save(graph).fold(
+                            { `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_node", "deleted", id); renderGraph("Memory deleted.") },
+                            { graphResult.text = "Delete save failed: ${it.message}" }
+                        )
+                    }.show()
+            })
+            addView(actionButton("Reset encrypted knowledge graph", "सभी nodes और relationships हटाएँ") {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("पूरा Knowledge Graph मिटाएँ?")
+                    .setMessage("सभी local encrypted memories और links स्थायी रूप से हट जाएँगे।")
+                    .setNegativeButton("रद्द करें", null)
+                    .setPositiveButton("सभी हटाएँ") { _, _ ->
+                        if (graphStore.clear()) {
+                            graph = `in`.shraddha.ai.future.KnowledgeGraph()
+                            storageReady = true
+                            `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_graph", "cleared")
+                            renderGraph("Encrypted knowledge graph reset.")
+                        } else graphResult.text = "Vault clear नहीं हो पाया।"
+                    }.show()
             })
         }
         addAdvancedFeatureStudios(root)
