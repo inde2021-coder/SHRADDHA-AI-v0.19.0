@@ -1058,7 +1058,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "SECURITY AUDIT TRAIL", "इस फोन पर सीमित metadata log; passwords, API keys, screen recordings या biometric data log नहीं होते") {
             val audit=`in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity)
             addView(actionButton("View local audit log","Recent workflow events") {
-                val auditLog: String = audit.exportText()
+                val auditLog: String = audit.exportText().getOrElse { error -> "Audit log unavailable: ${error.message ?: "encryption error"}" }
                 val dialog = android.app.AlertDialog.Builder(this@MainActivity)
                 dialog.setTitle("Security Audit Trail")
                 dialog.setMessage(if (auditLog.length == 0) "अभी कोई audit event नहीं है।" else auditLog)
