@@ -24,6 +24,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import `in`.shraddha.ai.vision.LiveVisualTranslationSession as LiveVisualTranslationSession
 import com.google.android.material.card.MaterialCardView
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.brain.SecureMemoryVault
 import `in`.shraddha.ai.brain.OfflineCommandEngine
@@ -125,6 +127,56 @@ class MainActivity : AppCompatActivity() {
         }
         showHome()
         installLinkCallbacks()
+        handlePairingIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handlePairingIntent(intent)
+    }
+
+    private fun handlePairingIntent(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "shraddha" || data.host != "pair") return
+        val relay = data.getQueryParameter("relay").orEmpty()
+        val code = data.getQueryParameter("code").orEmpty()
+        if (!validRelay(relay) || !code.matches(Regex("[0-9]{6}"))) {
+            Toast.makeText(this, "Pairing QR invalid or expired.", Toast.LENGTH_LONG).show()
+            return
+        }
+        showPage("devices")
+        relayUrl.setText(relay)
+        pairingCode.setText(code)
+        status.text = "QR invitation loaded. Verify the relay and tap Join Another Phone. The code is single-use."
+    }
+
+    private fun showPairingQr(relay: String, code: String) {
+        val payload = android.net.Uri.Builder().scheme("shraddha").authority("pair")
+            .appendQueryParameter("relay", relay.trim().trimEnd("/"))
+            .appendQueryParameter("code", code).build().toString()
+        val matrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 720, 720)
+        val bitmap = android.graphics.Bitmap.createBitmap(720, 720, android.graphics.Bitmap.Config.ARGB_8888)
+        for (y in 0 until 720) for (x in 0 until 720) bitmap.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(8))
+            addView(ImageView(this@MainActivity).apply {
+                setImageBitmap(bitmap); adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_CENTER
+                layoutParams = LinearLayout.LayoutParams(-1, dp(280))
+                contentDescription = "Single-use Shraddha device pairing QR code"
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Pairing code  $code\\nValid for 5 minutes • One successful join only\\nScan with the other Shraddha AI app."
+                gravity = android.view.Gravity.CENTER; textSize = 14f; setTextColor(0xFFE7EAF5.toInt()); setPadding(0, dp(10), 0, 0)
+            })
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Secure device pairing")
+            .setView(content)
+            .setPositiveButton("Done", null)
+            .setOnDismissListener { bitmap.recycle() }
+            .show()
     }
 
     private fun showHome() {
@@ -843,7 +895,7 @@ class MainActivity : AppCompatActivity() {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "पहले अपना deployed HTTPS relay URL डालें।"; return@actionButton }
                 DeviceLinkManager.createSession(url, deviceName.text.toString().ifBlank { "$assistantDisplayName Phone" }) { result -> runOnUiThread {
-                    result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "Pairing code: ${it.code}\nदूसरे फोन में यह code डालें। Code 5 मिनट में expire होगा।" }
+                    result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "One-time pairing invite created. Scan the QR on the other Shraddha AI app."; showPairingQr(url, it.code) }
                         .onFailure { status.text = "Pairing error: ${it.message}" }
                 } }
             })
