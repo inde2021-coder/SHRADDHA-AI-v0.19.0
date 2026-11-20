@@ -61,7 +61,7 @@ Not started. Requires successful unit tests, lint/static checks, debug and relea
 - Added a model catalog documenting source revisions, checksums, tensor contracts, attribution and limitations.
 - Corrected SFace preprocessing to match OpenCV FaceRecognizerSF: aligned RGB 112×112, NCHW float32, raw 0–255 values. Added unit tests for channel order, layout and value range.
 - Added consent-gated live 1:1 face comparison against a selected saved person using OpenCV's published 0.363 cosine reference threshold. This is similarity only, not authentication.
-- ECAPA ONNX export accepts 16 kHz mono waveform input and includes its own filterbank frontend; the five-second sample path is compatible at the tensor-shape level. Speaker decision threshold and real-device accuracy remain uncalibrated, so no speaker identity verdict is exposed yet.
+- ECAPA ONNX export accepts 16 kHz mono waveform input and includes its own filterbank frontend; the five-second sample path is compatible at the tensor-shape level. A consent-gated voice comparison can now show raw same-profile cosine similarity, but speaker decision threshold and real-device accuracy remain uncalibrated, so no speaker identity verdict is exposed.
 - The models have not yet been downloaded and executed on a physical Android phone in this environment. CI must pass before APK build status can be claimed.
 
 ### Additional security/privacy hardening — 2026-11-20
