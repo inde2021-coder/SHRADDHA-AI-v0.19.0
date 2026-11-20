@@ -3,6 +3,30 @@ from types import SimpleNamespace
 from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
+class DeviceE2ECryptoTests(unittest.TestCase):
+    def test_p256_key_agreement_and_aes_gcm_roundtrip(self):
+        from e2e_crypto import DeviceE2ECrypto
+        alice = DeviceE2ECrypto()
+        bob = DeviceE2ECrypto()
+        alice_key, alice_fingerprint = alice.derive_peer_key(bob.public_key_base64, "android-device", "windows-device")
+        bob_key, bob_fingerprint = bob.derive_peer_key(alice.public_key_base64, "windows-device", "android-device")
+        self.assertEqual(alice_key, bob_key)
+        self.assertEqual(alice_fingerprint, bob_fingerprint)
+        sealed = DeviceE2ECrypto.encrypt(alice_key, b"approved remote command", b"android-device|windows-device|remote_action")
+        opened = DeviceE2ECrypto.decrypt(bob_key, sealed["nonce"], sealed["ciphertext"], b"android-device|windows-device|remote_action")
+        self.assertEqual(opened, b"approved remote command")
+        with self.assertRaises(Exception):
+            DeviceE2ECrypto.decrypt(bob_key, sealed["nonce"], sealed["ciphertext"], b"wrong-associated-data")
+
+    def test_e2e_rejects_invalid_peer_and_payload_bounds(self):
+        from e2e_crypto import DeviceE2ECrypto
+        alice = DeviceE2ECrypto()
+        with self.assertRaises(ValueError):
+            alice.derive_peer_key("%%%invalid%%%", "a", "b")
+        with self.assertRaises(ValueError):
+            DeviceE2ECrypto.encrypt(b"x" * 31, b"hello", b"aad")
+
+
 class PcCompanionPolicyTests(unittest.TestCase):
     def test_clipboard_payload_roundtrip_and_integrity(self):
         payload = build_clipboard_payload('Namaste Shraddha')
