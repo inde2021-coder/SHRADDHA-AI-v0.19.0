@@ -40,8 +40,9 @@ object DeviceLinkManager {
             done(Result.failure(IllegalArgumentException("Remote device pairing requires a valid HTTPS relay URL. Plain HTTP is blocked.")))
             return
         }
-        require(pair.sessionId.isNotBlank() && pair.deviceId.isNotBlank() && pair.token.length >= 24) {
-            "Relay returned an invalid session or device credential."
+        if (pair.sessionId.isBlank() || pair.deviceId.isBlank() || pair.token.length < 24) {
+            done(Result.failure(IllegalArgumentException("Relay returned an invalid session or device credential.")))
+            return
         }
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
         val url = parsed.newBuilder().scheme("wss").addPathSegments("ws")
@@ -72,7 +73,11 @@ object DeviceLinkManager {
                 val jpeg = frame.copyOfRange(2 + idLength, frame.size)
                 if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
             }
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); done(Result.failure(t)) }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                sessionId = null; deviceId = null; deviceToken = null; socket = null
+                onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
+                done(Result.failure(t))
+            }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason") }
         })
     }
