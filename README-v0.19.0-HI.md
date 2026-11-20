@@ -13,7 +13,7 @@
 
 ## नवीनतम सत्यापित build
 
-<badge>Android CI run #280</badge>
+**Android CI run #280**
 
 - Commit: `d8b9af6d9b780c0ce97fd9b471ce65455adfd272`
 - Android unit tests: PASS.
