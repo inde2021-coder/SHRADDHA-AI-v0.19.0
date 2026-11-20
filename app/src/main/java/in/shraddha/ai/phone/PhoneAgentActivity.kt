@@ -21,12 +21,18 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.Lia.assistant.data.VoiceGatewaySettings
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class PhoneAgentActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("phone_agent", Context.MODE_PRIVATE) }
     private lateinit var status: TextView
     private lateinit var history: TextView
     private lateinit var voiceStatus: TextView
+    private lateinit var edesyHistory: TextView
     private var tts: TextToSpeech? = null
     private val voiceCallRequest = 903
     private val contactsPermissionRequest = 904
@@ -92,9 +98,24 @@ class PhoneAgentActivity : AppCompatActivity() {
             setBackgroundColor(0xFF111B2D.toInt())
         }
         root.addView(history)
-        root.addView(actionButton("Share call summary") { shareCallSummary() })
+        root.addView(actionButton("Share phone call summary") { shareCallSummary() })
         root.addView(TextView(this).apply {
-            text = "IMPORTANT: Normal SIM-call audio is not exposed to third-party InCallService apps on standard Android. Shraddha can provide call controls and history here, but live AI listening and speaking requires a supported carrier/OEM integration or a VoIP/SIP calling service. Auto-answer is intentionally unavailable until that voice path is implemented and tested, so calls are never silently answered without an AI response."
+            text = "EDESY AI CALL HISTORY"
+            textSize = 12f
+            setTextColor(0xFFBDA8FF.toInt())
+            setPadding(0, 24, 0, 8)
+        })
+        edesyHistory = TextView(this).apply {
+            text = "Edesy status not checked yet."
+            textSize = 13f
+            setTextColor(0xFFE4E9F5.toInt())
+            setPadding(14, 14, 14, 14)
+            setBackgroundColor(0xFF111B2D.toInt())
+        }
+        root.addView(edesyHistory)
+        root.addView(actionButton("Refresh Edesy AI call history") { refreshEdesyHistory() })
+        root.addView(TextView(this).apply {
+            text = "IMPORTANT: Android InCallService cannot capture normal SIM-call audio. For the selected flow, the caller dials your existing SIM, the handset rings first, and the mobile operator forwards only unanswered calls to your configured Edesy DID. Shraddha AI can speak only after Edesy routing, OpenAI Live credentials and two-way audio are verified. Do not enable forwarding before a successful real test call."
             textSize = 12f
             setTextColor(0xFFFFC78A.toInt())
             setPadding(0, 20, 0, 0)
@@ -280,6 +301,65 @@ class PhoneAgentActivity : AppCompatActivity() {
         status.text = "Default phone app: ${if (manager.defaultDialerPackage == packageName) "YES" else "NO"}"
         history.text = prefs.getString(ShraddhaInCallService.KEY_CALL_HISTORY, null)
             ?.takeIf { it.isNotBlank() } ?: "No call events recorded yet."
+    }
+
+    private fun refreshEdesyHistory() {
+        edesyHistory.text = "Edesy AI call history is loading…"
+        Thread {
+            val config = VoiceGatewaySettings.get(this)
+            if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) {
+                runOnUiThread { edesyHistory.text = "पहले Settings में secure HTTPS Backend URL और Gateway Token configure करें।" }
+                return@Thread
+            }
+            val client = OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .callTimeout(20, TimeUnit.SECONDS)
+                .build()
+            fun getJson(path: String): JSONObject {
+                val request = Request.Builder()
+                    .url(config.baseUrl.trimEnd('/') + path)
+                    .header("Authorization", "Bearer ${config.gatewayToken}")
+                    .get().build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        val error = runCatching { JSONObject(body).optString("error") }.getOrDefault("")
+                        throw IllegalStateException(error.ifBlank { "HTTP ${response.code}" })
+                    }
+                    return JSONObject(body)
+                }
+            }
+            val message = runCatching {
+                val readiness = getJson("/api/telephony/edesy/status")
+                if (!readiness.optBoolean("configured")) {
+                    "Backend connected, लेकिन Edesy stream token या OpenAI API key server पर configured नहीं है."
+                } else {
+                    val calls = getJson("/api/telephony/edesy/calls").optJSONArray("calls")
+                    if (calls == null || calls.length() == 0) {
+                        "Edesy configured है। अभी कोई forwarded AI call record नहीं मिला."
+                    } else {
+                        (0 until calls.length()).mapNotNull { index ->
+                            calls.optJSONObject(index)?.let { call ->
+                                val caller = call.optString("callerName").ifBlank { call.optString("caller", "Unknown caller") }
+                                val started = call.optString("startedAt")
+                                val statusText = call.optString("status")
+                                val summary = call.optString("summary").ifBlank {
+                                    when (call.optString("summaryStatus")) {
+                                        "disabled" -> "Summary disabled (transcript consent/configuration required)."
+                                        "pending" -> "Summary is being prepared."
+                                        "failed" -> "Summary unavailable."
+                                        else -> "No summary available."
+                                    }
+                                }
+                                "• $caller\n  $started • $statusText\n  $summary"
+                            }
+                        }.joinToString("\n\n").ifBlank { "No readable call records." }
+                    }
+                }
+            }.getOrElse { "Edesy status/history could not be loaded: ${it.message ?: "network error"}" }
+            runOnUiThread { if (!isFinishing && !isDestroyed) edesyHistory.text = message }
+        }.start()
     }
 
     private fun shareCallSummary() {
