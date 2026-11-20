@@ -100,7 +100,8 @@ The old `autoTapSend` helper still exists in the legacy accessibility class, but
 
 - Workflow `Android CI` run **424** on commit `371a7fba4c442ce5a4ad670bced91764d0583fa6` completed successfully after the missing contact-query constant was fixed.
 - The previous run on `a6a0cfde63515b939617d25cc858f57b791d7520` failed compilation with unresolved `EXTRA_PENDING_CONTACT_QUERY`; that specific compile error was fixed.
-- At the time of this report, CI runs **427/428** for commit `9bf499cacc30244e9416cf3effcf62c88d71206d` were still in progress. The later message-action and dial-safety changes therefore must not yet be called build-verified.
+- GitHub Actions run **427** for commit `9bf499cacc30244e9416cf3effcf62c88d71206d` completed successfully: backend JavaScript syntax, Android unit tests, debug APK assembly and APK artifact upload all passed. A duplicate run 428 was still running at the time of this report.
+- The audit-report-only commit does not change application code; GitHub also queued runs 429/430 for commit `4822175b5947479f003ee039266f47575c5d2f32`.
 - The workflow validates backend JavaScript syntax and runs Android unit tests plus debug APK assembly. It does not run real device, carrier, provider, desktop, Firebase emulator, or instrumentation tests.
 - No signed release APK/AAB or real-device test result is included in the repository evidence.
 
