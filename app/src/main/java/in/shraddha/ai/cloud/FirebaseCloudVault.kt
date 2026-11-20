@@ -44,7 +44,7 @@ class FirebaseCloudVault(private val context: Context) {
         require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter a valid email address." }
         require(password.isNotEmpty()) { "Account password is required." }
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Backup key format is invalid." }
-        require(plaintext.toByteArray(Charsets.UTF_8).size <= 150_000) { "Backup is too large (maximum 150 KB)." }
+        require(plaintext.toByteArray(Charsets.UTF_8).size <= 140_000) { "Backup is too large (maximum 140 KB)." }
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email.trim(), password).await().user ?: error("Sign-in failed")
@@ -80,7 +80,7 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     private fun decrypt(payload: String, password: String): String {
-        require(payload.length <= 200_000) { "Encrypted backup is too large." }
+        require(payload.length <= 190_000) { "Encrypted backup is too large." }
         val parts = payload.split('.')
         require(parts.size == 3) { "Encrypted backup format is invalid" }
         val salt = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
