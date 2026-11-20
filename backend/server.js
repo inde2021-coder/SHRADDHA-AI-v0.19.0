@@ -548,7 +548,56 @@ wss.on('connection', (ws, ctx) => {
     }
     let msg; try { msg = JSON.parse(data.toString()); } catch { return; }
     if (!msg || typeof msg.type !== 'string') return;
-    if (msg.type === 'control_request') {
+    if (msg.type === 'e2e_key_offer') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const publicKey = String(msg.publicKey || '');
+      if (!target || targetId === deviceId || publicKey.length < 100 || publicKey.length > 512 || !/^[A-Za-z0-9+/]+=*$/.test(publicKey)) return;
+      send(targetId, JSON.stringify({ type: 'e2e_key_offer', fromDeviceId: deviceId, publicKey }));
+    } else if (msg.type === 'e2e_key_confirm') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const fingerprint = String(msg.fingerprint || '');
+      if (!target || targetId === deviceId || !/^(?:[A-F0-9]{4}-){3}[A-F0-9]{4}$/.test(fingerprint)) return;
+      send(targetId, JSON.stringify({ type: 'e2e_key_confirm', fromDeviceId: deviceId, fingerprint }));
+    } else if (msg.type === 'e2e_message') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const messageKind = String(msg.messageKind || '');
+      const nonce = String(msg.nonce || '');
+      const ciphertext = String(msg.ciphertext || '');
+      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload'].includes(messageKind) ||
+          !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 24 || ciphertext.length > 3_400_000 ||
+          !/^[A-Za-z0-9+/]+=*$/.test(ciphertext)) return;
+      if (messageKind === 'remote_action') {
+        const grantExpiry = target.controlGrants?.get(deviceId) || 0;
+        const actionId = String(msg.actionId || '');
+        const actionKind = String(msg.actionKind || '');
+        if (grantExpiry < Date.now() || !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
+            !['tap','swipe','type','click_text','open_app','home','back','scroll'].includes(actionKind)) return;
+        target.pendingRemoteActions ||= new Map();
+        if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
+        target.pendingRemoteActions.set(actionId, { requesterId: deviceId, actionKind, expiresAt: Date.now() + 60_000 });
+      } else if (messageKind === 'remote_action_result') {
+        const pending = device.pendingRemoteActions?.get(String(msg.actionId || ''));
+        const expiry = device.controlGrants?.get(targetId) || 0;
+        if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() || expiry < Date.now()) return;
+        device.pendingRemoteActions.delete(String(msg.actionId));
+      } else if (messageKind === 'file_transfer_chunk') {
+        const transfer = target.incomingTransfers?.get(String(msg.transferId || ''));
+        const index = Number(msg.index);
+        if (!transfer || transfer.fromDeviceId !== deviceId || transfer.expiresAt < Date.now() ||
+            !Number.isSafeInteger(index) || index < 0 || index >= transfer.chunkCount) return;
+      } else if (messageKind === 'clipboard_payload') {
+        const category = 'clipboard';
+        const grant = target.grants?.get(deviceId + ':' + category);
+        if (target.sharePermissions?.[category] !== true || !matchesOneTimeShareGrant(grant, String(msg.requestId || ''))) return;
+        target.grants.delete(deviceId + ':' + category);
+      }
+      send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind, actionId: String(msg.actionId || '').slice(0,64),
+        actionKind: String(msg.actionKind || '').slice(0,32), transferId: String(msg.transferId || '').slice(0,64),
+        index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, requestId: String(msg.requestId || '').slice(0,64), nonce, ciphertext }));
+    } else if (msg.type === 'control_request') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       if (!target || targetId === deviceId || (session.controlMode === 'master' && device.role !== 'owner')) return;
