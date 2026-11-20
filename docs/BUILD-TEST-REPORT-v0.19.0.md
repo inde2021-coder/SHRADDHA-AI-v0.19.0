@@ -1,16 +1,22 @@
 # v0.19.0 Build/Test Report
 
-- ZIP source tree assembled: PASS
-- LIA source files copied into SHRADDHA `app/src/main/java/com/Lia/assistant`: PASS
-- LIA launcher renamed and registered as internal Activity: PASS (static inspection)
-- SHRADDHA manifest remains the only MAIN/LAUNCHER: PASS (static inspection)
-- LIA upstream unit-test sources merged into the unified app test source set: PASS
-- MYRA desktop companion source retained: PASS
-- Education features removed from newly added integration entry points: PASS
-- Android Gradle/Kotlin compile: NOT RUN / NOT VERIFIED in this environment
-- APK build/install: NOT RUN
-- Runtime tests on Android: NOT RUN
-- Gemini Live/provider/network tests: NOT RUN
-- MYRA PC pairing and remote-control tests: NOT RUN
+## CI verification
+- Android unit tests: PASS (GitHub Actions run #203, commit `635b2c571326681ef7bcd53268c8162bb1734d5a`)
+- Android debug APK build: PASS
+- ARM ABI split generation: PASS (`arm64-v8a`, `armeabi-v7a`)
+- APK architecture verification: PASS (each APK contains only its intended ARM native ABI)
+- SHA-256 checksum generation and verification: PASS
+- Backend JavaScript syntax check: PASS
+- Backend security/API tests: PASS
+- Debug APK artifact: `shraddha-ai-debug-apks-arm`; artifact ID `14602413064`
 
-Do not treat source merge or static checks as proof that every upstream feature works on every device. Build and device verification are still required before release.
+## Not yet verified
+- Installation and runtime behavior on a physical Android phone.
+- Microphone, camera, Accessibility, overlay, calls/SMS, notifications and background-service behavior on device.
+- Gemini Live/provider/network flows with real user credentials.
+- MYRA PC pairing and remote-control end-to-end operation.
+- Firebase Console configuration and publication of Firestore/Realtime Database/Storage rules.
+- Production signing, release APK/AAB and Play Store compliance.
+- Licensed SFace, ECAPA and MiniFASNet model weights are not included as verified production model assets; model import, provenance, tensor-contract and accuracy testing remain required.
+
+Do not treat CI build success as proof that every capability works on every device. This is a debug artifact, not a production release.
