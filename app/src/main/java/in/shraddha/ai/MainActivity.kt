@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showPairingQr(relay: String, code: String) {
         val payload = android.net.Uri.Builder().scheme("shraddha").authority("pair")
-            .appendQueryParameter("relay", relay.trim().trimEnd("/"))
+            .appendQueryParameter("relay", relay.trim().trimEnd('/'))
             .appendQueryParameter("code", code).build().toString()
         val matrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 720, 720)
         val bitmap = android.graphics.Bitmap.createBitmap(720, 720, android.graphics.Bitmap.Config.ARGB_8888)
