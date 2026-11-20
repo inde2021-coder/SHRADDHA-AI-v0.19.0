@@ -97,3 +97,41 @@ The companion binds no inference HTTP port and exposes no unauthenticated local 
 - OCR output is redacted before it is returned to the paired device: credential-labelled lines, nearby value lines, and long numeric identifiers are hidden. This is a defensive filter, not a guarantee that every secret can be detected; avoid OCR on sensitive screens.
 - Optional file browsing uses only the folder explicitly selected with `--file-root`. Listing, reading, and text search each require local PC confirmation.
 - File search is restricted to text/code formats, skips hidden files and symlinks, and enforces depth, file-count, file-size, result-count, and total-read limits. It does not modify or delete files.
+
+
+## Bidirectional Android control and screen viewing
+
+Install the optional camera/preview dependency once:
+
+~~~powershell
+py -m pip install -r requirements-qr.txt
+~~~
+
+Pair by scanning the QR shown by Android Shraddha AI:
+
+~~~powershell
+py shraddha_pc_companion.py --scan-pairing-qr --device-name "Office PC"
+~~~
+
+The QR scanner asks for local PC confirmation before opening the webcam. The QR contains a five-minute, single-use invitation; it does not contain a device token. After joining, the PC credentials are stored in Windows Credential Manager.
+
+To request control of the paired Android phone, use its device ID shown in the Android Device Universe peer list:
+
+~~~powershell
+py shraddha_pc_companion.py --control-phone ANDROID_DEVICE_ID --phone-action back
+py shraddha_pc_companion.py --control-phone ANDROID_DEVICE_ID --phone-action tap --phone-x 0.5 --phone-y 0.5
+py shraddha_pc_companion.py --control-phone ANDROID_DEVICE_ID --phone-action type --phone-text "Hello"
+py shraddha_pc_companion.py --control-phone ANDROID_DEVICE_ID --phone-action open_app --phone-app "Settings"
+~~~
+
+Each command asks the PC user for local confirmation, then sends a short control request. The Android owner must also have Remote Control permission enabled and accept the Android approval dialog. Actions are sent only after both approvals; the companion reports the Android accessibility service's acceptance or rejection. This acknowledgement means the service accepted/rejected the request, not that the app's business task was independently verified. Main-phone-only mode may block a PC member from initiating control.
+
+To view an Android screen stream on Windows, start the companion with:
+
+~~~powershell
+py shraddha_pc_companion.py --view-phone-screen
+~~~
+
+On Android, enable Screen sharing in its permissions, select the paired PC, then press Share This Phone Screen and accept Android's system MediaProjection prompt. The PC preview uses the optional OpenCV window; press Q or stop the companion to close it. Sharing is targeted to the selected paired PC, not broadcast to the whole session.
+
+To share the active Windows app window back to Android, use --share-screen; the PC user must separately confirm sharing at startup. Sensitive-looking window titles are excluded, but title matching is only a best-effort guard. Close private windows before sharing.
