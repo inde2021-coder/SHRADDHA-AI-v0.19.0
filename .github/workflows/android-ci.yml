@@ -3,8 +3,12 @@ name: Android CI
 on:
   push:
     branches: ["main", "work/**"]
+    paths-ignore:
+      - "**/*.md"
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - "**/*.md"
 
 permissions:
   contents: read
@@ -12,7 +16,7 @@ permissions:
 # Keep only the newest verification run for a branch. This avoids duplicate Gradle
 # dependency downloads on every small commit and prevents Maven Central rate limiting.
 concurrency:
-  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  group: android-ci-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
