@@ -3,7 +3,7 @@ import math
 import re
 
 _ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll"}
-_SECRET_TEXT = re.compile(r"(?i)(?:\\b(?:password|passcode|otp|one[- ]time code|pin|cvv|security code|recovery phrase)\\b|पासवर्ड|ओटीपी|पिन)")
+_SECRET_TEXT = re.compile(r"(?i)(?:\b(?:password|passcode|otp|one[- ]time code|pin|cvv|security code|recovery phrase)\b|पासवर्ड|ओटीपी|पिन)")
 
 
 def _number(value):
