@@ -97,21 +97,6 @@ object LiaToolCatalog {
         )
 
         // Visual Agent Tools
-        array.put(
-            GeminiToolUtils.functionDecl(
-                name = "execute_social_media_task",
-                description = "Navigates and executes actions on Instagram or Facebook. Always requests confirmation before publishing irreversible content.",
-                params = mapOf(
-                    "platform" to "Platform: 'INSTAGRAM' or 'FACEBOOK'",
-                    "action" to "Action: 'CREATE_POST', 'CREATE_REEL', 'CREATE_STORY', or 'TEXT_POST'",
-                    "media_uri" to "Optional local content:// URI of the media to share",
-                    "caption" to "Caption or text content for the post",
-                    "mode" to "'DRAFT' (prepare only) or 'PUBLISH' (requires explicit confirmation before final publish)",
-                    "target_account" to "Optional account handle or name"
-                ),
-                required = listOf("platform", "action")
-            )
-        )
 
         array.put(
             GeminiToolUtils.functionDecl(
@@ -140,17 +125,6 @@ object LiaToolCatalog {
             )
         )
 
-        array.put(
-            GeminiToolUtils.functionDecl(
-                name = "whatsapp_task_control",
-                description = "Controls or confirms an active WhatsApp task.",
-                params = mapOf(
-                    "command" to "Control command: 'CONFIRM', 'REJECT', 'CANCEL', or 'STATUS'",
-                    "task_id" to "Task ID"
-                ),
-                required = listOf("command", "task_id")
-            )
-        )
 
         return array
     }
