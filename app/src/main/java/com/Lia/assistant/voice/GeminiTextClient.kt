@@ -29,15 +29,22 @@ object GeminiTextClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    @Volatile
-    private var cachedResolvedModel: String? = null
+    // Cache model discovery per credential fingerprint; never expose API keys in URLs.
+    private val resolvedModels = ConcurrentHashMap<String, String>()
+
+    private fun credentialFingerprint(apiKey: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(apiKey.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     suspend fun resolveModel(apiKey: String): String {
-        cachedResolvedModel?.let { return it }
+        val cacheKey = credentialFingerprint(apiKey)
+        resolvedModels[cacheKey]?.let { return it }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models"
         val request = Request.Builder()
             .url(url)
+            .header("x-goog-api-key", apiKey)
             .get()
             .build()
 
