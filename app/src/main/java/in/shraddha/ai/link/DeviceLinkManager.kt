@@ -225,6 +225,9 @@ object DeviceLinkManager {
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun respondRemoteControl(requesterDeviceId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_response").put("requesterDeviceId", requesterDeviceId).put("approved", approved).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun sendAction(targetDeviceId: String, action: JSONObject): Boolean = socket?.send(JSONObject().put("type", "remote_action").put("targetDeviceId", targetDeviceId).put("action", action).toString()) == true
+    fun sendRemoteActionResult(targetDeviceId: String, actionKind: String, result: String): Boolean =
+        socket?.send(JSONObject().put("type", "remote_action_result").put("targetDeviceId", targetDeviceId)
+            .put("actionKind", actionKind.take(32)).put("result", result.take(1000)).toString()) == true
     fun requestPcOcr(targetDeviceId: String): Boolean =
         sendAction(targetDeviceId, JSONObject().put("kind", "ocr"))
 
