@@ -924,6 +924,7 @@ async def run_once(args) -> None:
                 except json.JSONDecodeError:
                     continue
                 kind = message.get("type")
+                encrypted_transport = kind == "e2e_message"
                 if kind == "e2e_key_offer":
                     peer_id = str(message.get("fromDeviceId", ""))
                     try:
@@ -982,6 +983,9 @@ async def run_once(args) -> None:
                     }))
                     print("PC control", "approved for " + requester_id if approved else "denied")
                 elif kind == "remote_action":
+                    if not encrypted_transport:
+                        print("Blocked plaintext remote action; E2E encryption is mandatory.")
+                        continue
                     sender_id = str(message.get("fromDeviceId", ""))
                     action_id = str(message.get("actionId", ""))
                     if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id) or message.get("requiresPerActionApproval") is not True:
@@ -1015,6 +1019,9 @@ async def run_once(args) -> None:
                         print("Android remote-control request was denied or expired:", str(message.get("reason", "not approved"))[:240])
                         break
                 elif kind == "remote_action_result":
+                    if not encrypted_transport:
+                        print("Blocked plaintext remote action result; E2E encryption is mandatory.")
+                        continue
                     if phone_action_sent and message.get("fromDeviceId") == args.control_phone:
                         print("Android action result:", str(message.get("result", "no result"))[:1000])
                         break
@@ -1056,6 +1063,9 @@ async def run_once(args) -> None:
                     await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": source_id, "transferId": transfer_id, "index": -1, "complete": False, "ok": True}))
                     print(f"Receiving {name}: 0/{chunks} chunks (0%).")
                 elif kind == "file_transfer_chunk" and incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
+                    if not encrypted_transport:
+                        print("Blocked plaintext file chunk; E2E encryption is mandatory.")
+                        continue
                     try:
                         import base64
                         index = int(message.get("index", -1)); data = validate_transfer_chunk(index, incoming_transfer["chunks"], str(message.get("payload", "")))
