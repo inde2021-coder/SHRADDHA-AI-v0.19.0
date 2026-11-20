@@ -19,7 +19,11 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         if (steps.isEmpty()) return fail("वर्कफ़्लो खाली है।")
         for ((index, step) in steps.withIndex()) {
             if (stopped) return false
-            val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, step.inputTemplate)
+            // Re-check the resolved value, not only the training placeholder. A saved
+            // template such as "customer_phone" must not become a route for injecting
+            // an OTP, password, PIN or payment security code at runtime.
+            val resolvedInput = values[step.inputTemplate] ?: step.inputTemplate
+            val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, resolvedInput)
             if (risk.risk == OperatorSafetyPolicy.Risk.BLOCK) return fail(risk.reason)
             if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && !confirmed) {
                 emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason}")); return false
@@ -33,14 +37,14 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val ok = when (step.action.uppercase()) {
                 "CLICK", "TAP" -> if (match != null && match.score >= .50f) ShraddhaAccessibilityService.clickByResourceId(match.element.id).let { clicked -> clicked || ShraddhaAccessibilityService.clickVisibleText(match.element.text.ifBlank { match.element.description }) } else false
                 "TYPE" -> {
-                    val value = values[step.inputTemplate] ?: step.inputTemplate
+                    val value = resolvedInput
                     if (match != null && match.element.id.isNotBlank()) ShraddhaAccessibilityService.fillByResourceId(match.element.id, value)
                     else ShraddhaAccessibilityService.fillFocusedField(value)
                 }
                 "BACK" -> ShraddhaAccessibilityService.goBack()
                 "SCROLL" -> ShraddhaAccessibilityService.scrollForward()
                 "SELECT_FILE" -> {
-                    val requested = values[step.inputTemplate] ?: step.inputTemplate
+                    val requested = resolvedInput
                     val search = DeviceFileLocator(context).search(requested, values["__file_folder"].orEmpty())
                     if (search.matches.size == 1) ShraddhaAccessibilityService.selectFileInPicker(search.matches.first().displayName) else false
                 }
