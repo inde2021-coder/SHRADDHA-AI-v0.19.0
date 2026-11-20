@@ -19,6 +19,8 @@ class OperatorSafetyPolicyTest {
         assertEquals(OperatorSafetyPolicy.Risk.CONFIRM, OperatorSafetyPolicy.assess("CLICK_TEXT", target = "Send").risk)
         assertEquals(OperatorSafetyPolicy.Risk.CONFIRM, OperatorSafetyPolicy.assess("CLICK", target = "Delete").risk)
         assertEquals(OperatorSafetyPolicy.Risk.CONFIRM, OperatorSafetyPolicy.assess("TAP", target = "Pay").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.CONFIRM, OperatorSafetyPolicy.assess("CLICK", target = "Pay now").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.CONFIRM, OperatorSafetyPolicy.assess("CLICK_TEXT", target = "Checkout").risk)
     }
 
     @Test fun ordinaryNavigationRemainsLowRisk() {
