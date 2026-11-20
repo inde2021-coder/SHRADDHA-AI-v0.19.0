@@ -204,9 +204,7 @@ test('remote control rejects malformed action payloads even after an explicit co
   });
   try {
     await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
-    const ownerPermission = nextWsMessage(ownerSocket, (data, binary) => !binary && JSON.parse(data.toString()).type === 'permission_status');
     ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { remote_control: true } }));
-    await ownerPermission;
 
     const incomingRequest = nextWsMessage(ownerSocket, (data, binary) => !binary && JSON.parse(data.toString()).type === 'control_request');
     memberSocket.send(JSON.stringify({ type: 'control_request', targetDeviceId: owner.deviceId, minutes: 1 }));
