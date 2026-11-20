@@ -26,6 +26,7 @@ class TaskPlannerActivity : AppCompatActivity() {
     private data class Task(val id: Long, val title: String, val note: String, val dueAt: Long, val done: Boolean)
     private lateinit var list: LinearLayout
     private lateinit var summary: TextView
+    private lateinit var briefingToggle: android.widget.Switch
     private val prefs by lazy { getSharedPreferences("shraddha_task_planner", MODE_PRIVATE) }
     private val tasks = mutableListOf<Task>()
 
@@ -50,6 +51,22 @@ class TaskPlannerActivity : AppCompatActivity() {
             setPadding(dp(14), dp(14), dp(14), dp(14)); background = panel()
         }
         root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); bottomMargin = dp(14) })
+        briefingToggle = android.widget.Switch(this).apply {
+            text = "Daily briefing • 8:00 AM"
+            setTextColor(0xFFE4E9F5.toInt())
+            isChecked = prefs.getBoolean("daily_briefing_enabled", false)
+            setOnCheckedChangeListener { _, enabled ->
+                prefs.edit().putBoolean("daily_briefing_enabled", enabled).apply()
+                if (enabled) {
+                    scheduleDailyBriefing()
+                    toast("Daily briefing enabled for 8:00 AM")
+                } else {
+                    cancelDailyBriefing()
+                    toast("Daily briefing disabled")
+                }
+            }
+        }
+        root.addView(briefingToggle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         root.addView(TextView(this).apply {
             text = "YOUR TASKS"; textSize = 11f; letterSpacing = .12f
             setTextColor(Color.rgb(159, 139, 255)); setPadding(dp(2), dp(8), 0, dp(8))
@@ -202,6 +219,29 @@ class TaskPlannerActivity : AppCompatActivity() {
             }.show()
     }
 
+
+    private fun scheduleDailyBriefing() {
+        val alarm = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pending = PendingIntent.getBroadcast(
+            this, DAILY_BRIEFING_REQUEST, Intent(this, DailyBriefingReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val next = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 8); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+        }
+        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.timeInMillis, pending)
+    }
+
+    private fun cancelDailyBriefing() {
+        val pending = PendingIntent.getBroadcast(
+            this, DAILY_BRIEFING_REQUEST, Intent(this, DailyBriefingReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        (getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pending)
+        pending.cancel()
+    }
+
     private fun loadTasks() {
         tasks.clear()
         runCatching {
@@ -225,4 +265,6 @@ class TaskPlannerActivity : AppCompatActivity() {
 
     private fun toast(message: String) = android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    companion object { private const val DAILY_BRIEFING_REQUEST = 81008 }
 }
