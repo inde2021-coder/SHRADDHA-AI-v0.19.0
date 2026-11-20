@@ -52,7 +52,7 @@ The Edesy DID and AI voice flow must be provisioned and tested before enabling f
 - This is a backend integration implementation, not proof of a working paid Edesy account or successful PSTN call.
 - Edesy account, DID, API credentials, OpenAI Live API key/access, hosting environment variables, and provider flow configuration must be supplied/configured by the account owner.
 - The current adapter assumes the Edesy Stream node's documented first JSON metadata frame and subsequent binary L16 frames. Confirm actual deployed provider frame behavior with a real test call before production.
-- Call transcripts are not persisted; WhatsApp summaries are not sent. Add an explicit caller opt-in and WhatsApp consent/recipient confirmation before enabling those functions.
+- Optional live transcript capture and AI post-call summaries are implemented behind `CALL_TRANSCRIPTS_ENABLED=true`; default is off. The current history is bounded server memory only and disappears on process restart. Durable encrypted storage, caller notice/consent workflow, recording, and WhatsApp delivery remain unimplemented.
 - Play an upfront notice that the caller is speaking with an AI assistant. Recording/transcription requires appropriate notice, consent, retention controls, and legal review.
 - Never expose the stream token or OpenAI API key in the Android app, logs, client settings, or public repository.
 - Do not point a personal SIM's unconditional forwarding at this number until inbound routing, audio in both directions, hang-up behavior, interruption handling, cost, and failover have been tested end-to-end.
