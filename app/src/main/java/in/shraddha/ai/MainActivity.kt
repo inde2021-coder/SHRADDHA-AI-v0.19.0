@@ -773,18 +773,19 @@ class MainActivity : AppCompatActivity() {
     private fun handleIncomingShareRequest(msg: JSONObject) {
         val from = msg.optString("fromDeviceId")
         val category = msg.optString("category")
+        val requestId = msg.optString("requestId")
         val allowed = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean(category, false)
         runOnUiThread {
             if (!allowed) {
-                DeviceLinkManager.respondDataShare(from, category, msg.optString("requestId"), false)
+                DeviceLinkManager.respondDataShare(from, category, requestId, false)
                 Toast.makeText(this, "$category sharing इस फोन पर बंद है।", Toast.LENGTH_LONG).show()
                 return@runOnUiThread
             }
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("Data sharing request")
                 .setMessage("दूसरा paired device '$category' category का डेटा माँग रहा है। क्या आप 5 मिनट के लिए अनुमति देते हैं?")
-                .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondDataShare(from, category, false) }
-                .setPositiveButton("Allow once") { _, _ -> DeviceLinkManager.respondDataShare(from, category, true, 5) }
+                .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondDataShare(from, category, requestId, false) }
+                .setPositiveButton("Allow once") { _, _ -> DeviceLinkManager.respondDataShare(from, category, requestId, true, 5) }
                 .setCancelable(true).show()
         }
     }
