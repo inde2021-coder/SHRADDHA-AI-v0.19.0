@@ -40,4 +40,29 @@ class DeviceE2ECryptoTest {
         val (ac, _) = a.derivePeerKey(c.publicKeyBase64(), "a", "c")
         assertNotEquals(ab.toList(), ac.toList())
     }
+
+    @Test fun rejectsOversizedEncodedInputsBeforeDecoding() {
+        val crypto = DeviceE2ECrypto.create()
+        try {
+            crypto.derivePeerKey("A".repeat(100_000), "android", "windows")
+            throw AssertionError("Oversized public key must be rejected")
+        } catch (_: IllegalArgumentException) { }
+        try {
+            DeviceE2ECrypto.decrypt(ByteArray(32), "A".repeat(100_000), "AA", byteArrayOf())
+            throw AssertionError("Oversized nonce must be rejected")
+        } catch (_: IllegalArgumentException) { }
+        try {
+            DeviceE2ECrypto.decrypt(ByteArray(32), "AAAAAAAAAAAAAAAA", "A".repeat(4_000_000), byteArrayOf())
+            throw AssertionError("Oversized ciphertext must be rejected before decoding")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun rejectsOversizedAssociatedData() {
+        val key = ByteArray(32)
+        try {
+            DeviceE2ECrypto.encrypt(key, byteArrayOf(1), ByteArray(1_025))
+            throw AssertionError("Oversized AAD must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
 }
