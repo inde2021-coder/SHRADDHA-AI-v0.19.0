@@ -555,25 +555,31 @@ wss.on('connection', (ws, ctx) => {
       const target = session.devices.get(targetId);
       const category = String(msg.category || '');
       if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
-      const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 64);\n      if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;\n      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
+      const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 64);
+      if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
+      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
     } else if (msg.type === 'data_share_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
       const category = String(msg.category || '');
-      if (!requester || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
+      const requestId = String(msg.requestId || '').slice(0, 64);
+      if (!requester || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category) || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
       const approved = msg.approved === true && device.sharePermissions?.[category] === true;
-      if (approved) device.grants.set(`${requesterId}:${category}`, Date.now() + Math.min(15, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
-      send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, approved, expiresInMinutes: approved ? Math.min(15, Math.max(1, Number(msg.minutes) || 5)) : 0 }));
+      const minutes = Math.min(15, Math.max(1, Number(msg.minutes) || 5));
+      if (approved) device.grants.set(`${requesterId}:${category}`, { requestId, expiresAt: Date.now() + minutes * 60_000 });
+      send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, requestId, approved, expiresInMinutes: approved ? minutes : 0 }));
     } else if (msg.type === 'data_share_payload') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const category = String(msg.category || '');
       const grantKey = `${deviceId}:${category}`;
-      const expiresAt = target?.grants?.get(grantKey) || 0;
+      const grant = target?.grants?.get(grantKey);
+      const requestId = String(msg.requestId || '').slice(0, 64);
       const payload = typeof msg.payload === 'string' ? msg.payload : '';
       const sizeBytes = Number(msg.sizeBytes);
       const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
-      if (!target || target.sharePermissions?.[category] !== true || !grant || grant.expiresAt < Date.now() || !requestId || grant.requestId !== requestId ||
+      if (!target || target.sharePermissions?.[category] !== true || !grant || grant.expiresAt < Date.now() ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || grant.requestId !== requestId ||
           payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
           !/^[a-f0-9]{64}$/.test(digest)) return;
       if (!validateSharedFileEnvelope(payload, sizeBytes, digest)) return;
