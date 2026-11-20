@@ -947,6 +947,28 @@ class MainActivity : AppCompatActivity() {
             addView(mainOnlyMode)
             addView(actionButton("Share This Phone Screen", "Android system confirmation हर बार जरूरी है") { requestScreenShare() })
             addView(actionButton("Stop Screen Sharing", "Live screen stream तुरंत बंद करें") { stopService(Intent(this@MainActivity, ScreenShareService::class.java)); lastScreenJpeg = null; status.text = "Screen sharing stopped on this phone." })
+            addView(actionButton("REVOKE SELECTED PAIRED DEVICE", "Owner-only • clears session access and grants") {
+                val selected = targetDevice.text.toString().trim()
+                if (!isSessionOwner) { status.text = "केवल session owner paired device revoke कर सकता है।"; return@actionButton }
+                if (selected.isBlank() || !peerIds.contains(selected)) { status.text = "पहले सूची से valid paired device चुनें।"; return@actionButton }
+                val label = peerNames[selected] ?: selected
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Revoke $label?")
+                    .setMessage("इस device का session access, data grants और remote-control grants तुरंत रद्द होंगे। इसे दोबारा pair करना पड़ेगा।")
+                    .setNegativeButton("Keep device", null)
+                    .setPositiveButton("Revoke device") { _, _ ->
+                        status.text = if (DeviceLinkManager.revokePairedDevice(selected)) "Revocation request sent for $label. Waiting for relay confirmation…" else "Relay disconnected; revoke request could not be sent."
+                    }.show()
+            })
+            addView(actionButton("DISCONNECT THIS DEVICE", "इस phone को paired session से हटाएँ") {
+                if (isSessionOwner) { status.text = "Main session owner cannot leave this session. Revoke other devices or disconnect locally."; return@actionButton }
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Leave paired session?")
+                    .setMessage("This phone will be removed from the device group.")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Leave") { _, _ ->
+                        DeviceLinkManager.leavePairedSession(); DeviceLinkManager.disconnect()
+                        peerIds.clear(); peerNames.clear(); peerOnline.clear(); targetDevice.setText("")
+                        status.text = "This phone left the paired session."
+                    }.show()
+            })
         }
 
         section(root, "03  •  REMOTE APP CONTROL", "चुने हुए paired phone पर अनुमत gestures और data entry") {
@@ -2417,6 +2439,17 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 runOnUiThread { mainOnlyMode.isChecked = msg.optString("controlMode") == "master"; publishDataPermissions() }
+            } else if (msg.optString("type") == "device_revoked") {
+                val revokedId = msg.optString("deviceId")
+                runOnUiThread {
+                    peerIds.remove(revokedId); peerNames.remove(revokedId); peerOnline.remove(revokedId)
+                    if (targetDevice.text.toString() == revokedId) targetDevice.setText("")
+                    if (::peerPicker.isInitialized) {
+                        val labels = peerIds.map { id -> "${peerNames[id] ?: "Device"} • ${if (peerOnline[id] == true) "Online" else "Offline"}" }
+                        peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, labels.ifEmpty { listOf("No paired devices") })
+                    }
+                    status.text = "Device $revokedId revoked. Relay access removed."
+                }
             } else if (msg.optString("type") == "peer_status") {
                 val peerId = msg.optString("deviceId")
                 val peerName = msg.optString("name", "Device")
@@ -2564,18 +2597,55 @@ class MainActivity : AppCompatActivity() {
         val appContext = applicationContext
         DeviceLinkManager.onRemoteActionWithId = { fromDeviceId, actionId, action ->
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                val allowed = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
-                val accepted = allowed && ShraddhaAccessibilityService.applyRemoteAction(action)
-                DeviceLinkManager.sendRemoteActionResult(
-                    fromDeviceId, actionId, action.optString("kind", "unknown"),
-                    if (accepted) "accepted_by_android_accessibility" else "rejected_permission_or_action_unavailable"
-                )
-                runCatching {
-                    `in`.shraddha.ai.future.LocalAuditTrail(appContext).append(
-                        "remote_control", if (accepted) "action_accepted" else "action_rejected",
-                        "kind=${action.optString("kind", "unknown").take(32)}; source_device_redacted"
-                    )
+                val prefs = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
+                val allowed = prefs.getBoolean("remote_control_consent", false)
+                val kind = action.optString("kind", "unknown").take(32)
+                val description = when (kind) {
+                    "tap" -> "Tap at (${action.optDouble("x").toInt()}, ${action.optDouble("y").toInt()})"
+                    "swipe" -> "Swipe gesture"
+                    "type" -> "Type text: " + action.optString("text").take(120)
+                    "click_text" -> "Click visible text: " + action.optString("text").take(120)
+                    "open_app" -> "Open app: " + action.optString("appName").take(80)
+                    "home" -> "Go to Home screen"
+                    "back" -> "Go Back"
+                    "scroll" -> "Scroll current screen"
+                    else -> "Unsupported action: $kind"
                 }
+                if (!allowed) {
+                    DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "DENIED: This phone's remote-control permission is OFF.")
+                    return@post
+                }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Approve remote action?")
+                    .setMessage("From paired device: ${peerNames[fromDeviceId] ?: fromDeviceId}\n\nAction: $description\n\nOnly this action runs after your approval.")
+                    .setNegativeButton("Deny") { _, _ ->
+                        DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "DENIED_BY_USER: No action was executed.")
+                        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(appContext).append("remote_control", "action_denied", "kind=$kind; source_device_redacted") }
+                    }
+                    .setPositiveButton("Approve this action") { _, _ ->
+                        val stillAllowed = prefs.getBoolean("remote_control_consent", false)
+                        val before = ShraddhaAccessibilityService.captureVisibleScreen()
+                        val executed = stillAllowed && ShraddhaAccessibilityService.applyRemoteAction(action)
+                        if (!executed) {
+                            DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "FAILED: Accessibility permission, target app, or action unavailable.")
+                            runCatching { `in`.shraddha.ai.future.LocalAuditTrail(appContext).append("remote_control", "action_failed", "kind=$kind; source_device_redacted") }
+                        } else {
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                val after = ShraddhaAccessibilityService.captureVisibleScreen()
+                                val visible = after?.elements.orEmpty().asSequence().filterNot { it.password }
+                                    .map { (it.text.ifBlank { it.description }).trim() }.filter { it.isNotBlank() }
+                                    .distinct().take(24).joinToString(" | ").take(1800)
+                                val evidence = if (after != null) {
+                                    "ACCESSIBILITY_ACCEPTED; screen_observation_after_action=true; app=${after.packageName.take(120)}; previous_app=${before?.packageName.orEmpty().take(120)}; visible_text=$visible"
+                                } else "ACCESSIBILITY_ACCEPTED; screen_observation_after_action=unavailable; actual UI outcome unverified."
+                                DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, evidence)
+                                status.text = "Remote $kind action returned with screen observation."
+                                runCatching { `in`.shraddha.ai.future.LocalAuditTrail(appContext).append("remote_control", "action_result_observed", "kind=$kind; source_device_redacted; screen_observed=${after != null}") }
+                            }, 900L)
+                        }
+                    }
+                    .setOnCancelListener { DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "DISMISSED: No action was executed.") }
+                    .show()
             }
         }
         DeviceLinkManager.onScreenFrame = { sourceId, bytes ->
