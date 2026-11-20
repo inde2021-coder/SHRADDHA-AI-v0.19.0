@@ -61,6 +61,25 @@ class BiometricConsentVault(private val store: EncryptedFeatureStore) {
     }
 
     @Synchronized
+    fun similarityForPerson(kind: String, personId: String, embedding: FloatArray): Float? {
+        require(kind == "face" || kind == "speaker")
+        require(personId.isNotBlank())
+        require(embedding.isNotEmpty() && embedding.all { it.isFinite() })
+        val templates = readRoot().optJSONArray("templates") ?: return null
+        var best: Float? = null
+        for (i in 0 until templates.length()) {
+            val item = templates.optJSONObject(i) ?: continue
+            if (item.optString("kind") != kind || item.optString("personId") != personId) continue
+            val values = item.optJSONArray("embedding") ?: continue
+            if (values.length() != embedding.size) continue
+            val candidate = FloatArray(values.length()) { values.optDouble(it).toFloat() }
+            val score = cosine(embedding, candidate) ?: continue
+            if (best == null || score > best!!) best = score
+        }
+        return best
+    }
+
+    @Synchronized
     fun deletePerson(personId: String): Result<Unit> = runCatching {
         val root = readRoot()
         val old = root.optJSONArray("templates") ?: JSONArray()
