@@ -33,6 +33,9 @@ class DeviceTransferActivity : Activity() {
     private var incomingFile: File? = null
     private var incomingOut: RandomAccessFile? = null
     private var incomingChunks = 0
+    private val receivedChunkIndexes = java.util.BitSet()
+    private var pendingSaveUri: Uri? = null
+    private var incomingVerified = false
     private var incomingCount = 0
     private var incomingSize = 0L
     private var incomingHash = ""
@@ -110,7 +113,7 @@ class DeviceTransferActivity : Activity() {
                     }
                 } catch (e: Exception) { runOnUiThread { status.text = "File error: ${e.message}" } }
             }
-        } else if (requestCode == 702) saveIncoming(uri)
+        } else if (requestCode == 702) { pendingSaveUri = uri; if (incomingVerified) saveIncoming(uri) else status.text = "Save destination selected. Waiting for verification…" }
     }
 
     private fun requestReceiverPermission() {
@@ -202,8 +205,7 @@ class DeviceTransferActivity : Activity() {
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
             val expected = if (index == incomingCount - 1) (incomingSize - index * 49152L).toInt() else 49152
             require(bytes.size == expected)
-            incomingOut!!.seek(index.toLong() * 49152L); incomingOut!!.write(bytes)
-            incomingChunks++
+            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * 49152L); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++ }
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
             progress.progress = (incomingChunks * 100 / incomingCount)
             status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
@@ -229,14 +231,15 @@ class DeviceTransferActivity : Activity() {
         file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
         if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); return }
-        status.text = "All chunks received. SHA-256 verified. Confirm destination picker to save."
+        incomingVerified = true
+        status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
+        pendingSaveUri?.let { saveIncoming(it) }
     }
 
     private fun resumeTransfer() {
         if (transferId.isBlank()) { status.text = "No active transfer to resume."; return }
         if (sourceUri != null && sourcePeer.isBlank()) {
-            DeviceLinkManager.requestFileTransferResume(peer.text.toString().trim(), transferId)
-            status.text = "Requesting missing chunk list…"
+            status.text = "Sender ready. The receiver must request resume to identify missing chunks."
         } else if (sourcePeer.isNotBlank()) {
             DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId)
             status.text = "Requesting missing chunks from sender…"
