@@ -18,10 +18,20 @@ import `in`.shraddha.ai.R
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.fx.OverlayEdgeGlowController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class VoiceForegroundService : Service() {
 
     private var voiceWakeLock: PowerManager.WakeLock? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var inactiveMonitor: Job? = null
+    @Volatile private var stopping = false
 
     companion object {
         const val ACTION_START = "com.Lia.assistant.action.START_VOICE"
@@ -52,6 +62,8 @@ class VoiceForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            stopping = true
+            inactiveMonitor?.cancel()
             VoiceSessionManager.stop()
             releaseVoiceWakeLock()
             OverlayEdgeGlowController.stop(this)
@@ -81,6 +93,25 @@ class VoiceForegroundService : Service() {
         acquireVoiceWakeLock()
         OverlayEdgeGlowController.start(this)
         VoiceSessionManager.start(this)
+
+        // If the API key is missing or AudioRecord fails, the manager marks the
+        // session inactive. Tear down the foreground service and wake lock too;
+        // never leave a phantom "Listening" notification running without a mic.
+        inactiveMonitor?.cancel()
+        inactiveMonitor = serviceScope.launch {
+            VoiceSessionManager.isActive.first { active -> !active }
+            if (!stopping) {
+                stopping = true
+                releaseVoiceWakeLock()
+                OverlayEdgeGlowController.stop(this@VoiceForegroundService)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
+                else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                stopSelf()
+            }
+        }
 
         // Android may kill a microphone FGS while the app is backgrounded. Do not
         // resurrect a user-visible microphone session silently after process death;
@@ -162,6 +193,10 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        stopping = true
+        inactiveMonitor?.cancel()
+        inactiveMonitor = null
+        serviceScope.cancel()
         VoiceSessionManager.stop()
         releaseVoiceWakeLock()
         OverlayEdgeGlowController.stop(this)
