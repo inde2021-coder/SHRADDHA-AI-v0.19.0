@@ -94,8 +94,14 @@ object VoiceSessionManager {
                 _lastError.value = message
                 _vadActive.value = false
                 _amplitude.value = 0f
+                _isActive.value = false
+                sessionEpoch.incrementAndGet()
+                reconnectJob?.cancel()
+                reconnectJob = null
+                client?.disconnect()
+                client = null
                 _state.value = NovaOrbState.ERROR
-                _statusText.value = "Microphone unavailable"
+                _statusText.value = "Microphone unavailable • tap Start to retry"
                 // Stop capture immediately after a fatal AudioRecord error; never leave a
                 // dead microphone thread running while the UI still reports an active session.
                 audioIO?.stopRecording()
@@ -162,7 +168,15 @@ object VoiceSessionManager {
 
                 _state.value = NovaOrbState.SPEAKING
                 _statusText.value = "$assistantName is speaking..."
-                val amp = audioIO?.playChunk(bytes) ?: 0f
+                val amp = try {
+                    audioIO?.playChunk(bytes) ?: 0f
+                } catch (playbackError: Exception) {
+                    _lastError.value = playbackError.localizedMessage ?: "Speaker playback failed."
+                    _state.value = NovaOrbState.ERROR
+                    _statusText.value = "Speaker unavailable • reconnecting"
+                    scheduleReconnect()
+                    return
+                }
                 _amplitude.value = amp
 
                 // Re-arm 300 ms silence watchdog
