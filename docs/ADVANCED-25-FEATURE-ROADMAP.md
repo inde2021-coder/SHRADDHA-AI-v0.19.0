@@ -59,3 +59,26 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 ## Notification history security update (20 November 2026)
 
 Notification metadata history now uses the existing Android Keystore-backed `EncryptedFeatureStore` (AES-GCM) rather than plaintext SharedPreferences. The listener keeps the 100-event bound, refuses plaintext fallback if key access or encryption fails, and purges the legacy plaintext history key before attempting a new encrypted write. The workspace count reads the encrypted record and the clear-history action deletes both encrypted and legacy keys. An Android instrumentation test verifies ciphertext-at-rest (the package name is absent from the raw stored value), successful decryption and deletion. Device/OS matrix testing is still required.
+
+
+## Shared integration orchestration (2026-11-20)
+
+A shared Android-domain orchestration boundary now exists in
+`ShraddhaIntegrationHub.kt`. It connects dependency-aware task planning
+(`AutonomousTaskPlanner`) to the workflow lifecycle (`WorkflowEngine`) and
+the final acceptance gate (`SelfReviewEngine`). It records an append-only
+in-memory event sequence for plan creation, per-step approval/decline,
+dispatch, independent verification and final review. Sensitive and irreversible
+steps wait for explicit approval; a declined step pauses without dispatch;
+failed verification stops the remaining plan; a failed final review downgrades
+a nominally completed workflow.
+
+JVM tests cover the complete lifecycle, approval denial, verification failure,
+and final-review rejection. This is the shared orchestration contract, not a
+claim that every platform adapter is already connected: Voice/AI provider
+routing, People Memory camera capture, Android Operator execution, Firebase
+sync, Windows companion transport, Visual Lens streaming/translation, and
+OS-level permission screens still require their own live adapters and device
+tests. The hub itself performs no external action and cannot bypass platform
+permissions. Its audit list is currently in-memory; durable encrypted audit
+persistence is a separate integration task.
