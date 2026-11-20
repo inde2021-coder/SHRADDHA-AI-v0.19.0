@@ -25,6 +25,17 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         decoded = decrypt_e2e_message(envelope, {"android-1": {"key": windows_key, "local_confirmed": True, "remote_confirmed": True}},
                                      "session-1", "windows-1")
         self.assertEqual(decoded["action"]["kind"], "back")
+        clipboard_aad = e2e_associated_data("session-1", "android-1", "windows-1", "clipboard_payload", "request123456789")
+        clipboard_bytes = b'{"payload":"YWJj","sizeBytes":3,"sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","contentType":"clipboard_text"}'
+        clipboard_cipher = AESGCM(android_key).encrypt(nonce, clipboard_bytes, clipboard_aad)
+        clipboard_message = {"fromDeviceId": "android-1", "messageKind": "clipboard_payload",
+                             "requestId": "request123456789", "nonce": base64.b64encode(nonce).decode("ascii").rstrip("="),
+                             "ciphertext": base64.b64encode(clipboard_cipher).decode("ascii").rstrip("=")}
+        clipboard_decoded = decrypt_e2e_message(clipboard_message,
+            {"android-1": {"key": windows_key, "local_confirmed": True, "remote_confirmed": True}},
+            "session-1", "windows-1")
+        self.assertEqual(clipboard_decoded["type"], "data_share_payload")
+        self.assertEqual(clipboard_decoded["category"], "clipboard")
         with self.assertRaises(Exception):
             AESGCM(windows_key).decrypt(nonce, encrypted, aad + b"tampered")
 
