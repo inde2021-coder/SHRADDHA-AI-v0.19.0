@@ -2544,10 +2544,21 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val appContext = applicationContext
-        DeviceLinkManager.onRemoteAction = { _, action ->
+        DeviceLinkManager.onRemoteAction = { fromDeviceId, action ->
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val allowed = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
-                if (allowed) ShraddhaAccessibilityService.applyRemoteAction(action)
+                val accepted = allowed && ShraddhaAccessibilityService.applyRemoteAction(action)
+                DeviceLinkManager.sendRemoteActionResult(
+                    fromDeviceId,
+                    action.optString("kind", "unknown"),
+                    if (accepted) "accepted_by_android_accessibility" else "rejected_permission_or_action_unavailable"
+                )
+                runCatching {
+                    `in`.shraddha.ai.future.LocalAuditTrail(appContext).append(
+                        "remote_control", if (accepted) "action_accepted" else "action_rejected",
+                        "kind=${action.optString("kind", "unknown").take(32)}; source_device_redacted"
+                    )
+                }
             }
         }
         DeviceLinkManager.onScreenFrame = { sourceId, bytes ->
