@@ -1,9 +1,21 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
+    def test_pairing_qr_parser_validates_scheme_relay_and_code(self):
+        relay, code = parse_pairing_qr("shraddha://pair?relay=https%3A%2F%2Frelay.example&code=123456")
+        self.assertEqual(relay, "https://relay.example")
+        self.assertEqual(code, "123456")
+        for payload in (
+            "https://evil.example/?relay=https%3A%2F%2Frelay.example&code=123456",
+            "shraddha://pair?relay=http%3A%2F%2Frelay.example&code=123456",
+            "shraddha://pair?relay=https%3A%2F%2Frelay.example&code=abc123",
+        ):
+            with self.assertRaises(ValueError):
+                parse_pairing_qr(payload)
+
     def test_normalize_point_clamps_coordinates(self):
         self.assertEqual(normalize_point(-1), 0.0)
         self.assertEqual(normalize_point(2), 1.0)
