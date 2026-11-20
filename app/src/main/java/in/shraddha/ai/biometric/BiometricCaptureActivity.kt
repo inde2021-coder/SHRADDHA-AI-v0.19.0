@@ -99,7 +99,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
         val consent = intent.getBooleanExtra(EXTRA_CONSENT, false)
         val threshold = intent.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
-        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f))) {
+        if (!consent || (mode == "enroll" && (id.isBlank() || name.isBlank())) || (mode in setOf("match", "compare") && id.isBlank()) || kind !in setOf("face", "speaker") || mode !in setOf("enroll", "match", "compare") || (mode == "match" && (!threshold.isFinite() || threshold !in 0f..1f)) || (mode == "compare" && kind != "speaker")) {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
@@ -397,8 +397,14 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 val mode = extras.getStringExtra(EXTRA_MODE) ?: "enroll"
                 val id = extras.getStringExtra(EXTRA_PERSON_ID).orEmpty()
                 val name = extras.getStringExtra(EXTRA_PERSON_NAME).orEmpty()
-                if (mode == "enroll") { vault.enroll(id, name, "speaker", embedding, true).getOrThrow(); finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.") }
-                else {
+                if (mode == "enroll") {
+                    vault.enroll(id, name, "speaker", embedding, true).getOrThrow()
+                    finishWith("Speaker voiceprint encrypted locally for $name. Raw audio discarded.")
+                } else if (mode == "compare") {
+                    val score = vault.similarityForPerson("speaker", id, embedding)
+                    finishWith(score?.let { "Saved voice similarity for $name: %.3f. यह केवल model similarity है; calibrated same-speaker verdict नहीं।".format(it) }
+                        ?: "इस व्यक्ति का voice template नहीं मिला या model dimensions अलग हैं।")
+                } else {
                     val threshold = extras.getFloatExtra(EXTRA_THRESHOLD, Float.NaN)
                     val match = vault.match("speaker", embedding, threshold, id.takeIf { it.isNotBlank() })
                     finishWith(match?.let { "Speaker match: ${it.name} • similarity %.3f. This is not proof of identity.".format(it.similarity) } ?: "Unknown speaker. No voiceprint passed the calibrated threshold.")
