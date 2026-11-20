@@ -8,7 +8,7 @@ export function canShareVisualFrame(sharePermissions, frameType) {
 
 /** Consume a pairing code exactly once; expired or malformed codes are removed. */
 export function consumePairingCode(pairCodes, code, now = Date.now()) {
-  if (!(pairCodes instanceof Map) || typeof code !== 'string' || !/^\\d{6}$/.test(code)) return null;
+  if (!(pairCodes instanceof Map) || typeof code !== 'string' || !/^\d{6}$/.test(code)) return null;
   const entry = pairCodes.get(code);
   pairCodes.delete(code);
   if (!entry || !Number.isFinite(entry.expiresAt) || entry.expiresAt <= now) return null;
