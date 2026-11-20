@@ -26,3 +26,8 @@ export function isAllowedSharedPayloadType(category, contentType, sizeBytes) {
   if (contentType === 'file') return category !== 'clipboard';
   return false;
 }
+
+/** Categories eligible for one-time peer-approved data sharing. */
+export function isAllowedShareCategory(category) {
+  return ['contacts','media','documents','messages','calendar','location','device_status','ai_memory','clipboard'].includes(category);
+}
