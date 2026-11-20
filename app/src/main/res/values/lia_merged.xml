@@ -1,5 +1,5 @@
 <resources>
-    <string name="lia_app_name_internal">LIA Voice Engine</string>
+    <string name="shraddha_voice_engine_internal">Shraddha AI Voice Engine</string>
     <string name="accessibility_service_description">Shraddha AI uses accessibility only to carry out user-requested screen actions.</string>
     <string name="lia_accessibility_description_internal">Shraddha AI accessibility capability</string>
     <style name="Theme_LIA_Merged" parent="android:Theme.Material.NoActionBar">
