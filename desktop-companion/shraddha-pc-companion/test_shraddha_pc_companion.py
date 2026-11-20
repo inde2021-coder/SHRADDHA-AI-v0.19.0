@@ -1,9 +1,18 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
+    def test_android_screen_frame_protocol_is_decoded_and_validated(self):
+        packet = bytes([6]) + b"phone1" + bytes([1]) + b"\xff\xd8jpeg"
+        self.assertEqual(decode_screen_frame(packet), ("phone1", 1, b"\xff\xd8jpeg"))
+        with self.assertRaises(ValueError):
+            decode_screen_frame(b"\x00")
+        with self.assertRaises(ValueError):
+            decode_screen_frame(bytes([1]) + b"x" + bytes([9]) + b"jpeg")
+
+
     def test_windows_can_build_bounded_actions_for_an_approved_android_phone(self):
         from types import SimpleNamespace
         args = SimpleNamespace(control_phone="android-1", phone_action="tap", phone_x=0.4, phone_y=0.6)
