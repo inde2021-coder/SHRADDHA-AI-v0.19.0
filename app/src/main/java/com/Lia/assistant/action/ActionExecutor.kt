@@ -115,27 +115,39 @@ object ActionExecutor {
                 val lookup = ContactResolver.lookup(context, contactName)
                 val phoneNumber = when (lookup) {
                     is ContactLookupResult.Found -> lookup.phoneNumber
-                    else -> contactName
+                    is ContactLookupResult.Ambiguous -> {
+                        result.put("status", "needs_clarification")
+                        result.put("action", "ambiguous_contact")
+                        result.put("candidates", JSONArray().apply { lookup.candidates.forEach { put(it.first) } })
+                        result.put("message", "Multiple contacts match. Ask the user to identify the exact recipient before opening a message.")
+                        return result
+                    }
+                    is ContactLookupResult.NoPermission -> {
+                        result.put("status", "needs_user_action")
+                        result.put("action", "contacts_permission_required")
+                        result.put("message", "Grant Contacts permission before selecting a saved contact.")
+                        return result
+                    }
+                    is ContactLookupResult.NotFound -> {
+                        result.put("status", "error")
+                        result.put("action", "contact_not_found")
+                        result.put("message", "Recipient was not found. Do not treat a name as a phone number.")
+                        return result
+                    }
                 }
 
                 val isWhatsApp = targetApp == "whatsapp"
-                val status = if (isWhatsApp) {
+                val composerStatus = if (isWhatsApp) {
                     CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
                 } else {
                     CommIntents.openSmsComposer(context, phoneNumber, messageText)
                 }
 
-                // If accessibility service is active, auto-tap Send
-                val service = NovaAccessibilityService.instance
-                val finalStatus = if (service != null && status == "composer_opened") {
-                    service.autoTapSend(isWhatsApp)
-                } else {
-                    status
-                }
-
-                result.put("status", "success")
-                result.put("action", finalStatus)
+                // Never press Send automatically. The user must review the recipient and message.
+                result.put("status", if (composerStatus == "composer_opened") "needs_user_action" else "error")
+                result.put("action", composerStatus)
                 result.put("recipient", phoneNumber)
+                result.put("message", if (composerStatus == "composer_opened") "Message composer opened. Review the recipient and message, then tap Send yourself." else "Message composer could not be opened.")
             }
 
             "read_screen" -> {
@@ -222,30 +234,27 @@ object ActionExecutor {
             }
 
             "execute_social_media_task" -> {
-                result.put("status", "success")
-                result.put("task_id", "task_${System.currentTimeMillis()}")
-                result.put("action", "social_task_queued")
-                result.put("message", "Social agent initialized. Confirmation will be requested before publishing.")
+                result.put("status", "not_implemented")
+                result.put("action", "social_task_unavailable")
+                result.put("message", "Social media task execution is not connected yet. No task was queued and no post was published.")
             }
 
             "social_media_task_control" -> {
-                val cmd = args.optString("command", "STATUS")
-                result.put("status", "success")
-                result.put("action", "command_executed")
-                result.put("command", cmd)
+                result.put("status", "not_implemented")
+                result.put("action", "social_task_control_unavailable")
+                result.put("message", "Social media task controls are not connected; no command was executed.")
             }
 
             "execute_whatsapp_task" -> {
-                result.put("status", "success")
-                result.put("task_id", "wa_${System.currentTimeMillis()}")
-                result.put("action", "whatsapp_task_queued")
+                result.put("status", "not_implemented")
+                result.put("action", "whatsapp_task_unavailable")
+                result.put("message", "WhatsApp workflow automation is not connected; no task was queued.")
             }
 
             "whatsapp_task_control" -> {
-                val cmd = args.optString("command", "STATUS")
-                result.put("status", "success")
-                result.put("action", "command_executed")
-                result.put("command", cmd)
+                result.put("status", "not_implemented")
+                result.put("action", "whatsapp_task_control_unavailable")
+                result.put("message", "WhatsApp workflow controls are not connected; no command was executed.")
             }
 
             else -> {
