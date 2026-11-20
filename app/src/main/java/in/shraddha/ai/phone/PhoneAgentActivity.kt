@@ -218,8 +218,14 @@ class PhoneAgentActivity : AppCompatActivity() {
         if (requestCode == callPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             voiceStatus.text = "Call permission मिली। फिर से voice command दें।"
         } else if (requestCode == callPermissionRequest) status.text = "Phone-call permission was not granted."
-        if (requestCode == contactsPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) launchCallRecognition()
-        else if (requestCode == contactsPermissionRequest) voiceStatus.text = "Contacts permission के बिना नाम खोजकर कॉल नहीं हो सकती।"
+        if (requestCode == contactsPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            val pending = pendingContactQuery
+            pendingContactQuery = null
+            if (!pending.isNullOrBlank()) handleVoiceCallResult(pending) else launchCallRecognition()
+        } else if (requestCode == contactsPermissionRequest) {
+            pendingContactQuery = null
+            voiceStatus.text = "Contacts permission के बिना नाम खोजकर कॉल नहीं हो सकती।"
+        }
     }
 
     override fun onResume() {
@@ -276,5 +282,6 @@ class PhoneAgentActivity : AppCompatActivity() {
 
     companion object {
         const val KEY_LAST_CALL = "last_call_note"
+        const val EXTRA_PENDING_CONTACT_QUERY = "extra_pending_contact_query"
     }
 }
