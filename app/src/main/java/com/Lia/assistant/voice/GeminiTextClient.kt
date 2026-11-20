@@ -8,6 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 data class ChatTurn(
     val isUser: Boolean,
@@ -43,7 +45,7 @@ object GeminiTextClient {
             internalHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val fallback = "models/gemini-2.0-flash"
-                    cachedResolvedModel = fallback
+                    resolvedModels[cacheKey] = fallback
                     return fallback
                 }
 
@@ -90,12 +92,12 @@ object GeminiTextClient {
                 }
 
                 val chosen = flashCandidate ?: anyGenerateCandidate ?: "models/gemini-2.0-flash"
-                cachedResolvedModel = chosen
+                resolvedModels[cacheKey] = chosen
                 return chosen
             }
         } catch (_: Exception) {
             val fallback = "models/gemini-2.0-flash"
-            cachedResolvedModel = fallback
+            resolvedModels[cacheKey] = fallback
             return fallback
         }
     }
@@ -111,13 +113,19 @@ object GeminiTextClient {
         if (history.isEmpty()) {
             return ChatReplyResult.Error("No conversation history provided.")
         }
+        if (history.size > 40 || history.any { it.text.length > 8_000 }) {
+            return ChatReplyResult.Error("Conversation context is too large. Keep it to 40 turns with 8,000 characters per turn.")
+        }
+        if (systemInstruction.length > 8_000) {
+            return ChatReplyResult.Error("System instructions exceed the 8,000-character safety limit.")
+        }
 
         val modelName = runCatching {
             kotlinx.coroutines.runBlocking { resolveModel(apiKey) }
         }.getOrDefault("models/gemini-2.0-flash")
 
         val modelEndpoint = if (modelName.startsWith("models/")) modelName else "models/$modelName"
-        val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:generateContent"
 
         val root = JSONObject()
 
@@ -144,6 +152,7 @@ object GeminiTextClient {
         val requestBody = root.toString().toRequestBody(mediaType)
         val request = Request.Builder()
             .url(url)
+            .header("x-goog-api-key", apiKey)
             .post(requestBody)
             .build()
 
