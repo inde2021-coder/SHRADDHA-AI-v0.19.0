@@ -113,7 +113,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map() }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), incomingTransfers: new Map() }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -157,7 +157,7 @@ const server = http.createServer(async (req, res) => {
       const consumed = consumePairingCode(pairCodes, code);
       if (!consumed || consumed.sessionId !== session.id) return json(res, 400, { error: 'Pairing code invalid, expired, or already used' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map() });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), incomingTransfers: new Map() });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
@@ -644,6 +644,48 @@ wss.on('connection', (ws, ctx) => {
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
         fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100),
         requestId, sizeBytes, sha256: digest, contentType, payload }));
+    } else if (msg.type === 'file_transfer_start') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const requestId = String(msg.requestId || '');
+      const transferId = String(msg.transferId || '');
+      const name = String(msg.fileName || '').replace(/[\\/\x00-\x1f]/g, '_').slice(0, 120);
+      const size = Number(msg.sizeBytes), chunks = Number(msg.chunkCount);
+      const digest = String(msg.sha256 || '').toLowerCase();
+      const grant = target && target.grants.get(deviceId + ':documents');
+      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true || !matchesOneTimeShareGrant(grant, requestId) || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) || !name || !Number.isSafeInteger(size) || size < 1 || size > 100 * 1024 * 1024 || !Number.isSafeInteger(chunks) || chunks < 1 || chunks > 2200 || !/^[a-f0-9]{64}$/.test(digest) || chunks !== Math.ceil(size / (48 * 1024))) return;
+      target.grants.delete(deviceId + ':documents');
+      target.incomingTransfers.set(transferId, { fromDeviceId: deviceId, requestId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunks: new Map(), expiresAt: Date.now() + 30 * 60_000 });
+      send(targetId, JSON.stringify({ type: 'file_transfer_start', fromDeviceId: deviceId, transferId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunkBytes: 48 * 1024 }));
+    } else if (msg.type === 'file_transfer_chunk') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const transferId = String(msg.transferId || '');
+      const transfer = target?.incomingTransfers?.get(transferId);
+      const index = Number(msg.index);
+      const encoded = typeof msg.payload === 'string' ? msg.payload : '';
+      if (!transfer || transfer.fromDeviceId !== deviceId || transfer.expiresAt <= Date.now() || !Number.isSafeInteger(index) || index < 0 || index >= transfer.chunkCount || encoded.length < 1 || encoded.length > 70000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return;
+      const raw = Buffer.from(encoded, 'base64');
+      if (!raw.length || raw.length > 48 * 1024 || raw.toString('base64') !== encoded) return;
+      const expected = index === transfer.chunkCount - 1 ? transfer.sizeBytes - index * 48 * 1024 : 48 * 1024;
+      if (raw.length !== expected) return;
+      transfer.chunks.set(index, true);
+      send(targetId, JSON.stringify({ type: 'file_transfer_chunk', fromDeviceId: deviceId, transferId, index, payload: encoded }));
+    } else if (msg.type === 'file_transfer_ack') {
+      const targetId = String(msg.targetDeviceId || '');
+      const requester = session.devices.get(targetId);
+      const transferId = String(msg.transferId || '');
+      const transfer = device.incomingTransfers?.get(transferId);
+      if (!requester || !transfer || transfer.fromDeviceId !== targetId || requester === device) return;
+      const index = Number(msg.index);
+      if (msg.complete === true) device.incomingTransfers.delete(transferId);
+      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: Number.isSafeInteger(index) ? index : -1, complete: msg.complete === true, ok: msg.ok === true }));
+    } else if (msg.type === 'file_transfer_cancel') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const transferId = String(msg.transferId || '');
+      target?.incomingTransfers?.delete(transferId); device.incomingTransfers?.delete(transferId);
+      if (target && targetId !== deviceId) send(targetId, JSON.stringify({ type: 'file_transfer_cancel', fromDeviceId: deviceId, transferId, reason: String(msg.reason || 'cancelled').slice(0, 120) }));
     } else if (msg.type === 'task_handoff') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
