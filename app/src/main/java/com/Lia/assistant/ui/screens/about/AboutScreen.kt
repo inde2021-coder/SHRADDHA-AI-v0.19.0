@@ -63,7 +63,6 @@ fun AboutScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 120 dp Orb on About screen
         Box(
             modifier = Modifier.size(120.dp),
             contentAlignment = Alignment.Center
@@ -86,7 +85,7 @@ fun AboutScreen(
         )
 
         Text(
-            text = "Version 1.0.0",
+            text = "Version 0.19.2",
             fontSize = 13.sp,
             color = colors.textSecondary
         )
@@ -96,14 +95,14 @@ fun AboutScreen(
         NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 Text(
-                    text = "A Pearl of Light in the Night",
+                    text = "Your Intelligent AI Companion",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = colors.accent
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Lia AI is a real-time full-duplex personal AI companion crafted in Kotlin & Jetpack Compose with custom AGSL 3D shaders, multi-lingual intelligence (Hindi, Hinglish, English), and the Website Forge.",
+                    text = "Shraddha AI is a Hindi, Hinglish and English personal AI companion with voice interaction, multi-provider AI chat, secure personal memory, visual tools and device assistance. Available features depend on device permissions, configured provider services and connected devices.",
                     fontSize = 14.sp,
                     color = colors.textPrimary,
                     lineHeight = 22.sp
