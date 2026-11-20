@@ -172,6 +172,8 @@ test('screen frames are blocked until the sending device explicitly enables scre
     // Reject unknown frame types and oversized target-device routing headers.
     ownerSocket.send(Buffer.from([3, 0, 0xff, 0xd8]));
     ownerSocket.send(Buffer.concat([Buffer.from([1, 65]), Buffer.alloc(65, 0x61), Buffer.from([0xff, 0xd8])]));
+    // Reject arbitrary binary payloads that do not begin with the JPEG SOI marker.
+    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), Buffer.from([0x00, 0x11, 0x22, 0x33])]));
     const allowedJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x55]);
     ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), allowedJpeg]));
 
