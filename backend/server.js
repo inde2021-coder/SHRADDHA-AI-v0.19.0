@@ -572,21 +572,39 @@ wss.on('connection', (ws, ctx) => {
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
       if (!target || targetIdIsSelf(targetId, deviceId) || expiresAt < Date.now()) return;
       if (session.controlMode === 'master' && device.role !== 'owner') return;
-      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll', 'ocr', 'file_list', 'file_read', 'file_search', 'offline_chat'].includes(msg.action.kind)) return;
-      send(targetId, JSON.stringify({ type: 'remote_action', fromDeviceId: deviceId, action: msg.action }));
+      const actionId = String(msg.actionId || '');
+      if (!validRemoteActionEnvelope(actionId, msg.action)) return;
+      target.pendingRemoteActions ||= new Map();
+      if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
+      target.pendingRemoteActions.set(actionId, { requesterId: deviceId, actionKind: msg.action.kind, expiresAt: Date.now() + 60_000 });
+      send(targetId, JSON.stringify({ type: 'remote_action', actionId, fromDeviceId: deviceId, action: msg.action, requiresPerActionApproval: true }));
     } else if (msg.type === 'remote_action_result') {
       const requesterId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(requesterId);
-      const expiresAt = device.controlGrants?.get(requesterId) || 0;
-      if (!requester || requesterId === deviceId || expiresAt < Date.now()) return;
+      const pending = device.pendingRemoteActions?.get(String(msg.actionId || ''));
+      if (!requester || requesterId === deviceId || !pending || pending.requesterId !== requesterId || pending.expiresAt < Date.now()) return;
+      device.pendingRemoteActions.delete(String(msg.actionId));
       const result = typeof msg.result === 'string' ? msg.result.slice(0, 14000) : '';
       if (!result) return;
       send(requesterId, JSON.stringify({
         type: 'remote_action_result',
         fromDeviceId: deviceId,
+        actionId: String(msg.actionId || '').slice(0, 64),
         actionKind: String(msg.actionKind || '').slice(0, 32),
         result
       }));
+    } else if (msg.type === 'revoke_device') {
+      const targetId = String(msg.targetDeviceId || '');
+      if (!revokePairedDevice(session, targetId, deviceId)) return;
+      send(deviceId, JSON.stringify({ type: 'device_revoked', deviceId: targetId, revoked: true }));
+      for (const [id] of session.devices) send(id, JSON.stringify({ type: 'device_revoked', deviceId: targetId, revoked: true }));
+    } else if (msg.type === 'leave_session') {
+      if (device.role === 'owner') return;
+      for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false, revoked: true }));
+      device.controlGrants?.clear(); device.grants?.clear(); device.pendingControlRequests?.clear(); device.incomingTransfers?.clear();
+      try { ws.close(1000, 'Device left session'); } catch {}
+      session.devices.delete(deviceId);
+      return;
     } else if (msg.type === 'set_control_mode') {
       if (device.role !== 'owner' || !['master', 'mutual'].includes(msg.mode)) return;
       session.controlMode = msg.mode;
