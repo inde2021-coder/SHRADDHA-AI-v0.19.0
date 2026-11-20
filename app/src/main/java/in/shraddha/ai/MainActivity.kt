@@ -2332,8 +2332,12 @@ class MainActivity : AppCompatActivity() {
             } else if (msg.optString("type") == "data_share_result") {
                 val approved = msg.optBoolean("approved")
                 runOnUiThread {
+                    if (approved) {
+                        approvedShareRequestId = msg.optString("requestId")
+                        approvedShareTarget = msg.optString("targetDeviceId")
+                    }
                     status.text = if (approved) "Permission approved for ${msg.optString("category")}. अब चुनी file भेज सकते हैं।" else "Data sharing request अस्वीकार हुई।"
-                    if (approved) Toast.makeText(this, "Permission मिली। अब Send a Selected Document / Photo चुनें।", Toast.LENGTH_LONG).show()
+                    if (approved) Toast.makeText(this, "इस exact request के लिए one-time permission मिली।", Toast.LENGTH_LONG).show()
                 }
             } else if (msg.optString("type") == "data_share_payload") {
                 runCatching {
@@ -2620,7 +2624,10 @@ class MainActivity : AppCompatActivity() {
                 val mime = contentResolver.getType(uri) ?: "application/octet-stream"
                 val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
                 val payload = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                val requestId = approvedShareRequestId\n                if (requestId.isNullOrBlank() || approvedShareTarget != target) { status.text = "पहले इसी target के लिए नया one-time sharing approval लें।"; return }\n                val sent = DeviceLinkManager.sendSharedPayload(target, category, requestId, name, mime, payload, bytes.size.toLong(), digest)\n                if (sent) { approvedShareRequestId = null; approvedShareTarget = null }
+                val requestId = approvedShareRequestId
+                if (requestId.isNullOrBlank() || approvedShareTarget != target) { status.text = "पहले इसी target के लिए नया one-time sharing approval लें।"; return }
+                val sent = DeviceLinkManager.sendSharedPayload(target, category, requestId, name, mime, payload, bytes.size.toLong(), digest)
+                if (sent) { approvedShareRequestId = null; approvedShareTarget = null }
                 status.text = if (sent) "File integrity digest सहित $target को भेजी गई। Receiver पर SHA-256 verify होगा।" else "File भेजने के लिए relay disconnected है या permission grant expire हो गया।"
             } catch (e: Exception) { status.text = "File share error: ${e.message}" }
             return
