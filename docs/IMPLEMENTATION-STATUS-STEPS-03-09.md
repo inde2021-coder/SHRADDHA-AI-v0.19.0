@@ -23,7 +23,7 @@ Main branch: untouched.
 
 ## Step 4 — People Memory and Visual Lens (source integration in progress)
 
-- Added a user-triggered local camera capture entry in the Visual Lens panel. The camera app returns a photo preview; the user explicitly starts analysis through the authenticated HTTPS vision gateway. JPEG is bounded to 2.5 MB and provider is limited to Gemini/OpenAI/Anthropic. This uses the external camera app thumbnail contract; full-resolution CameraX capture and physical-device validation remain open.
+- Upgraded Visual Lens to request a full-resolution photo from the device camera app via FileProvider, decode/downsample to a maximum 1600 px edge, compress to the 2.5 MB gateway limit, and delete the temporary local image after processing. The photo is only sent after the user captures it and the analysis request is explicitly initiated. Physical camera-app compatibility and device testing remain open.
 
 - CameraX/ML Kit capture activity is registered and reachable from the People Memory screen.
 - Person profiles receive stable local IDs; separate confirmation is required before face or speaker enrollment.

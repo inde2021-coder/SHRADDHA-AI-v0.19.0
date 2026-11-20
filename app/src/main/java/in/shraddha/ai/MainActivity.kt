@@ -77,6 +77,7 @@ class MainActivity : AppCompatActivity() {
     private val faceModelRequest = 46
     private val speakerModelRequest = 47
     private val localVisionRequest = 48
+    private var pendingVisionPhoto: java.io.File? = null
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
@@ -920,11 +921,23 @@ class MainActivity : AppCompatActivity() {
             visionPrompt.setText("इस स्क्रीन पर दिख रहे ऐप और फॉर्म को समझो। दिखाई दे रहे फील्ड के नाम पढ़ो और बताओ कि कौन-सी जानकारी कहाँ भरनी है। बिना मेरी पुष्टि कोई कार्रवाई मत करना।")
             visionPrompt.isSingleLine = false; visionPrompt.minLines = 3
             addView(visionPrompt)
-            addView(actionButton("OPEN CAMERA • VISUAL LENS", "एक फोटो लें; भेजने से पहले आप स्वयं AI analysis शुरू करेंगे") {
+            addView(actionButton("OPEN CAMERA • VISUAL LENS", "Full-resolution photo लें; AI को भेजना अलग से शुरू होगा") {
                 try {
-                    startActivityForResult(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE), localVisionRequest)
-                } catch (_: android.content.ActivityNotFoundException) {
-                    status.text = "इस फोन में camera app उपलब्ध नहीं है।"
+                    val folder = java.io.File(cacheDir, "shared").apply { mkdirs() }
+                    pendingVisionPhoto = java.io.File.createTempFile("shraddha-visual-lens-", ".jpg", folder)
+                    val photoUri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity, "$packageName.lia.fileprovider", pendingVisionPhoto!!
+                    )
+                    val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                        putExtra(android.provider.MediaStore.EXTRA_OUTPUT, photoUri)
+                        clipData = android.content.ClipData.newUri(contentResolver, "Visual Lens photo", photoUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    }
+                    startActivityForResult(cameraIntent, localVisionRequest)
+                } catch (error: Exception) {
+                    pendingVisionPhoto?.delete()
+                    pendingVisionPhoto = null
+                    status.text = "Camera start failed: ${error.message}"
                 }
             })
             addView(actionButton("Ask Shraddha to Understand Screen", "Latest received screenshot का AI analysis") {
@@ -1679,37 +1692,54 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == localVisionRequest) {
-            if (resultCode != Activity.RESULT_OK) { status.text = "Visual Lens photo capture cancelled."; return }
-            val bitmap = data?.extras?.get("data") as? android.graphics.Bitmap
-            if (bitmap == null) { status.text = "Camera did not return a photo. Please try again."; return }
-            if (!::relayUrl.isInitialized || !::gatewayToken.isInitialized) {
-                status.text = "Visual Lens settings are not ready. Open Device Universe and try again."; return
+            val photo = pendingVisionPhoto
+            pendingVisionPhoto = null
+            if (resultCode != Activity.RESULT_OK || photo == null || !photo.isFile || photo.length() == 0L) {
+                photo?.delete()
+                status.text = "Visual Lens photo capture cancelled or empty."
+                return
             }
-            val url = relayUrl.text.toString().trim()
-            if (!validRelay(url)) { status.text = "Visual Lens के लिए valid HTTPS AI gateway URL जरूरी है।"; return }
-            val output = java.io.ByteArrayOutputStream()
-            var quality = 90
-            do {
-                output.reset()
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, output)
-                quality -= 10
-            } while (output.size() > 2_500_000 && quality >= 40)
-            val jpeg = output.toByteArray()
-            if (jpeg.isEmpty() || jpeg.size > 2_500_000) { status.text = "Photo size limit से बड़ी है। छोटा/कम-resolution photo लें."; return }
-            val prompt = if (::visionPrompt.isInitialized && visionPrompt.text.isNotBlank()) visionPrompt.text.toString()
-                else "इस तस्वीर को ध्यान से समझाओ। जो स्पष्ट दिख रहा है वही बताओ और अनिश्चित बातों को अनुमान के रूप में चिह्नित करो।"
-            val provider = if (::visionProvider.isInitialized) visionProvider.selectedItem?.toString() ?: "gemini" else "gemini"
-            if (::visionResult.isInitialized) visionResult.text = "Visual Lens फोटो का विश्लेषण कर रहा है…"
-            status.text = "Photo चुनी गई। सुरक्षित gateway पर AI analysis चल रहा है…"
-            DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), provider, prompt, jpeg) { result -> runOnUiThread {
-                result.onSuccess {
-                    if (::visionResult.isInitialized) visionResult.text = it
-                    status.text = "Visual Lens photo analysis complete."
-                }.onFailure {
-                    if (::visionResult.isInitialized) visionResult.text = "Analysis error: ${it.message}"
-                    status.text = "Visual Lens analysis failed."
-                }
-            } }
+            try {
+                if (!::relayUrl.isInitialized || !::gatewayToken.isInitialized) error("Open Device Universe and configure the HTTPS AI gateway first.")
+                val url = relayUrl.text.toString().trim()
+                require(validRelay(url)) { "Visual Lens के लिए valid HTTPS AI gateway URL जरूरी है।" }
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(photo.absolutePath, bounds)
+                require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Captured photo is unreadable." }
+                var sample = 1
+                while (bounds.outWidth / sample > 1600 || bounds.outHeight / sample > 1600) sample *= 2
+                val bitmap = android.graphics.BitmapFactory.decodeFile(photo.absolutePath,
+                    android.graphics.BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 })
+                    ?: error("Could not decode captured photo.")
+                val output = java.io.ByteArrayOutputStream()
+                try {
+                    var quality = 88
+                    do {
+                        output.reset()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, output)
+                        quality -= 8
+                    } while (output.size() > 2_500_000 && quality >= 40)
+                } finally { bitmap.recycle(); photo.delete() }
+                val jpeg = output.toByteArray()
+                require(jpeg.isNotEmpty() && jpeg.size <= 2_500_000) { "Photo could not be reduced below the 2.5 MB upload limit." }
+                val prompt = if (::visionPrompt.isInitialized && visionPrompt.text.isNotBlank()) visionPrompt.text.toString()
+                    else "इस तस्वीर को ध्यान से समझाओ। जो स्पष्ट दिख रहा है वही बताओ और अनिश्चित बातों को अनुमान के रूप में चिह्नित करो।"
+                val provider = if (::visionProvider.isInitialized) visionProvider.selectedItem?.toString() ?: "gemini" else "gemini"
+                if (::visionResult.isInitialized) visionResult.text = "Visual Lens फोटो का विश्लेषण कर रहा है…"
+                status.text = "Photo captured locally. AI analysis will start now…"
+                DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), provider, prompt, jpeg) { result -> runOnUiThread {
+                    result.onSuccess {
+                        if (::visionResult.isInitialized) visionResult.text = it
+                        status.text = "Visual Lens photo analysis complete."
+                    }.onFailure {
+                        if (::visionResult.isInitialized) visionResult.text = "Analysis error: ${it.message}"
+                        status.text = "Visual Lens analysis failed."
+                    }
+                } }
+            } catch (error: Exception) {
+                photo.delete()
+                status.text = "Visual Lens capture failed: ${error.message}"
+            }
             return
         }
         if (requestCode == faceModelRequest || requestCode == speakerModelRequest) {

@@ -71,7 +71,7 @@ class ScreenShareService : Service() {
         reader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 2)
         reader!!.setOnImageAvailableListener({ source ->
             val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastFrameAt < 700) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
+            if (now - lastFrameAt < 250) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
             val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
             try {
                 val plane = image.planes[0]; val buffer = plane.buffer
