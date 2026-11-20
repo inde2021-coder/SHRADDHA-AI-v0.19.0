@@ -22,6 +22,7 @@ jobs:
   build:
     name: Compile, unit tests and debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,13 +94,17 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
+      # Use a lightweight, stable API 34 image and explicit software rendering.
+      # The previous Pixel 6 / API 35 runner stayed offline until its boot timeout,
+      # even though unit tests and APK compilation had already passed.
       - name: Run biometric ONNX smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
           target: google_apis
-          profile: pixel_6
+          profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 2
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
