@@ -6,14 +6,14 @@ This is an original Shraddha AI implementation plan informed by publicly documen
 
 | Capability | Status | Notes |
 |---|---|---|
-| Voice command to find a saved contact and start a normal SIM call | Partial | Hindi speech-recognition button, Contacts lookup, ambiguity-safe matching and TelecomManager call initiation are in the Android Phone Agent. It is not yet wired into the always-listening wake-word/tool pipeline. |
+| Voice command to find a saved contact and start a normal SIM call | Implemented in code, device test pending | The active Gemini Live voice session exposes `call_contact`; it resolves saved contacts, requests Contacts permission through the Phone Agent when needed, refuses ambiguous matches, and starts the SIM call only for a unique match. A separate tap-to-speak Phone Agent fallback is also available. The voice session must be activated by the user; no always-on wake-word is claimed. |
 | Incoming call UI and basic call controls | Partial | Android InCallService can show call state and provide answer/end/mute/speaker controls when selected as the default dialer. |
 | Personal SIM rings first, then forwards unanswered calls to Edesy DID | Configuration required | Carrier-side conditional no-answer forwarding; not controlled by the app. |
 | Edesy bidirectional audio bridge to GPT-Live | Implemented in code, unverified live | 16 kHz mono L16 ↔ 24 kHz PCM16 bridge; requires provisioned DID, provider flow, backend secrets and real PSTN testing. |
 | Caller identity metadata | Partial | Backend stores a masked caller number and caller name from Edesy metadata in a bounded in-memory call list. |
 | Live transcript | Implemented behind opt-in, unverified live | Set CALL_TRANSCRIPTS_ENABLED=true only after consent/privacy review. |
 | AI post-call summary | Implemented behind opt-in, unverified live | Generated from transcript using the server OpenAI chat API; summary remains in bounded process memory only. |
-| Caller interruption / barge-in | Partial | Edesy killAudio triggers GPT-Live response.cancel; real-world interruption latency must be tested. |
+| Caller interruption / barge-in | Implemented in code, unverified live | When GPT-Live detects caller speech (`session.input_audio.speech_started`), the bridge sends Edesy `killAudio` to flush queued playback. Real-world interruption latency must be tested. |
 | Audio recording | Not implemented | No audio files are captured or stored. Requires explicit notice/consent, encrypted durable storage, retention/deletion controls and legal review. |
 | One-tap human takeover / transfer | Not implemented | Requires a supported Edesy transfer/bridging flow and Android notification/deep-link handoff. |
 | Caller screening policies (known/unknown, selected categories, VIP allowlist/blocklist) | Not implemented | Needs a persistent policy model and carrier/backend enforcement, not just local UI toggles. |
