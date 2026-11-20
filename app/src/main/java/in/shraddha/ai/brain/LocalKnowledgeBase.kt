@@ -37,8 +37,8 @@ object LocalKnowledgeBase {
                     words.any { word -> word == term || (term.length >= 3 && word.startsWith(term)) || (word.length >= 4 && term.startsWith(word)) }
                 }
                 if (matched.isEmpty()) return@mapNotNull null
-                var score = matched.sumOf { term ->
-                    if (term in words) 3 else 1
+                var score = matched.fold(0) { total, term ->
+                    total + if (term in words) 3 else 1
                 }
                 if (identity.contains(normalizedQuery)) score += 5
                 // Prefer passages that cover a larger fraction of the user's query.
