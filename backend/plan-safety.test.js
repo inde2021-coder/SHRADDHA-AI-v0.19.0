@@ -58,7 +58,8 @@ test('AI operator plans reject duplicate IDs, invalid fields and unsafe secret i
     { id: 'same', title: 'Open again', action: 'OPEN_APP', target: 'Chrome' },
     { id: 'bad action', title: 'Bad', action: 'OPEN_APP', target: 'Settings' },
     { id: 'secret', title: 'Fill', action: 'TYPE_TEXT', value: 'password: secret' },
-    { id: 'type-target', title: 'Fill', action: 'TYPE_TEXT', target: 'field', value: 'hello' }
+    { id: 'type-target', title: 'Fill', action: 'TYPE_TEXT', target: 'field', value: 'hello' },
+    { id: 'mixed-open', title: 'Open', action: 'OPEN_APP', target: 'Settings', value: 'extra' }
   ]);
   assert.equal(steps.length, 1);
   assert.equal(steps[0].id, 'same');
