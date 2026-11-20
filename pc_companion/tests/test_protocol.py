@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from protocol import validate_remote_action
+from pc_companion.protocol import validate_remote_action
 
 
 class ProtocolTests(unittest.TestCase):

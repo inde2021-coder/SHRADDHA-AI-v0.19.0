@@ -1,6 +1,6 @@
 import unittest
 
-from actions import execute_action
+from pc_companion.actions import execute_action
 
 
 class FakeGui:
