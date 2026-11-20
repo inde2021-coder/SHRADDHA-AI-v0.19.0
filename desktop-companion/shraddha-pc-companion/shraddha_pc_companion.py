@@ -252,6 +252,48 @@ async def share_screen_loop(ws, fps: float, target_device_id: str) -> None:
 
 
 
+
+def build_phone_action(args) -> dict | None:
+    """Build one bounded action for a paired Android phone; the phone still approves control."""
+    target = str(getattr(args, "control_phone", "") or "").strip()
+    if not target:
+        return None
+    kind = getattr(args, "phone_action", "back")
+    if kind == "tap":
+        x, y = float(args.phone_x), float(args.phone_y)
+        if not (0 <= x <= 1 and 0 <= y <= 1):
+            raise ValueError("Phone tap coordinates must be normalized between 0 and 1")
+        return {"kind": "tap", "x": x, "y": y}
+    if kind == "swipe":
+        points = [float(args.phone_x1), float(args.phone_y1), float(args.phone_x2), float(args.phone_y2)]
+        if not all(0 <= point <= 1 for point in points):
+            raise ValueError("Phone swipe coordinates must be normalized between 0 and 1")
+        return {"kind": "swipe", "x1": points[0], "y1": points[1], "x2": points[2], "y2": points[3]}
+    if kind == "type":
+        value = str(args.phone_text or "")
+        if not value or len(value) > 500:
+            raise ValueError("Phone text must contain 1-500 characters")
+        return {"kind": "type", "text": value}
+    if kind == "click_text":
+        value = str(args.phone_text or "").strip()
+        if not value or len(value) > 120:
+            raise ValueError("Phone button label must contain 1-120 characters")
+        return {"kind": "click_text", "text": value}
+    if kind == "open_app":
+        value = str(args.phone_app or "").strip()
+        if not value or len(value) > 120:
+            raise ValueError("Phone app name must contain 1-120 characters")
+        return {"kind": "open_app", "appName": value}
+    if kind == "scroll":
+        amount = int(args.phone_scroll)
+        if amount == 0 or not -10 <= amount <= 10:
+            raise ValueError("Phone scroll amount must be between -10 and 10, excluding 0")
+        return {"kind": "scroll", "amount": amount}
+    if kind in {"back", "home"}:
+        return {"kind": kind}
+    raise ValueError("Unsupported Android phone action")
+
+
 def parse_pairing_qr(payload: str) -> tuple[str, str]:
     """Validate a Shraddha pairing QR deep link without trusting its contents."""
     from urllib.parse import parse_qs, urlparse
@@ -541,11 +583,18 @@ async def run(args) -> None:
         )
         print("Local offline inference is ready. No cloud AI provider is used for offline_chat.")
 
+    phone_action = build_phone_action(args)
+    if phone_action and not await asyncio.to_thread(confirm, f"Ask the selected Android phone for permission to run {phone_action['kind']}?"):
+        phone_action = None
+    phone_action_sent = False
     allow_control = await asyncio.to_thread(confirm, "Allow this paired phone to request temporary control of this PC?")
     share_screen = bool(args.share_screen and await asyncio.to_thread(confirm, "Share this PC screen with paired Shraddha devices? Sensitive active windows will pause sharing."))
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
         await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen}}))
         print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
+        if phone_action:
+            await ws.send(json.dumps({"type": "control_request", "targetDeviceId": args.control_phone, "minutes": 2}))
+            print("Waiting for the Android phone owner to approve remote control…")
         approved_until = 0.0
         approved_device_id = ""
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
@@ -597,6 +646,18 @@ async def run(args) -> None:
                         "actionKind": action_kind,
                         "result": result[:14000]
                     }))
+                elif kind == "control_result":
+                    if phone_action and message.get("targetDeviceId") == args.control_phone and message.get("approved") is True:
+                        await ws.send(json.dumps({"type": "remote_action", "targetDeviceId": args.control_phone, "action": phone_action}))
+                        phone_action_sent = True
+                        print("Android owner approved. Sending one locally-confirmed action…")
+                    elif phone_action:
+                        print("Android remote-control request was denied or expired:", str(message.get("reason", "not approved"))[:240])
+                        break
+                elif kind == "remote_action_result":
+                    if phone_action_sent and message.get("fromDeviceId") == args.control_phone:
+                        print("Android action result:", str(message.get("result", "no result"))[:1000])
+                        break
                 elif kind == "peer_status":
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
@@ -614,6 +675,14 @@ def main() -> int:
     parser.add_argument("--base-url", default="", help="HTTPS URL of your Shraddha relay (saved after pairing)")
     parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
     parser.add_argument("--scan-pairing-qr", action="store_true", help="Use the PC camera to scan a Shraddha pairing QR; requires requirements-qr.txt")
+    parser.add_argument("--control-phone", default="", help="Paired Android device ID to control after its owner approves")
+    parser.add_argument("--phone-action", choices=["tap", "swipe", "type", "click_text", "open_app", "scroll", "back", "home"], default="back")
+    parser.add_argument("--phone-x", type=float, default=0.5); parser.add_argument("--phone-y", type=float, default=0.5)
+    parser.add_argument("--phone-x1", type=float, default=0.5); parser.add_argument("--phone-y1", type=float, default=0.8)
+    parser.add_argument("--phone-x2", type=float, default=0.5); parser.add_argument("--phone-y2", type=float, default=0.2)
+    parser.add_argument("--phone-text", default="", help="Text or exact visible button label for the selected Android action")
+    parser.add_argument("--phone-app", default="", help="Installed Android app name for open_app")
+    parser.add_argument("--phone-scroll", type=int, default=-3)
     parser.add_argument("--device-name", default="My Windows PC")
     parser.add_argument("--allow-typing", action="store_true", help="Enable text paste; each paste still asks PC user")
     parser.add_argument("--allow-ocr", action="store_true", help="Enable active-window OCR; each request asks PC user")
