@@ -56,6 +56,9 @@ jobs:
       - name: Test backend relay consent policy
         run: node --test backend/relay-policy.test.js
 
+      - name: Test shared file integrity envelope
+        run: node --test backend/relay-file-validation.test.js
+
       - name: Test Firebase Firestore and Storage security rules
         run: |
           npm install --prefix firebase/rules-tests --no-audit --no-fund
