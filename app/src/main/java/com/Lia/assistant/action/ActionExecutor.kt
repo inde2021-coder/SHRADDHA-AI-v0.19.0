@@ -70,11 +70,11 @@ object ActionExecutor {
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
-                        result.put("status", if (callStatus == "call_started") "success" else "error")
+                        result.put("status", when (callStatus) { "call_started" -> "success"; "dialer_opened_no_permission" -> "needs_user_action"; else -> "error" })
                         result.put("action", callStatus)
                         result.put("message", when (callStatus) {
                             "call_started" -> "Calling ${lookup.displayName}."
-                            "call_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + Calling दबाएँ, फिर voice command दोहराएँ।"
+                            "dialer_opened_no_permission" -> "फोन dialer खुल गया है। कॉल करने के लिए नंबर और Call बटन जाँचकर स्वयं टैप करें।"
                             else -> "Could not start the call."
                         })
                         result.put("contact", lookup.displayName)
