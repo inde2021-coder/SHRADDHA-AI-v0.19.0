@@ -37,4 +37,4 @@ data class OperatorStep(
 
 enum class OperatorTaskState { IDLE, OBSERVING, EXECUTING, VERIFYING, WAITING_CONFIRMATION, COMPLETED, FAILED, CANCELLED }
 
-data class OperatorEvent(val state: OperatorTaskState, val message: String, val snapshot: ScreenSnapshot? = null)
+data class OperatorEvent(val state: OperatorTaskState, val message: String, val snapshot: ScreenSnapshot? = null, val stepIndex: Int? = null)

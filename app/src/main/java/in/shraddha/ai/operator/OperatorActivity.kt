@@ -87,7 +87,6 @@ class OperatorActivity : Activity() {
             log.text = "यह workflow सुरक्षा नीति से block हुआ: ${policyDecisions.first { it.risk == OperatorSafetyPolicy.Risk.BLOCK }.reason}"
             return
         }
-        val destructive = steps.any { it.destructive } || policyDecisions.any { it.risk == OperatorSafetyPolicy.Risk.CONFIRM }
         val variables = EditText(this).apply { hint = "अन्य मान: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
@@ -96,8 +95,8 @@ class OperatorActivity : Activity() {
             .setPositiveButton(if (destructive) "पुष्टि करके चलाएँ" else "चलाएँ") { _, _ ->
                 val extra = variables.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
                 val allValues = route.values + extra
-                if (destructive) android.app.AlertDialog.Builder(this).setTitle("अंतिम अनुमति").setMessage("इस Workflow में बाहरी/संवेदनशील प्रभाव हो सकता है। क्या आगे बढ़ें?").setNegativeButton("नहीं", null).setPositiveButton("हाँ") { _, _ -> runLearned(route.profile, route.workflowName, allValues, true) }.show()
-                else runLearned(route.profile, route.workflowName, allValues, false)
+                // Sensitive actions are confirmed individually immediately before execution.
+                runLearned(route.profile, route.workflowName, allValues)
             }.show()
     }
 
@@ -119,9 +118,8 @@ class OperatorActivity : Activity() {
                 log.text = "यह workflow सुरक्षा नीति से block हुआ: ${decisions.first { it.risk == OperatorSafetyPolicy.Risk.BLOCK }.reason}"
                 return@setPositiveButton
             }
-            val needsConfirm = steps.any { it.destructive } || decisions.any { it.risk == OperatorSafetyPolicy.Risk.CONFIRM }
-                    if (needsConfirm) android.app.AlertDialog.Builder(this).setTitle("संवेदनशील कार्रवाई").setMessage("इस Workflow में संदेश/भुगतान/हटाने जैसी कार्रवाई हो सकती है। क्या आप अनुमति देते हैं?").setNegativeButton("नहीं", null).setPositiveButton("हाँ, चलाएँ") { _, _ -> runLearned(profile, name, map, true) }.show()
-                    else runLearned(profile, name, map, false)
+            // Sensitive actions are confirmed individually immediately before execution.
+                    runLearned(profile, name, map)
                 }.show()
         }.show()
     }
@@ -144,13 +142,31 @@ class OperatorActivity : Activity() {
         }
     }
 
-    private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, confirmed: Boolean) {
-        Thread { AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
-            val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
-            log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
-        } }.run(profile, name, values, confirmed) }.start()
+    private fun runLearned(
+        profile: AppTrainingProfile,
+        name: String,
+        values: Map<String, String>,
+        startAt: Int = 0,
+        confirmedStepIndex: Int? = null
+    ) {
+        Thread {
+            AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+                val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
+                log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
+                val pendingStep = event.stepIndex
+                if (event.state == OperatorTaskState.WAITING_CONFIRMATION && pendingStep != null) {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("इस चरण की अनुमति")
+                        .setMessage(event.message + "\n\nक्या केवल इसी चरण को चलाने की अनुमति देते हैं?")
+                        .setNegativeButton("नहीं, रोकें", null)
+                        .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ ->
+                            runLearned(profile, name, values, startAt = pendingStep, confirmedStepIndex = pendingStep)
+                        }
+                        .show()
+                }
+            } }.run(profile, name, values, startAt, confirmedStepIndex)
+        }.start()
     }
-
     private fun field(hintText: String) = EditText(this).apply {
         hint = hintText; setHintTextColor(0xFF8290AA.toInt()); setTextColor(Color.WHITE); textSize = 14f
         setSingleLine(true); setPadding(14, 10, 14, 10)

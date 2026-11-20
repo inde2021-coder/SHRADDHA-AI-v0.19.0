@@ -14,10 +14,12 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
     private val audit = LocalAuditTrail(context.applicationContext)
     fun stop() { stopped = true; emit(OperatorEvent(OperatorTaskState.CANCELLED, "ऑपरेटर रोक दिया गया।")) }
 
-    fun run(profile: AppTrainingProfile, workflowName: String, values: Map<String, String>, confirmed: Boolean = false): Boolean {
+    fun run(profile: AppTrainingProfile, workflowName: String, values: Map<String, String>, startAt: Int = 0, confirmedStepIndex: Int? = null): Boolean {
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty()) return fail("वर्कफ़्लो खाली है।")
-        for ((index, step) in steps.withIndex()) {
+        if (startAt !in steps.indices) return fail("Workflow resume position is invalid.")
+        for (index in startAt until steps.size) {
+            val step = steps[index]
             if (stopped) return false
             // Re-check the resolved value, not only the training placeholder. A saved
             // template such as "customer_phone" must not become a route for injecting
@@ -25,8 +27,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val resolvedInput = values[step.inputTemplate] ?: step.inputTemplate
             val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, resolvedInput)
             if (risk.risk == OperatorSafetyPolicy.Risk.BLOCK) return fail(risk.reason)
-            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && !confirmed) {
-                emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason}")); return false
+            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && confirmedStepIndex != index) {
+                emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason} इस चरण को चलाने से पहले अलग अनुमति चाहिए।", stepIndex = index))
+                return false
             }
             val before = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("स्क्रीन पढ़ने के लिए Accessibility सेवा चालू करें।")
             if (before.packageName != profile.packageName && before.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) return fail("खुला हुआ ऐप ${before.packageName} है, जबकि प्रशिक्षित ऐप ${profile.packageName} है।")
