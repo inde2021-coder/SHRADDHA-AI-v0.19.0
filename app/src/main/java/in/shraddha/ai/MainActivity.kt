@@ -271,7 +271,8 @@ class MainActivity : AppCompatActivity() {
                 Triple("◎  PEOPLE MEMORY", "Consented profiles", { showPage("people") }),
                 Triple("☁  CLOUD & DATA", "Backup • Sync • Sharing", { showPage("cloud") }),
                 Triple("⚙  PRIVACY", "Permissions • Security", { showPage("permissions") }),
-                Triple("✧  INTELLIGENCE", "Automation • Safe workflows", { showPage("future") })
+                Triple("✧  INTELLIGENCE", "Automation • Safe workflows", { showPage("future") }),
+                Triple("◷  TASK PLANNER", "Tasks • Daily briefing • Reminders", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.future.TaskPlannerActivity::class.java)) })
             )
             val search = edit("Search workspaces", "Try voice, devices, people or privacy")
             search.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
