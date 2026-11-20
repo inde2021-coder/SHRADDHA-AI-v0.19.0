@@ -21,11 +21,23 @@ Main branch: untouched.
 - Add explicit voice consent indicator, lifecycle recovery and user-facing failure/retry states.
 - Test Hindi/English speech recognition, transcript integrity, audio latency and interruption.
 
-## Step 4 — People Memory and Visual Lens
-Not started in this implementation pass. Existing biometric code has missing engine/liveness/consent classes, missing camera dependencies and an unregistered activity. SFace/ECAPA model weights, license provenance, input/output tensor contracts and benchmarks must be supplied/verified before enabling matching. Liveness must not be described as certified anti-spoofing without independent testing.
+## Step 4 — People Memory and Visual Lens (source integration in progress)
 
-## Step 5 — Device Universe
-Not started in this implementation pass. Audit and implement consent-bound pairing, authenticated transport, per-device permissions, screen-share consent, revocation, replay protection and visible remote-control indicators. Do not claim arbitrary control of every app/device; Android and remote OS restrictions apply.
+- CameraX/ML Kit capture activity is registered and reachable from the People Memory screen.
+- Person profiles receive stable local IDs; separate confirmation is required before face or speaker enrollment.
+- Added SAF model import into app-private storage with a 250 MB cap and temporary-file/rename handling.
+- Face capture runs a basic randomized blink/head-turn interaction challenge, quality checks and local ONNX inference; speaker flow uses on-device speech recognition followed by five seconds of local audio capture.
+- Embeddings are stored in the encrypted local vault; profile deletion also deletes that person's biometric templates.
+- No SFace/ECAPA weights are bundled. Imported model license, exact preprocessing/tensor contract and thresholds still need independent validation. Blink/head-turn is not certified anti-spoofing and must not be used as sole authentication.
+- Speaker recognition is blocked when on-device speech recognition is unavailable; cloud speech upload is not used for this challenge.
+- Physical-device capture, model compatibility, accuracy, false-accept/false-reject and spoof evaluation remain mandatory before calling this step complete.
+
+## Step 5 — Device Universe (security hardening in progress)
+
+- Pairing/session creation and WebSocket relay now reject plain HTTP and require HTTPS/WSS.
+- Relay credentials are validated before opening a session; query parameters are built with OkHttp URL encoding rather than string concatenation.
+- Remaining: server-side one-time pairing expiry/attempt limits, device-token rotation/revocation, per-device capability grants, command allowlists, replay protection, screen/camera consent lifecycle and cross-platform companion validation.
+- Arbitrary control of every app/device is not possible; Android and remote OS restrictions apply.
 
 ## Step 6 — AI Intelligence
 Not started in this implementation pass. Provider abstraction, capability routing, expert knowledge grounding, citations, tool permission boundaries, offline behavior and factuality tests remain to be implemented/verified.
@@ -61,5 +73,6 @@ A step is complete only when its source changes are committed, tests pass, relev
 - Important limitations: blink/head-turn is not certified anti-spoofing; ECAPA exports with mel-feature inputs are rejected until exact preprocessing is validated; no licensed SFace/ECAPA model weights are bundled; no benchmark or physical-device biometric accuracy test has been performed. The current capture flow must not be treated as secure identity proof.
 
 ### Build verification
-- Earlier CI run exposed namespace import errors, missing CameraX/ML Kit/Exif dependencies, missing Guava ListenableFuture and missing biometric implementation classes. Source changes were made to address these blockers.
-- A new CI run after adding Guava and Kotlin escaped-package imports is in progress. Do not treat it as passed until the run concludes successfully.
+- CI run 44568205177 completed successfully for the earlier Step 3/4 engine and dependency changes.
+- CI runs for the latest People Memory UI integration (bcd0c3a1…) and HTTPS/WSS relay hardening (a0fe74ad…) were triggered and must be checked separately; do not infer their outcome from the earlier passing run.
+- No physical-device validation or certified biometric spoof testing has been performed.
