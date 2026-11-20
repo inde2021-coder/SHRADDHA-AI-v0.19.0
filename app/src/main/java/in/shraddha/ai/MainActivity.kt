@@ -579,69 +579,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun addExpertStudioSection(root: LinearLayout) {
-        section(root, "08  •  EXPERT COURSE, REPAIR & CREATOR STUDIO", "Electronics, engineering, medical education, agriculture, law और content creation के लिए multi-domain AI workspace") {
-            val domains = listOf(
-                "electronics" to "Electronics Engineering", "electrical" to "Electrical Engineering",
-                "mechanical" to "Mechanical Engineering", "medical" to "Medical & Health Education",
-                "agriculture" to "Agriculture & Farming", "civil" to "Civil Engineering",
-                "law" to "Law & Legal Studies", "repair" to "Repair & Troubleshooting",
-                "creator" to "Creator Studio", "general" to "General Science & Technology"
-            )
-            val modes = listOf(
-                "learn" to "Structured Course / Learn", "solve" to "Problem Solver", "design" to "Project / Design Creator",
-                "diagnose" to "Repair / Fault Diagnosis", "exam" to "Exam Preparation", "create" to "Content Creator"
-            )
-            addView(TextView(this@MainActivity).apply { text = "Choose your expert field"; setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(0, dp(6), 0, dp(4)) })
-            val domainPicker = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, domains.map { it.second })
-            }
-            addView(domainPicker)
-            addView(TextView(this@MainActivity).apply { text = "Choose what $assistantDisplayName should do"; setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(0, dp(10), 0, dp(4)) })
-            val modePicker = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, modes.map { it.second })
-            }
-            addView(modePicker)
-            val expertProvider = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
-            }
-            addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFFE4E9F5.toInt()); textSize = 14f; setPadding(0, dp(10), 0, dp(4)) })
-            addView(expertProvider)
-            val request = edit("Describe your question / project / repair issue", "उदाहरण: 1 HP मोटर की basic working समझाओ; गेहूँ की फसल में पीले पत्तों के संभावित कारण बताओ; 60 सेकंड का science video script बनाओ").apply { isSingleLine = false; minLines = 4 }
-            addView(request)
-            val result = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14); text = "आपका उत्तर, course outline, repair decision-tree या creator draft यहाँ दिखाई देगा।" }
-            addView(result)
-            addView(actionButton("Ask Domain Expert / Create Solution", "AI answer • structured learning • safe troubleshooting • creator drafts") {
-                val url = relayUrl.text.toString().trim()
-                val question = request.text.toString().trim()
-                if (!validRelay(url) || question.isBlank()) { status.text = "पहले HTTPS relay URL और अपना सवाल भरें।"; return@actionButton }
-                val domain = domains[domainPicker.selectedItemPosition].first
-                val mode = modes[modePicker.selectedItemPosition].first
-                result.text = "${domains[domainPicker.selectedItemPosition].second} विशेषज्ञ से उत्तर तैयार हो रहा है…"
-                DeviceLinkManager.expertAssist(url, gatewayToken.text.toString(), expertProvider.selectedItem.toString(), domain, mode, question) { response -> runOnUiThread {
-                    result.text = response.getOrElse { "Expert Studio error: ${it.message}" }.let { raw ->
-                        runCatching { org.json.JSONObject(raw).optString("answer").ifBlank { raw } }.getOrDefault(raw)
-                    }
-                } }
-            })
-            addView(TextView(this@MainActivity).apply {
-                text = "महत्वपूर्ण: Medical भाग शिक्षा के लिए है, diagnosis/prescription नहीं। Electrical, mechanical, repair और civil काम में जोखिम होने पर विशेषज्ञ/लाइसेंसधारी व्यक्ति से जाँच कराएँ। Law उत्तर सामान्य जानकारी है; सही jurisdiction और वकील की सलाह जरूरी हो सकती है। AI-generated design को निर्माण/मरम्मत से पहले verify करें।"
-                textSize = 12f; setTextColor(0xFFFFC98A.toInt()); setPadding(0, dp(10), 0, dp(4))
-            })
-        }
-    }
-
     private fun addCompleteExpertHubSection(root: LinearLayout) {
-        section(root, "09  •  COMPLETE EXPERT HUB", "AI University • CAD/3D • Circuit/PCB • Civil • Medical Education • Agriculture • Law • Repair • Creator • Research • Software") {
+        section(root, "09  •  PRACTICAL EXPERT HUB", "Engineering • Medical information • Agriculture • Law • Repair • CAD/3D • Creator • Research • Software") {
             val workspaces = listOf(
-                "university" to "AI University & Courses", "electronics" to "Electronics Engineering", "electrical" to "Electrical Engineering",
+                "electronics" to "Electronics Engineering", "electrical" to "Electrical Engineering",
                 "mechanical" to "Mechanical Engineering", "cad3d" to "CAD / 3D Design", "circuit_pcb" to "Circuit & PCB Studio",
-                "civil_building" to "Civil & Building Plan", "medical_education" to "Medical Education", "agriculture" to "Agriculture AI",
-                "law" to "Law & Legal Studies", "repair" to "Universal Repair", "creator" to "Creator Studio", "software" to "Software & App Builder",
+                "civil_building" to "Civil & Building Plan", "medical" to "Medical Information Assistant", "agriculture" to "Agriculture AI",
+                "law" to "Law & Legal Information", "repair" to "Universal Repair", "creator" to "Creator Studio", "software" to "Software & App Builder",
                 "research" to "Deep Research Lab", "data_science" to "Data Science", "robotics" to "Robotics", "drone" to "Drone & Mapping",
                 "gis" to "GIS & Spatial Analysis", "smart_home" to "Smart Home / IoT", "business" to "Business & Finance"
             )
-            val tasks = listOf("teach" to "Teach / Explain", "course" to "Build Full Course", "quiz" to "Quiz & Exam", "solve" to "Solve Problem", "design" to "Design / Create", "diagnose" to "Diagnose / Troubleshoot", "research" to "Research / Compare", "create" to "Create Deliverable", "estimate" to "Estimate / Calculate", "review" to "Review / Audit")
+            val tasks = listOf("solve" to "Solve Practical Problem", "design" to "Design / Create", "diagnose" to "Diagnose / Troubleshoot", "research" to "Research / Compare", "create" to "Create Deliverable", "estimate" to "Estimate / Calculate", "review" to "Review / Audit")
             val workspacePicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, workspaces.map { it.second }) }
             val taskPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, tasks.map { it.second }) }
             val providerPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity")) }
@@ -653,7 +601,7 @@ class MainActivity : AppCompatActivity() {
             addView(taskPicker)
             addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
             addView(providerPicker)
-            val request = edit("Project / course / problem", "जैसे 6 महीने का Electronics course बनाओ, या 2BHK का conceptual floor plan तैयार करो").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
+            val request = edit("Practical project / problem", "जैसे 2BHK का conceptual floor plan तैयार करो, मोटर की fault diagnosis करो, या फसल की समस्या का विश्लेषण करो").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
             addView(request)
             val output = TextView(this@MainActivity).apply { text = "Generated work यहाँ दिखाई देगा। इसे local project library में save या Android share sheet से export कर सकते हैं।"; setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(14), dp(14), dp(14), dp(14)); background = rounded(0xFF111B2D.toInt(), 16); minHeight = dp(110) }
             addView(output)
