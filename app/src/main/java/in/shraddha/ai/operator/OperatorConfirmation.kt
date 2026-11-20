@@ -27,7 +27,7 @@ class OperatorConfirmation private constructor(
         private const val MAX_AGE_MS = 30_000L
 
         /** Call only from the positive button handler after a visible user approval dialog. */
-        fun afterExplicitUserApproval(
+        internal fun afterExplicitUserApproval(
             step: OperatorStep,
             nowElapsedMs: Long = System.nanoTime() / 1_000_000L
         ): OperatorConfirmation = OperatorConfirmation(
