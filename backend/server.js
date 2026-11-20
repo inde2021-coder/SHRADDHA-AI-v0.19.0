@@ -13,7 +13,7 @@ const apiAttempts = new Map();
 const knowlarityEvents = new Map();
 const KNOWLARITY_CHANNELS = new Set(['Basic','Advance','Premium','Enterprise']);
 function knowlarityConfigured() { return Boolean(process.env.KNOWLARITY_API_KEY && process.env.KNOWLARITY_SR_API_KEY && process.env.KNOWLARITY_NUMBER && process.env.KNOWLARITY_WEBHOOK_TOKEN); }
-function normalizeE164(value) { return typeof value === 'string' && /^\\+[1-9]\\d{7,14}$/.test(value); }
+function normalizeE164(value) { return typeof value === 'string' && /^\+[1-9]\d{7,14}$/.test(value); }
 function saveKnowlarityEvent(payload) {
   const event = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
   const id = String(event.uuid || event.call_id || event.id || randomBytes(12).toString('hex')).slice(0, 120);
