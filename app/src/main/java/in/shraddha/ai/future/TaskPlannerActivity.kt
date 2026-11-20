@@ -137,6 +137,10 @@ class TaskPlannerActivity : AppCompatActivity() {
                 }
             })
             row.addView(Button(this).apply {
+                text = "Edit"; isAllCaps = false
+                setOnClickListener { editTask(task) }
+            })
+            row.addView(Button(this).apply {
                 text = "×"; contentDescription = "Delete task"
                 setOnClickListener {
                     AlertDialog.Builder(this@TaskPlannerActivity).setMessage("Delete this task?")
@@ -157,6 +161,45 @@ class TaskPlannerActivity : AppCompatActivity() {
             })
             list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
+    }
+
+
+    private fun editTask(task: Task) {
+        val titleInput = EditText(this).apply { setText(task.title); hint = "Task title"; setTextColor(Color.WHITE) }
+        val noteInput = EditText(this).apply { setText(task.note); hint = "Optional details"; setTextColor(Color.WHITE) }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(titleInput)
+            addView(noteInput)
+        }
+        AlertDialog.Builder(this).setTitle("Edit task").setView(form)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save and reschedule") { _, _ ->
+                val title = titleInput.text.toString().trim()
+                if (title.isBlank()) { toast("Task title is required"); return@setPositiveButton }
+                val oldDate = Calendar.getInstance().apply { timeInMillis = task.dueAt }
+                DatePickerDialog(this, { _, year, month, day ->
+                    TimePickerDialog(this, { _, hour, minute ->
+                        val due = Calendar.getInstance().apply {
+                            set(year, month, day, hour, minute, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                        if (due <= System.currentTimeMillis() && !task.done) {
+                            toast("Choose a future reminder time")
+                            return@TimePickerDialog
+                        }
+                        cancelReminder(task)
+                        val updated = task.copy(title = title, note = noteInput.text.toString().trim(), dueAt = due)
+                        val index = tasks.indexOfFirst { it.id == task.id }
+                        if (index >= 0) tasks[index] = updated
+                        if (!updated.done) schedule(updated)
+                        saveTasks()
+                        render()
+                        toast("Task updated")
+                    }, oldDate.get(Calendar.HOUR_OF_DAY), oldDate.get(Calendar.MINUTE), false).show()
+                }, oldDate.get(Calendar.YEAR), oldDate.get(Calendar.MONTH), oldDate.get(Calendar.DAY_OF_MONTH)).show()
+            }.show()
     }
 
     private fun loadTasks() {
