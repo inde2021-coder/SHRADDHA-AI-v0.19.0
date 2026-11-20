@@ -4,7 +4,14 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /** Local, permission-gated observe -> act -> re-observe engine. It never bypasses Android security surfaces. */
-class OperatorEngine(\n    private val emit: (OperatorEvent) -> Unit,\n    private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> }\n) {\n    private fun record(event: String, outcome: String, step: OperatorStep, snapshot: ScreenSnapshot? = null) {\n        // Never audit typed text, screen contents or secrets. Record action metadata only.\n        runCatching { audit(event, outcome, "action=${step.action}; target=${step.target.take(80)}; package=${snapshot?.packageName.orEmpty().take(120)}") }\n    }
+class OperatorEngine(
+    private val emit: (OperatorEvent) -> Unit,
+    private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> }
+) {
+    private fun record(event: String, outcome: String, step: OperatorStep, snapshot: ScreenSnapshot? = null) {
+        // Never audit typed text, screen contents or secrets. Record action metadata only.
+        runCatching { audit(event, outcome, "action=${step.action}; target=${step.target.take(80)}; package=${snapshot?.packageName.orEmpty().take(120)}") }
+    }
     @Volatile private var cancelled = false
 
     fun cancel() { cancelled = true; emit(OperatorEvent(OperatorTaskState.CANCELLED, "काम उपयोगकर्ता ने रोक दिया।")) }
@@ -58,6 +65,7 @@ class OperatorEngine(\n    private val emit: (OperatorEvent) -> Unit,\n    priva
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित परिणाम स्क्रीन पर सत्यापित नहीं हुआ।", after)); record("operator_action", "verification_failed", step, after); return false
         }
         emit(OperatorEvent(OperatorTaskState.COMPLETED, "चरण पूरा हुआ और स्क्रीन दोबारा जाँची गई।", after))
+        record("operator_action", "verified", step, after)
         return true
     }
 }
