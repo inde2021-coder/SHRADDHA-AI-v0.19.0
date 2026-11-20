@@ -31,6 +31,22 @@ Provider documentation:
 - https://edesy.in/docs/ivr/nodes/stream-to-ai
 - https://developers.openai.com/api/docs/guides/voice-websockets
 
+
+## Personal SIM fallback: ring the owner first, then Shraddha AI
+
+This is the selected call experience. The caller continues to dial the user's existing personal SIM number.
+
+1. On the mobile operator account/SIM, enable **conditional call forwarding on no reply / no answer** to the Edesy DID number. Do not enable unconditional forwarding.
+2. Set the operator's no-answer delay (where supported) to a comfortable interval, typically 20–30 seconds, so the handset rings first.
+3. Leave call forwarding on busy and unreachable disabled unless the owner explicitly wants those cases routed to the AI too.
+4. Configure the Edesy DID's inbound route to the AI Voice Agent Stream flow described above.
+5. Test from a second phone: (a) answer the SIM call and confirm the AI does not join; (b) ignore the call and confirm it forwards after the configured delay; (c) reject/busy and unreachable cases should follow the separately configured operator rules.
+6. Verify with the mobile operator the forwarding activation method, supported delay, and charges. Activation codes and charges vary by operator and plan; do not copy a generic USSD code without carrier confirmation.
+
+**Important:** No-answer forwarding is a mobile-network feature, not an Android app feature. The handset rings first; if unanswered, the operator forwards the call to the Edesy DID. The caller still dialled only the original SIM number. Forwarded-leg charges may apply according to the SIM operator, in addition to Edesy DID/minute and AI usage charges.
+
+The Edesy DID and AI voice flow must be provisioned and tested before enabling forwarding on the personal SIM. Keep the ability to disable no-answer forwarding from the handset/operator account as a fallback.
+
 ## Important limitations / release gate
 
 - This is a backend integration implementation, not proof of a working paid Edesy account or successful PSTN call.
