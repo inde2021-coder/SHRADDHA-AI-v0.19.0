@@ -33,21 +33,23 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     }
 
     private fun performRemoteTap(xNorm: Float, yNorm: Float): Boolean {
-        if (Build.VERSION.SDK_INT < 24) return false
+        if (Build.VERSION.SDK_INT < 24 || !xNorm.isFinite() || !yNorm.isFinite() ||
+            xNorm !in 0f..1f || yNorm !in 0f..1f) return false
         val metrics = resources.displayMetrics
-        val x = (xNorm.coerceIn(0f, 1f) * metrics.widthPixels)
-        val y = (yNorm.coerceIn(0f, 1f) * metrics.heightPixels)
+        val x = xNorm * metrics.widthPixels
+        val y = yNorm * metrics.heightPixels
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 90)).build()
         return dispatchGesture(gesture, null, null)
     }
 
     private fun performRemoteSwipe(x1: Float, y1: Float, x2: Float, y2: Float): Boolean {
-        if (Build.VERSION.SDK_INT < 24) return false
+        val coordinates = listOf(x1, y1, x2, y2)
+        if (Build.VERSION.SDK_INT < 24 || coordinates.any { !it.isFinite() || it !in 0f..1f }) return false
         val metrics = resources.displayMetrics
         val path = Path().apply {
-            moveTo(x1.coerceIn(0f, 1f) * metrics.widthPixels, y1.coerceIn(0f, 1f) * metrics.heightPixels)
-            lineTo(x2.coerceIn(0f, 1f) * metrics.widthPixels, y2.coerceIn(0f, 1f) * metrics.heightPixels)
+            moveTo(x1 * metrics.widthPixels, y1 * metrics.heightPixels)
+            lineTo(x2 * metrics.widthPixels, y2 * metrics.heightPixels)
         }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 350)).build()
         return dispatchGesture(gesture, null, null)
@@ -152,7 +154,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
                 "tap" -> service.performRemoteTap(action.optDouble("x").toFloat(), action.optDouble("y").toFloat())
                 "swipe" -> service.performRemoteSwipe(action.optDouble("x1").toFloat(), action.optDouble("y1").toFloat(), action.optDouble("x2").toFloat(), action.optDouble("y2").toFloat())
                 "type" -> service.setFocusedText(action.optString("text").take(2000))
-                "click_text" -> service.clickVisibleText(action.optString("text").take(120))
+                "click_text" -> action.optString("text").trim().takeIf { it.isNotEmpty() && it.length <= 120 }?.let(service::clickVisibleText) ?: false
                 "open_app" -> service.openInstalledApp(action.optString("appName").take(80))
                 "home" -> service.performGlobalAction(GLOBAL_ACTION_HOME)
                 "back" -> service.performGlobalAction(GLOBAL_ACTION_BACK)
