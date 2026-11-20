@@ -44,6 +44,7 @@ import com.Lia.assistant.data.AssistantBrand
 class MainActivity : AppCompatActivity() {
     private val assistantDisplayName: String
         get() = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
+    private val securityAudit by lazy { in.shraddha.ai.future.LocalAuditTrail(applicationContext) }
     private lateinit var status: TextView
     private lateinit var pageRoot: LinearLayout
     private lateinit var shell: LinearLayout
@@ -687,7 +688,7 @@ class MainActivity : AppCompatActivity() {
                         if (!checked) {
                             when (key) {
                                 "screen" -> { stopService(Intent(this@MainActivity, ScreenShareService::class.java)); lastScreenJpeg = null }
-                                "camera" -> { stopService(Intent(this@MainActivity, RemoteCameraService::class.java)); lastCameraJpeg = null }
+                                "camera" -> { stopService(Intent(this@MainActivity, RemoteCameraService::class.java)); lastCameraJpeg = null; securityAudit.append("camera_share", "stopped", "user_or_permission_revoked") }
                             }
                         }
                         publishDataPermissions()
@@ -777,6 +778,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             val intent = Intent(this, RemoteCameraService::class.java).putExtra(RemoteCameraService.EXTRA_FACING, facing).putExtra(RemoteCameraService.EXTRA_TARGET, target)
             ContextCompat.startForegroundService(this, intent)
+            securityAudit.append("camera_share", "started", "facing=$facing; foreground_service=true")
             status.text = "${if (facing == "front") "Front" else "Rear"} camera sharing started. Android camera indicator दिखाई देगा।"
         }
     }
@@ -2203,6 +2205,7 @@ class MainActivity : AppCompatActivity() {
                     .putExtra(BiometricCaptureActivity.EXTRA_CONSENT, true)
                     .putExtra(BiometricCaptureActivity.EXTRA_THRESHOLD, threshold ?: Float.NaN)
                 consent.isChecked = false
+                securityAudit.append("biometric_capture", "started", "kind=$kind; mode=$mode; explicit_session_consent=true")
                 startActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
             }
             addView(actionButton("ENROLL FACE • LIVE CAMERA", "Random blink + head-turn liveness check; camera runs only on this screen") { launchCapture("face", "enroll") })
@@ -2527,6 +2530,7 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode == faceCaptureRequest || requestCode == speakerCaptureRequest) {
             status.text = data?.getStringExtra(BiometricCaptureActivity.EXTRA_RESULT) ?: "Biometric capture cancelled or did not complete."
+            securityAudit.append("biometric_capture", if (resultCode == Activity.RESULT_OK) "finished" else "cancelled", "request=${if (requestCode == faceCaptureRequest) "face" else "speaker"}; result_text_not_logged")
             refreshBiometricStatus?.invoke()
             return
         }
