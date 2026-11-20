@@ -25,4 +25,9 @@ class WorkflowEngine {
         val step=s.steps[next]
         return s.copy(currentStep=next,status=if(step.requiresApproval || step.risk==Risk.SENSITIVE || step.risk==Risk.IRREVERSIBLE) WorkflowStatus.WAITING_FOR_APPROVAL else WorkflowStatus.RUNNING,message="Next: ${step.title}")
     }
+    fun markFailed(s: WorkflowSnapshot, reason: String): WorkflowSnapshot {
+        require(s.status == WorkflowStatus.RUNNING || s.status == WorkflowStatus.VERIFYING)
+        return s.copy(status = WorkflowStatus.FAILED, message = reason.take(240))
+    }
 }
+
