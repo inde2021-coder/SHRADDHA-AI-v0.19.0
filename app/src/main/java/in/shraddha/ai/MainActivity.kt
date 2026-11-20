@@ -2414,6 +2414,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun installLinkCallbacks() {
         DeviceLinkManager.onStatus = { message -> runOnUiThread { status.text = message } }
+        DeviceLinkManager.onE2EVerification = { peerId, fingerprint ->
+            runOnUiThread {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Verify paired-device encryption")
+                    .setMessage("Device: " + (peerNames[peerId] ?: peerId) + "\n\nFingerprint:\n" + fingerprint + "\n\nCompare this exact code with the other device through a separate trusted channel. Only confirm if both screens show the same code. A mismatch may indicate interception.")
+                    .setNegativeButton("Do not trust", null)
+                    .setPositiveButton("Fingerprint matches") { _, _ ->
+                        val sent = DeviceLinkManager.confirmE2EPeer(peerId, fingerprint)
+                        status.text = if (sent) "Local fingerprint confirmed. Waiting for the other device to confirm too." else "Could not confirm fingerprint; reconnect and try again."
+                    }.show()
+            }
+        }
         DeviceLinkManager.onPeerMessage = { msg ->
             if (msg.optString("type") == "connected") {
                 val peers = msg.optJSONArray("devices")
