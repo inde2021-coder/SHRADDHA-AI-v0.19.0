@@ -33,6 +33,7 @@ android {
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseConfigValue("FIREBASE_PROJECT_ID")}\"")
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseConfigValue("FIREBASE_SENDER_ID")}\"")
         buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${firebaseConfigValue("FIREBASE_STORAGE_BUCKET")}\"")
+        buildConfigField("String", "FIREBASE_DATABASE_URL", "\"${firebaseConfigValue("FIREBASE_DATABASE_URL")}\"")
     }
     buildFeatures { buildConfig = true; compose = true }
     compileOptions {
@@ -87,6 +88,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
