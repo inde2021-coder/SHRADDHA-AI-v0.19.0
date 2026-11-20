@@ -1841,7 +1841,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val appContext = applicationContext
-        DeviceLinkManager.onRemoteAction = { fromDeviceId, action ->
+        DeviceLinkManager.onRemoteAction = { fromDeviceId, actionId, action ->
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val prefs = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
                 val enabled = prefs.getBoolean("remote_control_consent", false)
@@ -1876,6 +1876,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 if (risk.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK) {
                     status.text = "Remote action blocked by safety policy: ${risk.reason}"
+                    DeviceLinkManager.respondRemoteAction(actionId, false, risk.reason)
                     return@post
                 }
                 android.app.AlertDialog.Builder(this@MainActivity)
@@ -1883,6 +1884,7 @@ class MainActivity : AppCompatActivity() {
                     .setMessage("Device: $fromDeviceId\nAction: $detail\n\nक्या इस एक कार्रवाई की अनुमति दें?")
                     .setNegativeButton("Deny") { _, _ ->
                         status.text = "Remote action denied by you."
+                        DeviceLinkManager.respondRemoteAction(actionId, false, "Denied on receiving device")
                     }
                     .setPositiveButton("Allow once") { _, _ ->
                         val stillAuthorized = prefs.getBoolean("remote_control_consent", false) &&
@@ -1890,14 +1892,25 @@ class MainActivity : AppCompatActivity() {
                             System.currentTimeMillis() < prefs.getLong("remote_control_grant_expires_at", 0L)
                         if (!stillAuthorized) {
                             status.text = "Remote action blocked: approval expired before confirmation."
+                            DeviceLinkManager.respondRemoteAction(actionId, false, "Approval expired before confirmation")
                         } else {
                             val applied = ShraddhaAccessibilityService.applyRemoteAction(action, userConfirmed = true)
                             status.text = if (applied) "Approved remote action executed." else
                                 "Approved action could not be completed; Accessibility service may be unavailable."
+                            DeviceLinkManager.respondRemoteAction(actionId, applied, if (applied) "" else "Accessibility service unavailable or action failed")
                         }
                     }
-                    .setOnCancelListener { status.text = "Remote action dismissed; no action was executed." }
+                    .setOnCancelListener {
+                        status.text = "Remote action dismissed; no action was executed."
+                        DeviceLinkManager.respondRemoteAction(actionId, false, "Approval dialog dismissed")
+                    }
                     .show()
+            }
+        }
+        DeviceLinkManager.onRemoteActionResult = { targetId, actionId, ok, reason ->
+            runOnUiThread {
+                status.text = if (ok) "Remote action verified: $actionId completed on $targetId."
+                    else "Remote action failed on $targetId: ${reason.ifBlank { "not completed" }}"
             }
         }
         DeviceLinkManager.onScreenFrame = { sourceId, bytes ->
