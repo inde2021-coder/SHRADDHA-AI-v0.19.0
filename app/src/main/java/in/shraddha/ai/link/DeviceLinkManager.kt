@@ -65,7 +65,7 @@ object DeviceLinkManager {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
-                    if (msg.optString("type").startsWith("file_transfer_") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
+                    if ((msg.optString("type").startsWith("file_transfer_") && msg.optString("type") != "file_transfer_chunk") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
                     when (msg.optString("type")) {
                         "e2e_message" -> {
                             val peerId = msg.optString("fromDeviceId")
@@ -137,11 +137,9 @@ object DeviceLinkManager {
                         }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
-                        "remote_action" -> { val sender = msg.optString("fromDeviceId"); val actionId = msg.optString("actionId"); val action = msg.optJSONObject("action") ?: JSONObject(); if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && msg.optBoolean("requiresPerActionApproval")) onRemoteActionWithId?.invoke(sender, actionId, action) else onStatus?.invoke("Unverified remote action blocked: missing approval metadata") }
-                        "remote_action_result" -> {
-                            onRemoteActionResult?.invoke(msg.optString("fromDeviceId"), msg.optString("actionKind"), msg.optString("result"))
-                            onPeerMessage?.invoke(msg)
-                        }
+                        "remote_action" -> onStatus?.invoke("Blocked plaintext remote action. End-to-end encryption is mandatory.")
+                        "remote_action_result" -> onStatus?.invoke("Blocked plaintext remote action result. End-to-end encryption is mandatory.")
+                        "file_transfer_chunk" -> onStatus?.invoke("Blocked plaintext file chunk. End-to-end encryption is mandatory.")
                         else -> onPeerMessage?.invoke(msg)
                     }
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
@@ -387,9 +385,8 @@ object DeviceLinkManager {
     }
     fun revokePairedDevice(targetDeviceId: String): Boolean = socket?.send(JSONObject().put("type", "revoke_device").put("targetDeviceId", targetDeviceId).toString()) == true
     fun leavePairedSession(): Boolean = socket?.send(JSONObject().put("type", "leave_session").toString()) == true
-    fun sendRemoteActionResult(targetDeviceId: String, actionKind: String, result: String): Boolean =
-        socket?.send(JSONObject().put("type", "remote_action_result").put("targetDeviceId", targetDeviceId)
-            .put("actionKind", actionKind.take(32)).put("result", result.take(1000)).toString()) == true
+    @Deprecated("An actionId and mutually verified E2E peer key are required")
+    fun sendRemoteActionResult(targetDeviceId: String, actionKind: String, result: String): Boolean = false
     fun requestPcOcr(targetDeviceId: String): Boolean =
         sendAction(targetDeviceId, JSONObject().put("kind", "ocr"))
 
