@@ -1485,7 +1485,7 @@ class MainActivity : AppCompatActivity() {
                 val enabledListeners = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
                 val component = android.content.ComponentName(this@MainActivity, `in`.shraddha.ai.future.ShraddhaNotificationListener::class.java)
                 val access = enabledListeners.split(':').any { it.equals(component.flattenToString(), true) }
-                val events = runCatching { org.json.JSONArray(notificationPrefs.getString(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_EVENTS, "[]")).length() }.getOrDefault(0)
+                val events = runCatching { val saved = EncryptedFeatureStore(this@MainActivity).get(`in`.shraddha.ai.future.ShraddhaNotificationListener.ENCRYPTED_EVENTS_KEY).getOrThrow(); if (saved.isBlank()) 0 else org.json.JSONArray(saved).length() }.getOrDefault(0)
                 notificationStatus.text = "OS notification access: ${if (access) "GRANTED" else "NOT GRANTED"}\nMetadata capture: ${if (notificationConsent.isChecked) "ON" else "OFF"}\nStored metadata events: $events / 100\nNotification content is never read; notifications are never dismissed."
             }
             addView(TextView(this@MainActivity).apply { text = "19 • SMART NOTIFICATION MANAGER"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
@@ -1504,6 +1504,7 @@ class MainActivity : AppCompatActivity() {
                 android.app.AlertDialog.Builder(this@MainActivity).setTitle("Clear notification history?")
                     .setMessage("Only locally stored app/category/time metadata will be deleted.")
                     .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
+                        EncryptedFeatureStore(this@MainActivity).remove(`in`.shraddha.ai.future.ShraddhaNotificationListener.ENCRYPTED_EVENTS_KEY)
                         notificationPrefs.edit().remove(`in`.shraddha.ai.future.ShraddhaNotificationListener.KEY_EVENTS).apply()
                         refreshNotificationStatus()
                     }.show()
