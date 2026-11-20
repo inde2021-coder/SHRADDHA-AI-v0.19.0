@@ -35,7 +35,7 @@ object MultiProviderChatClient {
         // Groq retired llama-3.3-70b-versatile for developer-tier traffic in August 2026.
         "GROQ" -> Config("https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
         "PERPLEXITY" -> Config("https://api.perplexity.ai/v1/agent", "", perplexityAgent = true)
-        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5-5", true)
+        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5", true)
         else -> null
     }
 
@@ -132,7 +132,8 @@ object MultiProviderChatClient {
             )
         }
         return JSONObject()
-            .put("preset", "fast")
+            // Current Agent API uses effort levels (preset is the older field name).
+            .put("effort", "fast")
             .put("instructions", systemInstruction)
             .put("input", input)
             .put("max_output_tokens", 2048)
@@ -175,6 +176,21 @@ object MultiProviderChatClient {
                         val title = result.optString("title").trim().ifBlank { url }
                         if (url.startsWith("https://") || url.startsWith("http://")) {
                             if (!sources.containsKey(url)) sources[url] = title
+                        }
+                    }
+                }
+                "message" -> {
+                    val content = item.optJSONArray("content") ?: JSONArray()
+                    for (j in 0 until content.length()) {
+                        val part = content.optJSONObject(j) ?: continue
+                        val annotations = part.optJSONArray("annotations") ?: JSONArray()
+                        for (k in 0 until annotations.length()) {
+                            val annotation = annotations.optJSONObject(k) ?: continue
+                            val url = annotation.optString("url").trim()
+                            val title = annotation.optString("title").trim().ifBlank { url }
+                            if (url.startsWith("https://") || url.startsWith("http://")) {
+                                if (!sources.containsKey(url)) sources[url] = title
+                            }
                         }
                     }
                 }
