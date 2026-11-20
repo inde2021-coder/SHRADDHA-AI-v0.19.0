@@ -6,7 +6,7 @@ import { canShareVisualFrame } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
-import { normalizePlanSteps } from './plan-safety.js';
+import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
 import { buildVisionPrompt } from './vision-analysis.js';
 
@@ -18,7 +18,7 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare','/api/voice/synthesize','/api/social/publish']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
@@ -404,6 +404,36 @@ const server = http.createServer(async (req, res) => {
       const prompt = `You are Shraddha AI's multidisciplinary expert tutor and practical creator assistant. Respond in the same language as the user (Hindi/Hinglish/English). Domain: ${domain}. Mode: ${mode}.\nDOMAIN RULES: ${domainRules[domain]}\nTASK RULES: ${modeRules[mode]}\nGeneral quality: be accurate, structured, beginner-friendly but technically deep; show formulas and units when relevant; separate known facts, assumptions and estimates; never invent sources, laws, standards, citations, prices or current data. If current local regulations/medical guidance/agrochemical labels are essential and you cannot verify them, say so and ask for the jurisdiction/source. Ask concise clarifying questions if essential information is missing. Never claim to have inspected a physical device or executed a repair. End with a short safety/verification checklist when relevant.\nUser request: ${body.question.trim()}`;
       const result = await askProviderDetailed(provider, prompt);
       return json(res, 200, { provider: result.provider, requestedProvider: provider, domain, mode, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed', safetyReviewRequired: ['medical','electrical','electronics','mechanical','civil','law','repair'].includes(domain) });
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/council/operator-plan') {
+      const body = await readBody(req, 12 * 1024);
+      if (typeof body.goal !== 'string' || !body.goal.trim() || body.goal.length > 3000) return json(res, 400, { error: 'goal must be 1-3000 characters' });
+      const supported = ['openai','gemini','anthropic','groq','perplexity'];
+      const providers = [...new Set((Array.isArray(body.providers) ? body.providers : []).filter(x => supported.includes(x)))].slice(0, 5);
+      if (providers.length < 1) return json(res, 400, { error: 'Choose at least one supported AI provider' });
+      const requested = providers[0];
+      const prompt = `Convert the user's goal into a SHORT proposed Android accessibility workflow. Return ONLY one JSON object, no markdown: {"steps":[{"id":"step_1","title":"Open Settings","action":"OPEN_APP","target":"Settings","value":"","expectedVisibleText":"Settings"}]}. Allowed actions ONLY: OPEN_APP, CLICK_TEXT, TYPE_TEXT, BACK, HOME, SCROLL_FORWARD. Maximum 8 steps. Each step must be a small observable UI action, never a general instruction. OPEN_APP requires target app name. CLICK_TEXT requires exact visible target label. TYPE_TEXT uses value only for ordinary non-secret text and must not target password, OTP, PIN, payment or private fields. Never create payment, send, publish, delete, purchase, install, permission changes, account/security changes, or any irreversible action. If goal requires those, return {"steps":[]} and explain no safe operator plan can be generated. Include expectedVisibleText when a reliable post-action label can be expected; otherwise empty string. Do not invent screen labels or claim the app is installed. IDs must be unique simple strings. User goal: ${body.goal.trim()}`;
+      const generated = await askProvider(requested, prompt);
+      let parsed;
+      try {
+        const start = generated.indexOf('{');
+        const end = generated.lastIndexOf('}');
+        if (start < 0 || end <= start) throw new Error('No JSON object');
+        parsed = JSON.parse(generated.slice(start, end + 1));
+      } catch {
+        return json(res, 422, { error: 'AI did not return a valid structured operator plan. Nothing was executed.' });
+      }
+      const steps = normalizeOperatorActions(parsed.steps);
+      if (!steps.length) return json(res, 422, { error: 'No safe supported operator steps were produced. Nothing was executed.' });
+      return json(res, 200, {
+        mode: 'council_operator_plan_proposal',
+        provider: requested,
+        goal: body.goal.trim(),
+        steps,
+        requiresUserReview: true,
+        requiresPerStepApproval: true,
+        execution: 'proposal_only_no_actions_executed'
+      });
     }
     if (req.method === 'POST' && req.url === '/api/agents/council') {
       if (!process.env.GATEWAY_TOKEN || req.headers.authorization !== `Bearer ${process.env.GATEWAY_TOKEN}`) return json(res, 401, { error: 'Gateway authentication is required' });
