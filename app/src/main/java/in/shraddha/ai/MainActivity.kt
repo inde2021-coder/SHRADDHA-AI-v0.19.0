@@ -267,6 +267,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         section(pageRoot, "COMMAND CENTER", "सभी systems एक unified dashboard से") {
+            addView(workspaceTile("☎  AI PHONE AGENT", "Incoming call assistant • caller history • call settings") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.phone.PhoneAgentActivity::class.java)) })
             addView(workspaceTile("✦  AI BRAIN + ${assistantDisplayName.uppercase()} VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             addView(workspaceTile("◈  ${assistantDisplayName.uppercase()} PC COMPANION", "Windows/Linux companion • Website Forge • PC automation") { showPage("devices") })
             addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical information • Agriculture • Law • Creator") { showPage("expert") })
