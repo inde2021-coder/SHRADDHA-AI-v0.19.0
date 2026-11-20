@@ -37,3 +37,22 @@ export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes
   const expected = index === chunkCount - 1 ? totalBytes - index * 48 * 1024 : 48 * 1024;
   return expected > 0 && byteLength === expected;
 }
+
+export function validRemoteActionEnvelope(actionId, action, now = Date.now()) {
+  return typeof actionId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(actionId) &&
+    action && typeof action === 'object' && !Array.isArray(action) &&
+    ['tap','swipe','type','click_text','open_app','home','back','scroll','ocr','file_list','file_read','file_search','offline_chat'].includes(action.kind) &&
+    Number.isFinite(now);
+}
+
+export function revokePairedDevice(session, deviceId, actorId) {
+  if (!session?.devices || typeof deviceId !== 'string' || !deviceId || deviceId === actorId) return false;
+  const actor = session.devices.get(actorId);
+  const target = session.devices.get(deviceId);
+  if (!actor || !target || actor.role !== 'owner') return false;
+  target.controlGrants?.clear(); target.pendingControlRequests?.clear(); target.grants?.clear();
+  target.incomingTransfers?.clear();
+  try { target.socket?.close(4003, 'Device revoked by owner'); } catch {}
+  session.devices.delete(deviceId);
+  return true;
+}
