@@ -387,7 +387,9 @@ wss.on('connection', (ws, ctx) => {
       const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
       if (targetId && (!session.devices.has(targetId) || targetId === deviceId)) return;
       const jpeg = clientFrame.subarray(2 + targetLength);
-      if (!jpeg.length || jpeg.length > 2_500_000) return;
+      if (jpeg.length < 4 || jpeg.length > 2_500_000) return;
+      // Only relay JPEG payloads; reject arbitrary binary blobs disguised as camera/screen frames.
+      if (jpeg[0] !== 0xff || jpeg[1] !== 0xd8) return;
       const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([frameType]), jpeg]);
       if (targetId) send(targetId, framed, true);
       else for (const [id] of session.devices) if (id !== deviceId) send(id, framed, true);
