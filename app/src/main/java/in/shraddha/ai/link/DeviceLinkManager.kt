@@ -17,7 +17,8 @@ object DeviceLinkManager {
     @Volatile var deviceId: String? = null; private set
     @Volatile private var deviceToken: String? = null
     @Volatile var onStatus: ((String) -> Unit)? = null
-    @Volatile var onRemoteAction: ((String, JSONObject) -> Unit)? = null
+    @Volatile var onRemoteAction: ((String, String, JSONObject) -> Unit)? = null
+    @Volatile var onRemoteActionResult: ((String, String, Boolean, String) -> Unit)? = null
     @Volatile var onScreenFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onCameraFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onPeerMessage: ((JSONObject) -> Unit)? = null
@@ -58,7 +59,8 @@ object DeviceLinkManager {
                         "connected" -> { onStatus?.invoke("Connected • ${msg.optJSONArray("devices")?.length() ?: 0} paired device(s)"); onPeerMessage?.invoke(msg) }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
-                        "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optJSONObject("action") ?: JSONObject())
+                        "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optString("actionId"), msg.optJSONObject("action") ?: JSONObject())
+                        "remote_action_result" -> onRemoteActionResult?.invoke(msg.optString("targetDeviceId"), msg.optString("actionId"), msg.optBoolean("ok"), msg.optString("reason"))
                         else -> onPeerMessage?.invoke(msg)
                     }
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
@@ -212,6 +214,8 @@ object DeviceLinkManager {
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun respondRemoteControl(requesterDeviceId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_response").put("requesterDeviceId", requesterDeviceId).put("approved", approved).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun sendAction(targetDeviceId: String, action: JSONObject): Boolean = socket?.send(JSONObject().put("type", "remote_action").put("targetDeviceId", targetDeviceId).put("action", action).toString()) == true
+    fun respondRemoteAction(actionId: String, ok: Boolean, reason: String = ""): Boolean =
+        if (actionId.isBlank() || actionId.length > 64) false else socket?.send(JSONObject().put("type", "remote_action_result").put("actionId", actionId).put("ok", ok).put("reason", reason.take(240)).toString()) == true
     fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
