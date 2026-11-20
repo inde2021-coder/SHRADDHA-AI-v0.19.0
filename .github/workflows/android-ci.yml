@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: ["main", "work/**", "audit-fixes/**", "redesign/**", "feature/**"]
+    branches: ["main", "work/**", "audit-fixes/**", "audit-fixes-v0.19.1", "redesign/**", "redesign-v0.19.2", "feature/**"]
     paths-ignore:
       - "**/*.md"
   pull_request:
