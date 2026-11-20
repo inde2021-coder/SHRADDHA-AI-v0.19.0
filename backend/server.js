@@ -381,11 +381,13 @@ wss.on('connection', (ws, ctx) => {
       if (now - device.frameWindowStart >= 1000) { device.frameWindowStart = now; device.frameCount = 0; }
       if (++device.frameCount > 10) return;
       const targetLength = clientFrame[1];
-      if (clientFrame.length < 2 + targetLength + 1) return;
+      // Device IDs are short opaque identifiers; reject oversized routing headers and
+      // oversized JPEGs before allocating/relaying a frame to every paired device.
+      if (targetLength > 64 || clientFrame.length < 2 + targetLength + 1) return;
       const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
       if (targetId && (!session.devices.has(targetId) || targetId === deviceId)) return;
       const jpeg = clientFrame.subarray(2 + targetLength);
-      if (!jpeg.length) return;
+      if (!jpeg.length || jpeg.length > 2_500_000) return;
       const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([frameType]), jpeg]);
       if (targetId) send(targetId, framed, true);
       else for (const [id] of session.devices) if (id !== deviceId) send(id, framed, true);
