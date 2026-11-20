@@ -167,6 +167,8 @@ test('screen frames are blocked until the sending device explicitly enables scre
 
     ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: false } }));
     await waitForPermission(true);
+    // A sender must not bypass the Android client's 2.5 MB image limit.
+    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), Buffer.alloc(2_500_001)]));
     const allowedJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x55]);
     ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), allowedJpeg]));
 
