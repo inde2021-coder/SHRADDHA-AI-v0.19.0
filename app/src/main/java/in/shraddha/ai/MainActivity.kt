@@ -2337,7 +2337,7 @@ class MainActivity : AppCompatActivity() {
                     val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
                     val expectedSize = msg.getLong("sizeBytes")
                     val expectedHash = msg.getString("sha256").lowercase()
-                    require(expectedSize in 1..650_000 && bytes.size.toLong() == expectedSize) { "File size mismatch" }
+                    require(expectedSize in 1L..650_000L && bytes.size.toLong() == expectedSize) { "File size mismatch" }
                     require(expectedHash.matches(Regex("[a-f0-9]{64}"))) { "Invalid file digest" }
                     val actualHash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
                         .joinToString("") { "%02x".format(it) }
