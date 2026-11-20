@@ -780,6 +780,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             addView(remoteConsent)
+            addView(actionButton("Revoke active remote-control approval", "किसी भी समय 5-minute device permission तुरंत बंद करें") {
+                getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                    .remove("remote_control_grant_peer")
+                    .remove("remote_control_grant_expires_at")
+                    .apply()
+                status.text = "Active remote-control approval revoked on this phone."
+            })
             mainOnlyMode = Switch(this@MainActivity).apply {
                 text = "Main phone only mode (OFF = Mutual control)"
                 setTextColor(-1); isChecked = false; isEnabled = false; setPadding(0, dp(4), 0, dp(8))
@@ -811,7 +818,14 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Remote Scroll Down", "अगली visible list / page पर जाएँ") { sendRemote(JSONObject().put("kind", "scroll")) })
             addView(actionButton("Send Remote Home", "फोन की Home screen पर जाएँ") { sendRemote(JSONObject().put("kind", "home")) })
             addView(actionButton("Send Remote Back", "पिछली screen पर जाएँ") { sendRemote(JSONObject().put("kind", "back")) })
-            addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें") { DeviceLinkManager.disconnect(); status.text = "This phone disconnected." })
+            addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें और active control approval revoke करें") {
+                getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                    .remove("remote_control_grant_peer")
+                    .remove("remote_control_grant_expires_at")
+                    .apply()
+                DeviceLinkManager.disconnect()
+                status.text = "This phone disconnected; active remote-control approval revoked."
+            })
         }
 
         section(root, "04  •  VISUAL LENS – LIVE SCREEN & REMOTE CAMERA", "स्क्रीन और कैमरा अलग-अलग, स्पष्ट अनुमति से साझा करें") {
