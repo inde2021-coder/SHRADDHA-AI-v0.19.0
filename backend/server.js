@@ -392,6 +392,7 @@ telephonyWss.on('connection', carrier => {
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
     if (event.type === 'session.started') ready = true;
+    if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) carrier.send(JSON.stringify({ type: 'killAudio' }));
     if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
       if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
       if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
@@ -421,10 +422,7 @@ telephonyWss.on('connection', carrier => {
       return;
     }
     if (message.type === 'disconnect') return shutdown();
-    if (message.type === 'killAudio' && callRecord) {
-      callRecord.lastControl = 'caller-interruption';
-      if (live?.readyState === WebSocket.OPEN) live.send(JSON.stringify({ type: 'response.cancel' }));
-    }
+    if (message.type === 'mark' && callRecord) callRecord.lastMark = String(message.data?.name || '').slice(0, 80);
   });
   carrier.on('close', shutdown);
   carrier.on('error', shutdown);
