@@ -82,6 +82,17 @@ object DeviceLinkManager {
         })
     }
 
+    private fun secureApiUrl(baseUrl: String, path: String): String? {
+        val parsed = baseUrl.trim().trimEnd('/').toHttpUrlOrNull() ?: return null
+        if (parsed.scheme != "https" || parsed.host.isBlank()) return null
+        return parsed.newBuilder().addPathSegments(path.trimStart('/')).build().toString()
+    }
+
+    private fun <T> rejectInsecure(done: (Result<T>) -> Unit): Boolean {
+        done(Result.failure(IllegalArgumentException("AI gateway requires a valid HTTPS URL. Plain HTTP is blocked.")))
+        return false
+    }
+
     private fun post(base: String, path: String, body: JSONObject, callback: (Result<JSONObject>) -> Unit) {
         val parsed = base.trim().trimEnd('/').toHttpUrlOrNull()
         if (parsed == null || parsed.scheme != "https" || parsed.host.isBlank()) {
@@ -99,8 +110,9 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
+        val endpoint = secureApiUrl(baseUrl, "/api/chat") ?: return rejectInsecure(done)
         val body = JSONObject().put("provider", provider).put("prompt", prompt.take(12000))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/chat")
+        val builder = Request.Builder().url(endpoint)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -116,7 +128,8 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/ai/providers").get()
+        val endpoint = secureApiUrl(baseUrl, "/api/ai/providers") ?: return rejectInsecure(done)
+        val builder = Request.Builder().url(endpoint).get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
@@ -147,7 +160,8 @@ object DeviceLinkManager {
     }
 
     private fun postAuthenticated(baseUrl: String, path: String, gatewayToken: String, body: JSONObject, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path).post(body.toString().toRequestBody("application/json".toMediaType()))
+        val endpoint = secureApiUrl(baseUrl, path) ?: return rejectInsecure(done)
+        val builder = Request.Builder().url(endpoint).post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
@@ -158,9 +172,14 @@ object DeviceLinkManager {
     }
 
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, done: (Result<String>) -> Unit) {
+        if (jpeg.isEmpty() || jpeg.size > 2_500_000) {
+            done(Result.failure(IllegalArgumentException("Vision image must be between 1 byte and 2.5 MB.")))
+            return
+        }
+        val endpoint = secureApiUrl(baseUrl, "/api/vision") ?: return rejectInsecure(done)
         val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000))
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/vision")
+        val builder = Request.Builder().url(endpoint)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
