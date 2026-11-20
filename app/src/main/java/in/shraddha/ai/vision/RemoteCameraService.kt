@@ -24,11 +24,17 @@ class RemoteCameraService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotification()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+        val facing = intent?.getStringExtra(EXTRA_FACING) ?: "back"
+        val target = intent?.getStringExtra(EXTRA_TARGET).orEmpty()
+        val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
+        if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, target, facing)) {
             stopSelf(); return START_NOT_STICKY
         }
         stopCamera()
-        startCamera(intent?.getStringExtra(EXTRA_FACING) ?: "back", intent?.getStringExtra(EXTRA_TARGET).orEmpty())
+        getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().putString("active_target", target).putString("active_facing", facing).apply()
+        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_service", "started", "facing=$facing; target_id_redacted") }
+        startCamera(facing, target)
         return START_NOT_STICKY
     }
 
@@ -66,11 +72,22 @@ class RemoteCameraService : Service() {
                 if (now - lastFrameAt < 900) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
+                    val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
+                    if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, targetDeviceId, facing)) {
+                        stopSelf()
+                        return@setOnImageAvailableListener
+                    }
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()); buffer.get(bytes)
-                    DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)
+                    if (!DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)) {
+                        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "frame_not_sent") }
+                    }
+                    bytes.fill(0)
                     lastFrameAt = now
-                } catch (_: Exception) { }
+                } catch (_: Exception) {
+                    runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "frame_not_sent") }
+                }
                 finally { image.close() }
             }, handler)
             manager.openCamera(id, object : CameraDevice.StateCallback() {

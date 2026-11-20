@@ -1,0 +1,81 @@
+package com.Lia.assistant.voice
+
+import android.content.Context
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+/**
+ * Shraddha's dedicated speech output client.
+ * The gateway proxies to a self-hosted, licensed bilingual voice model and returns
+ * mono PCM signed-16 little-endian audio at 24 kHz. There is deliberately no Google
+ * or Android system-TTS fallback.
+ */
+object ShraddhaSpeechClient {
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(35, TimeUnit.SECONDS)
+        .callTimeout(40, TimeUnit.SECONDS)
+        .build()
+
+    fun synthesize(
+        context: Context,
+        text: String,
+        language: String,
+        done: (Result<ByteArray>) -> Unit
+    ) {
+        val clean = text.trim().take(6000)
+        if (clean.isBlank()) {
+            done(Result.failure(IllegalArgumentException("Speech text is empty")))
+            return
+        }
+        val config = com.Lia.assistant.data.VoiceGatewaySettings.get(context)
+        if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) {
+            done(Result.failure(IllegalStateException("Secure voice backend is not configured")))
+            return
+        }
+        val body = JSONObject()
+            .put("text", clean)
+            .put("language", if (language.equals("HI", true) || language.equals("hi-IN", true)) "hi" else "en")
+            .toString()
+            .toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(config.baseUrl.trimEnd('/') + "/api/voice/synthesize")
+            .header("Authorization", "Bearer ${config.gatewayToken}")
+            .post(body)
+            .build()
+        http.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                done(Result.failure(e))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!it.isSuccessful) {
+                        val message = it.body?.string().orEmpty().take(300)
+                        done(Result.failure(IllegalStateException("Shraddha voice engine unavailable (HTTP ${it.code}): ${message.ifBlank { "Check the configured custom TTS service." }}")))
+                        return
+                    }
+                    val type = it.header("Content-Type").orEmpty().lowercase()
+                    if (!type.contains("audio/pcm") && !type.contains("application/octet-stream")) {
+                        done(Result.failure(IllegalStateException("Voice server returned an unsupported audio format")))
+                        return
+                    }
+                    val bytes = it.body?.bytes() ?: ByteArray(0)
+                    if (bytes.size !in 2..3_000_000 || bytes.size % 2 != 0) {
+                        done(Result.failure(IllegalStateException("Voice server returned invalid PCM audio")))
+                        return
+                    }
+                    done(Result.success(bytes))
+                }
+            }
+        })
+    }
+}

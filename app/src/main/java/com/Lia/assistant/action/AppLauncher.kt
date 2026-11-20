@@ -50,9 +50,12 @@ object AppLauncher {
 
         if (candidates.isEmpty()) return null
 
-        // Pick candidate with closest label length
-        val bestLabel = candidates.minByOrNull { abs(it.length - q.length) } ?: return null
-        return apps[bestLabel]
+        // Pick only a clearly best candidate. Equal-distance matches are ambiguous
+        // (for example, several apps beginning with the same word) and must be clarified.
+        val ranked = candidates.distinct().map { it to abs(it.length - q.length) }.sortedBy { it.second }
+        val best = ranked.firstOrNull() ?: return null
+        if (ranked.getOrNull(1)?.second == best.second) return null
+        return apps[best.first]
     }
 
     fun launch(context: Context, packageName: String): Boolean {

@@ -7,7 +7,6 @@ import java.util.Date
 import java.util.Locale
 
 class LiaApplication : Application() {
-
     override fun onCreate() {
         super.onCreate()
         installCrashHandler()

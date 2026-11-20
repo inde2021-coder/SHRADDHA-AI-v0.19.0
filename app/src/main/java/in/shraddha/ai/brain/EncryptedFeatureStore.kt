@@ -38,5 +38,85 @@ class EncryptedFeatureStore(context: Context) {
         c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(p[0], Base64.NO_WRAP)))
         String(c.doFinal(Base64.decode(p[1], Base64.NO_WRAP)), Charsets.UTF_8)
     }
+
+    /** Encrypt and commit a related set of feature records in one SharedPreferences transaction. */
+    @Synchronized fun putAll(values: Map<String, String>): Result<Unit> = runCatching {
+        require(values.isNotEmpty()) { "At least one record is required" }
+        val secretKey = key()
+        val editor = prefs.edit()
+        values.forEach { (name, value) ->
+            require(name.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+            require(value.length <= 100_000) { "Data too large for $name" }
+            val plain = value.toByteArray(Charsets.UTF_8)
+            try {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+                val encrypted = cipher.doFinal(plain)
+                val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
+                    Base64.encodeToString(encrypted, Base64.NO_WRAP)
+                editor.putString(name, payload)
+                encrypted.fill(0)
+            } finally {
+                plain.fill(0)
+            }
+        }
+        check(editor.commit()) { "Atomic encrypted save failed" }
+    }
+
     @Synchronized fun remove(name: String): Boolean = prefs.edit().remove(name).commit()
+
+    /** Atomically replace encrypted records and remove related keys in one transaction. */
+    @Synchronized fun putAllAndRemove(values: Map<String, String>, namesToRemove: Set<String>): Result<Unit> = runCatching {
+        val secretKey = key()
+        val editor = prefs.edit()
+        namesToRemove.forEach { name ->
+            require(name.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+            editor.remove(name)
+        }
+        values.forEach { (name, value) ->
+            require(name.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+            require(value.length <= 100_000) { "Data too large for $name" }
+            val plain = value.toByteArray(Charsets.UTF_8)
+            try {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+                val encrypted = cipher.doFinal(plain)
+                editor.putString(name, Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
+                    Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                encrypted.fill(0)
+            } finally {
+                plain.fill(0)
+            }
+        }
+        check(editor.commit()) { "Atomic encrypted update/delete failed" }
+    }
+
+
+    /** Read and decrypt every stored record whose key belongs to an explicitly selected family. */
+    @Synchronized fun getAllWithPrefixes(prefixes: Set<String>): Result<Map<String, String>> = runCatching {
+        require(prefixes.isNotEmpty())
+        prefixes.forEach { require(it.matches(Regex("[a-zA-Z0-9_.-]{1,80}"))) }
+        val keys = prefs.all.keys.filter { key -> prefixes.any { key.startsWith(it) } }.sorted()
+        keys.associateWith { key -> get(key).getOrThrow() }
+    }
+
+    /** Replace complete selected record families in one encrypted preference transaction. */
+    @Synchronized fun replaceAllWithPrefixes(values: Map<String, String>, prefixes: Set<String>): Result<Unit> = runCatching {
+        require(prefixes.isNotEmpty())
+        prefixes.forEach { require(it.matches(Regex("[a-zA-Z0-9_.-]{1,80}"))) }
+        values.keys.forEach { key ->
+            require(prefixes.any { key.startsWith(it) }) { "Backup contains an unapproved feature key: $key" }
+        }
+        val oldKeys = prefs.all.keys.filter { key -> prefixes.any { key.startsWith(it) } }.toSet()
+        val removals = oldKeys - values.keys
+        putAllAndRemove(values, removals).getOrThrow()
+    }
+
+    /** Atomically remove all encrypted entries in one namespaced feature family. */
+    @Synchronized fun removeAllWithPrefix(prefix: String): Boolean {
+        require(prefix.matches(Regex("[a-zA-Z0-9_.-]{1,80}")))
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
+        return editor.commit()
+    }
 }

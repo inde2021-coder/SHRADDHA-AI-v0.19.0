@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.fx.LiaOrb3D
@@ -52,17 +53,22 @@ fun OnboardingScreen(
     val colors = LocalNovaColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val assistantName = NovaPreferences.getString(
+        context,
+        NovaPreferences.Keys.ASSISTANT_NAME,
+        AssistantBrand.NAME
+    ).trim().ifBlank { AssistantBrand.NAME }
 
     val pages = listOf(
         OnboardingPageData(
             title = "A Pearl of Light in the Night",
-            description = "Welcome to Lia AI. Real-time, full-duplex spoken intelligence that listens, understands, and accompanies you.",
+            description = "Welcome to $assistantName. Hindi, Hinglish and English voice intelligence with personal memory and device assistance.",
             orbStyle = NovaOrbStyle.NOVA,
             orbState = NovaOrbState.IDLE
         ),
         OnboardingPageData(
             title = "Speak Hindi, Hinglish or English",
-            description = "Naturally switch between languages. Lia automatically matches your tone, language, and nuance turn by turn.",
+            description = "Naturally switch between languages. $assistantName automatically matches your tone, language, and nuance turn by turn.",
             orbStyle = NovaOrbStyle.AURORA,
             orbState = NovaOrbState.LISTENING
         ),
@@ -74,7 +80,7 @@ fun OnboardingScreen(
         ),
         OnboardingPageData(
             title = "Website Forge 3D",
-            description = "Say 'Lia, ek cafe ki website banao' and watch a complete animated 3D website come alive in the Forge Reactor.",
+            description = "Say '$assistantName, ek cafe ki website banao' and watch a complete animated 3D website come alive in the Forge Reactor.",
             orbStyle = NovaOrbStyle.ARCHER,
             orbState = NovaOrbState.CONNECTING
         )

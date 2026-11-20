@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.ByteString
 import org.json.JSONObject
+import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
@@ -20,6 +21,7 @@ object DeviceLinkManager {
     @Volatile var onScreenFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onCameraFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onPeerMessage: ((JSONObject) -> Unit)? = null
+    @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
@@ -48,6 +50,10 @@ object DeviceLinkManager {
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optJSONObject("action") ?: JSONObject())
+                        "remote_action_result" -> {
+                            onRemoteActionResult?.invoke(msg.optString("fromDeviceId"), msg.optString("actionKind"), msg.optString("result"))
+                            onPeerMessage?.invoke(msg)
+                        }
                         else -> onPeerMessage?.invoke(msg)
                     }
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
@@ -89,10 +95,46 @@ object DeviceLinkManager {
                 response.use {
                     val raw = it.body?.string().orEmpty()
                     if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).getString("answer") })
+                    else done(runCatching { JSONObject(raw).let { body ->
+                        val actual = body.optString("provider", provider)
+                        val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
+                        "$route\n\n${body.getString("answer")}"
+                    } })
                 }
             }
         })
+    }
+
+    fun publishSocialPost(
+        baseUrl: String,
+        gatewayToken: String,
+        platform: String,
+        exactText: String,
+        userConfirmed: Boolean,
+        confirmedPlatform: String,
+        confirmedText: String,
+        onCall: ((Call) -> Unit)? = null,
+        done: (Result<String>) -> Unit
+    ): Call? {
+        val normalizedPlatform = platform.trim().lowercase()
+        if (!userConfirmed || !confirmedPlatform.trim().equals(normalizedPlatform, true) || confirmedText != exactText) {
+            done(Result.failure(IllegalStateException("Exact social post preview approval is required")))
+            return null
+        }
+        val characterLength = if (normalizedPlatform == "bluesky") exactText.codePointCount(0, exactText.length) else exactText.length
+        val limit = when (normalizedPlatform) {
+            "bluesky" -> 300
+            "linkedin" -> 3000
+            "telegram", "mastodon" -> 5000
+            else -> 0
+        }
+        if (limit == 0 || exactText.isBlank() || characterLength > limit) {
+            done(Result.failure(IllegalArgumentException("Unsupported platform or post length (limit: ${if (limit == 0) 0 else limit} characters)")))
+            return null
+        }
+        val body = JSONObject().put("platform", normalizedPlatform).put("text", exactText)
+            .put("preview", exactText).put("confirmed", true)
+        return postAuthenticated(baseUrl, "/api/social/publish", gatewayToken, body, done, onCall)
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
@@ -126,19 +168,35 @@ object DeviceLinkManager {
         postAuthenticated(baseUrl, "/api/ai/compare", gatewayToken, JSONObject().put("providers", org.json.JSONArray(providers.distinct().take(3))).put("prompt", prompt.take(4000)), done)
     }
 
-    private fun postAuthenticated(baseUrl: String, path: String, gatewayToken: String, body: JSONObject, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path).post(body.toString().toRequestBody("application/json".toMediaType()))
+    private fun postAuthenticated(
+        baseUrl: String,
+        path: String,
+        gatewayToken: String,
+        body: JSONObject,
+        done: (Result<String>) -> Unit,
+        onCall: ((Call) -> Unit)? = null
+    ): Call {
+        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        client.newCall(builder.build()).enqueue(object : Callback {
+        val call = client.newCall(builder.build())
+        onCall?.invoke(call)
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
-                response.use { val raw = it.body?.string().orEmpty(); if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")))) else done(Result.success(raw)) }
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(
+                        runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")
+                    ))) else done(Result.success(raw))
+                }
             }
         })
+        return call
     }
 
-    fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, done: (Result<String>) -> Unit) {
-        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000))
+    fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
+        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000)).put("mode", mode)
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
         val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -149,21 +207,46 @@ object DeviceLinkManager {
                 response.use {
                     val raw = it.body?.string().orEmpty()
                     if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    else done(runCatching { JSONObject(raw).getString("answer") })
+                    else done(runCatching { JSONObject(raw).let { body ->
+                        val actual = body.optString("provider", provider)
+                        val route = if (body.optString("routing") == "automatic_failover") "Auto vision route → $actual" else "Vision provider → $actual"
+                        "$route\n\n${body.getString("answer")}"
+                    } })
                 }
             }
         })
     }
 
     fun updateSharePermissions(permissions: JSONObject): Boolean = socket?.send(JSONObject().put("type", "permission_update").put("permissions", permissions).toString()) == true
-    fun requestDataShare(targetDeviceId: String, category: String, itemLabel: String = ""): Boolean = socket?.send(JSONObject().put("type", "data_share_request").put("targetDeviceId", targetDeviceId).put("category", category).put("itemLabel", itemLabel).put("requestId", java.util.UUID.randomUUID().toString()).toString()) == true
-    fun respondDataShare(requesterDeviceId: String, category: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "data_share_response").put("requesterDeviceId", requesterDeviceId).put("category", category).put("approved", approved).put("minutes", minutes).toString()) == true
-    fun sendSharedPayload(targetDeviceId: String, category: String, fileName: String, mimeType: String, base64Payload: String): Boolean = socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("payload", base64Payload).toString()) == true
+    fun requestDataShare(targetDeviceId: String, category: String, requestId: String, itemLabel: String = ""): Boolean = socket?.send(JSONObject().put("type", "data_share_request").put("targetDeviceId", targetDeviceId).put("category", category).put("itemLabel", itemLabel).put("requestId", requestId).toString()) == true
+    fun respondDataShare(requesterDeviceId: String, category: String, requestId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "data_share_response").put("requesterDeviceId", requesterDeviceId).put("category", category).put("requestId", requestId).put("approved", approved).put("minutes", minutes).toString()) == true
+    fun sendSharedPayload(targetDeviceId: String, category: String, requestId: String, fileName: String, mimeType: String, base64Payload: String, sizeBytes: Long, sha256: String, contentType: String = "file"): Boolean { if (requestId.isBlank() || sizeBytes !in 1L..650_000L || !sha256.matches(Regex("[a-fA-F0-9]{64}")) || base64Payload.length > 900_000 || contentType !in setOf("file", "clipboard_text")) return false; return socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("requestId", requestId).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload).toString()) == true }
     fun sendSignal(targetDeviceId: String, signal: JSONObject): Boolean = socket?.send(JSONObject().put("type", "signal").put("targetDeviceId", targetDeviceId).put("signal", signal).toString()) == true
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun respondRemoteControl(requesterDeviceId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_response").put("requesterDeviceId", requesterDeviceId).put("approved", approved).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun sendAction(targetDeviceId: String, action: JSONObject): Boolean = socket?.send(JSONObject().put("type", "remote_action").put("targetDeviceId", targetDeviceId).put("action", action).toString()) == true
+    fun requestPcOcr(targetDeviceId: String): Boolean =
+        sendAction(targetDeviceId, JSONObject().put("kind", "ocr"))
+
+    fun requestPcFileList(targetDeviceId: String, relativePath: String = ""): Boolean =
+        sendAction(targetDeviceId, JSONObject().put("kind", "file_list").put("path", relativePath.take(500)))
+
+    fun requestPcTextPreview(targetDeviceId: String, relativePath: String): Boolean =
+        if (relativePath.isBlank()) false else sendAction(targetDeviceId,
+            JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
+
     fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
+    fun sendTaskHandoff(targetDeviceId: String, title: String, description: String, steps: List<String>): Boolean {
+        if (targetDeviceId.isBlank() || title.isBlank() || description.isBlank()) return false
+        val cleanSteps = JSONArray()
+        steps.take(12).forEach { cleanSteps.put(it.take(300)) }
+        val task = JSONObject().put("title", title.trim().take(120))
+            .put("description", description.trim().take(3000)).put("steps", cleanSteps)
+        return socket?.send(JSONObject().put("type", "task_handoff").put("targetDeviceId", targetDeviceId).put("task", task).toString()) == true
+    }
+    fun respondTaskHandoff(fromDeviceId: String, taskId: String, accepted: Boolean, note: String = ""): Boolean =
+        socket?.send(JSONObject().put("type", "task_handoff_response").put("targetDeviceId", fromDeviceId)
+            .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
         if (jpeg.size > 2_500_000 || frameType !in 1..2) return false
