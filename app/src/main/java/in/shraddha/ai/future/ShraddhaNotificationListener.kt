@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import org.json.JSONArray
 import org.json.JSONObject
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import java.util.Calendar
 
 /**
@@ -26,10 +27,17 @@ class ShraddhaNotificationListener : NotificationListenerService() {
             .put("quietHours", isQuietHours())
         synchronized(LOCK) {
             val prefs = preferences()
-            val items = runCatching { JSONArray(prefs.getString(KEY_EVENTS, "[]")) }.getOrDefault(JSONArray())
+            val store = EncryptedFeatureStore(this)
+            // Android Keystore AES-GCM; never fall back to plaintext if encryption fails.
+            val items = runCatching {
+                val saved = store.get(ENCRYPTED_EVENTS_KEY).getOrThrow()
+                if (saved.isBlank()) JSONArray() else JSONArray(saved)
+            }.getOrElse { return }
             items.put(record)
             while (items.length() > MAX_EVENTS) items.remove(0)
-            prefs.edit().putString(KEY_EVENTS, items.toString()).apply()
+            if (store.put(ENCRYPTED_EVENTS_KEY, items.toString()).isFailure) return
+            // Purge legacy plaintext history from older app versions.
+            prefs.edit().remove(KEY_EVENTS).commit()
         }
     }
 
@@ -51,7 +59,9 @@ class ShraddhaNotificationListener : NotificationListenerService() {
     companion object {
         const val PREFS = "shraddha_notification_preferences"
         const val KEY_ENABLED = "metadata_capture_enabled"
+        /** Legacy plaintext key retained only for cleanup of older installs. */
         const val KEY_EVENTS = "metadata_events"
+        const val ENCRYPTED_EVENTS_KEY = "notification_history_v1"
         const val KEY_QUIET_ENABLED = "quiet_hours_enabled"
         const val KEY_QUIET_START = "quiet_hours_start_minute"
         const val KEY_QUIET_END = "quiet_hours_end_minute"
