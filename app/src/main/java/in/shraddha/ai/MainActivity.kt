@@ -183,7 +183,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        heroTop.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(138), dp(138)))
+        heroTop.addView(ShraddhaOrbView(this, assistantDisplayName), LinearLayout.LayoutParams(dp(138), dp(138)))
         heroBody.addView(heroTop)
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Live voice engine") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
@@ -300,7 +300,7 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER
                 setPadding(dp(8), dp(2), dp(8), dp(14))
             }
-            assistantHero.addView(ShraddhaOrbView(this), LinearLayout.LayoutParams(dp(188), dp(188)))
+            assistantHero.addView(ShraddhaOrbView(this, assistantDisplayName), LinearLayout.LayoutParams(dp(188), dp(188)))
             assistantHero.addView(TextView(this).apply {
                 text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
@@ -2521,7 +2521,7 @@ object VoiceCommandParser {
 
 
 /** Animated 3D-style energy orb. Its animation is decorative; microphone state is reported separately. */
-private class ShraddhaOrbView(context: android.content.Context) : View(context) {
+private class ShraddhaOrbView(context: android.content.Context, assistantName: String) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -2535,7 +2535,7 @@ private class ShraddhaOrbView(context: android.content.Context) : View(context) 
 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        contentDescription = "$assistantDisplayName animated energy orb. Microphone state is shown by the voice controls."
+        contentDescription = "$assistantName animated energy orb. Microphone state is shown by the voice controls."
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
