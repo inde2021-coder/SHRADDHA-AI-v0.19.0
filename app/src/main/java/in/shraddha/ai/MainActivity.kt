@@ -90,7 +90,7 @@ class MainActivity : AppCompatActivity() {
 
         pageRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(30))
+            setPadding(dp(16), dp(16), dp(16), dp(24))
             setBackgroundColor(0xFF070B14.toInt())
         }
         pageScroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(pageRoot) }
@@ -130,8 +130,8 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         brand.addView(TextView(this).apply {
-            text = "Your intelligent universe"
-            textSize = 22f; setTextColor(0xFFF4F6FF.toInt())
+            text = assistantDisplayName
+            textSize = 24f; setTextColor(0xFFF4F6FF.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD); setPadding(0, dp(4), 0, 0)
         })
         header.addView(brand)
@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
         pageRoot.addView(header)
 
         val hero = MaterialCardView(this).apply {
-            radius = dp(30).toFloat(); cardElevation = dp(12).toFloat()
+            radius = dp(28).toFloat(); cardElevation = dp(8).toFloat()
             strokeWidth = dp(1); strokeColor = 0xFF6357B9.toInt()
             setCardBackgroundColor(0xFF11182C.toInt())
         }
@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1B2044.toInt(), 0xFF111B2B.toInt(), 0xFF0B1421.toInt())
+                intArrayOf(0xFF29264F.toInt(), 0xFF17243A.toInt(), 0xFF0D1728.toInt())
             ).apply { cornerRadius = dp(30).toFloat() }
         }
         hero.addView(heroBody)
@@ -165,12 +165,12 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         intro.addView(TextView(this).apply {
-            text = "One mind.\nMany capabilities."
-            textSize = 25f; setTextColor(-1); setTypeface(null, android.graphics.Typeface.BOLD)
+            text = "Your AI.\nYour universe."
+            textSize = 27f; setTextColor(-1); setTypeface(null, android.graphics.Typeface.BOLD)
             setPadding(0, dp(8), 0, dp(6))
         })
         intro.addView(TextView(this).apply {
-            text = "Voice • Vision • Memory • Automation"
+            text = "VOICE  •  VISION  •  MEMORY  •  ACTION"
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
@@ -195,19 +195,7 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        section(pageRoot, "COMMAND CENTER", "सभी systems एक unified dashboard से") {
-            addView(workspaceTile("✦  AI BRAIN + LIA VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
-            addView(workspaceTile("◈  MYRA PC COMMAND CENTER", "Windows/Linux companion • MYRA Coder • Website Forge • PC automation") { showPage("devices") })
-            addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical learning • Agriculture • Law • Creator") { showPage("expert") })
-            addView(workspaceTile("⌘  DEVICE UNIVERSE", "Paired phones • PC companion • Remote screen") { showPage("devices") })
-            addView(workspaceTile("▣  APP OPERATOR", "Visual UI control • Workflow • Verification") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) })
-            addView(workspaceTile("◇  AI PROJECT LAB", "Agents • Code • Website • App • Automation") { showPage("lab") })
-            
-            addView(workspaceTile("◎  PEOPLE MEMORY", "Consent-based person profiles and recognition roadmap") { showPage("people") })
-            addView(workspaceTile("☁  CLOUD & DATA", "Firebase sync • Secure memory • Sharing") { showPage("cloud") })
-            addView(workspaceTile("⚙  CONTROL & PRIVACY", "Permissions • Security • Device access") { showPage("permissions") })
-            addView(workspaceTile("✧  FUTURE INTELLIGENCE", "Advanced systems • workflow safety • capability status") { showPage("future") })
-        }
+        workspaceGrid(pageRoot)
         section(pageRoot, "SYSTEM STATUS", "यहाँ केवल app द्वारा ज्ञात वास्तविक स्थिति दिखाई जाएगी") {
             addView(TextView(this@MainActivity).apply {
                 text = "ON-DEVICE CORE  •  READY\\nCLOUD SYNC  •  CONFIGURATION REQUIRED\\nPC COMPANION  •  PAIRING REQUIRED"
@@ -220,25 +208,70 @@ class MainActivity : AppCompatActivity() {
     private fun workspaceTile(title: String, subtitle: String, action: () -> Unit): LinearLayout {
         val tile = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(15), dp(16), dp(15))
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            minimumHeight = dp(126)
+            setPadding(dp(14), dp(14), dp(14), dp(14))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1A2540.toInt(), 0xFF111B2D.toInt())
-            ).apply { cornerRadius = dp(19).toFloat(); setStroke(dp(1), 0xFF34466B.toInt()) }
-            elevation = dp(3).toFloat()
+                intArrayOf(0xFF1C2945.toInt(), 0xFF111A2C.toInt(), 0xFF0B1422.toInt())
+            ).apply { cornerRadius = dp(20).toFloat(); setStroke(dp(1), 0xFF394B70.toInt()) }
+            elevation = dp(4).toFloat()
             isClickable = true; isFocusable = true
+            foreground = android.util.TypedValue().let {
+                val out = android.util.TypedValue()
+                theme.resolveAttribute(android.R.attr.selectableItemBackground, out, true)
+                if (out.resourceId != 0) ContextCompat.getDrawable(this@MainActivity, out.resourceId) else null
+            }
+            contentDescription = "$title. $subtitle"
             setOnClickListener { action() }
         }
         tile.addView(TextView(this).apply {
-            text = title; textSize = 14f; letterSpacing = .035f
-            setTextColor(0xFFE8E9FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+            text = title; textSize = 13f; letterSpacing = .01f
+            maxLines = 2; setTextColor(0xFFF1F3FF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
         })
         tile.addView(TextView(this).apply {
-            text = subtitle; textSize = 11f; setTextColor(0xFF9EADC8.toInt())
-            setPadding(0, dp(6), 0, 0)
+            text = subtitle; textSize = 10.5f; maxLines = 3
+            setLineSpacing(dp(2).toFloat(), 1f); setTextColor(0xFFAAB8D0.toInt())
+            setPadding(0, dp(8), 0, 0)
         })
-        tile.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) }
         return tile
+    }
+
+    private fun workspaceGrid(root: LinearLayout) {
+        section(root, "COMMAND CENTER", "अपने सभी AI systems और workspaces एक जगह से खोलें") {
+            val items = listOf(
+                Triple("✦  AI BRAIN + VOICE", "Hindi / English • Live audio • Memory", { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) }),
+                Triple("◈  MYRA PC CENTER", "Windows / Linux • PC automation", { showPage("devices") }),
+                Triple("◈  EXPERT STUDIO", "Engineering • Agriculture • Law", { showPage("expert") }),
+                Triple("⌘  DEVICE UNIVERSE", "Paired phones • PC • Remote screen", { showPage("devices") }),
+                Triple("▣  APP OPERATOR", "Visual UI • Workflow • Verification", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
+                Triple("◇  AI PROJECT LAB", "Agents • Code • Website • Apps", { showPage("lab") }),
+                Triple("◎  PEOPLE MEMORY", "Consent-based person profiles", { showPage("people") }),
+                Triple("☁  CLOUD & DATA", "Firebase • Secure memory • Sharing", { showPage("cloud") }),
+                Triple("⚙  CONTROL & PRIVACY", "Permissions • Security • Access", { showPage("permissions") }),
+                Triple("✧  FUTURE INTELLIGENCE", "Advanced systems • Workflow safety", { showPage("future") })
+            )
+            items.chunked(2).forEach { pair ->
+                val row = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.TOP
+                }
+                pair.forEachIndexed { index, item ->
+                    val cell = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply {
+                            if (index == 0) rightMargin = dp(6) else leftMargin = dp(6)
+                            bottomMargin = dp(12)
+                        }
+                    }
+                    cell.addView(workspaceTile(item.first, item.second, item.third), LinearLayout.LayoutParams(-1, -2))
+                    row.addView(cell)
+                }
+                if (pair.size == 1) row.addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                addView(row)
+            }
+        }
     }
 
     private fun showPage(page: String) {
@@ -1449,16 +1482,40 @@ class MainActivity : AppCompatActivity() {
 
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
         val card = MaterialCardView(this).apply {
-            radius = dp(22).toFloat(); cardElevation = dp(3).toFloat()
-            strokeWidth = dp(1); strokeColor = 0xFF26344D.toInt()
-            setCardBackgroundColor(0xFF111827.toInt())
+            radius = dp(24).toFloat()
+            cardElevation = dp(5).toFloat()
+            strokeWidth = dp(1)
+            strokeColor = 0xFF2D3D5B.toInt()
+            setCardBackgroundColor(0xFF101827.toInt())
+            useCompatPadding = true
         }
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(12)) }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(17), dp(17), dp(17), dp(15))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF151F33.toInt(), 0xFF0E1726.toInt())
+            ).apply { cornerRadius = dp(23).toFloat() }
+        }
         card.addView(body)
-        body.addView(TextView(this).apply { text = title; textSize = 14f; letterSpacing = .06f; setTextColor(0xFFBDA8FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD) })
-        body.addView(TextView(this).apply { text = subtitle; textSize = 12f; setTextColor(0xFF93A2BA.toInt()); setPadding(0, dp(5), 0, dp(14)) })
+        body.addView(TextView(this).apply {
+            text = title
+            textSize = 12f
+            letterSpacing = .11f
+            setTextColor(0xFFB9A7FF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        })
+        body.addView(TextView(this).apply {
+            text = subtitle
+            textSize = 12f
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setTextColor(0xFFAAB7CC.toInt())
+            setPadding(0, dp(7), 0, dp(16))
+        })
         body.content()
-        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(16)
+        })
         return body
     }
 
@@ -1693,10 +1750,21 @@ class MainActivity : AppCompatActivity() {
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }
     private fun actionButton(label: String, hint: String, action: () -> Unit) = Button(this).apply {
-        text = "$label\n$hint"; isAllCaps = false; textSize = 13f; gravity = android.view.Gravity.CENTER_VERTICAL
-        setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF283454.toInt())
-        minHeight = dp(56); setPadding(dp(16), dp(10), dp(16), dp(10)); setOnClickListener { action() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) }
+        text = "$label\n$hint"
+        isAllCaps = false
+        textSize = 12f
+        letterSpacing = .015f
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        setTextColor(0xFFF5F6FF.toInt())
+        background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(0xFF51449A.toInt(), 0xFF263D68.toInt())
+        ).apply { cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF7468C5.toInt()) }
+        minHeight = dp(54)
+        setPadding(dp(16), dp(10), dp(16), dp(10))
+        elevation = dp(2).toFloat()
+        setOnClickListener { action() }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }
 
     private fun requestAudioPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 10) }
