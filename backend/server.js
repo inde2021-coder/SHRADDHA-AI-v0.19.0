@@ -578,7 +578,8 @@ wss.on('connection', (ws, ctx) => {
       const requestId = String(msg.requestId || '').slice(0, 64);
       const payload = typeof msg.payload === 'string' ? msg.payload : '';
       const sizeBytes = Number(msg.sizeBytes);
-      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';\n      const contentType = msg.contentType === 'clipboard_text' ? 'clipboard_text' : 'file';
+      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
+      const contentType = msg.contentType === 'clipboard_text' ? 'clipboard_text' : 'file';
       if (!target || target.sharePermissions?.[category] !== true ||
           !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
           payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
