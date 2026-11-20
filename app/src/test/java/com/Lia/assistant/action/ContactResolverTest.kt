@@ -27,7 +27,7 @@ class ContactResolverTest {
     @Test fun oneContainsMatchResolvesAndMultipleContainsMatchesDoNotGuess() {
         val unique = ContactResolver.resolveCandidates("avi", listOf("Ravi Kumar" to "+911111111111"))
         assertTrue(unique is ContactLookupResult.Found)
-        val multiple = ContactResolver.resolveCandidates("avi", listOf("Ravi Kumar" to "+911111111111", "Aviral" to "+922222222222"))
+        val multiple = ContactResolver.resolveCandidates("avi", listOf("Ravi Kumar" to "+911111111111", "Xavi" to "+922222222222"))
         assertTrue(multiple is ContactLookupResult.Ambiguous)
     }
 
