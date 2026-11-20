@@ -9,8 +9,13 @@
 - `docs/integration/LIA-MYRA-FULL-MERGE-v0.19.0-HI.md` — merge ledger and boundaries.
 - `desktop-companion/README-SHRADDHA-MYRA-PAIRING-HI.md` — MYRA PC setup.
 
-## Build
-Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `:app:assembleDebug`. Build has not been verified in this execution environment because Gradle distribution download was blocked by DNS/network. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
+## Build और वर्तमान सत्यापन
+- JDK 17 / Android SDK 35 के साथ GitHub Actions पर Android unit tests सफल हुए।
+- Debug APK build सफल हुआ; CI ने ARM-specific `arm64-v8a` और `armeabi-v7a` APK बनाए और उनके SHA-256 checksums verify किए।
+- Artifact: GitHub Actions run #203, `shraddha-ai-debug-apks-arm` (14 दिन तक उपलब्ध)।
+- यह **debug build** है, Play Store release-signed APK नहीं। फोन पर installation और वास्तविक hardware/runtime tests अभी अलग से करने होंगे।
+- Android Studio में root खोलकर `:app:assembleDebug` चलाया जा सकता है। JDK 17 और Android SDK 35 आवश्यक हैं।
+- Firebase और AI provider credentials को local configuration में रखें; private secrets GitHub में commit न करें।
 
 ## Required device permissions
 Microphone, notifications, Accessibility Service, overlay, camera, and media access are requested only for features that need them. Enable Accessibility manually in Android Settings for cross-app automation. PC control needs a paired MYRA desktop companion.
