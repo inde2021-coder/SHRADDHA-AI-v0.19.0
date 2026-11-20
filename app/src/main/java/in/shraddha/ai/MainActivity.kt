@@ -34,6 +34,7 @@ import `in`.shraddha.ai.vision.RemoteCameraService
 import org.json.JSONObject
 import org.json.JSONArray
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import `in`.shraddha.ai.brain.PersistentChatMemory
 
 class MainActivity : AppCompatActivity() {
     private val assistantDisplayName: String

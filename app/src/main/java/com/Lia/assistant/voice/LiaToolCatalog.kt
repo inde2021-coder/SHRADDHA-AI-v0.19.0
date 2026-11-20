@@ -106,7 +106,6 @@ object LiaToolCatalog {
                     "action" to "Only supported action: 'SEND_MESSAGE' (opens a draft; user must tap Send)",
                     "contact_name" to "Name of contact",
                     "message" to "Message body; composer only, user taps Send"
-                    "query" to "Search query if searching"
                 ),
                 required = listOf("action")
             )
