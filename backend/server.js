@@ -11,6 +11,7 @@ const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
 const knowlarityEvents = new Map();
+const edesyCalls = new Map();
 const KNOWLARITY_CHANNELS = new Set(['Basic','Advance','Premium','Enterprise']);
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 function resamplePcm16(input, fromRate, toRate) {
@@ -135,7 +136,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      return json(res, 200, { provider: 'edesy', configured: edesyConfigured(), capabilities: { inboundWebSocketAudio: edesyConfigured(), liveBidirectionalAiAudio: edesyConfigured(), whatsappDelivery: false }, required: ['EDESY_STREAM_TOKEN','OPENAI_API_KEY'], note: 'Requires an Edesy AI Voice Agent Stream node pointed to this backend WSS URL.' });
+      return json(res, 200, { provider: 'edesy', configured: edesyConfigured(), capabilities: { inboundWebSocketAudio: edesyConfigured(), liveBidirectionalAiAudio: edesyConfigured(), liveTranscripts: edesyConfigured(), persistentCallRecording: false, whatsappDelivery: false }, required: ['EDESY_STREAM_TOKEN','OPENAI_API_KEY'], note: 'Requires a provisioned Edesy DID and AI Voice Agent Stream flow. Call transcripts are currently kept in bounded server memory only.' });
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      return json(res, 200, { calls: [...edesyCalls.values()].slice(-30).reverse() });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/knowlarity/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
@@ -358,14 +363,59 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 telephonyWss.on('connection', carrier => {
-  let live, ready = false, closed = false, firstText = true;
-  const shutdown = () => { if (closed) return; closed = true; if (live && live.readyState === WebSocket.OPEN) live.close(); if (carrier.readyState === WebSocket.OPEN) carrier.close(); };
+  let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
+  const finalize = () => {
+    if (!callRecord) return;
+    callRecord.endedAt = new Date().toISOString();
+    callRecord.status = 'ended';
+    edesyCalls.set(callRecord.id, callRecord);
+  };
+  const shutdown = () => {
+    if (closed) return;
+    closed = true;
+    finalize();
+    if (live && live.readyState === WebSocket.OPEN) live.close();
+    if (carrier.readyState === WebSocket.OPEN) carrier.close();
+  };
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
-  live.on('open', () => live.send(JSON.stringify({ type: 'session.start', session: { model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1', instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI. Disclose that you are an AI assistant. Speak naturally in Hindi or English, ask one question at a time, and do not claim actions you cannot perform.', audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } }, delegation: { type: 'client' } } })));
-  live.on('message', raw => { let e; try { e = JSON.parse(raw.toString()); } catch { return; } if (e.type === 'session.started') ready = true; if (e.type === 'session.output_audio.delta' && typeof e.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(e.delta, 'base64'), 24000, 16000), { binary: true }); if (e.type === 'error') console.error('Live voice error:', String(e.error && e.error.message || 'unknown').slice(0, 180)); });
-  live.on('error', shutdown); live.on('close', shutdown);
-  carrier.on('message', (data, binary) => { if (binary) { if (!ready || live.readyState !== WebSocket.OPEN || data.length > 65536) return; const pcm24 = resamplePcm16(Buffer.from(data), 16000, 24000); live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') })); return; } let m; try { m = JSON.parse(data.toString()); } catch { return; } if (firstText) { firstText = false; if (m.direction && m.direction !== 'inbound') shutdown(); return; } if (m.type === 'disconnect') shutdown(); });
-  carrier.on('close', shutdown); carrier.on('error', shutdown);
+  live.on('open', () => live.send(JSON.stringify({ type: 'session.start', session: { model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1', instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, a disclosed AI call assistant. Tell the caller you are an AI assistant. Speak naturally in Hindi or English, ask one question at a time, understand the reason for the call, take a concise message, and never claim you performed an action you cannot perform.', audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } }, delegation: { type: 'client' } } })));
+  live.on('message', raw => {
+    let event;
+    try { event = JSON.parse(raw.toString()); } catch { return; }
+    if (event.type === 'session.started') ready = true;
+    if (callRecord && typeof event.delta === 'string') {
+      if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
+      if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
+      if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
+    }
+    if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, 16000), { binary: true });
+    if (event.type === 'error') console.error('Live voice error:', String(event.error && event.error.message || 'unknown').slice(0, 180));
+  });
+  live.on('error', shutdown);
+  live.on('close', shutdown);
+  carrier.on('message', (data, binary) => {
+    if (binary) {
+      if (!ready || live.readyState !== WebSocket.OPEN || data.length > 65536) return;
+      const pcm24 = resamplePcm16(Buffer.from(data), 16000, 24000);
+      live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+      return;
+    }
+    let message;
+    try { message = JSON.parse(data.toString()); } catch { return; }
+    if (!metadataSeen) {
+      metadataSeen = true;
+      if (message.direction && message.direction !== 'inbound') return shutdown();
+      const caller = String(message.from || '');
+      callRecord = { id: String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex')).slice(0, 120), direction: String(message.direction || 'inbound'), caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller', callerName: String(message.caller_name || message.callerName || '').slice(0, 80), startedAt: new Date().toISOString(), endedAt: null, status: 'active', transcript: [] };
+      edesyCalls.set(callRecord.id, callRecord);
+      while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
+      return;
+    }
+    if (message.type === 'disconnect') return shutdown();
+    if (message.type === 'killAudio' && callRecord) callRecord.lastControl = 'caller-interruption';
+  });
+  carrier.on('close', shutdown);
+  carrier.on('error', shutdown);
 });
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://localhost');
