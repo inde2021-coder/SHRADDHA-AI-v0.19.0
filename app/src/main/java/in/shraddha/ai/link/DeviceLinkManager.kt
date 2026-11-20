@@ -130,6 +130,11 @@ object DeviceLinkManager {
                             onStatus?.invoke("Connected • " + (peers?.length() ?: 0) + " paired device(s)")
                             onPeerMessage?.invoke(msg)
                         }
+                        "device_revoked" -> {
+                            val revokedId = msg.optString("deviceId")
+                            peerKeys.remove(revokedId)?.key?.fill(0)
+                            onPeerMessage?.invoke(msg)
+                        }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> { val sender = msg.optString("fromDeviceId"); val actionId = msg.optString("actionId"); val action = msg.optJSONObject("action") ?: JSONObject(); if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && msg.optBoolean("requiresPerActionApproval")) onRemoteActionWithId?.invoke(sender, actionId, action) else onStatus?.invoke("Unverified remote action blocked: missing approval metadata") }
@@ -419,5 +424,5 @@ object DeviceLinkManager {
         System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
         return socket?.send(ByteString.of(*packet)) == true
     }
-    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
+    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear(); lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
 }
