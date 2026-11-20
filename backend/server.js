@@ -15,6 +15,14 @@ const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
+const clientIp = req => {
+  // Trust forwarded IPs only when the deployment's reverse proxy overwrites them.
+  if (process.env.TRUST_PROXY === 'true') {
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded.slice(0, 64);
+  }
+  return String(req.socket.remoteAddress || 'unknown').slice(0, 64);
+};
 async function readBody(req, limit = MAX_BODY) { let raw = ''; for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > limit) { const e = new Error('Request too large'); e.statusCode = 413; throw e; } } try { return JSON.parse(raw || '{}'); } catch { const e = new Error('Request body must be valid JSON'); e.statusCode = 400; throw e; } }
 
 async function askProvider(provider, prompt) {
@@ -69,7 +77,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0 }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -82,7 +90,7 @@ const server = http.createServer(async (req, res) => {
   const routePath = String(req.url || '').split('?')[0];
   if (AI_ROUTES.has(routePath)) {
     if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+    const ip = clientIp(req);
     const now = Date.now(); const usage = apiAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
     if (usage.resetAt <= now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
     usage.count += 1; apiAttempts.set(ip, usage);
@@ -96,7 +104,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, createSession(name));
     }
     if (req.method === 'POST' && req.url === '/api/device/join') {
-      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      const ip = clientIp(req);
       const now = Date.now(); const attempt = joinAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (attempt.resetAt < now) { attempt.count = 0; attempt.resetAt = now + 10 * 60 * 1000; }
       attempt.count += 1; joinAttempts.set(ip, attempt);
@@ -110,7 +118,7 @@ const server = http.createServer(async (req, res) => {
       const session = sessions.get(pair.sessionId);
       if (!session || session.devices.size >= 8) return json(res, 409, { error: 'Session unavailable or device limit reached' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0 });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
@@ -244,7 +252,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/agents/council') {
       if (!process.env.GATEWAY_TOKEN || req.headers.authorization !== `Bearer ${process.env.GATEWAY_TOKEN}`) return json(res, 401, { error: 'Gateway authentication is required' });
-      const caller = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      const caller = clientIp(req);
       const now = Date.now(); const usage = councilAttempts.get(caller) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (usage.resetAt < now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
       usage.count += 1; councilAttempts.set(caller, usage);
@@ -318,6 +326,11 @@ wss.on('connection', (ws, ctx) => {
       const clientFrame = Buffer.from(data);
       if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
       const frameType = clientFrame[0];
+      const permission = frameType === 1 ? 'screen' : 'camera';
+      if (device.sharePermissions?.[permission] !== true) return;
+      const now = Date.now();
+      if (now - device.frameWindowStart >= 1000) { device.frameWindowStart = now; device.frameCount = 0; }
+      if (++device.frameCount > 10) return;
       const targetLength = clientFrame[1];
       if (clientFrame.length < 2 + targetLength + 1) return;
       const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
@@ -339,13 +352,17 @@ wss.on('connection', (ws, ctx) => {
         send(deviceId, JSON.stringify({ type: 'control_result', targetDeviceId: targetId, approved: false, reason: 'Remote control is disabled on the target device.' }));
         return;
       }
-      send(targetId, JSON.stringify({ type: 'control_request', fromDeviceId: deviceId, requesterName: device.name, requestedMinutes: Math.min(5, Math.max(1, Number(msg.minutes) || 5)) }));
+      const requestedMinutes = Math.min(5, Math.max(1, Number(msg.minutes) || 5));
+      target.pendingControlRequests.set(deviceId, Date.now() + 60_000);
+      send(targetId, JSON.stringify({ type: 'control_request', fromDeviceId: deviceId, requesterName: device.name, requestedMinutes }));
     } else if (msg.type === 'control_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
-      const approved = Boolean(requester && msg.approved === true && device.sharePermissions?.remote_control === true);
+      const pendingUntil = device.pendingControlRequests.get(requesterId) || 0;
+      device.pendingControlRequests.delete(requesterId);
+      const approved = Boolean(requester && pendingUntil >= Date.now() && msg.approved === true && device.sharePermissions?.remote_control === true);
       if (approved) device.controlGrants.set(requesterId, Date.now() + Math.min(5, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
-      send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request denied or target permission is disabled.' }));
+      send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request expired, denied, or target permission is disabled.' }));
     } else if (msg.type === 'remote_action') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
@@ -368,7 +385,10 @@ wss.on('connection', (ws, ctx) => {
       for (const [grantKey] of device.grants) {
         const category = grantKey.split(':').slice(1).join(':');
         if (next[category] !== true) device.grants.delete(grantKey);
-      if (next.remote_control !== true) device.controlGrants.clear();
+      }
+      if (next.remote_control !== true) {
+        device.controlGrants.clear();
+        device.pendingControlRequests.clear();
       }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
@@ -376,14 +396,19 @@ wss.on('connection', (ws, ctx) => {
       const target = session.devices.get(targetId);
       const category = String(msg.category || '');
       if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
-      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId: String(msg.requestId || randomBytes(12).toString('hex')), itemLabel: String(msg.itemLabel || '').slice(0,120) }));
+      const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 80);
+      target.pendingDataShares.set(`${deviceId}:${category}`, { requestId, expiresAt: Date.now() + 60_000 });
+      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
     } else if (msg.type === 'data_share_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
       const category = String(msg.category || '');
       if (!requester || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
-      const approved = msg.approved === true && device.sharePermissions?.[category] === true;
-      if (approved) device.grants.set(`${requesterId}:${category}`, Date.now() + Math.min(15, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
+      const pendingKey = `${requesterId}:${category}`;
+      const pending = device.pendingDataShares.get(pendingKey);
+      device.pendingDataShares.delete(pendingKey);
+      const approved = Boolean(pending && pending.expiresAt >= Date.now() && msg.approved === true && device.sharePermissions?.[category] === true);
+      if (approved) device.grants.set(pendingKey, Date.now() + Math.min(15, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
       send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, approved, expiresInMinutes: approved ? Math.min(15, Math.max(1, Number(msg.minutes) || 5)) : 0 }));
     } else if (msg.type === 'data_share_payload') {
       const targetId = String(msg.targetDeviceId || '');
@@ -396,6 +421,8 @@ wss.on('connection', (ws, ctx) => {
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category, fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100), payload }));
     } else if (msg.type === 'signal' || msg.type === 'chat' || msg.type === 'control_consent') {
+      if (JSON.stringify(msg).length > 64 * 1024) return;
+      if (msg.type === 'chat' && (typeof msg.message !== 'string' || msg.message.length > 2000)) return;
       if (msg.type === 'signal') { if (typeof msg.targetDeviceId !== 'string' || !session.devices.has(msg.targetDeviceId)) return; send(msg.targetDeviceId, JSON.stringify({ ...msg, fromDeviceId: deviceId })); }
       else for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ ...msg, fromDeviceId: deviceId }));
     }
@@ -404,5 +431,16 @@ wss.on('connection', (ws, ctx) => {
 });
 function targetIdIsSelf(target, self) { return target === self; }
 
-setInterval(() => { const now = Date.now(); for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code); for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip); for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id); }, 60_000).unref();
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code);
+  for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip);
+  for (const session of sessions.values()) for (const device of session.devices.values()) {
+    for (const [id, expiry] of device.pendingControlRequests) if (expiry < now) device.pendingControlRequests.delete(id);
+    for (const [key, pending] of device.pendingDataShares) if (pending.expiresAt < now) device.pendingDataShares.delete(key);
+    for (const [id, expiry] of device.controlGrants) if (expiry < now) device.controlGrants.delete(id);
+    for (const [key, expiry] of device.grants) if (expiry < now) device.grants.delete(key);
+  }
+  for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id);
+}, 60_000).unref();
 server.listen(PORT, '0.0.0.0', () => console.log(`Shraddha device relay listening on ${PORT}`));
