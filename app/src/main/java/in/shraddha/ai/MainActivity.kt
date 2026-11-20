@@ -22,6 +22,7 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import `in`.shraddha.ai.vision.LiveVisualTranslationSession as LiveVisualTranslationSession
 import com.google.android.material.card.MaterialCardView
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.brain.SecureMemoryVault
@@ -73,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var visionResult: TextView
     @Volatile private var lastScreenJpeg: ByteArray? = null
     @Volatile private var lastCameraJpeg: ByteArray? = null
+    @Volatile private var liveVisualTranslationSession: LiveVisualTranslationSession? = null
     private var touchStartX = 0f
     private var touchStartY = 0f
     private var lastPeerId: String? = null
@@ -2436,6 +2438,7 @@ class MainActivity : AppCompatActivity() {
         }
         DeviceLinkManager.onCameraFrame = { sourceId, bytes ->
             lastCameraJpeg = bytes
+            liveVisualTranslationSession?.offerFrame(bytes)
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             if (bitmap != null) runOnUiThread {
                 if (::cameraPreview.isInitialized) cameraPreview.setImageBitmap(bitmap)
@@ -2698,6 +2701,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        liveVisualTranslationSession?.stop()
+        liveVisualTranslationSession = null
         DeviceLinkManager.onStatus = null
         DeviceLinkManager.onPeerMessage = null
         DeviceLinkManager.onScreenFrame = null
