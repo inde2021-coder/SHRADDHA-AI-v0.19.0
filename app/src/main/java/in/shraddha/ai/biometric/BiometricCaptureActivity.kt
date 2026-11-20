@@ -325,7 +325,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun buildSpeakerScreen(mode: String, id: String, name: String, threshold: Float) {
-        val root = baseLayout(if (mode == "enroll") "Speaker enrollment" else "Live speaker match", "On-device speech challenge • raw audio is processed in memory and discarded")
+        val root = baseLayout(
+            when (mode) { "enroll" -> "Speaker enrollment"; "compare" -> "Voice similarity comparison"; else -> "Live speaker match" },
+            "On-device speech challenge • raw audio is processed in memory and discarded"
+        )
         val phrase = TextView(this).apply { text = "इसे साफ़ बोलें / Say clearly:  $randomPhrase"; textSize = 18f; setTextColor(Color.WHITE); setPadding(0, 20, 0, 20) }
         root.addView(phrase, 1)
         message.text = "A random phrase is generated for this session. On-device speech recognition must verify it before the biometric sample is recorded."
