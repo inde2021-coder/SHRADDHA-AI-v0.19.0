@@ -155,7 +155,7 @@ class OperatorActivity : Activity() {
         name: String,
         values: Map<String, String>,
         startAt: Int = 0,
-        confirmedStepIndex: Int? = null
+        approval: `in`.shraddha.ai.operator.learning.WorkflowStepApproval? = null
     ) {
         Thread {
             val runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
@@ -168,14 +168,25 @@ class OperatorActivity : Activity() {
                         .setMessage(event.message + "\n\nक्या केवल इसी चरण को चलाने की अनुमति देते हैं?")
                         .setNegativeButton("नहीं, रोकें") { _, _ -> activeRunner?.stop(); activeRunner = null }
                         .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ ->
-                            runLearned(profile, name, values, startAt = pendingStep, confirmedStepIndex = pendingStep)
+                            val pending = profile.workflows[name]?.getOrNull(pendingStep)
+                            if (pending == null) {
+                                log.text = "अनुमति वाला चरण अब उपलब्ध नहीं है; workflow रोक दिया गया।"
+                                activeRunner?.stop()
+                                activeRunner = null
+                            } else {
+                                val resolved = values[pending.inputTemplate] ?: pending.inputTemplate
+                                val grant = `in`.shraddha.ai.operator.learning.WorkflowStepApproval.afterExplicitUserApproval(
+                                    profile.packageName, name, pendingStep, pending.action, pending.targetLabel, resolved, pending.expectedText
+                                )
+                                runLearned(profile, name, values, startAt = pendingStep, approval = grant)
+                            }
                         }
                         .show()
                 }
                 if (event.state in setOf(OperatorTaskState.COMPLETED, OperatorTaskState.FAILED, OperatorTaskState.CANCELLED)) activeRunner = null
             } }
             activeRunner = runner
-            runner.run(profile, name, values, startAt, confirmedStepIndex)
+            runner.run(profile, name, values, startAt, approval)
         }.start()
     }
     private fun field(hintText: String) = EditText(this).apply {
