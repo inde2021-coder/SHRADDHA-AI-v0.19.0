@@ -157,7 +157,7 @@ Receiving clipboard text on Windows asks for a separate local confirmation befor
 Offline voice control uses a local Vosk model; no cloud speech recognition is used. Install `vosk` and `sounddevice`, download an appropriate Hindi/English Vosk model, then run:
 
 ~~~powershell
-py -m pip install vosk sounddevice
+py -m pip install -r requirements-voice.txt
 py shraddha_pc_companion.py --voice-control-phone ANDROID_DEVICE_ID --vosk-model C:\\Models\\vosk-model-small-en-us
 ~~~
 
