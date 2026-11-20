@@ -1469,6 +1469,32 @@ class MainActivity : AppCompatActivity() {
                     }.onFailure { translationOutput.text = "Translation request invalid: ${it.message}" }
             })
 
+            addView(actionButton("START LIVE CAMERA TRANSLATION", "हर नए paired camera frame पर AI text पढ़कर चुनी भाषा में अनुवाद करेगा") {
+                val frame = lastCameraJpeg
+                val settings = VoiceGatewaySettings.get(this@MainActivity)
+                if (frame == null) { translationOutput.text = "पहले paired phone पर Camera Sharing चालू करें।"; return@actionButton }
+                if (!validRelay(settings.baseUrl)) { translationOutput.text = "पहले HTTPS AI backend configure करें।"; return@actionButton }
+                liveVisualTranslationSession?.stop()
+                val session = LiveVisualTranslationSession(
+                    settings.baseUrl, settings.gatewayToken, visionProvider.selectedItem.toString(),
+                    translationSource.selectedItem.toString(), translationTarget.selectedItem.toString(),
+                    onUpdate = { translated -> runOnUiThread {
+                        if (liveVisualTranslationSession != null) translationOutput.text = translated
+                    } },
+                    audit = { outcome, detail -> securityAudit.append("live_visual_translation", outcome, detail) }
+                )
+                runCatching { session.start() }.onSuccess {
+                    liveVisualTranslationSession = session
+                    translationOutput.text = "Live translation चालू है। Camera frame की प्रतीक्षा…"
+                    session.offerFrame(frame)
+                }.onFailure { translationOutput.text = "Live translation शुरू नहीं हुई: ${it.message}" }
+            })
+            addView(actionButton("STOP LIVE CAMERA TRANSLATION", "Live frame analysis और translation रोकें") {
+                liveVisualTranslationSession?.stop()
+                liveVisualTranslationSession = null
+                translationOutput.text = "Live camera translation बंद है।"
+            })
+
             val troubleCategory = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("network", "battery", "electrical", "general")) }
             val troubleOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
             addView(TextView(this@MainActivity).apply { text = "13 • VISUAL TROUBLESHOOTING PLAYBOOKS"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
