@@ -19,6 +19,7 @@ class OperatorActivity : Activity() {
     private lateinit var target: EditText
     private lateinit var typed: EditText
     private lateinit var commandInput: EditText
+    @Volatile private var activeRunner: AdaptiveWorkflowRunner? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +37,7 @@ class OperatorActivity : Activity() {
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
+        root.addView(action("■  चल रहा Workflow रोकें") { activeRunner?.stop() ?: run { log.text = "अभी कोई Workflow सक्रिय नहीं है।" } })
         root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
         root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) })
         root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString())) })
@@ -150,7 +152,7 @@ class OperatorActivity : Activity() {
         confirmedStepIndex: Int? = null
     ) {
         Thread {
-            AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+            val runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
                 val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
                 log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
                 val pendingStep = event.stepIndex
@@ -158,13 +160,16 @@ class OperatorActivity : Activity() {
                     android.app.AlertDialog.Builder(this)
                         .setTitle("इस चरण की अनुमति")
                         .setMessage(event.message + "\n\nक्या केवल इसी चरण को चलाने की अनुमति देते हैं?")
-                        .setNegativeButton("नहीं, रोकें", null)
+                        .setNegativeButton("नहीं, रोकें") { _, _ -> activeRunner?.stop(); activeRunner = null }
                         .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ ->
                             runLearned(profile, name, values, startAt = pendingStep, confirmedStepIndex = pendingStep)
                         }
                         .show()
                 }
-            } }.run(profile, name, values, startAt, confirmedStepIndex)
+                if (event.state in setOf(OperatorTaskState.COMPLETED, OperatorTaskState.FAILED, OperatorTaskState.CANCELLED)) activeRunner = null
+            } }
+            activeRunner = runner
+            runner.run(profile, name, values, startAt, confirmedStepIndex)
         }.start()
     }
     private fun field(hintText: String) = EditText(this).apply {

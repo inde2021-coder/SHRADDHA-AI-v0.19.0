@@ -55,6 +55,11 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             }
             if (!ok) { audit.append("operator_step", "failed", "${profile.packageName}:${step.action}"); return fail("चरण ${index + 1} का लक्ष्य भरोसेमंद तरीके से नहीं मिला या ऐप ने कार्रवाई रोकी। AI ने अनुमान से टैप नहीं किया।") }
             Thread.sleep(500)
+            if (stopped) {
+                audit.append("operator_step", "cancelled_after_dispatch", "${profile.packageName}:${step.action}")
+                emit(OperatorEvent(OperatorTaskState.CANCELLED, "रोकने का अनुरोध मिल गया। मौजूदा कार्रवाई भेजी जा चुकी हो सकती है; आगे के चरण नहीं चलेंगे।"))
+                return false
+            }
             val after: ScreenSnapshot = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
             if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
             audit.append("operator_step", "verified", "${profile.packageName}:${step.action}")
