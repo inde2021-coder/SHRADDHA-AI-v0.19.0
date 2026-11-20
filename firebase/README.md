@@ -13,12 +13,12 @@ The Android app is registered as `in.shraddha.ai` in Firebase project `shraddha-
 
 ## Cloud memory format
 
-The app encrypts the selected memory note locally with AES-256-GCM. A key is derived from the account password using PBKDF2-HMAC-SHA256 (210,000 iterations). The encrypted payload is written to both Firestore and Realtime Database at `users/{uid}/vault/{key}`. Restore reads Realtime Database first and falls back to Firestore if the RTDB record is missing or unavailable.
+The app encrypts the selected memory note locally with AES-256-GCM. A key is derived from the account password using PBKDF2-HMAC-SHA256 (210,000 iterations). The encrypted payload is written to both Firestore and Realtime Database at `users/{uid}/vault/{key}`. Restore reads Realtime Database first and independently tries Firestore if the RTDB record is missing, unavailable, corrupt or cannot be decrypted. Backup writes attempt both stores and report partial mirror failures.
 
-The account password is not uploaded. If the password is lost, the encrypted backup cannot be decrypted. Face/voice biometric templates, child records, provider API keys, OTPs, and payment data are excluded.
+The account password is not uploaded. The vault encryption key is derived from the Firebase account password. If the password is lost or changed, old backups cannot be decrypted with the new password. Before changing the Firebase password, restore the vault using the old password and create a fresh encrypted backup using the new password. A dedicated recovery-key workflow is not implemented yet. Face/voice biometric templates, child records, provider API keys, OTPs, and payment data are excluded.
 
 ## Security and deployment boundary
 
 Realtime Database rules restrict each authenticated account to its own UID path and validate the encrypted record shape/size. Rules files in this repository are **not automatically published** to the Firebase project. The project owner must publish them in Firebase Console or authorize a Firebase CLI deployment. Never put service-account private keys in this repository.
 
-Storage uploads and FCM handlers are not implemented by this change; their SDK dependencies remain preparatory only.
+Storage uploads and FCM handlers are not implemented by this change; their SDK dependencies remain preparatory only. The encrypted cloud vault is an on-demand backup/restore mirror, not a continuous real-time sync listener.
