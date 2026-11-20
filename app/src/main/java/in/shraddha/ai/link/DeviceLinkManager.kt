@@ -27,6 +27,7 @@ object DeviceLinkManager {
     @Volatile private var deviceToken: String? = null
     @Volatile var onStatus: ((String) -> Unit)? = null
     @Volatile var onRemoteAction: ((String, JSONObject) -> Unit)? = null
+    @Volatile var onRemoteActionWithId: ((String, String, JSONObject) -> Unit)? = null
     @Volatile var onScreenFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onCameraFrame: ((String, ByteArray) -> Unit)? = null
     @Volatile var onPeerMessage: ((JSONObject) -> Unit)? = null
@@ -60,7 +61,7 @@ object DeviceLinkManager {
                         "connected" -> { onStatus?.invoke("Connected • ${msg.optJSONArray("devices")?.length() ?: 0} paired device(s)"); onPeerMessage?.invoke(msg) }
                         "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
-                        "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optJSONObject("action") ?: JSONObject())
+                        "remote_action" -> { val sender = msg.optString("fromDeviceId"); val actionId = msg.optString("actionId"); val action = msg.optJSONObject("action") ?: JSONObject(); if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && msg.optBoolean("requiresPerActionApproval")) onRemoteActionWithId?.invoke(sender, actionId, action) else onStatus?.invoke("Unverified remote action blocked: missing approval metadata") }
                         "remote_action_result" -> {
                             onRemoteActionResult?.invoke(msg.optString("fromDeviceId"), msg.optString("actionKind"), msg.optString("result"))
                             onPeerMessage?.invoke(msg)
@@ -270,7 +271,16 @@ object DeviceLinkManager {
     fun sendSignal(targetDeviceId: String, signal: JSONObject): Boolean = socket?.send(JSONObject().put("type", "signal").put("targetDeviceId", targetDeviceId).put("signal", signal).toString()) == true
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
     fun respondRemoteControl(requesterDeviceId: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_response").put("requesterDeviceId", requesterDeviceId).put("approved", approved).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
-    fun sendAction(targetDeviceId: String, action: JSONObject): Boolean = socket?.send(JSONObject().put("type", "remote_action").put("targetDeviceId", targetDeviceId).put("action", action).toString()) == true
+    fun sendAction(targetDeviceId: String, action: JSONObject): Boolean {
+        val actionId = java.util.UUID.randomUUID().toString().replace("-", "")
+        return socket?.send(JSONObject().put("type", "remote_action").put("targetDeviceId", targetDeviceId).put("actionId", actionId).put("action", action).toString()) == true
+    }
+    fun sendRemoteActionResult(targetDeviceId: String, actionId: String, actionKind: String, result: String): Boolean {
+        if (!actionId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return false
+        return socket?.send(JSONObject().put("type", "remote_action_result").put("targetDeviceId", targetDeviceId).put("actionId", actionId).put("actionKind", actionKind.take(32)).put("result", result.take(1000)).toString()) == true
+    }
+    fun revokePairedDevice(targetDeviceId: String): Boolean = socket?.send(JSONObject().put("type", "revoke_device").put("targetDeviceId", targetDeviceId).toString()) == true
+    fun leavePairedSession(): Boolean = socket?.send(JSONObject().put("type", "leave_session").toString()) == true
     fun sendRemoteActionResult(targetDeviceId: String, actionKind: String, result: String): Boolean =
         socket?.send(JSONObject().put("type", "remote_action_result").put("targetDeviceId", targetDeviceId)
             .put("actionKind", actionKind.take(32)).put("result", result.take(1000)).toString()) == true
