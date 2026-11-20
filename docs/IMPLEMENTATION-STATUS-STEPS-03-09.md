@@ -60,6 +60,7 @@ Not started. Requires successful unit tests, lint/static checks, debug and relea
 - Microphone permission is no longer requested at app launch; it is requested only when the user opens Voice or explicitly starts a voice command.
 - Remote accessibility commands now require a fresh peer-specific approval, expire after five minutes, and can be revoked immediately. The persistent opt-in switch alone no longer authorizes incoming commands.
 - Deleting all People Memory profiles now also clears the encrypted biometric template vault, not just the visible directory.
+- Gemini API keys now use the Android Keystore-backed AES-GCM encrypted store; an existing plaintext SharedPreferences key is migrated and cleared only after the encrypted write succeeds.
 - These changes are source-level hardening; relay-server authorization, Android device behavior and multi-device tests still need end-to-end verification.
 
 ## Truthful completion gate
