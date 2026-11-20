@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
@@ -113,7 +113,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map() }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -153,8 +153,11 @@ const server = http.createServer(async (req, res) => {
       if (!name || name.length > 48) return json(res, 400, { error: 'deviceName must be 1-48 characters' });
       const session = sessions.get(pair.sessionId);
       if (!session || session.devices.size >= 8) return json(res, 409, { error: 'Session unavailable or device limit reached' });
+      // Consume only after all validation succeeds; a QR/code invitation cannot be replayed.
+      const consumed = consumePairingCode(pairCodes, code);
+      if (!consumed || consumed.sessionId !== session.id) return json(res, 400, { error: 'Pairing code invalid, expired, or already used' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map() });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
@@ -553,11 +556,14 @@ wss.on('connection', (ws, ctx) => {
         send(deviceId, JSON.stringify({ type: 'control_result', targetDeviceId: targetId, approved: false, reason: 'Remote control is disabled on the target device.' }));
         return;
       }
-      send(targetId, JSON.stringify({ type: 'control_request', fromDeviceId: deviceId, requesterName: device.name, requestedMinutes: Math.min(5, Math.max(1, Number(msg.minutes) || 5)) }));
+      const requestedMinutes = Math.min(5, Math.max(1, Number(msg.minutes) || 5));
+      target.pendingControlRequests.set(deviceId, { expiresAt: Date.now() + 60_000, requestedMinutes });
+      send(targetId, JSON.stringify({ type: 'control_request', fromDeviceId: deviceId, requesterName: device.name, requestedMinutes, expiresInSeconds: 60 }));
     } else if (msg.type === 'control_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
-      const approved = Boolean(requester && msg.approved === true && device.sharePermissions?.remote_control === true);
+      const hasLiveRequest = resolveControlApproval(device.pendingControlRequests, requesterId, msg.approved === true);
+      const approved = Boolean(requester && hasLiveRequest && device.sharePermissions?.remote_control === true);
       if (approved) device.controlGrants.set(requesterId, Date.now() + Math.min(5, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
       send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request denied or target permission is disabled.' }));
     } else if (msg.type === 'remote_action') {
@@ -597,7 +603,7 @@ wss.on('connection', (ws, ctx) => {
         if (next[category] !== true) device.grants.delete(grantKey);
       }
       // Revoke remote-control grants immediately, even when no data-share grants exist.
-      if (next.remote_control !== true) device.controlGrants.clear();
+      if (next.remote_control !== true) { device.controlGrants.clear(); device.pendingControlRequests.clear(); }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
       const targetId = String(msg.targetDeviceId || '');
