@@ -1,6 +1,9 @@
 package `in`.shraddha.ai.link
 
 import android.util.Base64
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -12,6 +15,12 @@ import java.util.concurrent.TimeUnit
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
     private val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
+    private val reconnectHandler = Handler(Looper.getMainLooper())
+    @Volatile private var lastBaseUrl: String? = null
+    @Volatile private var lastPair: PairResult? = null
+    @Volatile private var reconnectAttempts = 0
+    @Volatile private var reconnectPending = false
+
     @Volatile private var socket: WebSocket? = null
     @Volatile var sessionId: String? = null; private set
     @Volatile var deviceId: String? = null; private set
@@ -36,12 +45,14 @@ object DeviceLinkManager {
     }
 
     private fun saveAndConnect(baseUrl: String, pair: PairResult, done: (Result<PairResult>) -> Unit) {
+        lastBaseUrl = baseUrl; lastPair = pair
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
+        val completionDelivered = AtomicBoolean(false)
         val wsBase = baseUrl.trim().trimEnd('/').replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
         val url = "$wsBase/ws?sessionId=${pair.sessionId}&deviceId=${pair.deviceId}"
         val request = Request.Builder().url(url).header("Authorization", "Bearer ${pair.token}").build()
         socket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) { onStatus?.invoke("Secure relay connected"); done(Result.success(pair)) }
+            override fun onOpen(webSocket: WebSocket, response: Response) { reconnectAttempts = 0; reconnectPending = false; onStatus?.invoke("Secure relay connected"); if (completionDelivered.compareAndSet(false, true)) done(Result.success(pair)) }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
@@ -68,11 +79,25 @@ object DeviceLinkManager {
                 val jpeg = frame.copyOfRange(2 + idLength, frame.size)
                 if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
             }
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); done(Result.failure(t)) }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason") }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t)); scheduleReconnect(baseUrl, pair) }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason"); if (code != 1000) scheduleReconnect(baseUrl, pair) }
         })
     }
 
+    private fun scheduleReconnect(baseUrl: String, pair: PairResult) {
+        if (sessionId != pair.sessionId || reconnectPending) return
+        reconnectPending = true
+        val delaySeconds = (1 shl reconnectAttempts.coerceIn(0, 5)).coerceAtMost(60)
+        reconnectAttempts = (reconnectAttempts + 1).coerceAtMost(6)
+        onStatus?.invoke("Reconnecting securely in ${delaySeconds}s…")
+        reconnectHandler.postDelayed({
+            reconnectPending = false
+            if (sessionId == pair.sessionId && lastPair?.deviceId == pair.deviceId) {
+                onStatus?.invoke("Restoring paired device connection…")
+                saveAndConnect(baseUrl, pair) { result -> if (result.isFailure) onStatus?.invoke("Reconnect attempt failed; retry scheduled") }
+            }
+        }, delaySeconds * 1000L)
+    }
     private fun post(base: String, path: String, body: JSONObject, callback: (Result<JSONObject>) -> Unit) {
         val url = base.trim().trimEnd('/') + path
         val request = Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType())).build()
@@ -283,5 +308,5 @@ object DeviceLinkManager {
         System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
         return socket?.send(ByteString.of(*packet)) == true
     }
-    fun disconnect() { socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
+    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
 }
