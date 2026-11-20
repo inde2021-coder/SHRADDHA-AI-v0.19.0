@@ -1880,7 +1880,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 android.app.AlertDialog.Builder(this@MainActivity)
                     .setTitle("Shraddha AI • Remote action approval")
-                    .setMessage("Device: $fromDeviceId\\nAction: $detail\\n\\nक्या इस एक कार्रवाई की अनुमति दें?")
+                    .setMessage("Device: $fromDeviceId\nAction: $detail\n\nक्या इस एक कार्रवाई की अनुमति दें?")
                     .setNegativeButton("Deny") { _, _ ->
                         status.text = "Remote action denied by you."
                     }
