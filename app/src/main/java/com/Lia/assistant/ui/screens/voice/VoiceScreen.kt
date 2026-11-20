@@ -74,7 +74,7 @@ fun VoiceScreen(
     val statusText by VoiceSessionManager.statusText.collectAsState()
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val orbSize = screenWidth * 0.70f
+    val orbSize = (screenWidth * 0.62f).coerceIn(160.dp, 260.dp)
 
     var hasRecordAudioPermission by remember {
         mutableStateOf(
@@ -114,15 +114,20 @@ fun VoiceScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Bar: Dismiss/Close button
+            // Top Bar: identity and dismiss control
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = appState.assistantName, fontSize = 18.sp, color = colors.textPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    Text(text = "VOICE INTERFACE  •  PRIVATE SESSION", fontSize = 9.sp, letterSpacing = 1.1.sp, color = colors.textTertiary)
+                }
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -139,7 +144,7 @@ fun VoiceScreen(
                 }
             }
 
-            // Center: 70% width 3D Orb & Status
+            // Center: adaptive 3D Orb and live session status
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -205,7 +210,7 @@ fun VoiceScreen(
                         text = statusText,
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
-                        fontSize = 20.sp,
+                        fontSize = 19.sp,
                         color = colors.textPrimary
                     )
 
@@ -214,8 +219,8 @@ fun VoiceScreen(
                     if (state == NovaOrbState.SPEAKING) {
                         NovaVoiceVisualizer(
                             amplitude = amplitude,
-                            barCount = 48,
-                            modifier = Modifier.padding(horizontal = 32.dp)
+                            barCount = 36,
+                            modifier = Modifier.padding(horizontal = 20.dp)
                         )
                     }
                 }
@@ -228,7 +233,7 @@ fun VoiceScreen(
                     .depthSurface(shape = frostedShape, elevation = 4.dp)
                     .clip(frostedShape)
                     .background(colors.surfaceGlass)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
