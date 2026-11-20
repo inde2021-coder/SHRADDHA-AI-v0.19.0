@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { validRemoteAction } from './relay-policy.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -16,22 +17,6 @@ const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
-function validRemoteAction(action) {
-  if (!action || typeof action !== 'object' || Array.isArray(action)) return false;
-  const finiteCoordinate = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10000;
-  switch (action.kind) {
-    case 'tap': return finiteCoordinate(action.x) && finiteCoordinate(action.y);
-    case 'swipe': return ['x1','y1','x2','y2'].every(key => finiteCoordinate(action[key]));
-    case 'type': return typeof action.text === 'string' && action.text.length > 0 && action.text.length <= 2000;
-    case 'click_text': return typeof action.text === 'string' && action.text.trim().length > 0 && action.text.length <= 120;
-    case 'open_app': return typeof action.appName === 'string' && action.appName.trim().length > 0 && action.appName.length <= 80;
-    case 'home':
-    case 'back':
-    case 'scroll': return true;
-    default: return false;
-  }
-}
-
 const clientIp = req => {
   // Trust forwarded IPs only when the deployment's reverse proxy overwrites them.
   if (process.env.TRUST_PROXY === 'true') {
