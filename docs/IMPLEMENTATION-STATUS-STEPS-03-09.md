@@ -56,6 +56,12 @@ Not started in this implementation pass. Full-screen responsive design, navigati
 ## Step 9 — Final Testing
 Not started. Requires successful unit tests, lint/static checks, debug and release APK builds, install/upgrade tests, physical-device tests, crash/performance checks and final artifact checksums.
 
+### Additional security/privacy hardening — 2026-11-20
+- Microphone permission is no longer requested at app launch; it is requested only when the user opens Voice or explicitly starts a voice command.
+- Remote accessibility commands now require a fresh peer-specific approval, expire after five minutes, and can be revoked immediately. The persistent opt-in switch alone no longer authorizes incoming commands.
+- Deleting all People Memory profiles now also clears the encrypted biometric template vault, not just the visible directory.
+- These changes are source-level hardening; relay-server authorization, Android device behavior and multi-device tests still need end-to-end verification.
+
 ## Truthful completion gate
 A step is complete only when its source changes are committed, tests pass, relevant device/integration checks are performed, limitations are documented and artifacts are reproducible. A GitHub CI run alone does not prove hardware behavior.
 
