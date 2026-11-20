@@ -1,9 +1,16 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
+    def test_clipboard_payload_roundtrip_and_integrity(self):
+        payload = build_clipboard_payload('Namaste Shraddha')
+        message = dict(payload, sizeBytes=payload['sizeBytes'], sha256=payload['sha256'])
+        self.assertEqual(decode_clipboard_payload(message), 'Namaste Shraddha')
+        message['sha256'] = '0' * 64
+        with self.assertRaises(ValueError): decode_clipboard_payload(message)
+
     def test_file_transfer_manifest_and_chunk_bounds(self):
         import tempfile
         from pathlib import Path
