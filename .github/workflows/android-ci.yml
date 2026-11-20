@@ -37,6 +37,13 @@ jobs:
         run: ./gradlew testDebugUnitTest
       - name: Build debug APK
         run: ./gradlew assembleDebug
+      - name: Publish debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shraddha-ai-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
 
   backend-check:
     runs-on: ubuntu-latest
