@@ -185,6 +185,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run { proxy.close(); return }
         val input = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
@@ -391,11 +392,18 @@ class BiometricCaptureActivity : AppCompatActivity() {
         setContentView(root)
     }
 
+    @androidx.annotation.RequiresApi(31)
+    private fun createOnDeviceRecognizer(): SpeechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+
     private fun startSpeakerChallenge() {
         if (busy) return
         busy = true
         action.isEnabled = false
-        val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        val recognizer = if (android.os.Build.VERSION.SDK_INT >= 31) createOnDeviceRecognizer() else {
+            busy = false
+            finishWith("On-device speech recognition requires Android 12 or newer.")
+            return
+        }
         speechRecognizer = recognizer
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
