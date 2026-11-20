@@ -12,7 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.Lia.assistant.MainActivity
-import com.Lia.assistant.R
+import `in`.shraddha.ai.R
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.fx.OverlayEdgeGlowController
