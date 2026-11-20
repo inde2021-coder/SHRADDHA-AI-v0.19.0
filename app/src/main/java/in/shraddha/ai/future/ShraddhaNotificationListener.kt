@@ -45,7 +45,7 @@ class ShraddhaNotificationListener : NotificationListenerService() {
         val start = prefs.getInt(KEY_QUIET_START, 22 * 60).coerceIn(0, 1439)
         val end = prefs.getInt(KEY_QUIET_END, 7 * 60).coerceIn(0, 1439)
         val now = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
-        return if (start == end) true else if (start < end) now in start until end else now >= start || now < end
+        return if (start == end) false else if (start < end) now in start until end else now >= start || now < end
     }
 
     companion object {
