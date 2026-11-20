@@ -14,7 +14,7 @@ Open Settings > AI & Voice Intelligence. Tap AI Chat Provider to cycle the provi
 
 ## Model defaults
 
-The adapters use these initial model IDs: gpt-4o-mini, llama-3.3-70b-versatile, sonar, and claude-3-5-sonnet-latest. Provider model availability and account entitlements change; an HTTP error is surfaced to the chat rather than silently falling back to another provider. Update the model IDs when the provider retires or restricts one.
+The adapters use these initial model IDs: gpt-4o-mini, llama-3.3-70b-versatile, sonar, and claude-sonnet-5-5. Provider model availability and account entitlements change; an HTTP error is surfaced to the chat rather than silently falling back to another provider. The Claude default was updated to the current Sonnet 5.5 API ID. Model availability and account entitlements can change; update defaults after checking the provider's live model catalog.
 
 ## Security and limitations
 
