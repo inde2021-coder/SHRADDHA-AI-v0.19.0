@@ -2377,7 +2377,7 @@ class MainActivity : AppCompatActivity() {
                         runOnUiThread {
                             androidx.appcompat.app.AlertDialog.Builder(this)
                                 .setTitle("Clipboard text received")
-                                .setMessage("Paired device से text आया है। इसे इस फोन के clipboard में copy करना है?\\n\\n" + receivedText.take(800))
+                                .setMessage("Paired device से text आया है। इसे इस फोन के clipboard में copy करना है?\n\n" + receivedText.take(800))
                                 .setNegativeButton("Discard", null)
                                 .setPositiveButton("Copy to Clipboard") { _, _ ->
                                     val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
