@@ -47,7 +47,7 @@ class LiveVisualTranslationSession(
                 if (gate.isActive() && generation.get() == requestGeneration) onUpdate("Live translation error: ${error.message ?: "backend unavailable"}")
                 audit("frame_failed", "error_type=${error.javaClass.simpleName}")
             }
-            gate.complete()
+            if (generation.get() == requestGeneration) gate.complete()
         }
     }
 
