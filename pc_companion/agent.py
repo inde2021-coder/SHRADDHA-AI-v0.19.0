@@ -331,15 +331,18 @@ class PcCompanionApp:
                     monitor = capture.monitors[1]
                     shot = capture.grab(monitor)
                 image = Image.frombytes("RGB", shot.size, shot.rgb)
-                image.thumbnail((1280, 720), Image.Resampling.LANCZOS)
-                from io import BytesIO
-                output = BytesIO()
-                image.save(output, format="JPEG", quality=55, optimize=True)
-                jpeg = output.getvalue()
-                if jpeg and len(jpeg) <= MAX_FRAME_BYTES:
-                    with self.send_lock:
-                        if ws.sock and ws.sock.connected:
-                            ws.send(bytes((1, 0)) + jpeg, opcode=websocket.ABNF.OPCODE_BINARY)
+                try:
+                    image.thumbnail((1280, 720), Image.Resampling.LANCZOS)
+                    from io import BytesIO
+                    with BytesIO() as output:
+                        image.save(output, format="JPEG", quality=55, optimize=True)
+                        jpeg = output.getvalue()
+                    if jpeg and len(jpeg) <= MAX_FRAME_BYTES:
+                        with self.send_lock:
+                            if ws.sock and ws.sock.connected:
+                                ws.send(bytes((1, 0)) + jpeg, opcode=websocket.ABNF.OPCODE_BINARY)
+                finally:
+                    image.close()
             except Exception as exc:
                 self.events.put(("status", f"Screen capture paused: {str(exc)[:120]}"))
                 self.screen_event.clear()
