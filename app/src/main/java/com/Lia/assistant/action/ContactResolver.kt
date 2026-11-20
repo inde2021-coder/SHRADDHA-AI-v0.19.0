@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 
 sealed class ContactLookupResult {
     data class Found(val displayName: String, val phoneNumber: String) : ContactLookupResult()
+    data class Ambiguous(val candidates: List<Pair<String, String>>) : ContactLookupResult()
     object NoPermission : ContactLookupResult()
     object NotFound : ContactLookupResult()
 }
@@ -70,21 +71,29 @@ object ContactResolver {
             return ContactLookupResult.NotFound
         }
 
-        // Rank candidates: exact > prefix > contains
-        val ranked = rankCandidates(q, candidates)
-        val best = ranked.firstOrNull() ?: return ContactLookupResult.NotFound
-        return ContactLookupResult.Found(displayName = best.first, phoneNumber = best.second)
-    }
+        // Never place a call based only on the first fuzzy match. Exact name wins
+        // only when it resolves to one distinct number; otherwise ask the user.
+        val qLower = q.lowercase().trim()
+        val distinct = candidates.distinctBy { it.second }
+        val exact = distinct.filter { it.first.lowercase().trim() == qLower }
+        if (exact.size == 1) {
+            val best = exact.first()
+            return ContactLookupResult.Found(best.first, best.second)
+        }
+        if (exact.size > 1) return ContactLookupResult.Ambiguous(exact.take(5))
 
-    fun rankCandidates(query: String, candidates: List<Pair<String, String>>): List<Pair<String, String>> {
-        val qLower = query.lowercase().trim()
-        return candidates.sortedBy { (name, _) ->
-            val nameLower = name.lowercase().trim()
-            when {
-                nameLower == qLower -> 0
-                nameLower.startsWith(qLower) -> 1
-                else -> 2
-            }
+        val prefix = distinct.filter { it.first.lowercase().trim().startsWith(qLower) }
+        if (prefix.size == 1) {
+            val best = prefix.first()
+            return ContactLookupResult.Found(best.first, best.second)
+        }
+        if (prefix.size > 1) return ContactLookupResult.Ambiguous(prefix.take(5))
+
+        val contains = distinct.filter { it.first.lowercase().contains(qLower) }
+        return when (contains.size) {
+            0 -> ContactLookupResult.NotFound
+            1 -> ContactLookupResult.Found(contains.first().first, contains.first().second)
+            else -> ContactLookupResult.Ambiguous(contains.take(5))
         }
     }
 }
