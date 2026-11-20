@@ -114,3 +114,12 @@ A step is complete only when its source changes are committed, tests pass, relev
 - Added explicit pause, resume and cancel transitions. Resuming a declined sensitive/irreversible step requires fresh approval; cancellation is terminal; failed independent verification stops the workflow.
 - Added unit coverage for approval gates, fresh approval on resume, failed verification, cancellation, duplicate step IDs, invalid indexes and invalid approval transitions.
 - These workflow changes are a deterministic state machine only. They do not grant app/device permissions or execute external actions; the host executor must re-check permissions immediately before each operation.
+
+
+## Update — 2026-11-20 encrypted conversation continuity
+- Added an opt-in switch for persistent chat memory; it defaults OFF and can be disabled at any time.
+- When enabled, the latest 12 user/assistant turns are stored locally through the existing Android Keystore AES-256-GCM vault. The recap is bounded to 1,000 characters per turn and 12,000 characters overall.
+- Chat sends the saved recap as bounded context to the selected AI provider; it is not uploaded to Firebase or shared with paired devices.
+- Added a confirmation dialog to clear the encrypted recap.
+- Added unit tests for role preservation, turn retention and payload bounds.
+- This is a compact conversation recap, not face/person recognition memory. No biometric identity is inferred from chat text.
