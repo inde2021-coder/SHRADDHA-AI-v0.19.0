@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest verification run for a branch. This avoids duplicate Gradle
+# dependency downloads on every small commit and prevents Maven Central rate limiting.
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
