@@ -901,7 +901,8 @@ async def run_once(args) -> None:
                             incoming_transfer["stream"].seek(index * FILE_CHUNK_BYTES); incoming_transfer["stream"].write(data); incoming_transfer["received"].add(index)
                         await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"], "index": index, "complete": False, "ok": True}))
                         count = len(incoming_transfer["received"]); total = incoming_transfer["chunks"]
-                        print(f"Receiving {incoming_transfer[\"name\"]}: {count}/{total} chunks ({count*100//total}%).", end="\\r", flush=True)
+                        received_name = incoming_transfer["name"]
+                        print(f"Receiving {received_name}: {count}/{total} chunks ({count*100//total}%).", end="\\r", flush=True)
                         if count == total:
                             incoming_transfer["stream"].flush(); incoming_transfer["stream"].close()
                             if not verify_transfer_file(incoming_transfer["temp"], incoming_transfer["size"], incoming_transfer["sha256"]):
@@ -910,7 +911,8 @@ async def run_once(args) -> None:
                             import os
                             os.replace(incoming_transfer["temp"], incoming_transfer["path"])
                             await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"], "index": -1, "complete": True, "ok": True}))
-                            print(f"\\nSaved and SHA-256 verified: {incoming_transfer[\"path\"]}")
+                            saved_path = incoming_transfer["path"]
+                            print(f"\\nSaved and SHA-256 verified: {saved_path}")
                             incoming_transfer = None
                     except Exception as exc: print("File receive error:", str(exc)[:200])
                 elif kind == "file_transfer_resume" and file_send and message.get("transferId") == file_send["transferId"]:
