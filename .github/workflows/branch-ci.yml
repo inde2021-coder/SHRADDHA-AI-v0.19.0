@@ -7,10 +7,15 @@ on:
   pull_request:
     branches:
       - main
+      - redesign-v0.19.2
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: branch-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:

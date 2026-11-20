@@ -10,12 +10,12 @@ import androidx.core.content.ContextCompat
 import java.net.URLEncoder
 
 object CommIntents {
-    /** Places a call directly after the user has granted CALL_PHONE permission. */
+    /** Starts a call only with Android's CALL_PHONE permission; otherwise opens the dialer for a user tap. */
     fun placeCall(context: Context, phoneNumber: String): String {
         val cleanNumber = phoneNumber.replace(Regex("[^0-9+]"), "")
         if (cleanNumber.length < 5) return "invalid_phone_number"
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-            return "call_permission_required"
+            return openDialer(context, cleanNumber)
         }
         return try {
             val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$cleanNumber")).apply {
@@ -24,10 +24,20 @@ object CommIntents {
             context.startActivity(callIntent)
             "call_started"
         } catch (_: SecurityException) {
-            "call_permission_required"
+            openDialer(context, cleanNumber)
         } catch (_: Exception) {
             "call_failed"
         }
+    }
+
+    private fun openDialer(context: Context, cleanNumber: String): String = try {
+        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$cleanNumber")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(dialIntent)
+        "dialer_opened_no_permission"
+    } catch (_: Exception) {
+        "failed_to_open_dialer"
     }
 
     /** Sends SMS directly after the user has granted SEND_SMS permission. */

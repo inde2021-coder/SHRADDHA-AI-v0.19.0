@@ -9,6 +9,7 @@ import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
 import { buildVisionPrompt } from './vision-analysis.js';
+import { resamplePcm16 } from './telephony-audio.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -18,6 +19,9 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
+const edesyCalls = new Map();
+const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
+
 const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -244,6 +248,27 @@ const server = http.createServer(async (req, res) => {
       const result = await upstream.json().catch(() => ({}));
       if (!upstream.ok || typeof result.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the post' });
       return json(res, 200, { ok: true, platform: 'mastodon', postId: result.id, url: typeof result.url === 'string' ? result.url : '', visibility, confirmedPreview: true });
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      return json(res, 200, {
+        provider: 'edesy',
+        configured: edesyConfigured(),
+        capabilities: {
+          inboundWebSocketAudio: edesyConfigured(),
+          liveBidirectionalAiAudio: edesyConfigured(),
+          liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
+          aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
+          persistentCallRecording: false,
+          whatsappDelivery: false
+        },
+        required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'],
+        note: 'Requires a provisioned Edesy DID and AI Voice Agent Stream flow. Transcript capture is disabled by default and uses bounded in-memory storage only.'
+      });
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      return json(res, 200, { calls: [...edesyCalls.values()].slice(-30).reverse() });
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
@@ -509,8 +534,155 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
+const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
+
+telephonyWss.on('connection', carrier => {
+  let live;
+  let ready = false;
+  let closed = false;
+  let metadataSeen = false;
+  let callRecord = null;
+  let edesySampleRate = 16000;
+  const pendingAudio = [];
+  let pendingAudioBytes = 0;
+  const maxPendingAudioBytes = 64 * 1024;
+  const sendAudioToLive = pcm16 => {
+    if (!live || live.readyState !== WebSocket.OPEN) return;
+    const pcm24 = resamplePcm16(pcm16, edesySampleRate, 24000);
+    live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+  };
+
+  const finalize = () => {
+    if (!callRecord) return;
+    callRecord.endedAt = new Date().toISOString();
+    callRecord.status = 'ended';
+    const transcriptText = callRecord.transcript
+      .map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text)
+      .join('\n')
+      .slice(0, 24000);
+    if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
+      callRecord.summaryStatus = 'pending';
+      askProvider('openai', 'Summarize this phone call in Hindi. Return caller intent, key details, commitments and next actions. Do not invent facts.\n\n' + transcriptText)
+        .then(summary => { callRecord.summary = String(summary).slice(0, 6000); callRecord.summaryStatus = 'ready'; })
+        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); });
+    } else {
+      callRecord.summaryStatus = 'disabled';
+    }
+    edesyCalls.set(callRecord.id, callRecord);
+  };
+
+  const shutdown = () => {
+    if (closed) return;
+    closed = true;
+    finalize();
+    pendingAudio.length = 0;
+    pendingAudioBytes = 0;
+    if (live && live.readyState === WebSocket.OPEN) {
+      live.send(JSON.stringify({ type: 'session.close' }));
+      const closeTimer = setTimeout(() => {
+        if (live.readyState === WebSocket.OPEN) live.close();
+      }, 1500);
+      live.once('close', () => clearTimeout(closeTimer));
+    }
+    if (carrier.readyState === WebSocket.OPEN) carrier.close();
+  };
+
+  if (!edesyConfigured()) return shutdown();
+  live = new WebSocket('wss://api.openai.com/v1/live/sessions', {
+    headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY }
+  });
+
+  live.on('open', () => live.send(JSON.stringify({
+    type: 'session.start',
+    session: {
+      model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1',
+      instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, a disclosed AI call assistant. Tell the caller you are an AI assistant. Speak naturally in Hindi or English, ask one question at a time, understand the reason for the call, take a concise message, and never claim you performed an action you cannot perform.',
+      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } },
+      delegation: { type: 'client' }
+    }
+  })));
+
+  live.on('message', raw => {
+    let event;
+    try { event = JSON.parse(raw.toString()); } catch { return; }
+    if (event.type === 'session.closed') { live.close(); return; }
+    if (event.type === 'session.started') {
+      ready = true;
+      while (pendingAudio.length && live.readyState === WebSocket.OPEN) {
+        const queued = pendingAudio.shift();
+        pendingAudioBytes -= queued.length;
+        sendAudioToLive(queued);
+      }
+    }
+    if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) {
+      carrier.send(JSON.stringify({ type: 'killAudio' }));
+    }
+    if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
+      const text = event.delta.slice(0, 500);
+      if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text, at: new Date().toISOString() });
+      if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text, at: new Date().toISOString() });
+      if (callRecord.transcript.length > 300) callRecord.transcript.splice(0, callRecord.transcript.length - 300);
+    }
+    if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) {
+      carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, edesySampleRate), { binary: true });
+    }
+    if (event.type === 'error') console.error('Live voice error:', String(event.error?.message || 'unknown').slice(0, 180));
+  });
+
+  live.on('error', shutdown);
+  live.on('close', shutdown);
+
+  carrier.on('message', (data, binary) => {
+    if (binary) {
+      if (data.length === 0 || data.length > 65536) return;
+      const pcm16 = Buffer.from(data);
+      if (!ready || !live || live.readyState !== WebSocket.OPEN) {
+        if (pendingAudioBytes + pcm16.length <= maxPendingAudioBytes) {
+          pendingAudio.push(pcm16);
+          pendingAudioBytes += pcm16.length;
+        }
+        return;
+      }
+      sendAudioToLive(pcm16);
+      return;
+    }
+    let message;
+    try { message = JSON.parse(data.toString()); } catch { return; }
+    if (!metadataSeen) {
+      metadataSeen = true;
+      if (message.direction && message.direction !== 'inbound') return shutdown();
+      const negotiatedRate = Number(message.sampleRate || 16000);
+      if (![8000, 16000].includes(negotiatedRate) || (message.mixType && message.mixType !== 'mono')) return shutdown();
+      edesySampleRate = negotiatedRate;
+      const caller = String(message.from || '');
+      callRecord = {
+        id: String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex')).slice(0, 120),
+        direction: String(message.direction || 'inbound'),
+        caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller',
+        callerName: String(message.caller_name || message.callerName || '').slice(0, 80),
+        startedAt: new Date().toISOString(),
+        endedAt: null,
+        status: 'active',
+        transcript: []
+      };
+      edesyCalls.set(callRecord.id, callRecord);
+      while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
+      return;
+    }
+    if (message.type === 'disconnect') return shutdown();
+    if (message.type === 'mark' && callRecord) callRecord.lastMark = String(message.data?.name || '').slice(0, 80);
+  });
+
+  carrier.on('close', shutdown);
+  carrier.on('error', shutdown);
+});
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://localhost');
+  if (url.pathname === '/ws/telephony/edesy') {
+    const supplied = url.searchParams.get('token') || '';
+    if (!edesyConfigured() || !safeEqual(supplied, process.env.EDESY_STREAM_TOKEN)) return socket.destroy();
+    return telephonyWss.handleUpgrade(req, socket, head, ws => telephonyWss.emit('connection', ws));
+  }
   if (url.pathname !== '/ws') return socket.destroy();
   const session = sessions.get(url.searchParams.get('sessionId'));
   const deviceId = url.searchParams.get('deviceId');
