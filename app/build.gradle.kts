@@ -14,6 +14,13 @@ fun firebaseConfigValue(name: String): String =
     (System.getenv(name) ?: firebaseLocalProperties.getProperty(name) ?: "")
         .replace("\\", "\\\\").replace("\"", "\\\"")
 
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseKeystorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+    .all { !it.isNullOrBlank() }
+
 android {
     namespace = "in.shraddha.ai"
     compileSdk = 35
@@ -38,6 +45,23 @@ android {
             reset()
             include("arm64-v8a", "armeabi-v7a")
             isUniversalApk = false
+        }
+    }
+    signingConfigs {
+        create("release") {
+            // Credentials are injected by the protected CI release workflow only.
+            // Never commit a keystore or signing password to the repository.
+            if (hasReleaseSigning) {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
     buildFeatures { buildConfig = true; compose = true }
