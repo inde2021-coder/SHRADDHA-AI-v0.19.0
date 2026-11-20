@@ -125,13 +125,17 @@ class ShraddhaAccessibilityService : AccessibilityService() {
                 val node = queue.removeFirst(); count++
                 val rect = Rect(); node.getBoundsInScreen(rect)
                 if (node.isVisibleToUser && (node.text != null || node.contentDescription != null || node.isClickable || node.isEditable)) {
+                    val sensitive = node.isPassword
                     found.add(ScreenElement(
                         id = node.viewIdResourceName ?: "node_$count",
-                        text = node.text?.toString()?.take(300).orEmpty(),
-                        description = node.contentDescription?.toString()?.take(300).orEmpty(),
+                        // Never expose the contents of password/PIN fields to screen readers,
+                        // workflow training, audit summaries, or a remote companion.
+                        text = if (sensitive) "" else node.text?.toString()?.take(300).orEmpty(),
+                        description = if (sensitive) "संवेदनशील फ़ील्ड" else node.contentDescription?.toString()?.take(300).orEmpty(),
                         className = node.className?.toString().orEmpty(), bounds = Rect(rect),
                         clickable = node.isClickable, editable = node.isEditable,
-                        scrollable = node.isScrollable, password = node.isPassword, packageName = node.packageName?.toString().orEmpty(), hintText = node.hintText?.toString().orEmpty()
+                        scrollable = node.isScrollable, password = sensitive, packageName = node.packageName?.toString().orEmpty(),
+                        hintText = if (sensitive) "" else node.hintText?.toString()?.take(120).orEmpty()
                     ))
                 }
                 for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
@@ -153,8 +157,20 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             return when (action.optString("kind")) {
                 "tap" -> service.performRemoteTap(action.optDouble("x").toFloat(), action.optDouble("y").toFloat())
                 "swipe" -> service.performRemoteSwipe(action.optDouble("x1").toFloat(), action.optDouble("y1").toFloat(), action.optDouble("x2").toFloat(), action.optDouble("y2").toFloat())
-                "type" -> service.setFocusedText(action.optString("text").take(2000))
-                "click_text" -> action.optString("text").trim().takeIf { it.isNotEmpty() && it.length <= 120 }?.let(service::clickVisibleText) ?: false
+                "type" -> {
+                    val text = action.optString("text").take(2000)
+                    val decision = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess("TYPE_TEXT", value = text)
+                    decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW && service.setFocusedText(text)
+                }
+                "click_text" -> {
+                    val label = action.optString("text").trim()
+                    if (label.isEmpty() || label.length > 120) false
+                    else {
+                        val decision = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess("CLICK_TEXT", target = label)
+                        // Remote taps cannot satisfy a confirmation dialog on the phone.
+                        decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW && service.clickVisibleText(label)
+                    }
+                }
                 "open_app" -> service.openInstalledApp(action.optString("appName").take(80))
                 "home" -> service.performGlobalAction(GLOBAL_ACTION_HOME)
                 "back" -> service.performGlobalAction(GLOBAL_ACTION_BACK)
