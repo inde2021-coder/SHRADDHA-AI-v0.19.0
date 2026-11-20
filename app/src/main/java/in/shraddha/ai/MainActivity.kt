@@ -91,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var approvedShareRequestId: String? = null
     private var approvedShareTarget: String? = null
     private var approvedShareCategory: String? = null
+    private var approvedShareExpiresAt: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -727,7 +728,7 @@ class MainActivity : AppCompatActivity() {
                 val category = categoryPicker.selectedItem?.toString().orEmpty()
                 if (target.isBlank()) { status.text = "पहले paired target device चुनें।"; return@actionButton }
                 val requestId = java.util.UUID.randomUUID().toString().replace("-", "")
-                approvedShareRequestId = null; approvedShareTarget = null; approvedShareCategory = null
+                approvedShareRequestId = null; approvedShareTarget = null; approvedShareCategory = null; approvedShareExpiresAt = 0L
                 val sent = DeviceLinkManager.requestDataShare(target, category, requestId, "User requested $category")
                 status.text = if (sent) "$category sharing request भेजी गई। Target की अनुमति जरूरी है।" else "Relay connected नहीं है।"
             })
@@ -742,7 +743,7 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("Share Clipboard Text to Paired Phone", "Clipboard केवल इस बटन पर पढ़ा जाएगा; पहले target की one-time approval जरूरी है") {
                 val target = targetDevice.text.toString().trim()
                 if (target.isBlank()) { status.text = "पहले paired target device चुनें।"; return@actionButton }
-                if (approvedShareRequestId.isNullOrBlank() || approvedShareTarget != target || approvedShareCategory != "clipboard") {
+                if (approvedShareRequestId.isNullOrBlank() || approvedShareTarget != target || approvedShareCategory != "clipboard" || approvedShareExpiresAt <= System.currentTimeMillis()) {
                     status.text = "पहले category में Clipboard चुनकर Request Data भेजें और target की अनुमति लें।"; return@actionButton
                 }
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -2354,6 +2355,7 @@ class MainActivity : AppCompatActivity() {
                         approvedShareRequestId = msg.optString("requestId")
                         approvedShareTarget = msg.optString("targetDeviceId")
                         approvedShareCategory = msg.optString("category")
+                        approvedShareExpiresAt = System.currentTimeMillis() + msg.optLong("expiresInMinutes", 0L) * 60_000L
                     }
                     status.text = if (approved) "Permission approved for ${msg.optString("category")}. अब चुनी file भेज सकते हैं।" else "Data sharing request अस्वीकार हुई।"
                     if (approved) Toast.makeText(this, "इस exact request के लिए one-time permission मिली।", Toast.LENGTH_LONG).show()
@@ -2661,7 +2663,7 @@ class MainActivity : AppCompatActivity() {
                 val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
                 val payload = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 val requestId = approvedShareRequestId
-                if (requestId.isNullOrBlank() || approvedShareTarget != target || approvedShareCategory != category) { status.text = "इसी target और selected category के लिए नया one-time sharing approval लें।"; return }
+                if (requestId.isNullOrBlank() || approvedShareTarget != target || approvedShareCategory != category || approvedShareExpiresAt <= System.currentTimeMillis()) { status.text = "इसी target और selected category के लिए नया one-time sharing approval लें।"; return }
                 val sent = DeviceLinkManager.sendSharedPayload(target, category, requestId, name, mime, payload, bytes.size.toLong(), digest)
                 if (sent) { approvedShareRequestId = null; approvedShareTarget = null; approvedShareCategory = null }
                 status.text = if (sent) "File integrity digest सहित $target को भेजी गई। Receiver पर SHA-256 verify होगा।" else "File भेजने के लिए relay disconnected है या permission grant expire हो गया।"
