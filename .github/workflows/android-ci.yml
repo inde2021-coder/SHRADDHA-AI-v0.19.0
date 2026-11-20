@@ -40,7 +40,12 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
       - name: Run Android static lint
-        run: ./gradlew lintDebug
+        run: |
+          ./gradlew lintDebug || {
+            echo "Full lint report:"
+            cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt || true
+            exit 1
+          }
       - name: Build debug APK
         run: ./gradlew assembleDebug
       - name: Verify device-specific APKs and generate checksums
