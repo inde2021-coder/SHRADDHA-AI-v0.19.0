@@ -274,6 +274,13 @@ def confirm(prompt: str) -> bool:
     return answer in {"y", "yes"}
 
 
+def control_grant_allows(approved: bool, expires_at: float, now: float,
+                         approved_device_id: str, sender_device_id: str) -> bool:
+    """A temporary local approval is bound to one paired requester, never the whole session."""
+    return bool(approved and expires_at > now and approved_device_id
+                and sender_device_id and approved_device_id == sender_device_id)
+
+
 async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = False, file_root: str = "", offline_model=None) -> str:
     if not validate_action(action, allow_typing, allow_ocr, file_root, offline_model):
         return "blocked_unsupported_or_invalid_action"
@@ -489,6 +496,7 @@ async def run(args) -> None:
         await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen}}))
         print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
         approved_until = 0.0
+        approved_device_id = ""
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
         try:
             async for raw in ws:
@@ -502,30 +510,42 @@ async def run(args) -> None:
                 if kind == "connected":
                     print("Connected to Shraddha AI device session.")
                 elif kind == "control_request":
-                    if not allow_control:
+                    requester_id = str(message.get("fromDeviceId", ""))
+                    requester_valid = bool(requester_id) and len(requester_id) <= 80
+                    if not allow_control or not requester_valid:
                         approved = False
                     else:
                         approved = await asyncio.to_thread(
                             confirm,
-                            f"Allow {message.get('requesterName', 'paired phone')} to control this PC for up to {message.get('requestedMinutes', 5)} minutes?"
+                            f"Allow {message.get('requesterName', 'paired phone')} ({requester_id}) to control this PC for up to {message.get('requestedMinutes', 5)} minutes?"
                         )
+                    approved_device_id = requester_id if approved else ""
                     approved_until = time.time() + min(5, max(1, int(message.get("requestedMinutes", 5)))) * 60 if approved else 0
                     await ws.send(json.dumps({
                         "type": "control_response",
-                        "requesterDeviceId": message.get("fromDeviceId", ""),
+                        "requesterDeviceId": requester_id,
                         "approved": approved,
                         "minutes": 5 if approved else 0
                     }))
-                    print("PC control", "approved" if approved else "denied")
+                    print("PC control", "approved for " + requester_id if approved else "denied")
                 elif kind == "remote_action":
-                    if time.time() >= approved_until:
-                        print("Blocked remote action: local PC approval expired.")
+                    sender_id = str(message.get("fromDeviceId", ""))
+                    if not control_grant_allows(allow_control, approved_until, time.time(), approved_device_id, sender_id):
+                        print("Blocked remote action: no active grant for this exact paired requester.")
                         continue
                     action = message.get("action") or {}
-                    result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root, offline_model)
-                    print("Remote action:", action.get("kind"), "=>", result[:500])
-                    if action.get("kind") in {"ocr", "file_list", "file_read", "file_search", "offline_chat"}:
-                        await ws.send(json.dumps({"type": "remote_action_result", "targetDeviceId": message.get("fromDeviceId", ""), "actionKind": action.get("kind"), "result": result[:14000]}))
+                    action_kind = str(action.get("kind", "unknown"))[:32]
+                    try:
+                        result = await execute_action(action, args.allow_typing, args.allow_ocr, args.file_root, offline_model)
+                    except Exception as exc:
+                        result = "action_error:" + type(exc).__name__
+                    print("Remote action:", action_kind, "=>", result[:500])
+                    await ws.send(json.dumps({
+                        "type": "remote_action_result",
+                        "targetDeviceId": sender_id,
+                        "actionKind": action_kind,
+                        "result": result[:14000]
+                    }))
                 elif kind == "peer_status":
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
