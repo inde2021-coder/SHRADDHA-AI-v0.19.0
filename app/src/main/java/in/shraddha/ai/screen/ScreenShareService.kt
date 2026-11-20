@@ -79,11 +79,13 @@ class ScreenShareService : Service() {
                 val plane = image.planes[0]; val buffer = plane.buffer
                 val pixelStride = plane.pixelStride; val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * width
-                bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
-                bitmap.copyPixelsFromBuffer(buffer)
-                cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height)
+                val createdBitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
+                bitmap = createdBitmap
+                createdBitmap.copyPixelsFromBuffer(buffer)
+                val croppedBitmap = Bitmap.createBitmap(createdBitmap, 0, 0, width, height)
+                cropped = croppedBitmap
                 val out = ByteArrayOutputStream()
-                cropped.compress(Bitmap.CompressFormat.JPEG, 48, out)
+                croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 48, out)
                 if (DeviceLinkManager.sendFrame(out.toByteArray(), 1)) lastFrameAt = now
             } catch (_: Exception) { /* A dropped frame is safer than stopping the share session. */ }
             finally {
