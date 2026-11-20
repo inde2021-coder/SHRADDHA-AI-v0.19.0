@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -108,6 +108,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
+          emulator-boot-timeout: 900
           arch: x86_64
           target: google_apis
           profile: pixel_2
