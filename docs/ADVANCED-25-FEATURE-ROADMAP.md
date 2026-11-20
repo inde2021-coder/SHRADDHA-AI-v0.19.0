@@ -82,3 +82,23 @@ OS-level permission screens still require their own live adapters and device
 tests. The hub itself performs no external action and cannot bypass platform
 permissions. Its audit list is currently in-memory; durable encrypted audit
 persistence is a separate integration task.
+
+
+### Personal Memory ↔ Knowledge Vault ↔ Firebase adapter
+
+`UnifiedMemoryRepository.kt` now provides a local-first repository boundary:
+- Per-record local memory is encrypted with the Android Keystore-backed
+  `EncryptedFeatureStore` and namespaced by a validated record key.
+- Firebase sync/restore is performed only when the caller explicitly passes
+  cloud consent and supplies valid account credentials; no background sync is
+  started by this repository.
+- Local save happens before cloud upload. A cloud failure is surfaced while
+  preserving the local encrypted copy.
+- Cloud restore writes the returned, authenticated/decrypted value back to the
+  matching local encrypted record.
+- The policy validator rejects path-like keys, empty values and oversized data.
+
+JVM policy tests cover explicit cloud consent and record bounds. This adapter
+does not yet automatically synchronize the live ConversationMemory,
+KnowledgeGraph or People Memory stores; those sources need explicit export/
+import mapping and UI consent before they can share records.
