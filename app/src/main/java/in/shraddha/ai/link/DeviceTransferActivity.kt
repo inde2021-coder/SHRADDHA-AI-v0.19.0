@@ -51,7 +51,7 @@ class DeviceTransferActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(22,22,22,22); setBackgroundColor(0xFF080E1B.toInt()) }
         root.addView(TextView(this).apply { text = "DEVICE UNIVERSE • FILE TRANSFER"; textSize = 19f; setTextColor(Color.WHITE); setTypeface(null, android.graphics.Typeface.BOLD) })
         root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
-        peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()) }; root.addView(peer)
+        peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()); setText(intent.getStringExtra("peer").orEmpty()) }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
         pauseButton = button("PAUSE TRANSFER") { paused.set(!paused.get()); pauseButton.text = if (paused.get()) "RESUME TRANSFER" else "PAUSE TRANSFER"; status.text = if (paused.get()) "Paused locally. Resume to continue." else "Resuming transfer…" }
@@ -138,7 +138,9 @@ class DeviceTransferActivity : Activity() {
         input.use {
             var skip = index.toLong() * 49152L
             while (skip > 0) { val n = it.skip(skip); if (n <= 0) throw IllegalStateException("Could not seek source file"); skip -= n }
-            val bytes = it.readNBytes(49152)
+            val buffer = ByteArray(49152); var count = 0
+            while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
+            val bytes = buffer.copyOf(count)
             require(bytes.isNotEmpty())
             if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
         }
