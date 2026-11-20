@@ -255,8 +255,8 @@ fun ChatScreen(
                     color = colors.textPrimary
                 )
                 Text(
-                    text = if (isTyping) "Typing..." else "Here to help",
-                    fontSize = 12.sp,
+                    text = if (isTyping) "GENERATING RESPONSE" else "${appState.aiProvider}  •  READY",
+                    fontSize = 9.sp,
                     color = colors.textTertiary
                 )
             }
@@ -279,7 +279,7 @@ fun ChatScreen(
                     },
                     onCopyClick = {
                         val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        clip?.setPrimaryClip(ClipData.newPlainText("Lia message", msg.text))
+                        clip?.setPrimaryClip(ClipData.newPlainText(appState.assistantName, msg.text))
                     },
                     onRetryClick = {
                         sendMessage(messages.lastOrNull { it.isUser }?.text ?: "")
