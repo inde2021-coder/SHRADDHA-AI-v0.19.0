@@ -611,7 +611,8 @@ class MainActivity : AppCompatActivity() {
             val categories = listOf(
                 "contacts" to "Contacts", "media" to "Photos & Videos", "documents" to "Documents",
                 "messages" to "Messages (restricted data may not be available)", "calendar" to "Calendar & Tasks",
-                "location" to "Location", "device_status" to "Device Status", "ai_memory" to "AI Memory"
+                "location" to "Location", "device_status" to "Device Status", "ai_memory" to "AI Memory",
+                "screen" to "Live Screen Sharing", "camera" to "Live Camera Sharing"
             )
             categories.forEach { (key, label) ->
                 val toggle = Switch(this@MainActivity).apply {
@@ -619,6 +620,14 @@ class MainActivity : AppCompatActivity() {
                     isChecked = getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean(key, false)
                     setOnCheckedChangeListener { _, checked ->
                         getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).edit().putBoolean(key, checked).apply()
+                        if (!checked && key == "screen") {
+                            stopService(Intent(this@MainActivity, ScreenShareService::class.java))
+                            status.text = "Screen sharing stopped because its permission was switched off."
+                        }
+                        if (!checked && key == "camera") {
+                            stopService(Intent(this@MainActivity, RemoteCameraService::class.java))
+                            status.text = "Camera sharing stopped because its permission was switched off."
+                        }
                         publishDataPermissions()
                     }
                 }
@@ -653,6 +662,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCameraShare(facing: String) {
+        if (!getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("camera", false)) {
+            status.text = "पहले Control & Privacy में Live Camera Sharing की अनुमति ON करें।"
+            return
+        }
         val target = targetDevice.text.toString().trim()
         if (target.isBlank()) { status.text = "Remote camera के लिए पहले target device चुनें।"; return }
         getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putString("pending_camera_facing", facing).putString("pending_camera_target", target).apply()
@@ -1570,6 +1583,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestScreenShare() {
+        if (!getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) {
+            status.text = "पहले Control & Privacy में Live Screen Sharing की अनुमति ON करें।"
+            return
+        }
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
         @Suppress("DEPRECATION")
         startActivityForResult(manager.createScreenCaptureIntent(), screenShareRequest)
