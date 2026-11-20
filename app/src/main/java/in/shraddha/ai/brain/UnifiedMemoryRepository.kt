@@ -20,7 +20,8 @@ object MemorySyncPolicy {
  * sync. Firebase receives only the cloud-vault encrypted record. No background sync is started.
  */
 class UnifiedMemoryRepository(context: Context) {
-    private val local = SecureMemoryVault(context.applicationContext)
+    private val local = EncryptedFeatureStore(context.applicationContext)
+    private fun localKey(key: String) = "memory_$key"
     private val cloud = FirebaseCloudVault(context.applicationContext)
 
     data class SaveResult(val localSaved: Boolean, val cloudSaved: Boolean, val message: String)
@@ -34,7 +35,7 @@ class UnifiedMemoryRepository(context: Context) {
         password: String? = null
     ): Result<SaveResult> = runCatching {
         MemorySyncPolicy.validateRecord(key, value)
-        local.save(value).getOrThrow()
+        local.put(localKey(key), value).getOrThrow()
         if (!cloudConsent) return@runCatching SaveResult(true, false, "Saved to encrypted device memory; cloud sync remains off")
         MemorySyncPolicy.requireCloudConsent(cloudConsent)
         val account = email?.trim().orEmpty()
@@ -59,14 +60,14 @@ class UnifiedMemoryRepository(context: Context) {
             require(account.isNotBlank() && secret.length >= 8) { "Firebase account credentials are required for cloud restore" }
             val remote = cloud.signInAndLoad(account, secret, key).getOrThrow()
             if (remote != null) {
-                local.save(remote).getOrThrow()
+                local.put(localKey(key), remote).getOrThrow()
                 return@runCatching LoadResult(remote, "firebase")
             }
         }
-        LoadResult(local.load().getOrThrow().takeIf { it.isNotEmpty() }, "device")
+        LoadResult(local.get(localKey(key)).getOrThrow().takeIf { it.isNotEmpty() }, "device")
     }
 
     fun clearLocal(): Result<Unit> = runCatching {
-        check(local.clear()) { "Could not clear local memory" }
+        check(local.removeAllWithPrefix("memory_")) { "Could not clear local memory" }
     }
 }
