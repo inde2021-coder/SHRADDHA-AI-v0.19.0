@@ -554,7 +554,7 @@ wss.on('connection', (ws, ctx) => {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const category = String(msg.category || '');
-      if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
+      if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory','clipboard'].includes(category)) return;
       const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 64);
       if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
       send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
@@ -578,16 +578,16 @@ wss.on('connection', (ws, ctx) => {
       const requestId = String(msg.requestId || '').slice(0, 64);
       const payload = typeof msg.payload === 'string' ? msg.payload : '';
       const sizeBytes = Number(msg.sizeBytes);
-      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
+      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';\n      const contentType = msg.contentType === 'clipboard_text' ? 'clipboard_text' : 'file';
       if (!target || target.sharePermissions?.[category] !== true ||
           !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
           payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
-          !/^[a-f0-9]{64}$/.test(digest)) return;
+          !/^[a-f0-9]{64}$/.test(digest) || (contentType === 'clipboard_text' && (category !== 'clipboard' || sizeBytes > 80_000)) || (contentType === 'file' && category === 'clipboard')) return;
       if (!validateSharedFileEnvelope(payload, sizeBytes, digest)) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
         fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100),
-        requestId, sizeBytes, sha256: digest, payload }));
+        requestId, sizeBytes, sha256: digest, contentType, payload }));
     } else if (msg.type === 'task_handoff') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
