@@ -1,5 +1,6 @@
 package `in`.shraddha.ai.future
 
+import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,8 +25,11 @@ class SecureBackupCodecTest {
 
     @Test fun modifiedCiphertextFailsAuthentication() {
         val envelope = SecureBackupCodec.encrypt("private data", "correct horse battery".toCharArray())
-        val replacement = if (envelope.last() == 'A') 'B' else 'A'
-        val tampered = envelope.dropLast(1) + replacement
+        val parts = envelope.split('.').toMutableList()
+        val ciphertext = Base64.getUrlDecoder().decode(parts[3])
+        ciphertext[0] = (ciphertext[0].toInt() xor 0x01).toByte()
+        parts[3] = Base64.getUrlEncoder().withoutPadding().encodeToString(ciphertext)
+        val tampered = parts.joinToString(".")
         try {
             SecureBackupCodec.decrypt(tampered, "correct horse battery".toCharArray())
             throw AssertionError("Tampered backup must fail authentication")
