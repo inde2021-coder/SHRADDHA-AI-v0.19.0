@@ -763,6 +763,19 @@ async def run_once(args) -> None:
     allow_file_receive = bool(args.allow_file_receive and await asyncio.to_thread(confirm, "Allow this paired phone to request one-time file receive approval? Each transfer still needs your confirmation."))
     share_screen = bool(args.share_screen and await asyncio.to_thread(confirm, "Share this PC screen with paired Shraddha devices? Sensitive active windows will pause sharing."))
     incoming_transfer = None
+    from pathlib import Path
+    transfer_state_dir = Path.home() / ".shraddha-ai" / "transfers"
+    transfer_state_dir.mkdir(parents=True, exist_ok=True)
+    transfer_state_file = transfer_state_dir / "incoming-transfer.json"
+    if transfer_state_file.is_file():
+        try:
+            saved = json.loads(transfer_state_file.read_text(encoding="utf-8"))
+            if Path(saved["temp"]).is_file():
+                saved["stream"] = open(saved["temp"], "r+b")
+                saved["received"] = set(saved.get("received", []))
+                incoming_transfer = saved
+                print("Restored interrupted incoming transfer; missing chunks will be requested after reconnect.")
+        except Exception as exc: print("Could not restore previous transfer:", str(exc)[:160])
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
         await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen, "documents": allow_file_receive}}))
         print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
@@ -798,6 +811,8 @@ async def run_once(args) -> None:
                 kind = message.get("type")
                 if kind == "connected":
                     print("Connected to Shraddha AI device session.")
+                    if incoming_transfer:
+                        await ws.send(json.dumps({"type": "file_transfer_resume", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"]}))
                 elif kind == "control_request":
                     requester_id = str(message.get("fromDeviceId", ""))
                     requester_valid = bool(requester_id) and len(requester_id) <= 80
@@ -889,6 +904,7 @@ async def run_once(args) -> None:
                     temporary = destination + ".shraddha-part"
                     stream = open(temporary, "w+b"); stream.truncate(size)
                     incoming_transfer = {"id": transfer_id, "source": source_id, "name": name, "size": size, "chunks": chunks, "sha256": digest, "path": destination, "temp": temporary, "stream": stream, "received": set()}
+                    transfer_state_file.write_text(json.dumps({"id": transfer_id, "source": source_id, "name": name, "size": size, "chunks": chunks, "sha256": digest, "path": destination, "temp": temporary, "received": []}), encoding="utf-8")
                     await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": source_id, "transferId": transfer_id, "index": -1, "complete": False, "ok": True}))
                     print(f"Receiving {name}: 0/{chunks} chunks (0%).")
                 elif kind == "file_transfer_chunk" and incoming_transfer and message.get("transferId") == incoming_transfer["id"]:
@@ -901,6 +917,7 @@ async def run_once(args) -> None:
                             incoming_transfer["stream"].seek(index * FILE_CHUNK_BYTES); incoming_transfer["stream"].write(data); incoming_transfer["received"].add(index)
                         await ws.send(json.dumps({"type": "file_transfer_ack", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"], "index": index, "complete": False, "ok": True}))
                         count = len(incoming_transfer["received"]); total = incoming_transfer["chunks"]
+                        transfer_state_file.write_text(json.dumps({"id": incoming_transfer["id"], "source": incoming_transfer["source"], "name": incoming_transfer["name"], "size": incoming_transfer["size"], "chunks": total, "sha256": incoming_transfer["sha256"], "path": incoming_transfer["path"], "temp": incoming_transfer["temp"], "received": sorted(incoming_transfer["received"])}), encoding="utf-8")
                         received_name = incoming_transfer["name"]
                         print(f"Receiving {received_name}: {count}/{total} chunks ({count*100//total}%).", end="\\r", flush=True)
                         if count == total:
@@ -914,6 +931,7 @@ async def run_once(args) -> None:
                             saved_path = incoming_transfer["path"]
                             print(f"\\nSaved and SHA-256 verified: {saved_path}")
                             incoming_transfer = None
+                            transfer_state_file.unlink(missing_ok=True)
                     except Exception as exc: print("File receive error:", str(exc)[:200])
                 elif kind == "file_transfer_resume" and file_send and message.get("transferId") == file_send["transferId"]:
                     missing = message.get("missingIndexes") or []
@@ -932,6 +950,7 @@ async def run_once(args) -> None:
                         except Exception: pass
                         print("Incoming transfer cancelled by peer.")
                         incoming_transfer = None
+                        transfer_state_file.unlink(missing_ok=True)
                 elif kind == "data_share_payload" and message.get("category") == "clipboard" and message.get("contentType") == "clipboard_text":
                     text_value = decode_clipboard_payload(message)
                     if await asyncio.to_thread(confirm, "Copy approved paired-device clipboard text onto this Windows PC?"):
