@@ -50,6 +50,15 @@ object LiaToolCatalog {
             )
         )
 
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "plan_multi_agent_task",
+                description = "Uses Shraddha AI's local multi-role council to plan a goal, order Planner/Researcher/Specialist/Critic/Verifier tasks by dependencies, and save the proposed plan in encrypted local memory. This is planning only: it does not contact external agents or execute actions.",
+                params = mapOf("goal" to "The user's goal to break into a multi-role plan, maximum 1000 characters"),
+                required = listOf("goal")
+            )
+        )
+
         // Screen accessibility tools
         array.put(
             GeminiToolUtils.functionDecl(
