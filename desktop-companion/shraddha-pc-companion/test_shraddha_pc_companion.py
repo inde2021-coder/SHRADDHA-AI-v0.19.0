@@ -1,9 +1,25 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr
+from shraddha_pc_companion import normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action
 
 
 class PcCompanionPolicyTests(unittest.TestCase):
+    def test_windows_can_build_bounded_actions_for_an_approved_android_phone(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(control_phone="android-1", phone_action="tap", phone_x=0.4, phone_y=0.6)
+        self.assertEqual(build_phone_action(args), {"kind": "tap", "x": 0.4, "y": 0.6})
+        args.phone_action = "type"
+        args.phone_text = "hello"
+        self.assertEqual(build_phone_action(args), {"kind": "type", "text": "hello"})
+        args.phone_action = "open_app"
+        args.phone_app = "Settings"
+        self.assertEqual(build_phone_action(args), {"kind": "open_app", "appName": "Settings"})
+        args.phone_action = "tap"
+        args.phone_x = 1.5
+        with self.assertRaises(ValueError):
+            build_phone_action(args)
+
+
     def test_pairing_qr_parser_validates_scheme_relay_and_code(self):
         relay, code = parse_pairing_qr("shraddha://pair?relay=https%3A%2F%2Frelay.example&code=123456")
         self.assertEqual(relay, "https://relay.example")
