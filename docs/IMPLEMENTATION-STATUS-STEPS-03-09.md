@@ -56,6 +56,14 @@ Not started in this implementation pass. Full-screen responsive design, navigati
 ## Step 9 — Final Testing
 Not started. Requires successful unit tests, lint/static checks, debug and release APK builds, install/upgrade tests, physical-device tests, crash/performance checks and final artifact checksums.
 
+### People Memory model integration — 2026-11-20
+- Added explicit, user-started downloads for pinned SFace and ECAPA ONNX files. Downloads are HTTPS-only, size-limited, written to temporary files, SHA-256 verified and atomically installed into app-private storage.
+- Added a model catalog documenting source revisions, checksums, tensor contracts, attribution and limitations.
+- Corrected SFace preprocessing to match OpenCV FaceRecognizerSF: aligned RGB 112×112, NCHW float32, raw 0–255 values. Added unit tests for channel order, layout and value range.
+- Added consent-gated live 1:1 face comparison against a selected saved person using OpenCV's published 0.363 cosine reference threshold. This is similarity only, not authentication.
+- ECAPA ONNX export accepts 16 kHz mono waveform input and includes its own filterbank frontend; the five-second sample path is compatible at the tensor-shape level. Speaker decision threshold and real-device accuracy remain uncalibrated, so no speaker identity verdict is exposed yet.
+- The models have not yet been downloaded and executed on a physical Android phone in this environment. CI must pass before APK build status can be claimed.
+
 ### Additional security/privacy hardening — 2026-11-20
 - Microphone permission is no longer requested at app launch; it is requested only when the user opens Voice or explicitly starts a voice command.
 - Remote accessibility commands now require a fresh peer-specific approval, expire after five minutes, and can be revoked immediately. The persistent opt-in switch alone no longer authorizes incoming commands.
