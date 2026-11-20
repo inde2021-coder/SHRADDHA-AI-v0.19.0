@@ -471,7 +471,7 @@ fun SettingsScreen(
             confirmButton = {
                 NovaButton(
                     text = "Clear memory",
-                    type = NovaButtonType.DANGER,
+                    type = NovaButtonType.SECONDARY,
                     onClick = {
                         PersistentChatMemory.clear(context)
                         showClearMemoryDialog = false
