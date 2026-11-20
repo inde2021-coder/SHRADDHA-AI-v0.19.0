@@ -88,9 +88,8 @@ object DeviceLinkManager {
         return parsed.newBuilder().addPathSegments(path.trimStart('/')).build().toString()
     }
 
-    private fun <T> rejectInsecure(done: (Result<T>) -> Unit): Boolean {
+    private fun <T> rejectInsecure(done: (Result<T>) -> Unit) {
         done(Result.failure(IllegalArgumentException("AI gateway requires a valid HTTPS URL. Plain HTTP is blocked.")))
-        return false
     }
 
     private fun post(base: String, path: String, body: JSONObject, callback: (Result<JSONObject>) -> Unit) {
@@ -110,7 +109,8 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
-        val endpoint = secureApiUrl(baseUrl, "/api/chat") ?: return rejectInsecure(done)
+        val endpoint = secureApiUrl(baseUrl, "/api/chat")
+        if (endpoint == null) { rejectInsecure(done); return }
         val body = JSONObject().put("provider", provider).put("prompt", prompt.take(12000))
         val builder = Request.Builder().url(endpoint)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -128,7 +128,8 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
-        val endpoint = secureApiUrl(baseUrl, "/api/ai/providers") ?: return rejectInsecure(done)
+        val endpoint = secureApiUrl(baseUrl, "/api/ai/providers")
+        if (endpoint == null) { rejectInsecure(done); return }
         val builder = Request.Builder().url(endpoint).get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -160,7 +161,8 @@ object DeviceLinkManager {
     }
 
     private fun postAuthenticated(baseUrl: String, path: String, gatewayToken: String, body: JSONObject, done: (Result<String>) -> Unit) {
-        val endpoint = secureApiUrl(baseUrl, path) ?: return rejectInsecure(done)
+        val endpoint = secureApiUrl(baseUrl, path)
+        if (endpoint == null) { rejectInsecure(done); return }
         val builder = Request.Builder().url(endpoint).post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -176,7 +178,8 @@ object DeviceLinkManager {
             done(Result.failure(IllegalArgumentException("Vision image must be between 1 byte and 2.5 MB.")))
             return
         }
-        val endpoint = secureApiUrl(baseUrl, "/api/vision") ?: return rejectInsecure(done)
+        val endpoint = secureApiUrl(baseUrl, "/api/vision")
+        if (endpoint == null) { rejectInsecure(done); return }
         val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000))
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
         val builder = Request.Builder().url(endpoint)
