@@ -223,18 +223,37 @@ class LiveAudioIO(
                 track.release()
                 "Android could not initialize speaker playback."
             }
-            track.setVolume(currentVolume)
-            track.play()
-            audioTrack = track
-            return track
+            try {
+                track.setVolume(currentVolume)
+                track.play()
+                audioTrack = track
+                return track
+            } catch (error: Exception) {
+                runCatching { track.release() }
+                throw error
+            }
         }
     }
 
     fun playChunk(pcmBytes: ByteArray): Float {
         if (pcmBytes.isEmpty()) return 0f
         val track = getOrCreateSpeaker()
-        val written = track.write(pcmBytes, 0, pcmBytes.size)
-        if (written < 0) throw IllegalStateException("Speaker playback failed (AudioTrack error $written).")
+        val written = try {
+            track.write(pcmBytes, 0, pcmBytes.size)
+        } catch (error: Exception) {
+            synchronized(speakerLock) {
+                if (audioTrack === track) audioTrack = null
+                runCatching { track.release() }
+            }
+            throw error
+        }
+        if (written < 0) {
+            synchronized(speakerLock) {
+                if (audioTrack === track) audioTrack = null
+                runCatching { track.release() }
+            }
+            throw IllegalStateException("Speaker playback failed (AudioTrack error $written).")
+        }
         return calculateRms(pcmBytes)
     }
 
