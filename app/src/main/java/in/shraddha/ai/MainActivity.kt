@@ -675,7 +675,7 @@ class MainActivity : AppCompatActivity() {
             val categories = listOf(
                 "contacts" to "Contacts", "media" to "Photos & Videos", "documents" to "Documents",
                 "messages" to "Messages (restricted data may not be available)", "calendar" to "Calendar & Tasks",
-                "location" to "Location", "device_status" to "Device Status", "ai_memory" to "AI Memory"
+                "location" to "Location", "device_status" to "Device Status", "ai_memory" to "AI Memory", "clipboard" to "Clipboard text"
             )
             categories.forEach { (key, label) ->
                 val toggle = Switch(this@MainActivity).apply {
@@ -738,6 +738,23 @@ class MainActivity : AppCompatActivity() {
                 pendingShareTarget = target; pendingShareCategory = category
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = if (category == "media") "image/*" else "*/*" }
                 startActivityForResult(intent, dataFileRequest)
+            })
+            addView(actionButton("Share Clipboard Text to Paired Phone", "Clipboard केवल इस बटन पर पढ़ा जाएगा; पहले target की one-time approval जरूरी है") {
+                val target = targetDevice.text.toString().trim()
+                if (target.isBlank()) { status.text = "पहले paired target device चुनें।"; return@actionButton }
+                if (approvedShareRequestId.isNullOrBlank() || approvedShareTarget != target || approvedShareCategory != "clipboard") {
+                    status.text = "पहले category में Clipboard चुनकर Request Data भेजें और target की अनुमति लें।"; return@actionButton
+                }
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clipText = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
+                if (clipText.isBlank() || clipText.length > 20_000) { status.text = "Clipboard खाली है या 20,000 characters से बड़ा है।"; return@actionButton }
+                val bytes = clipText.toByteArray(Charsets.UTF_8)
+                val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+                val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val requestId = approvedShareRequestId ?: return@actionButton
+                val sent = DeviceLinkManager.sendSharedPayload(target, "clipboard", requestId, "clipboard.txt", "text/plain", encoded, bytes.size.toLong(), digest, "clipboard_text")
+                if (sent) { approvedShareRequestId = null; approvedShareTarget = null; approvedShareCategory = null }
+                status.text = if (sent) "Clipboard text भेजा गया। Receiver पर paste करने से पहले पुष्टि माँगी जाएगी।" else "Clipboard भेजना विफल हुआ; approval expire हो सकती है।"
             })
             addView(TextView(this@MainActivity).apply {
                 text = "सीमा: इस शुरुआती Data Hub में चुनी हुई छोटी फाइलों का one-time transfer है। Automatic background sync, contacts/calendar import, SMS access और cloud backup अलग implementation व Android permissions मांगते हैं। बड़े files के लिए secure HTTPS upload storage जोड़ा जाएगा।"
@@ -2353,15 +2370,32 @@ class MainActivity : AppCompatActivity() {
                     val actualHash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
                         .joinToString("") { "%02x".format(it) }
                     require(actualHash == expectedHash) { "File integrity verification failed" }
-                    val folder = java.io.File(filesDir, "shared").apply { mkdirs() }
-                    val safeName = msg.optString("fileName", "shared_file").replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "shared_file" }
-                    val destination = java.io.File(folder, safeName)
-                    val temp = java.io.File(folder, ".${safeName}.${java.util.UUID.randomUUID()}.part")
-                    try {
-                        temp.outputStream().use { it.write(bytes); it.fd.sync() }
-                        require(temp.renameTo(destination)) { "Could not commit verified file" }
-                    } finally { if (temp.exists()) temp.delete() }
-                    runOnUiThread { status.text = "Verified file received: $safeName (${bytes.size} bytes, SHA-256 OK). App storage में सुरक्षित है।" }
+                    if (msg.optString("contentType") == "clipboard_text") {
+                        require(msg.optString("category") == "clipboard" && bytes.size <= 80_000) { "Invalid clipboard packet" }
+                        val receivedText = bytes.toString(Charsets.UTF_8)
+                        require(receivedText.isNotBlank() && receivedText.length <= 20_000) { "Clipboard text limit exceeded" }
+                        runOnUiThread {
+                            androidx.appcompat.app.AlertDialog.Builder(this)
+                                .setTitle("Clipboard text received")
+                                .setMessage("Paired device से text आया है। इसे इस फोन के clipboard में copy करना है?\\n\\n" + receivedText.take(800))
+                                .setNegativeButton("Discard", null)
+                                .setPositiveButton("Copy to Clipboard") { _, _ ->
+                                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Shraddha shared text", receivedText))
+                                    status.text = "User-approved clipboard text copied."
+                                }.show()
+                        }
+                    } else {
+                        val folder = java.io.File(filesDir, "shared").apply { mkdirs() }
+                        val safeName = msg.optString("fileName", "shared_file").replace(Regex("[^A-Za-z0-9._-]"), "_").take(100).ifBlank { "shared_file" }
+                        val destination = java.io.File(folder, safeName)
+                        val temp = java.io.File(folder, ".${safeName}.${java.util.UUID.randomUUID()}.part")
+                        try {
+                            temp.outputStream().use { it.write(bytes); it.fd.sync() }
+                            require(temp.renameTo(destination)) { "Could not commit verified file" }
+                        } finally { if (temp.exists()) temp.delete() }
+                        runOnUiThread { status.text = "Verified file received: $safeName (${bytes.size} bytes, SHA-256 OK). App storage में सुरक्षित है।" }
+                    }
                 }.onFailure { runOnUiThread { status.text = "File rejected: ${it.message}" } }
             }
         }
