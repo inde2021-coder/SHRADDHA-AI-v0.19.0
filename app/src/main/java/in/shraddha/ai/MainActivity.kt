@@ -1057,9 +1057,10 @@ class MainActivity : AppCompatActivity() {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "HTTPS relay URL जरूरी है।"; return@actionButton }
                 visionResult.text = "Visual Lens remote camera frame समझ रहा है…"
+                securityAudit.append("visual_lens", "requested", "source=paired_camera; provider=${visionProvider.selectedItem}; prompt_not_logged")
                 DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), visionProvider.selectedItem.toString(), visionPrompt.text.toString(), frame) { result -> runOnUiThread {
-                    result.onSuccess { visionResult.text = it; status.text = "Remote camera visual analysis complete." }
-                        .onFailure { visionResult.text = "Camera analysis error: ${it.message}" }
+                    result.onSuccess { visionResult.text = it; status.text = "Remote camera visual analysis complete."; securityAudit.append("visual_lens", "completed", "source=paired_camera; result_not_logged") }
+                        .onFailure { visionResult.text = "Camera analysis error: ${it.message}"; securityAudit.append("visual_lens", "failed", "source=paired_camera; error_type=${it.javaClass.simpleName}") }
                 } }
             })
             visionResult = TextView(this@MainActivity).apply { text = "AI screen analysis result यहाँ दिखेगा।"; setTextColor(0xFFE4E8F2.toInt()); textSize = 14f; setPadding(dp(14), dp(14), dp(14), dp(14)); background = rounded(0xFF111B2D.toInt(), 16) }
@@ -1456,8 +1457,12 @@ class MainActivity : AppCompatActivity() {
                         val token = VoiceGatewaySettings.get(this@MainActivity).gatewayToken
                         if (!validRelay(url)) { translationOutput.text = "पहले Settings में secure AI backend configure करें।"; return@onSuccess }
                         translationOutput.text = "Translating…"
+                        securityAudit.append("translation", "requested", "source=${request.sourceLanguage}; target=${request.targetLanguage}; text_not_logged")
                         DeviceLinkManager.askChat(url, token, "auto", "Translate the following text from ${request.sourceLanguage} to ${request.targetLanguage}. Preserve meaning and formatting. Return only the translation:\\n\\n${request.text}") { result ->
-                            runOnUiThread { translationOutput.text = result.getOrElse { "Translation failed: ${it.message}" } }
+                            runOnUiThread {
+                                translationOutput.text = result.getOrElse { "Translation failed: ${it.message}" }
+                                securityAudit.append("translation", if (result.isSuccess) "completed" else "failed", "source=${request.sourceLanguage}; target=${request.targetLanguage}; content_not_logged")
+                            }
                         }
                     }.onFailure { translationOutput.text = "Translation request invalid: ${it.message}" }
             })
