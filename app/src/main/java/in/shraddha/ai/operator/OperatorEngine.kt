@@ -25,6 +25,15 @@ class OperatorEngine(
         return snapshot
     }
 
+    private fun screenFingerprint(snapshot: ScreenSnapshot): String =
+        buildString {
+            append(snapshot.packageName).append('|').append(snapshot.activityName)
+            snapshot.elements.forEach { element ->
+                append('|').append(element.id).append(':').append(element.text).append(':')
+                    .append(element.description).append(':').append(element.bounds.flattenToString())
+            }
+        }
+
     /** Execute one explicitly supplied step at a time. Sensitive actions are deliberately excluded. */
     fun execute(step: OperatorStep, confirmed: Boolean = false): Boolean {
         if (cancelled) { record("operator_action", "cancelled", step); return false }
@@ -59,10 +68,20 @@ class OperatorEngine(
         emit(OperatorEvent(OperatorTaskState.VERIFYING, "कार्रवाई के बाद स्क्रीन दोबारा जाँची जा रही है…"))
         Thread.sleep(450)
         val after = observe() ?: run { record("operator_action", "verification_unavailable", step, before); return false }
-        if (step.expectedVisibleText.isNotBlank() && after.elements.none {
-                it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
-            }) {
-            emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित परिणाम स्क्रीन पर सत्यापित नहीं हुआ।", after)); record("operator_action", "verification_failed", step, after); return false
+        val expectedVisible = step.expectedVisibleText.isNotBlank() && after.elements.any {
+            it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
+        }
+        val screenChanged = screenFingerprint(before) != screenFingerprint(after)
+        val actionVerified = if (step.expectedVisibleText.isNotBlank()) expectedVisible else when (step.action) {
+            OperatorActionType.TYPE_TEXT -> step.value.isNotBlank() && after.elements.any {
+                !it.password && (it.text.contains(step.value, true) || it.description.contains(step.value, true))
+            }
+            OperatorActionType.OPEN_APP -> screenChanged ||
+                after.packageName.contains(step.target, true) || after.activityName.contains(step.target, true)
+            OperatorActionType.CLICK_TEXT, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD -> screenChanged
+        }
+        if (!actionVerified) {
+            emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित UI बदलाव/परिणाम सत्यापित नहीं हुआ।", after)); record("operator_action", "verification_failed", step, after); return false
         }
         emit(OperatorEvent(OperatorTaskState.COMPLETED, "चरण पूरा हुआ और स्क्रीन दोबारा जाँची गई।", after))
         record("operator_action", "verified", step, after)
