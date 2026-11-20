@@ -59,10 +59,12 @@ class NovaAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty() && elements.size < maxElements) {
             val node = queue.poll() ?: continue
 
-            val text = (node.text?.toString() ?: node.contentDescription?.toString() ?: "").trim()
+            val sensitive = node.isPassword
+            val text = if (sensitive) "संवेदनशील फ़ील्ड" else
+                (node.text?.toString() ?: node.contentDescription?.toString() ?: "").trim()
             if (text.isNotEmpty() && text.length <= maxLabelLength) {
                 val type = when {
-                    node.isEditable -> "[input]"
+                    sensitive || node.isEditable -> "[input]"
                     node.isClickable -> "[button]"
                     node.isCheckable -> "[checkbox]"
                     else -> "[text]"
@@ -109,6 +111,7 @@ class NovaAccessibilityService : AccessibilityService() {
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             ?: findFirstEditable(root)
             ?: return "no_focused_field"
+        if (focused.isPassword) return "blocked_sensitive_field"
 
         val args = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
