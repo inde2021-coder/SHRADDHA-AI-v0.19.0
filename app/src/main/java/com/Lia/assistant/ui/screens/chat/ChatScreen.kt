@@ -154,7 +154,7 @@ fun ChatScreen(
             )
             val memoryRecap = PersistentChatMemory.recap(context)
             val memoryInstruction = memoryRecap?.let {
-                "\\n\\nRelevant saved conversation memory (user-approved, may be incomplete):\\n" + it
+                "\n\nRelevant saved conversation memory (user-approved, may be incomplete):\n" + it
             }.orEmpty()
             val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
             val result = if (appState.aiProvider == "GEMINI") {
