@@ -76,3 +76,33 @@ CI success proves source compilation and the listed automated checks only. It do
 - Compose buttons now have consistent rounded geometry, larger touch targets, single-line labels and correct cancelled-gesture handling (cancelled presses no longer invoke actions).
 - Compose home/settings bottom whitespace reduced; floating navigation dock respects navigation-bar insets.
 - These changes are source-level changes. Automated CI #297 is the current verification gate; visual confirmation on a physical phone remains outstanding.
+
+## Latest verification — 2026-11-20 (Android CI #331)
+- Tested commit: `17a85f93e364104734df5bc7e0cc841647bf6414`.
+- Backend JavaScript syntax and security/API tests: **PASS**.
+- Android unit tests, including Knowledge Graph and encrypted backup codec tests: **PASS**.
+- Android static lint: **PASS**.
+- ARM64 and ARMv7 debug APK build: **PASS**.
+- ABI-specific APK verification and SHA-256 manifest checks: **PASS**.
+- Artifact: `shraddha-ai-debug-apks-arm`; ID `14608828015`.
+- ARM64 SHA-256: `1658bbcf4e8576151012abe2ef79b5e5097a9aa527893e67956da5126e196432`.
+- ARMv7 SHA-256: `b3c55a8bf9ca3385a88b55b1a316898d1d2850674df1d5bbdb251ad8c522d075`.
+- [Android CI run #331](https://github.com/inde2021-coder/SHRADDHA-AI-v0.19.0/actions/runs/44691564527)
+- The artifact was downloaded; both APKs independently passed `sha256sum -c SHA256SUMS.txt`.
+
+## Additional implementation in this batch
+- Replaced the old unencrypted Knowledge Graph preference UI with the Android-Keystore AES-GCM persistent graph. Supports explicit node creation, search, relationships, deletion and reset; caps 100 nodes / 300 edges and validates identifiers, titles and relationship endpoints.
+- Added one-time migration of existing legacy graph notes into the encrypted slot before deleting the old preference copy.
+- Added password-protected portable backup export/restore (PBKDF2-HMAC-SHA256, 210,000 iterations, AES-256-GCM, authenticated format/version). Restore validates graph/task limits, asks for confirmation, replaces supported user-managed data and rebuilds task/briefing alarms.
+- Backup includes the user-curated Knowledge Graph, task planner, project state, Digital Twin preferences, assistant display name and opt-in encrypted conversation recap. Provider API keys, Firebase passwords/tokens, biometric templates and device pairing secrets are deliberately excluded.
+- Backup crypto wipes the supplied passphrase character array and runs on a background thread.
+- Device Operator now has a Stop control, stops future workflow steps after a stop request, requests per-step approval for sensitive actions, and stops a workflow when the Operator activity closes.
+- Daily briefing alarms are explicitly cancelled when the feature is disabled or a restored backup has the toggle off.
+
+## Still requires external/device verification
+- Real Android phone checks for microphone continuity, camera/Visual Lens, Accessibility UI actions, task notifications, background limits, battery behavior and OEM differences.
+- Firebase Console Auth/Firestore/Realtime Database enablement, published rules and real encrypted backup/restore round-trip.
+- Live provider requests with valid user API keys and quotas.
+- Windows PC Companion + Android pairing and real remote control/screen-share session.
+- Biometric model licence/runtime compatibility, real sample accuracy and anti-spoof testing. Current liveness challenge is not certified anti-spoofing.
+- Production-signed APK/AAB requires the owner's release keystore and GitHub signing secrets. The published APKs remain debug builds.
