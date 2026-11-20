@@ -235,6 +235,8 @@ object DeviceLinkManager {
         if (transferId.isBlank() || index !in 0..2199 || bytes.isEmpty() || bytes.size > 49152) return false
         return socket?.send(JSONObject().put("type", "file_transfer_chunk").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("index", index).put("payload", Base64.encodeToString(bytes, Base64.NO_WRAP)).toString()) == true
     }
+    fun requestFileTransferResume(sourceDeviceId: String, transferId: String): Boolean =
+        socket?.send(JSONObject().put("type", "file_transfer_resume").put("targetDeviceId", sourceDeviceId).put("transferId", transferId).toString()) == true
     fun acknowledgeFileTransfer(targetDeviceId: String, transferId: String, index: Int, complete: Boolean = false, ok: Boolean = true): Boolean =
         socket?.send(JSONObject().put("type", "file_transfer_ack").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("index", index).put("complete", complete).put("ok", ok).toString()) == true
     fun cancelFileTransfer(targetDeviceId: String, transferId: String, reason: String = "cancelled"): Boolean =
