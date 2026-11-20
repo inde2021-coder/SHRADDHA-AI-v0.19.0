@@ -46,18 +46,24 @@ object MultiProviderChatClient {
         if (apiKey.isBlank()) return ChatReplyResult.Error("$selected API key is missing. Add it in Settings.")
         if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
 
+        // Enforce limits here too, so callers other than ChatScreen cannot submit
+        // unbounded prompts or a single oversized message.
+        val boundedHistory = history.takeLast(40).map { turn ->
+            turn.copy(text = turn.text.take(8_000))
+        }
+        val boundedSystemInstruction = systemInstruction.take(8_000)
         val body = if (cfg.anthropic) {
             val messages = JSONArray()
-            history.forEach { turn ->
+            boundedHistory.forEach { turn ->
                 messages.put(JSONObject().put("role", if (turn.isUser) "user" else "assistant")
                     .put("content", turn.text))
             }
             JSONObject().put("model", cfg.model).put("max_tokens", 2048)
-                .put("system", systemInstruction).put("messages", messages)
+                .put("system", boundedSystemInstruction).put("messages", messages)
         } else {
             val messages = JSONArray()
-            messages.put(JSONObject().put("role", "system").put("content", systemInstruction))
-            history.forEach { turn ->
+            messages.put(JSONObject().put("role", "system").put("content", boundedSystemInstruction))
+            boundedHistory.forEach { turn ->
                 messages.put(JSONObject().put("role", if (turn.isUser) "user" else "assistant")
                     .put("content", turn.text))
             }
