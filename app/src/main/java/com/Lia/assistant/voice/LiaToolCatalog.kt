@@ -100,25 +100,12 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
-                name = "social_media_task_control",
-                description = "Controls an active social media task. Only call command 'CONFIRM' after the user explicitly said yes.",
-                params = mapOf(
-                    "command" to "Control command: 'CONFIRM', 'REJECT', 'RESUME', 'CANCEL', or 'STATUS'",
-                    "task_id" to "Task ID returned from execute_social_media_task"
-                ),
-                required = listOf("command", "task_id")
-            )
-        )
-
-        array.put(
-            GeminiToolUtils.functionDecl(
                 name = "execute_whatsapp_task",
                 description = "Prepares a WhatsApp message draft only. Chat reading, search, and mute automation are not available.",
                 params = mapOf(
                     "action" to "Only supported action: 'SEND_MESSAGE' (opens a draft; user must tap Send)",
                     "contact_name" to "Name of contact",
-                    "phone_number" to "Optional phone number",
-                    "message" to "Message body if sending",
+                    "message" to "Message body; composer only, user taps Send"
                     "query" to "Search query if searching"
                 ),
                 required = listOf("action")

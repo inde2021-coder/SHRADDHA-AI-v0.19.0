@@ -46,6 +46,13 @@ object PersistentChatMemory {
         return turns.takeLast(MAX_TURNS).joinToString("\n").takeLast(12_000)
     }
 
+    fun restore(context: Context, recap: String): Result<Unit> = runCatching {
+        require(isEnabled(context)) { "Turn on Encrypted Conversation Memory before restoring a recap." }
+        val safe = recap.trim()
+        require(safe.isNotEmpty() && safe.length <= 12_000) { "Restored recap must contain 1–12,000 characters." }
+        SecureMemoryVault(context.applicationContext).save(safe).getOrThrow()
+    }
+
     fun clear(context: Context): Boolean =
         SecureMemoryVault(context.applicationContext).clear()
 }

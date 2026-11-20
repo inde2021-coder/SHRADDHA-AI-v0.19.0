@@ -53,6 +53,7 @@ import com.Lia.assistant.data.ProviderKeyStore
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import `in`.shraddha.ai.brain.PersistentChatMemory
+import com.Lia.assistant.voice.VoiceSessionManager
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -188,7 +189,7 @@ fun SettingsScreen(
                 }
                 NovaSettingsRow(
                     title = "Encrypted Conversation Memory",
-                    subtitle = if (rememberChats) "ON • last 12 turns saved on this device" else "OFF • conversations are not saved between sessions",
+                    subtitle = if (rememberChats) "ON • last 12 turns saved on this device" else "OFF • new turns are not saved; existing recap remains until cleared",
                     icon = Icons.Default.Security,
                     switch = rememberChats,
                     onCheckedChange = {
@@ -198,7 +199,7 @@ fun SettingsScreen(
                 )
                 NovaSettingsRow(
                     title = "Clear Saved Conversation Memory",
-                    subtitle = "Permanently clear the encrypted local recap",
+                    subtitle = "Permanently clear the encrypted recap and current in-memory voice recap",
                     icon = Icons.Default.Security,
                     onClick = { showClearMemoryDialog = true }
                 )
@@ -468,13 +469,13 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showClearMemoryDialog = false },
             title = { Text("Clear saved conversation memory?") },
-            text = { Text("This permanently deletes the encrypted conversation recap stored on this device. It does not delete chat messages from other services.") },
+            text = { Text("This clears the encrypted local recap and the in-memory voice recap. If Voice Mode is active, it reconnects without the old recap. It does not delete WhatsApp/SMS messages or biometric People Memory.") },
             confirmButton = {
                 NovaButton(
                     text = "Clear memory",
                     type = NovaButtonType.SECONDARY,
                     onClick = {
-                        PersistentChatMemory.clear(context)
+                        VoiceSessionManager.clearConversationMemory(context)
                         showClearMemoryDialog = false
                     }
                 )

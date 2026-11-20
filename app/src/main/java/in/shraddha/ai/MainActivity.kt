@@ -1243,13 +1243,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addFirebaseCloudSection(root: LinearLayout) {
-        section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "पहले Firebase Console में Android app register करें और local.properties में config भरें। Cloud backup केवल आपकी सहमति से होगा।") {
+        section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "Firebase Console से Android app की client configuration यहाँ भरें। Email/Password Auth और Firestore चालू करें; sync केवल आपकी सहमति से होगा।") {
+            val firebaseApiKey = edit("Firebase API Key", "AIza…")
+            val firebaseAppId = edit("Firebase Android App ID", "1:123456789:android:abcdef")
+            val firebaseProjectId = edit("Firebase Project ID", "your-project-id")
+            val firebaseSenderId = edit("Firebase Messaging Sender ID", "123456789")
+            val firebaseBucket = edit("Storage bucket (optional)", "your-project.appspot.com")
+            addView(firebaseApiKey); addView(firebaseAppId); addView(firebaseProjectId); addView(firebaseSenderId); addView(firebaseBucket)
             val email = edit("Email", "name@example.com")
             val password = edit("Password (कम-से-कम 8 अक्षर)", "Firebase account password").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
             val note = edit("Cloud memory note", "यह note encrypted रूप में sync होगा").apply { minLines = 3; isSingleLine = false }
-            val consent = CheckBox(this@MainActivity).apply { text = "मैं इस note को अपने Firebase खाते में encrypted रूप में sync करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
+            val consent = CheckBox(this@MainActivity).apply { text = "मैं इस note/local conversation recap को अपने Firebase खाते में encrypted रूप में sync करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val result = TextView(this@MainActivity).apply { setTextColor(0xFFBFE8D2.toInt()); textSize = 13f }
-            addView(email); addView(password); addView(note); addView(consent); addView(result)
+            addView(email); addView(password); addView(note)
+            addView(actionButton("Load Encrypted Local Conversation Recap", "Requires Encrypted Conversation Memory to be ON") {
+                val recap = PersistentChatMemory.recap(this@MainActivity)
+                if (recap.isNullOrBlank()) result.text = "No saved recap found. Enable Encrypted Conversation Memory and use Shraddha first."
+                else { note.setText(recap); result.text = "Local encrypted recap loaded into this draft. Review before syncing." }
+            })
+            addView(consent); addView(result)
+            addView(actionButton("Save Firebase Configuration", "Client config is public; never paste service-account private keys") {
+                val configured = `in`.shraddha.ai.cloud.FirebaseCloudVault.configure(
+                    this@MainActivity, firebaseApiKey.text.toString(), firebaseAppId.text.toString(),
+                    firebaseProjectId.text.toString(), firebaseSenderId.text.toString(), firebaseBucket.text.toString()
+                )
+                result.text = configured.fold(
+                    { "Firebase config saved. Restart Shraddha AI, then create/sign in to your account." },
+                    { "Firebase config error: ${it.message}" }
+                )
+            })
             addView(actionButton("Create Firebase Account", "Email/password authentication") {
                 if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Valid email और कम-से-कम 8 अक्षर का password दें।"; return@actionButton }
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
@@ -1273,7 +1295,15 @@ class MainActivity : AppCompatActivity() {
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
                 result.text = "Encrypted backup download और decrypt हो रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory")
-                    runOnUiThread { result.text = r.fold({ value -> if (value == null) "इस account में backup नहीं मिला।" else { getSharedPreferences("shraddha_local_memory", MODE_PRIVATE).edit().putString("notes", value).apply(); "Memory restore होकर इस phone में save हुई।" } }, { "Restore failed: ${it.message}" }) }
+                    runOnUiThread {
+                        result.text = r.fold({ value ->
+                            if (value == null) "इस account में backup नहीं मिला।"
+                            else PersistentChatMemory.restore(this@MainActivity, value).fold(
+                                { "Encrypted recap इस phone की local memory में restore हुआ। Voice session active हो तो नया context load होगा." },
+                                { "Local restore failed: ${it.message}" }
+                            )
+                        }, { "Restore failed: ${it.message}" })
+                    }
                 }.start()
             })
             addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase client config secret नहीं होता, लेकिन database rules जरूरी हैं। Password किसी server पर नहीं भेजा जाता; उससे client पर encryption key बनती है। Face/voice biometric templates इस backup में शामिल नहीं हैं। Firebase project config सेट किए बिना cloud buttons काम नहीं करेंगे।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })

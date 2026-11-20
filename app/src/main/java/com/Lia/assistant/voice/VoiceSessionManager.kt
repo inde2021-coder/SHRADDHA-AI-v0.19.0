@@ -323,6 +323,13 @@ object VoiceSessionManager {
         }
     }
 
+    fun clearConversationMemory(context: Context): Boolean {
+        ConversationMemory.clear()
+        val cleared = PersistentChatMemory.clear(context)
+        if (_isActive.value) refreshInstructions(context)
+        return cleared
+    }
+
     fun toggleMute() {
         val next = !_muted.value
         _muted.value = next

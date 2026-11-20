@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.Lia.assistant.MainActivity
 import `in`.shraddha.ai.R
@@ -19,6 +20,8 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.fx.OverlayEdgeGlowController
 
 class VoiceForegroundService : Service() {
+
+    private var voiceWakeLock: PowerManager.WakeLock? = null
 
     companion object {
         const val ACTION_START = "com.Lia.assistant.action.START_VOICE"
@@ -50,6 +53,7 @@ class VoiceForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             VoiceSessionManager.stop()
+            releaseVoiceWakeLock()
             OverlayEdgeGlowController.stop(this)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -74,10 +78,25 @@ class VoiceForegroundService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
+        acquireVoiceWakeLock()
         OverlayEdgeGlowController.start(this)
         VoiceSessionManager.start(this)
 
         return START_STICKY
+    }
+
+    private fun acquireVoiceWakeLock() {
+        if (voiceWakeLock?.isHeld == true) return
+        val power = getSystemService(PowerManager::class.java) ?: return
+        voiceWakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:VoiceSession").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseVoiceWakeLock() {
+        runCatching { if (voiceWakeLock?.isHeld == true) voiceWakeLock?.release() }
+        voiceWakeLock = null
     }
 
     private fun createNotificationChannel() {
@@ -130,7 +149,7 @@ class VoiceForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(assistantName)
-            .setContentText("Voice session active • Tap Stop to end")
+            .setContentText("Voice session active • higher battery use • Tap Stop to end")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
@@ -141,6 +160,7 @@ class VoiceForegroundService : Service() {
 
     override fun onDestroy() {
         VoiceSessionManager.stop()
+        releaseVoiceWakeLock()
         OverlayEdgeGlowController.stop(this)
         super.onDestroy()
     }
