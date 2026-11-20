@@ -94,7 +94,7 @@ class PhoneAgentActivity : AppCompatActivity() {
     }
 
     private fun handleDialIntent(source: Intent?) {
-        val number = source?.data?.schemeSpecificPart ?: source?.getStringExtra(TelecomManager.EXTRA_PHONE_NUMBER)
+        val number = source?.data?.takeIf { it.scheme == "tel" }?.schemeSpecificPart
         if (!number.isNullOrBlank()) numberInput.setText(number)
     }
 
