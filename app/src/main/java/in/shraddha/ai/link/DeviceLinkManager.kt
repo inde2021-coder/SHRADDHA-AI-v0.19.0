@@ -34,9 +34,18 @@ object DeviceLinkManager {
     }
 
     private fun saveAndConnect(baseUrl: String, pair: PairResult, done: (Result<PairResult>) -> Unit) {
+        val parsed = baseUrl.trim().trimEnd('/').toHttpUrlOrNull()
+        if (parsed == null || parsed.scheme != "https" || parsed.host.isBlank()) {
+            done(Result.failure(IllegalArgumentException("Remote device pairing requires a valid HTTPS relay URL. Plain HTTP is blocked.")))
+            return
+        }
+        require(pair.sessionId.isNotBlank() && pair.deviceId.isNotBlank() && pair.token.length >= 24) {
+            "Relay returned an invalid session or device credential."
+        }
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
-        val wsBase = baseUrl.trim().trimEnd('/').replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
-        val url = "$wsBase/ws?sessionId=${pair.sessionId}&deviceId=${pair.deviceId}"
+        val url = parsed.newBuilder().scheme("wss").addPathSegments("ws")
+            .addQueryParameter("sessionId", pair.sessionId)
+            .addQueryParameter("deviceId", pair.deviceId).build()
         val request = Request.Builder().url(url).header("Authorization", "Bearer ${pair.token}").build()
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { onStatus?.invoke("Secure relay connected"); done(Result.success(pair)) }
@@ -68,7 +77,12 @@ object DeviceLinkManager {
     }
 
     private fun post(base: String, path: String, body: JSONObject, callback: (Result<JSONObject>) -> Unit) {
-        val url = base.trim().trimEnd('/') + path
+        val parsed = base.trim().trimEnd('/').toHttpUrlOrNull()
+        if (parsed == null || parsed.scheme != "https" || parsed.host.isBlank()) {
+            callback(Result.failure(IllegalArgumentException("Pairing and remote-device APIs require HTTPS. Plain HTTP is blocked.")))
+            return
+        }
+        val url = parsed.newBuilder().addPathSegments(path.trimStart('/')).build()
         val request = Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType())).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { callback(Result.failure(e)) }
