@@ -135,3 +135,32 @@ py shraddha_pc_companion.py --view-phone-screen
 On Android, enable Screen sharing in its permissions, select the paired PC, then press Share This Phone Screen and accept Android's system MediaProjection prompt. The PC preview uses the optional OpenCV window; press Q or stop the companion to close it. Sharing is targeted to the selected paired PC, not broadcast to the whole session.
 
 To share the active Windows app window back to Android, use --share-screen; the PC user must separately confirm sharing at startup. Sensitive-looking window titles are excluded, but title matching is only a best-effort guard. Close private windows before sharing.
+
+## File transfer, clipboard, voice commands and recovery
+
+File transfer protocol supports 48 KiB chunks, files up to 100 MiB, a SHA-256 manifest, per-chunk acknowledgements and transfer cancellation. A device must first request and receive the receiver's one-time Documents share approval. The Android relay API exposes start/chunk/ack/cancel calls; a complete Android file-picker UI, disk-backed receive/resume queue and end-to-end device tests are still required before calling the whole feature finished.
+
+Windows clipboard sync is a one-shot operation and requires the receiver to approve the Clipboard share request. Install `pyperclip` on Windows:
+
+~~~powershell
+py -m pip install pyperclip
+~~~
+
+Send the current Windows text clipboard to a paired Android device (replace the device ID):
+
+~~~powershell
+py shraddha_pc_companion.py --send-clipboard-to ANDROID_DEVICE_ID
+~~~
+
+Receiving clipboard text on Windows asks for a separate local confirmation before copying it. Likely password, OTP, PIN and recovery phrase content is blocked. Clipboard history is not uploaded or retained.
+
+Offline voice control uses a local Vosk model; no cloud speech recognition is used. Install `vosk` and `sounddevice`, download an appropriate Hindi/English Vosk model, then run:
+
+~~~powershell
+py -m pip install vosk sounddevice
+py shraddha_pc_companion.py --voice-control-phone ANDROID_DEVICE_ID --vosk-model C:\\Models\\vosk-model-small-en-us
+~~~
+
+Only allowlisted commands such as `go back`, `go home`, `scroll up`, `scroll down`, and `open app Settings` are accepted. The PC asks for confirmation and Android must separately approve remote control.
+
+Automatic reconnect uses bounded exponential backoff up to 60 seconds. Reconnection reuses the saved pairing token but asks for fresh local sharing/control consent; temporary control grants are not silently restored.
