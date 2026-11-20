@@ -386,7 +386,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 addCompleteExpertHubSection(pageRoot)
             }
-            "devices" -> addDeviceLinkSection(pageRoot)
+            "devices" -> { addDeviceLinkSection(pageRoot); pageRoot.addView(actionButton("⇄  OPEN FILE TRANSFER", "Android ↔ paired device • choose, send, receive, pause, resume") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.link.DeviceTransferActivity::class.java).putExtra("peer", if (::targetDevice.isInitialized) targetDevice.text.toString() else "")) }) }
             "lab" -> {
                 if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example").apply { setText(VoiceGatewaySettings.get(this@MainActivity).baseUrl) }
                 if (!::gatewayToken.isInitialized) gatewayToken = edit("AI gateway token", "Saved securely in Settings").apply {
