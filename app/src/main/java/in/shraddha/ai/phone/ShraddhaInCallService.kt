@@ -30,7 +30,7 @@ class ShraddhaInCallService : InCallService() {
         saveEvent(call, call.state)
         sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
 
-        if (call.state == Call.STATE_RINGING) {
+        if (call.state == Call.STATE_RINGING || call.state == Call.STATE_DIALING || call.state == Call.STATE_CONNECTING) {
             val screen = Intent(this, InCallActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             runCatching { startActivity(screen) }
@@ -40,7 +40,7 @@ class ShraddhaInCallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         callbacks.remove(call)?.let { call.unregisterCallback(it) }
         saveEvent(call, Call.STATE_DISCONNECTED)
-        if (activeCall === call) activeCall = null
+        if (activeCall === call) { activeCall = null; isMuted = false }
         sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
         super.onCallRemoved(call)
     }
