@@ -43,19 +43,29 @@ class SecureMemoryVault(context: Context) {
 
     @Synchronized fun loadSlot(slot: String): Result<String> = runCatching {
         require(validSlot(slot)) { "Invalid secure memory slot" }
-        val payload = prefs.getString("slot_$slot", null) ?: return@runCatching ""
+        val stored = prefs.getString("slot_$slot", null)
+        val legacy = if (stored == null && slot == "memory") prefs.getString("memory", null) else null
+        val payload = stored ?: legacy ?: return@runCatching ""
         val parts = payload.split('.', limit = 2)
         require(parts.size == 2) { "Vault data is invalid" }
         val iv = Base64.decode(parts[0], Base64.NO_WRAP)
         val data = Base64.decode(parts[1], Base64.NO_WRAP)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(data), Charsets.UTF_8)
+        val plaintext = String(cipher.doFinal(data), Charsets.UTF_8)
+        // One-time migration from the original pre-slot memory preference.
+        if (stored == null && legacy != null && slot == "memory") {
+            saveSlot("memory", plaintext).getOrThrow()
+            prefs.edit().remove("memory").commit()
+        }
+        plaintext
     }
 
     @Synchronized fun clearSlot(slot: String): Boolean {
         if (!validSlot(slot)) return false
-        return prefs.edit().remove("slot_$slot").commit()
+        val editor = prefs.edit().remove("slot_$slot")
+        if (slot == "memory") editor.remove("memory")
+        return editor.commit()
     }
 
     private fun validSlot(slot: String): Boolean = slot.matches(Regex("[a-z][a-z0-9_]{0,39}"))
