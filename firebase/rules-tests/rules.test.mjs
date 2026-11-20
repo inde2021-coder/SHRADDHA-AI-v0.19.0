@@ -60,8 +60,8 @@ test("Firestore Storage metadata and FCM device records are scoped to the owner"
 });
 
 test("Realtime Database encrypted vault is owner-only and rejects plaintext", async () => {
-  const alice = env.database("alice");
-  const bob = env.database("bob");
+  const alice = env.authenticatedContext("alice").database();
+  const bob = env.authenticatedContext("bob").database();
   const path = "users/alice/vault/personal_memory";
   const encryptedRecord = { format, payload: "ciphertext", updatedAt: Date.now() };
   await assertSucceeds(databaseSet(databaseRef(alice, path), encryptedRecord));
