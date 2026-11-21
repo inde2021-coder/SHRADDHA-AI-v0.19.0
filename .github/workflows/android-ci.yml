@@ -10,10 +10,10 @@ on:
     branches:
       - main
       - integration/master-feature-consolidation-2026-11
+  # Integration commits are validated by the open PR event; main pushes run after merge.
   push:
     branches:
       - main
-      - integration/master-feature-consolidation-2026-11
   workflow_dispatch:
 
 permissions:
