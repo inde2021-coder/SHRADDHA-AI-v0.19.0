@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   appendCallTranscript,
   clearCallTranscript,
+  hasExplicitTranscriptConsentPrompt,
   MAX_CALL_TRANSCRIPT_CHARS,
   MAX_CALL_TRANSCRIPT_CHUNK_CHARS
 } from '../call-transcript.js';
@@ -41,4 +42,13 @@ test('DTMF withdrawal clears both transcript data and character accounting', () 
 test('transcript cap constants remain within the bridge memory budget', () => {
   assert.equal(MAX_CALL_TRANSCRIPT_CHARS, 24_000);
   assert.equal(MAX_CALL_TRANSCRIPT_CHUNK_CHARS, 2_000);
+});
+
+test('transcript consent detection is explicit and supports Hindi and English', () => {
+  assert.equal(hasExplicitTranscriptConsentPrompt('Please press 1 if you consent to saving a text transcript.'), true);
+  assert.equal(hasExplicitTranscriptConsentPrompt('ट्रांसक्रिप्ट सेव करने की सहमति है तो प्रेस 1 दबाएं।'), true);
+  assert.equal(hasExplicitTranscriptConsentPrompt('Press 1 to continue the call.'), false);
+  assert.equal(hasExplicitTranscriptConsentPrompt('We may save a transcript if you agree.'), false);
+  assert.equal(hasExplicitTranscriptConsentPrompt('press 1 to save the transcript'), false);
+  assert.equal(hasExplicitTranscriptConsentPrompt(null), false);
 });
