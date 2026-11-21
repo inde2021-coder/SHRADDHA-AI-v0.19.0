@@ -65,7 +65,7 @@ export function buildFormExtractionPrompt(formType, userInstruction = '', allowP
   };
 }
 
-export function normalizeFormExtraction(raw, formType) {
+export function normalizeFormExtraction(raw, formType, allowPersonalData = false) {
   const type = Object.hasOwn(FORM_TYPES, formType) ? formType : 'unknown';
   let parsed = raw;
   if (typeof raw === 'string') {
@@ -80,7 +80,8 @@ export function normalizeFormExtraction(raw, formType) {
   for (const item of supplied.slice(0, 60)) {
     if (!item || typeof item !== 'object' || !SAFE_KEY.test(String(item.key || '')) || !allowed.has(item.key) || seen.has(item.key)) continue;
     seen.add(item.key);
-    const value = typeof item.value === 'string' ? item.value.trim().slice(0, 500) : '';
+    const extractedValue = typeof item.value === 'string' ? item.value.trim().slice(0, 500) : '';
+    const value = (!allowPersonalData && PRIVATE_KEYS.has(item.key)) ? '' : extractedValue;
     const confidence = Number.isFinite(Number(item.confidence)) ? Math.max(0, Math.min(1, Number(item.confidence))) : 0;
     const sourceText = typeof item.sourceText === 'string' ? item.sourceText.trim().slice(0, 240) : '';
     const status = !value ? 'not_found' : (item.status === 'ready' && confidence >= 0.9 && sourceText ? 'ready' : 'review');
