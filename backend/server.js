@@ -251,7 +251,11 @@ const server = http.createServer(async (req, res) => {
           whatsappDelivery: false
         },
         required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'],
-        note: 'Requires a provisioned Edesy DID and configured inbound AI Voice Agent Stream. Call history is bounded in-memory only; audio is not recorded.'
+        missing: [
+          ...(typeof process.env.EDESY_STREAM_TOKEN !== 'string' || process.env.EDESY_STREAM_TOKEN.length < 32 ? ['EDESY_STREAM_TOKEN (32+ characters)'] : []),
+          ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : [])
+        ],
+        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is bounded in-memory only; audio is not recorded.'
       });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
