@@ -95,11 +95,15 @@ async function persistCallHistoryRecord(record) {
       payload,
       createdAt: Date.parse(record.startedAt || '') || Date.now()
     });
-    const retained = await collection.orderBy('createdAt', 'desc').limit(MAX_EDESY_CALL_HISTORY + 1).get();
-    if (retained.size > MAX_EDESY_CALL_HISTORY) {
+    // Remove every record beyond the newest 100, in Firestore-safe batch sizes.
+    while (true) {
+      const overflow = await collection.orderBy('createdAt', 'desc')
+        .offset(MAX_EDESY_CALL_HISTORY).limit(450).get();
+      if (overflow.empty) break;
       const batch = store.db.batch();
-      retained.docs.slice(MAX_EDESY_CALL_HISTORY).forEach(document => batch.delete(document.ref));
+      overflow.docs.forEach(document => batch.delete(document.ref));
       await batch.commit();
+      if (overflow.size < 450) break;
     }
   });
   callHistoryWriteQueues.set(record.id, next);
