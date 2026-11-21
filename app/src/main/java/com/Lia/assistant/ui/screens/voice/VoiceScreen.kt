@@ -2,6 +2,7 @@ package com.Lia.assistant.ui.screens.voice
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -83,23 +84,32 @@ fun VoiceScreen(
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasRecordAudioPermission = isGranted
-        if (isGranted && NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)) {
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        hasRecordAudioPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        hasNotificationPermission = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (hasRecordAudioPermission && hasNotificationPermission &&
+            NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)) {
             VoiceForegroundService.start(context)
-        } else if (!isGranted) {
+        } else if (!hasRecordAudioPermission || !hasNotificationPermission) {
             NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
         }
     }
 
     val hasKey = ApiKeyStore.hasKey(context)
 
-    LaunchedEffect(hasRecordAudioPermission, hasKey) {
+    LaunchedEffect(hasRecordAudioPermission, hasNotificationPermission, hasKey) {
         val userWantsVoice = NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
-        if (hasRecordAudioPermission && hasKey && userWantsVoice && !VoiceSessionManager.isActive.value) {
+        if (hasRecordAudioPermission && hasNotificationPermission && hasKey && userWantsVoice && !VoiceSessionManager.isActive.value) {
             VoiceForegroundService.start(context)
         }
     }
@@ -170,7 +180,7 @@ fun VoiceScreen(
                         onClick = { navController.navigate("settings") },
                         type = NovaButtonType.PRIMARY
                     )
-                } else if (!hasRecordAudioPermission) {
+                } else if (!hasRecordAudioPermission || !hasNotificationPermission) {
                     LiaOrb3D(
                         state = NovaOrbState.ERROR,
                         size = orbSize,
@@ -179,16 +189,12 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Microphone Permission Required",
+                        text = "Microphone and notification permissions are required. Tap the microphone control below to enable the visible, continuous voice session.",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
-                        fontSize = 18.sp,
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    NovaButton(
-                        text = "Grant Permission",
-                        onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+                        fontSize = 16.sp,
+                        color = colors.textPrimary,
+                        textAlign = TextAlign.Center
                     )
                 } else {
                     Box(
@@ -257,8 +263,8 @@ fun VoiceScreen(
                                 navController.navigate("settings")
                             } else {
                                 NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, true)
-                                if (hasRecordAudioPermission) VoiceForegroundService.start(context)
-                                else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                if (hasRecordAudioPermission && hasNotificationPermission) VoiceForegroundService.start(context)
+                                else permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
                             }
                         },
                     contentAlignment = Alignment.Center
