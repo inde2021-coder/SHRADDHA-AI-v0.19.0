@@ -103,6 +103,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (currentPage != "home") showHome() else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
         window.statusBarColor = 0xFF070B14.toInt()
         window.navigationBarColor = 0xFF0B1220.toInt()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -477,11 +485,6 @@ class MainActivity : AppCompatActivity() {
                 (tab.getChildAt(j) as? TextView)?.setTextColor(if (selected) 0xFFE3D9FF.toInt() else 0xFF9EABC2.toInt())
             }
         }
-    }
-
-    @Deprecated("Deprecated in Android API; retained for compatibility")
-    override fun onBackPressed() {
-        if (currentPage != "home") showHome() else super.onBackPressed()
     }
 
     private fun addAiBrainSection(root: LinearLayout) {
