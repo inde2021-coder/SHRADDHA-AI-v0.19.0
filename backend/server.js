@@ -17,6 +17,7 @@ const PAIR_TTL_MS = 5 * 60 * 1000;
 const sessions = new Map();
 const pairCodes = new Map();
 const joinAttempts = new Map();
+const sessionCreateAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
 const edesyCalls = new Map();
