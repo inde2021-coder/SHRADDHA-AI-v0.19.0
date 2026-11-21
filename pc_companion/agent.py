@@ -73,6 +73,7 @@ class PcCompanionApp:
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
         self.device_token = None
+        self._pending_pairing_auth = False
         self.config = self._load_config()
 
         self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
@@ -142,20 +143,16 @@ class PcCompanionApp:
             base = _https_base(self.base_var.get())
             name = self.name_var.get().strip() or "Windows PC"
             joined = join_with_pairing_code(base, name, self.code_var.get().strip())
-            token = joined["deviceToken"]
-            keyring_saved = True
-            try:
-                keyring.set_password(SERVICE_NAME, joined["deviceId"], token)
-            except Exception:
-                keyring_saved = False
+            # Do not persist a bearer token until the WebSocket handshake proves
+            # that the relay accepted it. A successful HTTP join alone is not
+            # proof that the new device credential is active.
             self.config = {
                 "baseUrl": base, "deviceName": name[:48],
                 "sessionId": joined["sessionId"], "deviceId": joined["deviceId"]
             }
-            self._save_config()
-            self.device_token = token
-            self.status_var.set("Paired. Token saved in Windows Credential Manager." if keyring_saved else
-                                "Paired for this run only; Windows Credential Manager could not save the token.")
+            self.device_token = joined["deviceToken"]
+            self._pending_pairing_auth = True
+            self.status_var.set("Pairing created. Waiting for authenticated relay connection…")
             self.code_var.set("")
             self._connect_socket()
         except Exception as exc:
@@ -224,13 +221,18 @@ class PcCompanionApp:
             self.events.put(("status", "Ignored malformed relay message."))
 
     def _on_error(self, _ws, error):
-        self.events.put(("status", f"Relay error: {str(error)[:160]}"))
+        if self._pending_pairing_auth:
+            self.events.put(("pairing_failed", f"Relay authentication failed: {str(error)[:140]}"))
+        else:
+            self.events.put(("status", f"Relay error: {str(error)[:160]}"))
 
     def _on_close(self, _ws, code, reason):
         self.screen_event.clear()
         self.control_grant_until = 0
         if code == 4003:
             self.events.put(("revoked", None))
+        elif self._pending_pairing_auth:
+            self.events.put(("pairing_failed", f"Pairing was not authenticated ({code or 'closed'}): {str(reason or '')[:100]}"))
         else:
             self.events.put(("status", f"Disconnected ({code or 'closed'}): {str(reason or '')[:100]}"))
 
@@ -268,8 +270,26 @@ class PcCompanionApp:
                     self.status_var.set("This PC pairing was revoked by the session owner. Join again with a new pairing code.")
                 elif kind == "message":
                     self._handle_message(payload)
+                elif kind == "pairing_failed":
+                    self._pending_pairing_auth = False
+                    self.device_token = None
+                    self.config = {
+                        "baseUrl": self.base_var.get().strip().rstrip("/"),
+                        "deviceName": self.name_var.get().strip()[:48] or "Windows PC"
+                    }
+                    self.status_var.set(payload)
                 elif kind == "opened":
-                    self.status_var.set("Secure relay connected. Remote control and screen sharing are still off.")
+                    if self._pending_pairing_auth:
+                        self._pending_pairing_auth = False
+                        device_id = str(self.config.get("deviceId", ""))
+                        try:
+                            keyring.set_password(SERVICE_NAME, device_id, self.device_token)
+                            self._save_config()
+                            self.status_var.set("Relay authenticated. Pairing token saved in Windows Credential Manager.")
+                        except Exception:
+                            self.status_var.set("Relay authenticated for this run only; Windows Credential Manager could not save the token.")
+                    else:
+                        self.status_var.set("Secure relay connected. Remote control and screen sharing are still off.")
                     self._publish_permissions()
         except queue.Empty:
             pass
