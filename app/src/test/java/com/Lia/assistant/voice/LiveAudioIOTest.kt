@@ -33,6 +33,23 @@ class LiveAudioIOTest {
     }
 
     @Test
+    fun staleMicrophoneGenerationCannotFinishNewCapture() {
+        val gate = RecordingGenerationGate()
+        val first = gate.begin()
+        assertTrue(gate.isCurrent(first))
+
+        gate.invalidate()
+        val second = gate.begin()
+        assertTrue(gate.isCurrent(second))
+        assertTrue(!gate.isCurrent(first))
+
+        assertTrue(!gate.finish(first))
+        assertTrue("Old recorder must not invalidate the new capture", gate.isCurrent(second))
+        assertTrue(gate.finish(second))
+        assertTrue(!gate.isCurrent(second))
+    }
+
+    @Test
     fun testRmsHandlesNegativeFullScale() {
         val negativeFullScale = byteArrayOf(0x00, 0x80.toByte())
         val rms = LiveAudioIO.calculateRms(negativeFullScale)
