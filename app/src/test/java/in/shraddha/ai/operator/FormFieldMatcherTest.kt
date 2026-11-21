@@ -1,4 +1,4 @@
-package in.shraddha.ai.operator
+package `in`.shraddha.ai.operator
 
 import android.graphics.Rect
 import com.Lia.assistant.agent.core.ScreenObservation
