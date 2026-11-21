@@ -870,6 +870,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             append("\nInbound WebSocket: ").append(if (caps?.optBoolean("inboundWebSocketAudio") == true) "ready" else "not ready")
                             append("\nGPT-Live audio bridge: ").append(if (caps?.optBoolean("liveBidirectionalAiAudio") == true) "ready" else "not ready")
+                            append("\nProvider preflight: ").append(if (body.optBoolean("preflightReady")) "configured" else "needs Edesy API key + stream URL + public origin")
                             append("\nTranscript saving: ").append(if (caps?.optBoolean("liveTranscripts") == true) "available only after caller presses 1; press 0 to purge" else "OFF")
                             append("\nAudio recording: NOT stored")
                             append("\nReal Edesy DID / two-way phone test: still required")
