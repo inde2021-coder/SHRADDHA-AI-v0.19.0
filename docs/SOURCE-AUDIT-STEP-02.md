@@ -34,6 +34,7 @@ This report records source-level findings; it does not claim an APK build or dev
    - The main Shraddha workspace now exposes a dedicated 3D Voice Agent entry.
    - The voice screen uses one microphone activation/deactivation control; explicit user intent is persisted so a manual stop remains off across screen recreation. The foreground service and persistent notification keep an active user-started session alive when the screen is closed. The service is not sticky; OS process death recovery still depends on the user reopening Voice.
    - `LiveAudioIO` now tags each microphone capture thread with a generation token. A delayed read/finally callback from an old recording can no longer flip the active flag of a newly restarted microphone session; a regression unit test covers the stale-generation case.
+   - Speaker playback now loops until each PCM chunk is fully written in blocking mode; partial `AudioTrack` writes no longer silently drop the tail of a voice response.
    - The same microphone control requests both microphone and notification permissions, and is also the only retry path; separate connect/retry buttons have been removed. Permissions are rechecked when the screen resumes.
    - Android microphone foreground-service restrictions, visible notification, stop/restart behavior, lock-screen behavior, OEM battery restrictions, permission revocation and Android 14/15 behavior have not been physically tested.
    - Continuous listening must remain explicitly user-controlled and visibly indicated.
