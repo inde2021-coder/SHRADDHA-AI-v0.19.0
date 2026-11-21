@@ -1830,13 +1830,21 @@ class MainActivity : AppCompatActivity() {
                 val peerId = msg.optString("deviceId")
                 val peerName = msg.optString("name", "Device")
                 val online = msg.optBoolean("online")
+                val revoked = msg.optBoolean("revoked")
                 runOnUiThread {
-                    if (!peerIds.contains(peerId) && peerId.isNotBlank()) peerIds.add(peerId)
-                    if (peerId.isNotBlank()) { peerNames[peerId] = peerName; peerOnline[peerId] = online }
+                    if (revoked) {
+                        peerIds.remove(peerId)
+                        peerNames.remove(peerId)
+                        peerOnline.remove(peerId)
+                        if (targetDevice.text.toString() == peerId) targetDevice.setText("")
+                    } else {
+                        if (!peerIds.contains(peerId) && peerId.isNotBlank()) peerIds.add(peerId)
+                        if (peerId.isNotBlank()) { peerNames[peerId] = peerName; peerOnline[peerId] = online }
+                    }
                     val labels = peerIds.map { id -> "${peerNames[id] ?: "Device"} • ${if (peerOnline[id] == true) "Online" else "Offline"}" }
                     peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, labels.ifEmpty { listOf("No paired devices") })
-                    if (targetDevice.text.isNullOrBlank() && peerId.isNotBlank()) targetDevice.setText(peerId)
-                    status.text = "$peerName: ${if (online) "online" else "offline"}"
+                    if (targetDevice.text.isNullOrBlank() && peerIds.isNotEmpty()) targetDevice.setText(peerIds.first())
+                    status.text = if (revoked) "$peerName pairing revoked by session owner." else "$peerName: ${if (online) "online" else "offline"}"
                 }
             } else if (msg.optString("type") == "control_mode") {
                 runOnUiThread { mainOnlyMode.isChecked = msg.optString("mode") == "master"; status.text = if (mainOnlyMode.isChecked) "Main phone only control mode is active" else "Mutual phone control mode is active" }
