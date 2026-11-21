@@ -8,6 +8,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.database.FirebaseDatabase
@@ -153,6 +154,37 @@ class FirebaseCloudVault(private val context: Context) {
                 error("Backup restore failed. ${restoreErrors.joinToString(" ")}")
             }
             null
+        }
+    }
+
+    /**
+     * Permanently deletes this authenticated account and its encrypted vault copies.
+     * Recent credential reauthentication is required before either cloud copy is removed.
+     */
+    fun deleteAccount(email: String, password: String): Result<Unit> = runCatching {
+        require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter the account email address." }
+        require(password.isNotEmpty()) { "Account password is required to confirm deletion." }
+        runBlocking {
+            val app = initialize()
+            val auth = FirebaseAuth.getInstance(app)
+            val user = auth.currentUser ?: error("Sign in to the Firebase account before deleting it.")
+            require(user.email.equals(email.trim(), ignoreCase = true)) { "The entered email does not match the signed-in Firebase account." }
+            user.reauthenticate(EmailAuthProvider.getCredential(email.trim(), password)).await()
+
+            val firestore = FirebaseFirestore.getInstance(app)
+            val vaultCollection = firestore.collection("users").document(user.uid).collection("vault")
+            val documents = vaultCollection.get().await().documents
+            documents.chunked(450).forEach { group ->
+                val batch = firestore.batch()
+                group.forEach { document -> batch.delete(document.reference) }
+                batch.commit().await()
+            }
+
+            FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
+                .reference.child("users").child(user.uid).child("vault").removeValue().await()
+
+            user.delete().await()
+            auth.signOut()
         }
     }
 
