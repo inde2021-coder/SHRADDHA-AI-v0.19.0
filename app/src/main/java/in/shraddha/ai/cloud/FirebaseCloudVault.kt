@@ -10,6 +10,7 @@ import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.runBlocking
@@ -173,11 +174,13 @@ class FirebaseCloudVault(private val context: Context) {
 
             val firestore = FirebaseFirestore.getInstance(app)
             val vaultCollection = firestore.collection("users").document(user.uid).collection("vault")
-            val documents = vaultCollection.get().await().documents
-            documents.chunked(450).forEach { group ->
+            while (true) {
+                val page = vaultCollection.orderBy(FieldPath.documentId()).limit(450).get().await()
+                if (page.isEmpty) break
                 val batch = firestore.batch()
-                group.forEach { document -> batch.delete(document.reference) }
+                page.documents.forEach { document -> batch.delete(document.reference) }
                 batch.commit().await()
+                if (page.size() < 450) break
             }
 
             FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
