@@ -167,9 +167,18 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     private fun derive(password: String, salt: ByteArray): SecretKeySpec {
-        val spec = PBEKeySpec(password.toCharArray(), salt, 210_000, 256)
-        val bytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        spec.clearPassword()
-        return SecretKeySpec(bytes, "AES")
+        val passwordChars = password.toCharArray()
+        val spec = PBEKeySpec(passwordChars, salt, 210_000, 256)
+        try {
+            val bytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+            try {
+                return SecretKeySpec(bytes, "AES")
+            } finally {
+                bytes.fill(0)
+            }
+        } finally {
+            spec.clearPassword()
+            passwordChars.fill('\\u0000')
+        }
     }
 }
