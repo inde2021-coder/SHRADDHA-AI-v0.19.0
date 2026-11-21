@@ -20,6 +20,7 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - The agent never executes arbitrary shell commands, PowerShell, scripts or file operations.
 - **Revoke PC Pairing** asks for explicit confirmation, revokes this device on the relay, and deletes its Windows Credential Manager token. A new six-digit code is required to pair again.
 - Screen sharing is off by default and sends JPEG frames only while the local checkbox is enabled.
+- P-256/HKDF/AES-GCM helper primitives and tests exist for a future cross-platform encrypted frame protocol, but they are not yet connected to the live relay transport. Current relay JPEG frames are not end-to-end encrypted; do not treat WSS as end-to-end privacy.
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
 - PyAutoGUI's top-left fail-safe is enabled.
 - The companion does not capture microphone audio, read files, or silently send messages.
