@@ -134,32 +134,11 @@ jobs:
           disable-animations: true
           pre-emulator-launch-script: adb start-server
           script: |
-            # android-emulator-runner executes this script with /usr/bin/sh (not Bash).
-            set -eu
             adb wait-for-device
-            booted=""
-            for attempt in $(seq 1 180); do
-              booted="$(timeout 20s adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" || true
-              if [ "$booted" = "1" ]; then break; fi
-              if [ $((attempt % 15)) -eq 0 ]; then
-                adb reconnect offline >/dev/null 2>&1 || true
-                adb start-server >/dev/null 2>&1 || true
-              fi
-              sleep 2
-            done
-            test "$booted" = "1" || { echo "Android emulator did not finish booting"; adb devices -l; exit 1; }
-            # Confirm stable ADB shell/property access; AGP uses these same device properties.
-            sdk=""
-            for attempt in $(seq 1 12); do
-              sdk="$(timeout 30s adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" || true
-              if [ -n "$sdk" ] && [ "$sdk" -ge 30 ]; then break; fi
-              adb reconnect offline >/dev/null 2>&1 || true
-              sleep 5
-            done
-            test -n "$sdk" && [ "$sdk" -ge 30 ] || { echo "ADB could not read a valid Android API level"; adb devices -l; exit 1; }
-            echo "Verified emulator API level: $sdk"
-            timeout 60s adb shell df -h /data
-            timeout 60s adb shell cmd package list packages >/dev/null
+            adb shell getprop sys.boot_completed
+            adb shell getprop ro.build.version.sdk
+            adb shell df -h /data
+            adb shell cmd package list packages
             ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Android instrumentation reports
         if: always()
