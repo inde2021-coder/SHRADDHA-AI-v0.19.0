@@ -45,6 +45,20 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 
 class MainActivity : AppCompatActivity() {
+    private var pendingActivityRequestCode: Int? = null
+    private val activityResultLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val requestCode = pendingActivityRequestCode ?: return@registerForActivityResult
+        pendingActivityRequestCode = null
+        handleActivityResult(requestCode, result.resultCode, result.data)
+    }
+
+    private fun launchActivityForResult(intent: Intent, requestCode: Int) {
+        check(pendingActivityRequestCode == null) { "Another activity result request is already in progress" }
+        pendingActivityRequestCode = requestCode
+        activityResultLauncher.launch(intent)
+    }
     private val assistantDisplayName: String
         get() = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
     private val securityAudit by lazy { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext) }
@@ -597,7 +611,7 @@ class MainActivity : AppCompatActivity() {
             addView(localBackend)
             addView(actionButton("SELECT ON-DEVICE LLM MODEL", "अपनी compatible .litertlm model file चुनें; model APK में शामिल नहीं है") {
                 val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream" }
-                startActivityForResult(picker, offlineModelImportRequest)
+                launchActivityForResult(picker, offlineModelImportRequest)
             })
             addView(actionButton("CHECK DEVICE RAM & STORAGE", "Model load से पहले available RAM, low-memory mode, Java/native heap और storage जाँचें") {
                 val model = java.io.File(filesDir, "offline-models/shraddha.litertlm")
@@ -805,7 +819,7 @@ class MainActivity : AppCompatActivity() {
                 if (target.isBlank()) { status.text = "पहले target device चुनें।"; return@actionButton }
                 pendingShareTarget = target; pendingShareCategory = category
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = if (category == "media") "image/*" else "*/*" }
-                startActivityForResult(intent, dataFileRequest)
+                launchActivityForResult(intent, dataFileRequest)
             })
             addView(actionButton("Share Clipboard Text to Paired Phone", "Clipboard केवल इस बटन पर पढ़ा जाएगा; पहले target की one-time approval जरूरी है") {
                 val target = targetDevice.text.toString().trim()
@@ -1035,7 +1049,7 @@ class MainActivity : AppCompatActivity() {
                 val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
                 if (target.isBlank()) { status.text = "पहले paired Windows PC चुनें।"; return@actionButton }
                 val speech = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN").putExtra(RecognizerIntent.EXTRA_PROMPT, "Windows PC को क्या करना है?")
-                runCatching { startActivityForResult(speech, windowsVoiceRequest) }.onFailure { status.text = "Voice recognition उपलब्ध नहीं है: ${it.message}" }
+                runCatching { launchActivityForResult(speech, windowsVoiceRequest) }.onFailure { status.text = "Voice recognition उपलब्ध नहीं है: ${it.message}" }
             })
             addView(actionButton("Request 5-Minute Remote Control", "Target phone पर हर session के लिए approval dialog आएगा") {
                 val target = targetDevice.text.toString().trim().ifBlank { lastPeerId.orEmpty() }
@@ -1867,7 +1881,7 @@ class MainActivity : AppCompatActivity() {
                                     getSharedPreferences("shraddha_backup_pending",MODE_PRIVATE).edit().putString("payload",encrypted).commit()
                                     val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json"; putExtra(Intent.EXTRA_TITLE,"shraddha-ai-encrypted-backup-${System.currentTimeMillis()}.json") }
                                     @Suppress("DEPRECATION")
-                                    startActivityForResult(intent,backupFileRequest)
+                                    launchActivityForResult(intent,backupFileRequest)
                                 }
                             } catch(e:Exception) {
                                 runOnUiThread { status.text = "Backup preparation failed: ${e.message}" }
@@ -1880,7 +1894,7 @@ class MainActivity : AppCompatActivity() {
             addView(actionButton("RESTORE ENCRYPTED BACKUP","Choose a $assistantDisplayName encrypted backup file and enter its passphrase") {
                 val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type="application/json" }
                 @Suppress("DEPRECATION")
-                startActivityForResult(intent,backupImportRequest)
+                launchActivityForResult(intent,backupImportRequest)
             })
         }
         section(root, "ANDROID ON-DEVICE LLM", "LiteRT-LM CPU inference उपलब्ध है। compatible .litertlm model को AI Assistant workspace से import करें; model APK में bundled नहीं है।") {
@@ -2414,7 +2428,7 @@ class MainActivity : AppCompatActivity() {
                     .putExtra(BiometricCaptureActivity.EXTRA_THRESHOLD, threshold ?: Float.NaN)
                 consent.isChecked = false
                 securityAudit.append("biometric_capture", "started", "kind=$kind; mode=$mode; explicit_session_consent=true")
-                startActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
+                launchActivityForResult(request, if (kind == "face") faceCaptureRequest else speakerCaptureRequest)
             }
             addView(actionButton("ENROLL FACE • LIVE CAMERA", "Random blink + head-turn liveness check; camera runs only on this screen") { launchCapture("face", "enroll") })
             addView(actionButton("MATCH FACE • SELECTED PERSON", "Compare only with the selected consented profile") { launchCapture("face", "match") })
@@ -2762,7 +2776,7 @@ class MainActivity : AppCompatActivity() {
         pendingShareTarget = target
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
         @Suppress("DEPRECATION")
-        startActivityForResult(manager.createScreenCaptureIntent(), screenShareRequest)
+        launchActivityForResult(manager.createScreenCaptureIntent(), screenShareRequest)
     }
 
     private fun requestFeaturePermissions(requested: Array<String>, requestCode: Int, feature: String) {
@@ -2802,9 +2816,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Compatibility with starter project")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
+    private fun handleActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == screenShareRequest) {
             if (resultCode == Activity.RESULT_OK && data != null &&
                 getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) {
@@ -3102,7 +3114,7 @@ class MainActivity : AppCompatActivity() {
     private fun startVoiceInput() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { requestAudioPermission(); return }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN"); putExtra(RecognizerIntent.EXTRA_PROMPT, "$assistantDisplayName को अपना आदेश बोलें"); putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3) }
-        try { startActivityForResult(intent, speechRequest) } catch (_: Exception) { Toast.makeText(this, "इस डिवाइस पर Speech Recognition उपलब्ध नहीं है।", Toast.LENGTH_LONG).show() }
+        try { launchActivityForResult(intent, speechRequest) } catch (_: Exception) { Toast.makeText(this, "इस डिवाइस पर Speech Recognition उपलब्ध नहीं है।", Toast.LENGTH_LONG).show() }
     }
 }
 
