@@ -270,6 +270,7 @@ class MainActivity : AppCompatActivity() {
             addView(workspaceTile("☎  AI PHONE AGENT", "Incoming call assistant • caller history • call settings") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.phone.PhoneAgentActivity::class.java)) })
             addView(workspaceTile("✦  AI BRAIN + ${assistantDisplayName.uppercase()} VOICE ENGINE", "Continuous Hindi/English voice • Live audio • Personality • Memory") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             addView(workspaceTile("◈  ${assistantDisplayName.uppercase()} PC COMPANION", "Windows/Linux companion • Website Forge • PC automation") { showPage("devices") })
+            addView(workspaceTile("📱  MOBILE COMMAND CENTER", "Voice • App launcher • System/media • Files • OCR • Web • Automation") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.mobile.MobileCommandCenterActivity::class.java)) })
             addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical information • Agriculture • Law • Creator") { showPage("expert") })
             addView(workspaceTile("⌘  DEVICE UNIVERSE", "Paired phones • PC companion • Remote screen") { showPage("devices") })
             addView(workspaceTile("▣  APP OPERATOR", "Visual UI control • Workflow • Verification") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) })
