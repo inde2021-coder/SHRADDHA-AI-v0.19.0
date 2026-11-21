@@ -7,8 +7,8 @@ env:
 
 on:
   push:
-    branches:
-      - "**"
+    branches-ignore:
+      - integration/master-feature-consolidation-2026-11
   workflow_dispatch:
 
 permissions:
