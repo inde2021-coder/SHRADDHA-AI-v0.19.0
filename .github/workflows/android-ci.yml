@@ -63,24 +63,7 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
           pre-emulator-launch-script: adb start-server
-          script: |
-            bash .github/scripts/wait-for-android-emulator.sh
-            install_ok=false
-            for attempt in 1 2 3 4 5; do
-              if adb install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk; then
-                install_ok=true
-                break
-              fi
-              sleep 10
-            done
-            if [ "$install_ok" != "true" ]; then
-              adb logcat -d -t 500 || true
-              exit 1
-            fi
-            adb shell monkey -p in.shraddha.ai 1
-            sleep 15
-            adb shell pidof in.shraddha.ai
-            adb shell dumpsys activity activities
+          script: bash .github/scripts/android-ci-smoke.sh
 
       - name: Upload debug APK
         if: success()
