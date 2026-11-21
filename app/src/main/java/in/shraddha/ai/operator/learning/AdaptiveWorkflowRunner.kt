@@ -55,14 +55,21 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 else -> false
             }
             if (!ok) { audit.append("operator_step", "failed", "${profile.packageName}:${step.action}"); return fail("चरण ${index + 1} का लक्ष्य भरोसेमंद तरीके से नहीं मिला या ऐप ने कार्रवाई रोकी। AI ने अनुमान से टैप नहीं किया।") }
-            Thread.sleep(500)
+            val verifyDeadline = System.nanoTime() + 5_000_000_000L
+            var after: ScreenSnapshot? = ShraddhaAccessibilityService.captureVisibleScreen()
+            while (after != null && step.expectedText.isNotBlank() &&
+                !ScreenResultVerifier.containsExpectedText(after, step.expectedText) &&
+                System.nanoTime() < verifyDeadline && !stopped) {
+                Thread.sleep(250)
+                after = ShraddhaAccessibilityService.captureVisibleScreen()
+            }
             if (stopped) {
                 audit.append("operator_step", "cancelled_after_dispatch", "${profile.packageName}:${step.action}")
                 emit(OperatorEvent(OperatorTaskState.CANCELLED, "रोकने का अनुरोध मिल गया। मौजूदा कार्रवाई भेजी जा चुकी हो सकती है; आगे के चरण नहीं चलेंगे।"))
                 return false
             }
-            val after: ScreenSnapshot = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
-            if (!ScreenResultVerifier.containsExpectedText(after, step.expectedText)) return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
+            if (after == null) return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
+            if (!ScreenResultVerifier.containsExpectedText(after, step.expectedText)) return fail("चरण ${index + 1} के बाद 5 सेकंड में अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
             audit.append("operator_step", "verified", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.VERIFYING, "चरण ${index + 1} पूरा; स्क्रीन दोबारा पढ़ी गई।", after))
         }
