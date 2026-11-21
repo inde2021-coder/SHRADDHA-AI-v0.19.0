@@ -233,7 +233,7 @@ object DeviceLinkManager {
         val state = peerKeys[peerId] ?: return
         val sid = sessionId ?: return
         val local = deviceId ?: return
-        if (!state.localConfirmed || !state.remoteConfirmed || kind !in setOf("remote_action", "remote_action_result") ||
+        if (!state.localConfirmed || !state.remoteConfirmed || kind !in setOf("remote_action", "remote_action_result", "file_transfer_chunk") ||
             !actionId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return
         val transferId = msg.optString("transferId")
         val transferIndex = msg.optInt("index", -1)
