@@ -1,1 +1,1 @@
-Run master integration merge and full CI after all source branches are fetched.
+Synchronize source PR to trigger master consolidation and integrated test workflow.
