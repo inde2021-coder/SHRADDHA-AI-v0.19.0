@@ -265,6 +265,9 @@ class MainActivity : AppCompatActivity() {
         section(root, "WORKSPACES", "") {
             val items = listOf(
                 Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { showPage("assistant") }),
+                Triple("◉  3D VOICE AGENT", "Continuous mic • Orb • Hindi / English", {
+                    startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java))
+                }),
                 Triple("◈  WINDOWS PC", "Pair • Screen • Control", { showPage("devices") }),
                 Triple("☎  PHONE CALL AGENT", "SIM no-answer → AI voice bridge", { showPage("phone") }),
                 Triple("◈  EXPERT STUDIO", "Research • Expert answers", { showPage("expert") }),
