@@ -125,6 +125,53 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.equal(body.expiresInSeconds, 300);
 });
 
+test('device revocation requires authentication and owner authority, and removes the whole owner session', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Revoke Owner' })
+  });
+  const owner = await ownerResponse.json();
+  assert.equal(ownerResponse.status, 201);
+
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Revoke Member', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  assert.equal(memberResponse.status, 200);
+
+  const endpoint = `${baseUrl}/api/device/revoke`;
+  const payload = targetDeviceId => ({
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: owner.sessionId, deviceId: member.deviceId, targetDeviceId })
+  });
+  const unauthenticated = await fetch(endpoint, payload(owner.deviceId));
+  assert.equal(unauthenticated.status, 401);
+
+  const memberCannotRevokeOwner = await fetch(endpoint, {
+    ...payload(owner.deviceId), headers: {
+      'content-type': 'application/json', authorization: `Bearer ${member.deviceToken}`
+    }
+  });
+  assert.equal(memberCannotRevokeOwner.status, 403);
+
+  const ownerRevokesMember = await fetch(endpoint, {
+    ...payload(member.deviceId), headers: {
+      'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
+    }
+  });
+  assert.equal(ownerRevokesMember.status, 200);
+  assert.deepEqual(await ownerRevokesMember.json(), { ok: true, revoked: member.deviceId });
+
+  const ownerRevokesSession = await fetch(endpoint, {
+    ...payload(owner.deviceId), headers: {
+      'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
+    }
+  });
+  assert.equal(ownerRevokesSession.status, 200);
+  assert.deepEqual(await ownerRevokesSession.json(), { ok: true, revoked: 'session' });
+});
+
 test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
