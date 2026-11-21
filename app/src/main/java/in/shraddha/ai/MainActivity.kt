@@ -865,9 +865,9 @@ class MainActivity : AppCompatActivity() {
                     TelephonyGatewayStore.clear(this@MainActivity)
                     relayUrl.setText("")
                     gatewayToken.setText("")
-                    bridgeStatus.text = "Saved backend connection cleared."
+                    status.text = "Saved backend connection cleared."
                 } catch (error: Exception) {
-                    bridgeStatus.text = "Could not clear saved backend connection: ${error.message}"
+                    status.text = "Could not clear saved backend connection: ${error.message}"
                 }
             })
             val bridgeStatus = TextView(this@MainActivity).apply {
