@@ -71,9 +71,6 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Push consolidated branch
-        run: git push origin HEAD:integration/master-feature-consolidation-2026-11
-
       - name: Validate backend JavaScript
         run: |
           node --version
@@ -102,6 +99,9 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+
+      - name: Push consolidated branch only after all verification steps pass
+        run: git push origin HEAD:integration/master-feature-consolidation-2026-11
 
       - name: Upload consolidated debug APK
         if: always()
