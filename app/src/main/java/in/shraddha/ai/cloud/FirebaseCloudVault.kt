@@ -176,11 +176,11 @@ class FirebaseCloudVault(private val context: Context) {
             val vaultCollection = firestore.collection("users").document(user.uid).collection("vault")
             while (true) {
                 val page = vaultCollection.orderBy(FieldPath.documentId()).limit(450).get().await()
-                if (page.isEmpty) break
+                if (page.documents.isEmpty()) break
                 val batch = firestore.batch()
                 page.documents.forEach { document -> batch.delete(document.reference) }
                 batch.commit().await()
-                if (page.size() < 450) break
+                if (page.documents.size < 450) break
             }
 
             FirebaseDatabase.getInstance(app, app.options.databaseUrl ?: BuildConfig.FIREBASE_DATABASE_URL)
