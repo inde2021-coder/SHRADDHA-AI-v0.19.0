@@ -25,6 +25,7 @@ from PIL import Image
 
 from actions import execute_action
 from protocol import valid_pairing_ids, validate_remote_action
+from e2e_crypto import DeviceE2ECrypto
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -73,6 +74,8 @@ class PcCompanionApp:
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
         self.device_token = None
+        self.e2e_crypto = DeviceE2ECrypto()
+        self.peer_keys = {}
         self._pending_pairing_auth = False
         self.config = self._load_config()
 
@@ -241,6 +244,7 @@ class PcCompanionApp:
             self.events.put(("status", f"Relay error: {str(error)[:160]}"))
 
     def _on_close(self, _ws, code, reason):
+        self._clear_peer_keys()
         self.screen_event.clear()
         self.control_grant_until = 0
         if code == 4003:
@@ -330,9 +334,59 @@ class PcCompanionApp:
         if kind == "connected":
             peers = msg.get("devices", [])
             role = "Owner" if msg.get("role") == "owner" else "Member"
+            for peer in peers:
+                peer_id = str(peer.get("id", ""))
+                if peer_id and peer_id != self.config.get("deviceId"):
+                    self._send_e2e_key_offer(peer_id)
             self.status_var.set(f"Connected as {role} • {len(peers)} other paired device(s).")
         elif kind == "peer_status":
+            peer_id = str(msg.get("deviceId", ""))
+            if msg.get("revoked"):
+                state = self.peer_keys.pop(peer_id, None)
+                if state:
+                    state["key"] = bytes(len(state["key"]))
+            elif msg.get("online") and peer_id:
+                self._send_e2e_key_offer(peer_id)
             self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
+        elif kind == "e2e_key_offer":
+            peer_id = str(msg.get("fromDeviceId", ""))
+            try:
+                key, fingerprint = self.e2e_crypto.derive_peer_key(
+                    msg.get("publicKey", ""), self.config.get("sessionId", ""),
+                    self.config.get("deviceId", ""), peer_id
+                )
+                previous = self.peer_keys.pop(peer_id, None)
+                if previous:
+                    previous["key"] = bytes(len(previous["key"]))
+                self.peer_keys[peer_id] = {"key": key, "fingerprint": fingerprint,
+                                           "local_confirmed": False, "remote_confirmed": False}
+                approved = messagebox.askyesno(
+                    "Shraddha AI • Verify paired-device fingerprint",
+                    f"Peer device: {peer_id}\n\nFingerprint:\n{fingerprint}\n\n"
+                    "Compare this exact fingerprint with the other device using a separate trusted channel. "
+                    "Confirm only if every character matches."
+                )
+                if approved:
+                    sent = self._send_json({"type": "e2e_key_confirm", "targetDeviceId": peer_id,
+                                            "fingerprint": fingerprint})
+                    self.peer_keys[peer_id]["local_confirmed"] = bool(sent)
+                    self.status_var.set("Fingerprint confirmation sent; waiting for the other device.")
+                else:
+                    rejected = self.peer_keys.pop(peer_id, None)
+                    if rejected:
+                        rejected["key"] = bytes(len(rejected["key"]))
+                    self.status_var.set("Peer fingerprint rejected; encrypted sharing remains blocked.")
+            except Exception as exc:
+                self.status_var.set(f"Rejected peer E2E key offer: {str(exc)[:140]}")
+        elif kind == "e2e_key_confirm":
+            peer_id = str(msg.get("fromDeviceId", ""))
+            state = self.peer_keys.get(peer_id)
+            if state and state["fingerprint"] == msg.get("fingerprint"):
+                state["remote_confirmed"] = True
+                self.status_var.set("Peer fingerprint confirmed. Mutual trust: " +
+                                    ("READY" if state["local_confirmed"] else "waiting for local confirmation"))
+            else:
+                self.status_var.set("E2E fingerprint mismatch. Do not trust this peer.")
         elif kind == "control_request":
             requester = str(msg.get("requesterName", "Paired device"))[:80]
             requester_id = str(msg.get("fromDeviceId", ""))[:80]
@@ -359,6 +413,23 @@ class PcCompanionApp:
             self._execute(action)
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
+
+    def _send_e2e_key_offer(self, peer_id):
+        if not peer_id or peer_id == self.config.get("deviceId"):
+            return False
+        return self._send_json({
+            "type": "e2e_key_offer", "targetDeviceId": peer_id,
+            "publicKey": self.e2e_crypto.public_key_base64()
+        })
+
+    def is_e2e_trusted(self, peer_id):
+        state = self.peer_keys.get(peer_id)
+        return bool(state and state["local_confirmed"] and state["remote_confirmed"])
+
+    def _clear_peer_keys(self):
+        for state in self.peer_keys.values():
+            state["key"] = bytes(len(state["key"]))
+        self.peer_keys.clear()
 
     def _execute(self, action):
         try:
@@ -468,6 +539,7 @@ class PcCompanionApp:
                 ws.close()
             except Exception:
                 pass
+        self._clear_peer_keys()
         self.status_var.set("Emergency stop: permissions revoked." if emergency else "Disconnected. Permissions revoked.")
 
     def _close(self):
