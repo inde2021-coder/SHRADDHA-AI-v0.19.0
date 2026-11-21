@@ -206,6 +206,19 @@ test('connected WebSocket event reports authenticated owner and member roles', a
   await once(ownerSocket, 'open');
   const [ownerMessage] = await ownerConnected;
   assert.equal(JSON.parse(ownerMessage.toString()).role, 'owner');
+  const ownerInitialClosed = once(ownerSocket, 'close');
+  ownerSocket.close();
+  await ownerInitialClosed;
+
+  const ownerReconnect = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(owner.sessionId)}&deviceId=${encodeURIComponent(owner.deviceId)}`, {
+    headers: { authorization: `Bearer ${owner.deviceToken}` }
+  });
+  const ownerReconnected = nextWsMessage(ownerReconnect, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(ownerReconnect, 'open');
+  const [reconnectedOwnerMessage] = await ownerReconnected;
+  assert.equal(JSON.parse(reconnectedOwnerMessage.toString()).role, 'owner');
 
   const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -222,9 +235,9 @@ test('connected WebSocket event reports authenticated owner and member roles', a
   const [memberMessage] = await memberConnected;
   assert.equal(JSON.parse(memberMessage.toString()).role, 'member');
 
-  const ownerClosed = once(ownerSocket, 'close');
+  const ownerClosed = once(ownerReconnect, 'close');
   const memberClosed = once(memberSocket, 'close');
-  ownerSocket.close();
+  ownerReconnect.close();
   memberSocket.close();
   await Promise.all([ownerClosed, memberClosed]);
   await fetch(`${baseUrl}/api/device/revoke`, {
