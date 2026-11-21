@@ -25,7 +25,6 @@ import com.Lia.assistant.ui.screens.forge.ForgeScreen
 import com.Lia.assistant.ui.screens.history.HistoryScreen
 import com.Lia.assistant.ui.screens.home.HomeScreen
 import com.Lia.assistant.ui.screens.onboarding.OnboardingScreen
-import com.Lia.assistant.ui.screens.phone.PhoneCallAgentScreen
 import com.Lia.assistant.ui.screens.orb.OrbStyleScreen
 import com.Lia.assistant.ui.screens.permissions.PermissionsScreen
 import com.Lia.assistant.ui.screens.personality.PersonalityScreen
@@ -89,14 +88,13 @@ fun NovaApp(appState: NovaAppState) {
                     composable("history") { HistoryScreen(navController, appState) }
                     composable("settings") { SettingsScreen(navController, appState) }
                     composable("voice") { VoiceScreen(navController, appState) }
-                    composable("phone_call_agent") { PhoneCallAgentScreen(navController) }
                     composable("quick_actions") { QuickActionsScreen(navController) }
                     composable("profile") { ProfileScreen(navController, appState) }
                     composable("personality") { PersonalityScreen(navController, appState) }
                     composable("orb_style") { OrbStyleScreen(navController, appState) }
                     composable("privacy") { PrivacyScreen(navController) }
                     composable("permissions") { PermissionsScreen(navController) }
-                    composable("about") { AboutScreen(navController, appState) }
+                    composable("about") { AboutScreen(navController) }
                     composable("debug") { DebugScreen(navController) }
                     composable("forge") { ForgeScreen(navController) }
 
