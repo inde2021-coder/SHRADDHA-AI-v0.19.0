@@ -27,8 +27,10 @@ This report records source-level findings; it does not claim an APK build or dev
    - The vault's password-derived encryption key still needs a reviewed password-change/recovery design before production use.
    - No Firebase credentials should be committed.
 
-4. **Voice service requires real-device validation.**
-   - The foreground voice service and session manager source are present.
+4. **Voice service is now wired into the primary Android application; physical-device validation remains outstanding.**
+   - The primary manifest now registers `com.Lia.assistant.LiaApplication`, the integrated Compose voice activity and the microphone foreground service with the microphone FGS type.
+   - The main Shraddha workspace now exposes a dedicated 3D Voice Agent entry.
+   - The voice screen uses one microphone activation/deactivation control; the foreground service and persistent notification keep the user-started session alive when the screen is closed. Automatic restart after process death remains disabled to avoid silently resurrecting microphone capture.
    - Android microphone foreground-service restrictions, visible notification, stop/restart behavior, lock-screen behavior, OEM battery restrictions, permission revocation and Android 14/15 behavior have not been physically tested.
    - Continuous listening must remain explicitly user-controlled and visibly indicated.
 
