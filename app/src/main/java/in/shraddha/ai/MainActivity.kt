@@ -1048,13 +1048,22 @@ class MainActivity : AppCompatActivity() {
                 if (!isSessionOwner) { status.text = "दूसरे paired device को केवल session owner revoke कर सकता है। आप अपना pairing revoke कर सकते हैं।"; return@actionButton }
                 val target = targetDevice.text.toString().trim()
                 if (target.isBlank()) { status.text = "पहले paired device चुनें।"; return@actionButton }
+                val revokesThisPhone = target == DeviceLinkManager.deviceId
                 androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
                     .setTitle("Revoke paired device?")
                     .setMessage("Device $target की pairing और उससे जुड़ी active permissions तुरंत हटाई जाएँगी।")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Revoke") { _, _ ->
                         DeviceLinkManager.revokeRemoteDevice(target) { result -> runOnUiThread {
-                            result.onSuccess { ok -> status.text = if (ok) "Selected device revoked from relay session." else "Relay ने device revoke नहीं किया।" }
+                            result.onSuccess { ok ->
+                                status.text = if (ok) "Selected device revoked from relay session." else "Relay ने device revoke नहीं किया।"
+                                if (ok && revokesThisPhone) {
+                                    isSessionOwner = false
+                                    if (::mainOnlyMode.isInitialized) { mainOnlyMode.isEnabled = false; mainOnlyMode.isChecked = false }
+                                    peerIds.clear(); peerNames.clear(); peerOnline.clear(); targetDevice.setText("")
+                                    if (::peerPicker.isInitialized) peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("No paired devices"))
+                                }
+                            }
                                 .onFailure { status.text = "Device revoke failed: ${it.message}" }
                         } }
                     }.show()
@@ -1066,7 +1075,15 @@ class MainActivity : AppCompatActivity() {
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Revoke pairing") { _, _ ->
                         DeviceLinkManager.revokeCurrentPairing { result -> runOnUiThread {
-                            result.onSuccess { ok -> status.text = if (ok) "This phone pairing/session revoked." else "Relay ने pairing revoke नहीं की।" }
+                            result.onSuccess { ok ->
+                                status.text = if (ok) "This phone pairing/session revoked." else "Relay ने pairing revoke नहीं की।"
+                                if (ok) {
+                                    isSessionOwner = false
+                                    if (::mainOnlyMode.isInitialized) { mainOnlyMode.isEnabled = false; mainOnlyMode.isChecked = false }
+                                    peerIds.clear(); peerNames.clear(); peerOnline.clear(); targetDevice.setText("")
+                                    if (::peerPicker.isInitialized) peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("No paired devices"))
+                                }
+                            }
                                 .onFailure { status.text = "Pairing revoke failed: ${it.message}" }
                         } }
                     }.show()
