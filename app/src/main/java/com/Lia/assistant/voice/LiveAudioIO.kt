@@ -242,21 +242,29 @@ class LiveAudioIO(
     fun playChunk(pcmBytes: ByteArray): Float {
         if (pcmBytes.isEmpty()) return 0f
         val track = getOrCreateSpeaker()
-        val written = try {
-            track.write(pcmBytes, 0, pcmBytes.size)
+        try {
+            var offset = 0
+            while (offset < pcmBytes.size) {
+                val written = track.write(
+                    pcmBytes,
+                    offset,
+                    pcmBytes.size - offset,
+                    AudioTrack.WRITE_BLOCKING
+                )
+                if (written < 0) {
+                    throw IllegalStateException("Speaker playback failed (AudioTrack error $written).")
+                }
+                if (written == 0) {
+                    throw IllegalStateException("Speaker playback stopped before the audio chunk was fully written.")
+                }
+                offset += written
+            }
         } catch (error: Exception) {
             synchronized(speakerLock) {
                 if (audioTrack === track) audioTrack = null
                 runCatching { track.release() }
             }
             throw error
-        }
-        if (written < 0) {
-            synchronized(speakerLock) {
-                if (audioTrack === track) audioTrack = null
-                runCatching { track.release() }
-            }
-            throw IllegalStateException("Speaker playback failed (AudioTrack error $written).")
         }
         return calculateRms(pcmBytes)
     }
