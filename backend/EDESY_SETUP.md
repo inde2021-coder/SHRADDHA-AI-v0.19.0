@@ -49,9 +49,20 @@ The caller continues to dial the existing Jio SIM number. This is carrier call f
 
 Do not use generic USSD codes without Jio confirming the current code and plan support. Forwarded-call charges, Edesy DID/minute charges and GPT-Live usage are separate.
 
+## Durable encrypted call history
+
+The backend supports optional Firestore persistence for call metadata, caller-masked details, DTMF-consented transcript text and AI summaries. Each record is encrypted with AES-256-GCM before it leaves the Node process; Firestore stores only the versioned envelope and a non-sensitive creation timestamp. The encryption key is separate from Firebase credentials and is never written to Firestore. The backend retains at most 100 records.
+
+Configure these Vercel backend environment variables in the same deployment:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: the Firebase service-account JSON for project `shraddha-ai-1d3bf`. Store the entire JSON as a server-side secret; never commit it or place it in Android.
+- `CALL_HISTORY_ENCRYPTION_KEY`: base64 of exactly 32 random bytes. Generate it once with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` and keep a secure offline backup. Losing this key makes stored call history permanently unreadable.
+
+Enable Firestore for the Firebase project and grant the service account the minimum Firestore permissions needed to create/read/delete the `telephony_call_history` collection. Do not add public client read/write rules for this backend-only collection. After deployment, open Settings → Phone Call Agent and check the `callHistory.durable` status; it must be true. If either secret is absent, the bridge falls back to bounded in-memory history and the status endpoint lists the missing configuration. Do not enable transcript capture until caller notice, DTMF consent and retention/legal review are complete.
+
 ## Deployment topology
 
-- This Node backend currently keeps paired-device sessions, active relay sockets and recent call history in process memory. Run it as one persistent WebSocket-capable service instance for reliable Android/Windows pairing and Edesy call handling.
+- This Node backend keeps paired-device sessions and active relay sockets in process memory. Edesy call history is persisted encrypted in Firestore only when both durable-history secrets are configured; otherwise it falls back to bounded process memory. Run it as one persistent WebSocket-capable service instance for reliable Android/Windows pairing and Edesy call handling.
 - Do not horizontally scale this in-memory relay across multiple instances without first moving session state and socket fan-out to a shared Redis/pub/sub layer. Two paired devices reaching different instances will not share the same in-memory session.
 - Vercel Functions support WebSockets, but each connection is pinned to one function instance and closes at the configured maximum duration. A Vercel deployment therefore needs an external shared store/pub-sub for the device relay and explicit reconnect/session recovery for long calls.
 
@@ -60,5 +71,5 @@ Do not use generic USSD codes without Jio confirming the current code and plan s
 - Code integration does not prove that an Edesy tenant, DID, provider flow or paid API access has been provisioned.
 - No forwarding should be enabled on the personal SIM until real two-way calls pass on the actual Edesy account.
 - Android `InCallService` cannot capture ordinary SIM-call audio on standard Android. The SIM-first/no-answer behavior depends on Jio's network forwarding to the Edesy DID.
-- Transcript capture is off by default. When enabled, a per-call DTMF consent gate requires the caller to press 1 after the assistant's explicit prompt; pressing 0 stops capture and purges that call's transcript. Transcripts are limited to 24,000 characters per call and summaries to 6,000 characters; call history is capped at 100 records. Transcripts and summaries are held in bounded server memory and disappear on restart. Android can explicitly save a masked call-history snapshot encrypted locally. No persistent audio recording, automatic encrypted backend history, caller screening, human takeover, WhatsApp summary or call notifications are implemented yet.
+- Transcript capture is off by default. When enabled, a per-call DTMF consent gate requires the caller to press 1 after the assistant's explicit prompt; pressing 0 stops capture and purges that call's transcript. Transcripts are limited to 24,000 characters per call and summaries to 6,000 characters; call history is capped at 100 records. When durable history is configured, transcript and summary records are encrypted at rest in Firestore and capped at 100 calls; otherwise they disappear on restart. Android can also explicitly save a masked call-history snapshot encrypted locally. No persistent audio recording, caller screening, human takeover, WhatsApp summary or call notifications are implemented yet.
 - Configure an upfront AI disclosure in the Edesy flow and the GPT-Live prompt. Review recording/transcription notice and consent requirements before enabling transcript capture.
