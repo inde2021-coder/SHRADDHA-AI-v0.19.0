@@ -6,6 +6,10 @@ object OperatorSafetyPolicy {
     data class Decision(val risk: Risk, val reason: String)
     private val secretPattern = Regex("(?i)(?:^|[^a-z0-9])(?:password|passcode|otp|one-time code|pin|cvv|security code|recovery phrase)(?:$|[^a-z0-9])|पासवर्ड|ओटीपी|पिन")
     private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
+    private val finalButtonLabels = setOf(
+        "send", "send message", "submit", "pay", "pay now", "confirm", "delete", "remove", "publish", "post",
+        "भेजें", "भेजो", "सबमिट", "भुगतान", "अभी भुगतान करें", "पुष्टि करें", "हटाएं", "मिटाएं", "प्रकाशित करें"
+    )
     fun assess(action: String, target: String = "", value: String = ""): Decision {
         val all = "$action $target $value".lowercase()
         if (secretPattern.containsMatchIn(all)) return Decision(Risk.BLOCK, "पासवर्ड, OTP, PIN या भुगतान-सुरक्षा जानकारी AI द्वारा नहीं भरी जाएगी।")
