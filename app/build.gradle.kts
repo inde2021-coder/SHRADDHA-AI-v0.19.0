@@ -1,8 +1,5 @@
 import java.util.Properties
 import java.io.File
-import java.security.MessageDigest
-import java.net.URI
-import java.net.HttpURLConnection
 
 plugins {
     id("com.android.application")
@@ -41,6 +38,10 @@ android {
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseConfigValue("FIREBASE_SENDER_ID").ifBlank { "478972450737" }}\"")
         buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${firebaseConfigValue("FIREBASE_STORAGE_BUCKET").ifBlank { "shraddha-ai-1d3bf.firebasestorage.app" }}\"")
         buildConfigField("String", "FIREBASE_DATABASE_URL", "\"${firebaseConfigValue("FIREBASE_DATABASE_URL").ifBlank { "https://shraddha-ai-1d3bf-default-rtdb.firebaseio.com" }}\"")
+        // Optional device-specific APK: pass -PshraddhaAbi=arm64-v8a for modern Android phones.
+        val requestedAbis = providers.gradleProperty("shraddhaAbi").orNull
+            ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+        if (requestedAbis.isNotEmpty()) ndk { abiFilters += requestedAbis }
     }
     // Release signing is configured only when CI signing secrets are present.
     signingConfigs {
@@ -55,6 +56,9 @@ android {
     }
     buildTypes {
         getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -66,7 +70,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    androidResources { noCompress += "onnx" }
 }
 
 kotlin {
@@ -134,88 +137,3 @@ dependencies {
 }
 
 
-data class BiometricModelAsset(val fileName: String, val url: String, val sha256: String)
-val biometricModelAssets = listOf(
-    BiometricModelAsset("sface.onnx", "https://huggingface.co/opencv/opencv_zoo/resolve/39a1451/models/face_recognition_sface/face_recognition_sface_2021dec.onnx", "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"),
-    BiometricModelAsset("ecapa-any-length.onnx", "https://huggingface.co/kenrunio/transcriber-speaker-onnx/resolve/4467ef1/ecapa-any-length.onnx", "700b63064ee98981186f59f247d28e56f7f6ab265d8b50ebb450db5a8ce21dc7")
-)
-fun biometricSha256(file: File): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    file.inputStream().buffered().use { input ->
-        val buffer = ByteArray(1024 * 1024)
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            digest.update(buffer, 0, count)
-        }
-    }
-    return digest.digest().joinToString("") { "%02x".format(it) }
-}
-val downloadBiometricModels by tasks.registering {
-    val outputDir = layout.projectDirectory.dir("src/main/assets/biometric-models")
-    outputs.files(biometricModelAssets.map { outputDir.file(it.fileName) })
-    outputs.upToDateWhen {
-        biometricModelAssets.all { model ->
-            val cached = File(outputDir.asFile, model.fileName)
-            cached.isFile && biometricSha256(cached) == model.sha256
-        }
-    }
-    doLast {
-        val directory = outputDir.asFile
-        directory.mkdirs()
-        biometricModelAssets.forEach { model ->
-            val target = File(directory, model.fileName)
-            if (target.isFile && biometricSha256(target) == model.sha256) {
-                logger.lifecycle("Verified cached biometric model: ${model.fileName}")
-            } else {
-                target.delete()
-                val temporary = File(directory, model.fileName + ".part")
-                logger.lifecycle("Downloading ${model.fileName}; large model download may take several minutes")
-                var downloaded = false
-                var lastError: Exception? = null
-                for (attempt in 1..3) {
-                    try {
-                        temporary.delete()
-                        val connection = URI(model.url).toURL().openConnection() as HttpURLConnection
-                        try {
-                            connection.connectTimeout = 30_000
-                            connection.readTimeout = 180_000
-                            connection.instanceFollowRedirects = true
-                            connection.setRequestProperty("User-Agent", "ShraddhaAI-Build/0.19.2")
-                            check(connection.responseCode == HttpURLConnection.HTTP_OK) {
-                                "HTTP ${connection.responseCode} while downloading ${model.fileName}"
-                            }
-                            connection.inputStream.use { input ->
-                                temporary.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
-                            }
-                        } finally {
-                            connection.disconnect()
-                        }
-                        check(temporary.isFile && temporary.length() > 1024L * 1024L) {
-                            "Downloaded model is empty or unexpectedly small: ${model.fileName}"
-                        }
-                        val actual = biometricSha256(temporary)
-                        check(actual == model.sha256) { "Model SHA-256 mismatch for ${model.fileName}: $actual" }
-                        if (target.exists()) check(target.delete()) { "Could not replace invalid cached model: ${model.fileName}" }
-                        check(temporary.renameTo(target)) { "Could not install ${model.fileName}" }
-                        downloaded = true
-                        lastError = null
-                        break
-                    } catch (error: Exception) {
-                        lastError = error
-                        temporary.delete()
-                        logger.warn("Model download attempt $attempt/3 failed for ${model.fileName}: ${error.message}")
-                        if (attempt < 3) Thread.sleep(2_000L * attempt)
-                    }
-                }
-                check(downloaded) { "Could not download and verify ${model.fileName} after 3 attempts: ${lastError?.message}" }
-            }
-        }
-    }
-}
-// Biometric model assets are required for packaged APKs, not for JVM unit tests.
-tasks.configureEach {
-    if (name == "mergeDebugAssets" || name == "mergeReleaseAssets") {
-        dependsOn(downloadBiometricModels)
-    }
-}
