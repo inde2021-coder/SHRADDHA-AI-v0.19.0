@@ -22,6 +22,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import org.json.JSONArray
 import org.json.JSONObject
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import java.util.concurrent.Executors
 
 /**
@@ -140,22 +141,26 @@ class NoteOcrActivity : Activity() {
             Toast.makeText(this, "खाली नोट सुरक्षित नहीं किया।", Toast.LENGTH_SHORT).show()
             return
         }
-        val prefs = getSharedPreferences("private_notes", Context.MODE_PRIVATE)
-        val old = runCatching { JSONArray(prefs.getString("items", "[]")) }.getOrDefault(JSONArray())
+        val store = EncryptedFeatureStore(this)
+        val old = runCatching { JSONArray(store.get("private_notes_items").getOrThrow().ifBlank { "[]" }) }.getOrDefault(JSONArray())
         val items = JSONArray()
         items.put(JSONObject().put("text", value).put("updatedAt", System.currentTimeMillis()))
         for (i in 0 until old.length()) {
             val item = old.optJSONObject(i) ?: continue
             if (items.length() < 20) items.put(item)
         }
-        prefs.edit().putString("items", items.toString()).apply()
-        status.text = "नोट इस डिवाइस के app-private storage में सुरक्षित है।"
-        Toast.makeText(this, "नोट सुरक्षित हुआ।", Toast.LENGTH_SHORT).show()
+        val saved = store.put("private_notes_items", items.toString())
+        if (saved.isSuccess) {
+            status.text = "नोट इस डिवाइस के AES-GCM encrypted storage में सुरक्षित है।"
+            Toast.makeText(this, "नोट encrypted रूप में सुरक्षित हुआ।", Toast.LENGTH_SHORT).show()
+        } else {
+            status.text = "नोट सुरक्षित नहीं हुआ: ${saved.exceptionOrNull()?.message ?: "storage error"}"
+        }
     }
 
     private fun loadNote() {
         val items = runCatching {
-            JSONArray(getSharedPreferences("private_notes", Context.MODE_PRIVATE).getString("items", "[]"))
+            JSONArray(EncryptedFeatureStore(this).get("private_notes_items").getOrThrow().ifBlank { "[]" })
         }.getOrDefault(JSONArray())
         if (items.length() == 0) {
             Toast.makeText(this, "अभी कोई सुरक्षित नोट नहीं है।", Toast.LENGTH_SHORT).show()
