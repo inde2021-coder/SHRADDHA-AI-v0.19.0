@@ -107,7 +107,7 @@ object DeviceLinkManager {
                     val msg = JSONObject(text)
                     when (msg.optString("type")) {
                         "connected" -> { onStatus?.invoke("Connected • ${msg.optJSONArray("devices")?.length() ?: 0} paired device(s)"); onPeerMessage?.invoke(msg) }
-                        "peer_status" -> { onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
+                        "peer_status" -> { onStatus?.invoke(if (msg.optBoolean("revoked")) "${msg.optString("name", "Device")}: pairing revoked" else "${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optString("actionId"), msg.optJSONObject("action") ?: JSONObject())
                         "remote_action_result" -> onRemoteActionResult?.invoke(msg.optString("targetDeviceId"), msg.optString("actionId"), msg.optBoolean("ok"), msg.optString("reason"))
