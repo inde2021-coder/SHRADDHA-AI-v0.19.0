@@ -240,6 +240,23 @@ test('target device can revoke active remote-control grants immediately', async 
   const [revokedMessage] = await revokedPromise;
   assert.equal(JSON.parse(revokedMessage.toString()).targetDeviceId, member.deviceId);
 
+  const secondRequest = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'control_request'; } catch { return false; }
+  });
+  ownerSocket.send(JSON.stringify({ type: 'control_request', targetDeviceId: member.deviceId, minutes: 5 }));
+  await secondRequest;
+  const secondApproval = nextWsMessage(ownerSocket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'control_result' && msg.approved === true; } catch { return false; }
+  });
+  memberSocket.send(JSON.stringify({ type: 'control_response', requesterDeviceId: owner.deviceId, approved: true, minutes: 5 }));
+  await secondApproval;
+  const disabledPromise = nextWsMessage(ownerSocket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'control_result' && msg.approved === false && msg.reason.includes('disabled'); } catch { return false; }
+  });
+  memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { remote_control: false } }));
+  const [disabledMessage] = await disabledPromise;
+  assert.equal(JSON.parse(disabledMessage.toString()).targetDeviceId, member.deviceId);
+
   const ownerClosed = once(ownerSocket, 'close');
   const memberClosed = once(memberSocket, 'close');
   ownerSocket.close();
