@@ -66,6 +66,18 @@ class DeviceE2ECryptoTest {
         assertNotEquals(fingerprintOne, fingerprintTwo)
     }
 
+    @Test fun rejectsPeerKeysFromDifferentEllipticCurve() {
+        val alice = DeviceE2ECrypto.create()
+        val wrongCurve = java.security.KeyPairGenerator.getInstance("EC").apply {
+            initialize(java.security.spec.ECGenParameterSpec("secp384r1"))
+        }.generateKeyPair()
+        val encoded = java.util.Base64.getEncoder().encodeToString(wrongCurve.public.encoded)
+        try {
+            alice.derivePeerKey(encoded, "session-1", "alice", "bob")
+            throw AssertionError("A non-P-256 peer key must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
     @Test fun rejectsInvalidSessionBinding() {
         val alice = DeviceE2ECrypto.create()
         val bob = DeviceE2ECrypto.create()
