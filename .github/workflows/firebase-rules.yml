@@ -28,4 +28,4 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run Realtime Database emulator rules tests
         working-directory: firebase/rules-tests
-        run: npx --yes firebase-tools@13.29.1 emulators:exec --config ../../firebase.json --only database --project demo-shraddha-rtdb-rules "npm test"
+        run: npx --yes firebase-tools@13.29.1 emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-rtdb-rules "npm test"
