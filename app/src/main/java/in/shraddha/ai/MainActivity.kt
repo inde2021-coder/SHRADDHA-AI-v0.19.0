@@ -1521,6 +1521,10 @@ class MainActivity : AppCompatActivity() {
             val consent = CheckBox(this@MainActivity).apply { text = "मैं इस note/local conversation recap को अपने Firebase खाते में encrypted रूप में sync करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val result = TextView(this@MainActivity).apply { setTextColor(0xFFBFE8D2.toInt()); textSize = 13f }
             addView(email); addView(password); addView(backupPassphrase); addView(note)
+            addView(TextView(this@MainActivity).apply {
+                text = "पुराने backup को restore करते समय, यदि अलग backup passphrase नहीं बनाया था, तो पुराने account password को backup passphrase field में भी भरें। नए backup के लिए अलग passphrase रखें।"
+                setTextColor(0xFFFFC78A.toInt()); textSize = 12f; setPadding(0, dp(4), 0, dp(8))
+            })
             addView(actionButton("Load Encrypted Local Conversation Recap", "Requires Encrypted Conversation Memory to be ON") {
                 val recap = PersistentChatMemory.recap(this@MainActivity)
                 if (recap.isNullOrBlank()) result.text = "No saved recap found. Enable Encrypted Conversation Memory and use Shraddha first."
