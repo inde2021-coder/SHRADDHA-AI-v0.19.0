@@ -76,8 +76,7 @@ class WorkAgentActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF070B14.toInt()
-        window.navigationBarColor = 0xFF070B14.toInt()
+        window.decorView.setBackgroundColor(0xFF090D19.toInt())
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(12))
