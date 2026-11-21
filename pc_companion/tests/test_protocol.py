@@ -1,10 +1,17 @@
 import math
 import unittest
 
-from pc_companion.protocol import validate_remote_action
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_pairing_ids_match_relay_format(self):
+        self.assertTrue(valid_pairing_ids("a" * 24, "b" * 24))
+        self.assertTrue(valid_pairing_ids("a_b-cD123456789012", "0123456789abcdef01234567"))
+        self.assertFalse(valid_pairing_ids("short", "b" * 24))
+        self.assertFalse(valid_pairing_ids("a" * 24, "not-a-device-id"))
+        self.assertFalse(valid_pairing_ids(None, "b" * 24))
+
     def test_valid_normalized_tap(self):
         self.assertEqual(validate_remote_action({"kind": "tap", "x": 0.5, "y": 1}), {"kind": "tap", "x": 0.5, "y": 1.0})
 
