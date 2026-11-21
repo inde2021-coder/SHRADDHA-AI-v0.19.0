@@ -12,7 +12,6 @@ import android.view.ViewGroup
 import android.widget.*
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.agent.core.AccessibilityScreenDriver
-import com.Lia.assistant.agent.core.ScreenObservation
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import java.util.concurrent.Executors
@@ -167,25 +166,13 @@ class FormAutofillActivity : Activity() {
         status.text = "${item.label}: current form field match ho raha hai…"
         worker.execute {
             val outcome = runCatching {
-                val service = NovaAccessibilityService.instance ?: error("Accessibility service disconnected.")
-                val captured = runBlocking { AccessibilityScreenDriver().capture() } ?: error("Active screen read nahi ho paayi.")
-                val observation = ScreenObservation(
-                    observationId = "form-review",
-                    packageName = captured.packageName,
-                    windowClass = captured.windowClass,
-                    elements = captured.rawElements,
-                    screenWidth = captured.width,
-                    screenHeight = captured.height,
-                    windowStamp = captured.timestamp
-                )
-                val suggestion = FormFieldMatcher.suggest(listOf(item.copy(value = value)), observation).singleOrNull()
-                    ?: error("Is label ke liye unique editable field nahi mili. Koi text type nahi kiya.")
-                val typed = service.typeTextAtBounds(suggestion.target.bounds, value)
-                if (typed != "typed") error("Target field mein type nahi ho saka: $typed")
-                Thread.sleep(450)
-                val verify = runBlocking { AccessibilityScreenDriver().capture() } ?: error("Fill ke baad screen verify nahi hui.")
-                val verified = verify.rawElements.any { it.bounds == suggestion.target.bounds && it.isEditable && it.text == value }
-                if (!verified) error("Field value verify nahi hui. Kripya manually check karein.")
+                val result = runBlocking {
+                    FormAutofillExecutor(AccessibilityScreenDriver()).applyApproved(
+                        extractedValues = listOf(item.copy(value = value)),
+                        approvedFieldKeys = setOf(item.key)
+                    )
+                }.singleOrNull() ?: error("Approved field was not processed.")
+                if (!result.success) error(result.message)
                 "Verified: ${item.label} fill ho gaya. Form submit nahi hua."
             }
             runOnUiThread { status.text = outcome.getOrElse { "Roka gaya: ${it.message ?: "unknown error"}" } }
