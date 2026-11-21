@@ -140,6 +140,8 @@ class PcCompanionApp:
 
     def join_and_connect(self):
         try:
+            if self.ws_thread and self.ws_thread.is_alive():
+                raise ValueError("Disconnect the current PC pairing before joining a different session.")
             base = _https_base(self.base_var.get())
             name = self.name_var.get().strip() or "Windows PC"
             joined = join_with_pairing_code(base, name, self.code_var.get().strip())
