@@ -31,6 +31,15 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var command: EditText
     private val voiceRequest = 7401
     private var speechLanguage = "hi-IN"
+    private val voiceResultLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            command.setText(spoken)
+            runCommand(spoken)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,18 +149,8 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (speechLanguage == "hi-IN") "hi-IN,en-IN" else "en-IN,hi-IN")
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha को mobile command बताइए")
         }
-        runCatching { startActivityForResult(intent, voiceRequest) }
+        runCatching { voiceResultLauncher.launch(intent) }
             .onFailure { status.text = "Speech recognition इस फोन पर उपलब्ध नहीं है।" }
-    }
-
-    @Deprecated("Legacy result callback retained for Android speech recognizer compatibility")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == voiceRequest && resultCode == RESULT_OK) {
-            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
-            command.setText(spoken)
-            runCommand(spoken)
-        }
     }
 
     private fun runCommand(raw: String) {
