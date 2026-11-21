@@ -47,6 +47,7 @@ This report records source-level findings; it does not claim an APK build or dev
 
 6. **Device-to-device encryption has cryptographic primitives but is not integrated into transport.**
    - `DeviceE2ECrypto` provides ephemeral P-256 ECDH, session-bound HKDF-SHA256, AES-256-GCM and session-bound fingerprints.
+   - The Windows companion now has a wire-compatible Python implementation of the same P-256/HKDF/AES-GCM derivation and bounded frame encryption/decryption primitives, with dedicated unit tests added (not run yet).
    - Unit tests cover matching peer keys, AAD authentication, different sessions, malformed inputs, nonce freshness and tamper rejection; these tests have not been run after the latest source changes.
    - Android frame transport and Windows Companion still use the existing relay frame protocol. The relay can inspect JPEG frames. Do not claim end-to-end encrypted screen/camera sharing or encrypted command transport yet.
    - A secure transport rollout still requires two-sided fingerprint comparison/approval, encrypted frame envelopes, replay/session binding, Android + Windows client support, and relay rejection of plaintext after migration.
