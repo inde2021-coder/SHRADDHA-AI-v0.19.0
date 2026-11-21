@@ -9,6 +9,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okio.ByteString
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
@@ -71,18 +72,28 @@ object DeviceLinkManager {
             done(Result.failure(IllegalStateException("DeviceLinkManager must be initialized by the Application before pairing.")))
             return
         }
-        try { store.save(pair.sessionId, pair.deviceId, pair.token, parsed.toString()) }
-        catch (error: Exception) {
-            done(Result.failure(IllegalStateException("Could not securely save device credentials: ${error.message ?: "Keystore error"}")))
-            return
-        }
+        // Keep newly issued credentials only in memory until the relay accepts the
+        // WebSocket handshake. A failed/unreachable relay must not become a saved pairing.
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
+        val completionDelivered = AtomicBoolean(false)
         val url = parsed.newBuilder().scheme("wss").addPathSegments("ws")
             .addQueryParameter("sessionId", pair.sessionId)
             .addQueryParameter("deviceId", pair.deviceId).build()
         val request = Request.Builder().url(url).header("Authorization", "Bearer ${pair.token}").build()
         socket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) { onStatus?.invoke("Secure relay connected"); done(Result.success(pair)) }
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                try {
+                    store.save(pair.sessionId, pair.deviceId, pair.token, parsed.toString())
+                    onStatus?.invoke("Secure relay connected")
+                    if (completionDelivered.compareAndSet(false, true)) done(Result.success(pair))
+                } catch (error: Exception) {
+                    onStatus?.invoke("Could not securely save device credentials")
+                    webSocket.close(1000, "Credential storage failed")
+                    if (completionDelivered.compareAndSet(false, true)) {
+                        done(Result.failure(IllegalStateException("Could not securely save device credentials: ${error.message ?: "Keystore error"}")))
+                    }
+                }
+            }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
@@ -124,7 +135,7 @@ object DeviceLinkManager {
                         else "Relay error: ${t.message ?: "connection failed"}"
                     )
                 }
-                done(Result.failure(t))
+                if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 if (socket === webSocket) {
