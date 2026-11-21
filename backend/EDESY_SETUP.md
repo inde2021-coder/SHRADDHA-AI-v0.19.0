@@ -56,7 +56,7 @@ The backend supports optional Firestore persistence for call metadata, caller-ma
 Configure these Vercel backend environment variables in the same deployment:
 
 - `FIREBASE_SERVICE_ACCOUNT_JSON`: the Firebase service-account JSON for project `shraddha-ai-1d3bf`. Store the entire JSON as a server-side secret; never commit it or place it in Android.
-- `CALL_HISTORY_ENCRYPTION_KEY`: base64 of exactly 32 random bytes. Generate it once with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` and keep a secure offline backup. Losing this key makes stored call history permanently unreadable.
+- `CALL_HISTORY_ENCRYPTION_KEY`: base64 of exactly 32 random bytes. Generate it once with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` and keep a secure offline backup. Losing this key makes stored call history permanently unreadable. Do not rotate it without first decrypting and re-encrypting every retained record with a versioned migration.
 
 Enable Firestore for the Firebase project and grant the service account the minimum Firestore permissions needed to create/read/delete the `telephony_call_history` collection. Do not add public client read/write rules for this backend-only collection. After deployment, open Settings → Phone Call Agent and check the `callHistory.durable` status; it must be true. If either secret is absent, the bridge falls back to bounded in-memory history and the status endpoint lists the missing configuration. Do not enable transcript capture until caller notice, DTMF consent and retention/legal review are complete.
 
