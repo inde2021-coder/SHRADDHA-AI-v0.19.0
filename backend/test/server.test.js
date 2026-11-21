@@ -190,7 +190,7 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.equal(body.expiresInSeconds, 300);
 });
 
-test('connected WebSocket event reports authenticated owner and member roles', async () => {
+test('connected WebSocket event reports owner/member roles and restores owner role after reconnect', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ deviceName: 'Role Owner' })
