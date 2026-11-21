@@ -155,6 +155,8 @@ class MobileCommandCenterActivity : Activity() {
             lower.startsWith("वेब पर खोजो ") -> webSearch(text.substringAfter("वेब पर खोजो ").trim())
             lower.startsWith("search web ") -> webSearch(text.substringAfter("search web ").trim())
             lower in listOf("फाइल मैनेजर खोलो", "open file manager", "फाइल खोजो") -> startActivity(Intent(this, FileAccessActivity::class.java))
+            lower.startsWith("नोट बनाओ ") -> startActivity(Intent(this, NoteOcrActivity::class.java).putExtra("initial_note", text.substringAfter("नोट बनाओ ").trim()))
+            lower.startsWith("create note ") -> startActivity(Intent(this, NoteOcrActivity::class.java).putExtra("initial_note", text.substringAfter("create note ").trim()))
             lower in listOf("नोट खोलो", "open notes", "नोट बनाओ") -> startActivity(Intent(this, NoteOcrActivity::class.java))
             lower in listOf("ऑटोमेशन खोलो", "task automation", "ऐप कंट्रोल खोलो", "control apps") -> openOperator()
             lower in listOf("code assistant", "कोड असिस्टेंट खोलो") -> openAiWorkspace()
