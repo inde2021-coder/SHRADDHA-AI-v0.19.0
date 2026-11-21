@@ -2076,6 +2076,18 @@ class MainActivity : AppCompatActivity() {
                 if (::peerPicker.isInitialized) peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("No paired devices"))
             }
         } }
+        DeviceLinkManager.onE2EVerification = { peerId, fingerprint -> runOnUiThread {
+            androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                .setTitle("Verify paired-device fingerprint")
+                .setMessage("Device: $peerId\n\nFingerprint:\n$fingerprint\n\nदूसरे device पर दिख रहे fingerprint से अलग सुरक्षित माध्यम से मिलान करें। दोनों बिल्कुल समान हों तभी Confirm करें। अलग हों या मिलान न कर सकें तो Reject करें।")
+                .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.rejectE2EPeer(peerId); status.text = "Peer fingerprint rejected; encrypted sharing remains blocked." }
+                .setPositiveButton("Confirm match") { _, _ ->
+                    val confirmed = DeviceLinkManager.confirmE2EPeer(peerId, fingerprint)
+                    status.text = if (confirmed) "Local fingerprint confirmation sent. Waiting for peer confirmation." else "Could not confirm peer fingerprint; reconnect and retry."
+                }
+                .setOnCancelListener { DeviceLinkManager.rejectE2EPeer(peerId) }
+                .show()
+        } }
         DeviceLinkManager.onPeerMessage = { msg ->
             if (msg.optString("type") == "connected") {
                 val peers = msg.optJSONArray("devices")
