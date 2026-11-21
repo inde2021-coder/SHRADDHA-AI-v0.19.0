@@ -692,8 +692,8 @@ telephonyWss.on('connection', (carrier, request) => {
     if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
       callRecord.summaryStatus = 'pending';
       askProvider('openai', 'Summarize this phone call in Hindi. Return: caller intent, key details, commitments, and clear next actions. Do not invent facts.\n\n' + transcriptText)
-        .then(summary => { callRecord.summary = summary.slice(0, 6000); callRecord.summaryStatus = 'ready'; })
-        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); });
+        .then(summary => { callRecord.summary = summary.slice(0, 6000); callRecord.summaryStatus = 'ready'; storeEdesyCall(callRecord); })
+        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); storeEdesyCall(callRecord); });
     } else {
       callRecord.summaryStatus = 'disabled';
     }
@@ -708,15 +708,15 @@ telephonyWss.on('connection', (carrier, request) => {
     pendingAudio.length = 0;
     finalize();
     if (live && live.readyState === WebSocket.OPEN && !liveFinalized) {
-      if (callRecord) callRecord.finalizationStatus = 'pending';
+      if (callRecord) { callRecord.finalizationStatus = 'pending'; storeEdesyCall(callRecord); }
       try {
         live.send(JSON.stringify({ type: 'session.close' }));
         liveFinalizationTimer = setTimeout(() => {
-          if (callRecord && callRecord.finalizationStatus === 'pending') callRecord.finalizationStatus = 'unconfirmed';
+          if (callRecord && callRecord.finalizationStatus === 'pending') { callRecord.finalizationStatus = 'unconfirmed'; storeEdesyCall(callRecord); }
           if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Call finalization timeout');
         }, 4_000);
       } catch {
-        if (callRecord) callRecord.finalizationStatus = 'unconfirmed';
+        if (callRecord) { callRecord.finalizationStatus = 'unconfirmed'; storeEdesyCall(callRecord); }
         live.close();
       }
     } else if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) {
@@ -793,6 +793,7 @@ telephonyWss.on('connection', (carrier, request) => {
         const seconds = Number(event.usage?.seconds);
         if (Number.isFinite(seconds) && seconds >= 0) callRecord.finalUsageSeconds = seconds;
         callRecord.finalReason = String(event.reason || '').slice(0, 80);
+        storeEdesyCall(callRecord);
       }
       clearTimeout(liveFinalizationTimer);
       if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Live session finalized');
@@ -880,7 +881,7 @@ telephonyWss.on('connection', (carrier, request) => {
       callSampleRate = sampleRate;
       if (!isPreflight) {
         const rawId = String(message.customerData?.call_sid || message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
-        const callId = rawId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
+        const callId = rawId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
         const caller = String(message.from || '');
         callRecord = {
           id: callId,
