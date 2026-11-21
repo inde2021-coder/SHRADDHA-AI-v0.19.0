@@ -199,6 +199,39 @@ test('device revocation requires authentication and owner authority, and removes
   assert.deepEqual(await ownerRevokesSession.json(), { ok: true, revoked: 'session' });
 });
 
+test('device revocation validates identifiers and lets a member revoke only its own pairing', async () => {
+  const invalid = await fetch(`${baseUrl}/api/device/revoke`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer invalid' },
+    body: JSON.stringify({ sessionId: 'bad', deviceId: 'bad', targetDeviceId: 'bad' })
+  });
+  assert.equal(invalid.status, 400);
+
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Self Revoke Owner' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Self Revoke Member', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const response = await fetch(`${baseUrl}/api/device/revoke`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${member.deviceToken}` },
+    body: JSON.stringify({ sessionId: member.sessionId, deviceId: member.deviceId, targetDeviceId: member.deviceId })
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, revoked: member.deviceId });
+
+  const reuse = await fetch(`${baseUrl}/api/device/revoke`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${member.deviceToken}` },
+    body: JSON.stringify({ sessionId: member.sessionId, deviceId: member.deviceId, targetDeviceId: member.deviceId })
+  });
+  assert.equal(reuse.status, 401);
+});
+
 test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
