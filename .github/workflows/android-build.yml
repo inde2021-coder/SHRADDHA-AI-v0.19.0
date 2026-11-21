@@ -128,7 +128,8 @@ jobs:
           disable-animations: true
           pre-emulator-launch-script: adb start-server
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes this script with /usr/bin/sh (not Bash).
+            set -eu
             adb wait-for-device
             booted=""
             for attempt in $(seq 1 180); do
