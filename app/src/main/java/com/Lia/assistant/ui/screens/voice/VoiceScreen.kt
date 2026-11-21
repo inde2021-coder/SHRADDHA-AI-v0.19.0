@@ -43,6 +43,7 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.NovaAppState
+import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaVoiceVisualizer
@@ -87,17 +88,18 @@ fun VoiceScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasRecordAudioPermission = isGranted
-        if (isGranted) {
+        if (isGranted && NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)) {
             VoiceForegroundService.start(context)
+        } else if (!isGranted) {
+            NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
         }
     }
 
     val hasKey = ApiKeyStore.hasKey(context)
 
     LaunchedEffect(hasRecordAudioPermission, hasKey) {
-        if (!hasRecordAudioPermission) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        } else if (hasKey && !VoiceSessionManager.isActive.value) {
+        val userWantsVoice = NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
+        if (hasRecordAudioPermission && hasKey && userWantsVoice && !VoiceSessionManager.isActive.value) {
             VoiceForegroundService.start(context)
         }
     }
@@ -249,11 +251,14 @@ fun VoiceScreen(
                         .background(if (isActive) Color(0xFF8B2535) else colors.accent)
                         .clickable {
                             if (isActive) {
+                                NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
                                 VoiceForegroundService.stop(context)
-                            } else if (hasRecordAudioPermission) {
-                                VoiceForegroundService.start(context)
+                            } else if (!hasKey) {
+                                navController.navigate("settings")
                             } else {
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, true)
+                                if (hasRecordAudioPermission) VoiceForegroundService.start(context)
+                                else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                             }
                         },
                     contentAlignment = Alignment.Center
