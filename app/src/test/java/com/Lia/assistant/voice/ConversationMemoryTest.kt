@@ -17,7 +17,7 @@ class ConversationMemoryTest {
         assertEquals(2, ConversationMemory.size())
         val recap = ConversationMemory.recap()
         assertTrue(recap!!.contains("User: नमस्ते"))
-        assertTrue(recap.contains("You: नमस्ते, कैसे मदद करूँ?"))
+        assertTrue(recap.contains("Assistant: नमस्ते, कैसे मदद करूँ?"))
         ConversationMemory.clear()
     }
 
