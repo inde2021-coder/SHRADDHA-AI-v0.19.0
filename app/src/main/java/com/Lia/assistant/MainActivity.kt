@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
                     NovaApp(appState = appState)
 
                     if (showSplash) {
-                        LiaSplash3D(onDismiss = { showSplash = false })
+                        LiaSplash3D(assistantName = appState.assistantName, onDismiss = { showSplash = false })
                     }
 
                     ListeningEdgeGlow()
