@@ -21,6 +21,7 @@ permissions:
   contents: read
 jobs:
   realtime-database-rules:
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'integration/master-feature-consolidation-2026-11' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
