@@ -55,7 +55,7 @@ export function decryptCallHistoryRecord(envelope, key, expectedId) {
   const iv = decode(envelope.iv, 16, 16);
   const tag = decode(envelope.tag, 24, 24);
   const ciphertext = decode(envelope.ciphertext, 4, 220_000);
-  if (iv.length !== 12 || tag.length !== 16 || ciphertext.length < 1 || ciphertext.length > MAX_RECORD_BYTES) {
+  if (iv.length !== 12 || tag.length !== 16 || ciphertext.length < 1 || ciphertext.length > MAX_RECORD_BYTES + 16) {
     throw new Error('Call-history encrypted payload size is invalid.');
   }
   let plaintext;
