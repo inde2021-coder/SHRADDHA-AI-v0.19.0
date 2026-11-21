@@ -17,7 +17,7 @@ let edesyActiveConnections = 0;
 const edesyPreflightAttempts = new Map();
 const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
 const edesyPreflightReady = () => {
-  if (!edesyConfigured() || !process.env.EDESY_API_KEY) return false;
+  if (!edesyConfigured() || typeof process.env.EDESY_API_KEY !== 'string' || process.env.EDESY_API_KEY.length < 20) return false;
   try {
     const streamUrl = new URL(process.env.EDESY_STREAM_URL);
     const publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
@@ -251,7 +251,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/telephony/edesy/preflight') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      if (!edesyConfigured() || !process.env.EDESY_API_KEY || !process.env.EDESY_STREAM_URL || !process.env.PUBLIC_ORIGIN) {
+      if (!edesyConfigured() || typeof process.env.EDESY_API_KEY !== 'string' || process.env.EDESY_API_KEY.length < 20 || !process.env.EDESY_STREAM_URL || !process.env.PUBLIC_ORIGIN) {
         return json(res, 503, { error: 'Edesy preflight requires EDESY_STREAM_TOKEN, OPENAI_API_KEY, EDESY_API_KEY, EDESY_STREAM_URL and PUBLIC_ORIGIN.' });
       }
       const remote = String(req.socket.remoteAddress || 'unknown');
@@ -324,7 +324,7 @@ const server = http.createServer(async (req, res) => {
         missing: [
           ...(typeof process.env.EDESY_STREAM_TOKEN !== 'string' || process.env.EDESY_STREAM_TOKEN.length < 32 ? ['EDESY_STREAM_TOKEN (32+ characters)'] : []),
           ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : []),
-          ...(!process.env.EDESY_API_KEY ? ['EDESY_API_KEY (for provider preflight)'] : []),
+          ...(typeof process.env.EDESY_API_KEY !== 'string' || process.env.EDESY_API_KEY.length < 20 ? ['EDESY_API_KEY (for provider preflight)'] : []),
           ...(!process.env.EDESY_STREAM_URL ? ['EDESY_STREAM_URL'] : []),
           ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : []),
           ...(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN && !edesyPreflightReady() ? ['EDESY_STREAM_URL / PUBLIC_ORIGIN mismatch'] : [])
