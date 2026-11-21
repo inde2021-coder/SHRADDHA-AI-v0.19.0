@@ -17,7 +17,13 @@ data class FormFieldFillResult(
  * to a fresh accessibility snapshot and verified from a second snapshot.
  * This executor never presses Submit, Save, Agree, or any other final action.
  */
-class FormAutofillExecutor(private val driver: ScreenDriver) {
+class FormAutofillExecutor(
+    private val driver: ScreenDriver,
+    private val verificationDelayMillis: Long = 350L
+) {
+    init {
+        require(verificationDelayMillis >= 0L) { "Verification delay cannot be negative" }
+    }
     suspend fun applyApproved(
         extractedValues: List<ExtractedFormValue>,
         approvedFieldKeys: Set<String>
@@ -43,7 +49,7 @@ class FormAutofillExecutor(private val driver: ScreenDriver) {
                 continue
             }
             // Give the target app time to commit the accessibility text change before verifying.
-            delay(350)
+            if (verificationDelayMillis > 0L) delay(verificationDelayMillis)
             val verification = driver.capture()
             val verified = verification?.rawElements?.any { element ->
                 element.isEditable && element.bounds == suggestion.target.bounds &&
