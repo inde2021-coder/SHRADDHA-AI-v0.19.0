@@ -24,7 +24,7 @@ import websocket
 from PIL import Image
 
 from actions import execute_action
-from protocol import validate_remote_action
+from protocol import valid_pairing_ids, validate_remote_action
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -376,8 +376,8 @@ class PcCompanionApp:
         token = self.device_token or self._token_for_saved_device()
         try:
             base = _https_base(self.config.get("baseUrl", self.base_var.get()))
-            if not device_id or not session_id or not token:
-                raise ValueError("No active saved PC pairing is available to revoke.")
+            if not valid_pairing_ids(session_id, device_id) or not token:
+                raise ValueError("Saved PC pairing identifiers are invalid or unavailable. Pair this PC again.")
             payload = json.dumps({
                 "sessionId": session_id, "deviceId": device_id,
                 "targetDeviceId": device_id
