@@ -107,7 +107,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$greeting, \${appState.userName}", color = colors.textPrimary, fontSize = 25.sp,
+            Text("$greeting, ${appState.userName}", color = colors.textPrimary, fontSize = 25.sp,
                 fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, fontFamily = SansFontFamily)
             Text("Your world, understood.", color = colors.textSecondary, fontSize = 13.sp,
                 letterSpacing = 0.35.sp, modifier = Modifier.padding(top = 7.dp))
@@ -147,8 +147,8 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
         Spacer(Modifier.height(25.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            NovaButton("Speak", { navController.navigate("voice") }, NovaButtonType.PRIMARY, icon = Icons.Default.Mic)
-            NovaButton("Message", { navController.navigate("chat") }, NovaButtonType.SECONDARY)
+            NovaButton(text = "Speak", onClick = { navController.navigate("voice") }, type = NovaButtonType.PRIMARY, icon = Icons.Default.Mic)
+            NovaButton(text = "Message", onClick = { navController.navigate("chat") }, type = NovaButtonType.SECONDARY)
         }
 
         Spacer(Modifier.height(30.dp))
