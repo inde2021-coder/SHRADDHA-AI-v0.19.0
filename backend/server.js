@@ -14,7 +14,7 @@ const apiAttempts = new Map();
 const sessionCreateAttempts = new Map();
 const edesyCalls = new Map();
 let edesyActiveConnections = 0;
-const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
+const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
 function resamplePcm16(input, fromRate, toRate) {
   const count = Math.floor(input.length / 2);
   if (!count || fromRate === toRate) return input;
