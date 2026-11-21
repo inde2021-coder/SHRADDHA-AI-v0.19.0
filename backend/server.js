@@ -1042,10 +1042,27 @@ wss.on('connection', (ws, ctx) => {
       if (!msg.permissions || typeof msg.permissions !== 'object' || Array.isArray(msg.permissions)) return;
       for (const key of allowed) next[key] = msg.permissions[key] === true;
       device.sharePermissions = next;
+      const revokedShares = new Map();
       for (const [grantKey] of device.grants) {
-        const category = grantKey.split(':').slice(1).join(':');
-        if (next[category] !== true) device.grants.delete(grantKey);
+        const [requesterId, ...categoryParts] = grantKey.split(':');
+        const category = categoryParts.join(':');
+        if (next[category] !== true) {
+          device.grants.delete(grantKey);
+          if (requesterId) revokedShares.set(`${requesterId}:${category}`, { requesterId, category });
+        }
       }
+      for (const [pendingKey] of device.pendingDataShares) {
+        const [requesterId, ...categoryParts] = pendingKey.split(':');
+        const category = categoryParts.join(':');
+        if (next[category] !== true) {
+          device.pendingDataShares.delete(pendingKey);
+          if (requesterId) revokedShares.set(`${requesterId}:${category}`, { requesterId, category });
+        }
+      }
+      for (const { requesterId, category } of revokedShares.values()) send(requesterId, JSON.stringify({
+        type: 'data_share_result', targetDeviceId: deviceId, category, approved: false, expiresInMinutes: 0,
+        reason: 'Data sharing permission was disabled on the target device.'
+      }));
       if (next.remote_control !== true) {
         const revokedRequesters = new Set([
           ...device.controlGrants.keys(),
