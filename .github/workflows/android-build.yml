@@ -44,10 +44,13 @@ jobs:
           node-version: '22'
 
       - name: Validate backend source
-        run: node --check backend/server.js
+        run: node --check backend/server.js && node --check backend/form-autofill.js
 
       - name: Test specialized Visual Lens modes
         run: node --test backend/vision-analysis.test.js
+
+      - name: Test AI form image extraction and field safety
+        run: node --test backend/form-autofill.test.js
 
       - name: Test authorized social publishing policy
         run: node --test backend/social-publishing.test.js
