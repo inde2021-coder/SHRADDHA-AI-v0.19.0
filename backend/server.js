@@ -284,7 +284,7 @@ const server = http.createServer(async (req, res) => {
           method: 'POST',
           headers: { authorization: `Bearer ${process.env.EDESY_API_KEY}`, 'content-type': 'application/json' },
           signal: AbortSignal.timeout(20_000),
-          body: JSON.stringify({ stream_url: streamUrl.toString(), sample_rate: sampleRate, seconds })
+          body: JSON.stringify({ stream_url: (() => { const testUrl = new URL(streamUrl); testUrl.searchParams.set('mode', 'preflight'); return testUrl.toString(); })(), sample_rate: sampleRate, seconds })
         });
         const result = await providerResponse.json().catch(() => ({}));
         if (!providerResponse.ok) return json(res, providerResponse.status, { error: String(result.error || result.message || 'Edesy preflight failed').slice(0, 240) });
@@ -518,8 +518,10 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
-telephonyWss.on('connection', carrier => {
+telephonyWss.on('connection', (carrier, request) => {
   carrier.on('error', () => {});
+  const isPreflight = request?.isEdesyPreflight === true;
+  const transcriptCaptureEnabled = !isPreflight && process.env.CALL_TRANSCRIPTS_ENABLED === 'true';
   const callAgentName = String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI')
     .replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
@@ -701,29 +703,31 @@ telephonyWss.on('connection', carrier => {
     if (!metadataSeen) {
       metadataSeen = true;
       clearTimeout(metadataTimer);
-      if (message.direction && message.direction !== 'inbound') return shutdown();
+      if (!isPreflight && message.direction && message.direction !== 'inbound') return shutdown();
       const sampleRate = Number(message.sampleRate || 16000);
       if (![8000, 16000].includes(sampleRate) || (message.mixType && String(message.mixType).toLowerCase() !== 'mono')) return shutdown();
       callSampleRate = sampleRate;
-      const rawId = String(message.customerData?.call_sid || message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
-      const callId = rawId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
-      const caller = String(message.from || '');
-      callRecord = {
-        id: callId,
-        direction: 'inbound',
-        caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller',
-        startedAt: new Date().toISOString(),
-        endedAt: null,
-        status: 'active',
-        transcript: [],
-        transcriptConsentRequested: false,
-        transcriptConsent: false,
-        transcriptConsentDeclined: false,
-        transcriptConsentAt: null,
-        consentPromptBuffer: ''
-      };
-      edesyCalls.set(callRecord.id, callRecord);
-      while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
+      if (!isPreflight) {
+        const rawId = String(message.customerData?.call_sid || message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
+        const callId = rawId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
+        const caller = String(message.from || '');
+        callRecord = {
+          id: callId,
+          direction: message.direction || 'inbound',
+          caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller',
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          status: 'active',
+          transcript: [],
+          transcriptConsentRequested: false,
+          transcriptConsent: false,
+          transcriptConsentDeclined: false,
+          transcriptConsentAt: null,
+          consentPromptBuffer: ''
+        };
+        edesyCalls.set(callRecord.id, callRecord);
+        while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
+      }
       return;
     }
     if (message.type === 'disconnect') return shutdown();
@@ -736,8 +740,10 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname === '/ws/telephony/edesy') {
     const supplied = url.searchParams.get('token') || '';
-    if (!edesyConfigured() || !safeEqual(supplied, process.env.EDESY_STREAM_TOKEN)) return socket.destroy();
-    return telephonyWss.handleUpgrade(req, socket, head, ws => telephonyWss.emit('connection', ws));
+    const mode = url.searchParams.get('mode') || '';
+    if (!edesyConfigured() || !safeEqual(supplied, process.env.EDESY_STREAM_TOKEN) || (mode && mode !== 'preflight')) return socket.destroy();
+    req.isEdesyPreflight = mode === 'preflight';
+    return telephonyWss.handleUpgrade(req, socket, head, ws => telephonyWss.emit('connection', ws, req));
   }
   if (url.pathname !== '/ws') return socket.destroy();
   const session = sessions.get(url.searchParams.get('sessionId'));
