@@ -9,6 +9,7 @@ import com.google.firebase.appcheck.AppCheckProviderFactory
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.database.FirebaseDatabase
@@ -426,20 +427,31 @@ class FirebaseCloudVault(private val context: Context) {
     }
 
     private fun decrypt(payload: String, password: String): String {
+        require(payload.length <= 190_000) { "Encrypted backup is too large." }
         val parts = payload.split('.')
         require(parts.size == 3) { "Encrypted backup format is invalid" }
         val salt = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
         val iv = Base64.decode(parts[1], Base64.NO_WRAP or Base64.URL_SAFE)
         val encrypted = Base64.decode(parts[2], Base64.NO_WRAP or Base64.URL_SAFE)
+        require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
         return String(cipher.doFinal(encrypted), Charsets.UTF_8)
     }
 
     private fun derive(password: String, salt: ByteArray): SecretKeySpec {
-        val spec = PBEKeySpec(password.toCharArray(), salt, 210_000, 256)
-        val bytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        spec.clearPassword()
-        return SecretKeySpec(bytes, "AES")
+        val passwordChars = password.toCharArray()
+        val spec = PBEKeySpec(passwordChars, salt, 210_000, 256)
+        try {
+            val bytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+            try {
+                return SecretKeySpec(bytes, "AES")
+            } finally {
+                bytes.fill(0)
+            }
+        } finally {
+            spec.clearPassword()
+            passwordChars.fill('\u0000')
+        }
     }
 }

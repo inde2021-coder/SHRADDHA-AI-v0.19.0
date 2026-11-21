@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,9 +60,12 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.ChatPromptBuilder
+import `in`.shraddha.ai.brain.PersistentChatMemory
+import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
+import com.Lia.assistant.voice.MultiProviderChatClient
 import com.Lia.assistant.voice.NovaOrbState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -135,19 +139,39 @@ fun ChatScreen(
             return
         }
 
-        // Call Gemini
+        // Snapshot Compose state on the main thread; never read the mutable UI list
+        // from the IO dispatcher. Keep a bounded context window for every provider.
+        val historySnapshot = messages.takeLast(40)
+            .map { ChatTurn(isUser = it.isUser, text = it.text.take(8_000)) }
+
+        // Call the selected AI provider
         isTyping = true
         scope.launch(Dispatchers.IO) {
-            val apiKey = ApiKeyStore.getKey(context)
+            // Persistent memory is opt-in and encrypted locally. If disabled, no recap is read or saved.
+            PersistentChatMemory.record(context, "User", trimmed)
             val systemInstruction = ChatPromptBuilder.build(
                 personality = appState.personality,
                 language = appState.language,
                 assistantName = appState.assistantName
             )
+            val memoryRecap = PersistentChatMemory.recap(context)
+            val relevantMemory = memoryRecap?.let { recap ->
+                LocalKnowledgeBase.search(recap, trimmed, limit = 4).map { it.text }
+            }.orEmpty()
+            val memoryInstruction = if (relevantMemory.isNotEmpty()) {
+                "\n\nRelevant saved conversation memories (user-approved, encrypted on this device; may be incomplete):\n" +
+                    relevantMemory.joinToString("\n")
+            } else ""
+            val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
+            val result = if (appState.aiProvider == "GEMINI") {
+                GeminiTextClient.reply(ApiKeyStore.getKey(context), boundedInstruction, historySnapshot)
+            } else {
+                MultiProviderChatClient.reply(context, appState.aiProvider, boundedInstruction, historySnapshot)
+            }
 
-            val history = messages.map { ChatTurn(isUser = it.isUser, text = it.text) }
-            val result = GeminiTextClient.reply(apiKey, systemInstruction, history)
-
+            if (result is ChatReplyResult.Success) {
+                PersistentChatMemory.record(context, "Assistant", result.text)
+            }
             withContext(Dispatchers.Main) {
                 isTyping = false
                 when (result) {
@@ -236,9 +260,9 @@ fun ChatScreen(
                     color = colors.textPrimary
                 )
                 Text(
-                    text = if (isTyping) "Typing..." else "Here to help",
-                    fontSize = 12.sp,
-                    color = colors.textSecondary
+                    text = if (isTyping) "GENERATING RESPONSE" else "${appState.aiProvider}  •  READY",
+                    fontSize = 9.sp,
+                    color = colors.textTertiary
                 )
             }
         }
@@ -249,7 +273,8 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(messages, key = { it.id }) { msg ->
                 NovaMessageBubble(
@@ -259,7 +284,7 @@ fun ChatScreen(
                     },
                     onCopyClick = {
                         val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        clip?.setPrimaryClip(ClipData.newPlainText("Lia message", msg.text))
+                        clip?.setPrimaryClip(ClipData.newPlainText(appState.assistantName, msg.text))
                     },
                     onRetryClick = {
                         sendMessage(messages.lastOrNull { it.isUser }?.text ?: "")
@@ -299,8 +324,8 @@ fun ChatScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(colors.accent)
-                    .clickable { sendMessage(inputText) },
+                    .background(Brush.linearGradient(listOf(colors.accent, colors.accentSecondary)))
+                    .clickable(enabled = inputText.isNotBlank() && !isTyping) { sendMessage(inputText) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

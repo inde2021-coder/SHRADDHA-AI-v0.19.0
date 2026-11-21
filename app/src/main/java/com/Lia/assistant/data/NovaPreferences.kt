@@ -13,6 +13,7 @@ object NovaPreferences {
         const val PERSONALITY = "personality"
         const val USER_NAME = "user_name"
         const val VOICE_INPUT_ENABLED = "voice_input_enabled"
+        const val VOICE_SESSION_ENABLED = "voice_session_enabled"
         const val WAKE_WORD_ENABLED = "wake_word_enabled"
         const val LANGUAGE = "language"
         const val HAS_ONBOARDED = "has_onboarded"
@@ -21,6 +22,7 @@ object NovaPreferences {
         const val SPEECH_SPEED = "speech_speed"
         const val VOICE_VOLUME = "voice_volume"
         const val ASSISTANT_NAME = "assistant_name"
+        const val AI_PROVIDER = "ai_provider"
     }
 
     private fun getPrefs(context: Context): SharedPreferences {

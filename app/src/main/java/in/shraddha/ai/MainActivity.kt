@@ -9,6 +9,7 @@ import android.graphics.Shader
 import android.view.View
 import android.app.Activity
 import android.content.Intent
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -37,6 +38,7 @@ import `in`.shraddha.ai.screen.ScreenShareService
 import `in`.shraddha.ai.vision.RemoteCameraService
 import org.json.JSONObject
 import org.json.JSONArray
+import `in`.shraddha.ai.future.UserBackupManager
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.biometric.BiometricConsentVault
 import `in`.shraddha.ai.biometric.BiometricCaptureActivity
@@ -101,6 +103,21 @@ class MainActivity : AppCompatActivity() {
     private var approvedShareCategory: String? = null
     private var approvedShareExpiresAt: Long = 0L
 
+    override fun onResume() {
+        super.onResume()
+        if (!isShraddhaAccessibilityEnabled()) {
+            val prefs = getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
+            val hadConsent = prefs.getBoolean("remote_control_consent", false)
+            if (hadConsent) {
+                prefs.edit().putBoolean("remote_control_consent", false).apply()
+                if (::remoteConsent.isInitialized) {
+                    if (remoteConsent.isChecked) remoteConsent.isChecked = false
+                    else if (DeviceLinkManager.sessionId != null) publishDataPermissions()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = 0xFF070B14.toInt()
@@ -111,10 +128,15 @@ class MainActivity : AppCompatActivity() {
         }
         pageRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(30))
+            setPadding(dp(16), dp(10), dp(16), dp(20))
             setBackgroundColor(0xFF070B14.toInt())
         }
-        pageScroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(pageRoot) }
+        pageScroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            clipChildren = false
+            addView(pageRoot)
+        }
         shell = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xFF070B14.toInt())
@@ -123,6 +145,22 @@ class MainActivity : AppCompatActivity() {
         shell.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         shell.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(shell)
+        ViewCompat.setOnApplyWindowInsetsListener(shell) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            shell.setPadding(0, bars.top, 0, if (keyboardVisible) ime.bottom else 0)
+            bottomNav.visibility = if (keyboardVisible) View.GONE else View.VISIBLE
+            val navParams = bottomNav.layoutParams
+            val targetHeight = dp(68) + if (keyboardVisible) 0 else bars.bottom
+            if (navParams.height != targetHeight) {
+                navParams.height = targetHeight
+                bottomNav.layoutParams = navParams
+            }
+            bottomNav.setPadding(dp(8), dp(5), dp(8), if (keyboardVisible) dp(5) else bars.bottom + dp(5))
+            insets
+        }
+        ViewCompat.requestApplyInsets(shell)
         status = TextView(this).apply {
             text = "Ready • $assistantDisplayName तैयार है। अपनी जरूरत का एक workspace खोलें।"
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -196,13 +234,13 @@ class MainActivity : AppCompatActivity() {
         }
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         brand.addView(TextView(this).apply {
-            text = "S H R A D D H A   /   A I"
+            text = assistantDisplayName.uppercase()
             textSize = 11f; letterSpacing = .12f; setTextColor(0xFF9F8BFF.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         brand.addView(TextView(this).apply {
-            text = "Your intelligent universe"
-            textSize = 22f; setTextColor(0xFFF4F6FF.toInt())
+            text = assistantDisplayName
+            textSize = 24f; setTextColor(0xFFF4F6FF.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD); setPadding(0, dp(4), 0, 0)
         })
         header.addView(brand)
@@ -215,7 +253,7 @@ class MainActivity : AppCompatActivity() {
         pageRoot.addView(header)
 
         val hero = MaterialCardView(this).apply {
-            radius = dp(30).toFloat(); cardElevation = dp(12).toFloat()
+            radius = dp(28).toFloat(); cardElevation = dp(8).toFloat()
             strokeWidth = dp(1); strokeColor = 0xFF6357B9.toInt()
             setCardBackgroundColor(0xFF11182C.toInt())
         }
@@ -224,7 +262,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1B2044.toInt(), 0xFF111B2B.toInt(), 0xFF0B1421.toInt())
+                intArrayOf(0xFF29264F.toInt(), 0xFF17243A.toInt(), 0xFF0D1728.toInt())
             ).apply { cornerRadius = dp(30).toFloat() }
         }
         hero.addView(heroBody)
@@ -236,12 +274,12 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         intro.addView(TextView(this).apply {
-            text = "One mind.\nMany capabilities."
-            textSize = 25f; setTextColor(-1); setTypeface(null, android.graphics.Typeface.BOLD)
+            text = "Your AI.\nYour universe."
+            textSize = 27f; setTextColor(-1); setTypeface(null, android.graphics.Typeface.BOLD)
             setPadding(0, dp(8), 0, dp(6))
         })
         intro.addView(TextView(this).apply {
-            text = "Voice • Vision • Memory • Automation"
+            text = "VOICE  •  VISION  •  MEMORY  •  ACTION"
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
@@ -250,18 +288,14 @@ class MainActivity : AppCompatActivity() {
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Live voice engine") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
 
-        val liveCard = section(pageRoot, "LIVE WORKSPACE", "वास्तविक screen/task activity यहाँ दिखाई जाएगी; connection न होने पर कोई नकली live status नहीं दिखेगा") {
+        section(pageRoot, "LIVE WORKSPACE", "No active task") {
             addView(TextView(this@MainActivity).apply {
                 text = "◉  WAITING FOR AN ACTIVE TASK"
                 textSize = 11f; letterSpacing = .06f; setTextColor(0xFF79DCCB.toInt())
                 setPadding(dp(12), dp(13), dp(12), dp(13))
                 background = rounded(0xFF0D2027.toInt(), 14)
             })
-            addView(TextView(this@MainActivity).apply {
-                text = "Connect App Operator or a paired desktop/phone to stream verified actions, screen previews and task results."
-                textSize = 12f; setTextColor(0xFF9EABC2.toInt()); setPadding(0, dp(10), 0, dp(2))
-            })
-            addView(actionButton("OPEN LIVE APP OPERATOR", "Observe → act → verify") {
+            addView(actionButton("OPEN APP OPERATOR", "View and approve app actions") {
                 startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java))
             })
         }
@@ -348,6 +382,75 @@ class MainActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(dp(22), -1))
         tile.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
         return tile
+    }
+
+    private fun workspaceGrid(root: LinearLayout) {
+        section(root, "WORKSPACES", "") {
+            val items = listOf(
+                Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { showPage("assistant") }),
+                Triple("◉  3D VOICE AGENT", "Continuous mic • Orb • Hindi / English", {
+                    startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java))
+                }),
+                Triple("◈  WINDOWS PC", "Pair • Screen • Control", { showPage("devices") }),
+                Triple("☎  PHONE CALL AGENT", "SIM no-answer → AI voice bridge", { showPage("phone") }),
+                Triple("◈  EXPERT STUDIO", "Research • Expert answers", { showPage("expert") }),
+                Triple("⌘  DEVICES", "Phones • PC • Pairing", { showPage("devices") }),
+                Triple("▣  APP OPERATOR", "Observe • Approve • Verify", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
+                Triple("◇  PROJECT LAB", "Agents • Code • Apps", { showPage("lab") }),
+                Triple("◎  PEOPLE MEMORY", "Consented profiles", { showPage("people") }),
+                Triple("☁  CLOUD & DATA", "Backup • Sync • Sharing", { showPage("cloud") }),
+                Triple("⚙  PRIVACY", "Permissions • Security", { showPage("permissions") }),
+                Triple("✧  INTELLIGENCE", "Automation • Safe workflows", { showPage("future") }),
+                Triple("◷  TASK PLANNER", "Tasks • Daily briefing • Reminders", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.future.TaskPlannerActivity::class.java)) })
+            )
+            val search = edit("Search workspaces", "Try voice, devices, people or privacy")
+            search.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            addView(search)
+            val grid = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+            addView(grid)
+
+            fun render(query: String) {
+                grid.removeAllViews()
+                val filtered = items.filter {
+                    query.isBlank() || it.first.contains(query, true) || it.second.contains(query, true)
+                }
+                if (filtered.isEmpty()) {
+                    grid.addView(TextView(this@MainActivity).apply {
+                        text = "No matching workspace"
+                        textSize = 13f
+                        setTextColor(0xFFAAB8D0.toInt())
+                        gravity = android.view.Gravity.CENTER
+                        setPadding(0, dp(18), 0, dp(18))
+                    })
+                    return
+                }
+                filtered.chunked(2).forEach { pair ->
+                    val row = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.TOP
+                    }
+                    pair.forEachIndexed { index, item ->
+                        val cell = LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply {
+                                if (index == 0) rightMargin = dp(6) else leftMargin = dp(6)
+                                bottomMargin = dp(10)
+                            }
+                        }
+                        cell.addView(workspaceTile(item.first, item.second, item.third), LinearLayout.LayoutParams(-1, -2))
+                        row.addView(cell)
+                    }
+                    if (pair.size == 1) row.addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                    grid.addView(row)
+                }
+            }
+            render("")
+            search.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = render(s?.toString().orEmpty().trim())
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+            })
+        }
     }
 
     private fun showPage(page: String) {
@@ -778,8 +881,9 @@ class MainActivity : AppCompatActivity() {
                 addView(toggle)
             }
             addView(actionButton("Publish My Sharing Permissions", "दूसरे paired devices को मेरी चुनी अनुमति बताएँ") { publishDataPermissions() })
+            val shareableCategories = categories.filter { it.first !in setOf("screen", "camera") }
             val categoryPicker = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categories.map { it.first })
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, shareableCategories.map { it.first })
             }
             addView(categoryPicker)
             addView(actionButton("Request Data from Selected Phone", "Target phone पर approval dialog आएगा") {
@@ -841,10 +945,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isShraddhaAccessibilityEnabled(): Boolean {
+        val expected = ComponentName(this, ShraddhaAccessibilityService::class.java).flattenToString()
+        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+
     private fun publishDataPermissions() {
         val json = JSONObject()
         dataPermissionSwitches.forEach { (key, toggle) -> json.put(key, toggle.isChecked) }
-        json.put("remote_control", remoteConsent.isChecked)
+        json.put("remote_control", remoteConsent.isChecked && isShraddhaAccessibilityEnabled())
         val sent = DeviceLinkManager.updateSharePermissions(json)
         status.text = if (sent) "आपकी custom data permissions paired devices पर publish हुईं।" else "पहले relay से connect करें; permissions इस फोन पर सुरक्षित save हैं।"
     }
@@ -873,7 +983,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleIncomingControlRequest(msg: JSONObject) {
         val from = msg.optString("fromDeviceId")
         val requester = msg.optString("requesterName", "Paired device")
-        val allowed = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
+        val allowed = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false) && isShraddhaAccessibilityEnabled()
         runOnUiThread {
             if (!allowed) {
                 DeviceLinkManager.respondRemoteControl(from, false)
@@ -884,9 +994,178 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Remote control permission")
                 .setMessage("$requester इस फोन को अधिकतम 5 मिनट तक नियंत्रित करना चाहता है। केवल भरोसेमंद व्यक्ति को अनुमति दें।")
                 .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondRemoteControl(from, false) }
-                .setPositiveButton("Allow for 5 minutes") { _, _ -> DeviceLinkManager.respondRemoteControl(from, true, 5) }
+                .setPositiveButton("Allow for 5 minutes") { _, _ ->
+                    val prefs = getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
+                    val granted = DeviceLinkManager.respondRemoteControl(from, true, 5)
+                    if (granted) {
+                        prefs.edit()
+                            .putString("remote_control_grant_peer", from)
+                            .putLong("remote_control_grant_expires_at", System.currentTimeMillis() + 5 * 60 * 1000L)
+                            .apply()
+                        status.text = "इस paired device को 5 मिनट के लिए remote control की अनुमति दी गई है।"
+                    } else {
+                        prefs.edit().remove("remote_control_grant_peer").remove("remote_control_grant_expires_at").apply()
+                        status.text = "Remote control अनुमति relay तक नहीं पहुँच सकी।"
+                    }
+                }
                 .setOnCancelListener { DeviceLinkManager.respondRemoteControl(from, false) }
                 .show()
+        }
+    }
+
+    private fun addTelephonySection(root: LinearLayout) {
+        section(root, "INCOMING SIM CALL → SHRADDHA AI", "आपका सामान्य SIM पहले बजेगा। Jio का no-answer forwarding Edesy DID पर जाने के बाद AI कॉल संभालेगा।") {
+            val savedBackendUrl = TelephonyGatewayStore.baseUrl(this@MainActivity)
+            val savedGatewayToken = TelephonyGatewayStore.token(this@MainActivity)
+            if (savedBackendUrl.isNotBlank()) relayUrl.setText(savedBackendUrl)
+            if (savedGatewayToken.isNotBlank()) gatewayToken.setText(savedGatewayToken)
+            addView(relayUrl)
+            addView(gatewayToken)
+            addView(actionButton("Save Backend Connection Securely", "HTTPS URL और gateway token को Android Keystore encrypted store में रखें") {
+                try {
+                    TelephonyGatewayStore.save(this@MainActivity, relayUrl.text.toString(), gatewayToken.text.toString())
+                    status.text = "Phone Call Agent backend URL और gateway token encrypted storage में save हुए।"
+                } catch (error: Exception) {
+                    status.text = "Backend connection save नहीं हुआ: ${error.message}"
+                }
+            })
+            addView(actionButton("Clear Saved Backend Connection", "Encrypted backend URL और gateway token हटाएँ") {
+                try {
+                    TelephonyGatewayStore.clear(this@MainActivity)
+                    relayUrl.setText("")
+                    gatewayToken.setText("")
+                    status.text = "Saved backend connection cleared."
+                } catch (error: Exception) {
+                    status.text = "Could not clear saved backend connection: ${error.message}"
+                }
+            })
+            val bridgeStatus = TextView(this@MainActivity).apply {
+                text = "AI call bridge status अभी जाँचा नहीं गया।"
+                textSize = 13f
+                setTextColor(0xFFB9C8E6.toInt())
+                setPadding(0, dp(10), 0, dp(10))
+            }
+            addView(bridgeStatus)
+            addView(actionButton("Check Edesy + GPT-Live readiness", "Backend configuration पढ़ें; कोई call या forwarding चालू नहीं होगी") {
+                val url = relayUrl.text.toString().trim()
+                val token = gatewayToken.text.toString().trim()
+                DeviceLinkManager.telephonyStatus(url, token) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        val configured = body.optBoolean("configured")
+                        val caps = body.optJSONObject("capabilities")
+                        bridgeStatus.text = buildString {
+                            append(if (configured) "Server secrets configured." else "Server secrets missing.")
+                            val callName = body.optString("agentName", "Shraddha AI")
+                            append("\nInbound call agent name: ").append(callName)
+                            if (!callName.equals(assistantDisplayName, ignoreCase = true)) append(" (update SHRADDHA_CALL_AGENT_NAME to match app name)")
+                            val historyConfig = body.optJSONObject("callHistory")
+                            append("\nEncrypted durable call history: ").append(if (historyConfig?.optBoolean("durable") == true) "READY" else "not configured")
+                            if (!historyConfig?.optString("error").isNullOrBlank()) append("\nCall history error: ").append(historyConfig?.optString("error"))
+                            val historyMissing = historyConfig?.optJSONArray("missing")
+                            if (historyMissing != null && historyMissing.length() > 0) append("\nCall history secrets missing: ").append((0 until historyMissing.length()).joinToString(", ") { historyMissing.optString(it) })
+                            val missing = body.optJSONArray("missing")
+                            if (missing != null && missing.length() > 0) {
+                                append("\nMissing: ")
+                                append((0 until missing.length()).joinToString(", ") { missing.optString(it) })
+                            }
+                            append("\nInbound WebSocket: ").append(if (caps?.optBoolean("inboundWebSocketAudio") == true) "secrets present; provider path not yet verified" else "not configured")
+                            append("\nGPT-Live audio bridge: ").append(if (caps?.optBoolean("liveBidirectionalAiAudio") == true) "API key present; live call not yet verified" else "not configured")
+                            append("\nProvider preflight: ").append(if (body.optBoolean("preflightReady")) "configured" else "needs Edesy API key + stream URL + public origin")
+                            append("\nTranscript saving: ").append(if (caps?.optBoolean("liveTranscripts") == true) "available only after caller presses 1; press 0 to purge" else "OFF")
+                            append("\nAudio recording: NOT stored")
+                            append("\nReal Edesy DID / two-way phone test: still required")
+                        }
+                    }.onFailure { bridgeStatus.text = "Status check failed: ${it.message}" }
+                } }
+            })
+            addView(actionButton("Run Edesy Network Preflight", "Provider DNS, TLS, WebSocket upgrade और audio path जाँचें; कोई real call नहीं होगी") {
+                bridgeStatus.text = "Edesy preflight चल रहा है…"
+                DeviceLinkManager.telephonyPreflight(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        val steps = body.optJSONArray("steps")
+                        bridgeStatus.text = buildString {
+                            append(if (body.optBoolean("ok")) "EDESY PREFLIGHT PASSED" else "EDESY PREFLIGHT FAILED")
+                            if (steps != null) for (i in 0 until steps.length()) {
+                                val step = steps.optJSONObject(i) ?: continue
+                                append("\n").append(if (step.optBoolean("ok")) "✓ " else "✕ ")
+                                    .append(step.optString("step", "step"))
+                                val detail = step.optString("detail")
+                                if (detail.isNotBlank()) append(": ").append(detail.take(180))
+                            }
+                            val hint = body.optString("hint")
+                            if (hint.isNotBlank()) append("\nHint: ").append(hint.take(240))
+                            append("\nAudio frames received: ").append(body.optInt("audio_frames_received"))
+                            append("\nAudio bytes received: ").append(body.optInt("audio_bytes_received"))
+                            append("\nReal Edesy DID + two-way call test is still required.")
+                        }
+                    }.onFailure { bridgeStatus.text = "Edesy preflight failed: ${it.message}" }
+                } }
+            })
+            addView(actionButton("Refresh recent AI calls", "Backend की आखिरी 30 call entries दिखाएँ") {
+                DeviceLinkManager.telephonyCalls(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        val calls = body.optJSONArray("calls")
+                        bridgeStatus.text = if (calls == null || calls.length() == 0) {
+                            "अभी कोई AI call history नहीं है।"
+                        } else buildString {
+                            append("Storage: ").append(if (body.optBoolean("durable")) "Encrypted Firestore" else "temporary backend memory")
+                            if (body.optString("warning").isNotBlank()) append("\nWarning: ").append(body.optString("warning"))
+                            append("\n")
+                            for (i in 0 until minOf(calls.length(), 10)) {
+                                val call = calls.optJSONObject(i) ?: continue
+                                append(call.optString("startedAt", "Unknown time"))
+                                append(" • ").append(call.optString("caller", "Unknown caller"))
+                                append(" • ").append(call.optString("status", "unknown"))
+                                append(" • Transcript: ").append(if (call.optBoolean("transcriptConsent")) "consented" else "not saved")
+                                if (call.optString("summaryStatus") == "ready") append("\nSummary: ").append(call.optString("summary").take(240))
+                                append("\n")
+                            }
+                        }
+                    }.onFailure { bridgeStatus.text = "Call history load failed: ${it.message}" }
+                } }
+            })
+            addView(actionButton("Save Recent Calls Encrypted on This Phone", "Masked caller and call summaries are stored locally with Android Keystore AES-GCM") {
+                DeviceLinkManager.telephonyCalls(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        EncryptedFeatureStore(this@MainActivity).put("call_history", body.toString())
+                            .onSuccess { bridgeStatus.text = "Recent call history saved as encrypted local data. No audio recording was saved." }
+                            .onFailure { bridgeStatus.text = "Encrypted local save failed: ${it.message}" }
+                    }.onFailure { bridgeStatus.text = "Call history fetch failed: ${it.message}" }
+                } }
+            })
+            addView(actionButton("View Locally Saved Encrypted Call History", "Show the last saved local snapshot") {
+                val saved = EncryptedFeatureStore(this@MainActivity).get("call_history")
+                saved.onSuccess { raw ->
+                    val calls = runCatching { org.json.JSONObject(raw).optJSONArray("calls") }.getOrNull()
+                    bridgeStatus.text = if (calls == null || calls.length() == 0) "No locally saved call history." else buildString {
+                        for (i in 0 until minOf(calls.length(), 10)) {
+                            val call = calls.optJSONObject(i) ?: continue
+                            append(call.optString("startedAt", "Unknown time"))
+                            append(" • ").append(call.optString("caller", "Unknown caller"))
+                            append(" • ").append(call.optString("status", "unknown"))
+                            append(" • Transcript: ").append(if (call.optBoolean("transcriptConsent")) "consented" else "not saved")
+                            if (call.optString("summaryStatus") == "ready") append("\nSummary: ").append(call.optString("summary").take(240))
+                            append("\n")
+                        }
+                    }
+                }.onFailure { bridgeStatus.text = "Saved call history could not be decrypted: ${it.message}" }
+            })
+            addView(actionButton("Clear Saved Call History", "Delete the local encrypted call-history snapshot") {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Clear saved call history?")
+                    .setMessage("This deletes only the encrypted call-history snapshot stored on this phone.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear") { _, _ ->
+                        val removed = EncryptedFeatureStore(this@MainActivity).remove("call_history")
+                        bridgeStatus.text = if (removed) "Saved local call history cleared." else "Saved call history could not be cleared."
+                    }.show()
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "महत्वपूर्ण: केवल Jio no-answer forwarding उपयोग करें। Unconditional forwarding चालू न करें। पहले Edesy DID पर वास्तविक दो-तरफ़ा call, AI की शुरुआती पहचान, hang-up और interruption जाँचें। उसके बाद ही Jio से current forwarding code/delay/charges की पुष्टि करें। Android सामान्य SIM call का audio सीधे AI को नहीं दे सकता।"
+                textSize = 12f
+                setTextColor(0xFFFFC78A.toInt())
+                setPadding(0, dp(12), 0, 0)
+            })
         }
     }
 
@@ -895,6 +1174,14 @@ class MainActivity : AppCompatActivity() {
             relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
             deviceName = edit("This phone name", "e.g. Main Phone")
             addView(relayUrl); addView(deviceName)
+            if (DeviceLinkManager.hasSavedPairing()) {
+                addView(actionButton("Reconnect Saved Paired Device", "Android Keystore में सुरक्षित pairing token से relay reconnect करें") {
+                    DeviceLinkManager.reconnectSaved { result -> runOnUiThread {
+                        result.onSuccess { status.text = "Saved device pairing reconnected securely." }
+                            .onFailure { status.text = "Saved pairing reconnect failed: ${it.message}" }
+                    } }
+                })
+            }
             addView(actionButton("Create Main Phone Session", "नया secure pairing code बनाएँ") {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "पहले अपना deployed HTTPS relay URL डालें।"; return@actionButton }
@@ -902,6 +1189,14 @@ class MainActivity : AppCompatActivity() {
                     result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "One-time pairing invite created. Scan the QR on the other Shraddha AI app."; showPairingQr(url, it.code) }
                         .onFailure { status.text = "Pairing error: ${it.message}" }
                 } }
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "WINDOWS PC: $assistantDisplayName PC Companion.exe चलाएँ, यही HTTPS relay URL और ऊपर बना 6-digit code डालें। PC पर remote control और screen sharing अलग-अलग opt-in हैं; हर control request PC पर approve करनी होगी।"
+                setTextColor(0xFFB9C8E6.toInt()); textSize = 12f; setPadding(0, dp(8), 0, dp(10))
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Encryption status: WSS protects data in transit, but screen/camera JPEG frames are not yet end-to-end encrypted. The relay can technically inspect shared frames. Do not share sensitive screens until E2E frame transport and two-device fingerprint verification are complete."
+                setTextColor(0xFFFFC56B.toInt()); textSize = 12f; setPadding(0, dp(2), 0, dp(10))
             })
             pairingCode = edit("Pairing code", "6-digit code दूसरे फोन से")
             addView(pairingCode)
@@ -932,14 +1227,77 @@ class MainActivity : AppCompatActivity() {
             remoteConsent = Switch(this@MainActivity).apply {
                 text = "इस फोन को paired device से control करने दें"
                 setTextColor(-1)
-                isChecked = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
+                isChecked = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false) && isShraddhaAccessibilityEnabled()
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, checked ->
+                    if (checked && !isShraddhaAccessibilityEnabled()) {
+                        Toast.makeText(this@MainActivity, "पहले Accessibility App Control चालू करें।", Toast.LENGTH_LONG).show()
+                        isChecked = false
+                        return@setOnCheckedChangeListener
+                    }
                     getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putBoolean("remote_control_consent", checked).apply()
+                    if (!checked) {
+                        getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                            .remove("remote_control_grant_peer")
+                            .remove("remote_control_grant_expires_at")
+                            .apply()
+                    }
                     if (DeviceLinkManager.sessionId != null) publishDataPermissions()
                 }
             }
             addView(remoteConsent)
+            addView(actionButton("Revoke active remote-control approval", "किसी भी समय 5-minute device permission तुरंत बंद करें") {
+                getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                    .remove("remote_control_grant_peer")
+                    .remove("remote_control_grant_expires_at")
+                    .apply()
+                val relayRevoked = DeviceLinkManager.revokeAllRemoteControlGrants()
+                status.text = if (relayRevoked) "All remote-control grants were revoked on the relay." else "Local approval cleared. Relay is offline; any server grant expires within its short lease."
+            })
+            addView(actionButton("Revoke Selected Paired Device", "यह device relay session से हटेगा; केवल session owner दूसरे device को revoke कर सकता है") {
+                if (!isSessionOwner) { status.text = "दूसरे paired device को केवल session owner revoke कर सकता है। आप अपना pairing revoke कर सकते हैं।"; return@actionButton }
+                val target = targetDevice.text.toString().trim()
+                if (target.isBlank()) { status.text = "पहले paired device चुनें।"; return@actionButton }
+                val revokesThisPhone = target == DeviceLinkManager.deviceId
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Revoke paired device?")
+                    .setMessage(if (revokesThisPhone && isSessionOwner) "यह owner phone है; पूरा session और सभी paired devices disconnect होंगे।" else "Device $target की pairing और उससे जुड़ी active permissions तुरंत हटाई जाएँगी।")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Revoke") { _, _ ->
+                        DeviceLinkManager.revokeRemoteDevice(target) { result -> runOnUiThread {
+                            result.onSuccess { ok ->
+                                status.text = if (ok) "Selected device revoked from relay session." else "Relay ने device revoke नहीं किया।"
+                                if (ok && revokesThisPhone) {
+                                    isSessionOwner = false
+                                    if (::mainOnlyMode.isInitialized) { mainOnlyMode.isEnabled = false; mainOnlyMode.isChecked = false }
+                                    peerIds.clear(); peerNames.clear(); peerOnline.clear(); targetDevice.setText("")
+                                    if (::peerPicker.isInitialized) peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("No paired devices"))
+                                }
+                            }
+                                .onFailure { status.text = "Device revoke failed: ${it.message}" }
+                        } }
+                    }.show()
+            })
+            addView(actionButton("Revoke This Phone Pairing / Session", "Owner पूरे session को बंद करेगा; member केवल अपनी pairing हटाएगा") {
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Revoke this phone pairing?")
+                    .setMessage("इस phone की relay pairing तुरंत हटेगी। अगर यह owner phone है, तो पूरा paired-device session बंद होगा।")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Revoke pairing") { _, _ ->
+                        DeviceLinkManager.revokeCurrentPairing { result -> runOnUiThread {
+                            result.onSuccess { ok ->
+                                status.text = if (ok) "This phone pairing/session revoked." else "Relay ने pairing revoke नहीं की।"
+                                if (ok) {
+                                    isSessionOwner = false
+                                    if (::mainOnlyMode.isInitialized) { mainOnlyMode.isEnabled = false; mainOnlyMode.isChecked = false }
+                                    peerIds.clear(); peerNames.clear(); peerOnline.clear(); targetDevice.setText("")
+                                    if (::peerPicker.isInitialized) peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("No paired devices"))
+                                }
+                            }
+                                .onFailure { status.text = "Pairing revoke failed: ${it.message}" }
+                        } }
+                    }.show()
+            })
             mainOnlyMode = Switch(this@MainActivity).apply {
                 text = "Main phone only mode (OFF = Mutual control)"
                 setTextColor(-1); isChecked = false; isEnabled = false; setPadding(0, dp(4), 0, dp(8))
@@ -1077,7 +1435,14 @@ class MainActivity : AppCompatActivity() {
             })
             addView(actionButton("Send Remote Home", "फोन की Home screen पर जाएँ") { sendRemote(JSONObject().put("kind", "home")) })
             addView(actionButton("Send Remote Back", "पिछली screen पर जाएँ") { sendRemote(JSONObject().put("kind", "back")) })
-            addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें") { DeviceLinkManager.disconnect(); status.text = "This phone disconnected." })
+            addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें और active control approval revoke करें") {
+                getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                    .remove("remote_control_grant_peer")
+                    .remove("remote_control_grant_expires_at")
+                    .apply()
+                DeviceLinkManager.disconnect()
+                status.text = "This phone disconnected; active remote-control approval revoked."
+            })
         }
 
         section(root, "04  •  VISUAL LENS – LIVE SCREEN & REMOTE CAMERA", "स्क्रीन और कैमरा अलग-अलग, स्पष्ट अनुमति से साझा करें") {
@@ -1385,24 +1750,95 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { projectView.text=it.message ?: "Update failed" }
             })
         }
-        section(root, "PERSONAL KNOWLEDGE GRAPH", "आप स्वयं जानकारी जोड़ें और खोजें। अभी automatic face/voice identification या hidden sensitive inference नहीं होता।") {
-            val label=edit("Memory title","उदाहरण: मेरी दुकान")
-            val kind=edit("Category","Project / Person / Device / Place")
-            val note=edit("Memory note","इस जानकारी को याद रखने के लिए लिखें") .apply { minLines=2; isSingleLine=false }
-            val query=edit("Search saved memories","दुकान, project, device...")
-            val graphResult=TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize=12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background=rounded(0xFF0C1525.toInt(),14) }
-            addView(label); addView(kind); addView(note); addView(query); addView(graphResult)
-            val memoryPrefs=getSharedPreferences("shraddha_knowledge_graph", MODE_PRIVATE)
-            fun graphArray()=runCatching { JSONArray(memoryPrefs.getString("nodes","[]")) }.getOrElse { JSONArray() }
-            addView(actionButton("Save knowledge node","Explicitly user-entered local memory") {
-                if(label.text.isNullOrBlank()) { graphResult.text="Memory title जरूरी है।"; return@actionButton }
-                val arr=graphArray(); arr.put(JSONObject().put("id","n-${System.currentTimeMillis()}").put("label",label.text.toString().trim()).put("kind",kind.text.toString().trim().ifBlank { "Note" }).put("note",note.text.toString().take(1000)).put("updated",System.currentTimeMillis()))
-                memoryPrefs.edit().putString("nodes",arr.toString()).apply(); `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_node","saved",label.text.toString()); graphResult.text="Memory locally saved. Total nodes: ${arr.length()}"
+        section(root, "PERSONAL KNOWLEDGE GRAPH", "आपकी अनुमति से जोड़ी गई जानकारी Android Keystore के AES-GCM encrypted local vault में सुरक्षित रहती है।") {
+            val graphStore = `in`.shraddha.ai.future.PersistentKnowledgeGraph(this@MainActivity)
+            val initialLoad = graphStore.load()
+            var graph = initialLoad.getOrElse { `in`.shraddha.ai.future.KnowledgeGraph() }
+            var storageReady = initialLoad.isSuccess
+            val label = edit("Memory title", "उदाहरण: मेरी दुकान")
+            val kind = edit("Category", "Project / Person / Device / Place")
+            val note = edit("Memory note", "इस जानकारी को याद रखने के लिए लिखें").apply { minLines = 2; isSingleLine = false }
+            val query = edit("Search saved memories", "दुकान, project, device...")
+            val sourceId = edit("Relationship source ID", "पहले node की ID")
+            val relation = edit("Relationship", "जैसे works_on / owns / located_at")
+            val targetId = edit("Relationship target ID", "दूसरे node की ID")
+            val deleteId = edit("Delete memory ID", "केवल चुनी हुई node ID")
+            val graphResult = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            addView(label); addView(kind); addView(note)
+            addView(query); addView(sourceId); addView(relation); addView(targetId); addView(deleteId); addView(graphResult)
+
+            fun renderGraph(message: String = "") {
+                val nodes = graph.allNodes()
+                val edges = graph.allEdges()
+                val lines = buildList {
+                    if (message.isNotBlank()) add(message)
+                    add("Encrypted local memories: ${nodes.size}/100 • Relationships: ${edges.size}/300")
+                    nodes.forEach { add("ID: ${it.id}\n${it.label} [${it.kind}]\n${it.note}") }
+                    edges.forEach { add("LINK: ${it.fromId} —${it.relation}→ ${it.toId}") }
+                }
+                graphResult.text = lines.joinToString("\n\n")
+            }
+            renderGraph(if (storageReady) "Encrypted knowledge graph loaded." else "Vault could not be decrypted/read. Existing data is protected; clear/reset is required before writing.")
+            addView(actionButton("Save encrypted knowledge node", "Explicitly user-entered memory • AES-GCM • Android Keystore") {
+                if (!storageReady) { graphResult.text = "Memory save रोक दिया गया: पुराना encrypted vault पढ़ा नहीं जा सका। पहले कारण ठीक करें या नीचे से स्पष्ट रूप से graph reset करें।"; return@actionButton }
+                val title = label.text.toString().trim()
+                if (title.isBlank()) { graphResult.text = "Memory title जरूरी है।"; return@actionButton }
+                val id = "n-" + java.util.UUID.randomUUID().toString()
+                runCatching {
+                    graph.upsert(`in`.shraddha.ai.future.KnowledgeNode(id, title, kind.text.toString().trim().ifBlank { "Note" }, note.text.toString().take(1000)))
+                    graphStore.save(graph).getOrThrow()
+                    `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_node", "saved", title)
+                    renderGraph("Encrypted memory saved. New node ID: $id")
+                    label.setText(""); note.setText("")
+                }.onFailure { graphResult.text = "Encrypted save failed: ${it.message}" }
             })
-            addView(actionButton("Search knowledge graph","Search titles, categories and notes") {
-                val q=query.text.toString().trim(); val arr=graphArray()
-                val hits=(0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.filter { it.optString("label").contains(q,true) || it.optString("kind").contains(q,true) || it.optString("note").contains(q,true) }
-                graphResult.text=if(hits.isEmpty()) "कोई matching memory नहीं मिली।" else hits.joinToString("\n\n") { "${it.optString("label")} [${it.optString("kind")}]\n${it.optString("note")}" }
+            addView(actionButton("Search knowledge graph", "Search titles, categories and notes in encrypted local memory") {
+                val q = query.text.toString().trim()
+                val hits = graph.allNodes().filter { q.isBlank() || it.label.contains(q, true) || it.kind.contains(q, true) || it.note.contains(q, true) }
+                    .sortedByDescending { it.updatedAt }
+                graphResult.text = if (hits.isEmpty()) "कोई matching memory नहीं मिली।" else hits.joinToString("\n\n") { "ID: ${it.id}\n${it.label} [${it.kind}]\n${it.note}\nLinks: ${graph.linksFor(it.id).joinToString { edge -> "${edge.relation} → ${if (edge.fromId == it.id) edge.toId else edge.fromId}" }}" }
+            })
+            addView(actionButton("Connect two memories", "Explicit relationship • दोनों node ID ऊपर से चुनें") {
+                if (!storageReady) { graphResult.text = "Encrypted vault उपलब्ध नहीं है।"; return@actionButton }
+                runCatching {
+                    graph.connect(sourceId.text.toString().trim(), relation.text.toString().trim(), targetId.text.toString().trim())
+                    graphStore.save(graph).getOrThrow()
+                    `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_edge", "saved", relation.text.toString().take(80))
+                    renderGraph("Relationship encrypted and saved.")
+                }.onFailure { graphResult.text = "Relationship save failed: ${it.message}" }
+            })
+            addView(actionButton("Delete selected memory", "Node और उससे जुड़े relationships स्थायी रूप से हटेंगे") {
+                if (!storageReady) { graphResult.text = "Encrypted vault उपलब्ध नहीं है।"; return@actionButton }
+                val id = deleteId.text.toString().trim()
+                if (graph.allNodes().none { it.id == id }) { graphResult.text = "इस ID की memory नहीं मिली।"; return@actionButton }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Memory delete करें?")
+                    .setMessage("यह node और उससे जुड़े links हटेंगे। यह काम वापस नहीं होगा।")
+                    .setNegativeButton("रद्द करें", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        graph.remove(id)
+                        graphStore.save(graph).fold(
+                            { `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_node", "deleted", id); renderGraph("Memory deleted.") },
+                            { graphResult.text = "Delete save failed: ${it.message}" }
+                        )
+                    }.show()
+            })
+            addView(actionButton("Reset encrypted knowledge graph", "सभी nodes और relationships हटाएँ") {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("पूरा Knowledge Graph मिटाएँ?")
+                    .setMessage("सभी local encrypted memories और links स्थायी रूप से हट जाएँगे।")
+                    .setNegativeButton("रद्द करें", null)
+                    .setPositiveButton("सभी हटाएँ") { _, _ ->
+                        if (graphStore.clear()) {
+                            graph = `in`.shraddha.ai.future.KnowledgeGraph()
+                            storageReady = true
+                            `in`.shraddha.ai.future.LocalAuditTrail(this@MainActivity).append("knowledge_graph", "cleared")
+                            renderGraph("Encrypted knowledge graph reset.")
+                        } else graphResult.text = "Vault clear नहीं हो पाया।"
+                    }.show()
             })
         }
         addAdvancedFeatureStudios(root)
@@ -1850,7 +2286,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addFirebaseCloudSection(root: LinearLayout) {
-        section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "पहले Firebase Console में Android app register करें और local.properties में config भरें। Cloud backup केवल आपकी सहमति से होगा।") {
+        section(root, "FIREBASE ACCOUNT & ENCRYPTED CLOUD VAULT", "Firebase configuration पहले से भरी है। Email/Password Auth, Firestore और Realtime Database चालू रखें; encrypted sync केवल आपकी सहमति से होगा।") {
+            val firebaseApiKey = edit("Firebase API Key", "AIza…").apply { setText(BuildConfig.FIREBASE_API_KEY) }
+            val firebaseAppId = edit("Firebase Android App ID", "Android App ID").apply { setText(BuildConfig.FIREBASE_APP_ID) }
+            val firebaseProjectId = edit("Firebase Project ID", "project-id").apply { setText(BuildConfig.FIREBASE_PROJECT_ID) }
+            val firebaseSenderId = edit("Firebase Messaging Sender ID", "sender-id").apply { setText(BuildConfig.FIREBASE_SENDER_ID) }
+            val firebaseBucket = edit("Storage bucket (optional)", "project.firebasestorage.app").apply { setText(BuildConfig.FIREBASE_STORAGE_BUCKET) }
+            val firebaseDatabaseUrl = edit("Realtime Database URL", "https://project-default-rtdb.firebaseio.com").apply { setText(BuildConfig.FIREBASE_DATABASE_URL) }
+            addView(firebaseApiKey); addView(firebaseAppId); addView(firebaseProjectId); addView(firebaseSenderId); addView(firebaseBucket); addView(firebaseDatabaseUrl)
             val email = edit("Email", "name@example.com")
             val password = edit("Password (कम-से-कम 8 अक्षर)", "Firebase account password").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
             val localVault = SecureMemoryVault(this@MainActivity)
@@ -1912,13 +2355,16 @@ class MainActivity : AppCompatActivity() {
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
                 result.text = "Firebase account बनाया जा रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).createAccount(emailValue, passwordValue)
-                    runOnUiThread { result.text = r.fold({ "Account created: ${it}" }, { "Firebase error: ${it.message}" }) }
+                    runOnUiThread {
+                        password.text.clear()
+                        result.text = r.fold({ "Account created: ${it}" }, { "Firebase error: ${it.message}" })
+                    }
                 }.start()
             })
             addView(actionButton("Sign In & Sync Encrypted Memory", "Cloud में केवल encrypted payload जाएगा; password/biometric data upload नहीं होगा") {
                 if (!consent.isChecked) { result.text = "पहले cloud sync consent checkbox चुनें।"; return@actionButton }
-                if (email.text.isNullOrBlank() || password.text.length < 8 || note.text.isNullOrBlank()) { result.text = "Email, password और memory note भरें।"; return@actionButton }
-                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val noteValue = note.text.toString()
+                if (email.text.isNullOrBlank() || password.text.length < 8 || backupPassphrase.text.length < 12 || note.text.isNullOrBlank()) { result.text = "Email, account password, 12+ character backup passphrase और memory note भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val backupPassphraseValue = backupPassphrase.text.toString(); val noteValue = note.text.toString()
                 result.text = "Sign-in और encrypted upload चल रहा है…"
                 Thread {
                     val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSave(emailValue, passwordValue, "personal_memory", noteValue)
@@ -1928,8 +2374,8 @@ class MainActivity : AppCompatActivity() {
             })
             addView(actionButton("Restore Encrypted Memory", "उसी email और password से दूसरे device पर restore करें") {
                 if (!consent.isChecked) { result.text = "Restore से पहले cloud consent चुनें।"; return@actionButton }
-                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
-                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
+                if (email.text.isNullOrBlank() || password.text.length < 8 || backupPassphrase.text.length < 8) { result.text = "Email, account password और कम-से-कम 8 अक्षर का backup passphrase भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val backupPassphraseValue = backupPassphrase.text.toString()
                 result.text = "Encrypted backup download और decrypt हो रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory")
                     runOnUiThread { result.text = r.fold({ value -> if (value == null) "इस account में backup नहीं मिला।" else {
@@ -2097,7 +2543,34 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
-            addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase client config secret नहीं होता, लेकिन database rules जरूरी हैं। Password किसी server पर नहीं भेजा जाता; उससे client पर encryption key बनती है। Face/voice biometric templates इस backup में शामिल नहीं हैं। Firebase project config सेट किए बिना cloud buttons काम नहीं करेंगे।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
+            addView(actionButton("Delete Firebase Account & Cloud Backups", "Recent password reauthentication के बाद दोनों cloud vault copies और Firebase account हटाएँ") {
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                if (emailValue.isBlank() || passwordValue.isBlank()) {
+                    result.text = "Account deletion से पहले signed-in email और current password भरें।"
+                    return@actionButton
+                }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Delete Firebase account permanently?")
+                    .setMessage("यह Firebase Auth account और इस खाते की Firestore तथा Realtime Database encrypted vault copies स्थायी रूप से हटाएगा। यह फोन पर मौजूद local memory या call-history snapshots नहीं मिटाएगा। यह कार्रवाई वापस नहीं हो सकती।")
+                    .setNegativeButton("Cancel") { _, _ -> password.text.clear() }
+                    .setPositiveButton("Delete account") { _, _ ->
+                        result.text = "Account reauthentication और cloud deletion चल रहा है…"
+                        password.text.clear()
+                        Thread {
+                            val deletion = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                                .deleteAccount(emailValue, passwordValue)
+                            runOnUiThread {
+                                result.text = deletion.fold(
+                                    { "Firebase account और cloud vault copies delete हो गईं। Local phone data अलग से manage करें." },
+                                    { "Account deletion failed: ${it.message}" }
+                                )
+                            }
+                        }.start()
+                    }
+                    .show()
+            })
+            addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase account password केवल sign-in के लिए है; backup encryption अलग 12+ character passphrase से होती है। Backup passphrase याद रखें—इसके बिना cloud ciphertext restore नहीं होगा। Passphrase Firebase को नहीं भेजा जाता। Face/voice biometric templates इस backup में शामिल नहीं हैं।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
         }
     }
 
@@ -2394,16 +2867,42 @@ class MainActivity : AppCompatActivity() {
     }
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
         val card = MaterialCardView(this).apply {
-            radius = dp(22).toFloat(); cardElevation = dp(3).toFloat()
-            strokeWidth = dp(1); strokeColor = 0xFF26344D.toInt()
-            setCardBackgroundColor(0xFF111827.toInt())
+            radius = dp(24).toFloat()
+            cardElevation = dp(5).toFloat()
+            strokeWidth = dp(1)
+            strokeColor = 0xFF2D3D5B.toInt()
+            setCardBackgroundColor(0xFF101827.toInt())
+            useCompatPadding = true
         }
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(12)) }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(17), dp(17), dp(17), dp(15))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF151F33.toInt(), 0xFF0E1726.toInt())
+            ).apply { cornerRadius = dp(23).toFloat() }
+        }
         card.addView(body)
-        body.addView(TextView(this).apply { text = title; textSize = 14f; letterSpacing = .06f; setTextColor(0xFFBDA8FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD) })
-        body.addView(TextView(this).apply { text = subtitle; textSize = 12f; setTextColor(0xFF93A2BA.toInt()); setPadding(0, dp(5), 0, dp(14)) })
+        body.addView(TextView(this).apply {
+            text = title
+            textSize = 12f
+            letterSpacing = .11f
+            setTextColor(0xFFB9A7FF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        })
+        if (subtitle.isNotBlank()) body.addView(TextView(this).apply {
+            text = subtitle
+            textSize = 11f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setTextColor(0xFFAAB7CC.toInt())
+            setPadding(0, dp(5), 0, dp(10))
+        })
         body.content()
-        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(16)
+        })
         return body
     }
 
@@ -2467,13 +2966,21 @@ class MainActivity : AppCompatActivity() {
                 val peerId = msg.optString("deviceId")
                 val peerName = msg.optString("name", "Device")
                 val online = msg.optBoolean("online")
+                val revoked = msg.optBoolean("revoked")
                 runOnUiThread {
-                    if (!peerIds.contains(peerId) && peerId.isNotBlank()) peerIds.add(peerId)
-                    if (peerId.isNotBlank()) { peerNames[peerId] = peerName; peerOnline[peerId] = online }
+                    if (revoked) {
+                        peerIds.remove(peerId)
+                        peerNames.remove(peerId)
+                        peerOnline.remove(peerId)
+                        if (targetDevice.text.toString() == peerId) targetDevice.setText("")
+                    } else {
+                        if (!peerIds.contains(peerId) && peerId.isNotBlank()) peerIds.add(peerId)
+                        if (peerId.isNotBlank()) { peerNames[peerId] = peerName; peerOnline[peerId] = online }
+                    }
                     val labels = peerIds.map { id -> "${peerNames[id] ?: "Device"} • ${if (peerOnline[id] == true) "Online" else "Offline"}" }
                     peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, labels.ifEmpty { listOf("No paired devices") })
-                    if (targetDevice.text.isNullOrBlank() && peerId.isNotBlank()) targetDevice.setText(peerId)
-                    status.text = "$peerName: ${if (online) "online" else "offline"}"
+                    if (targetDevice.text.isNullOrBlank() && peerIds.isNotEmpty()) targetDevice.setText(peerIds.first())
+                    status.text = if (revoked) "$peerName pairing revoked by session owner." else "$peerName: ${if (online) "online" else "offline"}"
                 }
             } else if (msg.optString("type") == "control_mode") {
                 runOnUiThread { mainOnlyMode.isChecked = msg.optString("mode") == "master"; status.text = if (mainOnlyMode.isChecked) "Main phone only control mode is active" else "Mutual phone control mode is active" }
@@ -2702,7 +3209,7 @@ class MainActivity : AppCompatActivity() {
         // The receiving phone independently decides whether to accept remote control.
         if (target.isBlank()) { status.text = "कोई paired target device online नहीं मिला।"; return }
         val sent = DeviceLinkManager.sendAction(target, action)
-        status.text = if (sent) "Remote action sent to $target" else "Relay disconnected; pair both phones first."
+        status.text = if (sent) "Encrypted remote action sent to $target" else "Relay disconnected or peer fingerprint is not mutually verified."
     }
 
     private fun requestScreenShare() {
@@ -2758,9 +3265,118 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Compatibility with starter project")
+    private fun importEncryptedBackup(uri: Uri) {
+        val envelope = runCatching {
+            val stream = contentResolver.openInputStream(uri) ?: error("Backup file could not be opened")
+            stream.use {
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                var total = 0
+                while (true) {
+                    val count = it.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    require(total <= 2_100_000) { "Encrypted backup exceeds the 2.1 MB import limit" }
+                    output.write(buffer, 0, count)
+                }
+                String(output.toByteArray(), Charsets.UTF_8)
+            }
+        }.getOrElse { status.text = "Backup read failed: " + it.message; return }
+        val password = EditText(this).apply {
+            hint = "Backup passphrase"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val panel = LinearLayout(this).apply { setPadding(dp(20), dp(8), dp(20), 0); addView(password) }
+        android.app.AlertDialog.Builder(this).setTitle("Restore encrypted backup")
+            .setMessage("यह Knowledge Graph, Tasks, Project, Digital Twin, Assistant Name और opt-in Conversation Memory को backup वाली स्थिति से replace करेगा। API keys, Firebase login, biometrics और device pairing secrets शामिल नहीं हैं।")
+            .setView(panel).setNegativeButton("Keep current data", null)
+            .setPositiveButton("Decrypt & restore") { _, _ ->
+                status.text = "Backup decrypt और restore हो रहा है…"
+                val passphrase = password.text.toString().toCharArray()
+                password.setText("")
+                Thread {
+                    val result = UserBackupManager(this@MainActivity).restore(envelope, passphrase)
+                    runOnUiThread {
+                        result.fold(
+                            { status.text = "Encrypted backup restored. Pending task reminders पुनः schedule किए गए। सभी screens refresh करने के लिए app restart करें।" },
+                            { status.text = "Backup restore failed: " + it.message }
+                        )
+                    }
+                }.start()
+            }.show()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == localVisionRequest) {
+            val photo = pendingVisionPhoto
+            pendingVisionPhoto = null
+            if (resultCode != Activity.RESULT_OK || photo == null || !photo.isFile || photo.length() == 0L) {
+                photo?.delete()
+                status.text = "Visual Lens photo capture cancelled or empty."
+                return
+            }
+            try {
+                if (!::relayUrl.isInitialized || !::gatewayToken.isInitialized) error("Open Device Universe and configure the HTTPS AI gateway first.")
+                val url = relayUrl.text.toString().trim()
+                require(validRelay(url)) { "Visual Lens के लिए valid HTTPS AI gateway URL जरूरी है।" }
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(photo.absolutePath, bounds)
+                require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Captured photo is unreadable." }
+                var sample = 1
+                while (bounds.outWidth / sample > 1600 || bounds.outHeight / sample > 1600) sample *= 2
+                val bitmap = android.graphics.BitmapFactory.decodeFile(photo.absolutePath,
+                    android.graphics.BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 })
+                    ?: error("Could not decode captured photo.")
+                val output = java.io.ByteArrayOutputStream()
+                try {
+                    var quality = 88
+                    do {
+                        output.reset()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, output)
+                        quality -= 8
+                    } while (output.size() > 2_500_000 && quality >= 40)
+                } finally { bitmap.recycle(); photo.delete() }
+                val jpeg = output.toByteArray()
+                require(jpeg.isNotEmpty() && jpeg.size <= 2_500_000) { "Photo could not be reduced below the 2.5 MB upload limit." }
+                val prompt = if (::visionPrompt.isInitialized && visionPrompt.text.isNotBlank()) visionPrompt.text.toString()
+                    else "इस तस्वीर को ध्यान से समझाओ। जो स्पष्ट दिख रहा है वही बताओ और अनिश्चित बातों को अनुमान के रूप में चिह्नित करो।"
+                val provider = if (::visionProvider.isInitialized) visionProvider.selectedItem?.toString() ?: "gemini" else "gemini"
+                if (::visionResult.isInitialized) visionResult.text = "Visual Lens फोटो का विश्लेषण कर रहा है…"
+                status.text = "Photo captured locally. AI analysis will start now…"
+                DeviceLinkManager.analyzeScreen(url, gatewayToken.text.toString(), provider, prompt, jpeg) { result -> runOnUiThread {
+                    result.onSuccess {
+                        if (::visionResult.isInitialized) visionResult.text = it
+                        status.text = "Visual Lens photo analysis complete."
+                    }.onFailure {
+                        if (::visionResult.isInitialized) visionResult.text = "Analysis error: ${it.message}"
+                        status.text = "Visual Lens analysis failed."
+                    }
+                } }
+            } catch (error: Exception) {
+                photo.delete()
+                status.text = "Visual Lens capture failed: ${error.message}"
+            }
+            return
+        }
+        if (requestCode == faceModelRequest || requestCode == speakerModelRequest) {
+            if (resultCode != Activity.RESULT_OK || data?.data == null) { status.text = "Model import cancelled."; return }
+            try {
+                val dir = java.io.File(filesDir, "biometric-models").apply { mkdirs() }
+                val target = java.io.File(dir, if (requestCode == faceModelRequest) "sface.onnx" else "ecapa-any-length.onnx")
+                val temp = java.io.File(dir, target.name + ".importing")
+                contentResolver.openInputStream(data.data!!)?.use { input ->
+                    temp.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024); var total = 0L
+                        while (true) { val count = input.read(buffer); if (count < 0) break; total += count; require(total <= 250L * 1024L * 1024L) { "Model file exceeds 250 MB limit." }; output.write(buffer, 0, count) }
+                    }
+                } ?: error("Could not read selected model.")
+                require(temp.length() > 1024) { "Selected model file is empty or invalid." }
+                if (!temp.renameTo(target)) { temp.delete(); error("Could not finalize model import.") }
+                status.text = "Model imported locally (${target.length()} bytes). License and tensor contract still require verification."
+            } catch (e: Exception) { status.text = "Model import failed: ${e.message}" }
+            return
+        }
         if (requestCode == screenShareRequest) {
             if (resultCode == Activity.RESULT_OK && data != null &&
                 getSharedPreferences("shraddha_data_permissions", MODE_PRIVATE).getBoolean("screen", false)) {
@@ -2989,7 +3605,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun validRelay(url: String) = url.startsWith("https://") && !url.contains("your-domain")
     private fun edit(label: String, hint: String) = EditText(this).apply {
-        this.hint = "$label  •  $hint"; setHintTextColor(0xFF8291AA.toInt()); setTextColor(-1); textSize = 14f
+        this.hint = label
+        contentDescription = "$label. $hint"
+        tooltipText = hint
+        setHintTextColor(0xFF8291AA.toInt()); setTextColor(-1); textSize = 14f
         setSingleLine(true); setPadding(dp(14), dp(13), dp(14), dp(13)); background = rounded(0xFF0B1220.toInt(), 14)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }

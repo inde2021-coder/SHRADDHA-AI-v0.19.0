@@ -14,6 +14,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
+/**
+ * Owns the microphone and speaker streams for one foreground voice session.
+ * Recording errors are reported once and all partially-created Android audio
+ * resources are released on every failure path.
+ */
 class LiveAudioIO(
     private val onMicChunk: (ByteArray) -> Unit,
     private val onMicAmplitude: (Float) -> Unit,
@@ -47,6 +52,8 @@ class LiveAudioIO(
 
     private var audioTrack: AudioTrack? = null
     private val isRecording = AtomicBoolean(false)
+    private val recordingGeneration = RecordingGenerationGate()
+    private val recordingErrorReported = AtomicBoolean(false)
     private var recordThread: Thread? = null
     private val recordingLock = Any()
     private val speakerLock = Any()

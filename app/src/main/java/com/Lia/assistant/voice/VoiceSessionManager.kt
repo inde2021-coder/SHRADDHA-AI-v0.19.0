@@ -8,11 +8,13 @@ import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
 import com.Lia.assistant.forge.ForgeController
+import `in`.shraddha.ai.brain.PersistentChatMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,7 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
 object VoiceSessionManager {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessionMutex = Mutex()
     private val clientLock = Any()
     private val toolJobsLock = Any()
@@ -80,6 +82,8 @@ object VoiceSessionManager {
         appContext = context.applicationContext
 
         _isActive.value = true
+        _muted.value = false
+        isTurnActive = false
         _lastError.value = null
         _statusText.value = "Connecting..."
         _state.value = NovaOrbState.CONNECTING
@@ -189,7 +193,15 @@ object VoiceSessionManager {
 
                 _state.value = NovaOrbState.SPEAKING
                 _statusText.value = "$assistantName is speaking..."
-                val amp = audioIO?.playChunk(bytes) ?: 0f
+                val amp = try {
+                    audioIO?.playChunk(bytes) ?: 0f
+                } catch (playbackError: Exception) {
+                    _lastError.value = playbackError.localizedMessage ?: "Speaker playback failed."
+                    _state.value = NovaOrbState.ERROR
+                    _statusText.value = "Speaker unavailable • reconnecting"
+                    scheduleReconnect()
+                    return
+                }
                 _amplitude.value = amp
 
                 // Re-arm 300 ms silence watchdog
@@ -210,6 +222,7 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 VoiceLatencyTracker.markUserTurnStart()
                 ConversationMemory.recordTurn(MemoryRole.USER, text)
+                scope.launch { PersistentChatMemory.record(currentContext, "User", text) }
                 val detected = LanguageDetector.detect(text)
                 if (detected != "UNKNOWN") {
                     _detectedLanguage.value = detected
@@ -281,11 +294,15 @@ object VoiceSessionManager {
                 }
 
                 if (name == "build_website") {
-                    val forgePrompt = args.optString("prompt", "")
-                    ForgeController.start(currentContext, forgePrompt)
-                    val resp = JSONObject().apply { put("result", "forge_started") }
-                    client?.sendToolResponse(id, name, resp)
+                    val response = runCatching {
+                        ForgeController.start(currentContext, args.optString("prompt", ""))
+                        JSONObject().put("result", "forge_started").put("success", true)
+                    }.getOrElse { error ->
+                        JSONObject().put("success", false).put("error", (error.localizedMessage ?: "Website build could not start").take(300))
+                    }
+                    client?.sendToolResponse(id, name, response)
                     _state.value = NovaOrbState.LISTENING
+                    _statusText.value = "Listening..."
                     return
                 }
 
@@ -419,12 +436,16 @@ object VoiceSessionManager {
     }
 
     private fun scheduleReconnect() {
-        if (!_isActive.value) return
-        if (reconnectJob?.isActive == true) return
+        if (!_isActive.value || reconnectJob?.isActive == true) return
 
         val count = VoiceLatencyTracker.reconnectCount.value
         val backoffMs = (1_200L * (1L shl count.coerceAtMost(5))).coerceAtMost(30_000L)
         VoiceLatencyTracker.incrementReconnect()
+        // Never collect microphone audio while disconnected. Keep the user-started
+        // session alive and reconnect automatically with bounded exponential backoff.
+        audioIO?.stopRecording()
+        _amplitude.value = 0f
+        _vadActive.value = false
         _state.value = NovaOrbState.CONNECTING
         _statusText.value = "Reconnecting (attempt ${count + 1})..."
 
@@ -450,6 +471,13 @@ object VoiceSessionManager {
         }
     }
 
+    fun clearConversationMemory(context: Context): Boolean {
+        ConversationMemory.clear()
+        val cleared = PersistentChatMemory.clear(context)
+        if (_isActive.value) refreshInstructions(context)
+        return cleared
+    }
+
     fun toggleMute() {
         val next = !_muted.value
         _muted.value = next
@@ -464,12 +492,16 @@ object VoiceSessionManager {
     }
 
     fun stop() {
+        val preserveError = _state.value == NovaOrbState.ERROR
+        val previousError = _lastError.value
+        val previousStatus = _statusText.value
         _isActive.value = false
         sessionEpoch.incrementAndGet()
         audioEpoch.incrementAndGet()
         cancelToolJobs()
         reconnectJob?.cancel()
         reconnectJob = null
+        VoiceLatencyTracker.resetReconnect()
         silenceWatchdogJob?.cancel()
         silenceWatchdogJob = null
 
@@ -485,10 +517,11 @@ object VoiceSessionManager {
         synchronized(pendingTextLock) { pendingAssistantText.clear() }
 
         isTurnActive = false
-        _state.value = NovaOrbState.IDLE
-        _statusText.value = "Ready to talk"
+        _state.value = if (preserveError) NovaOrbState.ERROR else NovaOrbState.IDLE
+        _statusText.value = if (preserveError) previousStatus else "Ready to talk"
         _amplitude.value = 0f
         _vadActive.value = false
         _muted.value = false
+        _lastError.value = if (preserveError) previousError else null
     }
 }

@@ -23,6 +23,12 @@ object VoiceLatencyTracker {
         _reconnectCount.value = 0
     }
 
+    /** Exponential retry delay with a 30-second ceiling; retry count is unbounded. */
+    fun reconnectDelayMs(attemptIndex: Int): Long {
+        val exponent = attemptIndex.coerceAtLeast(0).coerceAtMost(5)
+        return (1_200L shl exponent).coerceAtMost(30_000L)
+    }
+
     fun markUserTurnStart(timestamp: Long = System.currentTimeMillis()) {
         synchronized(lock) {
             turnStartTime = timestamp

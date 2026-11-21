@@ -1,0 +1,135 @@
+# SHRADDHA AI v0.19.0 — Steps 3–9 Implementation Tracker
+
+Working branch: `work/step-01-source-audit-fixes`
+Main branch: untouched.
+
+## Step 3 — Voice AI (in progress)
+
+### Implemented in source
+- Fixed Kotlin Gradle DSL Properties import that blocked project configuration.
+- Fixed duplicate `accessibility_description` Android string resource that blocked resource merging.
+- Hardened `LiveAudioIO`: validates unsupported microphone buffer formats, verifies AudioRecord enters RECORDSTATE_RECORDING, handles AudioRecord read errors, releases failed capture resources and reports failures instead of silently pretending the microphone is active.
+- Wired capture errors into `VoiceSessionManager` so the orb/session state can report a microphone error.
+- Added unit tests for voice conversation-memory trimming, role-aware recap, blank-turn handling and clearing.
+
+### Not yet verified / remaining
+- CI run `44665245546` on commit `6181d5f` passed both `testDebugUnitTest` and `assembleDebug`. A later workflow change adds APK artifact publishing; that workflow change and later source fixes require a fresh passing run.
+- Runtime mic permission and Android 14/15 microphone foreground-service lifecycle need physical-device tests.
+- Confirm service is started only from an eligible visible user action and that Stop/Mute work consistently.
+- Verify Gemini Live model availability, API response schema, reconnect/resume and quota behavior against a real configured key.
+- Validate microphone route changes, Bluetooth/headset, audio focus, echo cancellation and OEM battery restrictions.
+- Add explicit voice consent indicator, lifecycle recovery and user-facing failure/retry states.
+- Test Hindi/English speech recognition, transcript integrity, audio latency and interruption.
+
+## Step 4 — People Memory and Visual Lens (source integration in progress)
+
+- Upgraded Visual Lens to request a full-resolution photo from the device camera app via FileProvider, decode/downsample to a maximum 1600 px edge, compress to the 2.5 MB gateway limit, and delete the temporary local image after processing. The photo is only sent after the user captures it and the analysis request is explicitly initiated. Physical camera-app compatibility and device testing remain open.
+
+- CameraX/ML Kit capture activity is registered and reachable from the People Memory screen.
+- Person profiles receive stable local IDs; separate confirmation is required before face or speaker enrollment.
+- Added SAF model import into app-private storage with a 250 MB cap and temporary-file/rename handling.
+- Face capture runs a basic randomized blink/head-turn interaction challenge, quality checks and local ONNX inference; speaker flow uses on-device speech recognition followed by five seconds of local audio capture.
+- Embeddings are stored in the encrypted local vault; profile deletion also deletes that person's biometric templates.
+- No SFace/ECAPA weights are bundled. Imported model license, exact preprocessing/tensor contract and thresholds still need independent validation. Blink/head-turn is not certified anti-spoofing and must not be used as sole authentication.
+- Speaker recognition is blocked when on-device speech recognition is unavailable; cloud speech upload is not used for this challenge.
+- Capture now cancels microphone recording and blocks biometric enrollment if the activity is exited mid-capture; failures return `RESULT_CANCELED` rather than false success. Physical-device capture, model compatibility, accuracy, false-accept/false-reject and spoof evaluation remain mandatory before calling this step complete.
+
+## Step 5 — Device Universe (relay hardening implemented; end-to-end validation pending)
+
+- Pairing/session creation and WebSocket relay require HTTPS/WSS; relay credentials are validated before session creation and URL parameters are encoded with OkHttp.
+- Relay control requests require target-side approval, expire after 60 seconds while pending, and produce grants capped at five minutes. Data-share requests require per-category approval, expire after 60 seconds while pending and grants are one-shot with a maximum 15-minute lifetime.
+- Screen/camera frames are relayed only when the sending device has explicitly enabled the matching permission; frame rate is capped at 10/sec. Payloads and chat messages are size-limited.
+- Disconnect now revokes local and peer-side grants, pending requests and share permissions. Reconnect replacement is guarded against a late close event clearing the new socket.
+- Android client requires HTTPS for chat/provider/vision gateway APIs, limits vision payload size, validates remote tap/swipe coordinates and bounds click-text targets. Screen/camera toggles are checked again after OS permission prompts.
+- Remaining: automated protocol tests, token rotation/revocation review, replay protection, Android local authorization verification and cross-platform companion validation. Arbitrary control of every app/device is not possible; Android and remote OS restrictions apply.
+
+## Step 6 — AI Intelligence (core provider integration implemented; capability expansion pending)
+
+- Provider preference is persisted and validated for Gemini, OpenAI, Groq, Claude and Perplexity. Non-Gemini provider keys are stored in the Android Keystore-backed encrypted feature store and only sent to the selected provider.
+- Text chat adapters are implemented for OpenAI-compatible chat APIs, Anthropic Messages and Perplexity. Chat history is bounded to 40 turns / 8,000 characters per turn; system instruction is capped at 8,000 characters. Compose state is snapshotted before background requests.
+- Backend includes authenticated expert-domain and multi-provider council endpoints with bounded input, provider allowlists, per-IP rate limiting and explicit advice-only output (no external actions executed).
+- Current adapters are text-only: streaming, image/audio multimodality, browsing, citations, tool execution, automatic failover and offline model routing are not implemented. Claude default model ID was updated to `claude-sonnet-5-5`; live API compatibility still requires real user keys.
+
+## Step 7 — Premium UI (not yet fully audited)
+
+- Existing application screens and design-system documentation are present, but this implementation pass has not completed a screen-by-screen visual/accessibility audit.
+- Main native shell now reads the editable assistant name from the shared `nova_prefs` setting for its greeting, assistant heading, voice prompt, orb description, reminder default and export labels.
+- Remaining: verify dynamic name replacement across every Compose screen, notifications, shortcuts and third-party integrations; complete responsive layout, navigation, animation performance, reduced-motion, contrast, TalkBack and real-device audits. Do not claim premium UI completion until these checks pass.
+
+## Step 8 — Firebase and Security (runtime configuration and recap sync integrated; production deployment pending)
+
+- Firestore vault reads/writes are scoped to the authenticated user's UID; document IDs, exact field allowlist, ciphertext format/type, payload size and integer timestamp are validated. All other document paths are denied.
+- Storage rules scope paths to the authenticated user's UID, cap uploads below 50 MB, allow only image/video/PDF/JSON/plain-text content types and deny all other paths. Storage upload code is not yet integrated into the app.
+- Root firebase.json points Firebase CLI deployment at the checked-in Firestore and Storage rules. Firebase can be configured in-app with public Android client identifiers or supplied via local.properties/BuildConfig; no service-account credential is committed.
+- Cloud Vault signs in with Firebase Email/Password, encrypts backup text client-side using AES-256-GCM with a PBKDF2-HMAC-SHA256-derived key (210,000 iterations), and validates encrypted payload structure/size on restore.
+- Cloud & Data can load an opt-in encrypted local conversation recap into a reviewable draft, sync only after consent, and restore it to the local Keystore vault when memory is enabled. Remaining: run Firebase Emulator rules tests, deploy rules to the user's actual Firebase project, verify Email/Password Auth and App Check, account deletion/export, token lifecycle and backup recovery. Checked-in rules do not prove production deployment.
+
+## Step 9 — Final Testing
+Automated unit tests, backend syntax checks and debug APK builds have passed on recent working-branch CI runs. Remaining: lint/static checks, release-signed APK, install/upgrade tests, physical-device tests, crash/performance checks, model execution/accuracy tests and final artifact checksums.
+
+### People Memory model integration — 2026-11-20
+- Added a separately pinned Apache-2.0 MiniFASNet V2 ONNX model (1,744,116 bytes, SHA-256 verified) as an opt-in download. Face capture now requires this model and runs a 2.7× face crop through BGR 80×80 preprocessing before SFace embedding. The score is a supplementary print/screen-replay risk gate; it is not certified/iBeta/ISO 30107-3 PAD and does not defend against masks, deepfakes or injection attacks. The upstream Minivision test.py confirms class index 1 is the real-face class; the implementation uses [print, live, replay] ordering. A third-party model-card label order conflicts, so upstream label semantics are authoritative here. Thresholds still require device/dataset calibration.
+- Added explicit, user-started downloads for pinned SFace and ECAPA ONNX files. Downloads are HTTPS-only, size-limited, written to temporary files, SHA-256 verified and atomically installed into app-private storage.
+- Added a model catalog documenting source revisions, checksums, tensor contracts, attribution and limitations.
+- Corrected SFace preprocessing to match OpenCV FaceRecognizerSF: aligned RGB 112×112, NCHW float32, raw 0–255 values. Added unit tests for channel order, layout and value range.
+- Added consent-gated live 1:1 face comparison against a selected saved person using OpenCV's published 0.363 cosine reference threshold. This is similarity only, not authentication.
+- ECAPA ONNX export accepts 16 kHz mono waveform input and includes its own filterbank frontend; the five-second sample path is compatible at the tensor-shape level. A consent-gated voice comparison can now show raw same-profile cosine similarity, but speaker decision threshold and real-device accuracy remain uncalibrated, so no speaker identity verdict is exposed.
+- The models have not yet been downloaded and executed on a physical Android phone in this environment. CI must pass before APK build status can be claimed.
+
+### Additional security/privacy hardening — 2026-11-20
+- Microphone permission is no longer requested at app launch; it is requested only when the user opens Voice or explicitly starts a voice command.
+- Remote accessibility commands now require a fresh peer-specific approval, expire after five minutes, and can be revoked immediately. The persistent opt-in switch alone no longer authorizes incoming commands.
+- Deleting all People Memory profiles now also clears the encrypted biometric template vault, not just the visible directory.
+- Gemini API keys now use the Android Keystore-backed AES-GCM encrypted store; an existing plaintext SharedPreferences key is migrated and cleared only after the encrypted write succeeds.
+- These changes are source-level hardening; relay-server authorization, Android device behavior and multi-device tests still need end-to-end verification.
+
+## Truthful completion gate
+A step is complete only when its source changes are committed, tests pass, relevant device/integration checks are performed, limitations are documented and artifacts are reproducible. A GitHub CI run alone does not prove hardware behavior.
+
+## Update — 2026-11-20 integrated implementation pass
+- Full-resolution Visual Lens camera capture uses FileProvider and an explicit HTTPS vision request; screen and remote-camera previews are sampled at up to four frames/second.
+- Face capture now uses pinned MiniFASNet V2 as a supplementary PAD score; upstream label index 1 is the live class. It is not certified or calibrated on target phones.
+- Calls open the dialer; SMS/WhatsApp open reviewable drafts. Social publishing stubs were removed from the exposed tool catalog rather than reporting fake success.
+- Voice sessions auto-reconnect indefinitely with bounded backoff, pause microphone capture while disconnected, persist opt-in encrypted recap and hold a partial wake lock while foreground voice is active.
+- Firebase Cloud Vault supports runtime client configuration and explicit encrypted recap backup/restore; only the selected note/recap is synced.
+- Relay now rate-limits session creation, caps active sessions, cleans rate-limit maps and sends Gemini API keys in headers.
+
+## Update — 2026-11-19 implementation pass
+
+### Step 3 — Voice AI source changes
+- Added fatal AudioRecord error handling and resource cleanup; failed microphone capture no longer leaves its capture loop marked active.
+- Propagated microphone errors into the voice session state and clears VAD/amplitude indicators.
+- Voice reconnect retries continue with exponential backoff capped at 30 seconds; microphone capture pauses while disconnected and resumes only after the live session is ready. Manual retry is available for missing credentials or local microphone errors.
+- Foreground notification wording no longer falsely claims that the assistant is actively listening while it may still be connecting or recovering.
+- Added conversation-memory tests (12-turn retention, role-aware recap, blank input filtering and clear).
+- Still requires a passing latest CI run and physical-device checks for actual continuous listening, Android microphone foreground-service restrictions, lock-screen/OEM behavior, Bluetooth/audio focus and real Gemini Live API connectivity.
+
+### Step 4 — People Memory / Visual Lens source changes
+- Added CameraX, ML Kit Face Detection, ExifInterface, Guava ListenableFuture, Google Tasks and ONNX Runtime Android dependencies.
+- Registered the consent-gated biometric capture activity as non-exported.
+- Added an encrypted local biometric template vault backed by Android Keystore AES-GCM, with explicit enrollment consent, person deletion and cosine similarity threshold matching.
+- Added a strict ONNX adapter that checks input tensor contracts and refuses unknown model shapes rather than generating fake embeddings.
+- Added a basic randomized blink/head-turn interaction gate and voice phrase normalization tests.
+- Important limitations: blink/head-turn plus MiniFASNet are supplementary, not certified/iBeta/ISO 30107-3 anti-spoofing; masks, deepfakes and camera injection are not covered. SFace and ECAPA weights are not bundled but are available through pinned HTTPS downloads with SHA-256 verification; MiniFASNet is a separately downloaded optional model. No benchmark or physical-device biometric accuracy test has been performed. The current capture flow must not be treated as secure identity proof.
+
+### Build verification — 2026-11-20
+- Working-branch run `44673430564` for commit `1f03240a73b28bc1f7812fc18b91c4281d9cee3c` completed successfully: backend-check, Android unit tests, debug APK build and artifact publication all passed.
+- Physical-device validation, certified biometric spoof testing, Firebase Emulator rules tests and production Firebase rules deployment have not been performed.
+
+
+## Update — 2026-11-20 workflow safety pass
+- Gemini model discovery and generation requests now send the API key in the `x-goog-api-key` header rather than the URL query string; model discovery cache is keyed by a one-way credential fingerprint so changing providers/keys cannot reuse another key's cached model.
+- Gemini caller-level limits now reject history over 40 turns, any turn over 8,000 characters, and system instructions over 8,000 characters.
+- WorkflowEngine now validates workflow identity, step IDs, titles and current index instead of silently coercing an invalid step index.
+- Added explicit pause, resume and cancel transitions. Resuming a declined sensitive/irreversible step requires fresh approval; cancellation is terminal; failed independent verification stops the workflow.
+- Added unit coverage for approval gates, fresh approval on resume, failed verification, cancellation, duplicate step IDs, invalid indexes and invalid approval transitions.
+- These workflow changes are a deterministic state machine only. They do not grant app/device permissions or execute external actions; the host executor must re-check permissions immediately before each operation.
+
+
+## Update — 2026-11-20 encrypted conversation continuity
+- Added an opt-in switch for persistent chat memory; it defaults OFF and can be disabled at any time.
+- When enabled, the latest 12 user/assistant turns are stored locally through the existing Android Keystore AES-256-GCM vault. The recap is bounded to 1,000 characters per turn and 12,000 characters overall.
+- Chat sends the saved recap as bounded context to the selected AI provider; it is not uploaded to Firebase or shared with paired devices.
+- Added a confirmation dialog to clear the encrypted recap.
+- Added unit tests for role preservation, turn retention and payload bounds.
+- This is a compact conversation recap, not face/person recognition memory. No biometric identity is inferred from chat text.

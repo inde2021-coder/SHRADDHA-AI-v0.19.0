@@ -12,6 +12,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "firebase-admin": "^13.5.0"
   }
 }

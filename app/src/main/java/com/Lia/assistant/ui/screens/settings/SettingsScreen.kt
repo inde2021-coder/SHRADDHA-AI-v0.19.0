@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
@@ -55,6 +56,8 @@ import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.voice.ConversationMemory
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
+import `in`.shraddha.ai.brain.PersistentChatMemory
+import com.Lia.assistant.voice.VoiceSessionManager
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -85,6 +88,8 @@ fun SettingsScreen(
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
+    var rememberChats by remember { mutableStateOf(PersistentChatMemory.isEnabled(context)) }
+    var showClearMemoryDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
 
     Column(
@@ -92,7 +97,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .nightSky()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 100.dp)
+            .padding(bottom = 24.dp)
     ) {
         // Top Bar
         Row(
@@ -109,9 +114,10 @@ fun SettingsScreen(
                 )
             }
             Text(
-                text = "Settings",
+                text = "SYSTEM CONTROL",
                 style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                color = colors.textPrimary
+                color = colors.textPrimary,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -196,6 +202,40 @@ fun SettingsScreen(
                         context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE)
                             .edit().putBoolean("on_device_screen_ocr", it).apply()
                     }
+                )
+                NovaSettingsRow(
+                    title = "AI Chat Provider",
+                    subtitle = appState.aiProvider,
+                    icon = Icons.Default.Speed,
+                    value = "Change",
+                    onClick = { showProviderSelectionDialog = true }
+                )
+                if (appState.aiProvider != "GEMINI") {
+                    NovaSettingsRow(
+                        title = "${appState.aiProvider} API Key",
+                        subtitle = if (ProviderKeyStore.has(context, appState.aiProvider)) "Encrypted on this device" else "Required • tap to add",
+                        icon = Icons.Default.Key,
+                        onClick = {
+                            providerKeyInput = ""
+                            showProviderKeyDialog = true
+                        }
+                    )
+                }
+                NovaSettingsRow(
+                    title = "Encrypted Conversation Memory",
+                    subtitle = if (rememberChats) "ON • last 12 turns saved on this device" else "OFF • new turns are not saved; existing recap remains until cleared",
+                    icon = Icons.Default.Security,
+                    switch = rememberChats,
+                    onCheckedChange = {
+                        rememberChats = it
+                        PersistentChatMemory.setEnabled(context, it)
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Clear Saved Conversation Memory",
+                    subtitle = "Permanently clear the encrypted recap and current in-memory voice recap",
+                    icon = Icons.Default.Security,
+                    onClick = { showClearMemoryDialog = true }
                 )
                 NovaSettingsRow(
                     title = "Assistant Name",
@@ -367,6 +407,94 @@ fun SettingsScreen(
         )
     }
 
+    // Non-Gemini provider key dialog
+    if (showProviderSelectionDialog) {
+        val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+        AlertDialog(
+            onDismissRequest = { showProviderSelectionDialog = false },
+            title = { Text(text = "Choose AI provider", color = colors.textPrimary) },
+            text = {
+                Column {
+                    providers.forEach { provider ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    appState.applyAiProvider(context, provider)
+                                    showProviderSelectionDialog = false
+                                    if (provider != "GEMINI") {
+                                        providerKeyInput = ""
+                                        showProviderKeyDialog = true
+                                    }
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (appState.aiProvider == provider) "✓  $provider" else provider,
+                                color = colors.textPrimary,
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                NovaButton(
+                    text = "Close",
+                    onClick = { showProviderSelectionDialog = false },
+                    type = NovaButtonType.TEXT
+                )
+            },
+            containerColor = colors.surfaceRaised
+        )
+    }
+
+    if (showProviderKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showProviderKeyDialog = false },
+            title = { Text(text = "${appState.aiProvider} API Key", color = colors.textPrimary) },
+            text = {
+                Column {
+                    Text(
+                        text = "The key is encrypted locally using Android Keystore. It is sent only to the selected provider when you send a chat message.",
+                        fontSize = 13.sp,
+                        color = colors.textSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    NovaTextField(
+                        value = providerKeyInput,
+                        onValueChange = { providerKeyInput = it },
+                        placeholder = "Enter new provider API key",
+                        secret = true
+                    )
+                }
+            },
+            confirmButton = {
+                NovaButton(
+                    text = "Save Securely",
+                    enabled = providerKeyInput.isNotBlank(),
+                    onClick = {
+                        runCatching { ProviderKeyStore.save(context, appState.aiProvider, providerKeyInput.trim()) }
+                            .onSuccess {
+                                providerKeyInput = ""
+                                showProviderKeyDialog = false
+                            }
+                    }
+                )
+            },
+            dismissButton = {
+                NovaButton(
+                    text = "Cancel",
+                    onClick = { showProviderKeyDialog = false },
+                    type = NovaButtonType.TEXT
+                )
+            },
+            containerColor = colors.surfaceRaised
+        )
+    }
+
     // Assistant Name Dialog
     if (showNameDialog) {
         AlertDialog(
@@ -398,4 +526,29 @@ fun SettingsScreen(
             containerColor = colors.surfaceRaised
         )
     }
+    if (showClearMemoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearMemoryDialog = false },
+            title = { Text("Clear saved conversation memory?") },
+            text = { Text("This clears the encrypted local recap and the in-memory voice recap. If Voice Mode is active, it reconnects without the old recap. It does not delete WhatsApp/SMS messages or biometric People Memory.") },
+            confirmButton = {
+                NovaButton(
+                    text = "Clear memory",
+                    type = NovaButtonType.SECONDARY,
+                    onClick = {
+                        VoiceSessionManager.clearConversationMemory(context)
+                        showClearMemoryDialog = false
+                    }
+                )
+            },
+            dismissButton = {
+                NovaButton(
+                    text = "Cancel",
+                    type = NovaButtonType.SECONDARY,
+                    onClick = { showClearMemoryDialog = false }
+                )
+            }
+        )
+    }
+
 }

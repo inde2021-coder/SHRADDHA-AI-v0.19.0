@@ -4,6 +4,7 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.OperatorEvent
 import `in`.shraddha.ai.operator.OperatorTaskState
 import `in`.shraddha.ai.operator.ScreenSnapshot
+import `in`.shraddha.ai.operator.ScreenResultVerifier
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.files.DeviceFileLocator
 import `in`.shraddha.ai.future.LocalAuditTrail
@@ -118,7 +119,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 "BACK" -> ShraddhaAccessibilityService.goBack()
                 "SCROLL" -> ShraddhaAccessibilityService.scrollForward()
                 "SELECT_FILE" -> {
-                    val requested = values[step.inputTemplate] ?: step.inputTemplate
+                    val requested = resolvedInput
                     val search = DeviceFileLocator(context).search(requested, values["__file_folder"].orEmpty())
                     if (search.matches.size == 1) ShraddhaAccessibilityService.selectFileInPicker(search.matches.first().displayName) else false
                 }

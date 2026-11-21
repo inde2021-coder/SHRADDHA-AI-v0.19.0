@@ -106,6 +106,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
     private val randomPhrase get() = randomChallenge.first
     private val randomPhraseLocale get() = randomChallenge.second
     private var busy = false
+    @Volatile private var captureCancelled = false
+    @Volatile private var activeRecorder: AudioRecord? = null
+    @Volatile private var cameraProvider: ProcessCameraProvider? = null
     private var activeMode = "enroll"
     private var activePersonId = ""
     private var activePersonName = ""
@@ -188,6 +191,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun challengeText(): String = livenessGate.prompt()
 
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     private fun startCamera() {
         if (cameraStarting) return
         val view = previewView ?: return
@@ -247,6 +251,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
 
+    @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run {
             livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
@@ -482,6 +487,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
         setContentView(root)
     }
 
+    @androidx.annotation.RequiresApi(31)
+    private fun createOnDeviceRecognizer(): SpeechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+
     private fun startSpeakerChallenge() {
         if (busy) return
         busy = true
@@ -543,6 +551,9 @@ class BiometricCaptureActivity : AppCompatActivity() {
             var normalizedPcm: FloatArray? = null
             try {
                 val rate = 16000
+                if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    throw SecurityException("Microphone permission was revoked before speaker capture.")
+                }
                 val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(minBuffer > 0) { "Microphone unavailable" }
                 recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 16384))
@@ -560,6 +571,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 }
                 check(!captureCancelled.get() && offset == pcm.size) { "Voice capture cancelled" }
                 recorder.stop()
+                require(!captureCancelled) { "Capture cancelled." }
                 val samples = FloatArray(pcm.size) { pcm[it] / 32768f }
                 normalizedPcm = samples
                 var sumSquares = 0.0
@@ -610,7 +622,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }, "SpeakerCapture").apply { start() }
     }
 
-    private fun finishWith(text: String) {
+    private fun finishWith(text: String, successful: Boolean = false) {
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_RESULT, text))

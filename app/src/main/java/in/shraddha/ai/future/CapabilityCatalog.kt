@@ -5,6 +5,11 @@ enum class CapabilityState { AVAILABLE, PERMISSION_REQUIRED, COMPANION_REQUIRED,
 data class Capability(val id:String, val group:String, val title:String, val detail:String, val state:CapabilityState)
 object CapabilityCatalog {
     val all = listOf(
+        Capability("continuous_voice","Voice","Continuous foreground voice session","User-started microphone foreground service, screen-off CPU wake lock and automatic reconnect; microphone pauses while disconnected. Battery use and device/OEM tests remain.",CapabilityState.PERMISSION_REQUIRED),
+        Capability("visual_lens","Vision","Visual Lens camera Q&A","User-triggered full-resolution camera capture with explicit provider analysis; HTTPS gateway and supported vision provider configuration required.",CapabilityState.CONFIGURATION_REQUIRED),
+        Capability("communication","Automation","Calls, SMS and WhatsApp","Voice resolves contacts and opens the dialer or message draft; user must tap Call/Send. No silent sending.",CapabilityState.PERMISSION_REQUIRED),
+        Capability("cloud_backup","Memory","Encrypted Firebase Cloud Vault","Runtime Firebase client config and manual encrypted note/recap backup/restore; Email/Password Auth and Firestore rules must be enabled.",CapabilityState.CONFIGURATION_REQUIRED),
+        Capability("social_publish","Creator","Social media publishing","Not implemented in this build; no post is queued or published.",CapabilityState.ROADMAP),
         Capability("app_learning","Automation","Per-app Training Profiles","User-taught semantic anchors and named workflows saved by app package.",CapabilityState.AVAILABLE),
         Capability("semantic_ui","Automation","Semantic UI Understanding","Resource ID, text, hint and content-description matching; optional local Hindi/English ML Kit OCR can read and tap unique OCR text targets on Android 11+. Arbitrary non-text canvas controls remain limited.",CapabilityState.PERMISSION_REQUIRED),
         Capability("adaptive_workflow","Automation","Adaptive Workflow Execution","Re-observes each screen and verifies every learned step; encrypted checkpoints allow explicit resume only after verified boundaries. Requires Accessibility and target-app cooperation.",CapabilityState.PERMISSION_REQUIRED),

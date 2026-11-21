@@ -8,6 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 data class ChatTurn(
     val isUser: Boolean,
@@ -27,23 +29,30 @@ object GeminiTextClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    @Volatile
-    private var cachedResolvedModel: String? = null
+    // Cache model discovery per credential fingerprint; never expose API keys in URLs.
+    private val resolvedModels = ConcurrentHashMap<String, String>()
+
+    private fun credentialFingerprint(apiKey: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(apiKey.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     suspend fun resolveModel(apiKey: String): String {
-        cachedResolvedModel?.let { return it }
+        val cacheKey = credentialFingerprint(apiKey)
+        resolvedModels[cacheKey]?.let { return it }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models"
         val request = Request.Builder()
             .url(url)
+            .header("x-goog-api-key", apiKey)
             .get()
             .build()
 
         try {
             internalHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    val fallback = "models/gemini-2.0-flash"
-                    cachedResolvedModel = fallback
+                    val fallback = "models/gemini-3.8-flash"
+                    resolvedModels[cacheKey] = fallback
                     return fallback
                 }
 
@@ -52,7 +61,7 @@ object GeminiTextClient {
                 val models = json.optJSONArray("models") ?: JSONArray()
 
                 var flashCandidate: String? = null
-                var anyGenerateCandidate: String? = null
+                var bestVersionRank = -1
 
                 for (i in 0 until models.length()) {
                     val modelObj = models.getJSONObject(i)
@@ -66,36 +75,38 @@ object GeminiTextClient {
                         }
                     }
 
-                    if (canGenerate) {
-                        if (anyGenerateCandidate == null) {
-                            anyGenerateCandidate = name
-                        }
-                        val lowerName = name.lowercase()
-                        if (lowerName.contains("flash") &&
-                            !lowerName.contains("live") &&
-                            !lowerName.contains("image") &&
-                            !lowerName.contains("tts") &&
-                            !lowerName.contains("native-audio")
-                        ) {
-                            // Prefer gemini-2.0 or newer over older models
-                            if (flashCandidate == null ||
-                                (lowerName.contains("2.0") || lowerName.contains("2.5")) &&
-                                !flashCandidate!!.lowercase().contains("2.0") &&
-                                !flashCandidate!!.lowercase().contains("2.5")
-                            ) {
-                                flashCandidate = name
-                            }
-                        }
+                    if (!canGenerate) continue
+                    val lowerName = name.lowercase()
+                    if (!lowerName.contains("flash") ||
+                        lowerName.contains("live") ||
+                        lowerName.contains("image") ||
+                        lowerName.contains("tts") ||
+                        lowerName.contains("native-audio")
+                    ) continue
+
+                    // New projects may not be entitled to Gemini 2.5 generation even
+                    // when the catalog lists it. Prefer current 3.x Flash models and
+                    // rank by major/minor version (e.g. 3.8 > 3.5 > 3.1).
+                    val version = Regex("gemini-(\\d+)\\.(\\d+)").find(lowerName) ?: continue
+                    val major = version.groupValues[1].toIntOrNull() ?: continue
+                    val minor = version.groupValues[2].toIntOrNull() ?: continue
+                    if (major < 3) continue
+                    val rank = major * 100 + minor
+                    val previewPenalty = if (lowerName.contains("preview")) 0 else 1
+                    val weightedRank = rank * 10 + previewPenalty
+                    if (weightedRank > bestVersionRank) {
+                        bestVersionRank = weightedRank
+                        flashCandidate = name
                     }
                 }
 
-                val chosen = flashCandidate ?: anyGenerateCandidate ?: "models/gemini-2.0-flash"
-                cachedResolvedModel = chosen
+                val chosen = flashCandidate ?: "models/gemini-3.8-flash"
+                resolvedModels[cacheKey] = chosen
                 return chosen
             }
         } catch (_: Exception) {
-            val fallback = "models/gemini-2.0-flash"
-            cachedResolvedModel = fallback
+            val fallback = "models/gemini-3.8-flash"
+            resolvedModels[cacheKey] = fallback
             return fallback
         }
     }
@@ -111,13 +122,19 @@ object GeminiTextClient {
         if (history.isEmpty()) {
             return ChatReplyResult.Error("No conversation history provided.")
         }
+        if (history.size > 40 || history.any { it.text.length > 8_000 }) {
+            return ChatReplyResult.Error("Conversation context is too large. Keep it to 40 turns with 8,000 characters per turn.")
+        }
+        if (systemInstruction.length > 8_000) {
+            return ChatReplyResult.Error("System instructions exceed the 8,000-character safety limit.")
+        }
 
         val modelName = runCatching {
             kotlinx.coroutines.runBlocking { resolveModel(apiKey) }
-        }.getOrDefault("models/gemini-2.0-flash")
+        }.getOrDefault("models/gemini-3.8-flash")
 
         val modelEndpoint = if (modelName.startsWith("models/")) modelName else "models/$modelName"
-        val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:generateContent"
 
         val root = JSONObject()
 
@@ -144,6 +161,7 @@ object GeminiTextClient {
         val requestBody = root.toString().toRequestBody(mediaType)
         val request = Request.Builder()
             .url(url)
+            .header("x-goog-api-key", apiKey)
             .post(requestBody)
             .build()
 

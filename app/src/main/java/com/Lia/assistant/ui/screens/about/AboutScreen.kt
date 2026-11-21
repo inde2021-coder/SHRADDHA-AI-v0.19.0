@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.NovaGlassCard
 import com.Lia.assistant.ui.fx.LiaOrb3D
 import com.Lia.assistant.ui.theme.LocalNovaColors
@@ -34,6 +34,7 @@ import com.Lia.assistant.voice.NovaOrbState
 @Composable
 fun AboutScreen(
     navController: NavController,
+    appState: NovaAppState,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalNovaColors.current

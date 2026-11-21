@@ -1,17 +1,24 @@
 package `in`.shraddha.ai.link
 
+import android.content.Context
 import android.util.Base64
 import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.ByteString
 import org.json.JSONObject
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
@@ -43,6 +50,17 @@ object DeviceLinkManager {
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
+    /** Reconnects only with a previously paired credential restored from Android Keystore storage. */
+    fun reconnectSaved(done: (Result<PairResult>) -> Unit) {
+        val credentials = runCatching { credentialStore?.load() }.getOrNull()
+        if (credentials == null) {
+            done(Result.failure(IllegalStateException("No valid saved device pairing is available. Pair this device again.")))
+            return
+        }
+        val pair = PairResult("", credentials.sessionId, credentials.deviceId, credentials.token)
+        saveAndConnect(credentials.baseUrl, pair, done)
+    }
+
     fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
         result.mapCatching { body -> PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
             .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
@@ -63,6 +81,7 @@ object DeviceLinkManager {
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { reconnectAttempts = 0; reconnectPending = false; onStatus?.invoke("Secure relay connected"); if (completionDelivered.compareAndSet(false, true)) done(Result.success(pair)) }
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (socket !== webSocket) return
                 try {
                     val msg = JSONObject(text)
                     if ((msg.optString("type").startsWith("file_transfer_") && msg.optString("type") != "file_transfer_chunk") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
@@ -158,14 +177,65 @@ object DeviceLinkManager {
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
             }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                if (socket !== webSocket) return
                 val frame = bytes.toByteArray()
                 if (frame.isEmpty()) return
                 val idLength = frame[0].toInt() and 0xFF
-                if (idLength <= 0 || frame.size <= 2 + idLength) return
+                if (idLength !in 1..64 || frame.size <= 2 + idLength) return
                 val sourceId = frame.copyOfRange(1, 1 + idLength).toString(Charsets.UTF_8)
-                val frameType = frame[1 + idLength].toInt() and 0xFF
-                val jpeg = frame.copyOfRange(2 + idLength, frame.size)
-                if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
+                val encryptedType = frame[1 + idLength].toInt() and 0xFF
+                if (encryptedType !in 0x81..0x82) return // Plaintext visual frames are rejected.
+                val frameType = encryptedType and 0x7F
+                val headerOffset = 2 + idLength
+                if (frame.size < headerOffset + 8 + 12 + 16) return
+                val state = peerKeys[sourceId] ?: return
+                if (!state.localConfirmed || !state.remoteConfirmed) return
+                val sequence = ByteBuffer.wrap(frame, headerOffset + 1, 8).order(ByteOrder.BIG_ENDIAN).long
+                if (sequence < 0) return
+                synchronized(state) {
+                    val previous = if (frameType == 1) state.lastScreenSequence else state.lastCameraSequence
+                    if (sequence <= previous) return
+                    val nonce = frame.copyOfRange(headerOffset + 9, headerOffset + 21)
+                    val ciphertext = frame.copyOfRange(headerOffset + 21, frame.size)
+                    val aad = "${sessionId.orEmpty()}|$sourceId|${deviceId.orEmpty()}|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+                    val plain = runCatching {
+                        DeviceE2ECrypto.decrypt(
+                            state.key,
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(nonce),
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(ciphertext),
+                            aad
+                        )
+                    }.getOrNull() ?: return
+                    if (!DeviceFrameValidation.isValidJpeg(plain)) { plain.fill(0); return }
+                    if (frameType == 1) state.lastScreenSequence = sequence else state.lastCameraSequence = sequence
+                    if (frameType == 2) onCameraFrame?.invoke(sourceId, plain) else onScreenFrame?.invoke(sourceId, plain)
+                }
+            }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                val rejectedCredential = response?.code == 401 || response?.code == 403
+                val wasActive = socket === webSocket
+                if (wasActive) {
+                    if (rejectedCredential) {
+                        // Only the active socket may invalidate the currently saved pairing.
+                        // A late 401 from a superseded socket must not erase newer credentials.
+                        runCatching { credentialStore?.clear() }
+                    }
+                    sessionId = null; deviceId = null; deviceToken = null; socket = null
+                    clearE2EKeys()
+                    onStatus?.invoke(
+                        if (rejectedCredential) "Pairing expired or revoked. Pair this device again."
+                        else "Relay error: ${t.message ?: "connection failed"}"
+                    )
+                    if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
+                }
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (socket === webSocket) {
+                    if (code == 4003) runCatching { credentialStore?.clear() }
+                    sessionId = null; deviceId = null; deviceToken = null; socket = null
+                    clearE2EKeys()
+                    onStatus?.invoke(if (code == 4003) "This device pairing was revoked by the session owner." else "Disconnected: $reason")
+                }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t)); scheduleReconnect(baseUrl, pair) }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason"); if (code != 1000) scheduleReconnect(baseUrl, pair) }
@@ -187,7 +257,12 @@ object DeviceLinkManager {
         }, delaySeconds * 1000L)
     }
     private fun post(base: String, path: String, body: JSONObject, callback: (Result<JSONObject>) -> Unit) {
-        val url = base.trim().trimEnd('/') + path
+        val parsed = base.trim().trimEnd('/').toHttpUrlOrNull()
+        if (parsed == null || parsed.scheme != "https" || parsed.host.isBlank()) {
+            callback(Result.failure(IllegalArgumentException("Pairing and remote-device APIs require HTTPS. Plain HTTP is blocked.")))
+            return
+        }
+        val url = parsed.newBuilder().addPathSegments(path.trimStart('/')).build()
         val request = Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType())).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { callback(Result.failure(e)) }
@@ -198,8 +273,10 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
+        val endpoint = secureApiUrl(baseUrl, "/api/chat")
+        if (endpoint == null) { rejectInsecure(done); return }
         val body = JSONObject().put("provider", provider).put("prompt", prompt.take(12000))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/chat")
+        val builder = Request.Builder().url(endpoint)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -251,7 +328,9 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/ai/providers").get()
+        val endpoint = secureApiUrl(baseUrl, "/api/ai/providers")
+        if (endpoint == null) { rejectInsecure(done); return }
+        val builder = Request.Builder().url(endpoint).get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
@@ -311,7 +390,7 @@ object DeviceLinkManager {
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
         val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000)).put("mode", mode)
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/vision")
+        val builder = Request.Builder().url(endpoint)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -431,16 +510,140 @@ object DeviceLinkManager {
         socket?.send(JSONObject().put("type", "task_handoff_response").put("targetDeviceId", fromDeviceId)
             .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
+    /** Immediately revoke every remote-control grant issued by this phone. */
+    fun revokeAllRemoteControlGrants(): Boolean =
+        socket?.send(JSONObject().put("type", "control_revoke").toString()) == true
+
+    /** Revoke one requester's remote-control grant on this phone. */
+    fun revokeRemoteControlGrant(requesterDeviceId: String): Boolean {
+        if (!requesterDeviceId.matches(Regex("^[a-fA-F0-9]{24}$"))) return false
+        return socket?.send(JSONObject().put("type", "control_revoke").put("requesterDeviceId", requesterDeviceId).toString()) == true
+    }
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
-        if (jpeg.size > 2_500_000 || frameType !in 1..2) return false
-        val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
-        if (target.size > 255) return false
-        val packet = ByteArray(2 + target.size + jpeg.size)
-        packet[0] = frameType.toByte()
-        packet[1] = target.size.toByte()
-        if (target.isNotEmpty()) System.arraycopy(target, 0, packet, 2, target.size)
-        System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
-        return socket?.send(ByteString.of(*packet)) == true
+        if (!DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
+        val sid = sessionId ?: return false
+        val sourceId = deviceId ?: return false
+        val targets = if (targetDeviceId != null) listOf(targetDeviceId) else peerKeys.keys.toList()
+        var sentAny = false
+        for (targetId in targets) {
+            val state = peerKeys[targetId] ?: continue
+            if (!state.localConfirmed || !state.remoteConfirmed) continue
+            val target = targetId.toByteArray(Charsets.UTF_8)
+            if (target.isEmpty() || target.size > 64) continue
+            val sequence = state.sendSequence.getAndIncrement()
+            if (sequence < 0) continue
+            val aad = "$sid|$sourceId|$targetId|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+            val sealed = runCatching { DeviceE2ECrypto.encrypt(state.key, jpeg, aad) }.getOrNull() ?: continue
+            val nonce = java.util.Base64.getDecoder().decode(sealed.nonce)
+            val ciphertext = java.util.Base64.getDecoder().decode(sealed.ciphertext)
+            val packet = ByteBuffer.allocate(2 + target.size + 8 + nonce.size + ciphertext.size)
+                .order(ByteOrder.BIG_ENDIAN)
+                .put((frameType or 0x80).toByte()).put(target.size.toByte()).put(target)
+                .putLong(sequence).put(nonce).put(ciphertext).array()
+            if (socket?.send(ByteString.of(*packet)) == true) sentAny = true
+            nonce.fill(0); ciphertext.fill(0)
+        }
+        return sentAny
+    }
+    /** Revokes a paired device on the relay. Only the session owner may revoke another device. */
+    fun revokeRemoteDevice(targetDeviceId: String, done: (Result<Boolean>) -> Unit) {
+        val credentials = runCatching { credentialStore?.load() }.getOrNull()
+        val sid = sessionId ?: credentials?.sessionId
+        val did = deviceId ?: credentials?.deviceId
+        val bearer = deviceToken ?: credentials?.token
+        val baseUrl = credentials?.baseUrl
+        if (sid.isNullOrBlank() || did.isNullOrBlank() || bearer.isNullOrBlank() || baseUrl.isNullOrBlank()) {
+            done(Result.failure(IllegalStateException("Connect to the paired-device relay before revoking a device.")))
+            return
+        }
+        if (!Regex("^[a-f0-9]{24}$").matches(targetDeviceId)) {
+            done(Result.failure(IllegalArgumentException("Invalid target device ID.")))
+            return
+        }
+        val endpoint = secureApiUrl(baseUrl, "/api/device/revoke")
+        if (endpoint == null) {
+            done(Result.failure(IllegalArgumentException("Device revocation requires a valid HTTPS relay URL.")))
+            return
+        }
+        val body = JSONObject().put("sessionId", sid).put("deviceId", did).put("targetDeviceId", targetDeviceId)
+        val request = Request.Builder().url(endpoint)
+            .header("Authorization", "Bearer $bearer")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) {
+                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    } else {
+                        val revoked = runCatching { JSONObject(raw).optBoolean("ok") }.getOrDefault(false)
+                        if (revoked && targetDeviceId == did) disconnect(clearSavedPairing = true)
+                        done(Result.success(revoked))
+                    }
+                }
+            }
+        })
+    }
+
+    /** Revokes this device's local pairing and, for an owner device, the entire relay session. */
+    fun revokeCurrentPairing(done: (Result<Boolean>) -> Unit) {
+        val activeId = deviceId
+        if (!activeId.isNullOrBlank()) {
+            revokeRemoteDevice(activeId, done)
+            return
+        }
+        // A disconnected phone can still revoke its server-side token using the
+        // Keystore-protected saved credential. Never report remote revocation when
+        // only a local credential deletion was possible.
+        val saved = runCatching { credentialStore?.load() }.getOrNull()
+        if (saved == null) {
+            done(Result.failure(IllegalStateException("No saved pairing is available. The relay cannot be contacted to confirm revocation.")))
+            return
+        }
+        val endpoint = secureApiUrl(saved.baseUrl, "/api/device/revoke")
+        if (endpoint == null) {
+            done(Result.failure(IllegalArgumentException("Saved relay URL is not a valid HTTPS endpoint.")))
+            return
+        }
+        val body = JSONObject().put("sessionId", saved.sessionId)
+            .put("deviceId", saved.deviceId).put("targetDeviceId", saved.deviceId)
+        val request = Request.Builder().url(endpoint)
+            .header("Authorization", "Bearer ${saved.token}")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) {
+                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    } else {
+                        val revoked = runCatching { JSONObject(raw).optBoolean("ok") }.getOrDefault(false)
+                        if (revoked) disconnect(clearSavedPairing = true)
+                        done(Result.success(revoked))
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Closes the live relay connection. Keep the encrypted pairing by default so
+     * reconnectSaved() works after a temporary/manual disconnect. A confirmed
+     * server-side revocation must explicitly clear the local credential.
+     */
+    fun disconnect(clearSavedPairing: Boolean = false) {
+        val active = socket
+        socket = null
+        active?.close(1000, "User disconnected")
+        sessionId = null
+        deviceId = null
+        deviceToken = null
+        clearE2EKeys()
+        if (clearSavedPairing) credentialStore?.clear()
     }
     fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear(); lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
 }

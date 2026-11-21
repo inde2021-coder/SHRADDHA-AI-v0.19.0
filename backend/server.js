@@ -27,6 +27,14 @@ const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
+const clientIp = req => {
+  // Trust forwarded IPs only when the deployment's reverse proxy overwrites them.
+  if (process.env.TRUST_PROXY === 'true') {
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded.slice(0, 64);
+  }
+  return String(req.socket.remoteAddress || 'unknown').slice(0, 64);
+};
 async function readBody(req, limit = MAX_BODY) { let raw = ''; for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > limit) { const e = new Error('Request too large'); e.statusCode = 413; throw e; } } try { return JSON.parse(raw || '{}'); } catch { const e = new Error('Request body must be valid JSON'); e.statusCode = 400; throw e; } }
 
 async function askProviderDirect(provider, prompt) {
@@ -37,22 +45,63 @@ async function askProviderDirect(provider, prompt) {
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+    const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
-  if (provider === 'groq' || provider === 'perplexity') {
-    const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.PERPLEXITY_API_KEY;
-    if (!apiKey) throw new Error(`${provider.toUpperCase()}_API_KEY is not configured`);
-    const endpoint = provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.perplexity.ai/chat/completions';
-    const model = provider === 'groq' ? (process.env.GROQ_MODEL || 'llama-3.3-70b-versatile') : (process.env.PERPLEXITY_MODEL || 'sonar');
-    const r = await fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || `${provider} request failed`); return d.choices?.[0]?.message?.content || '';
+  if (provider === 'groq') {
+    if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
+    const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(45_000),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Groq request failed');
+    return d.choices?.[0]?.message?.content || '';
+  }
+  if (provider === 'perplexity') {
+    if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY is not configured');
+    const r = await fetch('https://api.perplexity.ai/v1/agent', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(90_000),
+      body: JSON.stringify({
+        effort: process.env.PERPLEXITY_EFFORT || 'fast',
+        input: prompt.slice(0, 12000),
+        max_output_tokens: 2048
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'Perplexity Agent request failed');
+    if (d.status === 'failed' || d.status === 'cancelled') throw new Error(d.error?.message || `Perplexity request ${d.status}`);
+    const answer = [];
+    const sources = new Map();
+    for (const item of Array.isArray(d.output) ? d.output : []) {
+      if (item?.type === 'message') {
+        for (const part of Array.isArray(item.content) ? item.content : []) {
+          if (part?.type === 'output_text' && typeof part.text === 'string' && part.text.trim()) answer.push(part.text);
+          for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
+            const url = typeof annotation?.url === 'string' ? annotation.url.trim() : '';
+            if (/^https?:\/\//i.test(url)) sources.set(url, String(annotation.title || url).slice(0, 180));
+          }
+        }
+      } else if (item?.type === 'search_results') {
+        for (const result of Array.isArray(item.results) ? item.results : []) {
+          const url = typeof result?.url === 'string' ? result.url.trim() : '';
+          if (/^https?:\/\//i.test(url)) sources.set(url, String(result.title || url).slice(0, 180));
+        }
+      }
+    }
+    if (!answer.length) throw new Error('Perplexity returned no answer text.');
+    const footer = [...sources.entries()].slice(0, 5).map(([url, title]) => `• ${title} — ${url}`).join('\n');
+    return answer.join('\n\n') + (footer ? `\n\nSources:\n${footer}` : '');
   }
   throw new Error('Unsupported provider');
 }
@@ -85,13 +134,13 @@ async function askVisionDirect(provider, prompt, imageBase64, mimeType) {
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
-    const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
+    const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini vision request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic vision request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
   throw new Error('Unsupported provider');
@@ -130,7 +179,7 @@ const server = http.createServer(async (req, res) => {
   const routePath = String(req.url || '').split('?')[0];
   if (AI_ROUTES.has(routePath)) {
     if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+    const ip = clientIp(req);
     const now = Date.now(); const usage = apiAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
     if (usage.resetAt <= now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
     usage.count += 1; apiAttempts.set(ip, usage);
@@ -138,13 +187,19 @@ const server = http.createServer(async (req, res) => {
   }
   try {
     if (req.method === 'POST' && req.url === '/api/device/session') {
+      const ip = clientIp(req);
+      const now = Date.now(); const usage = sessionCreateAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
+      if (usage.resetAt <= now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
+      usage.count += 1; sessionCreateAttempts.set(ip, usage);
+      if (usage.count > 10) return json(res, 429, { error: 'Too many session creation requests. Wait ten minutes and try again.' });
+      if (sessions.size >= 500) return json(res, 503, { error: 'Relay session capacity reached. Try again later.' });
       const body = await readBody(req);
       const name = typeof body.deviceName === 'string' ? body.deviceName.trim() : '';
       if (!name || name.length > 48) return json(res, 400, { error: 'deviceName must be 1-48 characters' });
       return json(res, 201, createSession(name));
     }
     if (req.method === 'POST' && req.url === '/api/device/join') {
-      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      const ip = clientIp(req);
       const now = Date.now(); const attempt = joinAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (attempt.resetAt < now) { attempt.count = 0; attempt.resetAt = now + 10 * 60 * 1000; }
       attempt.count += 1; joinAttempts.set(ip, attempt);
@@ -483,8 +538,8 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (req.method === 'POST' && req.url === '/api/agents/council') {
-      if (!process.env.GATEWAY_TOKEN || req.headers.authorization !== `Bearer ${process.env.GATEWAY_TOKEN}`) return json(res, 401, { error: 'Gateway authentication is required' });
-      const caller = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const caller = clientIp(req);
       const now = Date.now(); const usage = councilAttempts.get(caller) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (usage.resetAt < now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
       usage.count += 1; councilAttempts.set(caller, usage);
@@ -697,10 +752,12 @@ wss.on('connection', (ws, ctx) => {
   if (device.socket && device.socket.readyState === WebSocket.OPEN) device.socket.close(4001, 'Reconnected elsewhere');
   device.socket = ws;
   const send = (target, payload, binary = false) => { const peer = session.devices.get(target); if (peer?.socket?.readyState === WebSocket.OPEN) peer.socket.send(payload, { binary }); };
-  ws.send(JSON.stringify({ type: 'connected', deviceId, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
+  ws.send(JSON.stringify({ type: 'connected', deviceId, role: device.role, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
   for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: true }));
   ws.on('message', (data, isBinary) => {
-    if (isBinary) { // Frame protocol: [1-byte device-id length][device-id UTF-8][1-byte frame type][JPEG]. Client payload starts with frame type (1=screen, 2=camera).
+    if (isBinary) {
+      // Visual protocol v2: [encrypted frame type 0x81/0x82][target length][target id]
+      // [uint64 sequence][12-byte nonce][AES-256-GCM ciphertext+tag]. Plain JPEG is rejected.
       const idBytes = Buffer.from(deviceId, 'utf8');
       const clientFrame = Buffer.from(data);
       if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
@@ -708,14 +765,14 @@ wss.on('connection', (ws, ctx) => {
       // A paired socket is not implicit permission to watch another device.
       if (!canShareVisualFrame(device.sharePermissions, frameType)) return;
       const targetLength = clientFrame[1];
-      if (clientFrame.length < 2 + targetLength + 1) return;
-      const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
-      if (targetId && (!session.devices.has(targetId) || targetId === deviceId)) return;
-      const jpeg = clientFrame.subarray(2 + targetLength);
-      if (!jpeg.length) return;
-      const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([frameType]), jpeg]);
-      if (targetId) send(targetId, framed, true);
-      else for (const [id] of session.devices) if (id !== deviceId) send(id, framed, true);
+      if (targetLength < 1 || targetLength > 64 || clientFrame.length < 2 + targetLength + 8 + 12 + 16) return;
+      const targetId = clientFrame.subarray(2, 2 + targetLength).toString('utf8');
+      if (!session.devices.has(targetId) || targetId === deviceId) return;
+      const encryptedPayload = clientFrame.subarray(2 + targetLength);
+      if (encryptedPayload.length > 2_500_036) return;
+      // The relay deliberately cannot validate JPEG content: it only forwards bounded opaque ciphertext.
+      const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([clientFrame[0]]), encryptedPayload]);
+      send(targetId, framed, true);
       return;
     }
     let msg; try { msg = JSON.parse(data.toString()); } catch { return; }
@@ -840,6 +897,7 @@ wss.on('connection', (ws, ctx) => {
       if (!msg.permissions || typeof msg.permissions !== 'object' || Array.isArray(msg.permissions)) return;
       for (const key of allowed) next[key] = msg.permissions[key] === true;
       device.sharePermissions = next;
+      const revokedShares = new Map();
       for (const [grantKey] of device.grants) {
         const category = grantKey.split(':').slice(1).join(':');
         if (next[category] !== true) device.grants.delete(grantKey);
@@ -967,13 +1025,61 @@ wss.on('connection', (ws, ctx) => {
         note: String(msg.note || '').slice(0, 300)
       }));
     } else if (msg.type === 'signal' || msg.type === 'chat' || msg.type === 'control_consent') {
+      if (JSON.stringify(msg).length > 64 * 1024) return;
+      if (msg.type === 'chat' && (typeof msg.message !== 'string' || msg.message.length > 2000)) return;
       if (msg.type === 'signal') { if (typeof msg.targetDeviceId !== 'string' || !session.devices.has(msg.targetDeviceId)) return; send(msg.targetDeviceId, JSON.stringify({ ...msg, fromDeviceId: deviceId })); }
       else for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ ...msg, fromDeviceId: deviceId }));
     }
   });
-  ws.on('close', () => { if (device.socket === ws) device.socket = null; for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false })); });
+  ws.on('close', () => {
+    // Ignore a late close event from a socket replaced by a newer connection.
+    if (device.socket !== ws) return;
+    device.socket = null;
+    // Disconnect is a revocation boundary: all permissions and grants fail closed.
+    device.sharePermissions = {};
+    device.grants.clear();
+    device.controlGrants.clear();
+    device.pendingControlRequests.clear();
+    device.pendingRemoteActions.clear();
+    device.pendingDataShares.clear();
+    for (const [id, peer] of session.devices) {
+      if (id === deviceId) continue;
+      peer.controlGrants.delete(deviceId);
+      peer.pendingControlRequests.delete(deviceId);
+      for (const [actionId, pending] of peer.pendingRemoteActions) {
+        if (pending.requesterId === deviceId) peer.pendingRemoteActions.delete(actionId);
+      }
+      peer.grants.delete(`${deviceId}:contacts`);
+      peer.grants.delete(`${deviceId}:media`);
+      peer.grants.delete(`${deviceId}:documents`);
+      peer.grants.delete(`${deviceId}:messages`);
+      peer.grants.delete(`${deviceId}:calendar`);
+      peer.grants.delete(`${deviceId}:location`);
+      peer.grants.delete(`${deviceId}:device_status`);
+      peer.grants.delete(`${deviceId}:ai_memory`);
+      for (const key of peer.pendingDataShares.keys()) if (key.startsWith(`${deviceId}:`)) peer.pendingDataShares.delete(key);
+      if (peer.socket?.readyState === WebSocket.OPEN) {
+        peer.socket.send(JSON.stringify({ type: 'permission_status', deviceId, permissions: {} }));
+        peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false }));
+      }
+    }
+  });
 });
 function targetIdIsSelf(target, self) { return target === self; }
 
-setInterval(() => { const now = Date.now(); for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code); for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip); for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id); }, 60_000).unref();
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code);
+  for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip);
+  for (const [ip, a] of apiAttempts) if (a.resetAt < now) apiAttempts.delete(ip);
+  for (const [ip, a] of councilAttempts) if (a.resetAt < now) councilAttempts.delete(ip);
+  for (const [ip, a] of sessionCreateAttempts) if (a.resetAt < now) sessionCreateAttempts.delete(ip);
+  for (const session of sessions.values()) for (const device of session.devices.values()) {
+    for (const [id, expiry] of device.pendingControlRequests) if (expiry < now) device.pendingControlRequests.delete(id);
+    for (const [key, pending] of device.pendingDataShares) if (pending.expiresAt < now) device.pendingDataShares.delete(key);
+    for (const [id, expiry] of device.controlGrants) if (expiry < now) device.controlGrants.delete(id);
+    for (const [key, expiry] of device.grants) if (expiry < now) device.grants.delete(key);
+  }
+  for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id);
+}, 60_000).unref();
 server.listen(PORT, '0.0.0.0', () => console.log(`Shraddha device relay listening on ${PORT}`));

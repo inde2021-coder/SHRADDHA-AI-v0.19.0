@@ -37,7 +37,7 @@ import kotlinx.coroutines.delay
 import java.util.Random
 
 @Composable
-fun LiaSplash3D(onDismiss: () -> Unit) {
+fun LiaSplash3D(assistantName: String, onDismiss: () -> Unit) {
     if (SplashSession.played) {
         onDismiss()
         return

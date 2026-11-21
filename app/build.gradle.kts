@@ -18,6 +18,13 @@ fun firebaseConfigValue(name: String): String =
     (System.getenv(name) ?: firebaseLocalProperties.getProperty(name) ?: "")
         .replace("\\", "\\\\").replace("\"", "\\\"")
 
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseKeystorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+    .all { !it.isNullOrBlank() }
+
 android {
     namespace = "in.shraddha.ai"
     compileSdk = 35
@@ -68,6 +75,18 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // Camera and on-device face analysis used by the consent-gated People Memory capture flow.
+    val cameraXVersion = "1.4.1"
+    implementation("com.google.guava:guava:33.3.1-android")
+    implementation("androidx.camera:camera-core:$cameraXVersion")
+    implementation("androidx.camera:camera-camera2:$cameraXVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
+    implementation("androidx.camera:camera-view:$cameraXVersion")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("com.google.mlkit:face-detection:16.1.7")
+    implementation("com.google.android.gms:play-services-tasks:18.2.0")
+    // Runtime only; actual model files are user-supplied after license and tensor-contract review.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
@@ -88,6 +107,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-messaging")

@@ -1,5 +1,6 @@
 package com.Lia.assistant.voice
 
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -10,12 +11,20 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.Lia.assistant.MainActivity
 import `in`.shraddha.ai.R
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.fx.OverlayEdgeGlowController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class VoiceForegroundService : Service() {
     companion object {

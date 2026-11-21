@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlinx.coroutines.delay
 import java.util.LinkedList
 
 class NovaAccessibilityService : AccessibilityService() {
@@ -60,10 +59,12 @@ class NovaAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty() && elements.size < maxElements) {
             val node = queue.poll() ?: continue
 
-            val text = (node.text?.toString() ?: node.contentDescription?.toString() ?: "").trim()
+            val sensitive = node.isPassword
+            val text = if (sensitive) "संवेदनशील फ़ील्ड" else
+                (node.text?.toString() ?: node.contentDescription?.toString() ?: "").trim()
             if (text.isNotEmpty() && text.length <= maxLabelLength) {
                 val type = when {
-                    node.isEditable -> "[input]"
+                    sensitive || node.isEditable -> "[input]"
                     node.isClickable -> "[button]"
                     node.isCheckable -> "[checkbox]"
                     else -> "[text]"
@@ -101,7 +102,8 @@ class NovaAccessibilityService : AccessibilityService() {
         node.getBoundsInScreen(bounds)
         val x = bounds.centerX().toFloat()
         val y = bounds.centerY().toFloat()
-        return if (gestureTap(x, y)) "tapped" else "failed"
+        if (bounds.isEmpty) return "failed"
+        return if (gestureTap(x, y)) "gesture_dispatched" else "failed"
     }
 
     fun typeText(text: String): String {
@@ -109,6 +111,7 @@ class NovaAccessibilityService : AccessibilityService() {
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             ?: findFirstEditable(root)
             ?: return "no_focused_field"
+        if (focused.isPassword) return "blocked_sensitive_field"
 
         val args = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)

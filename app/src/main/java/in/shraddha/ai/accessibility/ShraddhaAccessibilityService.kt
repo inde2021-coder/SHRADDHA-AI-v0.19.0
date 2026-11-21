@@ -16,6 +16,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import `in`.shraddha.ai.operator.ScreenElement
 import `in`.shraddha.ai.operator.ScreenSnapshot
+import `in`.shraddha.ai.link.DeviceLinkManager
 
 class ShraddhaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
@@ -24,7 +25,15 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* Screen content is not uploaded or logged. */ }
     override fun onInterrupt() { }
-    override fun onDestroy() { if (active === this) active = null; super.onDestroy() }
+    override fun onUnbind(intent: Intent?): Boolean {
+        DeviceLinkManager.revokeAllRemoteControlGrants()
+        return super.onUnbind(intent)
+    }
+    override fun onDestroy() {
+        DeviceLinkManager.revokeAllRemoteControlGrants()
+        if (active === this) active = null
+        super.onDestroy()
+    }
 
     private fun isSensitiveNode(node: AccessibilityNodeInfo): Boolean {
         if (node.isPassword) return true
@@ -86,21 +95,23 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     }
 
     private fun performRemoteTap(xNorm: Float, yNorm: Float): Boolean {
-        if (Build.VERSION.SDK_INT < 24) return false
+        if (Build.VERSION.SDK_INT < 24 || !xNorm.isFinite() || !yNorm.isFinite() ||
+            xNorm !in 0f..1f || yNorm !in 0f..1f) return false
         val metrics = resources.displayMetrics
-        val x = (xNorm.coerceIn(0f, 1f) * metrics.widthPixels)
-        val y = (yNorm.coerceIn(0f, 1f) * metrics.heightPixels)
+        val x = xNorm * metrics.widthPixels
+        val y = yNorm * metrics.heightPixels
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 90)).build()
         return dispatchGesture(gesture, null, null)
     }
 
     private fun performRemoteSwipe(x1: Float, y1: Float, x2: Float, y2: Float): Boolean {
-        if (Build.VERSION.SDK_INT < 24) return false
+        val coordinates = listOf(x1, y1, x2, y2)
+        if (Build.VERSION.SDK_INT < 24 || coordinates.any { !it.isFinite() || it !in 0f..1f }) return false
         val metrics = resources.displayMetrics
         val path = Path().apply {
-            moveTo(x1.coerceIn(0f, 1f) * metrics.widthPixels, y1.coerceIn(0f, 1f) * metrics.heightPixels)
-            lineTo(x2.coerceIn(0f, 1f) * metrics.widthPixels, y2.coerceIn(0f, 1f) * metrics.heightPixels)
+            moveTo(x1 * metrics.widthPixels, y1 * metrics.heightPixels)
+            lineTo(x2 * metrics.widthPixels, y2 * metrics.heightPixels)
         }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 350)).build()
         return dispatchGesture(gesture, null, null)
@@ -242,13 +253,25 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         fun selectFileInPicker(fileName: String): Boolean = active?.selectFileInPicker(fileName) ?: false
         fun remoteTap(x: Float, y: Float): Boolean = active?.performRemoteTap(x, y) ?: false
         fun remoteSwipe(x1: Float, y1: Float, x2: Float, y2: Float): Boolean = active?.performRemoteSwipe(x1, y1, x2, y2) ?: false
-        fun applyRemoteAction(action: JSONObject): Boolean {
+        fun applyRemoteAction(action: JSONObject, userConfirmed: Boolean = false): Boolean {
             val service = active ?: return false
             return when (action.optString("kind")) {
                 "tap" -> service.performRemoteTap(action.optDouble("x").toFloat(), action.optDouble("y").toFloat())
                 "swipe" -> service.performRemoteSwipe(action.optDouble("x1").toFloat(), action.optDouble("y1").toFloat(), action.optDouble("x2").toFloat(), action.optDouble("y2").toFloat())
-                "type" -> service.setFocusedText(action.optString("text").take(2000))
-                "click_text" -> service.clickVisibleText(action.optString("text").take(120))
+                "type" -> {
+                    val text = action.optString("text").take(2000)
+                    val decision = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess("TYPE_TEXT", value = text)
+                    decision.risk != `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK && (decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW || userConfirmed) && service.setFocusedText(text)
+                }
+                "click_text" -> {
+                    val label = action.optString("text").trim()
+                    if (label.isEmpty() || label.length > 120) false
+                    else {
+                        val decision = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess("CLICK_TEXT", target = label)
+                        // Remote taps cannot satisfy a confirmation dialog on the phone.
+                        decision.risk != `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK && (decision.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.LOW || userConfirmed) && service.clickVisibleText(label)
+                    }
+                }
                 "open_app" -> service.openInstalledApp(action.optString("appName").take(80))
                 "home" -> service.performGlobalAction(GLOBAL_ACTION_HOME)
                 "back" -> service.performGlobalAction(GLOBAL_ACTION_BACK)

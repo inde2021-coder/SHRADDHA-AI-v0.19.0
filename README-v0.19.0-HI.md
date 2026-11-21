@@ -1,13 +1,36 @@
-# SHRADDHA AI v0.19.0 — Unified Android + MYRA PC Companion
+# SHRADDHA AI v0.19.0 — Android + Windows PC Companion
 
-यह v0.18.0 का updated source है। Android पर केवल SHRADDHA AI app/launcher है। LIA का Android voice/Compose experience उसी APK में internal Activity के रूप में जोड़ा गया है। MYRA का Windows/Linux companion `desktop-companion/` में है और SHRADDHA के Device Universe से pair किया जाना है।
+यह v0.18.0 का updated source है। Android पर केवल SHRADDHA AI app/launcher है। Shraddha AI का voice और Compose अनुभव उसी APK में internal Activity के रूप में जोड़ा गया है।
 
 ## मुख्य स्थान
-- `app/src/main/java/in/shraddha/ai/` — SHRADDHA core, Universal App Operator, security, Firebase, device link, vision.
-- `app/src/main/java/com/Lia/assistant/` — उसी APK में merged LIA voice, Compose UI, live audio, memory/personality, Forge, accessibility agent.
-- `desktop-companion/MYRA_ULTRA_APP/` — MYRA Ultra desktop companion, MYRA Coder and Website Forge.
-- `docs/integration/LIA-MYRA-FULL-MERGE-v0.19.0-HI.md` — merge ledger and boundaries.
-- `desktop-companion/README-SHRADDHA-MYRA-PAIRING-HI.md` — MYRA PC setup.
+- `app/src/main/java/in/shraddha/ai/` — SHRADDHA core, Universal App Operator, security, Firebase, device link और vision.
+- `app/src/main/java/com/Lia/assistant/` — उसी APK में merged Shraddha AI voice और Compose UI, live audio, memory/personality, Forge और accessibility agent.
+- `pc_companion/` — SHRADDHA AI का अलग Windows PC Companion; Android Device Universe से HTTPS relay के जरिए pair होता है।
+- Phone Call Agent — Edesy inbound bridge readiness, authenticated audio preflight और recent call history; backend URL और gateway token Android Keystore-backed encrypted storage में रखे जाते हैं। SIM forwarding Jio network पर no-answer conditional forwarding से ही काम करेगा।
+- `desktop-companion/Shraddha AI_ULTRA_APP/` — Shraddha AI desktop assistant/Coder/Website Forge source. यह Windows PC Companion executable से अलग codebase है।
+- `docs/integration/Shraddha AI-Shraddha AI-FULL-MERGE-v0.19.0-HI.md` — merge ledger और boundaries.
+- `pc_companion/README.md` — Windows companion setup और safety boundaries.
+- `desktop-companion/README-SHRADDHA-Shraddha AI-PAIRING-HI.md` — Shraddha AI source/architecture notes.
+
+## नवीनतम सत्यापित build
+
+**Android CI run #280**
+
+- Commit: `d8b9af6d9b780c0ce97fd9b471ce65455adfd272`
+- Android unit tests: PASS.
+- Backend JavaScript syntax और security/API tests: PASS.
+- Debug APK build: PASS.
+- `arm64-v8a` और `armeabi-v7a` APK generation तथा per-APK ABI verification: PASS.
+- SHA-256 checksum verification: PASS.
+- Artifact: `shraddha-ai-debug-apks-arm`, ID `14603898058`.
+- [पूरा Android CI परिणाम](https://github.com/inde2021-coder/SHRADDHA-AI-v0.19.0/actions/runs/44680183713)
+
+### Windows PC Companion
+- Windows Python tests: PASS (13 tests).
+- Windows EXE packaging: PASS.
+- [Windows CI run #7](https://github.com/inde2021-coder/SHRADDHA-AI-v0.19.0/actions/runs/44679699614)
+- Artifact: `ShraddhaAI-PC-Companion-Windows`, ID `14603647797`.
+- EXE Android APK में शामिल नहीं है; Windows PC पर अलग चलाना होगा।
 
 ## Build
 Open this project root in Android Studio. Use JDK 17 and Android SDK 35. Allow Gradle to download dependencies, then run `./gradlew testDebugUnitTest assembleDebug`. GitHub Actions now includes backend policy tests, Firebase Firestore/Storage emulator rules tests, Android unit tests, debug APK build and emulator ONNX smoke tests. The Firebase emulator assertion was corrected in `30cb7aa`. The next Android compile exposed missing Guava ListenableFuture visibility for CameraX and a non-public Firebase Messaging overload; both are corrected in `1aee25a`. A successful full build for that commit is still pending. Do not treat older APK artifacts as verification of the current source. Physical Android camera/microphone and accuracy tests are still required. Configure Firebase and AI provider keys using the documented local configuration; never commit secrets.
