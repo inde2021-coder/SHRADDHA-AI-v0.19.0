@@ -30,18 +30,29 @@ object EdesyCallAgentClient {
 
     private suspend fun get(baseUrl: String, token: String, path: String): JSONObject =
         execute(Request.Builder().url(endpoint(baseUrl, path))
-            .header("Authorization", "Bearer $token").get().build())
+            .header("Authorization", "Bearer ${validatedToken(token)}").get().build())
 
     private suspend fun post(baseUrl: String, token: String, path: String, body: JSONObject): JSONObject =
         execute(Request.Builder().url(endpoint(baseUrl, path))
             .header("Authorization", "Bearer $token")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build())
 
+    private fun validatedToken(token: String): String {
+        val clean = token.trim()
+        require(clean.length in 20..512 && clean == token) {
+            "Backend gateway token must contain 20-512 characters without surrounding whitespace."
+        }
+        return clean
+    }
+
     private fun endpoint(baseUrl: String, path: String): String {
+        require(baseUrl.length <= 512) { "Backend URL is too long." }
         val parsed = baseUrl.trim().trimEnd('/').toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Backend URL is invalid.")
-        require(parsed.scheme == "https" && parsed.host.isNotBlank()) {
-            "Phone Call Agent requires a valid HTTPS backend URL."
+        require(parsed.scheme == "https" && parsed.host.isNotBlank() &&
+            parsed.username.isEmpty() && parsed.password.isEmpty() &&
+            parsed.query == null && parsed.fragment == null) {
+            "Phone Call Agent requires an HTTPS backend URL without credentials, query parameters or fragments."
         }
         return parsed.newBuilder().addPathSegments(path.trimStart('/')).build().toString()
     }
