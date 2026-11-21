@@ -1,18 +1,15 @@
 package `in`.shraddha.ai.biometric
 
-import java.text.Normalizer
 import java.util.Locale
 
 object BiometricVoiceChallenge {
-    private fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
-        .lowercase(Locale.ROOT)
-        .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
-        .trim()
-        .replace(Regex("\\s+"), " ")
+    fun normalizeTranscript(value: String): String = value.lowercase(Locale.ROOT)
+        .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
+        .replace(Regex("\\s+"), " ").trim()
 
-    fun matches(expected: String, actual: String): Boolean {
-        val a = normalize(expected)
-        val b = normalize(actual)
-        return a.isNotBlank() && b.isNotBlank() && (a == b || b.contains(a))
+    fun matches(expectedPhrase: String, recognizedText: String): Boolean {
+        val expected = normalizeTranscript(expectedPhrase)
+        val actual = normalizeTranscript(recognizedText)
+        return expected.isNotBlank() && actual == expected
     }
 }
