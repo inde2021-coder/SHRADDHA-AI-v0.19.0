@@ -122,6 +122,10 @@ test('Edesy preflight WebSocket echoes bounded PCM without opening an AI call', 
   const closed = once(socket, 'close');
   socket.close();
   await closed;
+  const history = await fetch(`${baseUrl}/api/telephony/edesy/calls`, {
+    headers: { authorization: `Bearer ${TOKEN}` }
+  });
+  assert.deepEqual((await history.json()).calls, []);
 });
 
 test('Edesy preflight requires gateway auth and server-side provider configuration', async () => {
