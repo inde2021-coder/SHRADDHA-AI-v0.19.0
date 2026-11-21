@@ -30,33 +30,6 @@ object ActionExecutor {
             return result
         }
 
-        // Draft-only messaging does not auto-send, but sensitive credentials must
-        // never be placed into a message composer by a voice/tool instruction.
-        if (toolName in setOf("message_contact", "execute_whatsapp_task")) {
-            val draftText = args.optString("message", "")
-            val draftDecision = OperatorSafetyPolicy.assess("TYPE_TEXT", value = draftText)
-            if (draftDecision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
-                result.put("status", "error")
-                result.put("action", "blocked_by_safety_policy")
-                result.put("message", draftDecision.reason + " Message draft was not opened.")
-                return result
-            }
-        }
-
-        // Direct voice/tool actions may not bypass the Operator safety policy.
-        // Message tools only open a draft; the user still taps Send in the target app.
-        if (toolName !in setOf("message_contact", "execute_whatsapp_task")) {
-            val target = args.optString("text", args.optString("app_name", args.optString("contact_name", "")))
-            val value = args.optString("text", args.optString("message", ""))
-            val decision = OperatorSafetyPolicy.assess(toolName, target, value)
-            if (decision.risk != OperatorSafetyPolicy.Risk.LOW) {
-                result.put("status", "error")
-                result.put("action", if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) "blocked_by_safety_policy" else "confirmation_required")
-                result.put("message", decision.reason + " Direct voice action stopped; open App Operator to review and confirm.")
-                return result
-            }
-        }
-
         when (toolName) {
             "open_app" -> {
                 val appName = args.optString("app_name", "").trim()
@@ -106,7 +79,6 @@ object ActionExecutor {
                         })
                         result.put("contact", lookup.displayName)
                         result.put("number", lookup.phoneNumber)
-                        result.put("message", "Dialer opened. Review the number and tap Call to place the call.")
                     }
                     is ContactLookupResult.Ambiguous -> {
                         result.put("status", "needs_clarification")
@@ -138,16 +110,6 @@ object ActionExecutor {
                     return result
                 }
 
-                if (messageText.length > 2_000) {
-                    result.put("status", "error")
-                    result.put("message", "Message is too long (maximum 2,000 characters).")
-                    return result
-                }
-                if (targetApp !in setOf("sms", "whatsapp")) {
-                    result.put("status", "error")
-                    result.put("message", "Choose SMS or WhatsApp.")
-                    return result
-                }
                 val lookup = ContactResolver.lookup(context, contactName)
                 val phoneNumber = when (lookup) {
                     is ContactLookupResult.Found -> lookup.phoneNumber
