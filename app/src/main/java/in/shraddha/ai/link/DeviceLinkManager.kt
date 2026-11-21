@@ -3,8 +3,6 @@ package `in`.shraddha.ai.link
 import android.util.Base64
 import android.os.Handler
 import android.os.Looper
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.ConcurrentHashMap
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
