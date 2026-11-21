@@ -284,12 +284,14 @@ test('disabling a data-sharing category clears pending and active grants and not
   });
   ownerSocket.send(JSON.stringify({ type: 'data_share_request', targetDeviceId: member.deviceId, category: 'media', itemLabel: 'Photo' }));
   const [requestMessage] = await requestPromise;
-  assert.equal(JSON.parse(requestMessage.toString()).fromDeviceId, owner.deviceId);
+  const firstShareRequest = JSON.parse(requestMessage.toString());
+  assert.equal(firstShareRequest.fromDeviceId, owner.deviceId);
+  assert.match(firstShareRequest.requestId, /^[A-Za-z0-9_-]{12,64}$/);
 
   const approvedPromise = nextWsMessage(ownerSocket, data => {
     try { const msg = JSON.parse(data.toString()); return msg.type === 'data_share_result' && msg.approved === true; } catch { return false; }
   });
-  memberSocket.send(JSON.stringify({ type: 'data_share_response', requesterDeviceId: owner.deviceId, category: 'media', approved: true, minutes: 5 }));
+  memberSocket.send(JSON.stringify({ type: 'data_share_response', requesterDeviceId: owner.deviceId, category: 'media', requestId: firstShareRequest.requestId, approved: true, minutes: 5 }));
   const [approvedMessage] = await approvedPromise;
   assert.equal(JSON.parse(approvedMessage.toString()).category, 'media');
 
