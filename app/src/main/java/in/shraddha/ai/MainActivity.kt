@@ -125,12 +125,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
-        window.statusBarColor = 0xFF070B14.toInt()
-        window.navigationBarColor = 0xFF0B1220.toInt()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isStatusBarContrastEnforced = false
-            window.isNavigationBarContrastEnforced = false
-        }
+        window.decorView.setBackgroundColor(0xFF070B14.toInt())
         pageRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(30))
