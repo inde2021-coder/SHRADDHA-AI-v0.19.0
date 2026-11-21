@@ -17,6 +17,45 @@ import java.nio.FloatBuffer
  * and provenance before redistribution or deployment.
  */
 class LocalBiometricModelEngine : Closeable {
+    companion object {
+        /** MiniFASNet V2: BGR NCHW float32 normalized to [0,1]. */
+        internal fun preprocessMiniFasNetBgr(bgr80: ByteArray): FloatArray {
+            require(bgr80.size == 80 * 80 * 3) { "Expected 80x80 BGR image." }
+            val plane = 80 * 80
+            val data = FloatArray(3 * plane)
+            for (channel in 0..2) for (y in 0 until 80) for (x in 0 until 80) {
+                val pixel = (y * 80 + x) * 3 + channel
+                data[channel * plane + y * 80 + x] = (bgr80[pixel].toInt() and 0xff) / 255f
+            }
+            return data
+        }
+
+        internal fun isLiveFace(scores: FloatArray, minLiveScore: Float = 0.70f): Boolean {
+            require(scores.size == 3 && scores.all { it.isFinite() } && minLiveScore in 0f..1f)
+            return scores[1] >= minLiveScore && scores[1] > scores[0] && scores[1] > scores[2]
+        }
+
+        internal fun softmax(scores: FloatArray): FloatArray {
+            require(scores.isNotEmpty() && scores.all { it.isFinite() })
+            val max = scores.maxOrNull() ?: return FloatArray(0)
+            val exp = scores.map { kotlin.math.exp((it - max).toDouble()) }
+            val sum = exp.sum()
+            require(sum.isFinite() && sum > 0.0)
+            return exp.map { (it / sum).toFloat() }.toFloatArray()
+        }
+
+        /** OpenCV FaceRecognizerSF feature() preprocessing for an already aligned RGB crop. */
+        internal fun preprocessSFaceRgb(rgb112: ByteArray): FloatArray {
+            require(rgb112.size == 112 * 112 * 3) { "Expected aligned 112x112 RGB image." }
+            val data = FloatArray(3 * 112 * 112)
+            var p = 0
+            for (channel in 0..2) for (y in 0 until 112) for (x in 0 until 112) {
+                val index = (y * 112 + x) * 3 + channel
+                data[p++] = (rgb112[index].toInt() and 0xff).toFloat()
+            }
+            return data
+        }
+    }
     private val environment = OrtEnvironment.getEnvironment()
     private var faceSession: OrtSession? = null
     private var speakerSession: OrtSession? = null
