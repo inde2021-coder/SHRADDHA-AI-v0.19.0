@@ -59,7 +59,7 @@ jobs:
             work/step-01-source-audit-fixes
           do
             echo "::group::Merge origin/$branch"
-            git merge --no-edit --no-ff -X ours "origin/$branch" || {
+            git merge --no-edit --no-ff "origin/$branch" || {
               git status --short
               echo "Merge failed for $branch; stopping before tests."
               exit 1
