@@ -141,7 +141,7 @@ class NovaAppState(context: Context) {
     }
 
     fun applyAssistantName(context: Context, name: String) {
-        val trimmed = name.trim().ifEmpty { AssistantBrand.NAME }
+        val trimmed = name.filterNot { it.isISOControl() }.trim().take(40).ifEmpty { AssistantBrand.NAME }
         assistantName = trimmed
         NovaPreferences.putString(context, NovaPreferences.Keys.ASSISTANT_NAME, trimmed)
         ioScope.launch {
