@@ -1579,7 +1579,7 @@ class MainActivity : AppCompatActivity() {
             })
             addView(actionButton("Restore Encrypted Memory", "उसी email और password से दूसरे device पर restore करें") {
                 if (!consent.isChecked) { result.text = "Restore से पहले cloud consent चुनें।"; return@actionButton }
-                if (email.text.isNullOrBlank() || password.text.length < 8 || backupPassphrase.text.length < 12) { result.text = "Email, account password और backup passphrase भरें।"; return@actionButton }
+                if (email.text.isNullOrBlank() || password.text.length < 8 || backupPassphrase.text.length < 8) { result.text = "Email, account password और कम-से-कम 8 अक्षर का backup passphrase भरें।"; return@actionButton }
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val backupPassphraseValue = backupPassphrase.text.toString()
                 result.text = "Encrypted backup download और decrypt हो रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory", backupPassphraseValue)
