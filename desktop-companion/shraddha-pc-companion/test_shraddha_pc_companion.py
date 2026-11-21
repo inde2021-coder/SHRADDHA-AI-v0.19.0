@@ -264,5 +264,35 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(control_grant_allows(True, 200.0, 100.0, "device_A", ""))
 
 
+    def test_pc_app_launcher_is_allowlisted(self):
+        self.assertTrue(validate_action({"kind": "open_app", "name": "Notepad"}))
+        self.assertTrue(validate_action({"kind": "open_app", "name": "settings"}))
+        self.assertFalse(validate_action({"kind": "open_app", "name": "cmd /c del C:\\\\*"}))
+        self.assertFalse(validate_action({"kind": "open_app", "name": ""}))
+
+    def test_media_and_system_controls_are_allowlisted_and_bounded(self):
+        for command in ("play_pause", "next", "previous", "volume_up", "volume_down", "mute"):
+            self.assertTrue(validate_action({"kind": "media_control", "command": command}))
+        self.assertFalse(validate_action({"kind": "media_control", "command": "run_shell"}))
+        self.assertTrue(validate_action({"kind": "system_control", "command": "lock"}))
+        self.assertTrue(validate_action({"kind": "system_control", "command": "set_brightness", "value": 55}))
+        self.assertFalse(validate_action({"kind": "system_control", "command": "set_brightness", "value": 101}))
+        self.assertFalse(validate_action({"kind": "system_control", "command": "shutdown"}))
+
+    def test_screenshot_and_clipboard_transform_actions_are_bounded(self):
+        self.assertTrue(validate_action({"kind": "screenshot"}))
+        for operation in ("trim", "uppercase", "lowercase", "collapse_whitespace", "remove_blank_lines"):
+            self.assertTrue(validate_action({"kind": "clipboard_transform", "operation": operation}))
+        self.assertFalse(validate_action({"kind": "clipboard_transform", "operation": "upload_history"}))
+
+    def test_web_search_and_code_assistant_require_bounded_inputs(self):
+        self.assertTrue(validate_action({"kind": "web_search", "query": "Windows shortcuts"}))
+        self.assertFalse(validate_action({"kind": "web_search", "query": "x"}))
+        self.assertFalse(validate_action({"kind": "web_search", "query": "x" * 161}))
+        self.assertFalse(validate_action({"kind": "code_assistant", "prompt": "debug"}))
+        self.assertTrue(validate_action({"kind": "code_assistant", "prompt": "debug this function"}, offline_model=object()))
+        self.assertFalse(validate_action({"kind": "code_assistant", "prompt": " "}, offline_model=object()))
+
+
 if __name__ == "__main__":
     unittest.main()
