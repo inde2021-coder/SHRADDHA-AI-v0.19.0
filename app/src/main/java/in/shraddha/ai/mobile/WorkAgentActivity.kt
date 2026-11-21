@@ -176,12 +176,38 @@ class WorkAgentActivity : AppCompatActivity() {
         actions.addView(button("काम करवाएँ") { handoffToOperator() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         browserPanel.addView(actions)
         val webActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        webActions.addView(button("Inspect page") { inspectBrowserControls() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         webActions.addView(button("Click item") { requestBrowserClick() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         webActions.addView(button("Fill field") { requestBrowserFill() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         webActions.addView(button("Scroll ↓") {
             browser.evaluateJavascript("window.scrollBy({top:Math.max(300,window.innerHeight*0.75),behavior:'smooth'}); 'scrolled';") { pageStatus.text = "वेब पेज नीचे scroll किया।" }
         }, LinearLayout.LayoutParams(0, dp(44), 1f))
         browserPanel.addView(webActions)
+    }
+
+    /** Reads visible interactive controls so the user and AI can identify exact page targets. */
+    private fun inspectBrowserControls() {
+        val script = """(function(){const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const label=e=>(e.innerText||e.value||e.getAttribute('aria-label')||e.getAttribute('placeholder')||e.title||'').replace(/\\s+/g,' ').trim().slice(0,100);const items=[...document.querySelectorAll('button,a,[role="button"],input:not([type="password"]):not([type="hidden"]):not([type="file"]),textarea,[contenteditable="true"]')].filter(visible).map(e=>({tag:e.tagName.toLowerCase(),type:e.type||'',label:label(e)})).filter(x=>x.label).slice(0,100);return JSON.stringify({url:location.href,title:document.title,items});})()"""
+        browser.evaluateJavascript(script) { raw ->
+            val decoded = runCatching { org.json.JSONTokener(raw).nextValue().toString() }.getOrDefault("")
+            val parsed = runCatching { org.json.JSONObject(decoded) }.getOrNull()
+            val items = parsed?.optJSONArray("items")
+            val summary = buildString {
+                append("Page: ").append(parsed?.optString("title").orEmpty()).append("\\n")
+                append("URL: ").append(parsed?.optString("url").orEmpty()).append("\\n\\n")
+                if (items == null || items.length() == 0) append("कोई visible interactive controls नहीं मिले।")
+                else for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    append(i + 1).append(". [").append(item.optString("tag"))
+                    if (item.optString("type").isNotBlank()) append("/").append(item.optString("type"))
+                    append("] ").append(item.optString("label")).append("\\n")
+                }
+            }
+            addMessage("assistant", summary)
+            pageText = (pageText + "\\n\\nVISIBLE PAGE CONTROLS:\\n" + summary).take(12_000)
+            showTab("chat")
+            pageStatus.text = "Page controls inspect किए: ${items?.length() ?: 0}"
+        }
     }
 
     /** Clicks one uniquely labelled visible web control only after the user approves its exact label. */
