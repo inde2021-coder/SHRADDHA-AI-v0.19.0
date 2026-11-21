@@ -4,6 +4,8 @@ Pair with an Android-created relay code. Remote control is opt-in on this PC and
 each control request requires a local approval dialog. No arbitrary shell commands.
 """
 import json
+import base64
+import struct
 import os
 import queue
 import ssl
@@ -76,6 +78,7 @@ class PcCompanionApp:
         self.device_token = None
         self.e2e_crypto = DeviceE2ECrypto()
         self.peer_keys = {}
+        self.e2e_lock = threading.RLock()
         self._pending_pairing_auth = False
         self.config = self._load_config()
 
@@ -342,9 +345,10 @@ class PcCompanionApp:
         elif kind == "peer_status":
             peer_id = str(msg.get("deviceId", ""))
             if msg.get("revoked"):
-                state = self.peer_keys.pop(peer_id, None)
-                if state:
-                    state["key"] = bytes(len(state["key"]))
+                with self.e2e_lock:
+                    state = self.peer_keys.pop(peer_id, None)
+                    if state:
+                        state["key"][:] = b"\x00" * len(state["key"])
             elif msg.get("online") and peer_id:
                 self._send_e2e_key_offer(peer_id)
             self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
@@ -355,11 +359,13 @@ class PcCompanionApp:
                     msg.get("publicKey", ""), self.config.get("sessionId", ""),
                     self.config.get("deviceId", ""), peer_id
                 )
-                previous = self.peer_keys.pop(peer_id, None)
-                if previous:
-                    previous["key"] = bytes(len(previous["key"]))
-                self.peer_keys[peer_id] = {"key": key, "fingerprint": fingerprint,
-                                           "local_confirmed": False, "remote_confirmed": False}
+                with self.e2e_lock:
+                    previous = self.peer_keys.pop(peer_id, None)
+                    if previous:
+                        previous["key"][:] = b"\x00" * len(previous["key"])
+                    self.peer_keys[peer_id] = {"key": bytearray(key), "fingerprint": fingerprint,
+                                               "local_confirmed": False, "remote_confirmed": False,
+                                               "send_sequence": 0}
                 approved = messagebox.askyesno(
                     "Shraddha AI • Verify paired-device fingerprint",
                     f"Peer device: {peer_id}\n\nFingerprint:\n{fingerprint}\n\n"
@@ -369,22 +375,31 @@ class PcCompanionApp:
                 if approved:
                     sent = self._send_json({"type": "e2e_key_confirm", "targetDeviceId": peer_id,
                                             "fingerprint": fingerprint})
-                    self.peer_keys[peer_id]["local_confirmed"] = bool(sent)
+                    with self.e2e_lock:
+                        if peer_id in self.peer_keys:
+                            self.peer_keys[peer_id]["local_confirmed"] = bool(sent)
                     self.status_var.set("Fingerprint confirmation sent; waiting for the other device.")
                 else:
-                    rejected = self.peer_keys.pop(peer_id, None)
-                    if rejected:
-                        rejected["key"] = bytes(len(rejected["key"]))
+                    with self.e2e_lock:
+                        rejected = self.peer_keys.pop(peer_id, None)
+                        if rejected:
+                            rejected["key"][:] = b"\x00" * len(rejected["key"])
                     self.status_var.set("Peer fingerprint rejected; encrypted sharing remains blocked.")
             except Exception as exc:
                 self.status_var.set(f"Rejected peer E2E key offer: {str(exc)[:140]}")
         elif kind == "e2e_key_confirm":
             peer_id = str(msg.get("fromDeviceId", ""))
-            state = self.peer_keys.get(peer_id)
-            if state and state["fingerprint"] == msg.get("fingerprint"):
-                state["remote_confirmed"] = True
-                self.status_var.set("Peer fingerprint confirmed. Mutual trust: " +
-                                    ("READY" if state["local_confirmed"] else "waiting for local confirmation"))
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                if state and state["fingerprint"] == msg.get("fingerprint"):
+                    state["remote_confirmed"] = True
+                    trusted = state["local_confirmed"]
+                else:
+                    trusted = False
+            if trusted:
+                self.status_var.set("Peer fingerprint confirmed. Mutual trust: READY")
+            elif state and state["fingerprint"] == msg.get("fingerprint"):
+                self.status_var.set("Peer fingerprint confirmed; waiting for local confirmation.")
             else:
                 self.status_var.set("E2E fingerprint mismatch. Do not trust this peer.")
         elif kind == "control_request":
@@ -423,13 +438,15 @@ class PcCompanionApp:
         })
 
     def is_e2e_trusted(self, peer_id):
-        state = self.peer_keys.get(peer_id)
-        return bool(state and state["local_confirmed"] and state["remote_confirmed"])
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            return bool(state and state["local_confirmed"] and state["remote_confirmed"])
 
     def _clear_peer_keys(self):
-        for state in self.peer_keys.values():
-            state["key"] = bytes(len(state["key"]))
-        self.peer_keys.clear()
+        with self.e2e_lock:
+            for state in self.peer_keys.values():
+                state["key"][:] = b"\x00" * len(state["key"])
+            self.peer_keys.clear()
 
     def _execute(self, action):
         try:
@@ -476,9 +493,32 @@ class PcCompanionApp:
                         image.save(output, format="JPEG", quality=55, optimize=True)
                         jpeg = output.getvalue()
                     if jpeg and len(jpeg) <= MAX_FRAME_BYTES:
-                        with self.send_lock:
-                            if ws.sock and ws.sock.connected:
-                                ws.send(bytes((1, 0)) + jpeg, opcode=websocket.ABNF.OPCODE_BINARY)
+                        source_id = str(self.config.get("deviceId", ""))
+                        session_id = str(self.config.get("sessionId", ""))
+                        with self.e2e_lock:
+                            targets = [
+                                (peer_id, state) for peer_id, state in self.peer_keys.items()
+                                if state["local_confirmed"] and state["remote_confirmed"]
+                            ]
+                        for peer_id, state in targets:
+                            target_bytes = peer_id.encode("utf-8")
+                            if not target_bytes or len(target_bytes) > 64:
+                                continue
+                            with self.e2e_lock:
+                                current = self.peer_keys.get(peer_id)
+                                if current is not state or not current["local_confirmed"] or not current["remote_confirmed"]:
+                                    continue
+                                sequence = current["send_sequence"]
+                                current["send_sequence"] += 1
+                                key = bytes(current["key"])
+                            aad = f"{session_id}|{source_id}|{peer_id}|1|{sequence}".encode("utf-8")
+                            nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, jpeg, aad)
+                            nonce = base64.b64decode(nonce_b64 + "=" * ((4 - len(nonce_b64) % 4) % 4))
+                            ciphertext = base64.b64decode(ciphertext_b64 + "=" * ((4 - len(ciphertext_b64) % 4) % 4))
+                            packet = bytes((0x81, len(target_bytes))) + target_bytes + struct.pack(">Q", sequence) + nonce + ciphertext
+                            with self.send_lock:
+                                if ws.sock and ws.sock.connected:
+                                    ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
                 finally:
                     image.close()
             except Exception as exc:
