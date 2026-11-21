@@ -30,7 +30,7 @@ class OperatorActivity : Activity() {
         appName = field("ऐप का नाम (जैसे Chrome)")
         target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
         typed = field("फोकस किए गए सामान्य टेक्स्ट फील्ड में लिखें")
-        expectedVisibleText = field("कार्रवाई के बाद स्क्रीन पर क्या दिखना चाहिए? (वैकल्पिक)")
+        expectedVisibleText = field("Expected result text after action (optional; blank = screen re-read only)")
         root.addView(appName); root.addView(target); root.addView(typed); root.addView(expectedVisibleText)
         commandInput = field("श्रद्धा को निर्देश दें: जैसे Rahul.jpg upload करो")
         root.addView(commandInput)
