@@ -8,6 +8,7 @@ on:
       - redesign-v0.19.2
       - 'work/**'
       - 'feature/**'
+      - 'integration/**'
   pull_request:
     branches:
       - main
