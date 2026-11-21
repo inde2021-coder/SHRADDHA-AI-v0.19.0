@@ -109,21 +109,20 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      # Use a lightweight, stable API 34 image and explicit software rendering.
-      # The previous Pixel 6 / API 35 runner stayed offline until its boot timeout,
-      # even though unit tests and APK compilation had already passed.
+      # Use an older, lighter API 30 image for reliable boot on hosted runners without KVM.
+      # Keep the Android emulator smoke test enabled; this checks the ONNX runtime on-device.
       - name: Run biometric ONNX smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
           # GitHub-hosted Linux runners lack KVM; explicitly allow QEMU TCG software CPU emulation.
           ANDROID_I_WANT_MY_TCG: "yes"
         with:
-          api-level: 34
-          emulator-boot-timeout: 900
+          api-level: 30
+          emulator-boot-timeout: 1200
           arch: x86_64
           target: google_apis
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 2048 -cores 2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 2 -partition-size 4096
           disable-animations: true
           pre-emulator-launch-script: |
             adb kill-server || true
