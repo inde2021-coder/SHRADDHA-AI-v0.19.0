@@ -439,15 +439,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const callHistoryConfig = callHistoryConfigStatus();
       return json(res, 200, {
         provider: 'edesy',
         agentName: String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI',
+        callHistory: { durable: callHistoryConfig.configured, missing: callHistoryConfig.missing },
         configured: edesyConfigured(),
         capabilities: {
           inboundWebSocketAudio: edesyConfigured(),
           liveBidirectionalAiAudio: edesyConfigured(),
           liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
           aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
+          durableEncryptedCallHistory: callHistoryConfig.configured,
           persistentCallRecording: false,
           whatsappDelivery: false
         },
@@ -461,12 +464,21 @@ const server = http.createServer(async (req, res) => {
           ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : []),
           ...(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN && !edesyPreflightReady() ? ['EDESY_STREAM_URL / PUBLIC_ORIGIN mismatch'] : [])
         ],
-        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is bounded in-memory only; audio is not recorded.'
+        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is encrypted at rest in Firestore when FIREBASE_SERVICE_ACCOUNT_JSON and CALL_HISTORY_ENCRYPTION_KEY are configured; otherwise it is bounded in-memory only. Audio is not recorded.'
       });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      return json(res, 200, { calls: [...edesyCalls.values()].slice(-30).reverse() });
+      let durableCalls = null;
+      let warning = '';
+      try { durableCalls = await loadDurableCallHistory(30); }
+      catch (error) { warning = String(error.message || 'Durable call history is unavailable').slice(0, 200); }
+      const merged = new Map((durableCalls || []).map(record => [record.id, record]));
+      for (const record of edesyCalls.values()) {
+        merged.set(record.id, { ...callHistorySnapshot(record), durableStatus: record.durableStatus || (durableCalls ? 'pending' : 'not_configured') });
+      }
+      const calls = [...merged.values()].sort((a, b) => Date.parse(b.startedAt || '') - Date.parse(a.startedAt || '')).slice(0, 30);
+      return json(res, 200, { calls, durable: durableCalls !== null, warning });
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
