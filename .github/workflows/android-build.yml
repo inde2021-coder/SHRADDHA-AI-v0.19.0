@@ -117,17 +117,20 @@ jobs:
       # TCG runners are unstable when the action invokes Android settings to disable animations.
       - name: Run biometric ONNX smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 35
-          emulator-boot-timeout: 1200
+          emulator-boot-timeout: 600
           arch: x86_64
           target: google_apis
           profile: pixel_5
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot-load -no-snapshot-save -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 2 -partition-size 4096
-          pre-emulator-launch-script: adb start-server
+          pre-emulator-launch-script: |
+            if [[ ! -e /dev/kvm ]]; then echo "ERROR: KVM device is missing on this Linux runner."; exit 1; fi
+            sudo chmod 666 /dev/kvm
+            if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then echo "ERROR: KVM is not readable/writable; refusing slow TCG fallback."; exit 1; fi
+            ls -l /dev/kvm
+            adb start-server
           script: bash .github/scripts/android-onnx-smoke.sh
       - name: Upload Android instrumentation reports
         if: always()
