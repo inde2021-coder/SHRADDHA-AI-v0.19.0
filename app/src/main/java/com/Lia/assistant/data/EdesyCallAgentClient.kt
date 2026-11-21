@@ -51,8 +51,8 @@ object EdesyCallAgentClient {
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val message = runCatching {
-                    JSONObject(raw).optString("error", "Backend request failed (\${response.code}).")
-                }.getOrDefault("Backend request failed (\${response.code}).")
+                    JSONObject(raw).optString("error", "Backend request failed (${response.code}).")
+                }.getOrDefault("Backend request failed (${response.code}).")
                 throw IllegalStateException(message.take(240))
             }
             JSONObject(raw)
