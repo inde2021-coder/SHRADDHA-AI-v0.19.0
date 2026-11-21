@@ -437,9 +437,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
-const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
+const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 telephonyWss.on('connection', carrier => {
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
+  const pendingAudio = [];
+  let metadataTimer = setTimeout(() => shutdown(), 10_000);
+  const activeCalls = [...edesyCalls.values()].filter(call => call.status === 'active').length;
+  if (activeCalls >= Math.max(1, Math.min(50, Number(process.env.EDESY_MAX_CONCURRENT_CALLS) || 8))) {
+    carrier.close(1013, 'AI call capacity reached');
+    return;
+  }
   const finalize = () => {
     if (!callRecord) return;
     callRecord.endedAt = new Date().toISOString();
@@ -458,16 +465,33 @@ telephonyWss.on('connection', carrier => {
   const shutdown = () => {
     if (closed) return;
     closed = true;
+    clearTimeout(metadataTimer);
+    pendingAudio.length = 0;
     finalize();
     if (live && live.readyState === WebSocket.OPEN) live.close();
     if (carrier.readyState === WebSocket.OPEN) carrier.close();
   };
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
-  live.on('open', () => live.send(JSON.stringify({ type: 'session.start', session: { model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1', instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, a disclosed AI call assistant. Tell the caller you are an AI assistant. Speak naturally in Hindi or English, ask one question at a time, understand the reason for the call, take a concise message, and never claim you performed an action you cannot perform.', audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } }, delegation: { type: 'client' } } })));
+  live.on('open', () => live.send(JSON.stringify({
+    type: 'session.start',
+    session: {
+      model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1',
+      instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.',
+      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } },
+      delegation: { type: 'client' }
+    }
+  })));
   live.on('message', raw => {
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
-    if (event.type === 'session.started') ready = true;
+    if (event.type === 'session.started') {
+      ready = true;
+      while (pendingAudio.length && live.readyState === WebSocket.OPEN && !closed) {
+        const queued = pendingAudio.shift();
+        const pcm24 = resamplePcm16(queued, 16000, 24000);
+        live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+      }
+    }
     if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) carrier.send(JSON.stringify({ type: 'killAudio' }));
     if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
       if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
@@ -481,8 +505,14 @@ telephonyWss.on('connection', carrier => {
   live.on('close', shutdown);
   carrier.on('message', (data, binary) => {
     if (binary) {
-      if (!ready || live.readyState !== WebSocket.OPEN || data.length > 65536) return;
-      const pcm24 = resamplePcm16(Buffer.from(data), 16000, 24000);
+      if (closed || !metadataSeen || data.length === 0 || data.length > 65536 || data.length % 2 !== 0) return;
+      const pcm16 = Buffer.from(data);
+      if (!ready || live.readyState !== WebSocket.OPEN) {
+        if (pendingAudio.length >= 12) pendingAudio.shift();
+        pendingAudio.push(pcm16);
+        return;
+      }
+      const pcm24 = resamplePcm16(pcm16, 16000, 24000);
       live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
       return;
     }
@@ -490,9 +520,20 @@ telephonyWss.on('connection', carrier => {
     try { message = JSON.parse(data.toString()); } catch { return; }
     if (!metadataSeen) {
       metadataSeen = true;
+      clearTimeout(metadataTimer);
       if (message.direction && message.direction !== 'inbound') return shutdown();
+      const rawId = String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
+      const callId = rawId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
       const caller = String(message.from || '');
-      callRecord = { id: String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex')).slice(0, 120), direction: String(message.direction || 'inbound'), caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller', callerName: String(message.caller_name || message.callerName || '').slice(0, 80), startedAt: new Date().toISOString(), endedAt: null, status: 'active', transcript: [] };
+      callRecord = {
+        id: callId,
+        direction: 'inbound',
+        caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller',
+        startedAt: new Date().toISOString(),
+        endedAt: null,
+        status: 'active',
+        transcript: []
+      };
       edesyCalls.set(callRecord.id, callRecord);
       while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
       return;
