@@ -94,7 +94,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("orb_style") { OrbStyleScreen(navController, appState) }
                     composable("privacy") { PrivacyScreen(navController) }
                     composable("permissions") { PermissionsScreen(navController) }
-                    composable("about") { AboutScreen(navController) }
+                    composable("about") { AboutScreen(navController, appState) }
                     composable("debug") { DebugScreen(navController) }
                     composable("forge") { ForgeScreen(navController) }
 
