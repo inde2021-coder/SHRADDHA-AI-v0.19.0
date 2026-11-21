@@ -1984,7 +1984,12 @@ class MainActivity : AppCompatActivity() {
                         if (targetDevice.text.isNullOrBlank()) targetDevice.setText(lastPeerId.orEmpty())
                     }
                 }
-                runOnUiThread { mainOnlyMode.isChecked = msg.optString("controlMode") == "master"; publishDataPermissions() }
+                runOnUiThread {
+                    isSessionOwner = msg.optString("role") == "owner"
+                    mainOnlyMode.isEnabled = isSessionOwner
+                    mainOnlyMode.isChecked = isSessionOwner && msg.optString("controlMode") == "master"
+                    publishDataPermissions()
+                }
             } else if (msg.optString("type") == "peer_status") {
                 val peerId = msg.optString("deviceId")
                 val peerName = msg.optString("name", "Device")
