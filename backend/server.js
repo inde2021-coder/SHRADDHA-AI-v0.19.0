@@ -1120,6 +1120,21 @@ wss.on('connection', (ws, ctx) => {
       if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() || payload.length > 900_000 || !payload) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category, fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100), payload }));
+    } else if (msg.type === 'e2e_key_offer') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const publicKey = typeof msg.publicKey === 'string' ? msg.publicKey : '';
+      if (!target || targetId === deviceId || publicKey.length < 108 || publicKey.length > 344 ||
+          !/^[A-Za-z0-9+/]+={0,2}$/.test(publicKey)) return;
+      const encoded = Buffer.from(publicKey, 'base64');
+      if (encoded.length < 80 || encoded.length > 256 || encoded.toString('base64') !== publicKey) return;
+      send(targetId, JSON.stringify({ type: 'e2e_key_offer', fromDeviceId: deviceId, publicKey }));
+    } else if (msg.type === 'e2e_key_confirm') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const fingerprint = String(msg.fingerprint || '');
+      if (!target || targetId === deviceId || !/^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$/.test(fingerprint)) return;
+      send(targetId, JSON.stringify({ type: 'e2e_key_confirm', fromDeviceId: deviceId, fingerprint }));
     } else if (msg.type === 'signal' || msg.type === 'chat' || msg.type === 'control_consent') {
       if (JSON.stringify(msg).length > 64 * 1024) return;
       if (msg.type === 'chat' && (typeof msg.message !== 'string' || msg.message.length > 2000)) return;
