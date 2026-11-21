@@ -156,6 +156,13 @@ class PcCompanionApp:
             self.code_var.set("")
             self._connect_socket()
         except Exception as exc:
+            if self._pending_pairing_auth:
+                self._pending_pairing_auth = False
+                self.device_token = None
+                self.config = {
+                    "baseUrl": self.base_var.get().strip().rstrip("/"),
+                    "deviceName": self.name_var.get().strip()[:48] or "Windows PC"
+                }
             self.status_var.set(f"Pairing failed: {str(exc)[:180]}")
 
     def connect_saved(self):
@@ -287,6 +294,10 @@ class PcCompanionApp:
                             self._save_config()
                             self.status_var.set("Relay authenticated. Pairing token saved in Windows Credential Manager.")
                         except Exception:
+                            try:
+                                keyring.delete_password(SERVICE_NAME, device_id)
+                            except Exception:
+                                pass
                             self.status_var.set("Relay authenticated for this run only; Windows Credential Manager could not save the token.")
                     else:
                         self.status_var.set("Secure relay connected. Remote control and screen sharing are still off.")
