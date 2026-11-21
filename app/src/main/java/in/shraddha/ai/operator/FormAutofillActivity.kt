@@ -25,6 +25,7 @@ class FormAutofillActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var root: LinearLayout
     private lateinit var status: TextView
+    private lateinit var resultsContainer: LinearLayout
     private lateinit var formType: Spinner
     private lateinit var cloudConsent: CheckBox
     private lateinit var personalConsent: CheckBox
@@ -60,6 +61,8 @@ class FormAutofillActivity : Activity() {
         root.addView(action("AI se fields extract karein") { extractImage() })
         status = label("Status: Pehle image chunein. Accessibility permission zaroori hai.", 13f, 0xFFE0E6F5.toInt())
         root.addView(status)
+        resultsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(resultsContainer)
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
@@ -87,6 +90,7 @@ class FormAutofillActivity : Activity() {
         if (uri == null) { status.text = "Pehle image chunein."; return }
         if (!cloudConsent.isChecked) { status.text = "Cloud processing consent zaroori hai."; return }
         val type = listOf("farmer", "plot", "boundary", "land_deed", "consent", "unknown")[formType.selectedItemPosition]
+        val allowPersonalData = personalConsent.isChecked
         status.text = "Image process ho rahi hai…"
         worker.execute {
             val result = runCatching {
@@ -96,7 +100,7 @@ class FormAutofillActivity : Activity() {
                     FormExtractionClient.extract(
                         this, bitmap, type,
                         cloudProcessingConsent = true,
-                        personalDataConsent = personalConsent.isChecked
+                        personalDataConsent = allowPersonalData
                     ).getOrThrow()
                 } finally { bitmap.recycle() }
             }
@@ -110,9 +114,9 @@ class FormAutofillActivity : Activity() {
     private fun showReview(result: FormExtractionResult) {
         extracted = result
         rows.clear()
-        while (root.childCount > 5) root.removeViewAt(root.childCount - 1)
+        resultsContainer.removeAllViews()
         status.text = "Form: ${result.formType} • Provider: ${result.provider} • ${result.fields.size} fields. Koi field apne aap submit nahi hogi."
-        result.warnings.forEach { root.addView(label("⚠ $it", 12f, 0xFFFFC66D.toInt())) }
+        result.warnings.forEach { resultsContainer.addView(label("⚠ $it", 12f, 0xFFFFC66D.toInt())) }
         result.fields.forEach { item ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -131,9 +135,9 @@ class FormAutofillActivity : Activity() {
             card.addView(edit)
             rows += item to edit
             card.addView(action("Is field ko approve karke fill karein") { approveField(item, edit.text.toString()) })
-            root.addView(card)
+            resultsContainer.addView(card)
         }
-        if (result.fields.isEmpty()) root.addView(label("Koi field confidently extract nahi hui. Original form manually check karein.", 13f, 0xFFFFC66D.toInt()))
+        if (result.fields.isEmpty()) resultsContainer.addView(label("Koi field confidently extract nahi hui. Original form manually check karein.", 13f, 0xFFFFC66D.toInt()))
     }
 
     private fun approveField(item: ExtractedFormValue, value: String) {
@@ -178,7 +182,7 @@ class FormAutofillActivity : Activity() {
                     ?: error("Is label ke liye unique editable field nahi mili. Koi text type nahi kiya.")
                 val typed = service.typeTextAtBounds(suggestion.target.bounds, value)
                 if (typed != "typed") error("Target field mein type nahi ho saka: $typed")
-                delay(450)
+                Thread.sleep(450)
                 val verify = runBlocking { AccessibilityScreenDriver().capture() } ?: error("Fill ke baad screen verify nahi hui.")
                 val verified = verify.rawElements.any { it.bounds == suggestion.target.bounds && it.isEditable && it.text == value }
                 if (!verified) error("Field value verify nahi hui. Kripya manually check karein.")
