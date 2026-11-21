@@ -871,8 +871,8 @@ class MainActivity : AppCompatActivity() {
                                 append("\nMissing: ")
                                 append((0 until missing.length()).joinToString(", ") { missing.optString(it) })
                             }
-                            append("\nInbound WebSocket: ").append(if (caps?.optBoolean("inboundWebSocketAudio") == true) "ready" else "not ready")
-                            append("\nGPT-Live audio bridge: ").append(if (caps?.optBoolean("liveBidirectionalAiAudio") == true) "ready" else "not ready")
+                            append("\nInbound WebSocket: ").append(if (caps?.optBoolean("inboundWebSocketAudio") == true) "secrets present; provider path not yet verified" else "not configured")
+                            append("\nGPT-Live audio bridge: ").append(if (caps?.optBoolean("liveBidirectionalAiAudio") == true) "API key present; live call not yet verified" else "not configured")
                             append("\nProvider preflight: ").append(if (body.optBoolean("preflightReady")) "configured" else "needs Edesy API key + stream URL + public origin")
                             append("\nTranscript saving: ").append(if (caps?.optBoolean("liveTranscripts") == true) "available only after caller presses 1; press 0 to purge" else "OFF")
                             append("\nAudio recording: NOT stored")
