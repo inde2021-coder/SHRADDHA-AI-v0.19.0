@@ -208,7 +208,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                     1 -> source.uppercase(Locale.ROOT)
                     2 -> source.lowercase(Locale.ROOT)
                     3 -> source.replace(Regex("\\s+"), " ").trim()
-                    else -> source.lineSequence().filter { it.isNotBlank() }.joinToString("\\n")
+                    else -> source.lineSequence().filter { it.isNotBlank() }.joinToString("\n")
                 }
                 android.app.AlertDialog.Builder(this).setTitle("Transformed text • Review")
                     .setMessage(transformed.take(3500))
