@@ -2,6 +2,7 @@ package com.Lia.assistant.ui.screens.voice
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -17,15 +18,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,12 +39,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.NovaAppState
+import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaVoiceVisualizer
@@ -53,7 +58,6 @@ import com.Lia.assistant.ui.fx.ListeningEdgeGlow
 import com.Lia.assistant.ui.fx.NovaOrbStyle
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.SerifFontFamily
-import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.NovaOrbState
 import com.Lia.assistant.voice.VoiceForegroundService
@@ -67,14 +71,16 @@ fun VoiceScreen(
 ) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val state by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
-    val muted by VoiceSessionManager.muted.collectAsState()
+    val isActive by VoiceSessionManager.isActive.collectAsState()
     val statusText by VoiceSessionManager.statusText.collectAsState()
+    val lastError by VoiceSessionManager.lastError.collectAsState()
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val orbSize = screenWidth * 0.70f
+    val orbSize = (screenWidth * 0.62f).coerceIn(160.dp, 260.dp)
 
     var hasRecordAudioPermission by remember {
         mutableStateOf(
@@ -84,22 +90,46 @@ fun VoiceScreen(
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasRecordAudioPermission = isGranted
-        if (isGranted) {
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        hasRecordAudioPermission = grants[Manifest.permission.RECORD_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        hasNotificationPermission = Build.VERSION.SDK_INT < 33 ||
+            grants[Manifest.permission.POST_NOTIFICATIONS] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (hasRecordAudioPermission && hasNotificationPermission &&
+            NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)) {
             VoiceForegroundService.start(context)
+        } else if (!hasRecordAudioPermission || !hasNotificationPermission) {
+            NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
         }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasRecordAudioPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                hasNotificationPermission = Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val hasKey = ApiKeyStore.hasKey(context)
 
-    LaunchedEffect(hasRecordAudioPermission, hasKey) {
-        if (!hasRecordAudioPermission) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        } else if (hasKey && !VoiceSessionManager.isActive.value) {
+    LaunchedEffect(hasRecordAudioPermission, hasNotificationPermission, hasKey) {
+        val userWantsVoice = NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
+        if (hasRecordAudioPermission && hasNotificationPermission && hasKey && userWantsVoice && !VoiceSessionManager.isActive.value) {
             VoiceForegroundService.start(context)
         }
     }
@@ -114,15 +144,20 @@ fun VoiceScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Bar: Dismiss/Close button
+            // Top Bar: identity and dismiss control
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = appState.assistantName, fontSize = 18.sp, color = colors.textPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    Text(text = "VOICE INTERFACE  •  PRIVATE SESSION", fontSize = 9.sp, letterSpacing = 1.1.sp, color = colors.textTertiary)
+                }
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -139,7 +174,7 @@ fun VoiceScreen(
                 }
             }
 
-            // Center: 70% width 3D Orb & Status
+            // Center: adaptive 3D Orb and live session status
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -165,7 +200,7 @@ fun VoiceScreen(
                         onClick = { navController.navigate("settings") },
                         type = NovaButtonType.PRIMARY
                     )
-                } else if (!hasRecordAudioPermission) {
+                } else if (!hasRecordAudioPermission || !hasNotificationPermission) {
                     LiaOrb3D(
                         state = NovaOrbState.ERROR,
                         size = orbSize,
@@ -174,16 +209,12 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Microphone Permission Required",
+                        text = "Microphone and notification permissions are required. Tap the microphone control below to enable the visible, continuous voice session. If Android no longer shows the permission prompt, enable both permissions in this app's system settings.",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
-                        fontSize = 18.sp,
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    NovaButton(
-                        text = "Grant Permission",
-                        onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+                        fontSize = 16.sp,
+                        color = colors.textPrimary,
+                        textAlign = TextAlign.Center
                     )
                 } else {
                     Box(
@@ -205,86 +236,74 @@ fun VoiceScreen(
                         text = statusText,
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
-                        fontSize = 20.sp,
+                        fontSize = 19.sp,
                         color = colors.textPrimary
                     )
+
+                    if (state == NovaOrbState.ERROR) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = lastError.orEmpty(),
+                            fontSize = 12.sp,
+                            color = colors.error
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Tap the microphone control below to retry.",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     if (state == NovaOrbState.SPEAKING) {
                         NovaVoiceVisualizer(
                             amplitude = amplitude,
-                            barCount = 48,
-                            modifier = Modifier.padding(horizontal = 32.dp)
+                            barCount = 36,
+                            modifier = Modifier.padding(horizontal = 20.dp)
                         )
                     }
                 }
             }
 
-            // Bottom Frosted Controls: Mute, Stop, Close
-            val frostedShape = RoundedCornerShape(50)
-            Row(
-                modifier = Modifier
-                    .depthSurface(shape = frostedShape, elevation = 4.dp)
-                    .clip(frostedShape)
-                    .background(colors.surfaceGlass)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Mute toggle
+            // One persistent microphone control: the foreground session keeps running
+            // after this screen is closed and stops only when the user deactivates it.
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(82.dp)
                         .clip(CircleShape)
-                        .background(if (muted) colors.surfaceBorder else colors.surfaceRaised)
-                        .clickable { VoiceSessionManager.toggleMute() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (muted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = "Mute",
-                        tint = if (muted) colors.error else colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                // Stop button (large, red-tinted)
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF8B2535))
+                        .background(if (isActive) Color(0xFF8B2535) else colors.accent)
                         .clickable {
-                            VoiceForegroundService.stop(context)
-                            navController.popBackStack()
+                            if (isActive) {
+                                NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
+                                VoiceForegroundService.stop(context)
+                            } else if (!hasKey) {
+                                navController.navigate("settings")
+                            } else {
+                                NovaPreferences.putBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, true)
+                                if (hasRecordAudioPermission && hasNotificationPermission) VoiceForegroundService.start(context)
+                                else permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = "Stop Voice Session",
+                        imageVector = if (isActive) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = if (isActive) "Deactivate microphone" else "Activate microphone",
                         tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(34.dp)
                     )
                 }
-
-                // Close / dismiss button
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceRaised)
-                        .clickable { navController.popBackStack() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Voice Screen",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (isActive) "MICROPHONE ACTIVE • TAP TO DEACTIVATE" else "MICROPHONE OFF • TAP TO ACTIVATE",
+                    fontSize = 10.sp,
+                    letterSpacing = 0.8.sp,
+                    color = colors.textSecondary
+                )
             }
         }
     }

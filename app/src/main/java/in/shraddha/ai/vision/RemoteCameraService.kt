@@ -63,7 +63,7 @@ class RemoteCameraService : Service() {
             reader = ImageReader.newInstance(size.width, size.height, ImageFormat.JPEG, 2)
             reader?.setOnImageAvailableListener({ source ->
                 val now = android.os.SystemClock.elapsedRealtime()
-                if (now - lastFrameAt < 900) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
+                if (now - lastFrameAt < 250) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
                     val buffer = image.planes[0].buffer

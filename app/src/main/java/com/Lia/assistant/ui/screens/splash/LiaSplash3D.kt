@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 import java.util.Random
 
 @Composable
-fun LiaSplash3D(onDismiss: () -> Unit) {
+fun LiaSplash3D(assistantName: String, onDismiss: () -> Unit) {
     if (SplashSession.played) {
         onDismiss()
         return
@@ -121,7 +121,7 @@ fun LiaSplash3D(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = AssistantBrand.FULL_NAME,
+                    text = assistantName,
                     fontFamily = SerifFontFamily,
                     fontSize = 32.sp,
                     color = colors.textPrimary,

@@ -10,6 +10,7 @@ import `in`.shraddha.ai.operator.learning.AppTrainingActivity
 import `in`.shraddha.ai.operator.learning.AppTrainingProfile
 import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.NaturalLanguageWorkflowRouter
+import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -17,7 +18,9 @@ class OperatorActivity : Activity() {
     private lateinit var appName: EditText
     private lateinit var target: EditText
     private lateinit var typed: EditText
+    private lateinit var expectedVisibleText: EditText
     private lateinit var commandInput: EditText
+    @Volatile private var activeRunner: AdaptiveWorkflowRunner? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,7 +30,8 @@ class OperatorActivity : Activity() {
         appName = field("ऐप का नाम (जैसे Chrome)")
         target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
         typed = field("फोकस किए गए सामान्य टेक्स्ट फील्ड में लिखें")
-        root.addView(appName); root.addView(target); root.addView(typed)
+        expectedVisibleText = field("Expected result text after action (optional; blank = screen re-read only)")
+        root.addView(appName); root.addView(target); root.addView(typed); root.addView(expectedVisibleText)
         commandInput = field("श्रद्धा को निर्देश दें: जैसे Rahul.jpg upload करो")
         root.addView(commandInput)
         root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
@@ -35,15 +39,16 @@ class OperatorActivity : Activity() {
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
+        root.addView(action("■  चल रहा Workflow रोकें") { activeRunner?.stop() ?: run { log.text = "अभी कोई Workflow सक्रिय नहीं है।" } })
         root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
-        root.addView(action("ऐप खोलें") { runOperator { it.execute(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) } })
-        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperator { it.execute(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString())) } })
-        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperator { it.execute(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString())) } })
+        root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString(), expectedVisibleText = expectedVisibleText.text.toString())) })
+        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString(), expectedVisibleText = expectedVisibleText.text.toString())) })
+        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperatorStep(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString(), expectedVisibleText = expectedVisibleText.text.toString())) })
         root.addView(action("Back / Home / Scroll") {
             val choices = arrayOf("Back", "Home", "Scroll forward")
             android.app.AlertDialog.Builder(this).setTitle("कार्रवाई चुनें").setItems(choices) { _, which ->
                 val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
-                runOperator { it.execute(OperatorStep(type)) }
+                runOperatorStep(OperatorStep(type, expectedVisibleText = expectedVisibleText.text.toString()))
             }.show()
         })
         log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE0E6F5.toInt()); setPadding(14, 18, 14, 18) }
@@ -64,6 +69,12 @@ class OperatorActivity : Activity() {
         runCatching { startActivityForResult(intent, 902) }.onFailure { log.text = "इस डिवाइस पर Speech Recognition उपलब्ध नहीं है।" }
     }
 
+    override fun onDestroy() {
+        activeRunner?.stop()
+        activeRunner = null
+        super.onDestroy()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 902 && resultCode == RESULT_OK) {
@@ -81,17 +92,21 @@ class OperatorActivity : Activity() {
         val route = result.route
         if (route == null) { log.text = result.message; return }
         val steps = route.profile.workflows[route.workflowName].orEmpty()
-        val destructive = steps.any { it.destructive }
+        val policyDecisions = steps.map { OperatorSafetyPolicy.assess(it.action, it.targetLabel, it.inputTemplate) }
+        if (policyDecisions.any { it.risk == OperatorSafetyPolicy.Risk.BLOCK }) {
+            log.text = "यह workflow सुरक्षा नीति से block हुआ: ${policyDecisions.first { it.risk == OperatorSafetyPolicy.Risk.BLOCK }.reason}"
+            return
+        }
         val variables = EditText(this).apply { hint = "अन्य मान: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
             .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा।")
             .setView(panel).setNegativeButton("रद्द", null)
-            .setPositiveButton(if (destructive) "पुष्टि करके चलाएँ" else "चलाएँ") { _, _ ->
+            .setPositiveButton("चरण-दर-चरण चलाएँ") { _, _ ->
                 val extra = variables.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
                 val allValues = route.values + extra
-                if (destructive) android.app.AlertDialog.Builder(this).setTitle("अंतिम अनुमति").setMessage("इस Workflow में बाहरी/संवेदनशील प्रभाव हो सकता है। क्या आगे बढ़ें?").setNegativeButton("नहीं", null).setPositiveButton("हाँ") { _, _ -> runLearned(route.profile, route.workflowName, allValues, true) }.show()
-                else runLearned(route.profile, route.workflowName, allValues, false)
+                // Sensitive actions are confirmed individually immediately before execution.
+                runLearned(route.profile, route.workflowName, allValues)
             }.show()
     }
 
@@ -108,20 +123,74 @@ class OperatorActivity : Activity() {
             android.app.AlertDialog.Builder(this).setTitle("Workflow: $name").setMessage("ऐप: ${profile.displayName}\nचरण: ${steps.size}\nहर चरण पर स्क्रीन दोबारा पढ़ी जाएगी। संवेदनशील/पासवर्ड फ़ील्ड ब्लॉक रहेंगे।")
                 .setView(container).setNegativeButton("रद्द") { _, _ -> }.setPositiveButton("चलाएँ") { _, _ ->
                     val map = vars.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                    val needsConfirm = steps.any { it.destructive }
-                    if (needsConfirm) android.app.AlertDialog.Builder(this).setTitle("संवेदनशील कार्रवाई").setMessage("इस Workflow में संदेश/भुगतान/हटाने जैसी कार्रवाई हो सकती है। क्या आप अनुमति देते हैं?").setNegativeButton("नहीं", null).setPositiveButton("हाँ, चलाएँ") { _, _ -> runLearned(profile, name, map, true) }.show()
-                    else runLearned(profile, name, map, false)
+                    val decisions = steps.map { OperatorSafetyPolicy.assess(it.action, it.targetLabel, it.inputTemplate) }
+            if (decisions.any { it.risk == OperatorSafetyPolicy.Risk.BLOCK }) {
+                log.text = "यह workflow सुरक्षा नीति से block हुआ: ${decisions.first { it.risk == OperatorSafetyPolicy.Risk.BLOCK }.reason}"
+                return@setPositiveButton
+            }
+            // Sensitive actions are confirmed individually immediately before execution.
+                    runLearned(profile, name, map)
                 }.show()
         }.show()
     }
 
-    private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, confirmed: Boolean) {
-        Thread { AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
-            val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
-            log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
-        } }.run(profile, name, values, confirmed) }.start()
+    private fun runOperatorStep(step: OperatorStep) {
+        val decision = OperatorSafetyPolicy.assess(step.action.name, step.target, step.value)
+        if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
+            log.text = "BLOCKED: ${decision.reason}\\n\\n" + log.text.take(3000)
+            return
+        }
+        if (step.requiresConfirmation || decision.risk == OperatorSafetyPolicy.Risk.CONFIRM) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("संवेदनशील कार्रवाई की पुष्टि")
+                .setMessage(decision.reason + "\\n\\nक्या आप इस चरण को चलाना चाहते हैं?")
+                .setNegativeButton("रद्द", null)
+                .setPositiveButton("हाँ, चलाएँ") { _, _ -> runOperator { it.execute(step, OperatorConfirmation.afterExplicitUserApproval(step)) } }
+                .show()
+        } else {
+            runOperator { it.execute(step) }
+        }
     }
 
+    private fun runLearned(
+        profile: AppTrainingProfile,
+        name: String,
+        values: Map<String, String>,
+        startAt: Int = 0,
+        approval: `in`.shraddha.ai.operator.learning.WorkflowStepApproval? = null
+    ) {
+        Thread {
+            val runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+                val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
+                log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
+                val pendingStep = event.stepIndex
+                if (event.state == OperatorTaskState.WAITING_CONFIRMATION && pendingStep != null) {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("इस चरण की अनुमति")
+                        .setMessage(event.message + "\n\nक्या केवल इसी चरण को चलाने की अनुमति देते हैं?")
+                        .setNegativeButton("नहीं, रोकें") { _, _ -> activeRunner?.stop(); activeRunner = null }
+                        .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ ->
+                            val pending = profile.workflows[name]?.getOrNull(pendingStep)
+                            if (pending == null) {
+                                log.text = "अनुमति वाला चरण अब उपलब्ध नहीं है; workflow रोक दिया गया।"
+                                activeRunner?.stop()
+                                activeRunner = null
+                            } else {
+                                val resolved = values[pending.inputTemplate] ?: pending.inputTemplate
+                                val grant = `in`.shraddha.ai.operator.learning.WorkflowStepApproval.afterExplicitUserApproval(
+                                    profile.packageName, name, pendingStep, pending.action, pending.targetLabel, resolved, pending.expectedText
+                                )
+                                runLearned(profile, name, values, startAt = pendingStep, approval = grant)
+                            }
+                        }
+                        .show()
+                }
+                if (event.state in setOf(OperatorTaskState.COMPLETED, OperatorTaskState.FAILED, OperatorTaskState.CANCELLED)) activeRunner = null
+            } }
+            activeRunner = runner
+            runner.run(profile, name, values, startAt, approval)
+        }.start()
+    }
     private fun field(hintText: String) = EditText(this).apply {
         hint = hintText; setHintTextColor(0xFF8290AA.toInt()); setTextColor(Color.WHITE); textSize = 14f
         setSingleLine(true); setPadding(14, 10, 14, 10)

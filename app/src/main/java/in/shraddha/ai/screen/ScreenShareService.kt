@@ -71,23 +71,31 @@ class ScreenShareService : Service() {
         reader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 2)
         reader!!.setOnImageAvailableListener({ source ->
             val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastFrameAt < 700) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
+            if (now - lastFrameAt < 250) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
             val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
+            var bitmap: Bitmap? = null
+            var cropped: Bitmap? = null
             try {
                 val plane = image.planes[0]; val buffer = plane.buffer
                 val pixelStride = plane.pixelStride; val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * width
-                val bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
-                bitmap.copyPixelsFromBuffer(buffer)
-                val cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height)
+                val createdBitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
+                bitmap = createdBitmap
+                createdBitmap.copyPixelsFromBuffer(buffer)
+                val croppedBitmap = Bitmap.createBitmap(createdBitmap, 0, 0, width, height)
+                cropped = croppedBitmap
                 val out = ByteArrayOutputStream()
-                cropped.compress(Bitmap.CompressFormat.JPEG, 48, out)
-                DeviceLinkManager.sendFrame(out.toByteArray(), 1)
-                bitmap.recycle(); if (cropped !== bitmap) cropped.recycle(); lastFrameAt = now
+                croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 48, out)
+                if (DeviceLinkManager.sendFrame(out.toByteArray(), 1)) lastFrameAt = now
             } catch (_: Exception) { /* A dropped frame is safer than stopping the share session. */ }
-            finally { image.close() }
+            finally {
+                if (cropped != null && cropped !== bitmap && !cropped.isRecycled) cropped.recycle()
+                if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
+                image.close()
+            }
         }, handler)
         display = projection?.createVirtualDisplay("ShraddhaLiveShare", width, height, density, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader!!.surface, null, handler)
+            ?: error("Android could not create the screen-sharing display.")
     }
 
     override fun onDestroy() {

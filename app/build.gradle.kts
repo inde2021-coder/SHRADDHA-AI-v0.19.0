@@ -1,16 +1,25 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val firebaseLocalProperties = java.util.Properties().apply {
+val firebaseLocalProperties = Properties().apply {
     val configFile = rootProject.file("local.properties")
     if (configFile.exists()) configFile.inputStream().use { load(it) }
 }
 fun firebaseConfigValue(name: String): String =
     (System.getenv(name) ?: firebaseLocalProperties.getProperty(name) ?: "")
         .replace("\\", "\\\\").replace("\"", "\\\"")
+
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseKeystorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+    .all { !it.isNullOrBlank() }
 
 android {
     namespace = "in.shraddha.ai"
@@ -21,11 +30,39 @@ android {
         targetSdk = 35
         versionCode = 20
         versionName = "0.19.0"
-        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseConfigValue("FIREBASE_API_KEY")}\"")
-        buildConfigField("String", "FIREBASE_APP_ID", "\"${firebaseConfigValue("FIREBASE_APP_ID")}\"")
-        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseConfigValue("FIREBASE_PROJECT_ID")}\"")
-        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseConfigValue("FIREBASE_SENDER_ID")}\"")
-        buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${firebaseConfigValue("FIREBASE_STORAGE_BUCKET")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseConfigValue("FIREBASE_API_KEY").ifBlank { "AIzaSyA84S0TYemtRmhz81XmepCCsxkALjFM-rw" }}\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${firebaseConfigValue("FIREBASE_APP_ID").ifBlank { "1:478972450737:android:84ee734a71e245cb3ccf90" }}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseConfigValue("FIREBASE_PROJECT_ID").ifBlank { "shraddha-ai-1d3bf" }}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseConfigValue("FIREBASE_SENDER_ID").ifBlank { "478972450737" }}\"")
+        buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${firebaseConfigValue("FIREBASE_STORAGE_BUCKET").ifBlank { "shraddha-ai-1d3bf.firebasestorage.app" }}\"")
+        buildConfigField("String", "FIREBASE_DATABASE_URL", "\"${firebaseConfigValue("FIREBASE_DATABASE_URL").ifBlank { "https://shraddha-ai-1d3bf-default-rtdb.firebaseio.com" }}\"")
+    }
+    // Produce device-native APKs instead of one oversized universal APK containing
+    // four copies of native ONNX/ML Kit libraries. Android phones use ARM ABIs.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
+    }
+    signingConfigs {
+        create("release") {
+            // Credentials are injected by the protected CI release workflow only.
+            // Never commit a keystore or signing password to the repository.
+            if (hasReleaseSigning) {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
+        }
     }
     buildFeatures { buildConfig = true; compose = true }
     compileOptions {
@@ -54,6 +91,18 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // Camera and on-device face analysis used by the consent-gated People Memory capture flow.
+    val cameraXVersion = "1.4.1"
+    implementation("com.google.guava:guava:33.3.1-android")
+    implementation("androidx.camera:camera-core:$cameraXVersion")
+    implementation("androidx.camera:camera-camera2:$cameraXVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
+    implementation("androidx.camera:camera-view:$cameraXVersion")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("com.google.mlkit:face-detection:16.1.7")
+    implementation("com.google.android.gms:play-services-tasks:18.2.0")
+    // Runtime only; actual model files are user-supplied after license and tensor-contract review.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
@@ -63,8 +112,11 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

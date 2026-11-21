@@ -1,6 +1,11 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { initializeApp as initializeAdminApp, cert, getApps as getAdminApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { WebSocketServer, WebSocket } from 'ws';
+import { validRemoteAction } from './relay-policy.js';
+import { appendCallTranscript, clearCallTranscript, hasExplicitTranscriptConsentPrompt } from './call-transcript.js';
+import { encryptCallHistoryRecord, decryptCallHistoryRecord } from './call-history-crypto.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -10,11 +15,182 @@ const pairCodes = new Map();
 const joinAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
+const sessionCreateAttempts = new Map();
+const edesyCalls = new Map();
+const MAX_EDESY_CALL_HISTORY = 100;
+const callHistoryWriteQueues = new Map();
+let callHistoryStoreCache = null;
+
+function callHistoryConfigStatus() {
+  const missing = [];
+  const serviceJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  if (!serviceJson) missing.push('FIREBASE_SERVICE_ACCOUNT_JSON (or FIREBASE_SERVICE_ACCOUNT_BASE64)');
+  const encodedKey = String(process.env.CALL_HISTORY_ENCRYPTION_KEY || '').trim();
+  let keyValid = false;
+  if (encodedKey && /^[A-Za-z0-9+/]+={0,2}$/.test(encodedKey)) {
+    try {
+      const decodedKey = Buffer.from(encodedKey, 'base64');
+      keyValid = decodedKey.length === 32 && decodedKey.toString('base64') === encodedKey;
+      decodedKey.fill(0);
+    } catch { keyValid = false; }
+  }
+  if (!keyValid) missing.push('CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)');
+  return { configured: missing.length === 0, missing };
+}
+
+function getCallHistoryStore() {
+  const config = callHistoryConfigStatus();
+  if (!config.configured) return null;
+  if (callHistoryStoreCache) return callHistoryStoreCache;
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64
+    ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8')
+    : process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const serviceAccount = JSON.parse(raw);
+  if (!serviceAccount || typeof serviceAccount.project_id !== 'string' ||
+      typeof serviceAccount.client_email !== 'string' || typeof serviceAccount.private_key !== 'string') {
+    throw new Error('Firebase service-account JSON is incomplete.');
+  }
+  const appName = 'shraddha-encrypted-call-history';
+  const app = getAdminApps().find(item => item.name === appName) ||
+    initializeAdminApp({ credential: cert(serviceAccount), projectId: serviceAccount.project_id }, appName);
+  const key = Buffer.from(process.env.CALL_HISTORY_ENCRYPTION_KEY.trim(), 'base64');
+  if (key.length !== 32 || key.toString('base64') !== process.env.CALL_HISTORY_ENCRYPTION_KEY.trim()) {
+    key.fill(0);
+    throw new Error('CALL_HISTORY_ENCRYPTION_KEY must be canonical base64 for exactly 32 bytes.');
+  }
+  callHistoryStoreCache = { db: getFirestore(app), key };
+  return callHistoryStoreCache;
+}
+
+function callHistorySnapshot(record) {
+  return {
+    id: record.id,
+    direction: record.direction || 'inbound',
+    agentName: record.agentName || 'Shraddha AI',
+    caller: record.caller || 'Unknown caller',
+    startedAt: record.startedAt || null,
+    endedAt: record.endedAt || null,
+    status: record.status || 'unknown',
+    bridgeStatus: record.bridgeStatus || null,
+    transcriptConsent: record.transcriptConsent === true,
+    transcript: record.transcriptConsent === true && Array.isArray(record.transcript) ? record.transcript : [],
+    summaryStatus: record.summaryStatus || 'disabled',
+    summary: record.summary || '',
+    summaryError: String(record.summaryError || '').slice(0, 180),
+    usageSeconds: Number.isFinite(Number(record.usageSeconds)) ? Number(record.usageSeconds) : null,
+    finalUsageSeconds: Number.isFinite(Number(record.finalUsageSeconds)) ? Number(record.finalUsageSeconds) : null,
+    finalReason: String(record.finalReason || '').slice(0, 80),
+    finalizationStatus: record.finalizationStatus || 'pending'
+  };
+}
+
+async function persistCallHistoryRecord(record) {
+  const store = getCallHistoryStore();
+  if (!store) {
+    record.durableStatus = 'not_configured';
+    return false;
+  }
+  const previous = callHistoryWriteQueues.get(record.id) || Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    const collection = store.db.collection('telephony_call_history');
+    const payload = encryptCallHistoryRecord(callHistorySnapshot(record), store.key);
+    await collection.doc(record.id).set({
+      format: 'AES-256-GCM/shraddha-call-history-v1',
+      payload,
+      createdAt: Date.parse(record.startedAt || '') || Date.now()
+    });
+    // Remove every record beyond the newest 100, in Firestore-safe batch sizes.
+    while (true) {
+      const overflow = await collection.orderBy('createdAt', 'desc')
+        .offset(MAX_EDESY_CALL_HISTORY).limit(450).get();
+      if (overflow.empty) break;
+      const batch = store.db.batch();
+      overflow.docs.forEach(document => batch.delete(document.ref));
+      await batch.commit();
+      if (overflow.size < 450) break;
+    }
+  });
+  callHistoryWriteQueues.set(record.id, next);
+  try {
+    await next;
+    record.durableStatus = 'saved';
+    return true;
+  } finally {
+    if (callHistoryWriteQueues.get(record.id) === next) callHistoryWriteQueues.delete(record.id);
+  }
+}
+
+async function loadDurableCallHistory(limit = 30) {
+  const store = getCallHistoryStore();
+  if (!store) return null;
+  const snapshot = await store.db.collection('telephony_call_history')
+    .orderBy('createdAt', 'desc').limit(Math.max(1, Math.min(100, limit))).get();
+  const records = [];
+  for (const document of snapshot.docs) {
+    try {
+      const record = decryptCallHistoryRecord(document.get('payload'), store.key, document.id);
+      records.push({ ...record, durableStatus: 'saved' });
+    } catch (error) {
+      // Never return unauthenticated or undecryptable call data.
+      process.stderr.write('Skipping unreadable encrypted call-history record: ' + String(error.message || 'decrypt failed').slice(0, 120) + '\n');
+    }
+  }
+  return records;
+}
+function storeEdesyCall(record) {
+  edesyCalls.set(record.id, record);
+  while (edesyCalls.size > MAX_EDESY_CALL_HISTORY) {
+    const oldestId = edesyCalls.keys().next().value;
+    if (oldestId === undefined) break;
+    edesyCalls.delete(oldestId);
+  }
+  persistCallHistoryRecord(record).catch(error => {
+    record.durableStatus = 'failed';
+    process.stderr.write('Encrypted call-history persistence failed: ' + String(error.message || 'storage error').slice(0, 160) + '\n');
+  });
+}
+let edesyActiveConnections = 0;
+const edesyPreflightAttempts = new Map();
+const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
+const edesyPreflightReady = () => {
+  if (!edesyConfigured() || typeof process.env.EDESY_API_KEY !== 'string' || !process.env.EDESY_API_KEY.startsWith('sk_') || process.env.EDESY_API_KEY.length < 20) return false;
+  try {
+    const streamUrl = new URL(process.env.EDESY_STREAM_URL);
+    const publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
+    return streamUrl.protocol === 'wss:' && publicOrigin.protocol === 'https:' &&
+      streamUrl.host === publicOrigin.host && !streamUrl.username && !streamUrl.password &&
+      !streamUrl.hash && streamUrl.pathname === '/ws/telephony/edesy' &&
+      streamUrl.searchParams.get('token') === process.env.EDESY_STREAM_TOKEN;
+  } catch { return false; }
+};
+function resamplePcm16(input, fromRate, toRate) {
+  const count = Math.floor(input.length / 2);
+  if (!count || fromRate === toRate) return input;
+  const outCount = Math.max(1, Math.floor(count * toRate / fromRate));
+  const out = Buffer.allocUnsafe(outCount * 2);
+  for (let i = 0; i < outCount; i++) {
+    const p = i * fromRate / toRate;
+    const left = Math.min(count - 1, Math.floor(p));
+    const right = Math.min(count - 1, left + 1);
+    const fraction = p - left;
+    const value = input.readInt16LE(left * 2) * (1 - fraction) + input.readInt16LE(right * 2) * fraction;
+    out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(value))), i * 2);
+  }
+  return out;
+}
 const AI_ROUTES = new Set(['/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/ai/compare']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
+const clientIp = req => {
+  // Trust forwarded IPs only when the deployment's reverse proxy overwrites them.
+  if (process.env.TRUST_PROXY === 'true') {
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded.slice(0, 64);
+  }
+  return String(req.socket.remoteAddress || 'unknown').slice(0, 64);
+};
 async function readBody(req, limit = MAX_BODY) { let raw = ''; for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > limit) { const e = new Error('Request too large'); e.statusCode = 413; throw e; } } try { return JSON.parse(raw || '{}'); } catch { const e = new Error('Request body must be valid JSON'); e.statusCode = 400; throw e; } }
 
 async function askProvider(provider, prompt) {
@@ -25,22 +201,63 @@ async function askProvider(provider, prompt) {
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+    const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
-  if (provider === 'groq' || provider === 'perplexity') {
-    const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.PERPLEXITY_API_KEY;
-    if (!apiKey) throw new Error(`${provider.toUpperCase()}_API_KEY is not configured`);
-    const endpoint = provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.perplexity.ai/chat/completions';
-    const model = provider === 'groq' ? (process.env.GROQ_MODEL || 'llama-3.3-70b-versatile') : (process.env.PERPLEXITY_MODEL || 'sonar');
-    const r = await fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || `${provider} request failed`); return d.choices?.[0]?.message?.content || '';
+  if (provider === 'groq') {
+    if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
+    const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(45_000),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+    });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Groq request failed');
+    return d.choices?.[0]?.message?.content || '';
+  }
+  if (provider === 'perplexity') {
+    if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY is not configured');
+    const r = await fetch('https://api.perplexity.ai/v1/agent', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(90_000),
+      body: JSON.stringify({
+        effort: process.env.PERPLEXITY_EFFORT || 'fast',
+        input: prompt.slice(0, 12000),
+        max_output_tokens: 2048
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'Perplexity Agent request failed');
+    if (d.status === 'failed' || d.status === 'cancelled') throw new Error(d.error?.message || `Perplexity request ${d.status}`);
+    const answer = [];
+    const sources = new Map();
+    for (const item of Array.isArray(d.output) ? d.output : []) {
+      if (item?.type === 'message') {
+        for (const part of Array.isArray(item.content) ? item.content : []) {
+          if (part?.type === 'output_text' && typeof part.text === 'string' && part.text.trim()) answer.push(part.text);
+          for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
+            const url = typeof annotation?.url === 'string' ? annotation.url.trim() : '';
+            if (/^https?:\/\//i.test(url)) sources.set(url, String(annotation.title || url).slice(0, 180));
+          }
+        }
+      } else if (item?.type === 'search_results') {
+        for (const result of Array.isArray(item.results) ? item.results : []) {
+          const url = typeof result?.url === 'string' ? result.url.trim() : '';
+          if (/^https?:\/\//i.test(url)) sources.set(url, String(result.title || url).slice(0, 180));
+        }
+      }
+    }
+    if (!answer.length) throw new Error('Perplexity returned no answer text.');
+    const footer = [...sources.entries()].slice(0, 5).map(([url, title]) => `• ${title} — ${url}`).join('\n');
+    return answer.join('\n\n') + (footer ? `\n\nSources:\n${footer}` : '');
   }
   throw new Error('Unsupported provider');
 }
@@ -53,13 +270,13 @@ async function askVision(provider, prompt, imageBase64, mimeType) {
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
-    const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
+    const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini vision request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic vision request failed'); return d.content?.map(p => p.text || '').join('') || '';
   }
   throw new Error('Unsupported provider');
@@ -69,7 +286,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), incomingTransfers: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -82,7 +299,7 @@ const server = http.createServer(async (req, res) => {
   const routePath = String(req.url || '').split('?')[0];
   if (AI_ROUTES.has(routePath)) {
     if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+    const ip = clientIp(req);
     const now = Date.now(); const usage = apiAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
     if (usage.resetAt <= now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
     usage.count += 1; apiAttempts.set(ip, usage);
@@ -90,13 +307,19 @@ const server = http.createServer(async (req, res) => {
   }
   try {
     if (req.method === 'POST' && req.url === '/api/device/session') {
+      const ip = clientIp(req);
+      const now = Date.now(); const usage = sessionCreateAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
+      if (usage.resetAt <= now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
+      usage.count += 1; sessionCreateAttempts.set(ip, usage);
+      if (usage.count > 10) return json(res, 429, { error: 'Too many session creation requests. Wait ten minutes and try again.' });
+      if (sessions.size >= 500) return json(res, 503, { error: 'Relay session capacity reached. Try again later.' });
       const body = await readBody(req);
       const name = typeof body.deviceName === 'string' ? body.deviceName.trim() : '';
       if (!name || name.length > 48) return json(res, 400, { error: 'deviceName must be 1-48 characters' });
       return json(res, 201, createSession(name));
     }
     if (req.method === 'POST' && req.url === '/api/device/join') {
-      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      const ip = clientIp(req);
       const now = Date.now(); const attempt = joinAttempts.get(ip) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (attempt.resetAt < now) { attempt.count = 0; attempt.resetAt = now + 10 * 60 * 1000; }
       attempt.count += 1; joinAttempts.set(ip, attempt);
@@ -110,9 +333,173 @@ const server = http.createServer(async (req, res) => {
       const session = sessions.get(pair.sessionId);
       if (!session || session.devices.size >= 8) return json(res, 409, { error: 'Session unavailable or device limit reached' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map() });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), incomingTransfers: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
+    }
+    if (req.method === 'POST' && req.url === '/api/device/revoke') {
+      const body = await readBody(req);
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+      const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(sessionId) || !/^[a-f0-9]{24}$/.test(deviceId)) {
+        return json(res, 400, { error: 'Invalid session or device identifier' });
+      }
+      const session = sessions.get(sessionId);
+      const caller = session?.devices.get(deviceId);
+      const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      if (!caller || !safeEqual(caller.token, bearer)) return json(res, 401, { error: 'Valid device credentials are required' });
+      const targetId = typeof body.targetDeviceId === 'string' && body.targetDeviceId ? body.targetDeviceId : deviceId;
+      if (!/^[a-f0-9]{24}$/i.test(targetId)) return json(res, 400, { error: 'Invalid target device identifier' });
+      if (targetId !== deviceId && caller.role !== 'owner') return json(res, 403, { error: 'Only the session owner can revoke another device' });
+      const target = session.devices.get(targetId);
+      if (!target) return json(res, 404, { error: 'Target device was not found' });
+      if (target.role === 'owner' && targetId !== deviceId) return json(res, 403, { error: 'The owner device cannot be revoked by a member' });
+      const revokeOne = (id, item) => {
+        item.socket?.close(4003, 'Device pairing revoked');
+        for (const peer of session.devices.values()) {
+          peer.controlGrants?.delete(id);
+          peer.pendingControlRequests?.delete(id);
+          for (const [requestId, pending] of peer.pendingDataShares || []) {
+            if (pending.requesterId === id || pending.targetDeviceId === id) peer.pendingDataShares.delete(requestId);
+          }
+          peer.grants?.delete(`${id}:contacts`);
+          peer.grants?.delete(`${id}:media`);
+          peer.grants?.delete(`${id}:documents`);
+          peer.grants?.delete(`${id}:messages`);
+          peer.grants?.delete(`${id}:calendar`);
+          peer.grants?.delete(`${id}:location`);
+          peer.grants?.delete(`${id}:device_status`);
+          peer.grants?.delete(`${id}:ai_memory`);
+          for (const [actionId, pending] of peer.pendingRemoteActions || []) if (pending.requesterId === id) peer.pendingRemoteActions.delete(actionId);
+        }
+        session.devices.delete(id);
+        for (const [code, invite] of pairCodes) if (invite.sessionId === sessionId && !session.devices.size) pairCodes.delete(code);
+      };
+      if (targetId === deviceId && caller.role === 'owner') {
+        for (const [id, item] of session.devices) revokeOne(id, item);
+        sessions.delete(sessionId);
+        for (const [code, invite] of pairCodes) if (invite.sessionId === sessionId) pairCodes.delete(code);
+        return json(res, 200, { ok: true, revoked: 'session' });
+      }
+      revokeOne(targetId, target);
+      for (const [id, peer] of session.devices) if (id !== targetId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId: targetId, name: target.name, online: false, revoked: true }));
+      if (!session.devices.size) sessions.delete(sessionId);
+      return json(res, 200, { ok: true, revoked: targetId });
+    }
+    if (req.method === 'POST' && req.url === '/api/telephony/edesy/preflight') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      if (!edesyConfigured() || typeof process.env.EDESY_API_KEY !== 'string' || !process.env.EDESY_API_KEY.startsWith('sk_') || process.env.EDESY_API_KEY.length < 20 || !process.env.EDESY_STREAM_URL || !process.env.PUBLIC_ORIGIN) {
+        return json(res, 503, { error: 'Edesy preflight requires EDESY_STREAM_TOKEN, OPENAI_API_KEY, EDESY_API_KEY, EDESY_STREAM_URL and PUBLIC_ORIGIN.' });
+      }
+      const remote = String(req.socket.remoteAddress || 'unknown');
+      const now = Date.now();
+      const last = edesyPreflightAttempts.get(remote) || 0;
+      if (now - last < 60_000) return json(res, 429, { error: 'Edesy preflight is limited to one request per minute.' });
+      edesyPreflightAttempts.set(remote, now);
+      while (edesyPreflightAttempts.size > 500) edesyPreflightAttempts.delete(edesyPreflightAttempts.keys().next().value);
+      let streamUrl, publicOrigin;
+      try {
+        streamUrl = new URL(process.env.EDESY_STREAM_URL);
+        publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
+      } catch {
+        return json(res, 400, { error: 'EDESY_STREAM_URL or PUBLIC_ORIGIN is not a valid URL.' });
+      }
+      if (streamUrl.protocol !== 'wss:' || publicOrigin.protocol !== 'https:' ||
+          streamUrl.host !== publicOrigin.host || streamUrl.username || streamUrl.password ||
+          streamUrl.hash || streamUrl.pathname !== '/ws/telephony/edesy' ||
+          streamUrl.searchParams.get('token') !== process.env.EDESY_STREAM_TOKEN) {
+        return json(res, 400, { error: 'EDESY_STREAM_URL must point to this backend’s authenticated Edesy WebSocket endpoint.' });
+      }
+      const body = await readBody(req);
+      const sampleRate = Number(body.sample_rate || 16000);
+      const seconds = Number(body.seconds || 2);
+      if (![8000, 16000].includes(sampleRate) || !Number.isInteger(seconds) || seconds < 1 || seconds > 5) {
+        return json(res, 400, { error: 'sample_rate must be 8000 or 16000 and seconds must be between 1 and 5.' });
+      }
+      const redactPreflightText = value => String(value || '')
+        .replaceAll(process.env.EDESY_STREAM_TOKEN, '[redacted]')
+        .replace(/([?&]token=)[^&\s]+/gi, '$1[redacted]');
+      try {
+        const providerResponse = await fetch('https://voice-api.edesy.in/v1/stream-test', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${process.env.EDESY_API_KEY}`, 'content-type': 'application/json' },
+          signal: AbortSignal.timeout(20_000),
+          body: JSON.stringify({ stream_url: (() => { const testUrl = new URL(streamUrl); testUrl.searchParams.set('mode', 'preflight'); return testUrl.toString(); })(), sample_rate: sampleRate, seconds })
+        });
+        const result = await providerResponse.json().catch(() => ({}));
+        if (!providerResponse.ok) {
+          const providerError = typeof result.error === 'string' ? result.error : result.error?.message || result.message || 'Edesy preflight failed';
+          return json(res, providerResponse.status, { error: redactPreflightText(providerError).slice(0, 240) });
+        }
+        const steps = Array.isArray(result.steps) ? result.steps.slice(0, 8).map(step => ({
+          step: String(step.step || '').slice(0, 40),
+          ok: step.ok === true,
+          detail: redactPreflightText(step.detail).slice(0, 240)
+        })) : [];
+        return json(res, 200, {
+          ok: result.ok === true,
+          sample_rate: sampleRate,
+          steps,
+          hint: redactPreflightText(result.hint).slice(0, 240),
+          audio_frames_received: Number(result.audio_frames_received || 0),
+          audio_bytes_received: Number(result.audio_bytes_received || 0),
+          text_frames_received: Number(result.text_frames_received || 0)
+        });
+      } catch (error) {
+        return json(res, 502, { error: String(error.message || 'Edesy preflight request failed').slice(0, 240) });
+      }
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const callHistoryConfig = callHistoryConfigStatus();
+      let callHistoryReady = false;
+      let callHistoryError = '';
+      if (callHistoryConfig.configured) {
+        try {
+          const store = getCallHistoryStore();
+          if (store) await store.db.collection('telephony_call_history').limit(1).get();
+          callHistoryReady = Boolean(store);
+        } catch (error) { callHistoryError = String(error.message || 'Call-history store configuration failed').slice(0, 180); }
+      }
+      return json(res, 200, {
+        provider: 'edesy',
+        agentName: String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI',
+        callHistory: { durable: callHistoryReady, configured: callHistoryConfig.configured, missing: callHistoryConfig.missing, error: callHistoryError },
+        configured: edesyConfigured(),
+        capabilities: {
+          inboundWebSocketAudio: edesyConfigured(),
+          liveBidirectionalAiAudio: edesyConfigured(),
+          liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
+          aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
+          durableEncryptedCallHistory: callHistoryReady,
+          persistentCallRecording: false,
+          whatsappDelivery: false
+        },
+        required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'],
+        preflightReady: edesyPreflightReady(),
+        missing: [
+          ...(typeof process.env.EDESY_STREAM_TOKEN !== 'string' || process.env.EDESY_STREAM_TOKEN.length < 32 ? ['EDESY_STREAM_TOKEN (32+ characters)'] : []),
+          ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : []),
+          ...(typeof process.env.EDESY_API_KEY !== 'string' || !process.env.EDESY_API_KEY.startsWith('sk_') || process.env.EDESY_API_KEY.length < 20 ? ['EDESY_API_KEY (sk_... Voice API key)'] : []),
+          ...(!process.env.EDESY_STREAM_URL ? ['EDESY_STREAM_URL'] : []),
+          ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : []),
+          ...(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN && !edesyPreflightReady() ? ['EDESY_STREAM_URL / PUBLIC_ORIGIN mismatch'] : [])
+        ],
+        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is encrypted at rest in Firestore when the durable call-history store is ready; otherwise it is bounded in-memory only. Audio is not recorded.'
+      });
+    }
+    if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      let durableCalls = null;
+      let warning = '';
+      try { durableCalls = await loadDurableCallHistory(30); }
+      catch (error) { warning = String(error.message || 'Durable call history is unavailable').slice(0, 200); }
+      const merged = new Map((durableCalls || []).map(record => [record.id, record]));
+      for (const record of edesyCalls.values()) {
+        merged.set(record.id, { ...callHistorySnapshot(record), durableStatus: record.durableStatus || (durableCalls ? 'pending' : 'not_configured') });
+      }
+      const calls = [...merged.values()].sort((a, b) => Date.parse(b.startedAt || '') - Date.parse(a.startedAt || '')).slice(0, 30);
+      return json(res, 200, { calls, durable: durableCalls !== null, warning });
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
@@ -243,8 +630,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { provider, domain, mode, answer, safetyReviewRequired: ['medical','electrical','electronics','mechanical','civil','law','repair'].includes(domain) });
     }
     if (req.method === 'POST' && req.url === '/api/agents/council') {
-      if (!process.env.GATEWAY_TOKEN || req.headers.authorization !== `Bearer ${process.env.GATEWAY_TOKEN}`) return json(res, 401, { error: 'Gateway authentication is required' });
-      const caller = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const caller = clientIp(req);
       const now = Date.now(); const usage = councilAttempts.get(caller) || { count: 0, resetAt: now + 10 * 60 * 1000 };
       if (usage.resetAt < now) { usage.count = 0; usage.resetAt = now + 10 * 60 * 1000; }
       usage.count += 1; councilAttempts.set(caller, usage);
@@ -294,8 +681,256 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
+const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+telephonyWss.on('connection', (carrier, request) => {
+  carrier.on('error', () => {});
+  const isPreflight = request?.isEdesyPreflight === true;
+  const transcriptCaptureEnabled = !isPreflight && process.env.CALL_TRANSCRIPTS_ENABLED === 'true';
+  const callAgentName = String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI')
+    .replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
+  const callInstructions = process.env.SHRADDHA_CALL_INSTRUCTIONS
+    ? String(process.env.SHRADDHA_CALL_INSTRUCTIONS).replace(/Shraddha AI/gi, callAgentName).slice(0, 4000)
+    : `You are ${callAgentName}, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.`;
+  let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
+  let callSampleRate = 16000;
+  let liveFinalized = false;
+  let liveFinalizationTimer = null;
+  const pendingAudio = [];
+  let metadataTimer = null;
+  let liveReadyTimer = null;
+  if (edesyActiveConnections >= Math.max(1, Math.min(50, Number(process.env.EDESY_MAX_CONCURRENT_CALLS) || 8))) {
+    carrier.close(1013, 'AI call capacity reached');
+    return;
+  }
+  edesyActiveConnections += 1;
+  const finalize = () => {
+    if (!callRecord) return;
+    callRecord.endedAt = new Date().toISOString();
+    callRecord.status = ready ? 'ended' : 'failed';
+    callRecord.bridgeStatus = ready ? 'connected' : 'startup_failed';
+    callRecord.consentPromptBuffer = '';
+    const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : `${callAgentName}: `) + item.text).join('\n').slice(0, 24000);
+    if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
+      callRecord.summaryStatus = 'pending';
+      askProvider('openai', 'Summarize this phone call in Hindi. Return: caller intent, key details, commitments, and clear next actions. Do not invent facts.\n\n' + transcriptText)
+        .then(summary => { callRecord.summary = summary.slice(0, 6000); callRecord.summaryStatus = 'ready'; storeEdesyCall(callRecord); })
+        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); storeEdesyCall(callRecord); });
+    } else {
+      callRecord.summaryStatus = 'disabled';
+    }
+    storeEdesyCall(callRecord);
+  };
+  const shutdown = () => {
+    if (closed) return;
+    closed = true;
+    edesyActiveConnections = Math.max(0, edesyActiveConnections - 1);
+    clearTimeout(metadataTimer);
+    clearTimeout(liveReadyTimer);
+    pendingAudio.length = 0;
+    finalize();
+    if (live && live.readyState === WebSocket.OPEN && !liveFinalized) {
+      if (callRecord) { callRecord.finalizationStatus = 'pending'; storeEdesyCall(callRecord); }
+      try {
+        live.send(JSON.stringify({ type: 'session.close' }));
+        liveFinalizationTimer = setTimeout(() => {
+          if (callRecord && callRecord.finalizationStatus === 'pending') { callRecord.finalizationStatus = 'unconfirmed'; storeEdesyCall(callRecord); }
+          if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Call finalization timeout');
+        }, 4_000);
+      } catch {
+        if (callRecord) { callRecord.finalizationStatus = 'unconfirmed'; storeEdesyCall(callRecord); }
+        live.close();
+      }
+    } else if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) {
+      live.close(1000, 'Carrier call ended');
+    }
+    if (carrier.readyState === WebSocket.OPEN || carrier.readyState === WebSocket.CONNECTING) carrier.close(1000, 'Call bridge closed');
+  };
+  metadataTimer = setTimeout(() => shutdown(), 10_000);
+  if (!isPreflight) liveReadyTimer = setTimeout(() => { if (!ready) shutdown(); }, 20_000);
+  if (isPreflight) {
+    carrier.on('message', (data, binary) => {
+      if (closed) return;
+      if (binary) {
+        if (!metadataSeen || data.length === 0 || data.length > 65536 || data.length % 2 !== 0) return;
+        if (carrier.readyState === WebSocket.OPEN) carrier.send(data, { binary: true });
+        return;
+      }
+      let metadata;
+      try { metadata = JSON.parse(data.toString()); } catch { return shutdown(); }
+      if (!metadataSeen) {
+        metadataSeen = true;
+        clearTimeout(metadataTimer);
+        const sampleRate = Number(metadata.sampleRate || 16000);
+        if (![8000, 16000].includes(sampleRate) || (metadata.mixType && String(metadata.mixType).toLowerCase() !== 'mono')) return shutdown();
+        ready = true;
+        return;
+      }
+      if (metadata.type === 'disconnect') shutdown();
+    });
+    carrier.on('close', shutdown);
+    carrier.on('error', shutdown);
+    return;
+  }
+  live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
+  live.on('open', () => {
+    if (closed || carrier.readyState !== WebSocket.OPEN) {
+      live.close(1000, 'Carrier call ended before AI session started');
+      return;
+    }
+    live.send(JSON.stringify({
+    type: 'session.start',
+    session: {
+      model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1',
+      instructions: callInstructions +
+        (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
+          ? ' If text transcript saving is enabled, after disclosing that you are an AI, clearly explain that a text transcript may be saved only if the caller consents. Ask the caller to press 1 to consent; if they do not press 1, do not save any transcript. Tell them they can press 0 at any time to stop and discard the transcript. Never say that audio is recorded; audio is not recorded.'
+          : ' No call transcript is saved. Do not imply that the call is recorded.'),
+      input: [{
+        role: 'developer',
+        content: [{
+          type: 'input_text',
+          text: `Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main ${callAgentName}, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.` +
+            (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
+              ? ' Before discussing the call, clearly ask the caller to press 1 if they consent to saving a text transcript. No press-1 means no transcript is saved. Pressing 0 at any time stops and discards it. Do not claim audio is recorded.'
+              : ' Do not save a call transcript; no audio recording is made.')
+        }]
+      }],
+      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } },
+      delegation: { type: 'client' }
+    }
+    }));
+  });
+  live.on('message', raw => {
+    let event;
+    try { event = JSON.parse(raw.toString()); } catch { return; }
+    if (event.type === 'session.usage.updated' && callRecord) {
+      const seconds = Number(event.usage?.seconds);
+      if (Number.isFinite(seconds) && seconds >= 0) callRecord.usageSeconds = seconds;
+    }
+    if (event.type === 'session.closed') {
+      liveFinalized = true;
+      if (callRecord) {
+        callRecord.finalizationStatus = 'confirmed';
+        const seconds = Number(event.usage?.seconds);
+        if (Number.isFinite(seconds) && seconds >= 0) callRecord.finalUsageSeconds = seconds;
+        callRecord.finalReason = String(event.reason || '').slice(0, 80);
+        storeEdesyCall(callRecord);
+      }
+      clearTimeout(liveFinalizationTimer);
+      if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Live session finalized');
+      if (!closed) shutdown();
+      return;
+    }
+    if (closed) return;
+    if (event.type === 'session.started') {
+      ready = true;
+      clearTimeout(liveReadyTimer);
+      while (pendingAudio.length && live.readyState === WebSocket.OPEN && !closed) {
+        const queued = pendingAudio.shift();
+        const pcm24 = resamplePcm16(queued, callSampleRate, 24000);
+        live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+      }
+    }
+    if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) carrier.send(JSON.stringify({ type: 'killAudio' }));
+    if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
+      if (event.type === 'session.output_transcript.delta' && !callRecord.transcriptConsentRequested) {
+        callRecord.consentPromptBuffer = (callRecord.consentPromptBuffer + event.delta).slice(-800).toLowerCase();
+        if (hasExplicitTranscriptConsentPrompt(callRecord.consentPromptBuffer)) {
+          callRecord.transcriptConsentRequested = true;
+          callRecord.consentPromptAt = new Date().toISOString();
+          callRecord.consentPromptBuffer = '';
+        }
+      }
+      if (callRecord.transcriptConsent) {
+        const speaker = event.type === 'session.input_transcript.delta' ? 'caller' :
+          event.type === 'session.output_transcript.delta' ? 'assistant' : null;
+        if (speaker) appendCallTranscript(callRecord, speaker, event.delta);
+      }
+    }
+    if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, callSampleRate), { binary: true });
+    if (event.type === 'error') console.error('Live voice error:', String(event.error && event.error.message || 'unknown').slice(0, 180));
+  });
+  live.on('error', shutdown);
+  live.on('close', shutdown);
+  carrier.on('message', (data, binary) => {
+    if (closed) return;
+    if (binary) {
+      if (closed || !metadataSeen || data.length === 0 || data.length > 65536 || data.length % 2 !== 0) return;
+      const pcm16 = Buffer.from(data);
+      if (!ready || live.readyState !== WebSocket.OPEN) {
+        if (pendingAudio.length >= 12) pendingAudio.shift();
+        pendingAudio.push(pcm16);
+        return;
+      }
+      const pcm24 = resamplePcm16(pcm16, callSampleRate, 24000);
+      live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
+      return;
+    }
+    let message;
+    try { message = JSON.parse(data.toString()); } catch { return; }
+    if (message.event === 'dtmf') {
+      const digit = String(message.dtmf || '').slice(0, 1);
+      if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && callRecord.transcriptConsentRequested) {
+        if (digit === '1' && !callRecord.transcriptConsent && !callRecord.transcriptConsentDeclined) {
+          callRecord.transcriptConsent = true;
+          callRecord.transcriptConsentAt = new Date().toISOString();
+          callRecord.transcriptConsentMethod = 'dtmf-1';
+        } else if (digit === '0') {
+          callRecord.transcriptConsent = false;
+          callRecord.transcriptConsentDeclined = true;
+          clearCallTranscript(callRecord);
+          callRecord.transcriptConsentAt = new Date().toISOString();
+          callRecord.transcriptConsentMethod = 'dtmf-0';
+        }
+      }
+      return;
+    }
+    if (!metadataSeen) {
+      metadataSeen = true;
+      clearTimeout(metadataTimer);
+      if (!isPreflight && message.direction && message.direction !== 'inbound') return shutdown();
+      const sampleRate = Number(message.sampleRate || 16000);
+      if (![8000, 16000].includes(sampleRate) || (message.mixType && String(message.mixType).toLowerCase() !== 'mono')) return shutdown();
+      callSampleRate = sampleRate;
+      if (!isPreflight) {
+        const rawId = String(message.customerData?.call_sid || message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
+        const callId = rawId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
+        const caller = String(message.from || '');
+        callRecord = {
+          id: callId,
+          direction: message.direction || 'inbound',
+          agentName: callAgentName,
+          caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller',
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          status: 'active',
+          transcript: [],
+          transcriptChars: 0,
+          transcriptConsentRequested: false,
+          transcriptConsent: false,
+          transcriptConsentDeclined: false,
+          transcriptConsentAt: null,
+          consentPromptBuffer: ''
+        };
+        storeEdesyCall(callRecord);
+      }
+      return;
+    }
+    if (message.type === 'disconnect') return shutdown();
+    if (message.type === 'mark' && callRecord) callRecord.lastMark = String(message.data?.name || '').slice(0, 80);
+  });
+  carrier.on('close', shutdown);
+  carrier.on('error', shutdown);
+});
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://localhost');
+  if (url.pathname === '/ws/telephony/edesy') {
+    const supplied = url.searchParams.get('token') || '';
+    const mode = url.searchParams.get('mode') || '';
+    if (!edesyConfigured() || !safeEqual(supplied, process.env.EDESY_STREAM_TOKEN) || (mode && mode !== 'preflight')) return socket.destroy();
+    req.isEdesyPreflight = mode === 'preflight';
+    return telephonyWss.handleUpgrade(req, socket, head, ws => telephonyWss.emit('connection', ws, req));
+  }
   if (url.pathname !== '/ws') return socket.destroy();
   const session = sessions.get(url.searchParams.get('sessionId'));
   const deviceId = url.searchParams.get('deviceId');
@@ -310,28 +945,49 @@ wss.on('connection', (ws, ctx) => {
   if (device.socket && device.socket.readyState === WebSocket.OPEN) device.socket.close(4001, 'Reconnected elsewhere');
   device.socket = ws;
   const send = (target, payload, binary = false) => { const peer = session.devices.get(target); if (peer?.socket?.readyState === WebSocket.OPEN) peer.socket.send(payload, { binary }); };
-  ws.send(JSON.stringify({ type: 'connected', deviceId, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
+  ws.send(JSON.stringify({ type: 'connected', deviceId, role: device.role, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
   for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: true }));
   ws.on('message', (data, isBinary) => {
-    if (isBinary) { // Frame protocol: [1-byte device-id length][device-id UTF-8][1-byte frame type][JPEG]. Client payload starts with frame type (1=screen, 2=camera).
+    if (isBinary) {
+      // Visual protocol v2: [encrypted frame type 0x81/0x82][target length][target id]
+      // [uint64 sequence][12-byte nonce][AES-256-GCM ciphertext+tag]. Plain JPEG is rejected.
       const idBytes = Buffer.from(deviceId, 'utf8');
       const clientFrame = Buffer.from(data);
-      if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
-      const frameType = clientFrame[0];
+      if (clientFrame.length < 2 || ![0x81, 0x82].includes(clientFrame[0])) return;
+      const frameType = clientFrame[0] & 0x7f;
+      const permission = frameType === 1 ? 'screen' : 'camera';
+      if (device.sharePermissions?.[permission] !== true) return;
+      const now = Date.now();
+      if (now - device.frameWindowStart >= 1000) { device.frameWindowStart = now; device.frameCount = 0; }
+      if (++device.frameCount > 10) return;
       const targetLength = clientFrame[1];
-      if (clientFrame.length < 2 + targetLength + 1) return;
-      const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
-      if (targetId && (!session.devices.has(targetId) || targetId === deviceId)) return;
-      const jpeg = clientFrame.subarray(2 + targetLength);
-      if (!jpeg.length) return;
-      const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([frameType]), jpeg]);
-      if (targetId) send(targetId, framed, true);
-      else for (const [id] of session.devices) if (id !== deviceId) send(id, framed, true);
+      if (targetLength < 1 || targetLength > 64 || clientFrame.length < 2 + targetLength + 8 + 12 + 16) return;
+      const targetId = clientFrame.subarray(2, 2 + targetLength).toString('utf8');
+      if (!session.devices.has(targetId) || targetId === deviceId) return;
+      const encryptedPayload = clientFrame.subarray(2 + targetLength);
+      if (encryptedPayload.length > 2_500_036) return;
+      // The relay deliberately cannot validate JPEG content: it only forwards bounded opaque ciphertext.
+      const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([clientFrame[0]]), encryptedPayload]);
+      send(targetId, framed, true);
       return;
     }
     let msg; try { msg = JSON.parse(data.toString()); } catch { return; }
     if (!msg || typeof msg.type !== 'string') return;
-    if (msg.type === 'control_request') {
+    if (msg.type === 'control_revoke') {
+      const requesterId = String(msg.requesterDeviceId || '');
+      const revokeIds = requesterId ? [requesterId] : [...new Set([
+        ...device.controlGrants.keys(),
+        ...device.pendingControlRequests.keys(),
+        ...[...device.pendingRemoteActions.values()].map(item => item.requesterId).filter(Boolean)
+      ])];
+      for (const id of revokeIds) {
+        device.controlGrants.delete(id);
+        device.pendingControlRequests.delete(id);
+        for (const [actionId, pending] of device.pendingRemoteActions) if (pending.requesterId === id) device.pendingRemoteActions.delete(actionId);
+        send(id, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved: false, expiresInMinutes: 0, reason: 'Remote control access was revoked by the target device.' }));
+      }
+      send(deviceId, JSON.stringify({ type: 'control_revoked', requesterDeviceId: requesterId || null, revokedCount: revokeIds.length }));
+    } else if (msg.type === 'control_request') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       if (!target || targetId === deviceId || (session.controlMode === 'master' && device.role !== 'owner')) return;
@@ -339,21 +995,94 @@ wss.on('connection', (ws, ctx) => {
         send(deviceId, JSON.stringify({ type: 'control_result', targetDeviceId: targetId, approved: false, reason: 'Remote control is disabled on the target device.' }));
         return;
       }
-      send(targetId, JSON.stringify({ type: 'control_request', fromDeviceId: deviceId, requesterName: device.name, requestedMinutes: Math.min(5, Math.max(1, Number(msg.minutes) || 5)) }));
+      const requestedMinutes = Math.min(5, Math.max(1, Number(msg.minutes) || 5));
+      target.pendingControlRequests.set(deviceId, Date.now() + 60_000);
+      send(targetId, JSON.stringify({ type: 'control_request', fromDeviceId: deviceId, requesterName: device.name, requestedMinutes }));
     } else if (msg.type === 'control_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
-      const approved = Boolean(requester && msg.approved === true && device.sharePermissions?.remote_control === true);
+      const pendingUntil = device.pendingControlRequests.get(requesterId) || 0;
+      device.pendingControlRequests.delete(requesterId);
+      const approved = Boolean(requester && pendingUntil >= Date.now() && msg.approved === true && device.sharePermissions?.remote_control === true);
       if (approved) device.controlGrants.set(requesterId, Date.now() + Math.min(5, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
-      send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request denied or target permission is disabled.' }));
-    } else if (msg.type === 'remote_action') {
+      send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request expired, denied, or target permission is disabled.' }));
+    } else if (msg.type === 'e2e_message') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const kind = String(msg.messageKind || '');
+      const actionId = String(msg.actionId || '');
+      const actionKind = String(msg.actionKind || '');
+      const nonce = String(msg.nonce || '');
+      const ciphertext = String(msg.ciphertext || '');
+      if (!target || targetId === deviceId || !['remote_action', 'remote_action_result', 'file_transfer_chunk'].includes(kind) ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
+          !/^[A-Za-z0-9+/]{16}$/.test(nonce) ||
+          ciphertext.length < 22 || ciphertext.length > (kind === 'file_transfer_chunk' ? 120_000 : 32_000) ||
+          !/^[A-Za-z0-9+/]+$/.test(ciphertext)) return;
+      const nonceBytes = Buffer.from(nonce, 'base64');
+      const cipherBytes = Buffer.from(ciphertext, 'base64');
+      if (nonceBytes.length !== 12 || nonceBytes.toString('base64').replace(/=+$/, '') !== nonce ||
+          cipherBytes.length < 16 || cipherBytes.toString('base64').replace(/=+$/, '') !== ciphertext) return;
+      if (kind === 'file_transfer_chunk') {
+        const transferId = String(msg.transferId || '');
+        const index = Number(msg.index);
+        const transfer = target.incomingTransfers?.get(transferId);
+        if (transferId !== actionId || !transfer || transfer.fromDeviceId !== deviceId || transfer.expiresAt < Date.now() ||
+            !Number.isSafeInteger(index) || index < 0 || index >= transfer.chunkCount) return;
+      } else if (kind === 'remote_action') {
+        const grantExpiry = target.controlGrants?.get(deviceId) || 0;
+        const allowedKinds = ['tap','swipe','type','click_text','open_app','home','back','scroll'];
+        if (grantExpiry < Date.now() || !allowedKinds.includes(actionKind)) return;
+        target.pendingRemoteActions ||= new Map();
+        if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
+        target.pendingRemoteActions.set(actionId, { requesterId: deviceId, expiresAt: Date.now() + 60_000 });
+      } else if (kind === 'remote_action_result') {
+        const pending = device.pendingRemoteActions?.get(actionId);
+        const grantExpiry = device.controlGrants?.get(targetId) || 0;
+        if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() || grantExpiry < Date.now()) return;
+        device.pendingRemoteActions.delete(actionId);
+      }
+      send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind: kind,
+        actionId, actionKind: actionKind.slice(0, 32), transferId: String(msg.transferId || '').slice(0, 64),
+        index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, nonce, ciphertext }));
+    } else if (msg.type === 'remote_action') { return; // Plaintext remote actions are no longer accepted.
+
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
       if (!target || targetIdIsSelf(targetId, deviceId) || expiresAt < Date.now()) return;
       if (session.controlMode === 'master' && device.role !== 'owner') return;
-      if (!msg.action || !['tap', 'swipe', 'type', 'click_text', 'open_app', 'home', 'back', 'scroll'].includes(msg.action.kind)) return;
-      send(targetId, JSON.stringify({ type: 'remote_action', fromDeviceId: deviceId, action: msg.action }));
+      if (!validRemoteAction(msg.action)) {
+        send(deviceId, JSON.stringify({ type: 'remote_action_result', targetDeviceId: targetId, ok: false, reason: 'Remote action payload is invalid.' }));
+        return;
+      }
+      const now = Date.now();
+      if (now - device.remoteActionWindowStart >= 10_000) {
+        device.remoteActionWindowStart = now;
+        device.remoteActionCount = 0;
+      }
+      device.remoteActionCount += 1;
+      if (device.remoteActionCount > 20) {
+        send(deviceId, JSON.stringify({ type: 'remote_action_result', targetDeviceId: targetId, ok: false, reason: 'Remote action rate limit reached.' }));
+        return;
+      }
+      const actionId = randomBytes(12).toString('hex');
+      target.pendingRemoteActions.set(actionId, { requesterId: deviceId, expiresAt: Date.now() + 60_000 });
+      send(targetId, JSON.stringify({ type: 'remote_action', actionId, fromDeviceId: deviceId, action: msg.action }));
+    } else if (msg.type === 'remote_action_result') { return; // Plaintext remote action results are no longer accepted.
+
+      const actionId = String(msg.actionId || '');
+      const pending = device.pendingRemoteActions.get(actionId);
+      device.pendingRemoteActions.delete(actionId);
+      const requester = pending && pending.expiresAt >= Date.now() ? session.devices.get(pending.requesterId) : null;
+      if (!requester || typeof msg.ok !== 'boolean') return;
+      send(pending.requesterId, JSON.stringify({
+        type: 'remote_action_result',
+        actionId,
+        targetDeviceId: deviceId,
+        ok: msg.ok,
+        reason: String(msg.reason || '').slice(0, 240)
+      }));
     } else if (msg.type === 'set_control_mode') {
       if (device.role !== 'owner' || !['master', 'mutual'].includes(msg.mode)) return;
       session.controlMode = msg.mode;
@@ -365,10 +1094,40 @@ wss.on('connection', (ws, ctx) => {
       if (!msg.permissions || typeof msg.permissions !== 'object' || Array.isArray(msg.permissions)) return;
       for (const key of allowed) next[key] = msg.permissions[key] === true;
       device.sharePermissions = next;
+      const revokedShares = new Map();
       for (const [grantKey] of device.grants) {
-        const category = grantKey.split(':').slice(1).join(':');
-        if (next[category] !== true) device.grants.delete(grantKey);
-      if (next.remote_control !== true) device.controlGrants.clear();
+        const [requesterId, ...categoryParts] = grantKey.split(':');
+        const category = categoryParts.join(':');
+        if (next[category] !== true) {
+          device.grants.delete(grantKey);
+          if (requesterId) revokedShares.set(`${requesterId}:${category}`, { requesterId, category });
+        }
+      }
+      for (const [pendingKey] of device.pendingDataShares) {
+        const [requesterId, ...categoryParts] = pendingKey.split(':');
+        const category = categoryParts.join(':');
+        if (next[category] !== true) {
+          device.pendingDataShares.delete(pendingKey);
+          if (requesterId) revokedShares.set(`${requesterId}:${category}`, { requesterId, category });
+        }
+      }
+      for (const { requesterId, category } of revokedShares.values()) send(requesterId, JSON.stringify({
+        type: 'data_share_result', targetDeviceId: deviceId, category, approved: false, expiresInMinutes: 0,
+        reason: 'Data sharing permission was disabled on the target device.'
+      }));
+      if (next.remote_control !== true) {
+        const revokedRequesters = new Set([
+          ...device.controlGrants.keys(),
+          ...device.pendingControlRequests.keys(),
+          ...[...device.pendingRemoteActions.values()].map(item => item.requesterId).filter(Boolean)
+        ]);
+        device.controlGrants.clear();
+        device.pendingControlRequests.clear();
+        device.pendingRemoteActions.clear();
+        for (const requesterId of revokedRequesters) send(requesterId, JSON.stringify({
+          type: 'control_result', targetDeviceId: deviceId, approved: false, expiresInMinutes: 0,
+          reason: 'Remote control permission was disabled on the target device.'
+        }));
       }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
@@ -376,15 +1135,21 @@ wss.on('connection', (ws, ctx) => {
       const target = session.devices.get(targetId);
       const category = String(msg.category || '');
       if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
-      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId: String(msg.requestId || randomBytes(12).toString('hex')), itemLabel: String(msg.itemLabel || '').slice(0,120) }));
+      const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 80);
+      if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
+      target.pendingDataShares.set(`${deviceId}:${category}`, { requestId, expiresAt: Date.now() + 60_000 });
+      send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
     } else if (msg.type === 'data_share_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
       const category = String(msg.category || '');
       if (!requester || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
-      const approved = msg.approved === true && device.sharePermissions?.[category] === true;
-      if (approved) device.grants.set(`${requesterId}:${category}`, Date.now() + Math.min(15, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
-      send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, approved, expiresInMinutes: approved ? Math.min(15, Math.max(1, Number(msg.minutes) || 5)) : 0 }));
+      const pendingKey = `${requesterId}:${category}`;
+      const pending = device.pendingDataShares.get(pendingKey);
+      device.pendingDataShares.delete(pendingKey);
+      const approved = Boolean(pending && pending.requestId === String(msg.requestId || '') && pending.expiresAt >= Date.now() && msg.approved === true && device.sharePermissions?.[category] === true);
+      if (approved) device.grants.set(pendingKey, Date.now() + Math.min(15, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
+      send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, requestId: pending?.requestId || '', approved, expiresInMinutes: approved ? Math.min(15, Math.max(1, Number(msg.minutes) || 5)) : 0 }));
     } else if (msg.type === 'data_share_payload') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
@@ -395,14 +1160,142 @@ wss.on('connection', (ws, ctx) => {
       if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() || payload.length > 900_000 || !payload) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category, fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100), payload }));
+    } else if (msg.type === 'file_transfer_start') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const requestId = String(msg.requestId || '');
+      const transferId = String(msg.transferId || '');
+      const fileName = String(msg.fileName || '').replace(/[\\/\\x00-\\x1f]/g, '_').slice(0, 120);
+      const sizeBytes = Number(msg.sizeBytes);
+      const chunkCount = Number(msg.chunkCount);
+      const sha256 = String(msg.sha256 || '').toLowerCase();
+      const grantKey = `${deviceId}:documents`;
+      const grantExpiry = target?.grants?.get(grantKey) || 0;
+      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true ||
+          !grantExpiry || grantExpiry < Date.now() || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) || !fileName ||
+          !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 100 * 1024 * 1024 ||
+          !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
+          chunkCount !== Math.ceil(sizeBytes / 49152) || !/^[a-f0-9]{64}$/.test(sha256)) return;
+      target.grants.delete(grantKey);
+      target.incomingTransfers ||= new Map();
+      if (target.incomingTransfers.size >= 8) return;
+      target.incomingTransfers.set(transferId, {
+        fromDeviceId: deviceId, requestId, fileName, sizeBytes, chunkCount, sha256,
+        receivedChunks: new Set(), expiresAt: Date.now() + 30 * 60_000
+      });
+      send(targetId, JSON.stringify({ type: 'file_transfer_start', fromDeviceId: deviceId,
+        transferId, fileName, sizeBytes, chunkCount, sha256, chunkBytes: 49152 }));
+    } else if (msg.type === 'file_transfer_resume') {
+      const sourceId = String(msg.targetDeviceId || '');
+      const source = session.devices.get(sourceId);
+      const transferId = String(msg.transferId || '');
+      const transfer = device.incomingTransfers?.get(transferId);
+      if (!source || sourceId === deviceId || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now()) return;
+      const missingIndexes = [];
+      for (let i = 0; i < transfer.chunkCount && missingIndexes.length < 2200; i++) {
+        if (!transfer.receivedChunks.has(i)) missingIndexes.push(i);
+      }
+      send(sourceId, JSON.stringify({ type: 'file_transfer_resume', fromDeviceId: deviceId, transferId, missingIndexes }));
+    } else if (msg.type === 'file_transfer_ack') {
+      const sourceId = String(msg.targetDeviceId || '');
+      const source = session.devices.get(sourceId);
+      const transferId = String(msg.transferId || '');
+      const transfer = device.incomingTransfers?.get(transferId);
+      const index = Number(msg.index);
+      if (!source || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() ||
+          !Number.isSafeInteger(index) || index < -1 || index >= transfer.chunkCount) return;
+      if (index >= 0) transfer.receivedChunks.add(index);
+      if (msg.complete === true) {
+        if (transfer.receivedChunks.size !== transfer.chunkCount || msg.ok !== true) return;
+        device.incomingTransfers.delete(transferId);
+      }
+      send(sourceId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId,
+        index, complete: msg.complete === true, ok: msg.ok === true }));
+    } else if (msg.type === 'file_transfer_cancel') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const transferId = String(msg.transferId || '');
+      const localTransfer = device.incomingTransfers?.get(transferId);
+      const remoteTransfer = target?.incomingTransfers?.get(transferId);
+      if (!target || targetId === deviceId || (!localTransfer && !remoteTransfer) ||
+          (localTransfer && localTransfer.fromDeviceId !== targetId) ||
+          (remoteTransfer && remoteTransfer.fromDeviceId !== deviceId)) return;
+      device.incomingTransfers?.delete(transferId);
+      target.incomingTransfers?.delete(transferId);
+      send(targetId, JSON.stringify({ type: 'file_transfer_cancel', fromDeviceId: deviceId, transferId,
+        reason: String(msg.reason || 'cancelled').slice(0, 120) }));
+    } else if (msg.type === 'e2e_key_offer') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const publicKey = typeof msg.publicKey === 'string' ? msg.publicKey : '';
+      if (!target || targetId === deviceId || publicKey.length < 108 || publicKey.length > 344 ||
+          !/^[A-Za-z0-9+/]+={0,2}$/.test(publicKey)) return;
+      const encoded = Buffer.from(publicKey, 'base64');
+      if (encoded.length < 80 || encoded.length > 256 || encoded.toString('base64') !== publicKey) return;
+      send(targetId, JSON.stringify({ type: 'e2e_key_offer', fromDeviceId: deviceId, publicKey }));
+    } else if (msg.type === 'e2e_key_confirm') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const fingerprint = String(msg.fingerprint || '');
+      if (!target || targetId === deviceId || !/^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$/.test(fingerprint)) return;
+      send(targetId, JSON.stringify({ type: 'e2e_key_confirm', fromDeviceId: deviceId, fingerprint }));
     } else if (msg.type === 'signal' || msg.type === 'chat' || msg.type === 'control_consent') {
+      if (JSON.stringify(msg).length > 64 * 1024) return;
+      if (msg.type === 'chat' && (typeof msg.message !== 'string' || msg.message.length > 2000)) return;
       if (msg.type === 'signal') { if (typeof msg.targetDeviceId !== 'string' || !session.devices.has(msg.targetDeviceId)) return; send(msg.targetDeviceId, JSON.stringify({ ...msg, fromDeviceId: deviceId })); }
       else for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ ...msg, fromDeviceId: deviceId }));
     }
   });
-  ws.on('close', () => { if (device.socket === ws) device.socket = null; for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false })); });
+  ws.on('close', () => {
+    // Ignore a late close event from a socket replaced by a newer connection.
+    if (device.socket !== ws) return;
+    device.socket = null;
+    // Disconnect is a revocation boundary: all permissions and grants fail closed.
+    device.sharePermissions = {};
+    device.grants.clear();
+    device.controlGrants.clear();
+    device.pendingControlRequests.clear();
+    device.pendingRemoteActions.clear();
+    device.pendingDataShares.clear();
+    for (const [id, peer] of session.devices) {
+      if (id === deviceId) continue;
+      peer.controlGrants.delete(deviceId);
+      peer.pendingControlRequests.delete(deviceId);
+      for (const [actionId, pending] of peer.pendingRemoteActions) {
+        if (pending.requesterId === deviceId) peer.pendingRemoteActions.delete(actionId);
+      }
+      peer.grants.delete(`${deviceId}:contacts`);
+      peer.grants.delete(`${deviceId}:media`);
+      peer.grants.delete(`${deviceId}:documents`);
+      peer.grants.delete(`${deviceId}:messages`);
+      peer.grants.delete(`${deviceId}:calendar`);
+      peer.grants.delete(`${deviceId}:location`);
+      peer.grants.delete(`${deviceId}:device_status`);
+      peer.grants.delete(`${deviceId}:ai_memory`);
+      for (const key of peer.pendingDataShares.keys()) if (key.startsWith(`${deviceId}:`)) peer.pendingDataShares.delete(key);
+      if (peer.socket?.readyState === WebSocket.OPEN) {
+        peer.socket.send(JSON.stringify({ type: 'permission_status', deviceId, permissions: {} }));
+        peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false }));
+      }
+    }
+  });
 });
 function targetIdIsSelf(target, self) { return target === self; }
 
-setInterval(() => { const now = Date.now(); for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code); for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip); for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id); }, 60_000).unref();
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, pair] of pairCodes) if (pair.expiresAt < now) pairCodes.delete(code);
+  for (const [ip, a] of joinAttempts) if (a.resetAt < now) joinAttempts.delete(ip);
+  for (const [ip, a] of apiAttempts) if (a.resetAt < now) apiAttempts.delete(ip);
+  for (const [ip, a] of councilAttempts) if (a.resetAt < now) councilAttempts.delete(ip);
+  for (const [ip, a] of sessionCreateAttempts) if (a.resetAt < now) sessionCreateAttempts.delete(ip);
+  for (const session of sessions.values()) for (const device of session.devices.values()) {
+    for (const [id, expiry] of device.pendingControlRequests) if (expiry < now) device.pendingControlRequests.delete(id);
+    for (const [key, pending] of device.pendingDataShares) if (pending.expiresAt < now) device.pendingDataShares.delete(key);
+    for (const [id, expiry] of device.controlGrants) if (expiry < now) device.controlGrants.delete(id);
+    for (const [key, expiry] of device.grants) if (expiry < now) device.grants.delete(key);
+  }
+  for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id);
+}, 60_000).unref();
 server.listen(PORT, '0.0.0.0', () => console.log(`Shraddha device relay listening on ${PORT}`));

@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.operator
 
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
+import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /** Local, permission-gated observe -> act -> re-observe engine. It never bypasses Android security surfaces. */
 class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
@@ -18,10 +19,15 @@ class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
     }
 
     /** Execute one explicitly supplied step at a time. Sensitive actions are deliberately excluded. */
-    fun execute(step: OperatorStep, confirmed: Boolean = false): Boolean {
+    fun execute(step: OperatorStep, confirmation: OperatorConfirmation? = null): Boolean {
         if (cancelled) return false
-        if (step.requiresConfirmation && !confirmed) {
-            emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "इस चरण के लिए आपकी स्पष्ट अनुमति आवश्यक है।")); return false
+        val decision = OperatorSafetyPolicy.assess(step.action.name, step.target, step.value)
+        if (decision.risk == OperatorSafetyPolicy.Risk.BLOCK) {
+            emit(OperatorEvent(OperatorTaskState.FAILED, decision.reason)); return false
+        }
+        if ((step.requiresConfirmation || decision.risk == OperatorSafetyPolicy.Risk.CONFIRM) &&
+            confirmation?.consume(step, System.nanoTime() / 1_000_000L) != true) {
+            emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, decision.reason)); return false
         }
         val before = observe() ?: return false
         emit(OperatorEvent(OperatorTaskState.EXECUTING, "कार्रवाई: ${step.action}", before))
@@ -44,13 +50,25 @@ class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
         if (!ok) {
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई नहीं हो सकी। स्क्रीन/ऐप की अनुमति या UI स्थिति जाँचें।")); return false
         }
-        emit(OperatorEvent(OperatorTaskState.VERIFYING, "कार्रवाई के बाद स्क्रीन दोबारा जाँची जा रही है…"))
-        Thread.sleep(450)
-        val after = observe() ?: return false
-        if (step.expectedVisibleText.isNotBlank() && after.elements.none {
-                it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
-            }) {
-            emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित परिणाम स्क्रीन पर सत्यापित नहीं हुआ।", after)); return false
+        emit(OperatorEvent(OperatorTaskState.VERIFYING, "कार्रवाई के बाद स्क्रीन पर अपेक्षित परिणाम खोजा जा रहा है…"))
+        val verifyDeadline = System.nanoTime() + 5_000_000_000L
+        var after = ShraddhaAccessibilityService.captureVisibleScreen()
+        while (after != null && step.expectedVisibleText.isNotBlank() &&
+            !ScreenResultVerifier.containsExpectedText(after, step.expectedVisibleText) &&
+            System.nanoTime() < verifyDeadline && !cancelled) {
+            Thread.sleep(250)
+            after = ShraddhaAccessibilityService.captureVisibleScreen()
+        }
+        if (cancelled) {
+            emit(OperatorEvent(OperatorTaskState.CANCELLED, "परिणाम सत्यापन के दौरान कार्रवाई रोक दी गई।", after))
+            return false
+        }
+        if (after == null) {
+            emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।"))
+            return false
+        }
+        if (!ScreenResultVerifier.containsExpectedText(after, step.expectedVisibleText)) {
+            emit(OperatorEvent(OperatorTaskState.FAILED, "5 सेकंड में अपेक्षित परिणाम स्क्रीन पर सत्यापित नहीं हुआ।", after)); return false
         }
         emit(OperatorEvent(OperatorTaskState.COMPLETED, "चरण पूरा हुआ और स्क्रीन दोबारा जाँची गई।", after))
         return true

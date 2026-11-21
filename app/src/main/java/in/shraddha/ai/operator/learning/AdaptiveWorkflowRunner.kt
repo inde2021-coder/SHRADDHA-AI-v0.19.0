@@ -4,6 +4,7 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.OperatorEvent
 import `in`.shraddha.ai.operator.OperatorTaskState
 import `in`.shraddha.ai.operator.ScreenSnapshot
+import `in`.shraddha.ai.operator.ScreenResultVerifier
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.files.DeviceFileLocator
 import `in`.shraddha.ai.future.LocalAuditTrail
@@ -14,15 +15,22 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
     private val audit = LocalAuditTrail(context.applicationContext)
     fun stop() { stopped = true; emit(OperatorEvent(OperatorTaskState.CANCELLED, "ऑपरेटर रोक दिया गया।")) }
 
-    fun run(profile: AppTrainingProfile, workflowName: String, values: Map<String, String>, confirmed: Boolean = false): Boolean {
+    fun run(profile: AppTrainingProfile, workflowName: String, values: Map<String, String>, startAt: Int = 0, approval: WorkflowStepApproval? = null): Boolean {
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty()) return fail("वर्कफ़्लो खाली है।")
-        for ((index, step) in steps.withIndex()) {
+        if (startAt !in steps.indices) return fail("Workflow resume position is invalid.")
+        for (index in startAt until steps.size) {
+            val step = steps[index]
             if (stopped) return false
-            val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, step.inputTemplate)
+            // Re-check the resolved value, not only the training placeholder. A saved
+            // template such as "customer_phone" must not become a route for injecting
+            // an OTP, password, PIN or payment security code at runtime.
+            val resolvedInput = values[step.inputTemplate] ?: step.inputTemplate
+            val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, resolvedInput)
             if (risk.risk == OperatorSafetyPolicy.Risk.BLOCK) return fail(risk.reason)
-            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && !confirmed) {
-                emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason}")); return false
+            if ((risk.risk == OperatorSafetyPolicy.Risk.CONFIRM || step.destructive) && approval?.consume(profile.packageName, workflowName, index, step.action, step.targetLabel, resolvedInput, step.expectedText, System.nanoTime() / 1_000_000L) != true) {
+                emit(OperatorEvent(OperatorTaskState.WAITING_CONFIRMATION, "चरण ${index + 1}: ${risk.reason} इस चरण को चलाने से पहले अलग अनुमति चाहिए।", stepIndex = index))
+                return false
             }
             val before = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("स्क्रीन पढ़ने के लिए Accessibility सेवा चालू करें।")
             if (before.packageName != profile.packageName && before.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) return fail("खुला हुआ ऐप ${before.packageName} है, जबकि प्रशिक्षित ऐप ${profile.packageName} है।")
@@ -33,23 +41,35 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val ok = when (step.action.uppercase()) {
                 "CLICK", "TAP" -> if (match != null && match.score >= .50f) ShraddhaAccessibilityService.clickByResourceId(match.element.id).let { clicked -> clicked || ShraddhaAccessibilityService.clickVisibleText(match.element.text.ifBlank { match.element.description }) } else false
                 "TYPE" -> {
-                    val value = values[step.inputTemplate] ?: step.inputTemplate
+                    val value = resolvedInput
                     if (match != null && match.element.id.isNotBlank()) ShraddhaAccessibilityService.fillByResourceId(match.element.id, value)
                     else ShraddhaAccessibilityService.fillFocusedField(value)
                 }
                 "BACK" -> ShraddhaAccessibilityService.goBack()
                 "SCROLL" -> ShraddhaAccessibilityService.scrollForward()
                 "SELECT_FILE" -> {
-                    val requested = values[step.inputTemplate] ?: step.inputTemplate
+                    val requested = resolvedInput
                     val search = DeviceFileLocator(context).search(requested, values["__file_folder"].orEmpty())
                     if (search.matches.size == 1) ShraddhaAccessibilityService.selectFileInPicker(search.matches.first().displayName) else false
                 }
                 else -> false
             }
             if (!ok) { audit.append("operator_step", "failed", "${profile.packageName}:${step.action}"); return fail("चरण ${index + 1} का लक्ष्य भरोसेमंद तरीके से नहीं मिला या ऐप ने कार्रवाई रोकी। AI ने अनुमान से टैप नहीं किया।") }
-            Thread.sleep(500)
-            val after: ScreenSnapshot = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
-            if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
+            val verifyDeadline = System.nanoTime() + 5_000_000_000L
+            var after: ScreenSnapshot? = ShraddhaAccessibilityService.captureVisibleScreen()
+            while (after != null && step.expectedText.isNotBlank() &&
+                !ScreenResultVerifier.containsExpectedText(after, step.expectedText) &&
+                System.nanoTime() < verifyDeadline && !stopped) {
+                Thread.sleep(250)
+                after = ShraddhaAccessibilityService.captureVisibleScreen()
+            }
+            if (stopped) {
+                audit.append("operator_step", "cancelled_after_dispatch", "${profile.packageName}:${step.action}")
+                emit(OperatorEvent(OperatorTaskState.CANCELLED, "रोकने का अनुरोध मिल गया। मौजूदा कार्रवाई भेजी जा चुकी हो सकती है; आगे के चरण नहीं चलेंगे।"))
+                return false
+            }
+            if (after == null) return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
+            if (!ScreenResultVerifier.containsExpectedText(after, step.expectedText)) return fail("चरण ${index + 1} के बाद 5 सेकंड में अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
             audit.append("operator_step", "verified", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.VERIFYING, "चरण ${index + 1} पूरा; स्क्रीन दोबारा पढ़ी गई।", after))
         }

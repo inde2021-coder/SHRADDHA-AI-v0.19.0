@@ -1,12 +1,31 @@
 # Firebase setup for Shraddha AI
 
-1. Create a Firebase project and register Android package `in.shraddha.ai`.
-2. Enable **Authentication > Email/Password** and create a **Cloud Firestore** database.
-3. Publish `firestore.rules` from this folder. Do not use test mode in production.
-4. Copy `local.properties.example` to `local.properties` in the Android project root and replace every placeholder with the values from Firebase Project settings.
-5. Sync Gradle and run the app. Open **Secure Cloud Sync**. Create an account, then explicitly opt in before backup/restore.
-6. Enable Firebase App Check (Play Integrity for Play builds) before production release.
+The Android app is registered as `in.shraddha.ai` in Firebase project `shraddha-ai-1d3bf`. Its public client configuration and Realtime Database URL are prefilled in the Android build from the supplied Firebase Android configuration.
 
-The current implementation uses Firebase Authentication and Firestore. Cloud memory payloads are encrypted client-side with AES-256-GCM; a key is derived from the account password using PBKDF2-HMAC-SHA256. Firebase stores ciphertext, not the plaintext note. If the user loses the password, this backup cannot be decrypted. The password is not uploaded by this feature.
+## Required Firebase Console setup
 
-Storage and FCM SDKs are included as dependencies for the next integration stage, but file uploads and push-notification handlers are **not yet implemented**. `storage.rules` is a least-privilege starting point; deploy it only when Storage is enabled. Biometric templates, child records, API keys, OTPs, and payment data are not included in cloud sync.
+1. Enable **Authentication > Sign-in method > Email/Password**.
+2. Create/enable **Cloud Firestore**.
+3. Enable **Realtime Database** and confirm its URL is `https://shraddha-ai-1d3bf-default-rtdb.firebaseio.com`.
+4. Publish the Firestore rules and `firebase/database.rules.json` in this folder. Do not use public/test-mode rules in production.
+5. Build/install the app, open **Cloud & Data**, create an account, then explicitly opt in before backup or restore.
+6. Enable Firebase App Check. The Android app now installs the Debug provider for debug builds and Play Integrity for non-debug/release builds.
+7. For debug builds, copy the App Check debug token printed by the SDK to Logcat and register it only in the Firebase Console's App Check debug-token list. Never commit or share that token.
+8. Register the release app's signing certificate fingerprints and Play Integrity configuration in Firebase Console. Verify valid tokens in App Check metrics before enforcing App Check on Auth/Firestore/Realtime Database.
+9. Do not enforce App Check until the debug token and Play Integrity release path have both been verified on the intended distribution channel.
+
+## Cloud memory format
+
+The app encrypts the selected memory note locally with AES-256-GCM. A key is derived from the account password using PBKDF2-HMAC-SHA256 (210,000 iterations). The encrypted payload is written to both Firestore and Realtime Database at `users/{uid}/vault/{key}`. Restore reads Realtime Database first and independently tries Firestore if the RTDB record is missing, unavailable, corrupt or cannot be decrypted. Backup writes attempt both stores and report partial mirror failures.
+
+The account password is not uploaded. The vault encryption key is derived from the Firebase account password. If the password is lost or changed, old backups cannot be decrypted with the new password. Before changing the Firebase password, restore the vault using the old password and create a fresh encrypted backup using the new password. A dedicated recovery-key workflow is not implemented yet. Face/voice biometric templates, child records, provider API keys, OTPs, and payment data are excluded.
+
+## Security and deployment boundary
+
+Realtime Database rules restrict each authenticated account to its own UID path and validate the encrypted record shape/size. Rules files in this repository are **not automatically published** to the Firebase project. The project owner must publish them in Firebase Console or authorize a Firebase CLI deployment. Never put service-account private keys in this repository.
+
+Storage uploads and FCM handlers are not implemented by this change; their SDK dependencies remain preparatory only. The encrypted cloud vault is an on-demand backup/restore mirror, not a continuous real-time sync listener.
+
+## Account deletion
+
+The Cloud & Data screen includes a confirmed account-deletion action. It reauthenticates the currently signed-in email/password, deletes the account's Firestore and Realtime Database `vault` copies, then deletes the Firebase Authentication user and signs out. If either database deletion fails, the account deletion stops and reports failure; because Firestore and Realtime Database do not share a transaction, a partial cloud-copy deletion can occur and should be retried. Local on-device memories and encrypted call-history snapshots are not deleted by this cloud-account action.
