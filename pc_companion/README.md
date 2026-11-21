@@ -18,6 +18,7 @@ The PC device token is stored in Windows Credential Manager. The configuration f
 - Supported: normalized mouse click, drag/swipe, bounded text paste, Start Menu shortcut launch, show desktop, browser-style back and bounded scroll.
 - Text-based click is currently unsupported on Windows; the agent reports this instead of guessing.
 - The agent never executes arbitrary shell commands, PowerShell, scripts or file operations.
+- **Revoke PC Pairing** asks for explicit confirmation, revokes this device on the relay, and deletes its Windows Credential Manager token. A new six-digit code is required to pair again.
 - Screen sharing is off by default and sends JPEG frames only while the local checkbox is enabled.
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
 - PyAutoGUI's top-left fail-safe is enabled.
