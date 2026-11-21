@@ -3,7 +3,7 @@
 ## What is implemented
 
 - `GET /api/telephony/edesy/status` reports server-side readiness (gateway token required).
-- `GET /api/telephony/edesy/calls` returns a bounded in-memory call list (gateway token required).
+- `GET /api/telephony/edesy/calls` returns the latest 30 records from encrypted Firestore when configured, otherwise the bounded in-memory list (gateway token required).
 - `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=...` is the provider WebSocket ingress.
 - Edesy sends a JSON metadata frame, then binary 16 kHz mono PCM16 frames. The backend streams them to GPT-Live over a server-owned WebSocket and sends generated 16 kHz PCM16 audio back.
 - The backend resamples Edesy 16 kHz audio to GPT-Live's 24 kHz PCM format and back.
