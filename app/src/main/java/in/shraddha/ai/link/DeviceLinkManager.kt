@@ -111,9 +111,18 @@ object DeviceLinkManager {
                 if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                val rejectedCredential = response?.code == 401 || response?.code == 403
+                if (rejectedCredential) {
+                    // A definitive auth rejection means this saved bearer token is revoked/expired.
+                    // Clear it so the app cannot keep presenting a dead credential on every reconnect.
+                    runCatching { credentialStore?.clear() }
+                }
                 if (socket === webSocket) {
                     sessionId = null; deviceId = null; deviceToken = null; socket = null
-                    onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
+                    onStatus?.invoke(
+                        if (rejectedCredential) "Pairing expired or revoked. Pair this device again."
+                        else "Relay error: ${t.message ?: "connection failed"}"
+                    )
                 }
                 done(Result.failure(t))
             }
