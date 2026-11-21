@@ -31,7 +31,7 @@ Set these only in the backend host's secret/environment settings:
 4. Configure 16 kHz mono L16/PCM streaming (8 kHz is also supported) and the documented JSON metadata first frame. The backend reads `sampleRate` and `mixType` from that frame.
 5. Enable DTMF passthrough for the Media Stream. The per-call transcript consent gate depends on Edesy delivering `{"event":"dtmf","dtmf":"1"}` text frames; without it, transcript saving stays off.
 6. Route the DID to this WebSocket stream and call it from a separate phone.
-7. In the app's Phone Call Agent page, check readiness and run the authenticated Edesy preflight. It calls Edesy's `POST /v1/stream-test` from the backend; no provider API key is exposed to Android.
+7. In the app's Phone Call Agent page, check readiness and run the authenticated Edesy preflight. It calls Edesy's `POST /v1/stream-test` from the backend; no provider API key is exposed to Android. The preflight endpoint uses a dedicated `mode=preflight` WebSocket path that echoes the test PCM frames and does not start a GPT-Live session or create a real call-history entry.
 8. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
 
 The stream token is in a query string because the provider connector uses a WebSocket URL. Configure the hosting proxy and access logs to redact query strings for this route. Rotate the token if it may have appeared in logs.
