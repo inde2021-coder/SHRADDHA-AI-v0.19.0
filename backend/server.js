@@ -563,7 +563,8 @@ telephonyWss.on('connection', carrier => {
         const asksForPressOne = promptText.includes('press 1') || promptText.includes('press one') ||
           promptText.includes('दबाएं 1') || promptText.includes('दबाएँ 1') || promptText.includes('प्रेस 1');
         const mentionsTranscript = promptText.includes('transcript') || promptText.includes('प्रतिलिपि') || promptText.includes('लिखित');
-        const mentionsConsent = promptText.includes('consent') || promptText.includes('सहमति') || promptText.includes('अनुमति');
+        const mentionsConsent = promptText.includes('consent') || promptText.includes('सहमति') ||
+          promptText.includes('सहमत') || promptText.includes('अनुमति') || promptText.includes('मंजूरी');
         if (asksForPressOne && mentionsTranscript && mentionsConsent) {
           callRecord.transcriptConsentRequested = true;
           callRecord.consentPromptAt = new Date().toISOString();
