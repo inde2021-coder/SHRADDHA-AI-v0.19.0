@@ -63,6 +63,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         }
         root.addView(command)
         root.addView(action("🎙️ Voice Control • बोलकर command दें") { captureVoice() })
+        root.addView(action("🤖 AI Work Agent • Chat + Web + App tasks") { startActivity(Intent(this, WorkAgentActivity::class.java)) })
         root.addView(action("Voice Language • Hindi / English") { chooseVoiceLanguage() })
         root.addView(action("▶ Command चलाएँ") { runCommand(command.text.toString()) })
         root.addView(action("Task Automation + App Control") { openOperator() })
