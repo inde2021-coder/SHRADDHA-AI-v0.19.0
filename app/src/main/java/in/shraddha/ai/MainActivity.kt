@@ -266,6 +266,7 @@ class MainActivity : AppCompatActivity() {
             val items = listOf(
                 Triple("✦  AI BRAIN + VOICE", "Chat • Voice • Memory", { showPage("assistant") }),
                 Triple("◈  WINDOWS PC", "Pair • Screen • Control", { showPage("devices") }),
+                Triple("☎  PHONE CALL AGENT", "SIM no-answer → AI voice bridge", { showPage("phone") }),
                 Triple("◈  EXPERT STUDIO", "Research • Expert answers", { showPage("expert") }),
                 Triple("⌘  DEVICES", "Phones • PC • Pairing", { showPage("devices") }),
                 Triple("▣  APP OPERATOR", "Observe • Approve • Verify", { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) }),
@@ -359,6 +360,11 @@ class MainActivity : AppCompatActivity() {
                 if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
                 if (!::gatewayToken.isInitialized) gatewayToken = edit("Optional AI gateway token", "GATEWAY_TOKEN if configured")
                 addCompleteExpertHubSection(pageRoot)
+            }
+            "phone" -> {
+                if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
+                if (!::gatewayToken.isInitialized) gatewayToken = edit("Gateway token", "Server GATEWAY_TOKEN")
+                addTelephonySection(pageRoot)
             }
             "devices" -> addDeviceLinkSection(pageRoot)
             "lab" -> {
@@ -829,6 +835,63 @@ class MainActivity : AppCompatActivity() {
                 }
                 .setOnCancelListener { DeviceLinkManager.respondRemoteControl(from, false) }
                 .show()
+        }
+    }
+
+    private fun addTelephonySection(root: LinearLayout) {
+        section(root, "INCOMING SIM CALL → SHRADDHA AI", "आपका सामान्य SIM पहले बजेगा। Jio का no-answer forwarding Edesy DID पर जाने के बाद AI कॉल संभालेगा।") {
+            addView(relayUrl)
+            addView(gatewayToken)
+            val bridgeStatus = TextView(this@MainActivity).apply {
+                text = "AI call bridge status अभी जाँचा नहीं गया।"
+                textSize = 13f
+                setTextColor(0xFFB9C8E6.toInt())
+                setPadding(0, dp(10), 0, dp(10))
+            }
+            addView(bridgeStatus)
+            addView(actionButton("Check Edesy + GPT-Live readiness", "Backend configuration पढ़ें; कोई call या forwarding चालू नहीं होगी") {
+                val url = relayUrl.text.toString().trim()
+                val token = gatewayToken.text.toString().trim()
+                DeviceLinkManager.telephonyStatus(url, token) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        val configured = body.optBoolean("configured")
+                        val caps = body.optJSONObject("capabilities")
+                        bridgeStatus.text = buildString {
+                            append(if (configured) "Server secrets configured." else "Server secrets missing.")
+                            append("\nInbound WebSocket: ").append(if (caps?.optBoolean("inboundWebSocketAudio") == true) "ready" else "not ready")
+                            append("\nGPT-Live audio bridge: ").append(if (caps?.optBoolean("liveBidirectionalAiAudio") == true) "ready" else "not ready")
+                            append("\nTranscript capture: ").append(if (caps?.optBoolean("liveTranscripts") == true) "ON" else "OFF")
+                            append("\nAudio recording: NOT stored")
+                            append("\nReal Edesy DID / two-way phone test: still required")
+                        }
+                    }.onFailure { bridgeStatus.text = "Status check failed: ${it.message}" }
+                } }
+            })
+            addView(actionButton("Refresh recent AI calls", "Backend की आखिरी 30 call entries दिखाएँ") {
+                DeviceLinkManager.telephonyCalls(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        val calls = body.optJSONArray("calls")
+                        bridgeStatus.text = if (calls == null || calls.length() == 0) {
+                            "अभी कोई AI call history नहीं है।"
+                        } else buildString {
+                            for (i in 0 until minOf(calls.length(), 10)) {
+                                val call = calls.optJSONObject(i) ?: continue
+                                append(call.optString("startedAt", "Unknown time"))
+                                append(" • ").append(call.optString("caller", "Unknown caller"))
+                                append(" • ").append(call.optString("status", "unknown"))
+                                if (call.optString("summaryStatus") == "ready") append("\nSummary: ").append(call.optString("summary").take(240))
+                                append("\n")
+                            }
+                        }
+                    }.onFailure { bridgeStatus.text = "Call history load failed: ${it.message}" }
+                } }
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "महत्वपूर्ण: केवल Jio no-answer forwarding उपयोग करें। Unconditional forwarding चालू न करें। पहले Edesy DID पर वास्तविक दो-तरफ़ा call, AI की शुरुआती पहचान, hang-up और interruption जाँचें। उसके बाद ही Jio से current forwarding code/delay/charges की पुष्टि करें। Android सामान्य SIM call का audio सीधे AI को नहीं दे सकता।"
+                textSize = 12f
+                setTextColor(0xFFFFC78A.toInt())
+                setPadding(0, dp(12), 0, 0)
+            })
         }
     }
 
