@@ -22,34 +22,69 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
 
     fun publicKeyBase64(): String = Base64.getEncoder().encodeToString(pair.public.encoded)
 
-    fun derivePeerKey(peerPublicKeyBase64: String, localDeviceId: String, peerDeviceId: String): Pair<ByteArray, String> {
-        require(localDeviceId.isNotBlank() && peerDeviceId.isNotBlank() && localDeviceId != peerDeviceId)
+    fun derivePeerKey(
+        peerPublicKeyBase64: String,
+        sessionId: String,
+        localDeviceId: String,
+        peerDeviceId: String
+    ): Pair<ByteArray, String> {
+        require(sessionId.isNotBlank() && sessionId.length <= 128) { "Invalid session binding" }
+        require(localDeviceId.length in 1..64 && peerDeviceId.length in 1..64 && localDeviceId != peerDeviceId)
         require(peerPublicKeyBase64.length in 108..344) { "Invalid ECDH public key encoding size" }
         val encoded = Base64.getDecoder().decode(peerPublicKeyBase64)
         require(encoded.size in 80..256) { "Invalid ECDH public key size" }
         val publicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded))
+        require(publicKey is java.security.interfaces.ECPublicKey) { "Peer key is not an EC public key" }
+        val localPublic = pair.public as java.security.interfaces.ECPublicKey
+        val peerParams = publicKey.params
+        val localParams = localPublic.params
+        require(
+            peerParams.order == localParams.order &&
+                peerParams.cofactor == localParams.cofactor &&
+                peerParams.curve.field.fieldSize == localParams.curve.field.fieldSize &&
+                peerParams.curve.a == localParams.curve.a &&
+                peerParams.curve.b == localParams.curve.b &&
+                peerParams.generator.affineX == localParams.generator.affineX &&
+                peerParams.generator.affineY == localParams.generator.affineY
+        ) { "Peer key must use the same P-256 curve" }
+
         val agreement = KeyAgreement.getInstance("ECDH")
         agreement.init(pair.private)
         agreement.doPhase(publicKey, true)
         val shared = agreement.generateSecret()
-        val salt = (minOf(localDeviceId, peerDeviceId) + "|" + maxOf(localDeviceId, peerDeviceId)).toByteArray(Charsets.UTF_8)
+        val sortedIds = listOf(localDeviceId, peerDeviceId).sorted().joinToString("|")
+        val context = "shraddha-device-e2e-v2|$sessionId|$sortedIds"
+        val salt = MessageDigest.getInstance("SHA-256").digest(context.toByteArray(Charsets.UTF_8))
         val prkMac = Mac.getInstance("HmacSHA256")
-        prkMac.init(SecretKeySpec(salt, "HmacSHA256"))
-        val prk = prkMac.doFinal(shared)
-        prkMac.init(SecretKeySpec(prk, "HmacSHA256"))
-        prkMac.update("shraddha-device-e2e-v1".toByteArray(Charsets.UTF_8))
-        prkMac.update(1.toByte())
-        val key = prkMac.doFinal()
-        val publicKeys = listOf(pair.public.encoded, encoded).sortedWith { a, b ->
-            val limit = minOf(a.size, b.size)
-            var result = 0
-            for (i in 0 until limit) { result = (a[i].toInt() and 255).compareTo(b[i].toInt() and 255); if (result != 0) break }
-            if (result == 0) a.size.compareTo(b.size) else result
+        var prk: ByteArray? = null
+        try {
+            prkMac.init(SecretKeySpec(salt, "HmacSHA256"))
+            prk = prkMac.doFinal(shared)
+            prkMac.init(SecretKeySpec(prk, "HmacSHA256"))
+            prkMac.update(context.toByteArray(Charsets.UTF_8))
+            prkMac.update(1.toByte())
+            val key = prkMac.doFinal()
+
+            val publicKeys = listOf(pair.public.encoded, encoded).sortedWith { a, b ->
+                val limit = minOf(a.size, b.size)
+                var result = 0
+                for (i in 0 until limit) {
+                    result = (a[i].toInt() and 255).compareTo(b[i].toInt() and 255)
+                    if (result != 0) break
+                }
+                if (result == 0) a.size.compareTo(b.size) else result
+            }
+            val fingerprintDigest = MessageDigest.getInstance("SHA-256").digest(
+                context.toByteArray(Charsets.UTF_8) + publicKeys[0] + publicKeys[1]
+            )
+            val fingerprint = fingerprintDigest.take(16)
+                .joinToString("") { "%02X".format(it) }.chunked(4).joinToString("-")
+            salt.fill(0)
+            return key to fingerprint
+        } finally {
+            shared.fill(0)
+            prk?.fill(0)
         }
-        val fingerprintDigest = MessageDigest.getInstance("SHA-256").digest(publicKeys[0] + publicKeys[1])
-        val fingerprint = fingerprintDigest.take(16).joinToString("") { "%02X".format(it) }.chunked(4).joinToString("-")
-        shared.fill(0); prk.fill(0)
-        return key to fingerprint
     }
 
     companion object {
@@ -72,7 +107,15 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
             cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
             cipher.updateAAD(associatedData)
             val sealed = cipher.doFinal(plaintext)
-            return Sealed(Base64.getEncoder().withoutPadding().encodeToString(nonce), Base64.getEncoder().withoutPadding().encodeToString(sealed))
+            try {
+                return Sealed(
+                    Base64.getEncoder().withoutPadding().encodeToString(nonce),
+                    Base64.getEncoder().withoutPadding().encodeToString(sealed)
+                )
+            } finally {
+                sealed.fill(0)
+                nonce.fill(0)
+            }
         }
 
         fun decrypt(key: ByteArray, nonceBase64: String, ciphertextBase64: String, associatedData: ByteArray): ByteArray {
@@ -83,10 +126,15 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
             val nonce = Base64.getDecoder().decode(nonceBase64)
             val ciphertext = Base64.getDecoder().decode(ciphertextBase64)
             require(nonce.size == 12 && ciphertext.size in 16..MAX_CIPHERTEXT_BYTES)
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
-            cipher.updateAAD(associatedData)
-            return cipher.doFinal(ciphertext)
+            try {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+                cipher.updateAAD(associatedData)
+                return cipher.doFinal(ciphertext)
+            } finally {
+                nonce.fill(0)
+                ciphertext.fill(0)
+            }
         }
     }
 }
