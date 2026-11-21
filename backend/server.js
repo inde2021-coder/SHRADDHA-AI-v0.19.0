@@ -952,13 +952,39 @@ wss.on('connection', (ws, ctx) => {
       if (!msg.permissions || typeof msg.permissions !== 'object' || Array.isArray(msg.permissions)) return;
       for (const key of allowed) next[key] = msg.permissions[key] === true;
       device.sharePermissions = next;
-      const revokedShares = new Map();
-      for (const [grantKey] of device.grants) {
-        const category = grantKey.split(':').slice(1).join(':');
-        if (next[category] !== true) device.grants.delete(grantKey);
+      for (const [grantKey, grant] of device.grants) {
+        const [requesterId, category] = grantKey.split(':');
+        if (next[category] !== true) {
+          device.grants.delete(grantKey);
+          send(requesterId, JSON.stringify({
+            type: 'data_share_result', targetDeviceId: deviceId, category,
+            requestId: grant?.requestId || '', approved: false, expiresInMinutes: 0,
+            reason: 'Data sharing was disabled on the target device.'
+          }));
+        }
       }
-      // Revoke remote-control grants immediately, even when no data-share grants exist.
-      if (next.remote_control !== true) { device.controlGrants.clear(); device.pendingControlRequests.clear(); }
+      for (const [pendingKey, pending] of device.pendingDataShares || []) {
+        const [requesterId, category] = pendingKey.split(':');
+        if (next[category] !== true) {
+          device.pendingDataShares.delete(pendingKey);
+          send(requesterId, JSON.stringify({
+            type: 'data_share_result', targetDeviceId: deviceId, category,
+            requestId: pending.requestId, approved: false, expiresInMinutes: 0,
+            reason: 'Data sharing was disabled on the target device.'
+          }));
+        }
+      }
+      // Revoke remote-control grants and pending requests immediately.
+      if (next.remote_control !== true) {
+        const requesterIds = new Set([...device.controlGrants.keys(), ...device.pendingControlRequests.keys()]);
+        for (const requesterId of requesterIds) send(requesterId, JSON.stringify({
+          type: 'control_result', targetDeviceId: deviceId, approved: false, expiresInMinutes: 0,
+          reason: 'Remote control was disabled on the target device.'
+        }));
+        device.controlGrants.clear();
+        device.pendingControlRequests.clear();
+        device.pendingRemoteActions.clear();
+      }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
       const targetId = String(msg.targetDeviceId || '');
@@ -967,17 +993,23 @@ wss.on('connection', (ws, ctx) => {
       if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory','clipboard'].includes(category)) return;
       const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 64);
       if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
+      target.pendingDataShares ||= new Map();
+      target.pendingDataShares.set(`${deviceId}:${category}`, { requestId, expiresAt: Date.now() + 60_000 });
       send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
     } else if (msg.type === 'data_share_response') {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
       const category = String(msg.category || '');
       const requestId = String(msg.requestId || '').slice(0, 64);
-      if (!requester || !isAllowedShareCategory(category) || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
+      const pendingKey = `${requesterId}:${category}`;
+      const pending = device.pendingDataShares?.get(pendingKey);
+      if (!requester || !isAllowedShareCategory(category) || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) ||
+          !pending || pending.requestId !== requestId || pending.expiresAt < Date.now()) return;
+      device.pendingDataShares.delete(pendingKey);
       const approved = msg.approved === true && device.sharePermissions?.[category] === true;
       const minutes = Math.min(15, Math.max(1, Number(msg.minutes) || 5));
-      if (approved) device.grants.set(`${requesterId}:${category}`, { requestId, expiresAt: Date.now() + minutes * 60_000 });
-      else device.grants.delete(`${requesterId}:${category}`);
+      if (approved) device.grants.set(pendingKey, { requestId, expiresAt: Date.now() + minutes * 60_000 });
+      else device.grants.delete(pendingKey);
       send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, requestId, approved, expiresInMinutes: approved ? minutes : 0 }));
     } else if (msg.type === 'data_share_payload') {
       const targetId = String(msg.targetDeviceId || '');
