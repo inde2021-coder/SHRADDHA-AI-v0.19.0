@@ -44,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('..', import.meta.url),
-    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: '', OPENAI_API_KEY: '' },
+    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: '', OPENAI_API_KEY: '', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '' },
     stdio: 'ignore'
   });
   const deadline = Date.now() + 10_000;
@@ -103,6 +103,19 @@ test('Edesy call bridge readiness is private and reports missing external provis
   assert.ok(body.required.includes('OPENAI_API_KEY'));
   assert.ok(body.missing.includes('EDESY_STREAM_TOKEN (32+ characters)'));
   assert.ok(body.missing.includes('OPENAI_API_KEY'));
+});
+
+test('Edesy preflight requires gateway auth and server-side provider configuration', async () => {
+  const denied = await fetch(`${baseUrl}/api/telephony/edesy/preflight`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({})
+  });
+  assert.equal(denied.status, 401);
+  const unavailable = await fetch(`${baseUrl}/api/telephony/edesy/preflight`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify({ sample_rate: 16000, seconds: 2 })
+  });
+  assert.equal(unavailable.status, 503);
 });
 
 test('Edesy call history requires gateway authentication', async () => {
