@@ -102,6 +102,7 @@ object DeviceLinkManager {
                 }
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (socket !== webSocket) return
                 try {
                     val msg = JSONObject(text)
                     when (msg.optString("type")) {
@@ -115,6 +116,7 @@ object DeviceLinkManager {
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
             }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                if (socket !== webSocket) return
                 val frame = bytes.toByteArray()
                 if (frame.isEmpty()) return
                 val idLength = frame[0].toInt() and 0xFF
