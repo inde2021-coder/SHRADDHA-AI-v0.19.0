@@ -201,24 +201,6 @@ const server = http.createServer(async (req, res) => {
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
-    if (req.method === 'GET' && routePath === '/api/device/info') {
-      const url = new URL(req.url, 'http://localhost');
-      const sessionId = url.searchParams.get('sessionId') || '';
-      const deviceId = url.searchParams.get('deviceId') || '';
-      if (!/^[A-Za-z0-9_-]{16,64}$/.test(sessionId) || !/^[a-f0-9]{24,64}$/i.test(deviceId)) return json(res, 400, { error: 'Invalid session or device identifier' });
-      const session = sessions.get(sessionId);
-      const caller = session?.devices.get(deviceId);
-      const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (!caller || !safeEqual(caller.token, bearer)) return json(res, 401, { error: 'Valid device credentials are required' });
-      return json(res, 200, {
-        ok: true,
-        role: caller.role,
-        devices: [...session.devices.entries()].map(([id, device]) => ({
-          id, name: device.name, role: device.role,
-          online: device.socket?.readyState === WebSocket.OPEN
-        }))
-      });
-    }
     if (req.method === 'POST' && req.url === '/api/device/revoke') {
       const body = await readBody(req);
       const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
@@ -809,7 +791,7 @@ wss.on('connection', (ws, ctx) => {
   if (device.socket && device.socket.readyState === WebSocket.OPEN) device.socket.close(4001, 'Reconnected elsewhere');
   device.socket = ws;
   const send = (target, payload, binary = false) => { const peer = session.devices.get(target); if (peer?.socket?.readyState === WebSocket.OPEN) peer.socket.send(payload, { binary }); };
-  ws.send(JSON.stringify({ type: 'connected', deviceId, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
+  ws.send(JSON.stringify({ type: 'connected', deviceId, role: device.role, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
   for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: true }));
   ws.on('message', (data, isBinary) => {
     if (isBinary) { // Frame protocol: [1-byte device-id length][device-id UTF-8][1-byte frame type][JPEG]. Client payload starts with frame type (1=screen, 2=camera).
