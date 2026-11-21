@@ -216,6 +216,12 @@ test('device revocation requires authentication and owner authority, and removes
   );
   await once(memberSocket, 'open');
   const memberSocketClosed = once(memberSocket, 'close');
+  const ownerSocket = new WebSocket(
+    `${baseUrl.replace(/^http/, 'ws')}/ws?sessionId=${encodeURIComponent(owner.sessionId)}&deviceId=${encodeURIComponent(owner.deviceId)}`,
+    { headers: { authorization: `Bearer ${owner.deviceToken}` } }
+  );
+  await once(ownerSocket, 'open');
+  const ownerSocketClosed = once(ownerSocket, 'close');
   const unauthenticated = await fetch(endpoint, payload(owner.deviceId));
   assert.equal(unauthenticated.status, 401);
 
@@ -243,6 +249,8 @@ test('device revocation requires authentication and owner authority, and removes
   });
   assert.equal(ownerRevokesSession.status, 200);
   assert.deepEqual(await ownerRevokesSession.json(), { ok: true, revoked: 'session' });
+  const [ownerCloseCode] = await ownerSocketClosed;
+  assert.equal(ownerCloseCode, 4003, 'owner session revocation must close the owner socket');
 });
 
 test('device revocation validates identifiers and lets a member revoke only its own pairing', async () => {
