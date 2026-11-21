@@ -104,6 +104,35 @@ class NovaAccessibilityService : AccessibilityService() {
         return if (gestureTap(x, y)) "tapped" else "failed"
     }
 
+    /**
+     * Sets text only on the editable node whose current screen bounds match the
+     * previously observed target. Unlike typeText(), this never falls back to
+     * whichever input happens to be focused or first in the view tree.
+     */
+    fun typeTextAtBounds(targetBounds: Rect, text: String): String {
+        val root = rootInActiveWindow ?: return "no_active_window"
+        val queue = LinkedList<AccessibilityNodeInfo>()
+        queue.add(root)
+        var match: AccessibilityNodeInfo? = null
+        val nodeBounds = Rect()
+        while (queue.isNotEmpty()) {
+            val node = queue.poll() ?: continue
+            node.getBoundsInScreen(nodeBounds)
+            if (node.isEditable && nodeBounds == targetBounds) {
+                match = node
+                break
+            }
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        val target = match ?: return "target_field_not_found"
+        val args = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        return if (target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) "typed" else "failed"
+    }
+
     fun typeText(text: String): String {
         val root = rootInActiveWindow ?: return "no_focused_field"
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
