@@ -36,6 +36,7 @@ class OperatorActivity : Activity() {
         root.addView(appName); root.addView(target); root.addView(typed)
         commandInput = field("श्रद्धा को निर्देश दें: जैसे Rahul.jpg upload करो")
         root.addView(commandInput)
+        intent.getStringExtra("mobile_voice_command")?.takeIf { it.isNotBlank() }?.let { commandInput.setText(it); }
         root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
         root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
         root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
