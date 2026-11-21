@@ -22,11 +22,12 @@ Set these only in the backend host's secret/environment settings:
 ## Provision Edesy
 
 1. Create and verify an Edesy tenant, complete KYC, and provision an Indian DID.
-2. Create an inbound AI Voice Agent / Stream flow.
-3. Set its WebSocket URL to `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN`.
-4. Configure 16 kHz mono L16/PCM streaming and the documented JSON call-metadata first frame.
-5. Route the DID to this flow and call it from a separate phone.
-6. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
+2. Provision an Edesy phone number and configure its inbound route to **Media Streams** (or the portal's AI Voice Agent Stream node).
+3. Set the Media Streams WebSocket URL to `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN`.
+4. Configure 16 kHz mono L16/PCM streaming (8 kHz is also supported) and the documented JSON metadata first frame. The backend reads `sampleRate` and `mixType` from that frame.
+5. Route the DID to this WebSocket stream and call it from a separate phone.
+6. Run Edesy's `POST /v1/stream-test` preflight against the public WebSocket URL before placing a live call.
+7. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
 
 The stream token is in a query string because the provider connector uses a WebSocket URL. Configure the hosting proxy and access logs to redact query strings for this route. Rotate the token if it may have appeared in logs.
 
