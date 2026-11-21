@@ -442,8 +442,8 @@ const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 102
 telephonyWss.on('connection', carrier => {
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   const pendingAudio = [];
-  let metadataTimer = setTimeout(() => shutdown(), 10_000);
-  let liveReadyTimer = setTimeout(() => { if (!ready) shutdown(); }, 20_000);
+  let metadataTimer = null;
+  let liveReadyTimer = null;
   if (edesyActiveConnections >= Math.max(1, Math.min(50, Number(process.env.EDESY_MAX_CONCURRENT_CALLS) || 8))) {
     carrier.close(1013, 'AI call capacity reached');
     return;
@@ -476,6 +476,8 @@ telephonyWss.on('connection', carrier => {
     if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Carrier call ended');
     if (carrier.readyState === WebSocket.OPEN || carrier.readyState === WebSocket.CONNECTING) carrier.close(1000, 'Call bridge closed');
   };
+  metadataTimer = setTimeout(() => shutdown(), 10_000);
+  liveReadyTimer = setTimeout(() => { if (!ready) shutdown(); }, 20_000);
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
   live.on('open', () => {
     if (closed || carrier.readyState !== WebSocket.OPEN) {
