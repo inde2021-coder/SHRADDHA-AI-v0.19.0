@@ -74,7 +74,7 @@ class FormAutofillExecutorTest {
             )
         )
 
-        val result = FormAutofillExecutor(driver).applyApproved(listOf(farmerName), setOf("farmerName"))
+        val result = FormAutofillExecutor(driver, verificationDelayMillis = 0L).applyApproved(listOf(farmerName), setOf("farmerName"))
 
         assertEquals(1, driver.writes.size)
         assertEquals("Mahendra", driver.writes.single().second)
@@ -85,7 +85,7 @@ class FormAutofillExecutorTest {
     @Test fun performsNoCaptureOrWriteWhenNothingWasApproved() = runTest {
         val driver = SequenceDriver(emptyList())
 
-        val result = FormAutofillExecutor(driver).applyApproved(listOf(farmerName), emptySet())
+        val result = FormAutofillExecutor(driver, verificationDelayMillis = 0L).applyApproved(listOf(farmerName), emptySet())
 
         assertTrue(result.isEmpty())
         assertEquals(0, driver.captureCount)
@@ -97,7 +97,7 @@ class FormAutofillExecutorTest {
             listOf(screen(1, element("other-label", "Survey Number", 100, 140), element("input", "", 150, 210, true)))
         )
 
-        val result = FormAutofillExecutor(driver).applyApproved(listOf(farmerName), setOf("farmerName"))
+        val result = FormAutofillExecutor(driver, verificationDelayMillis = 0L).applyApproved(listOf(farmerName), setOf("farmerName"))
 
         assertFalse(result.single().success)
         assertTrue(driver.writes.isEmpty())
@@ -112,7 +112,7 @@ class FormAutofillExecutorTest {
             )
         )
 
-        val result = FormAutofillExecutor(driver).applyApproved(listOf(farmerName), setOf("farmerName"))
+        val result = FormAutofillExecutor(driver, verificationDelayMillis = 0L).applyApproved(listOf(farmerName), setOf("farmerName"))
 
         assertFalse(result.single().success)
         assertEquals("Could not verify the entered value", result.single().message)
@@ -125,7 +125,7 @@ class FormAutofillExecutorTest {
             writeResult = DriverResult.FAILED
         )
 
-        val result = FormAutofillExecutor(driver).applyApproved(listOf(farmerName), setOf("farmerName"))
+        val result = FormAutofillExecutor(driver, verificationDelayMillis = 0L).applyApproved(listOf(farmerName), setOf("farmerName"))
 
         assertFalse(result.single().success)
         assertEquals(1, driver.captureCount)
