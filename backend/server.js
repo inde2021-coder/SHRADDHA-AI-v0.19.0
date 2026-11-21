@@ -4,7 +4,7 @@ import { initializeApp as initializeAdminApp, cert, getApps as getAdminApps } fr
 import { getFirestore } from 'firebase-admin/firestore';
 import { WebSocketServer, WebSocket } from 'ws';
 import { validRemoteAction } from './relay-policy.js';
-import { appendCallTranscript, clearCallTranscript } from './call-transcript.js';
+import { appendCallTranscript, clearCallTranscript, hasExplicitTranscriptConsentPrompt } from './call-transcript.js';
 import { encryptCallHistoryRecord, decryptCallHistoryRecord } from './call-history-crypto.js';
 
 const PORT = Number(process.env.PORT || 8787);
@@ -831,15 +831,7 @@ telephonyWss.on('connection', (carrier, request) => {
     if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
       if (event.type === 'session.output_transcript.delta' && !callRecord.transcriptConsentRequested) {
         callRecord.consentPromptBuffer = (callRecord.consentPromptBuffer + event.delta).slice(-800).toLowerCase();
-        const promptText = callRecord.consentPromptBuffer;
-        const asksForPressOne = promptText.includes('press 1') || promptText.includes('press one') ||
-          promptText.includes('दबाएं 1') || promptText.includes('दबाएँ 1') ||
-          promptText.includes('एक दबाएं') || promptText.includes('एक दबाएँ') || promptText.includes('प्रेस 1');
-        const mentionsTranscript = promptText.includes('transcript') || promptText.includes('प्रतिलिपि') || promptText.includes('लिखित');
-        const mentionsConsent = promptText.includes('consent') || promptText.includes('agree') ||
-          promptText.includes('सहमति') || promptText.includes('सहमत') ||
-          promptText.includes('अनुमति') || promptText.includes('मंजूरी');
-        if (asksForPressOne && mentionsTranscript && mentionsConsent) {
+        if (hasExplicitTranscriptConsentPrompt(callRecord.consentPromptBuffer)) {
           callRecord.transcriptConsentRequested = true;
           callRecord.consentPromptAt = new Date().toISOString();
           callRecord.consentPromptBuffer = '';
