@@ -281,7 +281,7 @@ const server = http.createServer(async (req, res) => {
       }
       const redactPreflightText = value => String(value || '')
         .replaceAll(process.env.EDESY_STREAM_TOKEN, '[redacted]')
-        .replace(/([?&]token=)[^&\\s]+/gi, '$1[redacted]');
+        .replace(/([?&]token=)[^&\s]+/gi, '$1[redacted]');
       try {
         const providerResponse = await fetch('https://voice-api.edesy.in/v1/stream-test', {
           method: 'POST',
