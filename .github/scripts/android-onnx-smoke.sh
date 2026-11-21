@@ -2,29 +2,46 @@
 set -Eeuo pipefail
 
 bash .github/scripts/wait-for-android-emulator.sh
-ADB="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/platform-tools/adb"
+SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+ADB="$SDK_ROOT/platform-tools/adb"
 if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb)"; fi
 SERIAL="${ANDROID_SERIAL:-emulator-5554}"
 
 dump_diagnostics() {
   echo "===== ADB devices ====="
   "$ADB" devices -l || true
-  echo "===== Emulator properties ====="
-  "$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk || true
+  echo "===== Emulator boot/user properties ====="
+  "$ADB" -s "$SERIAL" shell getprop sys.boot_completed || true
+  "$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available || true
+  echo "===== Android services ====="
+  "$ADB" -s "$SERIAL" shell service check package || true
+  "$ADB" -s "$SERIAL" shell service check activity || true
+  "$ADB" -s "$SERIAL" shell service check window || true
   echo "===== Emulator disk ====="
   "$ADB" -s "$SERIAL" shell df -h /data || true
   echo "===== Emulator logcat ====="
-  "$ADB" -s "$SERIAL" logcat -d -t 1000 || true
+  "$ADB" -s "$SERIAL" logcat -d -t 1200 || true
 }
 trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 
 "$ADB" -s "$SERIAL" wait-for-device
+# Dismiss the emulator keyguard after credential-encrypted user storage is ready.
+"$ADB" -s "$SERIAL" shell input keyevent 82 || true
+"$ADB" -s "$SERIAL" shell wm dismiss-keyguard || true
 "$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk
+"$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available
 "$ADB" -s "$SERIAL" shell df -h /data
-# The readiness helper already verifies PackageManager and ActivityManager.
-# Avoid the flaky standalone "pm list packages" probe; connectedAndroidTest
-# performs the real package installation and instrumentation checks.
-./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+"$ADB" devices -l
+
+# Run actual Android instrumentation (including biometric/ONNX smoke coverage).
+./gradlew :app:connectedDebugAndroidTest --no-daemon --console=plain --stacktrace
+
+# Do not accept a green Gradle task that produced no instrumentation result files.
+report_dir="app/build/outputs/androidTest-results/connected"
+if [[ ! -d "$report_dir" ]] || ! find "$report_dir" -type f -name '*.xml' -print -quit | grep -q .; then
+  echo "ERROR: connectedDebugAndroidTest produced no XML instrumentation result files."
+  exit 1
+fi
 
 echo "Installing and launching the production debug APK..."
 "$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk
