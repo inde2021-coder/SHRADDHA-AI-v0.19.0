@@ -63,6 +63,9 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         root.addView(action("🎙️ Voice Control • बोलकर command दें") { captureVoice() })
         root.addView(action("▶ Command चलाएँ") { runCommand(command.text.toString()) })
         root.addView(action("Task Automation + App Control") { openOperator() })
+        root.addView(action("Calls by Voice • WhatsApp & SMS") { startActivity(Intent(this, `in`.shraddha.ai.phone.PhoneAgentActivity::class.java)) })
+        root.addView(action("Visual Lens • Camera / paired-device workspace") { openMainPage("devices") })
+        root.addView(action("AI Memory • Personality • Provider settings") { openAiWorkspace() })
         root.addView(action("App Launcher • installed apps") { showAppLauncher() })
         root.addView(action("File Manager • search / folders") { startActivity(Intent(this, FileAccessActivity::class.java)) })
         root.addView(action("Screenshot AI • current screen पढ़ें") { readCurrentScreen() })
@@ -168,6 +171,10 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                 status.text = "Command App Operator में भेजा गया। चलाने से पहले समीक्षा करें।"
             }
         }
+    }
+
+    private fun openMainPage(page: String) {
+        startActivity(Intent(this, `in`.shraddha.ai.MainActivity::class.java).putExtra("initial_page", page))
     }
 
     private fun openOperator() {
