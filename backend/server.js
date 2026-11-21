@@ -171,6 +171,48 @@ const server = http.createServer(async (req, res) => {
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
+    if (req.method === 'POST' && req.url === '/api/device/revoke') {
+      const body = await readBody(req);
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+      const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
+      const session = sessions.get(sessionId);
+      const caller = session?.devices.get(deviceId);
+      const bearer = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+      if (!caller || !safeEqual(caller.token, bearer)) return json(res, 401, { error: 'Valid device credentials are required' });
+      const targetId = typeof body.targetDeviceId === 'string' && body.targetDeviceId ? body.targetDeviceId : deviceId;
+      if (targetId !== deviceId && caller.role !== 'owner') return json(res, 403, { error: 'Only the session owner can revoke another device' });
+      const target = session.devices.get(targetId);
+      if (!target) return json(res, 404, { error: 'Target device was not found' });
+      if (target.role === 'owner' && targetId !== deviceId) return json(res, 403, { error: 'The owner device cannot be revoked by a member' });
+      const revokeOne = (id, item) => {
+        item.socket?.close(4003, 'Device pairing revoked');
+        for (const peer of session.devices.values()) {
+          peer.controlGrants?.delete(id);
+          peer.pendingControlRequests?.delete(id);
+          peer.grants?.delete(`${id}:contacts`);
+          peer.grants?.delete(`${id}:media`);
+          peer.grants?.delete(`${id}:documents`);
+          peer.grants?.delete(`${id}:messages`);
+          peer.grants?.delete(`${id}:calendar`);
+          peer.grants?.delete(`${id}:location`);
+          peer.grants?.delete(`${id}:device_status`);
+          peer.grants?.delete(`${id}:ai_memory`);
+          for (const [actionId, pending] of peer.pendingRemoteActions || []) if (pending.requesterId === id) peer.pendingRemoteActions.delete(actionId);
+        }
+        session.devices.delete(id);
+        for (const [code, invite] of pairCodes) if (invite.sessionId === sessionId && !session.devices.size) pairCodes.delete(code);
+      };
+      if (targetId === deviceId && caller.role === 'owner') {
+        for (const [id, item] of session.devices) revokeOne(id, item);
+        sessions.delete(sessionId);
+        for (const [code, invite] of pairCodes) if (invite.sessionId === sessionId) pairCodes.delete(code);
+        return json(res, 200, { ok: true, revoked: 'session' });
+      }
+      revokeOne(targetId, target);
+      for (const [id, peer] of session.devices) if (id !== targetId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId: targetId, name: target.name, online: false, revoked: true }));
+      if (!session.devices.size) sessions.delete(sessionId);
+      return json(res, 200, { ok: true, revoked: targetId });
+    }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const body = await readBody(req, 5 * 1024 * 1024);
