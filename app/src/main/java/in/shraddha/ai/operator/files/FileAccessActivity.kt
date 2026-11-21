@@ -145,7 +145,19 @@ class FileAccessActivity : Activity() {
     }
     private fun search() {
         val result = locator.search(filename.text.toString(), folder.text.toString())
-        status.text = result.message + "\n" + result.matches.joinToString("\n\n") { "${it.displayName}\n${it.mimeType}\n${it.relativePath}\n${it.uri}" }
+        latestMatches = result.matches
+        status.text = result.message
+        if (latestMatches.isNotEmpty()) {
+            android.app.AlertDialog.Builder(this).setTitle("मिली हुई फ़ाइल चुनें")
+                .setItems(latestMatches.map { "${it.displayName} • ${it.source} • ${it.relativePath}" }.toTypedArray()) { _, which ->
+                    val item = latestMatches[which]
+                    selectedUri = item.uri
+                    selectedName = item.displayName
+                    selectedMime = item.mimeType.ifBlank { "*/*" }
+                    status.text = "फ़ाइल चुनी गई: ${item.displayName}"
+                }.show()
+        }
     }
+
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF5946A8.toInt()); setOnClickListener { action() } }
 }
