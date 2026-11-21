@@ -24,6 +24,7 @@ This report records source-level findings; it does not claim an APK build or dev
 3. **Firebase remains configuration-driven and requires production lifecycle verification.**
    - Firebase Auth, Firestore, Realtime Database, Storage and Messaging dependencies are present.
    - Rules, App Check, account lifecycle, backup restore and permission-denial cases need live project tests.
+   - The Android named vault app now installs the Firebase App Check Debug provider in debug builds and Play Integrity provider in non-debug builds. Debug-token registration, release signing fingerprint registration, App Check metrics and enforcement remain Firebase Console owner actions.
    - Firebase account authentication is now separated from a 12+ character backup encryption passphrase. The passphrase is never sent to Firebase; old backups require the original account password in the passphrase field if no separate passphrase was used.
    - Password/passphrase field clearing and PBKDF2 transient-buffer wiping are implemented. Recovery of a forgotten backup passphrase is intentionally impossible; users must preserve it securely.
    - No Firebase credentials should be committed.
