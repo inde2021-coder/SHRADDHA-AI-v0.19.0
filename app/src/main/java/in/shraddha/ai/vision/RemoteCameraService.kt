@@ -95,7 +95,7 @@ class RemoteCameraService : Service() {
                     camera = device
                     val surface = reader?.surface ?: run { stopSelf(); return }
                     try {
-                        device.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+                        val callback = object : CameraCaptureSession.StateCallback() {
                             override fun onConfigured(session: CameraCaptureSession) {
                                 try {
                                     val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
@@ -106,7 +106,18 @@ class RemoteCameraService : Service() {
                                 } catch (_: Exception) { stopSelf() }
                             }
                             override fun onConfigureFailed(session: CameraCaptureSession) { stopSelf() }
-                        }, handler)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            val configuration = SessionConfiguration(
+                                SessionConfiguration.SESSION_REGULAR,
+                                listOf(OutputConfiguration(surface)),
+                                ContextCompat.getMainExecutor(this@RemoteCameraService),
+                                callback
+                            )
+                            device.createCaptureSession(configuration)
+                        } else {
+                            createLegacyCaptureSession(device, surface, callback, handler)
+                        }
                     } catch (_: Exception) { stopSelf() }
                 }
                 override fun onDisconnected(device: CameraDevice) { device.close(); if (camera === device) camera = null; stopSelf() }
@@ -114,6 +125,16 @@ class RemoteCameraService : Service() {
             }, handler)
         } catch (_: SecurityException) { stopSelf() }
         catch (_: Exception) { stopSelf() }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun createLegacyCaptureSession(
+        device: CameraDevice,
+        surface: android.view.Surface,
+        callback: CameraCaptureSession.StateCallback,
+        handler: Handler
+    ) {
+        device.createCaptureSession(listOf(surface), callback, handler)
     }
 
     private fun stopCamera() {
