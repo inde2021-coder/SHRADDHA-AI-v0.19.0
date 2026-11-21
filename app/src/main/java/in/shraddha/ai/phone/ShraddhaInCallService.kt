@@ -5,6 +5,9 @@ import android.content.Intent
 import android.media.AudioManager
 import android.telecom.Call
 import android.telecom.CallAudioState
+import android.telecom.CallEndpoint
+import android.telecom.CallEndpointException
+import android.os.OutcomeReceiver
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import java.text.SimpleDateFormat
@@ -35,6 +38,16 @@ class ShraddhaInCallService : InCallService() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             runCatching { startActivity(screen) }
         }
+    }
+
+    override fun onAvailableCallEndpointsChanged(availableEndpoints: MutableList<CallEndpoint>) {
+        availableCallEndpoints = availableEndpoints.toList()
+        super.onAvailableCallEndpointsChanged(availableEndpoints)
+    }
+
+    override fun onCallEndpointChanged(callEndpoint: CallEndpoint) {
+        super.onCallEndpointChanged(callEndpoint)
+        sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
     }
 
     override fun onCallRemoved(call: Call) {
@@ -92,12 +105,23 @@ class ShraddhaInCallService : InCallService() {
 
         fun toggleSpeaker() {
             val current = service ?: return
-            val audio = current.callAudioState
-            val route = if (audio?.route == CallAudioState.ROUTE_SPEAKER) {
-                CallAudioState.ROUTE_EARPIECE
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val currentType = current.currentCallEndpoint.endpointType
+                val targetType = if (currentType == CallEndpoint.TYPE_SPEAKER) CallEndpoint.TYPE_EARPIECE else CallEndpoint.TYPE_SPEAKER
+                val target = availableCallEndpoints.firstOrNull { it.endpointType == targetType } ?: return
+                current.requestCallEndpointChange(target, current.mainExecutor, object : OutcomeReceiver<Void, CallEndpointException> {
+                    override fun onResult(result: Void?) = Unit
+                    override fun onError(error: CallEndpointException) = Unit
+                })
             } else {
-                CallAudioState.ROUTE_SPEAKER
+                toggleSpeakerLegacy(current)
             }
+        }
+
+        @Suppress("DEPRECATION")
+        private fun toggleSpeakerLegacy(current: ShraddhaInCallService) {
+            val audio = current.callAudioState
+            val route = if (audio?.route == CallAudioState.ROUTE_SPEAKER) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER
             current.setAudioRoute(route)
         }
     }
