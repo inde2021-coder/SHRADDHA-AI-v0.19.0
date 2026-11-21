@@ -17,7 +17,7 @@ Set these only in the backend host's secret/environment settings:
 - `EDESY_STREAM_TOKEN` — long random secret for the provider WebSocket.
 - `OPENAI_API_KEY` — OpenAI project key with GPT-Live access.
 - Optional: `OPENAI_LIVE_MODEL` (default `gpt-live-1.1`), `OPENAI_LIVE_VOICE` (defaults to the Hindi-capable `nira` voice), `SHRADDHA_CALL_INSTRUCTIONS`.
-- `CALL_TRANSCRIPTS_ENABLED=false` by default. Enable only after caller notice/consent and retention review.
+- `CALL_TRANSCRIPTS_ENABLED=false` by default. If enabled, the assistant asks the caller to press 1 before any transcript is stored; pressing 0 at any time stops storage and purges the transcript accumulated for that call. If the assistant does not clearly issue the consent prompt, transcript capture remains off. No audio is recorded. Enable only after legal notice and retention review.
 
 ## Provision Edesy
 
@@ -49,5 +49,5 @@ Do not use generic USSD codes without Jio confirming the current code and plan s
 - Code integration does not prove that an Edesy tenant, DID, provider flow or paid API access has been provisioned.
 - No forwarding should be enabled on the personal SIM until real two-way calls pass on the actual Edesy account.
 - Android `InCallService` cannot capture ordinary SIM-call audio on standard Android. The SIM-first/no-answer behavior depends on Jio's network forwarding to the Edesy DID.
-- Transcript capture is off by default. When enabled, transcripts and summaries are held in bounded server memory and disappear on restart. No persistent audio recording, encrypted durable call history, caller consent workflow, WhatsApp delivery or human takeover is implemented yet.
+- Transcript capture is off by default. When enabled, a per-call DTMF consent gate requires the caller to press 1 after the assistant's explicit prompt; pressing 0 stops capture and purges that call's transcript. Transcripts and summaries are held in bounded server memory and disappear on restart. Android can explicitly save a masked call-history snapshot encrypted locally. No persistent audio recording, automatic encrypted backend history, caller screening, human takeover, WhatsApp summary or call notifications are implemented yet.
 - Configure an upfront AI disclosure in the Edesy flow and the GPT-Live prompt. Review recording/transcription notice and consent requirements before enabling transcript capture.
