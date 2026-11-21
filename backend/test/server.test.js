@@ -210,6 +210,11 @@ test('device revocation requires authentication and owner authority, and removes
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ sessionId: owner.sessionId, deviceId: member.deviceId, targetDeviceId })
   });
+  const memberSocket = new WebSocket(
+    `${baseUrl.replace(/^http/, 'ws')}/ws?sessionId=${encodeURIComponent(member.sessionId)}&deviceId=${encodeURIComponent(member.deviceId)}`,
+    { headers: { authorization: `Bearer ${member.deviceToken}` } }
+  );
+  await once(memberSocket, 'open');
   const unauthenticated = await fetch(endpoint, payload(owner.deviceId));
   assert.equal(unauthenticated.status, 401);
 
@@ -227,6 +232,9 @@ test('device revocation requires authentication and owner authority, and removes
   });
   assert.equal(ownerRevokesMember.status, 200);
   assert.deepEqual(await ownerRevokesMember.json(), { ok: true, revoked: member.deviceId });
+  const memberSocketClosed = once(memberSocket, 'close');
+  const [memberCloseCode] = await memberSocketClosed;
+  assert.equal(memberCloseCode, 4003, 'revoking a paired device must close its active relay socket');
 
   const ownerRevokesSession = await fetch(endpoint, {
     ...payload(owner.deviceId), headers: {
