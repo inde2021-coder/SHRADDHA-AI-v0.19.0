@@ -14,7 +14,10 @@
 Set these only in the backend host's secret/environment settings:
 
 - `GATEWAY_TOKEN` — existing app API gateway secret.
-- `EDESY_STREAM_TOKEN` — long random secret for the provider WebSocket.
+- `EDESY_STREAM_TOKEN` — long random secret (32+ characters) for the provider WebSocket.
+- `EDESY_API_KEY` — Edesy provider API key, used only by the server to run the provider preflight.
+- `EDESY_STREAM_URL` — exact public `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN` URL.
+- `PUBLIC_ORIGIN` — the matching HTTPS origin, for example `https://YOUR_BACKEND_HOST`.
 - `OPENAI_API_KEY` — OpenAI project key with GPT-Live access.
 - Optional: `OPENAI_LIVE_MODEL` (default `gpt-live-1.1`), `OPENAI_LIVE_VOICE` (defaults to the Hindi-capable `nira` voice), `SHRADDHA_CALL_INSTRUCTIONS`.
 - `CALL_TRANSCRIPTS_ENABLED=false` by default. If enabled, the assistant asks the caller to press 1 before any transcript is stored; pressing 0 at any time stops storage and purges the transcript accumulated for that call. If the assistant does not clearly issue the consent prompt, transcript capture remains off. No audio is recorded. Enable only after legal notice and retention review.
@@ -27,7 +30,7 @@ Set these only in the backend host's secret/environment settings:
 4. Configure 16 kHz mono L16/PCM streaming (8 kHz is also supported) and the documented JSON metadata first frame. The backend reads `sampleRate` and `mixType` from that frame.
 5. Enable DTMF passthrough for the Media Stream. The per-call transcript consent gate depends on Edesy delivering `{"event":"dtmf","dtmf":"1"}` text frames; without it, transcript saving stays off.
 6. Route the DID to this WebSocket stream and call it from a separate phone.
-7. Run Edesy's `POST /v1/stream-test` preflight against the public WebSocket URL before placing a live call.
+7. In the app's Phone Call Agent page, check readiness and run the authenticated Edesy preflight. It calls Edesy's `POST /v1/stream-test` from the backend; no provider API key is exposed to Android.
 8. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
 
 The stream token is in a query string because the provider connector uses a WebSocket URL. Configure the hosting proxy and access logs to redact query strings for this route. Rotate the token if it may have appeared in logs.
