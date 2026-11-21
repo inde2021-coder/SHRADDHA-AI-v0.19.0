@@ -190,6 +190,68 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.equal(body.expiresInSeconds, 300);
 });
 
+test('target device can revoke active remote-control grants immediately', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Control Requester' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Control Target', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace('http:', 'ws:');
+  const connect = (pair) => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner);
+  const ownerConnected = nextWsMessage(ownerSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(ownerSocket, 'open');
+  await ownerConnected;
+  const memberSocket = connect(member);
+  const memberConnected = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(memberSocket, 'open');
+  await memberConnected;
+
+  memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { remote_control: true } }));
+  const requestPromise = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'control_request'; } catch { return false; }
+  });
+  ownerSocket.send(JSON.stringify({ type: 'control_request', targetDeviceId: member.deviceId, minutes: 5 }));
+  const [requestMessage] = await requestPromise;
+  assert.equal(JSON.parse(requestMessage.toString()).fromDeviceId, owner.deviceId);
+
+  const approvedPromise = nextWsMessage(ownerSocket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'control_result' && msg.approved === true; } catch { return false; }
+  });
+  memberSocket.send(JSON.stringify({ type: 'control_response', requesterDeviceId: owner.deviceId, approved: true, minutes: 5 }));
+  const [approvedMessage] = await approvedPromise;
+  assert.equal(JSON.parse(approvedMessage.toString()).targetDeviceId, member.deviceId);
+
+  const revokedPromise = nextWsMessage(ownerSocket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'control_result' && msg.approved === false && msg.reason.includes('revoked'); } catch { return false; }
+  });
+  memberSocket.send(JSON.stringify({ type: 'control_revoke' }));
+  const [revokedMessage] = await revokedPromise;
+  assert.equal(JSON.parse(revokedMessage.toString()).targetDeviceId, member.deviceId);
+
+  const ownerClosed = once(ownerSocket, 'close');
+  const memberClosed = once(memberSocket, 'close');
+  ownerSocket.close();
+  memberSocket.close();
+  await Promise.all([ownerClosed, memberClosed]);
+  await fetch(`${baseUrl}/api/device/revoke`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}` },
+    body: JSON.stringify({ sessionId: owner.sessionId, deviceId: owner.deviceId, targetDeviceId: owner.deviceId })
+  });
+});
+
 test('connected WebSocket event reports owner/member roles and restores owner role after reconnect', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
