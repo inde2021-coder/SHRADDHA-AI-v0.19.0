@@ -1,41 +1,128 @@
 package `in`.shraddha.ai.biometric
 
-/**
- * Basic interaction challenge only. This is NOT certified presentation-attack detection.
- * A blink/head-turn challenge can be replayed or spoofed and must never be treated as proof
- * of a live human or as an authentication factor by itself.
- */
-class BiometricLivenessGate {
-    private enum class Stage { WAIT_OPEN, WAIT_BLINK, WAIT_TURN, WAIT_RETURN, COMPLETE }
-    private var stage = Stage.WAIT_OPEN
+import kotlin.math.abs
 
-    fun prompt(): String = when (stage) {
-        Stage.WAIT_OPEN -> "Keep one face centered and look at the camera."
-        Stage.WAIT_BLINK -> "Blink naturally once."
-        Stage.WAIT_TURN -> "Turn your head slightly to one side."
-        Stage.WAIT_RETURN -> "Return your head to the camera and look forward."
-        Stage.COMPLETE -> "Basic blink, turn and return challenge completed. This is not certified anti-spoofing."
+/** Active challenge-response heuristic only. This is NOT certified presentation-attack detection. */
+class BiometricLivenessGate(
+    sequence: List<Step> = listOf(
+        listOf(Step.BLINK, Step.TURN_SIDE, Step.TURN_OPPOSITE),
+        listOf(Step.TURN_SIDE, Step.BLINK, Step.TURN_OPPOSITE),
+        listOf(Step.TURN_SIDE, Step.TURN_OPPOSITE, Step.BLINK)
+    ).random(),
+    private val startedAtMs: Long = monotonicNow()
+) {
+    enum class Step { BLINK, TURN_SIDE, TURN_OPPOSITE }
+
+    companion object {
+        private const val MAX_CHALLENGE_MS = 45_000L
+        private const val MAX_CAPTURE_AGE_MS = 8_000L
+        private const val REQUIRED_STABLE_FRAMES = 2
+
+        /** Require the still frame immediately after the live challenge, not later. */
+        fun isCaptureFresh(passedAtMs: Long, nowMs: Long): Boolean =
+            passedAtMs > 0L && nowMs >= passedAtMs && nowMs - passedAtMs <= MAX_CAPTURE_AGE_MS
+
+        private fun monotonicNow(): Long = System.nanoTime() / 1_000_000L
+    }
+
+    private val steps = sequence.toList()
+    private var index = 0
+    private var blinkClosed = false
+    private var firstTurnSign = 0
+    private var stableFrames = 0
+    private var pendingTurnSign = 0
+    private var lastObservedAtMs = startedAtMs
+    private var expired = false
+
+    val isComplete: Boolean get() = index >= steps.size
+    val isExpired: Boolean get() = expired
+    val currentStep: Step? get() = steps.getOrNull(index)
+
+    init {
+        require(steps.size == 3 && steps.toSet() == Step.values().toSet())
+        require(steps.indexOf(Step.TURN_SIDE) < steps.indexOf(Step.TURN_OPPOSITE))
     }
 
     @Synchronized
-    fun observe(faceCount: Int, leftEyeOpen: Float, rightEyeOpen: Float, yawDegrees: Float): Boolean {
-        if (stage == Stage.COMPLETE) return true
-        if (faceCount != 1 || !leftEyeOpen.isFinite() || !rightEyeOpen.isFinite() || !yawDegrees.isFinite()) return false
-        when (stage) {
-            Stage.WAIT_OPEN -> if (leftEyeOpen > 0.65f && rightEyeOpen > 0.65f && kotlin.math.abs(yawDegrees) < 12f) {
-                stage = Stage.WAIT_BLINK
-            }
-            Stage.WAIT_BLINK -> if (leftEyeOpen < 0.25f && rightEyeOpen < 0.25f) {
-                stage = Stage.WAIT_TURN
-            }
-            Stage.WAIT_TURN -> if (kotlin.math.abs(yawDegrees) in 12f..35f) {
-                stage = Stage.WAIT_RETURN
-            }
-            Stage.WAIT_RETURN -> if (kotlin.math.abs(yawDegrees) < 10f && leftEyeOpen > 0.65f && rightEyeOpen > 0.65f) {
-                stage = Stage.COMPLETE
-            }
-            Stage.COMPLETE -> Unit
+    fun observe(faceCount: Int, leftEyeOpen: Float, rightEyeOpen: Float, yawDegrees: Float,
+                nowMs: Long = monotonicNow()): Boolean {
+        if (isComplete) return true
+        if (expired || nowMs < startedAtMs || nowMs < lastObservedAtMs || nowMs - startedAtMs > MAX_CHALLENGE_MS) {
+            expired = true
+            return false
         }
-        return stage == Stage.COMPLETE
+        lastObservedAtMs = nowMs
+        if (faceCount != 1 || !leftEyeOpen.isFinite() || !rightEyeOpen.isFinite() ||
+            leftEyeOpen !in 0f..1f || rightEyeOpen !in 0f..1f || !yawDegrees.isFinite()) {
+            stableFrames = 0
+            pendingTurnSign = 0
+            if (currentStep == Step.BLINK) blinkClosed = false
+            return false
+        }
+        val bothEyesClosed = maxOf(leftEyeOpen, rightEyeOpen) < 0.25f
+        val bothEyesOpen = minOf(leftEyeOpen, rightEyeOpen) > 0.65f
+        val passed = when (currentStep) {
+            Step.BLINK -> {
+                if (bothEyesClosed) {
+                    blinkClosed = true
+                    stableFrames = 0
+                    false
+                } else if (blinkClosed && bothEyesOpen) {
+                    stableFrames++
+                    stableFrames >= REQUIRED_STABLE_FRAMES
+                } else {
+                    stableFrames = 0
+                    false
+                }
+            }
+            Step.TURN_SIDE -> {
+                val sign = if (yawDegrees < 0f) -1 else 1
+                if (abs(yawDegrees) > 18f) {
+                    if (pendingTurnSign == sign) stableFrames++ else {
+                        pendingTurnSign = sign
+                        stableFrames = 1
+                    }
+                    if (stableFrames >= REQUIRED_STABLE_FRAMES) {
+                        firstTurnSign = sign
+                        true
+                    } else false
+                } else {
+                    stableFrames = 0
+                    pendingTurnSign = 0
+                    false
+                }
+            }
+            Step.TURN_OPPOSITE -> {
+                val sign = if (yawDegrees < 0f) -1 else 1
+                val opposite = firstTurnSign != 0 && sign == -firstTurnSign && abs(yawDegrees) > 18f
+                if (opposite) {
+                    if (pendingTurnSign == sign) stableFrames++ else {
+                        pendingTurnSign = sign
+                        stableFrames = 1
+                    }
+                    stableFrames >= REQUIRED_STABLE_FRAMES
+                } else {
+                    stableFrames = 0
+                    pendingTurnSign = 0
+                    false
+                }
+            }
+            null -> true
+        }
+        if (passed) {
+            index++
+            stableFrames = 0
+            pendingTurnSign = 0
+            if (steps.getOrNull(index - 1) == Step.BLINK) blinkClosed = false
+        }
+        return isComplete
+    }
+
+    fun prompt(): String = when {
+        isExpired -> "Live check expired. Restart the check and try again."
+        currentStep == Step.BLINK -> "Live check: blink naturally, then keep both eyes open"
+        currentStep == Step.TURN_SIDE -> "Live check: slowly turn your head to either side and hold"
+        currentStep == Step.TURN_OPPOSITE -> "Live check: slowly turn your head to the opposite side and hold"
+        else -> "Basic live challenge complete. This is not certified anti-spoofing."
     }
 }
