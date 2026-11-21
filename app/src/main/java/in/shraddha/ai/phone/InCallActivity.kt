@@ -27,8 +27,7 @@ class InCallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF080D18.toInt()
-        window.navigationBarColor = 0xFF080D18.toInt()
+        window.decorView.setBackgroundColor(0xFF080D18.toInt())
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
