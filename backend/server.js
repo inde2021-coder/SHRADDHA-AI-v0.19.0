@@ -443,6 +443,7 @@ telephonyWss.on('connection', carrier => {
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   const pendingAudio = [];
   let metadataTimer = setTimeout(() => shutdown(), 10_000);
+  let liveReadyTimer = setTimeout(() => { if (!ready) shutdown(); }, 20_000);
   if (edesyActiveConnections >= Math.max(1, Math.min(50, Number(process.env.EDESY_MAX_CONCURRENT_CALLS) || 8))) {
     carrier.close(1013, 'AI call capacity reached');
     return;
@@ -451,7 +452,8 @@ telephonyWss.on('connection', carrier => {
   const finalize = () => {
     if (!callRecord) return;
     callRecord.endedAt = new Date().toISOString();
-    callRecord.status = 'ended';
+    callRecord.status = ready ? 'ended' : 'failed';
+    callRecord.bridgeStatus = ready ? 'connected' : 'startup_failed';
     const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text).join('\n').slice(0, 24000);
     if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
       callRecord.summaryStatus = 'pending';
@@ -468,6 +470,7 @@ telephonyWss.on('connection', carrier => {
     closed = true;
     edesyActiveConnections = Math.max(0, edesyActiveConnections - 1);
     clearTimeout(metadataTimer);
+    clearTimeout(liveReadyTimer);
     pendingAudio.length = 0;
     finalize();
     if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Carrier call ended');
@@ -502,6 +505,7 @@ telephonyWss.on('connection', carrier => {
     try { event = JSON.parse(raw.toString()); } catch { return; }
     if (event.type === 'session.started') {
       ready = true;
+      clearTimeout(liveReadyTimer);
       while (pendingAudio.length && live.readyState === WebSocket.OPEN && !closed) {
         const queued = pendingAudio.shift();
         const pcm24 = resamplePcm16(queued, 16000, 24000);
