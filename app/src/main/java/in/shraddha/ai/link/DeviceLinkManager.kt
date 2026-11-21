@@ -370,7 +370,7 @@ object DeviceLinkManager {
             done(Result.failure(IllegalStateException("Connect to the paired-device relay before revoking a device.")))
             return
         }
-        if (targetDeviceId.isBlank() || targetDeviceId.length > 64) {
+        if (!Regex("^[a-f0-9]{24}$").matches(targetDeviceId)) {
             done(Result.failure(IllegalArgumentException("Invalid target device ID.")))
             return
         }
