@@ -35,6 +35,17 @@ object DeviceLinkManager {
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
+    /** Reconnects only with a previously paired credential restored from Android Keystore storage. */
+    fun reconnectSaved(done: (Result<PairResult>) -> Unit) {
+        val credentials = runCatching { credentialStore?.load() }.getOrNull()
+        if (credentials == null) {
+            done(Result.failure(IllegalStateException("No valid saved device pairing is available. Pair this device again.")))
+            return
+        }
+        val pair = PairResult("", credentials.sessionId, credentials.deviceId, credentials.token)
+        saveAndConnect(credentials.baseUrl, pair, done)
+    }
+
     fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
         result.mapCatching { body -> PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
             .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
