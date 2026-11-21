@@ -175,6 +175,9 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
       const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(sessionId) || !/^[a-f0-9]{24}$/.test(deviceId)) {
+        return json(res, 400, { error: 'Invalid session or device identifier' });
+      }
       const session = sessions.get(sessionId);
       const caller = session?.devices.get(deviceId);
       const bearer = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
@@ -189,6 +192,9 @@ const server = http.createServer(async (req, res) => {
         for (const peer of session.devices.values()) {
           peer.controlGrants?.delete(id);
           peer.pendingControlRequests?.delete(id);
+          for (const [requestId, pending] of peer.pendingDataShares || []) {
+            if (pending.requesterId === id || pending.targetDeviceId === id) peer.pendingDataShares.delete(requestId);
+          }
           peer.grants?.delete(`${id}:contacts`);
           peer.grants?.delete(`${id}:media`);
           peer.grants?.delete(`${id}:documents`);
