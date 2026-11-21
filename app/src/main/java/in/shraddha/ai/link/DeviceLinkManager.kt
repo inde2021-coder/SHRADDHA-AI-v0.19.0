@@ -128,7 +128,8 @@ object DeviceLinkManager {
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val rejectedCredential = response?.code == 401 || response?.code == 403
-                if (socket === webSocket) {
+                val wasActive = socket === webSocket
+                if (wasActive) {
                     if (rejectedCredential) {
                         // Only the active socket may invalidate the currently saved pairing.
                         // A late 401 from a superseded socket must not erase newer credentials.
@@ -139,8 +140,8 @@ object DeviceLinkManager {
                         if (rejectedCredential) "Pairing expired or revoked. Pair this device again."
                         else "Relay error: ${t.message ?: "connection failed"}"
                     )
+                    if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
                 }
-                if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 if (socket === webSocket) {
