@@ -180,10 +180,9 @@ class WorkAgentActivity : AppCompatActivity() {
             ): Boolean {
                 fileChooserCallback?.onReceiveValue(null)
                 fileChooserCallback = filePathCallback
-                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                val picker = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
                 }
                 return try {
                     startActivityForResult(picker, fileRequestCode)
@@ -361,7 +360,9 @@ class WorkAgentActivity : AppCompatActivity() {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
             if (spoken.isNotBlank()) handleVoiceCommand(spoken)
         } else if (requestCode == fileRequestCode) {
-            val result = if (resultCode == RESULT_OK) data?.data?.let { arrayOf(it) } else null
+            val result = if (resultCode == RESULT_OK && data != null) {
+                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+            } else null
             fileChooserCallback?.onReceiveValue(result)
             fileChooserCallback = null
             pageStatus.text = if (result != null) "File website के upload field को दिया गया। Form अपने-आप submit नहीं हुआ।" else "File selection रद्द।"
@@ -547,6 +548,8 @@ class WorkAgentActivity : AppCompatActivity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        fileChooserCallback?.onReceiveValue(null)
+        fileChooserCallback = null
         if (::browser.isInitialized) {
             browser.stopLoading()
             browser.loadUrl("about:blank")
