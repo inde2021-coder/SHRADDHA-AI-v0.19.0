@@ -29,5 +29,5 @@ test('call history rejects tampered ciphertext and malformed envelope fields', (
 test('call history rejects invalid identifiers, keys and oversized records', () => {
   assert.throws(() => encryptCallHistoryRecord({ id: '../unsafe' }, randomBytes(32)));
   assert.throws(() => encryptCallHistoryRecord({ id: 'valid' }, Buffer.alloc(16)));
-  assert.throws(() => encryptCallHistoryRecord({ id: 'large', transcript: 'x'.repeat(70_000) }, randomBytes(32)));
+  assert.throws(() => encryptCallHistoryRecord({ id: 'large', transcript: 'x'.repeat(170_000) }, randomBytes(32)));
 });
