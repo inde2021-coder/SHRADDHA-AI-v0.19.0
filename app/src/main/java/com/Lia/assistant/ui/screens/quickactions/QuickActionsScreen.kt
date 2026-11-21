@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Icon
@@ -118,7 +118,7 @@ fun QuickActionsScreen(
         QuickActionTile(
             title = "Send Message",
             phrase = "\"Rahul ko message karo\"",
-            icon = Icons.Default.Message,
+            icon = Icons.AutoMirrored.Filled.Message,
             onClick = { navController.navigate("voice") }
         ),
         QuickActionTile(
