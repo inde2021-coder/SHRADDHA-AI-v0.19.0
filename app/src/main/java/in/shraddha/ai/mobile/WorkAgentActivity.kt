@@ -1,6 +1,11 @@
 package `in`.shraddha.ai.mobile
 
 import android.content.Intent
+import android.app.DownloadManager
+import android.os.Environment
+import android.webkit.ValueCallback
+import android.webkit.CookieManager
+import android.webkit.URLUtil
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -50,6 +55,8 @@ class WorkAgentActivity : AppCompatActivity() {
     private var currentUrl = ""
     private var busy = false
     private val voiceRequestCode = 7412
+    private val fileRequestCode = 7413
+    private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,7 +172,32 @@ class WorkAgentActivity : AppCompatActivity() {
                 pageStatus.text = "Android Safe Browsing ने संभावित खतरनाक पेज रोका।"
             }
         }
-        browser.webChromeClient = WebChromeClient()
+        browser.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileChooserCallback?.onReceiveValue(null)
+                fileChooserCallback = filePathCallback
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+                }
+                return try {
+                    startActivityForResult(picker, fileRequestCode)
+                    true
+                } catch (_: Exception) {
+                    fileChooserCallback?.onReceiveValue(null)
+                    fileChooserCallback = null
+                    false
+                }
+            }
+        }
+        browser.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            queueApprovedDownload(url, userAgent, contentDisposition, mimeType)
+        }
         browserPanel.addView(browser, LinearLayout.LayoutParams(-1, 0, 1f))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(button("←") { if (browser.canGoBack()) browser.goBack() }, LinearLayout.LayoutParams(0, dp(44), 1f))
@@ -327,9 +359,12 @@ class WorkAgentActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == voiceRequestCode && resultCode == RESULT_OK) {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
-            if (spoken.isNotBlank()) {
-                handleVoiceCommand(spoken)
-            }
+            if (spoken.isNotBlank()) handleVoiceCommand(spoken)
+        } else if (requestCode == fileRequestCode) {
+            val result = if (resultCode == RESULT_OK) data?.data?.let { arrayOf(it) } else null
+            fileChooserCallback?.onReceiveValue(result)
+            fileChooserCallback = null
+            pageStatus.text = if (result != null) "File website के upload field को दिया गया। Form अपने-आप submit नहीं हुआ।" else "File selection रद्द।"
         }
     }
 
@@ -350,12 +385,6 @@ class WorkAgentActivity : AppCompatActivity() {
             else -> null
         }
         if (intent == null) { input.setText(command); sendMessage(); return }
-        if (intent == "upload" || intent == "download") {
-            input.setText(command)
-            addMessage("assistant", "Upload/Download के लिए file picker या सुरक्षित download destination की पुष्टि आवश्यक है। यह काम अभी स्वतः execute नहीं होगा; App Operator में review के लिए भेज रही हूँ।")
-            handoffToOperator()
-            return
-        }
         if (currentUrl.isBlank() || browserPanel.visibility != View.VISIBLE) {
             input.setText(command)
             addMessage("assistant", "पहले Browser tab में संबंधित वेबसाइट खोलें। फिर यही voice command दें; cross-app काम App Operator में review होगा।")
@@ -370,6 +399,8 @@ class WorkAgentActivity : AppCompatActivity() {
             "save" -> listOf("save", "store", "submit", "सहेज", "सेव", "जमा")
             "delete" -> listOf("delete", "remove", "erase", "trash", "हट", "मिटा", "डिलीट")
             "update" -> listOf("update", "edit", "change", "save", "अपडेट", "बदल", "संशोधन")
+            "upload" -> listOf("choose file", "browse", "select file", "attach file", "फ़ाइल चुनें", "फाइल चुनें", "ब्राउज़")
+            "download" -> listOf("download", "डाउनलोड")
             else -> listOf("send", "submit", "post", "message", "भेज", "सेंड", "जमा")
         }
         val verbsJson = org.json.JSONArray(verbs).toString()
@@ -402,6 +433,35 @@ class WorkAgentActivity : AppCompatActivity() {
                     }.setNegativeButton("रद्द", null).show()
             }
         }
+    }
+
+    private fun queueApprovedDownload(url: String, userAgent: String, contentDisposition: String, mimeType: String) {
+        val uri = runCatching { Uri.parse(url) }.getOrNull()
+        if (uri == null || !(uri.scheme.equals("https", true) || uri.scheme.equals("http", true))) {
+            pageStatus.text = "सुरक्षा कारण से केवल HTTP/HTTPS download स्वीकार है।"; return
+        }
+        val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            .replace(Regex("[^A-Za-z0-9._-]"), "_").take(120).ifBlank { "shraddha-download" }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Download की अनुमति")
+            .setMessage("वेबसाइट: ${uri.host}\nफ़ाइल: $fileName\nस्थान: Downloads\n\nक्या यह फ़ाइल डाउनलोड करें?")
+            .setNegativeButton("रद्द", null)
+            .setPositiveButton("हाँ, डाउनलोड करें") { _, _ ->
+                runCatching {
+                    val request = DownloadManager.Request(uri)
+                        .setTitle(fileName)
+                        .setDescription("Shraddha AI • ${uri.host}")
+                        .setMimeType(mimeType)
+                        .addRequestHeader("User-Agent", userAgent)
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let { request.addRequestHeader("Cookie", it) }
+                    val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                    val id = manager.enqueue(request)
+                    pageStatus.text = "Download queue में जोड़ा गया • ID $id"
+                    addMessage("assistant", "$fileName डाउनलोड queue में जोड़ी गई। Android notification में progress देखें।")
+                }.onFailure { pageStatus.text = "Download शुरू नहीं हुआ: ${it.message}" }
+            }.show()
     }
 
     private fun sendMessage() {
