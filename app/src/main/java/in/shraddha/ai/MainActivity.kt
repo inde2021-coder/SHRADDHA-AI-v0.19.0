@@ -2267,7 +2267,7 @@ class MainActivity : AppCompatActivity() {
         // The receiving phone independently decides whether to accept remote control.
         if (target.isBlank()) { status.text = "कोई paired target device online नहीं मिला।"; return }
         val sent = DeviceLinkManager.sendAction(target, action)
-        status.text = if (sent) "Remote action sent to $target" else "Relay disconnected; pair both phones first."
+        status.text = if (sent) "Encrypted remote action sent to $target" else "Relay disconnected or peer fingerprint is not mutually verified."
     }
 
     private fun requestScreenShare() {
