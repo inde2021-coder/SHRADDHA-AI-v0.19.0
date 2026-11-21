@@ -2483,7 +2483,7 @@ class MainActivity : AppCompatActivity() {
                         peerIds.clear(); peerIds.addAll(ids)
                         peerNames.clear(); peerOnline.clear()
                         for (i in 0 until ids.size) {
-                            val peer = peers?.optJSONObject(i) ?: continue
+                            val peer = peers.optJSONObject(i) ?: continue
                             peerNames[ids[i]] = peer.optString("name", "Device")
                             peerOnline[ids[i]] = peer.optBoolean("online")
                         }
