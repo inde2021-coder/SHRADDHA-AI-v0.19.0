@@ -106,6 +106,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Join & Connect", command=self.join_and_connect).pack(side="left")
         ttk.Button(buttons, text="Connect Saved PC", command=self.connect_saved).pack(side="left", padx=6)
         ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
+        ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
@@ -347,6 +348,41 @@ class PcCompanionApp:
                 self.events.put(("status", f"Screen capture paused: {str(exc)[:120]}"))
                 self.screen_event.clear()
             time.sleep(0.25)
+
+    def revoke_pairing(self):
+        device_id = str(self.config.get("deviceId", ""))
+        session_id = str(self.config.get("sessionId", ""))
+        token = self.device_token or self._token_for_saved_device()
+        try:
+            base = _https_base(self.config.get("baseUrl", self.base_var.get()))
+            if not device_id or not session_id or not token:
+                raise ValueError("No active saved PC pairing is available to revoke.")
+            payload = json.dumps({
+                "sessionId": session_id, "deviceId": device_id,
+                "targetDeviceId": device_id
+            }).encode("utf-8")
+            request = urllib.request.Request(
+                base + "/api/device/revoke", data=payload, method="POST",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+            )
+            with urllib.request.urlopen(request, timeout=20) as response:
+                result = json.loads(response.read(16 * 1024).decode("utf-8"))
+            if result.get("ok") is not True:
+                raise RuntimeError("Relay did not confirm revocation.")
+            self.disconnect()
+            try:
+                keyring.delete_password(SERVICE_NAME, device_id)
+            except Exception:
+                pass
+            self.config = {"baseUrl": base, "deviceName": self.name_var.get().strip()[:48]}
+            self._save_config()
+            self.device_token = None
+            self.status_var.set("This PC pairing was revoked on the relay and its saved token was deleted.")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read(4096).decode("utf-8", errors="replace")
+            self.status_var.set(f"Pairing revoke failed ({exc.code}): {detail[:160]}")
+        except Exception as exc:
+            self.status_var.set(f"Pairing revoke failed: {str(exc)[:180]}")
 
     def disconnect(self, emergency=False):
         self.screen_event.clear()
