@@ -883,6 +883,7 @@ class MainActivity : AppCompatActivity() {
                                 append(call.optString("startedAt", "Unknown time"))
                                 append(" • ").append(call.optString("caller", "Unknown caller"))
                                 append(" • ").append(call.optString("status", "unknown"))
+                                append(" • Transcript: ").append(if (call.optBoolean("transcriptConsent")) "consented" else "not saved")
                                 if (call.optString("summaryStatus") == "ready") append("\nSummary: ").append(call.optString("summary").take(240))
                                 append("\n")
                             }
@@ -909,6 +910,7 @@ class MainActivity : AppCompatActivity() {
                             append(call.optString("startedAt", "Unknown time"))
                             append(" • ").append(call.optString("caller", "Unknown caller"))
                             append(" • ").append(call.optString("status", "unknown"))
+                            append(" • Transcript: ").append(if (call.optBoolean("transcriptConsent")) "consented" else "not saved")
                             if (call.optString("summaryStatus") == "ready") append("\nSummary: ").append(call.optString("summary").take(240))
                             append("\n")
                         }
