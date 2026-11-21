@@ -25,6 +25,7 @@
         </intent>
     </queries>
     <application
+        android:name="com.Lia.assistant.LiaApplication"
         android:allowBackup="false"
         android:label="Shraddha AI"
         android:icon="@drawable/ic_shraddha"
@@ -36,6 +37,7 @@
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
+        <activity android:name="com.Lia.assistant.MainActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -58,6 +60,10 @@
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/method" />
         </service>
+        <service android:name="com.Lia.assistant.voice.VoiceForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
         <service android:name=".overlay.ShraddhaOverlayService" android:exported="false" />
         <service android:name=".screen.ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".vision.RemoteCameraService" android:exported="false" android:foregroundServiceType="camera" />
