@@ -1044,7 +1044,8 @@ class MainActivity : AppCompatActivity() {
                     .apply()
                 status.text = "Active remote-control approval revoked on this phone."
             })
-            addView(actionButton("Revoke Selected Paired Device", "यह device relay session से हटेगा; owner permission जरूरी है") {
+            addView(actionButton("Revoke Selected Paired Device", "यह device relay session से हटेगा; केवल session owner दूसरे device को revoke कर सकता है") {
+                if (!isSessionOwner) { status.text = "दूसरे paired device को केवल session owner revoke कर सकता है। आप अपना pairing revoke कर सकते हैं।"; return@actionButton }
                 val target = targetDevice.text.toString().trim()
                 if (target.isBlank()) { status.text = "पहले paired device चुनें।"; return@actionButton }
                 androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
