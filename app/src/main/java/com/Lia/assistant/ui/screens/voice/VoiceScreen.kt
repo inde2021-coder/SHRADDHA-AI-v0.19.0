@@ -248,10 +248,11 @@ fun VoiceScreen(
                             color = colors.error
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        NovaButton(
-                            text = "Retry connection",
-                            onClick = { VoiceSessionManager.retry(context) },
-                            type = NovaButtonType.PRIMARY
+                        Text(
+                            text = "Tap the microphone control below to retry.",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center
                         )
                     }
 
