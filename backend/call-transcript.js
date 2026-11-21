@@ -20,3 +20,17 @@ export function clearCallTranscript(callRecord) {
   callRecord.transcript = [];
   callRecord.transcriptChars = 0;
 }
+
+/** Fail-closed detection of an explicit press-1 transcript consent prompt in English or Hindi. */
+export function hasExplicitTranscriptConsentPrompt(text) {
+  if (typeof text !== 'string') return false;
+  const prompt = text.slice(-800).toLowerCase();
+  const asksForPressOne = prompt.includes('press 1') || prompt.includes('press one') ||
+    prompt.includes('दबाएं 1') || prompt.includes('दबाएँ 1') ||
+    prompt.includes('एक दबाएं') || prompt.includes('एक दबाएँ') || prompt.includes('प्रेस 1');
+  const mentionsTranscript = prompt.includes('transcript') || prompt.includes('प्रतिलिपि') || prompt.includes('लिखित');
+  const mentionsConsent = prompt.includes('consent') || prompt.includes('agree') ||
+    prompt.includes('सहमति') || prompt.includes('सहमत') ||
+    prompt.includes('अनुमति') || prompt.includes('मंजूरी');
+  return asksForPressOne && mentionsTranscript && mentionsConsent;
+}
