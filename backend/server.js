@@ -17,7 +17,7 @@ let edesyActiveConnections = 0;
 const edesyPreflightAttempts = new Map();
 const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
 const edesyPreflightReady = () => {
-  if (!edesyConfigured() || typeof process.env.EDESY_API_KEY !== 'string' || process.env.EDESY_API_KEY.length < 20) return false;
+  if (!edesyConfigured() || typeof process.env.EDESY_API_KEY !== 'string' || !process.env.EDESY_API_KEY.startsWith('sk_') || process.env.EDESY_API_KEY.length < 20) return false;
   try {
     const streamUrl = new URL(process.env.EDESY_STREAM_URL);
     const publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
