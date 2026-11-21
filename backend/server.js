@@ -442,6 +442,8 @@ const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 102
 telephonyWss.on('connection', carrier => {
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   let callSampleRate = 16000;
+  let liveFinalized = false;
+  let liveFinalizationTimer = null;
   const pendingAudio = [];
   let metadataTimer = null;
   let liveReadyTimer = null;
@@ -474,7 +476,21 @@ telephonyWss.on('connection', carrier => {
     clearTimeout(liveReadyTimer);
     pendingAudio.length = 0;
     finalize();
-    if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Carrier call ended');
+    if (live && live.readyState === WebSocket.OPEN && !liveFinalized) {
+      if (callRecord) callRecord.finalizationStatus = 'pending';
+      try {
+        live.send(JSON.stringify({ type: 'session.close' }));
+        liveFinalizationTimer = setTimeout(() => {
+          if (callRecord && callRecord.finalizationStatus === 'pending') callRecord.finalizationStatus = 'unconfirmed';
+          if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Call finalization timeout');
+        }, 4_000);
+      } catch {
+        if (callRecord) callRecord.finalizationStatus = 'unconfirmed';
+        live.close();
+      }
+    } else if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) {
+      live.close(1000, 'Carrier call ended');
+    }
     if (carrier.readyState === WebSocket.OPEN || carrier.readyState === WebSocket.CONNECTING) carrier.close(1000, 'Call bridge closed');
   };
   metadataTimer = setTimeout(() => shutdown(), 10_000);
@@ -503,9 +519,26 @@ telephonyWss.on('connection', carrier => {
     }));
   });
   live.on('message', raw => {
-    if (closed) return;
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
+    if (event.type === 'session.usage.updated' && callRecord) {
+      const seconds = Number(event.usage?.seconds);
+      if (Number.isFinite(seconds) && seconds >= 0) callRecord.usageSeconds = seconds;
+    }
+    if (event.type === 'session.closed') {
+      liveFinalized = true;
+      if (callRecord) {
+        callRecord.finalizationStatus = 'confirmed';
+        const seconds = Number(event.usage?.seconds);
+        if (Number.isFinite(seconds) && seconds >= 0) callRecord.finalUsageSeconds = seconds;
+        callRecord.finalReason = String(event.reason || '').slice(0, 80);
+      }
+      clearTimeout(liveFinalizationTimer);
+      if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Live session finalized');
+      if (!closed) shutdown();
+      return;
+    }
+    if (closed) return;
     if (event.type === 'session.started') {
       ready = true;
       clearTimeout(liveReadyTimer);
