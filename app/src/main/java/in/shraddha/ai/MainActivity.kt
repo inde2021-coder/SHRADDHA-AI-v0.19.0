@@ -1065,7 +1065,8 @@ class MainActivity : AppCompatActivity() {
                     .remove("remote_control_grant_peer")
                     .remove("remote_control_grant_expires_at")
                     .apply()
-                status.text = "Active remote-control approval revoked on this phone."
+                val relayRevoked = DeviceLinkManager.revokeAllRemoteControlGrants()
+                status.text = if (relayRevoked) "All remote-control grants were revoked on the relay." else "Local approval cleared. Relay is offline; any server grant expires within its short lease."
             })
             addView(actionButton("Revoke Selected Paired Device", "यह device relay session से हटेगा; केवल session owner दूसरे device को revoke कर सकता है") {
                 if (!isSessionOwner) { status.text = "दूसरे paired device को केवल session owner revoke कर सकता है। आप अपना pairing revoke कर सकते हैं।"; return@actionButton }
