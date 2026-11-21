@@ -1,1 +1,2 @@
 Synchronize source PR to trigger master consolidation and integrated test workflow.
+Retry consolidated integration workflow after enabling PR trigger.
