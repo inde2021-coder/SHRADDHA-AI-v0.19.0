@@ -35,7 +35,7 @@ object TelephonyGatewayStore {
 
     fun clear(context: Context) {
         val store = EncryptedFeatureStore(context.applicationContext)
-        store.remove(BASE_URL)
-        store.remove(TOKEN)
+        check(store.remove(BASE_URL)) { "Could not clear the saved backend URL." }
+        check(store.remove(TOKEN)) { "Could not clear the saved gateway token." }
     }
 }
