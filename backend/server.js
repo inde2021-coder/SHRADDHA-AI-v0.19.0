@@ -442,7 +442,6 @@ const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 102
 telephonyWss.on('connection', carrier => {
   carrier.on('error', () => {});
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
-  let greetingRequested = false;
   let callSampleRate = 16000;
   let liveFinalized = false;
   let liveFinalizationTimer = null;
@@ -550,10 +549,6 @@ telephonyWss.on('connection', carrier => {
     if (event.type === 'session.started') {
       ready = true;
       clearTimeout(liveReadyTimer);
-      if (!greetingRequested && live.readyState === WebSocket.OPEN) {
-        greetingRequested = true;
-        live.send(JSON.stringify({ type: 'response.create' }));
-      }
       while (pendingAudio.length && live.readyState === WebSocket.OPEN && !closed) {
         const queued = pendingAudio.shift();
         const pcm24 = resamplePcm16(queued, callSampleRate, 24000);
