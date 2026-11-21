@@ -545,7 +545,7 @@ telephonyWss.on('connection', (carrier, request) => {
     callRecord.status = ready ? 'ended' : 'failed';
     callRecord.bridgeStatus = ready ? 'connected' : 'startup_failed';
     callRecord.consentPromptBuffer = '';
-    const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text).join('\n').slice(0, 24000);
+    const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : `${callAgentName}: `) + item.text).join('\n').slice(0, 24000);
     if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
       callRecord.summaryStatus = 'pending';
       askProvider('openai', 'Summarize this phone call in Hindi. Return: caller intent, key details, commitments, and clear next actions. Do not invent facts.\n\n' + transcriptText)
@@ -686,7 +686,7 @@ telephonyWss.on('connection', (carrier, request) => {
       }
       if (callRecord.transcriptConsent) {
         if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
-        if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
+        if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'assistant', text: event.delta, at: new Date().toISOString() });
         if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
       }
     }
@@ -742,6 +742,7 @@ telephonyWss.on('connection', (carrier, request) => {
         callRecord = {
           id: callId,
           direction: message.direction || 'inbound',
+          agentName: callAgentName,
           caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller',
           startedAt: new Date().toISOString(),
           endedAt: null,
