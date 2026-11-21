@@ -9,6 +9,7 @@ import android.graphics.Shader
 import android.view.View
 import android.app.Activity
 import android.content.Intent
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -88,6 +89,13 @@ class MainActivity : AppCompatActivity() {
     private val dataPermissionSwitches = linkedMapOf<String, Switch>()
     private var pendingShareTarget: String? = null
     private var pendingShareCategory: String? = null
+
+    override fun onResume() {
+        super.onResume()
+        if (::remoteConsent.isInitialized && !isShraddhaAccessibilityEnabled() && remoteConsent.isChecked) {
+            remoteConsent.isChecked = false
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -784,10 +792,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isShraddhaAccessibilityEnabled(): Boolean {
+        val expected = ComponentName(this, ShraddhaAccessibilityService::class.java).flattenToString()
+        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+
     private fun publishDataPermissions() {
         val json = JSONObject()
         dataPermissionSwitches.forEach { (key, toggle) -> json.put(key, toggle.isChecked) }
-        json.put("remote_control", remoteConsent.isChecked)
+        json.put("remote_control", remoteConsent.isChecked && isShraddhaAccessibilityEnabled())
         val sent = DeviceLinkManager.updateSharePermissions(json)
         status.text = if (sent) "आपकी custom data permissions paired devices पर publish हुईं।" else "पहले relay से connect करें; permissions इस फोन पर सुरक्षित save हैं।"
     }
@@ -814,7 +828,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleIncomingControlRequest(msg: JSONObject) {
         val from = msg.optString("fromDeviceId")
         val requester = msg.optString("requesterName", "Paired device")
-        val allowed = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
+        val allowed = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false) && isShraddhaAccessibilityEnabled()
         runOnUiThread {
             if (!allowed) {
                 DeviceLinkManager.respondRemoteControl(from, false)
@@ -1046,9 +1060,14 @@ class MainActivity : AppCompatActivity() {
             remoteConsent = Switch(this@MainActivity).apply {
                 text = "इस फोन को paired device से control करने दें"
                 setTextColor(-1)
-                isChecked = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
+                isChecked = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false) && isShraddhaAccessibilityEnabled()
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, checked ->
+                    if (checked && !isShraddhaAccessibilityEnabled()) {
+                        Toast.makeText(this@MainActivity, "पहले Accessibility App Control चालू करें।", Toast.LENGTH_LONG).show()
+                        isChecked = false
+                        return@setOnCheckedChangeListener
+                    }
                     getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putBoolean("remote_control_consent", checked).apply()
                     if (!checked) {
                         getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
