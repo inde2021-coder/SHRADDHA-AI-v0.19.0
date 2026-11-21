@@ -1,5 +1,6 @@
 package `in`.shraddha.ai.link
 
+import android.content.Context
 import android.util.Base64
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -12,6 +13,15 @@ import java.util.concurrent.TimeUnit
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
     private val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
+    @Volatile private var credentialStore: DeviceCredentialStore? = null
+
+    /** Must be called once from Application.onCreate before pairing is used. */
+    fun initialize(context: Context) {
+        credentialStore = DeviceCredentialStore(context.applicationContext)
+    }
+
+    /** True when a Keystore-encrypted pairing can be restored by an explicit reconnect flow. */
+    fun hasSavedPairing(): Boolean = runCatching { credentialStore?.load() != null }.getOrDefault(false)
     @Volatile private var socket: WebSocket? = null
     @Volatile var sessionId: String? = null; private set
     @Volatile var deviceId: String? = null; private set
@@ -43,6 +53,16 @@ object DeviceLinkManager {
         }
         if (pair.sessionId.isBlank() || pair.deviceId.isBlank() || pair.token.length < 24) {
             done(Result.failure(IllegalArgumentException("Relay returned an invalid session or device credential.")))
+            return
+        }
+        val store = credentialStore
+        if (store == null) {
+            done(Result.failure(IllegalStateException("DeviceLinkManager must be initialized by the Application before pairing.")))
+            return
+        }
+        try { store.save(pair.sessionId, pair.deviceId, pair.token, parsed.toString()) }
+        catch (error: Exception) {
+            done(Result.failure(IllegalStateException("Could not securely save device credentials: ${error.message ?: "Keystore error"}")))
             return
         }
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
@@ -233,5 +253,5 @@ object DeviceLinkManager {
         System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
         return socket?.send(ByteString.of(*packet)) == true
     }
-    fun disconnect() { socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
+    fun disconnect() { socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null; credentialStore?.clear() }
 }
