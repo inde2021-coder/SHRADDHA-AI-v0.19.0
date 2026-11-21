@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -46,8 +45,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
-import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.components.NovaButton
@@ -72,17 +72,6 @@ fun VoiceScreen(
     val colors = LocalNovaColors.current
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var hasKey by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
-
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasKey = VoiceGatewaySettings.isConfigured(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
     val state by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
@@ -124,10 +113,23 @@ fun VoiceScreen(
         }
     }
 
-    LaunchedEffect(hasRecordAudioPermission, hasKey) {
-        if (!hasRecordAudioPermission) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        } else if (hasKey && !VoiceSessionManager.isActive.value) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasRecordAudioPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                hasNotificationPermission = Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val hasKey = ApiKeyStore.hasKey(context)
+
+    LaunchedEffect(hasRecordAudioPermission, hasNotificationPermission, hasKey) {
+        val userWantsVoice = NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
+        if (hasRecordAudioPermission && hasNotificationPermission && hasKey && userWantsVoice && !VoiceSessionManager.isActive.value) {
             VoiceForegroundService.start(context)
         }
     }
@@ -186,7 +188,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Secure Voice Backend Required",
+                        text = "API Key Required",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
                         fontSize = 20.sp,
@@ -194,7 +196,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     NovaButton(
-                        text = "Configure Secure Backend",
+                        text = "Open Settings",
                         onClick = { navController.navigate("settings") },
                         type = NovaButtonType.PRIMARY
                     )
