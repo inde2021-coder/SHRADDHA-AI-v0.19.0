@@ -101,6 +101,8 @@ test('Edesy call bridge readiness is private and reports missing external provis
   assert.equal(body.capabilities.inboundWebSocketAudio, true);
   assert.equal(body.capabilities.liveBidirectionalAiAudio, true);
   assert.equal(body.capabilities.persistentCallRecording, false);
+  assert.equal(body.callHistory.durable, false);
+  assert.ok(body.callHistory.missing.includes('CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)'));
   assert.ok(body.required.includes('EDESY_STREAM_TOKEN'));
   assert.ok(body.required.includes('OPENAI_API_KEY'));
   assert.ok(body.missing.includes('EDESY_API_KEY (sk_... Voice API key)'));
@@ -148,7 +150,9 @@ test('Edesy call history requires gateway authentication', async () => {
     headers: { authorization: `Bearer ${TOKEN}` }
   });
   assert.equal(allowed.status, 200);
-  assert.deepEqual((await allowed.json()).calls, []);
+  const body = await allowed.json();
+  assert.deepEqual(body.calls, []);
+  assert.equal(body.durable, false);
 });
 
 test('Visual Lens validates prompt and base64 before provider invocation', async () => {
