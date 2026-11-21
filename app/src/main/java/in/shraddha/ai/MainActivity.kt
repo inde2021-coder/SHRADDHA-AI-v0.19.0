@@ -863,6 +863,9 @@ class MainActivity : AppCompatActivity() {
                         val caps = body.optJSONObject("capabilities")
                         bridgeStatus.text = buildString {
                             append(if (configured) "Server secrets configured." else "Server secrets missing.")
+                            val callName = body.optString("agentName", "Shraddha AI")
+                            append("\nInbound call agent name: ").append(callName)
+                            if (!callName.equals(assistantDisplayName, ignoreCase = true)) append(" (update SHRADDHA_CALL_AGENT_NAME to match app name)")
                             val missing = body.optJSONArray("missing")
                             if (missing != null && missing.length() > 0) {
                                 append("\nMissing: ")
