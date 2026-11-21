@@ -540,6 +540,9 @@ telephonyWss.on('connection', (carrier, request) => {
   const transcriptCaptureEnabled = !isPreflight && process.env.CALL_TRANSCRIPTS_ENABLED === 'true';
   const callAgentName = String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI')
     .replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
+  const callInstructions = process.env.SHRADDHA_CALL_INSTRUCTIONS
+    ? String(process.env.SHRADDHA_CALL_INSTRUCTIONS).replace(/Shraddha AI/gi, callAgentName).slice(0, 4000)
+    : `You are ${callAgentName}, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.`;
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   let callSampleRate = 16000;
   let liveFinalized = false;
@@ -630,7 +633,7 @@ telephonyWss.on('connection', (carrier, request) => {
     type: 'session.start',
     session: {
       model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1',
-      instructions: (process.env.SHRADDHA_CALL_INSTRUCTIONS || `You are ${callAgentName}, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.`) +
+      instructions: callInstructions +
         (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
           ? ' If text transcript saving is enabled, after disclosing that you are an AI, clearly explain that a text transcript may be saved only if the caller consents. Ask the caller to press 1 to consent; if they do not press 1, do not save any transcript. Tell them they can press 0 at any time to stop and discard the transcript. Never say that audio is recorded; audio is not recorded.'
           : ' No call transcript is saved. Do not imply that the call is recorded.'),
