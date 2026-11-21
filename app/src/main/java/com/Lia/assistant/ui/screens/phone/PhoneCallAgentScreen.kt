@@ -146,7 +146,8 @@ fun PhoneCallAgentScreen(navController: NavController) {
                                 append("\nEncrypted durable call history: ").append(if (history?.optBoolean("durable") == true) "READY" else "not configured")
                                 val historyMissing = history?.optJSONArray("missing")
                                 if (historyMissing != null && historyMissing.length() > 0) append("\nCall-history secrets missing: ").append((0 until historyMissing.length()).joinToString(", ") { historyMissing.optString(it) })
-                                if (!history?.optString("error").isNullOrBlank()) append("\nCall-history error: ").append(history?.optString("error"))
+                                val historyError = history.optString("error")
+                                if (historyError.isNotBlank()) append("\nCall-history error: ").append(historyError)
                                 if (missingText.isNotEmpty()) append("\nMissing provider config: ").append(missingText.joinToString(", "))
                                 append("\n").append(body.optString("note"))
                             }
