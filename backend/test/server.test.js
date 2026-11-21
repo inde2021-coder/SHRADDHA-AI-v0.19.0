@@ -96,6 +96,7 @@ test('Edesy call bridge readiness is private and reports missing external provis
   assert.equal(response.status, 200);
   assert.equal(body.provider, 'edesy');
   assert.equal(body.configured, false);
+  assert.equal(body.preflightReady, false);
   assert.equal(body.capabilities.inboundWebSocketAudio, false);
   assert.equal(body.capabilities.liveBidirectionalAiAudio, false);
   assert.equal(body.capabilities.persistentCallRecording, false);
