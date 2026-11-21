@@ -363,13 +363,45 @@ object DeviceLinkManager {
 
     /** Revokes this device's local pairing and, for an owner device, the entire relay session. */
     fun revokeCurrentPairing(done: (Result<Boolean>) -> Unit) {
-        val did = deviceId
-        if (did.isNullOrBlank()) {
-            disconnect()
-            done(Result.success(true))
+        val activeId = deviceId
+        if (!activeId.isNullOrBlank()) {
+            revokeRemoteDevice(activeId, done)
             return
         }
-        revokeRemoteDevice(did, done)
+        // A disconnected phone can still revoke its server-side token using the
+        // Keystore-protected saved credential. Never report remote revocation when
+        // only a local credential deletion was possible.
+        val saved = runCatching { credentialStore?.load() }.getOrNull()
+        if (saved == null) {
+            done(Result.failure(IllegalStateException("No saved pairing is available. The relay cannot be contacted to confirm revocation.")))
+            return
+        }
+        val endpoint = secureApiUrl(saved.baseUrl, "/api/device/revoke")
+        if (endpoint == null) {
+            done(Result.failure(IllegalArgumentException("Saved relay URL is not a valid HTTPS endpoint.")))
+            return
+        }
+        val body = JSONObject().put("sessionId", saved.sessionId)
+            .put("deviceId", saved.deviceId).put("targetDeviceId", saved.deviceId)
+        val request = Request.Builder().url(endpoint)
+            .header("Authorization", "Bearer ${saved.token}")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) {
+                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    } else {
+                        val revoked = runCatching { JSONObject(raw).optBoolean("ok") }.getOrDefault(false)
+                        if (revoked) disconnect()
+                        done(Result.success(revoked))
+                    }
+                }
+            }
+        })
     }
 
     fun disconnect() { socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null; credentialStore?.clear() }
