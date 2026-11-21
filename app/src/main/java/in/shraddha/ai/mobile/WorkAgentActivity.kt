@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.speech.RecognizerIntent
 import android.view.Gravity
 import android.view.View
 import android.webkit.SafeBrowsingResponse
@@ -48,6 +49,7 @@ class WorkAgentActivity : AppCompatActivity() {
     private var pageText = ""
     private var currentUrl = ""
     private var busy = false
+    private val voiceRequestCode = 7412
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,6 +107,7 @@ class WorkAgentActivity : AppCompatActivity() {
         }
         chatPanel.addView(input)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(button("🎙️ Voice") { captureVoice() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         row.addView(button("Send") { sendMessage() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         row.addView(button("काम App में करें") { handoffToOperator() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         chatPanel.addView(row)
@@ -201,6 +204,31 @@ class WorkAgentActivity : AppCompatActivity() {
                 .getOrDefault("").take(12_000)
             pageStatus.text = if (pageText.isBlank()) "इस पेज का readable text उपलब्ध नहीं है।"
                 else "Page text ready • ${pageText.length} characters"
+        }
+    }
+
+    private fun captureVoice() {
+        val language = NovaPreferences.getString(this, NovaPreferences.Keys.LANGUAGE, "AUTO")
+        val locale = if (language.equals("ENGLISH", true) || language.equals("EN", true)) "en-IN" else "hi-IN"
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN,en-IN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha को अपना काम बताइए")
+        }
+        runCatching { startActivityForResult(intent, voiceRequestCode) }
+            .onFailure { status.text = "इस फोन पर speech recognition उपलब्ध नहीं है।" }
+    }
+
+    @Deprecated("Speech recognizer compatibility callback")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == voiceRequestCode && resultCode == RESULT_OK) {
+            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            if (spoken.isNotBlank()) {
+                input.setText(spoken)
+                sendMessage()
+            }
         }
     }
 
