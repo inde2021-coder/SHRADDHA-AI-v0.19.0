@@ -190,6 +190,50 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.equal(body.expiresInSeconds, 300);
 });
 
+test('connected WebSocket event restores owner and member roles after reconnect', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Role Owner' })
+  });
+  const owner = await ownerResponse.json();
+  const wsBase = baseUrl.replace('http:', 'ws:');
+  const ownerSocket = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(owner.sessionId)}&deviceId=${encodeURIComponent(owner.deviceId)}`, {
+    headers: { authorization: `Bearer ${owner.deviceToken}` }
+  });
+  const ownerConnected = nextWsMessage(ownerSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(ownerSocket, 'open');
+  const [ownerMessage] = await ownerConnected;
+  assert.equal(JSON.parse(ownerMessage.toString()).role, 'owner');
+
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Role Member', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const memberSocket = new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(member.sessionId)}&deviceId=${encodeURIComponent(member.deviceId)}`, {
+    headers: { authorization: `Bearer ${member.deviceToken}` }
+  });
+  const memberConnected = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(memberSocket, 'open');
+  const [memberMessage] = await memberConnected;
+  assert.equal(JSON.parse(memberMessage.toString()).role, 'member');
+
+  const ownerClosed = once(ownerSocket, 'close');
+  const memberClosed = once(memberSocket, 'close');
+  ownerSocket.close();
+  memberSocket.close();
+  await Promise.all([ownerClosed, memberClosed]);
+  await fetch(`${baseUrl}/api/device/revoke`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}` },
+    body: JSON.stringify({ sessionId: owner.sessionId, deviceId: owner.deviceId, targetDeviceId: owner.deviceId })
+  });
+});
+
 test('device revocation requires authentication and owner authority, and removes the whole owner session', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
