@@ -24,6 +24,13 @@ while (( SECONDS < deadline )); do
   user_ce="$("$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)"
   bootanim="$("$ADB" -s "$SERIAL" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)"
 
+  if [[ "$state" == device && "$boot" == 1 ]]; then
+    # The emulator runner sends this key event after boot; repeat it here so
+    # CE user storage can become available before instrumentation starts.
+    "$ADB" -s "$SERIAL" shell input keyevent 82 >/dev/null 2>&1 || true
+    "$ADB" -s "$SERIAL" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+  fi
+
   if [[ "$state" == device && "$boot" == 1 && "$user_ce" == true && "$bootanim" != running ]]; then
     package_service="$("$ADB" -s "$SERIAL" shell service check package 2>/dev/null | tr -d '\r' || true)"
     activity_service="$("$ADB" -s "$SERIAL" shell service check activity 2>/dev/null | tr -d '\r' || true)"
@@ -34,10 +41,10 @@ while (( SECONDS < deadline )); do
           "$window_service" == "Service window: found" ]]; then
       package_probe="$("$ADB" -s "$SERIAL" shell pm path android 2>/dev/null | tr -d '\r' || true)"
       activity_probe="$("$ADB" -s "$SERIAL" shell am get-current-user 2>/dev/null | tr -d '\r' || true)"
-      unlock_probe="$("$ADB" -s "$SERIAL" shell dumpsys user 2>/dev/null | tr -d '\r' || true)"
-      if [[ "$package_probe" == package:* &&
-            "$activity_probe" == 0 &&
-            ( "$unlock_probe" == *"mUserUnlocked=true"* || "$unlock_probe" == *"RUNNING_UNLOCKED"* ) ]]; then
+      # Android's CE-available system property is set only after user 0's
+      # credential-encrypted storage has been prepared/unlocked. Avoid parsing
+      # the human-readable dumpsys user output, which changes across API levels.
+      if [[ "$package_probe" == package:* && "$activity_probe" == 0 ]]; then
         ready_streak=$((ready_streak + 1))
         if (( ready_streak >= 3 )); then
           echo "Emulator $SERIAL is fully ready: PackageManager, ActivityManager, WindowManager and unlocked user 0 confirmed."
@@ -70,6 +77,5 @@ echo "ERROR: emulator $SERIAL did not become fully ready within 15 minutes."
 "$ADB" -s "$SERIAL" shell service check package || true
 "$ADB" -s "$SERIAL" shell service check activity || true
 "$ADB" -s "$SERIAL" shell service check window || true
-"$ADB" -s "$SERIAL" shell dumpsys user || true
 "$ADB" -s "$SERIAL" logcat -d -t 1200 || true
 exit 1
