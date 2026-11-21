@@ -1074,7 +1074,7 @@ class MainActivity : AppCompatActivity() {
                 val revokesThisPhone = target == DeviceLinkManager.deviceId
                 androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
                     .setTitle("Revoke paired device?")
-                    .setMessage("Device $target की pairing और उससे जुड़ी active permissions तुरंत हटाई जाएँगी।")
+                    .setMessage(if (revokesThisPhone && isSessionOwner) "यह owner phone है; पूरा session और सभी paired devices disconnect होंगे।" else "Device $target की pairing और उससे जुड़ी active permissions तुरंत हटाई जाएँगी।")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Revoke") { _, _ ->
                         DeviceLinkManager.revokeRemoteDevice(target) { result -> runOnUiThread {
