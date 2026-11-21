@@ -1,11 +1,10 @@
 name: Master integration merge and verification
 
 on:
-  push:
+  pull_request:
     branches:
       - integration/master-feature-consolidation-2026-11
-    paths:
-      - .github/integration-merge-trigger.txt
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: write
