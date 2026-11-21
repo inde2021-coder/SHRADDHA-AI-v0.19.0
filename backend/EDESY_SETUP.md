@@ -25,9 +25,10 @@ Set these only in the backend host's secret/environment settings:
 2. Provision an Edesy phone number and configure its inbound route to **Media Streams** (or the portal's AI Voice Agent Stream node).
 3. Set the Media Streams WebSocket URL to `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN`.
 4. Configure 16 kHz mono L16/PCM streaming (8 kHz is also supported) and the documented JSON metadata first frame. The backend reads `sampleRate` and `mixType` from that frame.
-5. Route the DID to this WebSocket stream and call it from a separate phone.
-6. Run Edesy's `POST /v1/stream-test` preflight against the public WebSocket URL before placing a live call.
-7. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
+5. Enable DTMF passthrough for the Media Stream. The per-call transcript consent gate depends on Edesy delivering `{"event":"dtmf","dtmf":"1"}` text frames; without it, transcript saving stays off.
+6. Route the DID to this WebSocket stream and call it from a separate phone.
+7. Run Edesy's `POST /v1/stream-test` preflight against the public WebSocket URL before placing a live call.
+8. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
 
 The stream token is in a query string because the provider connector uses a WebSocket URL. Configure the hosting proxy and access logs to redact query strings for this route. Rotate the token if it may have appeared in logs.
 
