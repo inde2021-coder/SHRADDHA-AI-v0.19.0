@@ -54,8 +54,6 @@ class WorkAgentActivity : AppCompatActivity() {
     private var pageText = ""
     private var currentUrl = ""
     private var busy = false
-    private val voiceRequestCode = 7412
-    private val fileRequestCode = 7413
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private val voiceResultLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
