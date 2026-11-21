@@ -228,16 +228,24 @@ test('end-to-end key offers and fingerprint confirmations are forwarded only to 
     const [confirm] = await confirmPromise;
     assert.equal(JSON.parse(confirm.toString()).fromDeviceId, member.deviceId);
 
-    const invalidOfferPromise = wait(memberSocket, 'e2e_key_offer');
+    const malformedOfferForwarded = new Promise(resolve => {
+      const listener = data => {
+        try {
+          if (JSON.parse(data.toString()).type === 'e2e_key_offer') {
+            memberSocket.off('message', listener);
+            resolve(true);
+          }
+        } catch {}
+      };
+      memberSocket.on('message', listener);
+      setTimeout(() => { memberSocket.off('message', listener); resolve(false); }, 100);
+    });
     ownerSocket.send(JSON.stringify({ type: 'e2e_key_offer', targetDeviceId: member.deviceId, publicKey: 'invalid!' }));
-    await new Promise(resolve => setTimeout(resolve, 80));
-    assert.equal(memberSocket.readyState, WebSocket.OPEN);
-    // A malformed offer must not be relayed; the following valid offer is the only match.
+    assert.equal(await malformedOfferForwarded, false, 'malformed E2E key offers must not be forwarded');
     const validOffer = wait(memberSocket, 'e2e_key_offer');
     ownerSocket.send(JSON.stringify({ type: 'e2e_key_offer', targetDeviceId: member.deviceId, publicKey: 'B'.repeat(120) }));
     const [validMessage] = await validOffer;
     assert.equal(JSON.parse(validMessage.toString()).publicKey, 'B'.repeat(120));
-    void invalidOfferPromise;
   } finally {
     const closes = [ownerSocket, memberSocket].map(socket => socket.readyState === WebSocket.CLOSED ? Promise.resolve() : new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
     await Promise.all(closes);
