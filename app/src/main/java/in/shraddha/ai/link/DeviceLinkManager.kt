@@ -72,8 +72,9 @@ object DeviceLinkManager {
             done(Result.failure(IllegalStateException("DeviceLinkManager must be initialized by the Application before pairing.")))
             return
         }
-        // Keep newly issued credentials only in memory until the relay accepts the
-        // WebSocket handshake. A failed/unreachable relay must not become a saved pairing.
+        // Supersede any in-flight connection before starting a new pairing/reconnect.
+        // Listener callbacks from the old socket must never overwrite or erase the new identity.
+        socket?.close(1000, "Superseded by a newer connection")
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
         val completionDelivered = AtomicBoolean(false)
         val url = parsed.newBuilder().scheme("wss").addPathSegments("ws")
@@ -82,6 +83,10 @@ object DeviceLinkManager {
         val request = Request.Builder().url(url).header("Authorization", "Bearer ${pair.token}").build()
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (socket !== webSocket) {
+                    webSocket.close(1000, "Superseded connection")
+                    return
+                }
                 try {
                     store.save(pair.sessionId, pair.deviceId, pair.token, parsed.toString())
                     onStatus?.invoke("Secure relay connected")
@@ -123,12 +128,12 @@ object DeviceLinkManager {
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val rejectedCredential = response?.code == 401 || response?.code == 403
-                if (rejectedCredential) {
-                    // A definitive auth rejection means this saved bearer token is revoked/expired.
-                    // Clear it so the app cannot keep presenting a dead credential on every reconnect.
-                    runCatching { credentialStore?.clear() }
-                }
                 if (socket === webSocket) {
+                    if (rejectedCredential) {
+                        // Only the active socket may invalidate the currently saved pairing.
+                        // A late 401 from a superseded socket must not erase newer credentials.
+                        runCatching { credentialStore?.clear() }
+                    }
                     sessionId = null; deviceId = null; deviceToken = null; socket = null
                     onStatus?.invoke(
                         if (rejectedCredential) "Pairing expired or revoked. Pair this device again."
