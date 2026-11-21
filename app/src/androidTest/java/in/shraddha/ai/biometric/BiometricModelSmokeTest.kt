@@ -7,21 +7,26 @@ import java.io.File
 import kotlin.math.PI
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BiometricModelSmokeTest {
-    @Test fun packagedModelsLoadAndRunOnDeviceWithoutNetworkInference() {
+    @Test fun selectedModelsDownloadVerifyAndRunOnDevice() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        BiometricModelInstaller.ensureInstalled(context)
+        val bundled = context.assets.list("biometric-models").orEmpty()
+        assertFalse("Large ONNX models must not be bundled in the APK", bundled.any { it.endsWith(".onnx") })
 
         val directory = File(context.filesDir, "biometric-models")
         val faceFile = File(directory, "sface.onnx")
         val speakerFile = File(directory, "ecapa-any-length.onnx")
-        assertTrue("SFace asset was not installed", faceFile.isFile && faceFile.length() > 1_000_000L)
-        assertTrue("ECAPA asset was not installed", speakerFile.isFile && speakerFile.length() > 1_000_000L)
+        BiometricModelInstaller.ensureInstalled(context, "face")
+        assertTrue("SFace model was not downloaded and verified", faceFile.isFile && faceFile.length() > 1_000_000L)
+        assertFalse("Speaker model should remain on-demand until selected", speakerFile.exists())
+        BiometricModelInstaller.ensureInstalled(context, "speaker")
+        assertTrue("ECAPA model was not downloaded and verified", speakerFile.isFile && speakerFile.length() > 1_000_000L)
 
         val engine = LocalBiometricModelEngine()
         val syntheticRgb = ByteArray(112 * 112 * 3) { index ->
