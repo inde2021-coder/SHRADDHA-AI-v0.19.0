@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - .github/workflows/master-integration-merge.yml
+  pull_request:
+    branches:
+      - integration/master-feature-consolidation-2026-11
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: write
