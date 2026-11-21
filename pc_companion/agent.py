@@ -116,6 +116,8 @@ class PcCompanionApp:
         ttk.Label(frame, textvariable=self.status_var, foreground="#146c43", wraplength=510).pack(anchor="w", pady=(10, 4))
         ttk.Label(frame, text="Safety: every control request opens a local approval dialog. F12 or Disconnect stops access. Screen sharing is off by default.",
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
+        ttk.Label(frame, text="Encryption warning: WSS protects traffic in transit, but screen JPEG frames are not yet end-to-end encrypted. The relay can inspect shared frames; do not share sensitive screens until peer fingerprint verification and encrypted frame transport are complete.",
+                  wraplength=510, foreground="#9a5a00", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
 
     def _load_config(self):
         try:
