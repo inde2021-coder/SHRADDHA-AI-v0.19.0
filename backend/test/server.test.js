@@ -44,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('..', import.meta.url),
-    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '', CALL_TRANSCRIPTS_ENABLED: 'false', SHRADDHA_CALL_AGENT_NAME: '' },
+    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '', CALL_TRANSCRIPTS_ENABLED: 'false', SHRADDHA_CALL_AGENT_NAME: '', FIREBASE_SERVICE_ACCOUNT_JSON: '', FIREBASE_SERVICE_ACCOUNT_BASE64: '', CALL_HISTORY_ENCRYPTION_KEY: '' },
     stdio: 'ignore'
   });
   const deadline = Date.now() + 10_000;
