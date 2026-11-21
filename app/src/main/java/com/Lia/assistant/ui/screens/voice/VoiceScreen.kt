@@ -21,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,7 +68,7 @@ fun VoiceScreen(
 
     val state by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
-    val muted by VoiceSessionManager.muted.collectAsState()
+    val isActive by VoiceSessionManager.isActive.collectAsState()
     val statusText by VoiceSessionManager.statusText.collectAsState()
     val lastError by VoiceSessionManager.lastError.collectAsState()
 
@@ -242,70 +240,39 @@ fun VoiceScreen(
                 }
             }
 
-            // Bottom Frosted Controls: Mute, Stop, Close
-            val frostedShape = RoundedCornerShape(50)
-            Row(
-                modifier = Modifier
-                    .depthSurface(shape = frostedShape, elevation = 4.dp)
-                    .clip(frostedShape)
-                    .background(colors.surfaceGlass)
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Mute toggle
+            // One persistent microphone control: the foreground session keeps running
+            // after this screen is closed and stops only when the user deactivates it.
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(82.dp)
                         .clip(CircleShape)
-                        .background(if (muted) colors.surfaceBorder else colors.surfaceRaised)
-                        .clickable { VoiceSessionManager.toggleMute() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (muted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = "Mute",
-                        tint = if (muted) colors.error else colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                // Stop button (large, red-tinted)
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF8B2535))
+                        .background(if (isActive) Color(0xFF8B2535) else colors.accent)
                         .clickable {
-                            VoiceForegroundService.stop(context)
-                            navController.popBackStack()
+                            if (isActive) {
+                                VoiceForegroundService.stop(context)
+                            } else if (hasRecordAudioPermission) {
+                                VoiceForegroundService.start(context)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = "Stop Voice Session",
+                        imageVector = if (isActive) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = if (isActive) "Deactivate microphone" else "Activate microphone",
                         tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(34.dp)
                     )
                 }
-
-                // Close / dismiss button
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceRaised)
-                        .clickable { navController.popBackStack() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Voice Screen",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (isActive) "MICROPHONE ACTIVE • TAP TO DEACTIVATE" else "MICROPHONE OFF • TAP TO ACTIVATE",
+                    fontSize = 10.sp,
+                    letterSpacing = 0.8.sp,
+                    color = colors.textSecondary
+                )
             }
         }
     }
