@@ -31,9 +31,11 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,10 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.voice.ConversationMemory
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
@@ -71,8 +75,14 @@ fun SettingsScreen(
     val colors = LocalNovaColors.current
     val context = LocalContext.current
 
-    var showApiKeyDialog by remember { mutableStateOf(false) }
-    var apiKeyInput by remember { mutableStateOf(ApiKeyStore.getKey(context)) }
+    var showGatewayDialog by remember { mutableStateOf(false) }
+    val savedGateway = remember { VoiceGatewaySettings.get(context) }
+    var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl) }
+    var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
+    var gatewaySaveError by remember { mutableStateOf<String?>(null) }
+    var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
+    var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
+    var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -155,10 +165,37 @@ fun SettingsScreen(
         ) {
             Column {
                 NovaSettingsRow(
-                    title = "Gemini API Key",
-                    subtitle = if (ApiKeyStore.hasKey(context)) "Configured locally" else "Tap to configure",
-                    icon = Icons.Default.Key,
-                    onClick = { showApiKeyDialog = true }
+                    title = "Secure Voice Backend",
+                    subtitle = if (gatewayConfigured) "HTTPS backend configured • token encrypted" else "Required for secure Live Voice",
+                    icon = Icons.Default.Security,
+                    onClick = {
+                        val current = VoiceGatewaySettings.get(context)
+                        gatewayUrlInput = current.baseUrl
+                        gatewayTokenInput = current.gatewayToken
+                        gatewaySaveError = null
+                        showGatewayDialog = true
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Encrypted Voice Memory",
+                    subtitle = if (voiceMemoryEnabled) "Recent turns saved encrypted on this phone" else "Off • voice history stays in this session only",
+                    icon = Icons.Default.Security,
+                    switch = voiceMemoryEnabled,
+                    onCheckedChange = {
+                        voiceMemoryEnabled = it
+                        ConversationMemory.setPersistenceEnabled(context, it)
+                    }
+                )
+                NovaSettingsRow(
+                    title = "On-device OCR Screen Reading",
+                    subtitle = if (screenOcrEnabled) "Hindi + English • local processing • no screenshot upload" else "Off • optional Android 11+ screenshot OCR",
+                    icon = Icons.Default.Visibility,
+                    switch = screenOcrEnabled,
+                    onCheckedChange = {
+                        screenOcrEnabled = it
+                        context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("on_device_screen_ocr", it).apply()
+                    }
                 )
                 NovaSettingsRow(
                     title = "Assistant Name",
@@ -192,18 +229,15 @@ fun SettingsScreen(
                     }
                 )
                 NovaSettingsRow(
-                    title = "Gemini Voice",
-                    subtitle = appState.voiceName,
+                    title = "Shraddha Voice Engine",
+                    subtitle = "Non-Google custom voice • requires SHRADDHA_TTS_URL on backend",
                     icon = Icons.Default.RecordVoiceOver,
                     onClick = {
-                        val nextVoice = when (appState.voiceName) {
-                            "Aoede" -> "Puck"
-                            "Puck" -> "Charon"
-                            "Charon" -> "Kore"
-                            "Kore" -> "Fenrir"
-                            else -> "Aoede"
-                        }
-                        appState.applyVoiceName(context, nextVoice)
+                        android.widget.Toast.makeText(
+                            context,
+                            "Deploy a licensed Hindi-English Shraddha voice model and configure SHRADDHA_TTS_URL on your HTTPS backend.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
                     }
                 )
             }
@@ -268,39 +302,64 @@ fun SettingsScreen(
         }
     }
 
-    // API Key Dialog
-    if (showApiKeyDialog) {
+    // Secure Voice Gateway Dialog
+    if (showGatewayDialog) {
         AlertDialog(
-            onDismissRequest = { showApiKeyDialog = false },
-            title = { Text(text = "Gemini API Key", color = colors.textPrimary) },
+            onDismissRequest = { showGatewayDialog = false },
+            title = { Text(text = "Secure Gemini Live Backend", color = colors.textPrimary) },
             text = {
                 Column {
                     Text(
-                        text = "Enter your Google Gemini API key. It is stored securely on your device only.",
+                        text = "Voice sessions request a one-use, short-lived Gemini token from your HTTPS backend. Keep GATEWAY_TOKEN private. The permanent Gemini API key stays on the server.",
                         fontSize = 13.sp,
                         color = colors.textSecondary
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     NovaTextField(
-                        value = apiKeyInput,
-                        onValueChange = { apiKeyInput = it },
-                        placeholder = "AIzaSy..."
+                        value = gatewayUrlInput,
+                        onValueChange = { gatewayUrlInput = it },
+                        placeholder = "https://your-backend.example"
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = gatewayTokenInput,
+                        onValueChange = { gatewayTokenInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Backend GATEWAY_TOKEN") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                    if (gatewaySaveError != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(gatewaySaveError!!, color = colors.error, fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
                 NovaButton(
-                    text = "Save Key",
+                    text = "Save Secure Backend",
                     onClick = {
-                        ApiKeyStore.saveKey(context, apiKeyInput)
-                        showApiKeyDialog = false
+                        val result = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
+                        result.onSuccess {
+                            gatewayConfigured = true
+                            gatewaySaveError = null
+                            showGatewayDialog = false
+                        }.onFailure {
+                            gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                        }
                     }
                 )
             },
             dismissButton = {
                 NovaButton(
-                    text = "Cancel",
-                    onClick = { showApiKeyDialog = false },
+                    text = "Clear",
+                    onClick = {
+                        VoiceGatewaySettings.clear(context)
+                        gatewayUrlInput = ""
+                        gatewayTokenInput = ""
+                        gatewayConfigured = false
+                        showGatewayDialog = false
+                    },
                     type = NovaButtonType.TEXT
                 )
             },
@@ -317,7 +376,7 @@ fun SettingsScreen(
                 NovaTextField(
                     value = nameInput,
                     onValueChange = { nameInput = it },
-                    placeholder = "Lia"
+                    placeholder = "अपना पसंदीदा नाम लिखें"
                 )
             },
             confirmButton = {

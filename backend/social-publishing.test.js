@@ -1,0 +1,49 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
+
+test('publishing requires explicit confirmation of the exact preview', () => {
+  assert.deepEqual(validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Hello', confirmed: true }), { platform: 'telegram', text: 'Hello' });
+  assert.throws(() => validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Changed', confirmed: true }), /exact post preview/);
+  assert.throws(() => validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Hello', confirmed: false }), /confirmation/);
+});
+
+test('only supported platforms and bounded non-empty posts are accepted', () => {
+  assert.throws(() => validatePublishIntent({ platform: 'instagram', text: 'x', preview: 'x', confirmed: true }), /Unsupported/);
+  assert.throws(() => validatePublishIntent({ platform: 'mastodon', text: ' ', preview: ' ', confirmed: true }), /1-5000/);
+  assert.throws(() => validatePublishIntent({ platform: 'telegram', text: 'x'.repeat(5001), preview: 'x'.repeat(5001), confirmed: true }), /1-5000/);
+});
+
+test('Mastodon server URL must be a public HTTPS origin', () => {
+  assert.equal(validateMastodonOrigin('https://mastodon.social'), 'https://mastodon.social');
+  for (const url of ['http://mastodon.social', 'https://localhost', 'https://127.0.0.1', 'https://mastodon.social/api', 'https://user:pass@mastodon.social']) {
+    assert.throws(() => validateMastodonOrigin(url));
+  }
+});
+
+test('Mastodon visibility is restricted to official visibility values', () => {
+  assert.equal(mastodonVisibility('unlisted'), 'unlisted');
+  assert.equal(mastodonVisibility(''), 'unlisted');
+  assert.throws(() => mastodonVisibility('secret'));
+});
+
+test('Bluesky and LinkedIn exact-preview posts pass platform-specific validation', () => {
+  assert.deepEqual(validatePublishIntent({ platform: 'bluesky', text: 'Namaste', preview: 'Namaste', confirmed: true }), { platform: 'bluesky', text: 'Namaste' });
+  assert.deepEqual(validatePublishIntent({ platform: 'linkedin', text: 'Hello professionals', preview: 'Hello professionals', confirmed: true }), { platform: 'linkedin', text: 'Hello professionals' });
+  assert.throws(() => validatePublishIntent({ platform: 'bluesky', text: 'x'.repeat(301), preview: 'x'.repeat(301), confirmed: true }), /300 characters/);
+  assert.throws(() => validatePublishIntent({ platform: 'linkedin', text: 'x'.repeat(3001), preview: 'x'.repeat(3001), confirmed: true }), /3000 characters/);
+});
+
+test('Bluesky requires a valid identifier and app password', () => {
+  assert.equal(validateBlueskyCredentials('shraddha.bsky.social', 'abcd-efgh-ijkl-mnop').identifier, 'shraddha.bsky.social');
+  assert.throws(() => validateBlueskyCredentials('bad handle', 'abcd-efgh-ijkl-mnop'));
+  assert.throws(() => validateBlueskyCredentials('user@example.com', 'short'));
+});
+
+test('LinkedIn author URN and API version are validated', () => {
+  assert.equal(validateLinkedInAuthor('urn:li:person:abc123'), 'urn:li:person:abc123');
+  assert.equal(validateLinkedInAuthor('urn:li:organization:123456'), 'urn:li:organization:123456');
+  assert.equal(validateLinkedInVersion('202611'), '202611');
+  assert.throws(() => validateLinkedInAuthor('https://linkedin.com/in/user'));
+  assert.throws(() => validateLinkedInVersion('202613'));
+});

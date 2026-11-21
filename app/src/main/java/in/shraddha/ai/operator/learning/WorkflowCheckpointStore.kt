@@ -1,0 +1,66 @@
+package `in`.shraddha.ai.operator.learning
+
+import android.content.Context
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import org.json.JSONObject
+import java.security.MessageDigest
+
+/** Encrypted, device-local checkpoints. Only verified step boundaries are resumable. */
+data class WorkflowCheckpoint(
+    val packageName: String,
+    val workflowName: String,
+    val workflowHash: String,
+    val nextStep: Int,
+    val totalSteps: Int,
+    val state: String,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+class WorkflowCheckpointStore(context: Context) {
+    private val encrypted = EncryptedFeatureStore(context.applicationContext)
+
+    fun fingerprint(steps: List<LearnedStep>): String {
+        val canonical = steps.joinToString("|") {
+            listOf(it.id, it.action, it.targetRole, it.targetLabel, it.inputTemplate, it.expectedText, it.destructive).joinToString("¦")
+        }
+        return MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    fun get(packageName: String, workflowName: String): WorkflowCheckpoint? =
+        encrypted.get(key(packageName, workflowName)).getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { raw -> runCatching {
+                val o = JSONObject(raw)
+                WorkflowCheckpoint(
+                    o.getString("packageName"), o.getString("workflowName"),
+                    o.getString("workflowHash"), o.getInt("nextStep"),
+                    o.getInt("totalSteps"), o.getString("state"), o.optLong("updatedAt")
+                )
+            }.getOrNull() }
+
+    fun save(checkpoint: WorkflowCheckpoint): Boolean {
+        if (checkpoint.packageName.isBlank() || checkpoint.workflowName.isBlank()) return false
+        if (checkpoint.nextStep !in 0..checkpoint.totalSteps || checkpoint.totalSteps !in 1..100) return false
+        val json = JSONObject()
+            .put("packageName", checkpoint.packageName)
+            .put("workflowName", checkpoint.workflowName)
+            .put("workflowHash", checkpoint.workflowHash)
+            .put("nextStep", checkpoint.nextStep)
+            .put("totalSteps", checkpoint.totalSteps)
+            .put("state", checkpoint.state)
+            .put("updatedAt", checkpoint.updatedAt)
+        return encrypted.put(key(checkpoint.packageName, checkpoint.workflowName), json.toString()).isSuccess
+    }
+
+    fun clear(packageName: String, workflowName: String): Boolean =
+        encrypted.remove(key(packageName, workflowName))
+
+    private fun key(packageName: String, workflowName: String): String {
+        val raw = "$packageName|$workflowName".toByteArray(Charsets.UTF_8)
+        val digest = MessageDigest.getInstance("SHA-256").digest(raw)
+            .take(16).joinToString("") { "%02x".format(it) }
+        return "workflow_checkpoint_$digest"
+    }
+}

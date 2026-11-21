@@ -1,0 +1,38 @@
+name: Branch CI
+
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+
+on:
+  push:
+    branches-ignore:
+      - integration/master-feature-consolidation-2026-11
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend syntax and available unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+      - name: Check backend syntax
+        working-directory: backend
+        run: npm run check
+      - name: Run backend unit tests when configured
+        working-directory: backend
+        run: npm test --if-present

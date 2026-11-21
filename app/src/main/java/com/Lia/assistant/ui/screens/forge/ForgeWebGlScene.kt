@@ -38,7 +38,7 @@ class ForgeBridge(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
 fun ForgeWebGlScene(
     state: ForgeUiState,

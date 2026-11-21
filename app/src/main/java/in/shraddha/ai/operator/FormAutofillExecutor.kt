@@ -1,8 +1,10 @@
 package `in`.shraddha.ai.operator
 
+import com.Lia.assistant.agent.core.CapturedScreen
 import com.Lia.assistant.agent.core.DriverResult
 import com.Lia.assistant.agent.core.ScreenDriver
-import com.Lia.assistant.agent.core.ScreenObserver
+import com.Lia.assistant.agent.core.ScreenObservation
+import kotlinx.coroutines.delay
 
 data class FormFieldFillResult(
     val fieldKey: String,
@@ -15,7 +17,13 @@ data class FormFieldFillResult(
  * to a fresh accessibility snapshot and verified from a second snapshot.
  * This executor never presses Submit, Save, Agree, or any other final action.
  */
-class FormAutofillExecutor(private val driver: ScreenDriver) {
+class FormAutofillExecutor(
+    private val driver: ScreenDriver,
+    private val verificationDelayMillis: Long = 350L
+) {
+    init {
+        require(verificationDelayMillis >= 0L) { "Verification delay cannot be negative" }
+    }
     suspend fun applyApproved(
         extractedValues: List<ExtractedFormValue>,
         approvedFieldKeys: Set<String>
@@ -29,7 +37,7 @@ class FormAutofillExecutor(private val driver: ScreenDriver) {
                 results += FormFieldFillResult(value.key, false, "Target app screen is unavailable")
                 break
             }
-            val observation = ScreenObserver.observe(captured)
+            val observation = captured.toObservation()
             val suggestion = FormFieldMatcher.suggest(listOf(value), observation).firstOrNull()
             if (suggestion == null) {
                 results += FormFieldFillResult(value.key, false, "Matching field is not visible or confidence is too low")
@@ -40,9 +48,15 @@ class FormAutofillExecutor(private val driver: ScreenDriver) {
                 results += FormFieldFillResult(value.key, false, "The selected field could not be filled")
                 continue
             }
+            // Give the target app time to commit the accessibility text change before verifying.
+            if (verificationDelayMillis > 0L) delay(verificationDelayMillis)
             val verification = driver.capture()
             val verified = verification?.rawElements?.any { element ->
-                element.isEditable && element.bounds == suggestion.target.bounds &&
+                element.isEditable &&
+                    element.bounds.left == suggestion.target.bounds.left &&
+                    element.bounds.top == suggestion.target.bounds.top &&
+                    element.bounds.right == suggestion.target.bounds.right &&
+                    element.bounds.bottom == suggestion.target.bounds.bottom &&
                     element.text.trim() == suggestion.value
             } == true
             results += FormFieldFillResult(
@@ -53,4 +67,14 @@ class FormAutofillExecutor(private val driver: ScreenDriver) {
         }
         return results
     }
+
+    private fun CapturedScreen.toObservation() = ScreenObservation(
+        observationId = "form-autofill-$timestamp",
+        packageName = packageName,
+        windowClass = windowClass,
+        elements = rawElements,
+        screenWidth = width,
+        screenHeight = height,
+        windowStamp = timestamp
+    )
 }

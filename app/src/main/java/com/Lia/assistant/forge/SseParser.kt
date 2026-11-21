@@ -41,7 +41,7 @@ object SseParser {
             val candidates = json.optJSONArray("candidates") ?: return null
             if (candidates.length() == 0) return null
             val candidate = candidates.getJSONObject(0)
-            candidate.optString("finishReason", null)
+            candidate.optString("finishReason").takeIf { it.isNotBlank() }
         } catch (_: Exception) {
             null
         }

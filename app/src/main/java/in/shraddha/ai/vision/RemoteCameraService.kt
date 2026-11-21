@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
+import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.SessionConfiguration
 import android.media.ImageReader
 import android.os.Build
 import android.os.Handler
@@ -24,11 +26,17 @@ class RemoteCameraService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotification()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+        val facing = intent?.getStringExtra(EXTRA_FACING) ?: "back"
+        val target = intent?.getStringExtra(EXTRA_TARGET).orEmpty()
+        val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
+        if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, target, facing)) {
             stopSelf(); return START_NOT_STICKY
         }
         stopCamera()
-        startCamera(intent?.getStringExtra(EXTRA_FACING) ?: "back", intent?.getStringExtra(EXTRA_TARGET).orEmpty())
+        getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().putString("active_target", target).putString("active_facing", facing).apply()
+        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_service", "started", "facing=$facing; target_id_redacted") }
+        startCamera(facing, target)
         return START_NOT_STICKY
     }
 
@@ -63,14 +71,25 @@ class RemoteCameraService : Service() {
             reader = ImageReader.newInstance(size.width, size.height, ImageFormat.JPEG, 2)
             reader?.setOnImageAvailableListener({ source ->
                 val now = android.os.SystemClock.elapsedRealtime()
-                if (now - lastFrameAt < 900) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
+                if (now - lastFrameAt < 250) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
+                    val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
+                    if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, targetDeviceId, facing)) {
+                        stopSelf()
+                        return@setOnImageAvailableListener
+                    }
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()); buffer.get(bytes)
-                    DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)
+                    if (!DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)) {
+                        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "frame_not_sent") }
+                    }
+                    bytes.fill(0)
                     lastFrameAt = now
-                } catch (_: Exception) { }
+                } catch (_: Exception) {
+                    runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "frame_not_sent") }
+                }
                 finally { image.close() }
             }, handler)
             manager.openCamera(id, object : CameraDevice.StateCallback() {
@@ -78,7 +97,7 @@ class RemoteCameraService : Service() {
                     camera = device
                     val surface = reader?.surface ?: run { stopSelf(); return }
                     try {
-                        device.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+                        val callback = object : CameraCaptureSession.StateCallback() {
                             override fun onConfigured(session: CameraCaptureSession) {
                                 try {
                                     val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
@@ -89,7 +108,18 @@ class RemoteCameraService : Service() {
                                 } catch (_: Exception) { stopSelf() }
                             }
                             override fun onConfigureFailed(session: CameraCaptureSession) { stopSelf() }
-                        }, handler)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            val configuration = SessionConfiguration(
+                                SessionConfiguration.SESSION_REGULAR,
+                                listOf(OutputConfiguration(surface)),
+                                ContextCompat.getMainExecutor(this@RemoteCameraService),
+                                callback
+                            )
+                            device.createCaptureSession(configuration)
+                        } else {
+                            createLegacyCaptureSession(device, surface, callback, handler)
+                        }
                     } catch (_: Exception) { stopSelf() }
                 }
                 override fun onDisconnected(device: CameraDevice) { device.close(); if (camera === device) camera = null; stopSelf() }
@@ -97,6 +127,16 @@ class RemoteCameraService : Service() {
             }, handler)
         } catch (_: SecurityException) { stopSelf() }
         catch (_: Exception) { stopSelf() }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun createLegacyCaptureSession(
+        device: CameraDevice,
+        surface: android.view.Surface,
+        callback: CameraCaptureSession.StateCallback,
+        handler: Handler
+    ) {
+        device.createCaptureSession(listOf(surface), callback, handler)
     }
 
     private fun stopCamera() {

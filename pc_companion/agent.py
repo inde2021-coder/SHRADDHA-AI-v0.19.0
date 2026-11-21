@@ -1,0 +1,722 @@
+"""Shraddha AI Windows PC Companion.
+
+Pair with an Android-created relay code. Remote control is opt-in on this PC and
+each control request requires a local approval dialog. No arbitrary shell commands.
+"""
+import json
+import base64
+import struct
+import os
+import re
+import queue
+import ssl
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+import keyring
+import mss
+import pyautogui
+import pyperclip
+import websocket
+from PIL import Image, ImageTk
+
+from actions import execute_action
+from protocol import valid_pairing_ids, validate_remote_action
+from e2e_crypto import DeviceE2ECrypto
+
+SERVICE_NAME = "ShraddhaAI-PC-Companion"
+CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
+MAX_FRAME_BYTES = 2_500_000
+
+
+def _https_base(value):
+    value = value.strip().rstrip("/")
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+        raise ValueError("Relay URL must be HTTPS and must not contain credentials.")
+    return value
+
+
+def join_with_pairing_code(base_url, device_name, code):
+    base = _https_base(base_url)
+    if len(code) != 6 or not code.isdigit():
+        raise ValueError("Enter the six-digit pairing code shown on the Android phone.")
+    payload = json.dumps({"deviceName": device_name[:48], "pairingCode": code}).encode("utf-8")
+    request = urllib.request.Request(
+        base + "/api/device/join", data=payload,
+        headers={"Content-Type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        result = json.loads(response.read(64 * 1024).decode("utf-8"))
+    required = ("sessionId", "deviceId", "deviceToken")
+    if not all(isinstance(result.get(key), str) and result[key] for key in required):
+        raise RuntimeError("Relay returned an incomplete pairing response.")
+    return result
+
+
+class PcCompanionApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Shraddha AI • Windows PC Companion")
+        self.root.geometry("560x470")
+        self.root.minsize(520, 430)
+        pyautogui.FAILSAFE = True
+        pyautogui.PAUSE = 0.04
+
+        self.events = queue.Queue()
+        self.ws_app = None
+        self.ws_thread = None
+        self.send_lock = threading.Lock()
+        self.screen_event = threading.Event()
+        self.stop_event = threading.Event()
+        self.control_grant_until = 0.0
+        self.device_token = None
+        self.e2e_crypto = DeviceE2ECrypto()
+        self.peer_keys = {}
+        self.e2e_lock = threading.RLock()
+        self.frame_window = None
+        self.frame_label = None
+        self.frame_photo = None
+        self._pending_pairing_auth = False
+        self.config = self._load_config()
+
+        self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
+        self.name_var = tk.StringVar(value=self.config.get("deviceName", "Windows PC"))
+        self.code_var = tk.StringVar()
+        self.remote_var = tk.BooleanVar(value=False)
+        self.screen_var = tk.BooleanVar(value=False)
+        self.status_var = tk.StringVar(value="Not connected")
+        self._build_ui()
+
+        self.screen_thread = threading.Thread(target=self._screen_loop, daemon=True)
+        self.screen_thread.start()
+        self.root.after(120, self._drain_events)
+        self.root.bind("<F12>", lambda _event: self.disconnect(emergency=True))
+        self.root.protocol("WM_DELETE_WINDOW", self._close)
+
+    def _build_ui(self):
+        frame = ttk.Frame(self.root, padding=16)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="SHRADDHA AI  /  PC COMPANION", font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="Secure relay pairing • local approval • no arbitrary shell access",
+                  font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 12))
+        ttk.Label(frame, text="HTTPS Relay URL").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.base_var).pack(fill="x", pady=(2, 8))
+        ttk.Label(frame, text="PC device name").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.name_var).pack(fill="x", pady=(2, 8))
+        ttk.Label(frame, text="6-digit pairing code from the Android phone").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.code_var, width=12).pack(anchor="w", pady=(2, 8))
+        buttons = ttk.Frame(frame)
+        buttons.pack(fill="x", pady=(2, 8))
+        ttk.Button(buttons, text="Join & Connect", command=self.join_and_connect).pack(side="left")
+        ttk.Button(buttons, text="Connect Saved PC", command=self.connect_saved).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
+        ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
+        ttk.Separator(frame).pack(fill="x", pady=8)
+        ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
+                        variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
+        ttk.Checkbutton(frame, text="Share this PC screen with paired devices",
+                        variable=self.screen_var, command=self._publish_permissions).pack(anchor="w", pady=4)
+        ttk.Label(frame, textvariable=self.status_var, foreground="#146c43", wraplength=510).pack(anchor="w", pady=(10, 4))
+        ttk.Label(frame, text="Safety: every control request opens a local approval dialog. F12 or Disconnect stops access. Screen sharing is off by default.",
+                  wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
+        ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
+                  wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
+
+    def _load_config(self):
+        try:
+            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def _save_config(self):
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temp = CONFIG_PATH.with_suffix(".tmp")
+        temp.write_text(json.dumps(self.config), encoding="utf-8")
+        temp.replace(CONFIG_PATH)
+
+    def _token_for_saved_device(self):
+        device_id = self.config.get("deviceId", "")
+        if not device_id:
+            return None
+        try:
+            return keyring.get_password(SERVICE_NAME, device_id)
+        except Exception:
+            return None
+
+    def join_and_connect(self):
+        try:
+            if self.ws_thread and self.ws_thread.is_alive():
+                raise ValueError("Disconnect the current PC pairing before joining a different session.")
+            base = _https_base(self.base_var.get())
+            name = self.name_var.get().strip() or "Windows PC"
+            joined = join_with_pairing_code(base, name, self.code_var.get().strip())
+            # Do not persist a bearer token until the WebSocket handshake proves
+            # that the relay accepted it. A successful HTTP join alone is not
+            # proof that the new device credential is active.
+            self.config = {
+                "baseUrl": base, "deviceName": name[:48],
+                "sessionId": joined["sessionId"], "deviceId": joined["deviceId"]
+            }
+            self.device_token = joined["deviceToken"]
+            self._pending_pairing_auth = True
+            self.status_var.set("Pairing created. Waiting for authenticated relay connection…")
+            self.code_var.set("")
+            self._connect_socket()
+        except Exception as exc:
+            if self._pending_pairing_auth:
+                self._pending_pairing_auth = False
+                self.device_token = None
+                self.config = {
+                    "baseUrl": self.base_var.get().strip().rstrip("/"),
+                    "deviceName": self.name_var.get().strip()[:48] or "Windows PC"
+                }
+            self.status_var.set(f"Pairing failed: {str(exc)[:180]}")
+
+    def connect_saved(self):
+        try:
+            if not self.config.get("sessionId") or not self.config.get("deviceId"):
+                raise ValueError("No saved PC pairing. Join with the six-digit code first.")
+            self.device_token = self._token_for_saved_device()
+            if not self.device_token:
+                raise ValueError("Windows Credential Manager has no saved token. Pair this PC again.")
+            self.base_var.set(self.config["baseUrl"])
+            self._connect_socket()
+        except Exception as exc:
+            self.status_var.set(f"Connect failed: {str(exc)[:180]}")
+
+    def _connect_socket(self):
+        if self.ws_thread and self.ws_thread.is_alive():
+            self.status_var.set("Already connecting or connected.")
+            return
+        base = _https_base(self.config.get("baseUrl", self.base_var.get()))
+        query = urllib.parse.urlencode({
+            "sessionId": self.config["sessionId"], "deviceId": self.config["deviceId"]
+        })
+        ws_url = base.replace("https://", "wss://", 1) + "/ws?" + query
+        token = self.device_token or self._token_for_saved_device()
+        if not token:
+            raise ValueError("Device token is unavailable. Pair this PC again.")
+        self.ws_app = websocket.WebSocketApp(
+            ws_url,
+            header={"Authorization": f"Bearer {token}"},
+            on_open=self._on_open,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close
+        )
+        self.ws_thread = threading.Thread(
+            target=lambda: self.ws_app.run_forever(
+                ping_interval=25, ping_timeout=10, sslopt={"cert_reqs": ssl.CERT_REQUIRED}
+            ), daemon=True
+        )
+        self.ws_thread.start()
+
+    def _send_json(self, payload):
+        ws = self.ws_app
+        if not ws or not ws.sock or not ws.sock.connected:
+            return False
+        try:
+            with self.send_lock:
+                ws.send(json.dumps(payload, separators=(",", ":")))
+            return True
+        except Exception as exc:
+            self.events.put(("status", f"Send failed: {str(exc)[:120]}"))
+            return False
+
+    def _on_open(self, _ws):
+        self.events.put(("opened", None))
+
+    def _on_message(self, _ws, message):
+        if isinstance(message, (bytes, bytearray)):
+            self._handle_binary_frame(bytes(message))
+            return
+        if not isinstance(message, str):
+            return
+        try:
+            self.events.put(("message", json.loads(message)))
+        except Exception:
+            self.events.put(("status", "Ignored malformed relay message."))
+
+    def _on_error(self, _ws, error):
+        status_code = getattr(error, "status_code", None)
+        if self._pending_pairing_auth:
+            self.events.put(("pairing_failed", f"Relay authentication failed: {str(error)[:140]}"))
+        elif status_code in (401, 403):
+            self.events.put(("credential_rejected", status_code))
+        else:
+            self.events.put(("status", f"Relay error: {str(error)[:160]}"))
+
+    def _on_close(self, _ws, code, reason):
+        self._clear_peer_keys()
+        self.screen_event.clear()
+        self.control_grant_until = 0
+        if code == 4003:
+            self.events.put(("revoked", None))
+        elif self._pending_pairing_auth:
+            self.events.put(("pairing_failed", f"Pairing was not authenticated ({code or 'closed'}): {str(reason or '')[:100]}"))
+        else:
+            self.events.put(("status", f"Disconnected ({code or 'closed'}): {str(reason or '')[:100]}"))
+
+    def _publish_permissions(self):
+        remote = bool(self.remote_var.get())
+        screen = bool(self.screen_var.get())
+        if not remote:
+            self.control_grant_until = 0
+        if screen:
+            self.screen_event.set()
+        else:
+            self.screen_event.clear()
+        self._send_json({
+            "type": "permission_update",
+            "permissions": {"remote_control": remote, "screen": screen}
+        })
+
+    def _drain_events(self):
+        try:
+            while True:
+                kind, payload = self.events.get_nowait()
+                if kind == "status":
+                    self.status_var.set(payload)
+                elif kind == "credential_rejected":
+                    device_id = str(self.config.get("deviceId", ""))
+                    if device_id:
+                        try:
+                            keyring.delete_password(SERVICE_NAME, device_id)
+                        except Exception:
+                            pass
+                    self.config.pop("sessionId", None)
+                    self.config.pop("deviceId", None)
+                    self.device_token = None
+                    self._save_config()
+                    self.status_var.set(f"Saved PC pairing was rejected by relay (HTTP {payload}). Pair this PC again.")
+                elif kind == "revoked":
+                    device_id = str(self.config.get("deviceId", ""))
+                    if device_id:
+                        try:
+                            keyring.delete_password(SERVICE_NAME, device_id)
+                        except Exception:
+                            pass
+                    self.config.pop("sessionId", None)
+                    self.config.pop("deviceId", None)
+                    self.device_token = None
+                    self._save_config()
+                    self.status_var.set("This PC pairing was revoked by the session owner. Join again with a new pairing code.")
+                elif kind == "message":
+                    self._handle_message(payload)
+                elif kind == "frame":
+                    self._show_frame(*payload)
+                elif kind == "pairing_failed":
+                    self._pending_pairing_auth = False
+                    self.device_token = None
+                    self.config = {
+                        "baseUrl": self.base_var.get().strip().rstrip("/"),
+                        "deviceName": self.name_var.get().strip()[:48] or "Windows PC"
+                    }
+                    self.status_var.set(payload)
+                elif kind == "opened":
+                    if self._pending_pairing_auth:
+                        self._pending_pairing_auth = False
+                        device_id = str(self.config.get("deviceId", ""))
+                        try:
+                            keyring.set_password(SERVICE_NAME, device_id, self.device_token)
+                            self._save_config()
+                            self.status_var.set("Relay authenticated. Pairing token saved in Windows Credential Manager.")
+                        except Exception:
+                            try:
+                                keyring.delete_password(SERVICE_NAME, device_id)
+                            except Exception:
+                                pass
+                            self.status_var.set("Relay authenticated for this run only; Windows Credential Manager could not save the token.")
+                    else:
+                        self.status_var.set("Secure relay connected. Remote control and screen sharing are still off.")
+                    self._publish_permissions()
+        except queue.Empty:
+            pass
+        self.root.after(120, self._drain_events)
+
+    def _handle_binary_frame(self, frame):
+        try:
+            if len(frame) < 1:
+                return
+            source_length = frame[0]
+            if source_length < 1 or source_length > 64 or len(frame) < 2 + source_length + 8 + 12 + 16:
+                return
+            source_id = frame[1:1 + source_length].decode("utf-8")
+            frame_type = frame[1 + source_length]
+            if frame_type not in (0x81, 0x82):
+                return
+            sequence_offset = 2 + source_length
+            sequence = struct.unpack_from(">Q", frame, sequence_offset)[0]
+            nonce = frame[sequence_offset + 8:sequence_offset + 20]
+            ciphertext = frame[sequence_offset + 20:]
+            with self.e2e_lock:
+                state = self.peer_keys.get(source_id)
+                if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                    return
+                sequence_key = "recv_screen_sequence" if frame_type == 0x81 else "recv_camera_sequence"
+                if sequence <= state[sequence_key]:
+                    return
+                key = bytes(state["key"])
+            local_id = str(self.config.get("deviceId", ""))
+            session_id = str(self.config.get("sessionId", ""))
+            base_type = frame_type & 0x7f
+            aad = f"{session_id}|{source_id}|{local_id}|{base_type}|{sequence}".encode("utf-8")
+            nonce_b64 = base64.b64encode(nonce).decode("ascii").rstrip("=")
+            ciphertext_b64 = base64.b64encode(ciphertext).decode("ascii").rstrip("=")
+            jpeg = DeviceE2ECrypto.decrypt(key, nonce_b64, ciphertext_b64, aad)
+            if len(jpeg) < 4 or jpeg[:2] != b"\\xff\\xd8" or jpeg[-2:] != b"\\xff\\xd9":
+                return
+            with self.e2e_lock:
+                current = self.peer_keys.get(source_id)
+                if current is not state or sequence <= current[sequence_key]:
+                    return
+                current[sequence_key] = sequence
+            self.events.put(("frame", (source_id, base_type, jpeg)))
+        except Exception:
+            self.events.put(("status", "Dropped an invalid, replayed or untrusted encrypted visual frame."))
+
+    def _show_frame(self, source_id, frame_type, jpeg):
+        try:
+            from io import BytesIO
+            image = Image.open(BytesIO(jpeg)).convert("RGB")
+            image.thumbnail((1280, 800), Image.Resampling.LANCZOS)
+            if not self.frame_window or not self.frame_window.winfo_exists():
+                self.frame_window = tk.Toplevel(self.root)
+                self.frame_window.title("Shraddha AI • Encrypted paired-device screen")
+                self.frame_label = ttk.Label(self.frame_window)
+                self.frame_label.pack(fill="both", expand=True, padx=8, pady=8)
+            self.frame_photo = ImageTk.PhotoImage(image)
+            self.frame_label.configure(image=self.frame_photo,
+                                       text=f"{source_id} • {'Screen' if frame_type == 1 else 'Camera'}")
+            self.frame_window.title(f"Shraddha AI • {source_id} • {'Screen' if frame_type == 1 else 'Camera'}")
+            image.close()
+        except Exception as exc:
+            self.status_var.set(f"Could not display encrypted peer frame: {str(exc)[:120]}")
+
+    def _handle_message(self, msg):
+        kind = msg.get("type")
+        if kind == "connected":
+            peers = msg.get("devices", [])
+            role = "Owner" if msg.get("role") == "owner" else "Member"
+            for peer in peers:
+                peer_id = str(peer.get("id", ""))
+                if peer_id and peer_id != self.config.get("deviceId"):
+                    self._send_e2e_key_offer(peer_id)
+            self.status_var.set(f"Connected as {role} • {len(peers)} other paired device(s).")
+        elif kind == "peer_status":
+            peer_id = str(msg.get("deviceId", ""))
+            if msg.get("revoked"):
+                with self.e2e_lock:
+                    state = self.peer_keys.pop(peer_id, None)
+                    if state:
+                        state["key"][:] = b"\x00" * len(state["key"])
+            elif msg.get("online") and peer_id:
+                self._send_e2e_key_offer(peer_id)
+            self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
+        elif kind == "e2e_key_offer":
+            peer_id = str(msg.get("fromDeviceId", ""))
+            try:
+                key, fingerprint = self.e2e_crypto.derive_peer_key(
+                    msg.get("publicKey", ""), self.config.get("sessionId", ""),
+                    self.config.get("deviceId", ""), peer_id
+                )
+                with self.e2e_lock:
+                    previous = self.peer_keys.pop(peer_id, None)
+                    if previous:
+                        previous["key"][:] = b"\x00" * len(previous["key"])
+                    self.peer_keys[peer_id] = {"key": bytearray(key), "fingerprint": fingerprint,
+                                               "local_confirmed": False, "remote_confirmed": False,
+                                               "send_sequence": 0, "recv_screen_sequence": -1,
+                                               "recv_camera_sequence": -1}
+                approved = messagebox.askyesno(
+                    "Shraddha AI • Verify paired-device fingerprint",
+                    f"Peer device: {peer_id}\n\nFingerprint:\n{fingerprint}\n\n"
+                    "Compare this exact fingerprint with the other device using a separate trusted channel. "
+                    "Confirm only if every character matches."
+                )
+                if approved:
+                    sent = self._send_json({"type": "e2e_key_confirm", "targetDeviceId": peer_id,
+                                            "fingerprint": fingerprint})
+                    with self.e2e_lock:
+                        if peer_id in self.peer_keys:
+                            self.peer_keys[peer_id]["local_confirmed"] = bool(sent)
+                    self.status_var.set("Fingerprint confirmation sent; waiting for the other device.")
+                else:
+                    with self.e2e_lock:
+                        rejected = self.peer_keys.pop(peer_id, None)
+                        if rejected:
+                            rejected["key"][:] = b"\x00" * len(rejected["key"])
+                    self.status_var.set("Peer fingerprint rejected; encrypted sharing remains blocked.")
+            except Exception as exc:
+                self.status_var.set(f"Rejected peer E2E key offer: {str(exc)[:140]}")
+        elif kind == "e2e_key_confirm":
+            peer_id = str(msg.get("fromDeviceId", ""))
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                if state and state["fingerprint"] == msg.get("fingerprint"):
+                    state["remote_confirmed"] = True
+                    trusted = state["local_confirmed"]
+                else:
+                    trusted = False
+            if trusted:
+                self.status_var.set("Peer fingerprint confirmed. Mutual trust: READY")
+            elif state and state["fingerprint"] == msg.get("fingerprint"):
+                self.status_var.set("Peer fingerprint confirmed; waiting for local confirmation.")
+            else:
+                self.status_var.set("E2E fingerprint mismatch. Do not trust this peer.")
+        elif kind == "e2e_message":
+            peer_id = str(msg.get("fromDeviceId", ""))
+            message_kind = str(msg.get("messageKind", ""))
+            action_id = str(msg.get("actionId", ""))
+            action_kind = str(msg.get("actionKind", ""))
+            if message_kind != "remote_action" or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):
+                self.status_var.set("Ignored unsupported encrypted peer message.")
+                return
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                    state = None
+                key = bytes(state["key"]) if state else None
+            if key is None:
+                self.status_var.set("Blocked encrypted action: peer fingerprint is not mutually verified.")
+                return
+            try:
+                aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|remote_action|{action_id}".encode("utf-8")
+                plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+                payload = json.loads(plain.decode("utf-8"))
+                action = validate_remote_action(payload.get("action"))
+                if not action or action.get("kind") != action_kind:
+                    raise ValueError("Action payload or action-kind binding is invalid.")
+            except Exception as exc:
+                self.status_var.set(f"Encrypted action rejected: {str(exc)[:140]}")
+                return
+            if not self.remote_var.get() or time.time() > self.control_grant_until:
+                self.status_var.set("Ignored action: no active local PC approval.")
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "reason": "No active local PC approval."},
+                                       action_id, action_kind)
+                return
+            self._execute(action, peer_id, action_id)
+        elif kind == "remote_action":
+            self.status_var.set("Blocked plaintext remote action. E2E encryption is mandatory.")
+        elif kind == "control_request":
+            requester = str(msg.get("requesterName", "Paired device"))[:80]
+            requester_id = str(msg.get("fromDeviceId", ""))[:80]
+            minutes = max(1, min(5, int(msg.get("requestedMinutes", 5))))
+            approved = messagebox.askyesno(
+                "Shraddha AI • Remote control request",
+                f"{requester} wants to control this PC for up to {minutes} minutes.\n\n"
+                "Approve only if you initiated this request on your phone."
+            )
+            self._send_json({
+                "type": "control_response", "requesterDeviceId": requester_id,
+                "approved": bool(approved), "minutes": minutes
+            })
+            self.control_grant_until = time.time() + minutes * 60 if approved else 0
+            self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
+        elif kind == "permission_status":
+            self.status_var.set("Peer permissions updated.")
+
+    def _send_e2e_key_offer(self, peer_id):
+        if not peer_id or peer_id == self.config.get("deviceId"):
+            return False
+        return self._send_json({
+            "type": "e2e_key_offer", "targetDeviceId": peer_id,
+            "publicKey": self.e2e_crypto.public_key_base64()
+        })
+
+    def is_e2e_trusted(self, peer_id):
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            return bool(state and state["local_confirmed"] and state["remote_confirmed"])
+
+    def _clear_peer_keys(self):
+        with self.e2e_lock:
+            for state in self.peer_keys.values():
+                state["key"][:] = b"\x00" * len(state["key"])
+            self.peer_keys.clear()
+
+    def _send_e2e_message(self, peer_id, kind, payload, action_id, action_kind=""):
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                return False
+            key = bytes(state["key"])
+        source_id = str(self.config.get("deviceId", ""))
+        target_id = peer_id
+        session_id = str(self.config.get("sessionId", ""))
+        aad = f"{session_id}|{source_id}|{target_id}|{kind}|{action_id}".encode("utf-8")
+        nonce, ciphertext = DeviceE2ECrypto.encrypt(key, json.dumps(payload, separators=(",", ":")).encode("utf-8"), aad)
+        return self._send_json({
+            "type": "e2e_message", "targetDeviceId": target_id, "messageKind": kind,
+            "actionId": action_id, "actionKind": action_kind,
+            "nonce": nonce, "ciphertext": ciphertext
+        })
+
+    def _execute(self, action, peer_id=None, action_id=None):
+        ok = False
+        message = "Action failed."
+        try:
+            ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut)
+            self.status_var.set(message)
+            if peer_id and action_id:
+                sent = self._send_e2e_message(peer_id, "remote_action_result",
+                                              {"ok": bool(ok), "reason": "" if ok else str(message)[:240]},
+                                              action_id, action.get("kind", ""))
+                if not sent:
+                    self.status_var.set("Action finished, but encrypted result could not be delivered.")
+            if not ok and "fail-safe" in message.lower():
+                self.disconnect(emergency=True)
+        except Exception as exc:
+            message = f"Action failed: {str(exc)[:160]}"
+            self.status_var.set(message)
+            if peer_id and action_id:
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "reason": message}, action_id, action.get("kind", ""))
+
+    def _open_start_menu_shortcut(self, app_name):
+        roots = [
+            Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+            Path(os.environ.get("PROGRAMDATA", "C:/ProgramData")) / "Microsoft/Windows/Start Menu/Programs"
+        ]
+        query = app_name.casefold()
+        for root in roots:
+            if not root.exists():
+                continue
+            for shortcut in root.rglob("*.lnk"):
+                if shortcut.stem.casefold() == query:
+                    os.startfile(str(shortcut))
+                    return True
+        return False
+
+    def _screen_loop(self):
+        while not self.stop_event.is_set():
+            if not self.screen_event.is_set():
+                time.sleep(0.25)
+                continue
+            ws = self.ws_app
+            if not ws or not ws.sock or not ws.sock.connected:
+                time.sleep(0.25)
+                continue
+            try:
+                with mss.mss() as capture:
+                    monitor = capture.monitors[1]
+                    shot = capture.grab(monitor)
+                image = Image.frombytes("RGB", shot.size, shot.rgb)
+                try:
+                    image.thumbnail((1280, 720), Image.Resampling.LANCZOS)
+                    from io import BytesIO
+                    with BytesIO() as output:
+                        image.save(output, format="JPEG", quality=55, optimize=True)
+                        jpeg = output.getvalue()
+                    if jpeg and len(jpeg) <= MAX_FRAME_BYTES:
+                        source_id = str(self.config.get("deviceId", ""))
+                        session_id = str(self.config.get("sessionId", ""))
+                        with self.e2e_lock:
+                            targets = [
+                                (peer_id, state) for peer_id, state in self.peer_keys.items()
+                                if state["local_confirmed"] and state["remote_confirmed"]
+                            ]
+                        for peer_id, state in targets:
+                            target_bytes = peer_id.encode("utf-8")
+                            if not target_bytes or len(target_bytes) > 64:
+                                continue
+                            with self.e2e_lock:
+                                current = self.peer_keys.get(peer_id)
+                                if current is not state or not current["local_confirmed"] or not current["remote_confirmed"]:
+                                    continue
+                                sequence = current["send_sequence"]
+                                current["send_sequence"] += 1
+                                key = bytes(current["key"])
+                            aad = f"{session_id}|{source_id}|{peer_id}|1|{sequence}".encode("utf-8")
+                            nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, jpeg, aad)
+                            nonce = base64.b64decode(nonce_b64 + "=" * ((4 - len(nonce_b64) % 4) % 4))
+                            ciphertext = base64.b64decode(ciphertext_b64 + "=" * ((4 - len(ciphertext_b64) % 4) % 4))
+                            packet = bytes((0x81, len(target_bytes))) + target_bytes + struct.pack(">Q", sequence) + nonce + ciphertext
+                            with self.send_lock:
+                                if ws.sock and ws.sock.connected:
+                                    ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
+                finally:
+                    image.close()
+            except Exception as exc:
+                self.events.put(("status", f"Screen capture paused: {str(exc)[:120]}"))
+                self.screen_event.clear()
+            time.sleep(0.25)
+
+    def revoke_pairing(self):
+        if not messagebox.askyesno(
+            "Revoke PC pairing?",
+            "This permanently revokes this PC's relay pairing. You will need a new six-digit code to connect again. Continue?",
+            parent=self.root,
+        ):
+            return
+        device_id = str(self.config.get("deviceId", ""))
+        session_id = str(self.config.get("sessionId", ""))
+        token = self.device_token or self._token_for_saved_device()
+        try:
+            base = _https_base(self.config.get("baseUrl", self.base_var.get()))
+            if not valid_pairing_ids(session_id, device_id) or not token:
+                raise ValueError("Saved PC pairing identifiers are invalid or unavailable. Pair this PC again.")
+            payload = json.dumps({
+                "sessionId": session_id, "deviceId": device_id,
+                "targetDeviceId": device_id
+            }).encode("utf-8")
+            request = urllib.request.Request(
+                base + "/api/device/revoke", data=payload, method="POST",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+            )
+            with urllib.request.urlopen(request, timeout=20) as response:
+                result = json.loads(response.read(16 * 1024).decode("utf-8"))
+            if result.get("ok") is not True:
+                raise RuntimeError("Relay did not confirm revocation.")
+            self.disconnect()
+            try:
+                keyring.delete_password(SERVICE_NAME, device_id)
+            except Exception:
+                pass
+            self.config = {"baseUrl": base, "deviceName": self.name_var.get().strip()[:48]}
+            self._save_config()
+            self.device_token = None
+            self.status_var.set("This PC pairing was revoked on the relay and its saved token was deleted.")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read(4096).decode("utf-8", errors="replace")
+            self.status_var.set(f"Pairing revoke failed ({exc.code}): {detail[:160]}")
+        except Exception as exc:
+            self.status_var.set(f"Pairing revoke failed: {str(exc)[:180]}")
+
+    def disconnect(self, emergency=False):
+        self.screen_event.clear()
+        self.remote_var.set(False)
+        self.screen_var.set(False)
+        self.control_grant_until = 0
+        self._send_json({"type": "permission_update", "permissions": {"remote_control": False, "screen": False}})
+        ws = self.ws_app
+        if ws:
+            try:
+                ws.close()
+            except Exception:
+                pass
+        self._clear_peer_keys()
+        self.status_var.set("Emergency stop: permissions revoked." if emergency else "Disconnected. Permissions revoked.")
+
+    def _close(self):
+        self.disconnect()
+        self.stop_event.set()
+        self.root.destroy()
+
+
+def main():
+    root = tk.Tk()
+    PcCompanionApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

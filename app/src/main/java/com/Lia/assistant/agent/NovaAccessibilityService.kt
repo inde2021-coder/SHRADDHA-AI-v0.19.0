@@ -104,6 +104,35 @@ class NovaAccessibilityService : AccessibilityService() {
         return if (gestureTap(x, y)) "tapped" else "failed"
     }
 
+    /**
+     * Sets text only on the editable node whose current screen bounds match the
+     * previously observed target. Unlike typeText(), this never falls back to
+     * whichever input happens to be focused or first in the view tree.
+     */
+    fun typeTextAtBounds(targetBounds: Rect, text: String): String {
+        val root = rootInActiveWindow ?: return "no_active_window"
+        val queue = LinkedList<AccessibilityNodeInfo>()
+        queue.add(root)
+        var match: AccessibilityNodeInfo? = null
+        val nodeBounds = Rect()
+        while (queue.isNotEmpty()) {
+            val node = queue.poll() ?: continue
+            node.getBoundsInScreen(nodeBounds)
+            if (node.isEditable && nodeBounds == targetBounds) {
+                match = node
+                break
+            }
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        val target = match ?: return "target_field_not_found"
+        val args = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        return if (target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) "typed" else "failed"
+    }
+
     fun typeText(text: String): String {
         val root = rootInActiveWindow ?: return "no_focused_field"
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
@@ -153,18 +182,65 @@ class NovaAccessibilityService : AccessibilityService() {
         return true
     }
 
-    suspend fun autoTapSend(isWhatsApp: Boolean): String {
-        for (i in 0 until 12) {
+    /**
+     * Sends only when WhatsApp is foregrounded, the intended recipient is visibly
+     * identified, and the exact dictated message is present in an editable field.
+     * If any check fails, it refuses to tap Send.
+     */
+    suspend fun sendWhatsAppMessage(lookupName: String, expectedNumber: String, message: String): String {
+        val digits = expectedNumber.filter { it.isDigit() }
+        val expectedName = lookupName.trim().lowercase()
+        for (attempt in 0 until 15) {
             delay(400)
-            if (isWhatsApp) {
-                tapText("Continue to chat")
+            val root = rootInActiveWindow ?: continue
+            val packageName = root.packageName?.toString().orEmpty()
+            if (packageName != "com.whatsapp" && packageName != "com.whatsapp.w4b") continue
+
+            val screenText = collectVisibleText(root).joinToString(" ").lowercase()
+            val recipientVisible = (expectedName.isNotBlank() && screenText.contains(expectedName)) ||
+                (digits.length >= 7 && screenText.filter { it.isDigit() }.contains(digits.takeLast(7)))
+            if (!recipientVisible) continue
+
+            val messageVisible = findExactEditableText(root, message)
+            if (!messageVisible) continue
+
+            val sendNode = findNodeMatchingText(root, "send") ?: continue
+            var clickable: AccessibilityNodeInfo? = sendNode
+            var clicked = false
+            while (clickable != null) {
+                if (clickable.isClickable) {
+                    clicked = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    if (clicked) break
+                }
+                clickable = clickable.parent
             }
-            val tappedSend = tapText("Send")
-            if (tappedSend == "tapped") {
-                return "sent"
-            }
+            if (clicked) return "whatsapp_sent"
         }
-        return "composer_opened_send_not_found"
+        return "whatsapp_recipient_not_verified"
+    }
+
+    private fun collectVisibleText(root: AccessibilityNodeInfo): List<String> {
+        val result = mutableListOf<String>()
+        val queue = LinkedList<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.poll() ?: continue
+            node.text?.toString()?.takeIf { it.isNotBlank() }?.let { result.add(it) }
+            node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { result.add(it) }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return result
+    }
+
+    private fun findExactEditableText(root: AccessibilityNodeInfo, expected: String): Boolean {
+        val queue = LinkedList<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.poll() ?: continue
+            if (node.isEditable && node.text?.toString()?.trim() == expected.trim()) return true
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return false
     }
 
     private fun findNodeMatchingText(root: AccessibilityNodeInfo, query: String): AccessibilityNodeInfo? {

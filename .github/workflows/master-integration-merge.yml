@@ -1,44 +1,45 @@
-name: Master integration merge and verification
+name: Integration branch consolidation and full verification
+
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/master-integration-merge.yml
   pull_request:
     branches:
-      - integration/master-feature-consolidation-2026-11
+      - main
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: master-integration-merge
-  cancel-in-progress: false
+  group: integration-full-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   merge-and-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - name: Checkout integration branch with full history
-        uses: actions/checkout@v4
+      - name: Checkout full history
+        uses: actions/checkout@v6
         with:
-          ref: integration/master-feature-consolidation-2026-11
+          ref: ${{ github.sha }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Set up JDK 21 for Firebase emulators
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Fetch every source branch
         run: git fetch origin --prune
 
-      - name: Merge every project branch into one integration branch
+      - name: Verify every source branch is already included in this commit
         shell: bash
         run: |
           set -euo pipefail
@@ -52,33 +53,41 @@ jobs:
             redesign-v0.19.2 \
             work/step-01-source-audit-fixes
           do
-            echo "::group::Merge origin/$branch"
-            git merge --no-edit --no-ff -X ours "origin/$branch" || {
-              git status --short
-              echo "Merge failed for $branch; stopping before tests."
+            if ! git merge-base --is-ancestor "origin/$branch" HEAD; then
+              echo "::error::Source branch $branch is not fully merged into the current integration commit."
+              echo "Merge $branch into integration and push before running the full suite."
               exit 1
-            }
-            echo "::endgroup::"
+            fi
+            echo "Verified: $branch is included in $(git rev-parse --short HEAD)"
           done
 
-      - name: Push consolidated branch
-        run: git push origin HEAD:integration/master-feature-consolidation-2026-11
+      - name: Check integrated diff for whitespace errors
+        run: git diff --check origin/main...HEAD
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Validate backend JavaScript
+        run: |
+          node --version
+          node --check backend/server.js
+          node --check backend/telephony-audio.js
+          node --check backend/form-autofill.js
 
-      - name: Validate backend JavaScript and run backend tests
+      - name: Run backend tests
         working-directory: backend
         run: |
           npm install --no-audit --no-fund
-          node --check server.js
-          node --check telephony-audio.js
           npm test
+
+      - name: Set up Python 3.12 for voice-engine validation
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Validate custom voice engine Python syntax
+        run: python -m py_compile voice-engine/app.py
 
       - name: Run Firebase security rules tests
         run: |
+          git config --global init.defaultBranch main
           npm install --prefix firebase/rules-tests --no-audit --no-fund
           ./firebase/rules-tests/node_modules/.bin/firebase emulators:exec --project demo-shraddha-ai --only firestore,storage,database "npm --prefix firebase/rules-tests test"
 
@@ -88,15 +97,87 @@ jobs:
           python -m pip install -r requirements.txt
           python -m unittest -v
 
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Run Android unit tests and build debug APK
+        timeout-minutes: 50
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+          timeout --signal=TERM --kill-after=60s 45m ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest :app:assembleDebug --stacktrace
+
+      - name: Run Android emulator instrumentation, ONNX and app launch checks
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
+        with:
+          api-level: 30
+          emulator-boot-timeout: 1200
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
+          pre-emulator-launch-script: adb start-server
+          script: bash .github/scripts/android-onnx-smoke.sh
+
+      - name: Upload Android instrumentation reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-android-instrumentation-reports
+          path: app/build/reports/androidTests/connected/
+          if-no-files-found: ignore
 
       - name: Upload consolidated debug APK
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shraddha-ai-master-integration-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
+  pc-companion-windows:
+    name: Windows PC companion tests and EXE package
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact triggering commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install PC companion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r pc_companion/requirements.txt
+
+      - name: Run PC companion protocol, action and E2E crypto tests
+        run: python -m unittest discover -s pc_companion/tests -v
+
+      - name: Build Windows PC companion executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --collect-all keyring --collect-all cryptography pc_companion/agent.py
+
+      - name: Upload Windows PC companion executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-pc-companion-windows-exe
+          path: dist/ShraddhaAI-PC-Companion.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Install legacy desktop companion dependencies
+        run: python -m pip install -r desktop-companion/shraddha-pc-companion/requirements.txt
+
+      - name: Run legacy Windows companion policy tests on Windows
+        working-directory: desktop-companion/shraddha-pc-companion
+        run: python -m unittest -v
+
+      - name: Compile legacy Windows companion entry point
+        working-directory: desktop-companion/shraddha-pc-companion
+        run: python -m py_compile shraddha_pc_companion.py

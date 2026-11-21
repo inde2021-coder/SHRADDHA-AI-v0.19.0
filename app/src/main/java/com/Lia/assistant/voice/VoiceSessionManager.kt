@@ -3,14 +3,18 @@ package com.Lia.assistant.voice
 import android.content.Context
 import com.Lia.assistant.action.ActionExecutor
 import com.Lia.assistant.action.InstalledAppLabelCache
-import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
 import com.Lia.assistant.forge.ForgeController
+import `in`.shraddha.ai.brain.PersistentChatMemory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,9 +26,13 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
 object VoiceSessionManager {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessionMutex = Mutex()
+    private val clientLock = Any()
+    private val toolJobsLock = Any()
+    private val toolJobs = mutableSetOf<Job>()
     private val sessionEpoch = AtomicLong(0)
+    private val audioEpoch = AtomicLong(0)
 
     private val _state = MutableStateFlow(NovaOrbState.IDLE)
     val state: StateFlow<NovaOrbState> = _state.asStateFlow()
@@ -56,73 +64,105 @@ object VoiceSessionManager {
     private val _vadActive = MutableStateFlow(false)
     val vadActive: StateFlow<Boolean> = _vadActive.asStateFlow()
 
-    private var client: GeminiLiveClient? = null
-    private var audioIO: LiveAudioIO? = null
+    @Volatile private var client: GeminiLiveClient? = null
+    @Volatile private var audioIO: LiveAudioIO? = null
     private var appContext: Context? = null
 
     private var reconnectJob: Job? = null
     private var silenceWatchdogJob: Job? = null
     private var isTurnActive = false
+    private val pendingAssistantText = StringBuilder()
+    private val pendingTextLock = Any()
+
+    fun isCurrentSession(epoch: Long): Boolean = sessionEpoch.get() == epoch
+    fun isActiveNow(): Boolean = _isActive.value
 
     fun start(context: Context) {
         if (_isActive.value) return
         appContext = context.applicationContext
 
         _isActive.value = true
+        _muted.value = false
+        isTurnActive = false
         _lastError.value = null
         _statusText.value = "Connecting..."
         _state.value = NovaOrbState.CONNECTING
+        val currentAudioEpoch = audioEpoch.incrementAndGet()
+        val startEpoch = sessionEpoch.incrementAndGet()
 
-        ConversationMemory.clear()
+        ConversationMemory.initialize(appContext ?: context.applicationContext)
         VoiceLatencyTracker.reset()
         InstalledAppLabelCache.prewarm(context)
 
         audioIO = LiveAudioIO(
             onMicChunk = { bytes ->
-                if (_isActive.value && !_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
                     client?.sendAudio(bytes)
                 }
             },
             onMicAmplitude = { amp ->
-                if (!_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
                     _amplitude.value = amp
                     _vadActive.value = amp > 0.05f
+                }
+            },
+            onRecordingError = { message ->
+                scope.launch {
+                    if (_isActive.value && audioEpoch.get() == currentAudioEpoch) {
+                        _lastError.value = message
+                        _state.value = NovaOrbState.ERROR
+                        _statusText.value = "Microphone unavailable: $message"
+                    }
                 }
             }
         )
 
         scope.launch {
             sessionMutex.withLock {
-                connectSession(isResuming = false)
+                connectSession(isResuming = false, expectedEpoch = startEpoch)
             }
         }
     }
 
-    private suspend fun connectSession(isResuming: Boolean) {
+    private suspend fun connectSession(isResuming: Boolean, expectedEpoch: Long? = null) {
         val currentContext = appContext ?: return
-        val currentEpoch = sessionEpoch.incrementAndGet()
+        val currentEpoch = expectedEpoch ?: sessionEpoch.incrementAndGet()
+        if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
+        cancelToolJobs()
 
-        client?.disconnect()
+        synchronized(clientLock) {
+            client?.disconnect()
+            client = null
+        }
         _state.value = NovaOrbState.CONNECTING
         _statusText.value = if (isResuming) "Reconnecting..." else "Connecting..."
 
-        val apiKey = ApiKeyStore.getKey(currentContext)
-        if (apiKey.isEmpty()) {
-            _state.value = NovaOrbState.ERROR
-            _statusText.value = "API key missing. Enter key in Settings."
-            _lastError.value = "Missing Gemini API Key"
+        val ephemeralToken = try {
+            VoiceGatewaySettings.fetchEphemeralToken(currentContext)
+        } catch (error: Exception) {
+            if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
+            val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
+            _lastError.value = message
+            _state.value = NovaOrbState.CONNECTING
+            _statusText.value = "Voice connection unavailable; retrying automatically"
+            audioIO?.stopRecording()
+            retryAfterCurrentAttempt()
             return
         }
+
+        // The user may stop while the ephemeral token request is in flight. Never
+        // create a WebSocket client or restart the microphone for a stale session.
+        if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
 
         val personality = PersonalityRepository.getPersonality(currentContext)
         val language = PersonalityRepository.getLanguage(currentContext)
         val assistantName = PersonalityRepository.getAssistantName(currentContext)
-        val voiceName = PersonalityRepository.getVoiceName(currentContext)
+        synchronized(pendingTextLock) { pendingAssistantText.clear() }
 
         _currentPersonality.value = personality
         _currentLanguage.value = language
 
-        val recap = if (isResuming) ConversationMemory.recap() else null
+        val recap = ConversationMemory.recap()
         val prompt = PersonalityPromptBuilder.build(
             personality = personality,
             language = language,
@@ -137,7 +177,9 @@ object VoiceSessionManager {
                 _state.value = NovaOrbState.LISTENING
                 _statusText.value = "Listening..."
                 VoiceLatencyTracker.resetReconnect()
-                audioIO?.startRecording()
+                synchronized(clientLock) {
+                    if (_isActive.value && sessionEpoch.get() == currentEpoch) audioIO?.startRecording()
+                }
             }
 
             override fun onAudioChunk(bytes: ByteArray) {
@@ -151,7 +193,15 @@ object VoiceSessionManager {
 
                 _state.value = NovaOrbState.SPEAKING
                 _statusText.value = "$assistantName is speaking..."
-                val amp = audioIO?.playChunk(bytes) ?: 0f
+                val amp = try {
+                    audioIO?.playChunk(bytes) ?: 0f
+                } catch (playbackError: Exception) {
+                    _lastError.value = playbackError.localizedMessage ?: "Speaker playback failed."
+                    _state.value = NovaOrbState.ERROR
+                    _statusText.value = "Speaker unavailable • reconnecting"
+                    scheduleReconnect()
+                    return
+                }
                 _amplitude.value = amp
 
                 // Re-arm 300 ms silence watchdog
@@ -172,6 +222,7 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 VoiceLatencyTracker.markUserTurnStart()
                 ConversationMemory.recordTurn(MemoryRole.USER, text)
+                scope.launch { PersistentChatMemory.record(currentContext, "User", text) }
                 val detected = LanguageDetector.detect(text)
                 if (detected != "UNKNOWN") {
                     _detectedLanguage.value = detected
@@ -180,7 +231,9 @@ object VoiceSessionManager {
 
             override fun onOutputTranscript(text: String) {
                 if (sessionEpoch.get() != currentEpoch) return
-                ConversationMemory.recordTurn(MemoryRole.ASSISTANT, text)
+                synchronized(pendingTextLock) {
+                    if (pendingAssistantText.length < 6000) pendingAssistantText.append(text).append(' ')
+                }
             }
 
             override fun onToolCall(id: String, name: String, args: JSONObject) {
@@ -188,21 +241,92 @@ object VoiceSessionManager {
                 _state.value = NovaOrbState.THINKING
                 _statusText.value = "Working on it..."
 
-                if (name == "build_website") {
-                    val forgePrompt = args.optString("prompt", "")
-                    ForgeController.start(currentContext, forgePrompt)
-                    val resp = JSONObject().apply { put("result", "forge_started") }
-                    client?.sendToolResponse(id, name, resp)
-                    _state.value = NovaOrbState.LISTENING
+                if (name == "plan_multi_agent_task") {
+                    runCatching {
+                        val goal = args.optString("goal").trim()
+                        require(goal.isNotBlank() && goal.length <= 1000) { "Goal must contain 1-1000 characters" }
+                        val council = `in`.shraddha.ai.future.AgentCouncil.plan(goal)
+                        val actions = council.roles.mapIndexed { index, role ->
+                            `in`.shraddha.ai.future.ShraddhaIntegrationHub.Action(
+                                id = role.name.lowercase().replace(Regex("[^a-z0-9_-]"), "_"),
+                                title = role.responsibility,
+                                dependsOn = if (index == 0) emptySet() else setOf(council.roles[index - 1].name.lowercase().replace(Regex("[^a-z0-9_-]"), "_")),
+                                priority = if (role.name == "Verifier" || role.name == "Critic") 1 else 2,
+                                estimatedMinutes = 10
+                            )
+                        }
+                        val hub = `in`.shraddha.ai.future.ShraddhaIntegrationHub()
+                        val session = hub.createPlan(
+                            workflowId = "voice-council-" + java.util.UUID.randomUUID().toString().take(8),
+                            title = goal.take(120),
+                            actions = actions
+                        )
+                        val roles = org.json.JSONArray()
+                        council.roles.forEach { role ->
+                            roles.put(JSONObject().put("name", role.name).put("responsibility", role.responsibility).put("output", role.output))
+                        }
+                        val ordered = org.json.JSONArray()
+                        session.plan.ordered.forEachIndexed { index, task ->
+                            ordered.put(JSONObject().put("step", index + 1).put("id", task.id).put("title", task.title).put("estimatedMinutes", task.estimatedMinutes))
+                        }
+                        val guardrails = org.json.JSONArray()
+                        council.guardrails.forEach { guardrails.put(it) }
+                        val response = JSONObject()
+                            .put("status", "plan_created")
+                            .put("goal", goal)
+                            .put("roles", roles)
+                            .put("orderedTasks", ordered)
+                            .put("guardrails", guardrails)
+                            .put("execution", "not_started")
+                        val saved = `in`.shraddha.ai.brain.EncryptedFeatureStore(currentContext)
+                            .put("voice_agent_council_latest", response.toString())
+                        response.put("encryptedLocalSave", saved.isSuccess)
+                        if (saved.isFailure) response.put("storageWarning", saved.exceptionOrNull()?.localizedMessage ?: "Encrypted local save failed")
+                        response
+                    }.getOrElse { error ->
+                        JSONObject().put("status", "error").put("message", error.localizedMessage ?: "Multi-agent planning failed")
+                    }.also { response ->
+                        client?.sendToolResponse(id, name, response)
+                        _state.value = NovaOrbState.LISTENING
+                        _statusText.value = "Listening..."
+                    }
                     return
                 }
 
-                scope.launch {
-                    val result = ActionExecutor.execute(currentContext, name, args)
-                    if (sessionEpoch.get() == currentEpoch) {
+                if (name == "build_website") {
+                    val response = runCatching {
+                        ForgeController.start(currentContext, args.optString("prompt", ""))
+                        JSONObject().put("result", "forge_started").put("success", true)
+                    }.getOrElse { error ->
+                        JSONObject().put("success", false).put("error", (error.localizedMessage ?: "Website build could not start").take(300))
+                    }
+                    client?.sendToolResponse(id, name, response)
+                    _state.value = NovaOrbState.LISTENING
+                    _statusText.value = "Listening..."
+                    return
+                }
+
+                val toolJob = scope.launch(start = CoroutineStart.LAZY) {
+                    val result = try {
+                        ActionExecutor.execute(currentContext, name, args)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        JSONObject().put("status", "error").put("message", error.localizedMessage ?: "Tool execution failed")
+                    }
+                    if (sessionEpoch.get() == currentEpoch && _isActive.value) {
                         client?.sendToolResponse(id, name, result)
                         _state.value = NovaOrbState.LISTENING
                         _statusText.value = "Listening..."
+                    }
+                }
+                synchronized(toolJobsLock) {
+                    if (_isActive.value && sessionEpoch.get() == currentEpoch) {
+                        toolJobs.add(toolJob)
+                        toolJob.invokeOnCompletion { synchronized(toolJobsLock) { toolJobs.remove(toolJob) } }
+                        toolJob.start()
+                    } else {
+                        toolJob.cancel()
                     }
                 }
             }
@@ -210,15 +334,24 @@ object VoiceSessionManager {
             override fun onTurnComplete() {
                 if (sessionEpoch.get() != currentEpoch) return
                 silenceWatchdogJob?.cancel()
-                if (isTurnActive) {
-                    isTurnActive = false
-                    EchoGuard.notifyPlaybackStopped()
+                val response = synchronized(pendingTextLock) {
+                    pendingAssistantText.toString().trim().also { pendingAssistantText.clear() }
                 }
-                audioIO?.flushPlayback()
-                _state.value = NovaOrbState.LISTENING
-                _statusText.value = "Listening..."
-                _amplitude.value = 0f
-                VoiceLatencyTracker.markTurnComplete()
+                if (response.isNotBlank()) {
+                    ConversationMemory.recordTurn(MemoryRole.ASSISTANT, response)
+                    VoiceLatencyTracker.markTurnComplete()
+                    speakWithShraddha(currentContext, currentEpoch, assistantName, response)
+                } else {
+                    if (isTurnActive) {
+                        isTurnActive = false
+                        EchoGuard.notifyPlaybackStopped()
+                    }
+                    audioIO?.flushPlayback()
+                    _state.value = NovaOrbState.LISTENING
+                    _statusText.value = "Listening..."
+                    _amplitude.value = 0f
+                    VoiceLatencyTracker.markTurnComplete()
+                }
             }
 
             override fun onInterrupted() {
@@ -228,6 +361,7 @@ object VoiceSessionManager {
                     isTurnActive = false
                     EchoGuard.notifyPlaybackStopped()
                 }
+                synchronized(pendingTextLock) { pendingAssistantText.clear() }
                 audioIO?.flushPlayback()
                 _state.value = NovaOrbState.LISTENING
                 _statusText.value = "Listening..."
@@ -238,6 +372,7 @@ object VoiceSessionManager {
                 if (sessionEpoch.get() != currentEpoch) return
                 _lastError.value = message
                 if (_isActive.value) {
+                    audioIO?.stopRecording()
                     scheduleReconnect()
                 }
             }
@@ -245,37 +380,81 @@ object VoiceSessionManager {
             override fun onClosed() {
                 if (sessionEpoch.get() != currentEpoch) return
                 if (_isActive.value) {
+                    audioIO?.stopRecording()
                     scheduleReconnect()
                 }
             }
         }
 
-        client = GeminiLiveClient(liveListener)
-        client?.connect(apiKey, prompt, voiceName)
+        val nextClient = GeminiLiveClient(liveListener)
+        synchronized(clientLock) {
+            if (!_isActive.value || sessionEpoch.get() != currentEpoch) {
+                nextClient.disconnect()
+                return
+            }
+            client = nextClient
+            nextClient.connect(ephemeralToken, prompt)
+        }
+    }
+
+    private fun speakWithShraddha(context: Context, epoch: Long, assistantName: String, text: String) {
+        _state.value = NovaOrbState.THINKING
+        _statusText.value = "Preparing Shraddha's own voice..."
+        ShraddhaSpeechClient.synthesize(context, text, _detectedLanguage.value) { result ->
+            if (sessionEpoch.get() != epoch || !_isActive.value) return@synthesize
+            result.onSuccess { pcm ->
+                scope.launch {
+                    if (sessionEpoch.get() != epoch || !_isActive.value) return@launch
+                    isTurnActive = true
+                    EchoGuard.notifyPlaybackStarted()
+                    _state.value = NovaOrbState.SPEAKING
+                    _statusText.value = assistantName + " is speaking..."
+                    _amplitude.value = audioIO?.playChunk(pcm) ?: 0f
+                    val durationMs = (pcm.size / 48.0).toLong().coerceIn(100L, 60000L)
+                    delay(durationMs + 180L)
+                    if (sessionEpoch.get() == epoch && isTurnActive) {
+                        isTurnActive = false
+                        EchoGuard.notifyPlaybackStopped()
+                        _state.value = NovaOrbState.LISTENING
+                        _statusText.value = "Listening..."
+                        _amplitude.value = 0f
+                    }
+                }
+            }.onFailure { error ->
+                _lastError.value = error.localizedMessage ?: "Shraddha custom voice engine unavailable"
+                _state.value = NovaOrbState.ERROR
+                _statusText.value = "Shraddha voice engine setup required — no Google voice fallback"
+            }
+        }
+    }
+
+    private fun retryAfterCurrentAttempt() {
+        scope.launch {
+            delay(1_200)
+            if (_isActive.value && reconnectJob?.isActive != true) scheduleReconnect()
+        }
     }
 
     private fun scheduleReconnect() {
-        if (!_isActive.value) return
-        if (reconnectJob?.isActive == true) return
+        if (!_isActive.value || reconnectJob?.isActive == true) return
 
         val count = VoiceLatencyTracker.reconnectCount.value
-        if (count >= 5) {
-            _state.value = NovaOrbState.ERROR
-            _statusText.value = "Connection lost - tap Stop and reopen Voice Mode"
-            _lastError.value = "Connection lost after 5 attempts"
-            return
-        }
-
+        val backoffMs = (1_200L * (1L shl count.coerceAtMost(5))).coerceAtMost(30_000L)
         VoiceLatencyTracker.incrementReconnect()
+        // Never collect microphone audio while disconnected. Keep the user-started
+        // session alive and reconnect automatically with bounded exponential backoff.
+        audioIO?.stopRecording()
+        _amplitude.value = 0f
+        _vadActive.value = false
         _state.value = NovaOrbState.CONNECTING
-        _statusText.value = "Reconnecting (attempt ${count + 1}/5)..."
+        _statusText.value = "Reconnecting (attempt ${count + 1})..."
 
+        // Keep the user-started voice session alive through transient network/API failures.
+        // Backoff is capped at 30 seconds and the session stops only on explicit user stop.
         reconnectJob = scope.launch {
-            delay(1200)
+            delay(backoffMs)
             sessionMutex.withLock {
-                if (_isActive.value) {
-                    connectSession(isResuming = true)
-                }
+                if (_isActive.value) connectSession(isResuming = true)
             }
         }
     }
@@ -292,34 +471,57 @@ object VoiceSessionManager {
         }
     }
 
+    fun clearConversationMemory(context: Context): Boolean {
+        ConversationMemory.clear()
+        val cleared = PersistentChatMemory.clear(context)
+        if (_isActive.value) refreshInstructions(context)
+        return cleared
+    }
+
     fun toggleMute() {
         val next = !_muted.value
         _muted.value = next
         _statusText.value = if (next) "Microphone muted" else "Listening..."
     }
 
+    private fun cancelToolJobs() {
+        synchronized(toolJobsLock) {
+            toolJobs.forEach { it.cancel() }
+            toolJobs.clear()
+        }
+    }
+
     fun stop() {
+        val preserveError = _state.value == NovaOrbState.ERROR
+        val previousError = _lastError.value
+        val previousStatus = _statusText.value
         _isActive.value = false
         sessionEpoch.incrementAndGet()
+        audioEpoch.incrementAndGet()
+        cancelToolJobs()
         reconnectJob?.cancel()
         reconnectJob = null
+        VoiceLatencyTracker.resetReconnect()
         silenceWatchdogJob?.cancel()
         silenceWatchdogJob = null
 
-        client?.disconnect()
-        client = null
-
-        audioIO?.release()
-        audioIO = null
+        synchronized(clientLock) {
+            client?.disconnect()
+            client = null
+            audioIO?.release()
+            audioIO = null
+        }
 
         EchoGuard.reset()
         ConversationMemory.clear()
+        synchronized(pendingTextLock) { pendingAssistantText.clear() }
 
         isTurnActive = false
-        _state.value = NovaOrbState.IDLE
-        _statusText.value = "Ready to talk"
+        _state.value = if (preserveError) NovaOrbState.ERROR else NovaOrbState.IDLE
+        _statusText.value = if (preserveError) previousStatus else "Ready to talk"
         _amplitude.value = 0f
         _vadActive.value = false
         _muted.value = false
+        _lastError.value = if (preserveError) previousError else null
     }
 }

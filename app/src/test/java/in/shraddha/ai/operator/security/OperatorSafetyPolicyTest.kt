@@ -1,0 +1,39 @@
+package `in`.shraddha.ai.operator.security
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class OperatorSafetyPolicyTest {
+    @Test fun blocksPasswordAndOtpTargets() {
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "Password field", "not-a-real-secret").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "सत्यापन ओटीपी", "123456").risk)
+    }
+
+    @Test fun blocksPaymentSecurityFields() {
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "UPI PIN", "1234").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "CVV", "123").risk)
+    }
+
+    @Test fun requiresConfirmationForExternalSideEffects() {
+        listOf("send", "pay", "transfer", "purchase", "publish").forEach { action ->
+            assertEquals(action, OperatorSafetyPolicy.Risk.CONFIRM,
+                OperatorSafetyPolicy.assess(action, "primary action", "").risk)
+        }
+    }
+
+    @Test fun blocksSecuritySettingChanges() {
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("open", "Accessibility settings", "").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("install apk", "unknown sources", "").risk)
+    }
+
+    @Test fun allowsOrdinaryNavigation() {
+        assertEquals(OperatorSafetyPolicy.Risk.LOW,
+            OperatorSafetyPolicy.assess("scroll", "message list", "").risk)
+    }
+}

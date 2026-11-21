@@ -6,13 +6,50 @@ service cloud.firestore {
       allow create, update: if request.auth != null
                             && request.auth.uid == userId
                             && documentId.matches('^[a-zA-Z0-9_-]{1,64}$')
+                            && request.resource.data.keys().hasAll(['format', 'payload', 'updatedAt'])
                             && request.resource.data.keys().hasOnly(['format', 'payload', 'updatedAt'])
                             && request.resource.data.format == 'AES-256-GCM/PBKDF2-SHA256-v1'
                             && request.resource.data.payload is string
-                            && request.resource.data.payload.size() < 200000
+                            && request.resource.data.payload.size() <= 190000
                             && request.resource.data.updatedAt is int;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Device registrations are private to their owner. IDs are SHA-256 hashes,
+    // and only the fields consumed by the mobile push/device registry are accepted.
+    match /users/{userId}/devices/{deviceId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && deviceId.matches('^[a-f0-9]{64}$')
+                            && request.resource.data.keys().hasAll(['fcmToken', 'updatedAt', 'platform', 'deviceName'])
+                            && request.resource.data.keys().hasOnly(['fcmToken', 'updatedAt', 'platform', 'deviceName'])
+                            && request.resource.data.fcmToken is string
+                            && request.resource.data.fcmToken.size() >= 32
+                            && request.resource.data.fcmToken.size() <= 4096
+                            && request.resource.data.updatedAt is int
+                            && request.resource.data.platform == 'android'
+                            && request.resource.data.deviceName is string
+                            && request.resource.data.deviceName.size() >= 1
+                            && request.resource.data.deviceName.size() <= 80;
+    }
+
+    // Metadata records may point only to the matching owner's encrypted object.
+    match /users/{userId}/storage_backups/{backupId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && backupId.matches('^backup_[0-9]{13}_[a-f0-9]{8}$')
+                            && request.resource.data.keys().hasAll(['storagePath', 'format', 'updatedAt', 'sizeBytes'])
+                            && request.resource.data.keys().hasOnly(['storagePath', 'format', 'updatedAt', 'sizeBytes'])
+                            && request.resource.data.storagePath == 'users/' + userId + '/backups/' + backupId + '.enc'
+                            && request.resource.data.format == 'AES-256-GCM/PBKDF2-SHA256-v1'
+                            && request.resource.data.updatedAt is int
+                            && request.resource.data.sizeBytes is int
+                            && request.resource.data.sizeBytes > 0
+                            && request.resource.data.sizeBytes <= 52428800;
+    }
+
     match /{document=**} { allow read, write: if false; }
   }
 }

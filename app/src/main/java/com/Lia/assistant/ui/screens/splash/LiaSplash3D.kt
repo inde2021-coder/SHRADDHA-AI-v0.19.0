@@ -25,6 +25,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.fx.LiaOrb3D
 import com.Lia.assistant.ui.theme.LocalNovaColors
@@ -35,13 +37,15 @@ import kotlinx.coroutines.delay
 import java.util.Random
 
 @Composable
-fun LiaSplash3D(onDismiss: () -> Unit) {
+fun LiaSplash3D(assistantName: String, onDismiss: () -> Unit) {
     if (SplashSession.played) {
         onDismiss()
         return
     }
 
     val colors = LocalNovaColors.current
+    val context = LocalContext.current
+    val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
     val reducedMotion = LocalNovaReducedMotion.current
 
     val orbScale = remember { Animatable(0.2f) }
@@ -121,7 +125,7 @@ fun LiaSplash3D(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = AssistantBrand.FULL_NAME,
+                    text = assistantName,
                     fontFamily = SerifFontFamily,
                     fontSize = 32.sp,
                     color = colors.textPrimary,

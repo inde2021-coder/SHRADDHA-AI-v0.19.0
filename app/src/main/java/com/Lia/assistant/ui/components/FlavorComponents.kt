@@ -45,14 +45,14 @@ fun AccessibilitySettingsRow(modifier: Modifier = Modifier) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Screen Control (Accessibility)",
+                text = "Shraddha AI — Device Control",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFEEE9FF)
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Enables Lia to read the screen, tap buttons and type",
+                text = "Enable this service for voice app control, screen reading, taps, typing and gestures. A separate optional service is only for WhatsApp send verification.",
                 fontSize = 13.sp,
                 color = Color(0xFFA7A0CC)
             )

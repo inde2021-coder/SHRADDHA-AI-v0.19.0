@@ -1,21 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <queries>
@@ -23,47 +27,83 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <package android:name="com.whatsapp" />
     </queries>
     <application
+        android:name="com.Lia.assistant.LiaApplication"
         android:allowBackup="false"
         android:label="Shraddha AI"
         android:icon="@drawable/ic_shraddha"
         android:roundIcon="@drawable/ic_shraddha"
         android:theme="@style/Theme.ShraddhaAI"
         android:supportsRtl="true">
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <activity android:name=".biometric.BiometricCaptureActivity" android:exported="false" android:screenOrientation="portrait" />
+        <!-- The launcher workspace opens this separate Compose voice-agent activity explicitly. -->
+        <activity android:name="com.Lia.assistant.MainActivity" android:exported="false" />
+        <activity android:name=".link.DeviceTransferActivity" android:exported="false" />
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
+        <activity android:name=".operator.FormAutofillActivity" android:exported="false" />
+        <activity android:name=".notes.NoteOcrActivity" android:exported="false" />
+        <activity android:name=".mobile.MobileCommandCenterActivity" android:exported="false" />
+        <activity android:name=".mobile.WorkAgentActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".phone.PhoneAgentActivity" android:exported="true" android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".phone.InCallActivity" android:exported="false" android:excludeFromRecents="true" />
+        <service
+            android:name=".phone.ShraddhaInCallService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:exported="true">
+            <intent-filter><action android:name="android.telecom.InCallService" /></intent-filter>
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="false" />
+        </service>
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="shraddha" android:host="pair" />
+            </intent-filter>
         </activity>
-        <service
-            android:name=".accessibility.ShraddhaAccessibilityService"
-            android:label="Shraddha AI App Control"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
+        <service android:name=".accessibility.ShraddhaAccessibilityService" android:label="Shraddha AI — Device Control" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_config" />
         </service>
-        <service
-            android:name=".keyboard.ShraddhaKeyboardService"
-            android:label="Shraddha AI Keyboard"
-            android:permission="android.permission.BIND_INPUT_METHOD"
-            android:exported="true">
+        <service android:name=".keyboard.ShraddhaKeyboardService" android:label="Shraddha AI Keyboard" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/method" />
         </service>
+        <service android:name="com.Lia.assistant.voice.VoiceForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
         <service android:name=".overlay.ShraddhaOverlayService" android:exported="false" />
         <service android:name=".screen.ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".vision.RemoteCameraService" android:exported="false" android:foregroundServiceType="camera" />
         <receiver android:name=".future.ReminderReceiver" android:exported="false" />
-    
-        <activity android:name="com.Lia.assistant.MainActivity" android:exported="false" android:launchMode="singleTop" android:windowSoftInputMode="adjustResize" />
-        <service android:name="com.Lia.assistant.voice.VoiceForegroundService" android:exported="false" android:foregroundServiceType="microphone" />
-        <service android:name="com.Lia.assistant.agent.NovaAccessibilityService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
+        <service android:name=".future.ShraddhaNotificationListener" android:label="Shraddha AI — Notification Intelligence" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true"><intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter></service>
+        <service android:name=".cloud.ShraddhaFirebaseMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <service android:name="com.Lia.assistant.agent.NovaAccessibilityService" android:label="Shraddha AI — Advanced App Operator (optional)" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
         </service>
@@ -74,5 +114,5 @@
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.lia.fileprovider" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/lia_file_paths" />
         </provider>
-</application>
+    </application>
 </manifest>

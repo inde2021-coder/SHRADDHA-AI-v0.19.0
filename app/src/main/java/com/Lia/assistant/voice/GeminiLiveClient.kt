@@ -28,7 +28,7 @@ class GeminiLiveClient(private val listener: Listener) {
 
     companion object {
         const val MODEL = "models/gemini-3.1-flash-live-preview"
-        const val BASE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        const val BASE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained"
     }
 
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
@@ -43,52 +43,47 @@ class GeminiLiveClient(private val listener: Listener) {
 
     fun isLive(): Boolean = isConnected.get()
 
-    fun connect(apiKey: String, systemInstruction: String, voiceName: String = "Aoede") {
-        if (apiKey.isBlank()) {
-            listener.onError("Missing Gemini API Key. Please configure it in Settings.")
-            return
-        }
-
+    fun connect(ephemeralToken: String, systemInstruction: String) {
         disconnect()
         deduplicator.clear()
 
-        val url = "$BASE_WS_URL?key=$apiKey"
+        val url = "$BASE_WS_URL?access_token=$ephemeralToken"
         val request = Request.Builder()
             .url(url)
             .build()
 
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
                 isConnected.set(true)
-                sendSetupMessage(ws, systemInstruction, voiceName)
+                sendSetupMessage(webSocket, systemInstruction)
             }
 
-            override fun onMessage(ws: WebSocket, text: String) {
+            override fun onMessage(webSocket: WebSocket, text: String) {
                 handleServerMessage(text)
             }
 
-            override fun onMessage(ws: WebSocket, bytes: ByteString) {
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 handleServerMessage(bytes.utf8())
             }
 
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 isConnected.set(false)
                 val msg = t.localizedMessage ?: "WebSocket failure"
                 listener.onError(msg)
             }
 
-            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 isConnected.set(false)
             }
 
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isConnected.set(false)
                 listener.onClosed()
             }
         })
     }
 
-    private fun sendSetupMessage(ws: WebSocket, systemInstruction: String, voiceName: String) {
+    private fun sendSetupMessage(ws: WebSocket, systemInstruction: String) {
         val root = JSONObject()
         val setup = JSONObject()
 
@@ -96,17 +91,9 @@ class GeminiLiveClient(private val listener: Listener) {
 
         val generationConfig = JSONObject()
         val modalities = JSONArray()
-        modalities.put("AUDIO")
+        // Gemini handles reasoning/transcription only; spoken output uses Shraddha's separate TTS engine.
+        modalities.put("TEXT")
         generationConfig.put("responseModalities", modalities)
-
-        val speechConfig = JSONObject()
-        val voiceConfig = JSONObject()
-        val prebuiltVoiceConfig = JSONObject()
-        prebuiltVoiceConfig.put("voiceName", voiceName)
-        voiceConfig.put("prebuiltVoiceConfig", prebuiltVoiceConfig)
-        speechConfig.put("voiceConfig", voiceConfig)
-        generationConfig.put("speechConfig", speechConfig)
-
         setup.put("generationConfig", generationConfig)
 
         val sysInstructionObj = JSONObject()
@@ -207,12 +194,20 @@ class GeminiLiveClient(private val listener: Listener) {
                 }
 
                 // Model turn (audio chunks)
+                var textFoundInTurn = false
                 if (serverContent.has("modelTurn")) {
                     val modelTurn = serverContent.getJSONObject("modelTurn")
                     if (modelTurn.has("parts")) {
                         val parts = modelTurn.getJSONArray("parts")
                         for (i in 0 until parts.length()) {
                             val part = parts.getJSONObject(i)
+                            if (part.has("text")) {
+                                val outputText = part.optString("text", "")
+                                if (outputText.isNotBlank()) {
+                                    listener.onOutputTranscript(outputText)
+                                    textFoundInTurn = true
+                                }
+                            }
                             if (part.has("inlineData")) {
                                 val inlineData = part.getJSONObject("inlineData")
                                 val data = inlineData.optString("data", "")
@@ -235,12 +230,10 @@ class GeminiLiveClient(private val listener: Listener) {
                 }
 
                 // Model output audio transcription
-                if (serverContent.has("outputTranscription")) {
+                if (!textFoundInTurn && serverContent.has("outputTranscription")) {
                     val outputTranscription = serverContent.getJSONObject("outputTranscription")
                     val text = outputTranscription.optString("text", "")
-                    if (text.isNotBlank()) {
-                        listener.onOutputTranscript(text)
-                    }
+                    if (text.isNotBlank()) listener.onOutputTranscript(text)
                 }
 
                 // Turn complete

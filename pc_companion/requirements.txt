@@ -1,0 +1,8 @@
+websocket-client==1.8.0
+pyautogui==0.9.54
+mss==10.0.0
+Pillow==11.1.0
+pyperclip==1.9.0
+keyring==25.6.0
+pyinstaller==6.11.1
+cryptography>=44.0.0,<47.0.0

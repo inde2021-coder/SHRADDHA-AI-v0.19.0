@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,12 +39,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
-import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -67,6 +71,18 @@ fun VoiceScreen(
 ) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasKey by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasKey = VoiceGatewaySettings.isConfigured(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val state by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
@@ -93,8 +109,6 @@ fun VoiceScreen(
             VoiceForegroundService.start(context)
         }
     }
-
-    val hasKey = ApiKeyStore.hasKey(context)
 
     LaunchedEffect(hasRecordAudioPermission, hasKey) {
         if (!hasRecordAudioPermission) {
@@ -153,7 +167,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "API Key Required",
+                        text = "Secure Voice Backend Required",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
                         fontSize = 20.sp,
@@ -161,7 +175,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     NovaButton(
-                        text = "Open Settings",
+                        text = "Configure Secure Backend",
                         onClick = { navController.navigate("settings") },
                         type = NovaButtonType.PRIMARY
                     )

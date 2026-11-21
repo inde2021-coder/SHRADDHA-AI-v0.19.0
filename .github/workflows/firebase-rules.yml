@@ -1,0 +1,43 @@
+name: Firebase Realtime Database Rules
+
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+on:
+  push:
+    branches: ["work/**"]
+    paths:
+      - "firebase/**"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "firebase/**"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
+permissions:
+  contents: read
+jobs:
+  realtime-database-rules:
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'integration/master-feature-consolidation-2026-11' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install Firebase rules test dependencies
+        working-directory: firebase/rules-tests
+        run: |
+          git config --global init.defaultBranch main
+          npm install --no-audit --no-fund
+      - name: Run Realtime Database emulator rules tests
+        working-directory: firebase/rules-tests
+        run: ./node_modules/.bin/firebase emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-ai "npm test"

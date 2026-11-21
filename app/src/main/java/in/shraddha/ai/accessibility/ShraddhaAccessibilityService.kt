@@ -10,6 +10,10 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONObject
 import android.graphics.Rect
+import android.graphics.Bitmap
+import android.view.Display
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import `in`.shraddha.ai.operator.ScreenElement
 import `in`.shraddha.ai.operator.ScreenSnapshot
 
@@ -22,13 +26,62 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     override fun onInterrupt() { }
     override fun onDestroy() { if (active === this) active = null; super.onDestroy() }
 
+    private fun isSensitiveNode(node: AccessibilityNodeInfo): Boolean {
+        if (node.isPassword) return true
+        // Labels are often attached to a TextInputLayout/container rather than the EditText.
+        // Inspect a short ancestor chain so the value cannot leak when only the child is captured.
+        val labels = mutableListOf<String>()
+        var current: AccessibilityNodeInfo? = node
+        repeat(4) {
+            val item = current ?: return@repeat
+            if (item.isPassword) return true
+            labels += listOfNotNull(
+                item.text?.toString(), item.contentDescription?.toString(), item.hintText?.toString(),
+                item.viewIdResourceName
+            )
+            current = item.parent
+        }
+        val combined = labels.joinToString(" ").lowercase()
+        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(combined)
+    }
+
+    private fun captureOcrTargetsInternal(done: (Result<List<ScreenOcrEngine.OcrLine>>) -> Unit) {
+        if (Build.VERSION.SDK_INT < 30) {
+            done(Result.failure(IllegalStateException("On-device OCR screenshot capture requires Android 11 or newer")))
+            return
+        }
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                    val buffer = screenshot.hardwareBuffer
+                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                    if (bitmap == null) {
+                        buffer.close()
+                        done(Result.failure(IllegalStateException("Android screenshot buffer unavailable")))
+                        return
+                    }
+                    ScreenOcrEngine.recognize(bitmap) { result ->
+                        bitmap.recycle()
+                        buffer.close()
+                        done(result)
+                    }
+                }
+                override fun onFailure(errorCode: Int) {
+                    done(Result.failure(IllegalStateException("Android refused screen OCR capture (code $errorCode). Secure screens may block capture.")))
+                }
+            })
+        } catch (error: Exception) {
+            done(Result.failure(error))
+        }
+    }
+
     private fun setFocusedText(value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
-        // Never interact with password fields or nodes marked sensitive.
-        if (focused.isPassword || !focused.isEditable || focused.isVisibleToUser.not()) return false
+        // Never enter secrets or interact with password/OTP/PIN fields.
+        if (isSensitiveNode(focused) || !focused.isEditable || !focused.isVisibleToUser) return false
         return focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
-            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value.take(4000))
         })
     }
 
@@ -59,32 +112,57 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         if (wanted.isBlank()) return false
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val matches = packageManager.queryIntentActivities(launcher, 0)
-        val match = matches.firstOrNull { it.loadLabel(packageManager).toString().equals(wanted, ignoreCase = true) }
-            ?: matches.firstOrNull { it.loadLabel(packageManager).toString().contains(wanted, ignoreCase = true) }
-            ?: return false
-        val launch = packageManager.getLaunchIntentForPackage(match.activityInfo.packageName) ?: return false
+        val exactPackages = matches.filter {
+            it.loadLabel(packageManager).toString().trim().equals(wanted, ignoreCase = true)
+        }.map { it.activityInfo.packageName }.distinct()
+        val selectedPackage = when {
+            exactPackages.size == 1 -> exactPackages.single()
+            exactPackages.size > 1 -> return false
+            else -> {
+                val partialPackages = matches.filter {
+                    it.loadLabel(packageManager).toString().contains(wanted, ignoreCase = true)
+                }.map { it.activityInfo.packageName }.distinct()
+                if (partialPackages.size != 1) return false
+                partialPackages.single()
+            }
+        }
+        val launch = packageManager.getLaunchIntentForPackage(selectedPackage) ?: return false
         return try { launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(launch); true } catch (_: Exception) { false }
     }
 
     private fun clickVisibleText(label: String): Boolean {
+        val wanted = label.trim()
+        if (wanted.isBlank()) return false
         val root = rootInActiveWindow ?: return false
-        val matches = root.findAccessibilityNodeInfosByText(label)
-        val node = matches.firstOrNull { it.isVisibleToUser && it.isClickable }
-            ?: matches.firstOrNull { it.isVisibleToUser }?.let { candidate ->
-                var parent = candidate.parent
-                while (parent != null && !parent.isClickable) parent = parent.parent
-                parent
-            }
-        return node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        val matches = root.findAccessibilityNodeInfosByText(wanted)
+            .filter { it.isVisibleToUser && !isSensitiveNode(it) }
+        val exact = matches.filter {
+            it.text?.toString()?.trim().equals(wanted, true) ||
+                it.contentDescription?.toString()?.trim().equals(wanted, true)
+        }
+        val candidates = (if (exact.isNotEmpty()) exact else matches).mapNotNull { candidate ->
+            var node: AccessibilityNodeInfo? = candidate
+            while (node != null && !node.isClickable) node = node.parent
+            node
+        }.distinctBy { node ->
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            listOf(node.viewIdResourceName.orEmpty(), node.className?.toString().orEmpty(),
+                node.text?.toString().orEmpty(), node.contentDescription?.toString().orEmpty(),
+                bounds.left, bounds.top, bounds.right, bounds.bottom).joinToString(":")
+        }
+        // Ambiguous labels are refused; the agent must inspect the screen and ask which one.
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun clickByResourceId(resourceId: String): Boolean {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
         val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList())
-        val node = nodes.firstOrNull { it.isVisibleToUser && it.isEnabled && it.isClickable }
-            ?: nodes.firstOrNull { it.isVisibleToUser && it.isEnabled }
-        return node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        val candidates = nodes.filter { it.isVisibleToUser && it.isEnabled && it.isClickable }
+        // A repeated resource ID is not enough to identify a unique control.
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun selectFileInPicker(fileName: String): Boolean {
@@ -101,15 +179,31 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     private fun fillByResourceId(resourceId: String, value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
-        val node = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList()).firstOrNull { it.isVisibleToUser && it.isEditable && !it.isPassword } ?: return false
-        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+        val candidates = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }
+            .getOrDefault(emptyList())
+            .filter { it.isVisibleToUser && it.isEditable && !isSensitiveNode(it) }
+        // Never type into the first of several fields sharing the same resource ID.
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value.take(4000))
         })
     }
 
     companion object {
         @Volatile private var active: ShraddhaAccessibilityService? = null
-        fun fillFocusedField(text: String): Boolean = active?.setFocusedText(text) ?: false
+        suspend fun captureOcrTargets(): List<ScreenOcrEngine.OcrLine>? = suspendCancellableCoroutine { continuation ->
+            val service = active
+            if (service == null) {
+                continuation.resume(null)
+            } else {
+                service.captureOcrTargetsInternal { result ->
+                    if (continuation.isActive) continuation.resume(result.getOrNull())
+                }
+            }
+        }
+        suspend fun captureOcrText(): String? =
+            captureOcrTargets()?.filterNot { it.sensitive }?.joinToString("\n") { it.text }
+                fun fillFocusedField(text: String): Boolean = active?.setFocusedText(text) ?: false
         fun openApp(name: String): Boolean = active?.openInstalledApp(name) ?: false
         fun goHome(): Boolean = active?.performGlobalAction(GLOBAL_ACTION_HOME) ?: false
         fun captureVisibleScreen(): ScreenSnapshot? {
@@ -123,13 +217,15 @@ class ShraddhaAccessibilityService : AccessibilityService() {
                 val node = queue.removeFirst(); count++
                 val rect = Rect(); node.getBoundsInScreen(rect)
                 if (node.isVisibleToUser && (node.text != null || node.contentDescription != null || node.isClickable || node.isEditable)) {
+                    val sensitive = service.isSensitiveNode(node)
                     found.add(ScreenElement(
                         id = node.viewIdResourceName ?: "node_$count",
-                        text = node.text?.toString()?.take(300).orEmpty(),
-                        description = node.contentDescription?.toString()?.take(300).orEmpty(),
+                        text = if (sensitive) "" else node.text?.toString()?.take(300).orEmpty(),
+                        description = if (sensitive) "संवेदनशील फ़ील्ड छिपाया गया" else node.contentDescription?.toString()?.take(300).orEmpty(),
                         className = node.className?.toString().orEmpty(), bounds = Rect(rect),
                         clickable = node.isClickable, editable = node.isEditable,
-                        scrollable = node.isScrollable, password = node.isPassword, packageName = node.packageName?.toString().orEmpty(), hintText = node.hintText?.toString().orEmpty()
+                        scrollable = node.isScrollable, password = sensitive, packageName = node.packageName?.toString().orEmpty(),
+                        hintText = if (sensitive) "" else node.hintText?.toString().orEmpty()
                     ))
                 }
                 for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
@@ -161,6 +257,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             }
         }
         fun scrollForward(): Boolean = active?.rootInActiveWindow?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true
+        fun scrollBackward(): Boolean = active?.rootInActiveWindow?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
         fun goBack(): Boolean = active?.performGlobalAction(GLOBAL_ACTION_BACK) == true
     }
 }
