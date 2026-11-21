@@ -115,3 +115,37 @@ jobs:
           name: shraddha-ai-master-integration-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
+pc-companion-windows:
+    name: Windows PC companion tests and EXE package
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact triggering commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install PC companion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r pc_companion/requirements.txt
+
+      - name: Run PC companion protocol, action and E2E crypto tests
+        run: python -m unittest discover -s pc_companion/tests -v
+
+      - name: Build Windows PC companion executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --collect-all keyring --collect-all cryptography pc_companion/agent.py
+
+      - name: Upload Windows PC companion executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-pc-companion-windows-exe
+          path: dist/ShraddhaAI-PC-Companion.exe
+          if-no-files-found: error
+          retention-days: 14
