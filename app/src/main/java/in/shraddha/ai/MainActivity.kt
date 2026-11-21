@@ -368,6 +368,7 @@ class MainActivity : AppCompatActivity() {
             "phone" -> {
                 if (!::relayUrl.isInitialized) relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
                 if (!::gatewayToken.isInitialized) gatewayToken = edit("Gateway token", "Server GATEWAY_TOKEN")
+                gatewayToken.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
                 addTelephonySection(pageRoot)
             }
             "devices" -> addDeviceLinkSection(pageRoot)
