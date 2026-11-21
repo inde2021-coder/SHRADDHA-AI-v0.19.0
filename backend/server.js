@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
@@ -796,8 +796,8 @@ wss.on('connection', (ws, ctx) => {
       // [uint64 sequence][12-byte nonce][AES-256-GCM ciphertext+tag]. Plain JPEG is rejected.
       const idBytes = Buffer.from(deviceId, 'utf8');
       const clientFrame = Buffer.from(data);
-      if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
-      const frameType = clientFrame[0];
+      if (clientFrame.length < 2 || ![0x81, 0x82].includes(clientFrame[0])) return;
+      const frameType = clientFrame[0] & 0x7f;
       // A paired socket is not implicit permission to watch another device.
       if (!canShareVisualFrame(device.sharePermissions, frameType)) return;
       if (!consumeVisualFrameBudget(device, Date.now(), 10)) return;
@@ -833,7 +833,7 @@ wss.on('connection', (ws, ctx) => {
       const nonce = String(msg.nonce || '');
       const ciphertext = String(msg.ciphertext || '');
       if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload'].includes(messageKind) ||
-          !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 24 || ciphertext.length > 3_400_000 ||
+          !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 22 || ciphertext.length > 3_400_000 ||
           !/^[A-Za-z0-9+/]+=*$/.test(ciphertext)) return;
       if (messageKind === 'remote_action') {
         const grantExpiry = target.controlGrants?.get(deviceId) || 0;
@@ -863,6 +863,24 @@ wss.on('connection', (ws, ctx) => {
       send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind, actionId: String(msg.actionId || '').slice(0,64),
         actionKind: String(msg.actionKind || '').slice(0,32), transferId: String(msg.transferId || '').slice(0,64),
         index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, requestId: String(msg.requestId || '').slice(0,64), nonce, ciphertext }));
+    } else if (msg.type === 'control_revoke') {
+      const requestedId = String(msg.requesterDeviceId || '');
+      const revokeIds = requestedId ? [requestedId] : [...new Set([
+        ...device.controlGrants.keys(),
+        ...device.pendingControlRequests.keys(),
+        ...[...device.pendingRemoteActions.values()].map(item => item.requesterId).filter(Boolean)
+      ])];
+      for (const id of revokeIds) {
+        device.controlGrants.delete(id);
+        device.pendingControlRequests.delete(id);
+        for (const [actionId, pending] of device.pendingRemoteActions) {
+          if (pending.requesterId === id) device.pendingRemoteActions.delete(actionId);
+        }
+        send(id, JSON.stringify({
+          type: 'control_result', targetDeviceId: deviceId, approved: false, expiresInMinutes: 0,
+          reason: 'Remote control access was revoked by the target device.'
+        }));
+      }
     } else if (msg.type === 'control_request') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
