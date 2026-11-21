@@ -194,6 +194,56 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.equal(body.expiresInSeconds, 300);
 });
 
+test('end-to-end key offers and fingerprint confirmations are forwarded only to the addressed peer', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'E2E Owner' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'E2E Member', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner);
+  const memberSocket = connect(member);
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const wait = (socket, type) => nextWsMessage(socket, data => {
+      try { return JSON.parse(data.toString()).type === type; } catch { return false; }
+    });
+    const offerPromise = wait(memberSocket, 'e2e_key_offer');
+    ownerSocket.send(JSON.stringify({ type: 'e2e_key_offer', targetDeviceId: member.deviceId, publicKey: 'A'.repeat(120) }));
+    const [offer] = await offerPromise;
+    const offerBody = JSON.parse(offer.toString());
+    assert.equal(offerBody.fromDeviceId, owner.deviceId);
+    assert.equal(offerBody.publicKey, 'A'.repeat(120));
+
+    const confirmPromise = wait(ownerSocket, 'e2e_key_confirm');
+    memberSocket.send(JSON.stringify({ type: 'e2e_key_confirm', targetDeviceId: owner.deviceId, fingerprint: 'ABCD-EF01-2345-6789-ABCD-EF01-2345-6789' }));
+    const [confirm] = await confirmPromise;
+    assert.equal(JSON.parse(confirm.toString()).fromDeviceId, member.deviceId);
+
+    const invalidOfferPromise = wait(memberSocket, 'e2e_key_offer');
+    ownerSocket.send(JSON.stringify({ type: 'e2e_key_offer', targetDeviceId: member.deviceId, publicKey: 'invalid!' }));
+    await new Promise(resolve => setTimeout(resolve, 80));
+    assert.equal(memberSocket.readyState, WebSocket.OPEN);
+    // A malformed offer must not be relayed; the following valid offer is the only match.
+    const validOffer = wait(memberSocket, 'e2e_key_offer');
+    ownerSocket.send(JSON.stringify({ type: 'e2e_key_offer', targetDeviceId: member.deviceId, publicKey: 'B'.repeat(120) }));
+    const [validMessage] = await validOffer;
+    assert.equal(JSON.parse(validMessage.toString()).publicKey, 'B'.repeat(120));
+    void invalidOfferPromise;
+  } finally {
+    const closes = [ownerSocket, memberSocket].map(socket => socket.readyState === WebSocket.CLOSED ? Promise.resolve() : new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
+
 test('disabling a data-sharing category clears pending and active grants and notifies requester', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
