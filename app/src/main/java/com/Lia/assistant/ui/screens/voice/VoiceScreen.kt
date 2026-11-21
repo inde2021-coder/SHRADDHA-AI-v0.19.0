@@ -94,8 +94,10 @@ fun VoiceScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        hasRecordAudioPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        hasRecordAudioPermission = grants[Manifest.permission.RECORD_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         hasNotificationPermission = Build.VERSION.SDK_INT < 33 ||
+            grants[Manifest.permission.POST_NOTIFICATIONS] == true ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         if (hasRecordAudioPermission && hasNotificationPermission &&
             NovaPreferences.getBoolean(context, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)) {
