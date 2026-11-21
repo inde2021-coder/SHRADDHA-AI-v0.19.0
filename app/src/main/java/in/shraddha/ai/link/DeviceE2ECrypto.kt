@@ -59,8 +59,9 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
         var prk: ByteArray? = null
         try {
             prkMac.init(SecretKeySpec(salt, "HmacSHA256"))
-            prk = prkMac.doFinal(shared)
-            prkMac.init(SecretKeySpec(prk, "HmacSHA256"))
+            val extracted = prkMac.doFinal(shared)
+            prk = extracted
+            prkMac.init(SecretKeySpec(extracted, "HmacSHA256"))
             prkMac.update(context.toByteArray(Charsets.UTF_8))
             prkMac.update(1.toByte())
             val key = prkMac.doFinal()
@@ -79,10 +80,10 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
             )
             val fingerprint = fingerprintDigest.take(16)
                 .joinToString("") { "%02X".format(it) }.chunked(4).joinToString("-")
-            salt.fill(0)
             return key to fingerprint
         } finally {
             shared.fill(0)
+            salt.fill(0)
             prk?.fill(0)
         }
     }
