@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: master-integration-merge
-  cancel-in-progress: false
+  group: integration-full-checks-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   merge-and-test:
