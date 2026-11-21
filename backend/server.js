@@ -506,12 +506,18 @@ telephonyWss.on('connection', carrier => {
     type: 'session.start',
     session: {
       model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1',
-      instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.',
+      instructions: (process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.') +
+        (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
+          ? ' If text transcript saving is enabled, after disclosing that you are an AI, clearly explain that a text transcript may be saved only if the caller consents. Ask the caller to press 1 to consent; if they do not press 1, do not save any transcript. Never say that audio is recorded; audio is not recorded.'
+          : ' No call transcript is saved. Do not imply that the call is recorded.'),
       input: [{
         role: 'developer',
         content: [{
           type: 'input_text',
-          text: 'Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main Shraddha AI, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.'
+          text: 'Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main Shraddha AI, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.' +
+            (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
+              ? ' Before discussing the call, clearly ask the caller to press 1 if they consent to saving a text transcript. No press-1 means no transcript is saved. Do not claim audio is recorded.'
+              : ' Do not save a call transcript; no audio recording is made.')
         }]
       }],
       audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'nira' } },
@@ -551,9 +557,23 @@ telephonyWss.on('connection', carrier => {
     }
     if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) carrier.send(JSON.stringify({ type: 'killAudio' }));
     if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
-      if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
-      if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
-      if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
+      if (event.type === 'session.output_transcript.delta' && !callRecord.transcriptConsentRequested) {
+        callRecord.consentPromptBuffer = (callRecord.consentPromptBuffer + event.delta).slice(-800).toLowerCase();
+        if (callRecord.consentPromptBuffer.includes('press 1') ||
+            callRecord.consentPromptBuffer.includes('press one') ||
+            callRecord.consentPromptBuffer.includes('दबाएं 1') ||
+            callRecord.consentPromptBuffer.includes('दबाएँ 1') ||
+            callRecord.consentPromptBuffer.includes('प्रेस 1')) {
+          callRecord.transcriptConsentRequested = true;
+          callRecord.consentPromptAt = new Date().toISOString();
+          callRecord.consentPromptBuffer = '';
+        }
+      }
+      if (callRecord.transcriptConsent) {
+        if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
+        if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
+        if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
+      }
     }
     if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, callSampleRate), { binary: true });
     if (event.type === 'error') console.error('Live voice error:', String(event.error && event.error.message || 'unknown').slice(0, 180));
@@ -576,6 +596,21 @@ telephonyWss.on('connection', carrier => {
     }
     let message;
     try { message = JSON.parse(data.toString()); } catch { return; }
+    if (message.event === 'dtmf') {
+      const digit = String(message.dtmf || '').slice(0, 1);
+      if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && callRecord.transcriptConsentRequested) {
+        if (digit === '1') {
+          callRecord.transcriptConsent = true;
+          callRecord.transcriptConsentAt = new Date().toISOString();
+          callRecord.transcriptConsentMethod = 'dtmf-1';
+        } else if (digit === '0') {
+          callRecord.transcriptConsentDeclined = true;
+          callRecord.transcriptConsentAt = new Date().toISOString();
+          callRecord.transcriptConsentMethod = 'dtmf-0';
+        }
+      }
+      return;
+    }
     if (!metadataSeen) {
       metadataSeen = true;
       clearTimeout(metadataTimer);
@@ -593,7 +628,12 @@ telephonyWss.on('connection', carrier => {
         startedAt: new Date().toISOString(),
         endedAt: null,
         status: 'active',
-        transcript: []
+        transcript: [],
+        transcriptConsentRequested: false,
+        transcriptConsent: false,
+        transcriptConsentDeclined: false,
+        transcriptConsentAt: null,
+        consentPromptBuffer: ''
       };
       edesyCalls.set(callRecord.id, callRecord);
       while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
