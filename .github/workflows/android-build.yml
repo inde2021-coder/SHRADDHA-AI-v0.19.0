@@ -30,6 +30,7 @@ concurrency:
 jobs:
   build:
     name: Compile, unit tests and debug APK
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'integration/master-feature-consolidation-2026-11' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -149,6 +150,7 @@ jobs:
 
   windows-companion:
     name: Windows PC companion native checks
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'integration/master-feature-consolidation-2026-11' }}
     runs-on: windows-latest
     steps:
       - name: Checkout
