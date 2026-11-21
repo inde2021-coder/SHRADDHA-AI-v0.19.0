@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.LinkedList
+import kotlinx.coroutines.delay
 
 class NovaAccessibilityService : AccessibilityService() {
 
