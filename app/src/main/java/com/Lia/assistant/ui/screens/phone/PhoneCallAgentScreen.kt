@@ -120,6 +120,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
                         TelephonyGatewayStore.clear(context)
                         backendUrl = ""
                         gatewayToken = ""
+                        callRows = emptyList()
                         resultText = "Saved backend URL and gateway token were cleared."
                     } catch (error: Exception) {
                         resultText = error.message ?: "Could not clear saved backend connection."
