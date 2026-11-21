@@ -159,6 +159,7 @@ object DeviceLinkManager {
                 if (socket === webSocket) {
                     if (code == 4003) runCatching { credentialStore?.clear() }
                     sessionId = null; deviceId = null; deviceToken = null; socket = null
+                    clearE2EKeys()
                     onStatus?.invoke(if (code == 4003) "This device pairing was revoked by the session owner." else "Disconnected: $reason")
                 }
             }
