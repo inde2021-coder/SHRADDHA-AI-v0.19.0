@@ -279,6 +279,9 @@ const server = http.createServer(async (req, res) => {
       if (![8000, 16000].includes(sampleRate) || !Number.isInteger(seconds) || seconds < 1 || seconds > 5) {
         return json(res, 400, { error: 'sample_rate must be 8000 or 16000 and seconds must be between 1 and 5.' });
       }
+      const redactPreflightText = value => String(value || '')
+        .replaceAll(process.env.EDESY_STREAM_TOKEN, '[redacted]')
+        .replace(/([?&]token=)[^&\\s]+/gi, '$1[redacted]');
       try {
         const providerResponse = await fetch('https://voice-api.edesy.in/v1/stream-test', {
           method: 'POST',
@@ -287,17 +290,17 @@ const server = http.createServer(async (req, res) => {
           body: JSON.stringify({ stream_url: (() => { const testUrl = new URL(streamUrl); testUrl.searchParams.set('mode', 'preflight'); return testUrl.toString(); })(), sample_rate: sampleRate, seconds })
         });
         const result = await providerResponse.json().catch(() => ({}));
-        if (!providerResponse.ok) return json(res, providerResponse.status, { error: String(result.error || result.message || 'Edesy preflight failed').slice(0, 240) });
+        if (!providerResponse.ok) return json(res, providerResponse.status, { error: redactPreflightText(result.error || result.message || 'Edesy preflight failed').slice(0, 240) });
         const steps = Array.isArray(result.steps) ? result.steps.slice(0, 8).map(step => ({
           step: String(step.step || '').slice(0, 40),
           ok: step.ok === true,
-          detail: String(step.detail || '').slice(0, 240)
+          detail: redactPreflightText(step.detail).slice(0, 240)
         })) : [];
         return json(res, 200, {
           ok: result.ok === true,
           sample_rate: sampleRate,
           steps,
-          hint: String(result.hint || '').slice(0, 240),
+          hint: redactPreflightText(result.hint).slice(0, 240),
           audio_frames_received: Number(result.audio_frames_received || 0),
           audio_bytes_received: Number(result.audio_bytes_received || 0),
           text_frames_received: Number(result.text_frames_received || 0)
