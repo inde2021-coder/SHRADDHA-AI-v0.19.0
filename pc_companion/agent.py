@@ -7,6 +7,7 @@ import json
 import base64
 import struct
 import os
+import re
 import queue
 import ssl
 import threading
@@ -470,6 +471,41 @@ class PcCompanionApp:
                 self.status_var.set("Peer fingerprint confirmed; waiting for local confirmation.")
             else:
                 self.status_var.set("E2E fingerprint mismatch. Do not trust this peer.")
+        elif kind == "e2e_message":
+            peer_id = str(msg.get("fromDeviceId", ""))
+            message_kind = str(msg.get("messageKind", ""))
+            action_id = str(msg.get("actionId", ""))
+            action_kind = str(msg.get("actionKind", ""))
+            if message_kind != "remote_action" or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):
+                self.status_var.set("Ignored unsupported encrypted peer message.")
+                return
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                    state = None
+                key = bytes(state["key"]) if state else None
+            if key is None:
+                self.status_var.set("Blocked encrypted action: peer fingerprint is not mutually verified.")
+                return
+            try:
+                aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|remote_action|{action_id}".encode("utf-8")
+                plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+                payload = json.loads(plain.decode("utf-8"))
+                action = validate_remote_action(payload.get("action"))
+                if not action or action.get("kind") != action_kind:
+                    raise ValueError("Action payload or action-kind binding is invalid.")
+            except Exception as exc:
+                self.status_var.set(f"Encrypted action rejected: {str(exc)[:140]}")
+                return
+            if not self.remote_var.get() or time.time() > self.control_grant_until:
+                self.status_var.set("Ignored action: no active local PC approval.")
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "reason": "No active local PC approval."},
+                                       action_id, action_kind)
+                return
+            self._execute(action, peer_id, action_id)
+        elif kind == "remote_action":
+            self.status_var.set("Blocked plaintext remote action. E2E encryption is mandatory.")
         elif kind == "control_request":
             requester = str(msg.get("requesterName", "Paired device"))[:80]
             requester_id = str(msg.get("fromDeviceId", ""))[:80]
@@ -516,14 +552,43 @@ class PcCompanionApp:
                 state["key"][:] = b"\x00" * len(state["key"])
             self.peer_keys.clear()
 
-    def _execute(self, action):
+    def _send_e2e_message(self, peer_id, kind, payload, action_id, action_kind=""):
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                return False
+            key = bytes(state["key"])
+        source_id = str(self.config.get("deviceId", ""))
+        target_id = peer_id
+        session_id = str(self.config.get("sessionId", ""))
+        aad = f"{session_id}|{source_id}|{target_id}|{kind}|{action_id}".encode("utf-8")
+        nonce, ciphertext = DeviceE2ECrypto.encrypt(key, json.dumps(payload, separators=(",", ":")).encode("utf-8"), aad)
+        return self._send_json({
+            "type": "e2e_message", "targetDeviceId": target_id, "messageKind": kind,
+            "actionId": action_id, "actionKind": action_kind,
+            "nonce": nonce, "ciphertext": ciphertext
+        })
+
+    def _execute(self, action, peer_id=None, action_id=None):
+        ok = False
+        message = "Action failed."
         try:
             ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut)
             self.status_var.set(message)
+            if peer_id and action_id:
+                sent = self._send_e2e_message(peer_id, "remote_action_result",
+                                              {"ok": bool(ok), "reason": "" if ok else str(message)[:240]},
+                                              action_id, action.get("kind", ""))
+                if not sent:
+                    self.status_var.set("Action finished, but encrypted result could not be delivered.")
             if not ok and "fail-safe" in message.lower():
                 self.disconnect(emergency=True)
         except Exception as exc:
-            self.status_var.set(f"Action failed: {str(exc)[:160]}")
+            message = f"Action failed: {str(exc)[:160]}"
+            self.status_var.set(message)
+            if peer_id and action_id:
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "reason": message}, action_id, action.get("kind", ""))
 
     def _open_start_menu_shortcut(self, app_name):
         roots = [
