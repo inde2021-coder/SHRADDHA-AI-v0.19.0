@@ -615,6 +615,10 @@ test('screen frames are blocked until the sending device explicitly enables scre
     ownerSocket.send(Buffer.concat([Buffer.from([3, 0]), Buffer.alloc(40)]));
     ownerSocket.send(Buffer.concat([Buffer.from([0x81, 65]), Buffer.alloc(65, 0x61), Buffer.alloc(40)]));
     ownerSocket.send(encryptedFrame(0x81, member.deviceId, 2).subarray(0, 2 + member.deviceId.length + 35));
+    ownerSocket.send(Buffer.concat([
+      Buffer.from([0x81, Buffer.byteLength(member.deviceId)]),
+      Buffer.from(member.deviceId), Buffer.alloc(2_500_037)
+    ])); // Reject an oversized encrypted envelope before relaying it.
     const allowedOpaque = encryptedFrame(0x81, member.deviceId, 3, 0x7a).subarray(2 + member.deviceId.length);
     ownerSocket.send(encryptedFrame(0x81, member.deviceId, 3, 0x7a));
 
