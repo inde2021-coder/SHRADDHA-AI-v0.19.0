@@ -899,6 +899,32 @@ class MainActivity : AppCompatActivity() {
                     .apply()
                 status.text = "Active remote-control approval revoked on this phone."
             })
+            addView(actionButton("Revoke Selected Paired Device", "यह device relay session से हटेगा; owner permission जरूरी है") {
+                val target = targetDevice.text.toString().trim()
+                if (target.isBlank()) { status.text = "पहले paired device चुनें।"; return@actionButton }
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Revoke paired device?")
+                    .setMessage("Device $target की pairing और उससे जुड़ी active permissions तुरंत हटाई जाएँगी।")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Revoke") { _, _ ->
+                        DeviceLinkManager.revokeRemoteDevice(target) { result -> runOnUiThread {
+                            result.onSuccess { ok -> status.text = if (ok) "Selected device revoked from relay session." else "Relay ने device revoke नहीं किया।" }
+                                .onFailure { status.text = "Device revoke failed: ${it.message}" }
+                        } }
+                    }.show()
+            })
+            addView(actionButton("Revoke This Phone Pairing / Session", "Owner पूरे session को बंद करेगा; member केवल अपनी pairing हटाएगा") {
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Revoke this phone pairing?")
+                    .setMessage("इस phone की relay pairing तुरंत हटेगी। अगर यह owner phone है, तो पूरा paired-device session बंद होगा।")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Revoke pairing") { _, _ ->
+                        DeviceLinkManager.revokeCurrentPairing { result -> runOnUiThread {
+                            result.onSuccess { ok -> status.text = if (ok) "This phone pairing/session revoked." else "Relay ने pairing revoke नहीं की।" }
+                                .onFailure { status.text = "Pairing revoke failed: ${it.message}" }
+                        } }
+                    }.show()
+            })
             mainOnlyMode = Switch(this@MainActivity).apply {
                 text = "Main phone only mode (OFF = Mutual control)"
                 setTextColor(-1); isChecked = false; isEnabled = false; setPadding(0, dp(4), 0, dp(8))
