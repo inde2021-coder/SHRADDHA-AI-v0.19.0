@@ -11,14 +11,19 @@ import asyncio
 import json
 import re
 import io
+import os
 import sys
 import time
+import subprocess
+import webbrowser
+import html
+from pathlib import Path
 import urllib.request
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "offline_chat"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
 
 
 def create_e2e_identity():
@@ -144,8 +149,26 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return False
     if kind == "offline_chat" and offline_model is None:
         return False
-    if kind == "offline_chat":
-        return isinstance(action.get("prompt"), str) and 0 < len(action["prompt"].strip()) <= 4000
+    if kind in {"offline_chat", "code_assistant"}:
+        prompt = action.get("prompt")
+        return offline_model is not None and isinstance(prompt, str) and 0 < len(prompt.strip()) <= 4000
+    if kind == "open_app":
+        name = action.get("name")
+        return isinstance(name, str) and name.strip().casefold() in {"notepad", "calculator", "paint", "file explorer", "explorer", "task manager", "settings", "edge", "chrome", "powershell", "terminal"}
+    if kind == "media_control":
+        return action.get("command") in {"play_pause", "next", "previous", "volume_up", "volume_down", "mute"}
+    if kind == "system_control":
+        command = action.get("command")
+        if command in {"lock", "volume_up", "volume_down", "mute", "brightness_up", "brightness_down"}:
+            return True
+        return command == "set_brightness" and isinstance(action.get("value"), int) and not isinstance(action.get("value"), bool) and 0 <= action["value"] <= 100
+    if kind == "screenshot":
+        return True
+    if kind == "clipboard_transform":
+        return action.get("operation") in {"trim", "uppercase", "lowercase", "collapse_whitespace", "remove_blank_lines"}
+    if kind == "web_search":
+        query = action.get("query")
+        return isinstance(query, str) and 2 <= len(query.strip()) <= 160
     if kind in {"file_list", "file_read", "file_search"} and not file_root:
         return False
     if kind == "file_list":
@@ -667,6 +690,113 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
     if kind == "home":
         pyautogui.hotkey("win", "d")
         return "desktop_shown"
+    if kind == "open_app":
+        aliases = {
+            "notepad": ["notepad.exe"], "calculator": ["calc.exe"], "paint": ["mspaint.exe"],
+            "file explorer": ["explorer.exe"], "explorer": ["explorer.exe"],
+            "task manager": ["taskmgr.exe"], "edge": ["msedge.exe"],
+            "chrome": ["chrome.exe"], "powershell": ["powershell.exe"],
+            "terminal": ["wt.exe"]
+        }
+        name = action["name"].strip().casefold()
+        if name == "settings":
+            try:
+                os.startfile("ms-settings:")
+                return "settings_open_requested"
+            except Exception as exc:
+                return "app_launch_failed:" + type(exc).__name__
+        executable = aliases.get(name)
+        if not executable:
+            return "blocked_app_not_allowlisted"
+        try:
+            subprocess.Popen(executable, close_fds=True)
+            return "app_launch_requested:" + name
+        except Exception as exc:
+            return "app_launch_failed:" + type(exc).__name__
+    if kind == "media_control":
+        keys = {"play_pause": "playpause", "next": "nexttrack", "previous": "prevtrack",
+                "volume_up": "volumeup", "volume_down": "volumedown", "mute": "volumemute"}
+        pyautogui.press(keys[action["command"]])
+        return "media_control_sent:" + action["command"]
+    if kind == "system_control":
+        command = action["command"]
+        if command == "lock":
+            try:
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+                return "workstation_lock_requested"
+            except Exception as exc:
+                return "lock_failed:" + type(exc).__name__
+        if command in {"volume_up", "volume_down", "mute"}:
+            key = {"volume_up": "volumeup", "volume_down": "volumedown", "mute": "volumemute"}[command]
+            pyautogui.press(key)
+            return "system_volume_control_sent:" + command
+        try:
+            import screen_brightness_control as sbc
+            current = sbc.get_brightness()
+            current = int(current[0] if isinstance(current, (list, tuple)) else current)
+            value = action["value"] if command == "set_brightness" else max(0, min(100, current + (10 if command == "brightness_up" else -10)))
+            sbc.set_brightness(value)
+            return "brightness_set:" + str(value)
+        except Exception as exc:
+            return "brightness_unavailable:" + type(exc).__name__
+    if kind == "screenshot":
+        try:
+            import pygetwindow
+            active = pygetwindow.getActiveWindow()
+            title = active.title if active else ""
+        except Exception:
+            active, title = None, ""
+        if not active or is_sensitive_window(title):
+            return "blocked_unknown_or_sensitive_window"
+        jpeg = await asyncio.to_thread(capture_screen_jpeg, 1600, 75)
+        if not jpeg:
+            return "screenshot_capture_unavailable"
+        try:
+            from PIL import Image
+            folder = Path.home() / "Pictures" / "Shraddha AI Screenshots"
+            folder.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            path = folder / f"shraddha_{stamp}.jpg"
+            Image.open(io.BytesIO(jpeg)).save(path, format="JPEG", quality=90)
+            return json.dumps({"status": "screenshot_saved", "path": str(path), "window": title[:120]}, ensure_ascii=False)
+        except Exception as exc:
+            return "screenshot_save_failed:" + type(exc).__name__
+    if kind == "clipboard_transform":
+        try:
+            import pyperclip
+            source = pyperclip.paste()
+            if not isinstance(source, str) or not source.strip():
+                return "clipboard_empty_or_not_text"
+            safe = sanitize_clipboard_text(source)
+            operation = action["operation"]
+            transformed = {
+                "trim": lambda value: value.strip(),
+                "uppercase": lambda value: value.upper(),
+                "lowercase": lambda value: value.lower(),
+                "collapse_whitespace": lambda value: re.sub(r"\\s+", " ", value).strip(),
+                "remove_blank_lines": lambda value: "\\n".join(line for line in value.splitlines() if line.strip())
+            }[operation](safe)
+            return json.dumps({"status": "clipboard_transformed", "operation": operation, "text": transformed[:20000]}, ensure_ascii=False)
+        except Exception as exc:
+            return "clipboard_transform_unavailable:" + type(exc).__name__
+    if kind == "web_search":
+        query = action["query"].strip()
+        try:
+            request = urllib.request.Request(
+                "https://html.duckduckgo.com/html/?q=" + quote(query),
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShraddhaAI/1.0"}
+            )
+            with urllib.request.urlopen(request, timeout=12) as response:
+                page = response.read(1_500_000).decode("utf-8", "replace")
+            anchors = re.findall(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, re.I | re.S)
+            results = []
+            for url, title in anchors[:5]:
+                clean_title = re.sub(r"<[^>]+>", "", title)
+                results.append({"title": html.unescape(clean_title)[:180], "url": html.unescape(url)[:1000]})
+            return json.dumps({"status": "web_search_complete" if results else "no_results", "query": query, "results": results}, ensure_ascii=False)
+        except Exception as exc:
+            return "web_search_unavailable:" + type(exc).__name__
     if kind == "click_text":
         label = action.get("label", action.get("text", ""))
         try:
@@ -716,19 +846,26 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             return "blocked_ui_target_disappeared"
         except Exception:
             return "blocked_ui_automation_unavailable"
-    if kind == "offline_chat":
+    if kind in {"offline_chat", "code_assistant"}:
         prompt = action["prompt"].strip()
         if not await asyncio.to_thread(confirm, "Run this prompt on the local offline PC model? " + prompt[:160]):
             return "offline_ai_request_rejected_by_pc_user"
+        system_prompt = (
+            "You are Shraddha AI Code Assistant running locally on this PC without network access. "
+            "Explain, write and debug code carefully. Prefer minimal safe patches, identify assumptions, "
+            "and never claim to have changed files or run tests unless tools actually did so."
+            if kind == "code_assistant" else
+            "You are Shraddha AI running locally on this PC without network access. Be accurate, concise, and state uncertainty. Never claim to have performed external actions."
+        )
         try:
             result = await asyncio.to_thread(
                 offline_model.create_chat_completion,
                 messages=[
-                    {"role": "system", "content": "You are Shraddha AI running locally on this PC without network access. Be accurate, concise, and state uncertainty. Never claim to have performed external actions."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=600
+                max_tokens=900 if kind == "code_assistant" else 600
             )
             answer = result.get("choices", [{}])[0].get("message", {}).get("content", "")
             if not isinstance(answer, str) or not answer.strip():
