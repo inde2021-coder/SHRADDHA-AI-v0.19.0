@@ -40,6 +40,7 @@ class OperatorActivity : Activity() {
         root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
         root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
+        root.addView(action("फॉर्म इमेज → AI Autofill Review") { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
         root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
