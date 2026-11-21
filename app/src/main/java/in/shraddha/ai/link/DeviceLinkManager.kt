@@ -230,6 +230,35 @@ object DeviceLinkManager {
         postAuthenticated(baseUrl, "/api/ai/compare", gatewayToken, JSONObject().put("providers", org.json.JSONArray(providers.distinct().take(3))).put("prompt", prompt.take(4000)), done)
     }
 
+    fun telephonyStatus(baseUrl: String, gatewayToken: String, done: (Result<JSONObject>) -> Unit) =
+        getAuthenticated(baseUrl, "/api/telephony/edesy/status", gatewayToken, done)
+
+    fun telephonyCalls(baseUrl: String, gatewayToken: String, done: (Result<JSONObject>) -> Unit) =
+        getAuthenticated(baseUrl, "/api/telephony/edesy/calls", gatewayToken, done)
+
+    private fun getAuthenticated(baseUrl: String, path: String, gatewayToken: String, done: (Result<JSONObject>) -> Unit) {
+        val endpoint = secureApiUrl(baseUrl, path)
+        if (endpoint == null) {
+            done(Result.failure(IllegalArgumentException("Telephony status requires a valid HTTPS backend URL.")))
+            return
+        }
+        val builder = Request.Builder().url(endpoint).get()
+        if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
+        client.newCall(builder.build()).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) {
+                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    } else {
+                        done(runCatching { JSONObject(raw) })
+                    }
+                }
+            }
+        })
+    }
+
     private fun postAuthenticated(baseUrl: String, path: String, gatewayToken: String, body: JSONObject, done: (Result<String>) -> Unit) {
         val endpoint = secureApiUrl(baseUrl, path)
         if (endpoint == null) { rejectInsecure(done); return }
