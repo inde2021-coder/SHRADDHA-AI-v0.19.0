@@ -1,7 +1,7 @@
 import java.util.Properties
 import java.io.File
 import java.security.MessageDigest
-import java.net.URL
+import java.net.URI
 import java.net.HttpURLConnection
 
 plugins {
@@ -176,7 +176,7 @@ val downloadBiometricModels by tasks.registering {
                 for (attempt in 1..3) {
                     try {
                         temporary.delete()
-                        val connection = URL(model.url).openConnection() as HttpURLConnection
+                        val connection = URI(model.url).toURL().openConnection() as HttpURLConnection
                         try {
                             connection.connectTimeout = 30_000
                             connection.readTimeout = 180_000
