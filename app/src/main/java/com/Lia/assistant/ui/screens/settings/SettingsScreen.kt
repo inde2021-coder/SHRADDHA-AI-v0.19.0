@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
@@ -233,6 +234,12 @@ fun SettingsScreen(
                         }
                         appState.applyLanguage(context, nextLang)
                     }
+                )
+                NovaSettingsRow(
+                    title = "Phone Call Agent",
+                    subtitle = "SIM no-answer forwarding • Edesy readiness",
+                    icon = Icons.Default.Call,
+                    onClick = { navController.navigate("phone_call_agent") }
                 )
                 NovaSettingsRow(
                     title = "Gemini Voice",
