@@ -16,6 +16,17 @@ const edesyCalls = new Map();
 let edesyActiveConnections = 0;
 const edesyPreflightAttempts = new Map();
 const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
+const edesyPreflightReady = () => {
+  if (!edesyConfigured() || !process.env.EDESY_API_KEY) return false;
+  try {
+    const streamUrl = new URL(process.env.EDESY_STREAM_URL);
+    const publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
+    return streamUrl.protocol === 'wss:' && publicOrigin.protocol === 'https:' &&
+      streamUrl.host === publicOrigin.host && !streamUrl.username && !streamUrl.password &&
+      !streamUrl.hash && streamUrl.pathname === '/ws/telephony/edesy' &&
+      streamUrl.searchParams.get('token') === process.env.EDESY_STREAM_TOKEN;
+  } catch { return false; }
+};
 function resamplePcm16(input, fromRate, toRate) {
   const count = Math.floor(input.length / 2);
   if (!count || fromRate === toRate) return input;
@@ -309,13 +320,14 @@ const server = http.createServer(async (req, res) => {
           whatsappDelivery: false
         },
         required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'],
-        preflightReady: Boolean(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN),
+        preflightReady: edesyPreflightReady(),
         missing: [
           ...(typeof process.env.EDESY_STREAM_TOKEN !== 'string' || process.env.EDESY_STREAM_TOKEN.length < 32 ? ['EDESY_STREAM_TOKEN (32+ characters)'] : []),
           ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : []),
           ...(!process.env.EDESY_API_KEY ? ['EDESY_API_KEY (for provider preflight)'] : []),
           ...(!process.env.EDESY_STREAM_URL ? ['EDESY_STREAM_URL'] : []),
-          ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : [])
+          ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : []),
+          ...(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN && !edesyPreflightReady() ? ['EDESY_STREAM_URL / PUBLIC_ORIGIN mismatch'] : [])
         ],
         note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is bounded in-memory only; audio is not recorded.'
       });
