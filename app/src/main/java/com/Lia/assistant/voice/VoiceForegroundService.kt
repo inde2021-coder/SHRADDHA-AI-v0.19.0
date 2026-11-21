@@ -77,6 +77,7 @@ class VoiceForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        stopping = false
         createNotificationChannel()
         val notification = buildNotification()
 
