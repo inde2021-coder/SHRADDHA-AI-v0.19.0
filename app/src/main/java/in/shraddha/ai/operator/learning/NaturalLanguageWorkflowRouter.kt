@@ -10,14 +10,15 @@ object NaturalLanguageWorkflowRouter {
         setOf("add", "create", "new", "जोड़", "बनाओ", "बनाना", "नया"),
         setOf("customer", "client", "contact", "ग्राहक", "कस्टमर"),
         setOf("upload", "attach", "select", "अपलोड", "लगाओ", "जोड़ो"),
-        setOf("file", "फ़ाइल", "फाइल", "document", "photo", "image", "फ़ोटो", "तस्वीर"),
-        setOf("invoice", "bill", "receipt", "चालान", "बिल"),
+        setOf("file", "फ़ाइल", "फाइल", "document", "दस्तावेज़", "दस्तावेज", "photo", "image", "फ़ोटो", "तस्वीर"),
+        setOf("invoice", "bill", "receipt", "इनवॉइस", "इनवॉयस", "चालान", "बिल"),
         setOf("search", "find", "lookup", "खोज", "ढूंढ", "सर्च"),
         setOf("save", "submit", "done", "सेव", "जमा", "सबमिट", "सहेज"),
         setOf("delete", "remove", "erase", "trash", "हटाओ", "हटाना", "मिटाओ", "डिलीट"),
         setOf("update", "edit", "change", "modify", "अपडेट", "बदलना", "बदलो", "संशोधन"),
         setOf("send", "share", "forward", "message", "भेजो", "भेजना", "सेंड", "साझा"),
         setOf("download", "fetch", "export", "डाउनलोड", "उतारो", "निकालो"),
+        setOf("report", "रिपोर्ट", "विवरण", "प्रतिवेदन"),
         setOf("upload", "attach", "select", "अपलोड", "लगाओ", "संलग्न")
     )
 
