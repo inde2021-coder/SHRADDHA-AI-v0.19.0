@@ -248,8 +248,10 @@ object DeviceLinkManager {
         seconds: Int = 2,
         done: (Result<JSONObject>) -> Unit
     ) {
-        require(sampleRate == 8000 || sampleRate == 16000)
-        require(seconds in 1..5)
+        if ((sampleRate != 8000 && sampleRate != 16000) || seconds !in 1..5) {
+            done(Result.failure(IllegalArgumentException("Preflight sample rate or duration is invalid.")))
+            return
+        }
         val endpoint = secureApiUrl(baseUrl, "/api/telephony/edesy/preflight")
         if (endpoint == null) {
             done(Result.failure(IllegalArgumentException("Preflight requires a valid HTTPS backend URL.")))
