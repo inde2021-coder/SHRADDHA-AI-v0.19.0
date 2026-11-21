@@ -452,10 +452,10 @@ telephonyWss.on('connection', carrier => {
     if (!callRecord) return;
     callRecord.endedAt = new Date().toISOString();
     callRecord.status = 'ended';
-    const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text).join('\\n').slice(0, 24000);
+    const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text).join('\n').slice(0, 24000);
     if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
       callRecord.summaryStatus = 'pending';
-      askProvider('openai', 'Summarize this phone call in Hindi. Return: caller intent, key details, commitments, and clear next actions. Do not invent facts.\\n\\n' + transcriptText)
+      askProvider('openai', 'Summarize this phone call in Hindi. Return: caller intent, key details, commitments, and clear next actions. Do not invent facts.\n\n' + transcriptText)
         .then(summary => { callRecord.summary = summary.slice(0, 6000); callRecord.summaryStatus = 'ready'; })
         .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); });
     } else {
