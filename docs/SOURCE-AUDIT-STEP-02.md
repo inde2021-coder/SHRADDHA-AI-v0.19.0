@@ -52,7 +52,7 @@ This report records source-level findings; it does not claim an APK build or dev
 
 7. **Paired-device revocation has a server API and Android/Windows UI paths.**
    - Relay revocation authenticates the device token, restricts cross-device revocation to the owner, clears grants/pending requests, and closes revoked sockets with code 4003.
-   - Android and Windows clear locally stored credentials when the relay confirms or signals revocation.
+   - Android and Windows clear locally stored credentials when the relay confirms or signals revocation. Android can also revoke its own saved pairing over HTTPS from Keystore credentials while the WebSocket is disconnected; it does not claim success if the relay cannot confirm.
    - The authenticated WebSocket `connected` event now reports the caller's owner/member role; Android restores owner-only controls after reconnect and Windows shows its role.
    - Backend tests cover owner/member role restoration and revoke authorization; these new tests have not been run yet.
    - Full physical paired-device tests remain outstanding.
