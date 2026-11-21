@@ -1753,7 +1753,7 @@ class MainActivity : AppCompatActivity() {
                 android.app.AlertDialog.Builder(this@MainActivity)
                     .setTitle("Delete Firebase account permanently?")
                     .setMessage("यह Firebase Auth account और इस खाते की Firestore तथा Realtime Database encrypted vault copies स्थायी रूप से हटाएगा। यह फोन पर मौजूद local memory या call-history snapshots नहीं मिटाएगा। यह कार्रवाई वापस नहीं हो सकती।")
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton("Cancel") { _, _ -> password.text.clear() }
                     .setPositiveButton("Delete account") { _, _ ->
                         result.text = "Account reauthentication और cloud deletion चल रहा है…"
                         password.text.clear()
