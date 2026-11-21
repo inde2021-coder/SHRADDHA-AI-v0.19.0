@@ -562,6 +562,67 @@ test('device revocation validates identifiers and lets a member revoke only its 
   assert.equal(reuse.status, 401);
 });
 
+test('end-to-end remote actions require a live control grant and relay opaque ciphertext', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'E2E Action Owner' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'E2E Action Target', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner);
+  const memberSocket = connect(member);
+  const waitType = (socket, type) => nextWsMessage(socket, data => {
+    try { return JSON.parse(data.toString()).type === type; } catch { return false; }
+  });
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const permission = waitType(ownerSocket, 'permission_status');
+    memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { remote_control: true } }));
+    await permission;
+
+    const controlRequest = waitType(memberSocket, 'control_request');
+    ownerSocket.send(JSON.stringify({ type: 'control_request', targetDeviceId: member.deviceId, minutes: 5 }));
+    await controlRequest;
+    const controlResult = waitType(ownerSocket, 'control_result');
+    memberSocket.send(JSON.stringify({ type: 'control_response', requesterDeviceId: owner.deviceId, approved: true, minutes: 5 }));
+    const [controlMessage] = await controlResult;
+    assert.equal(JSON.parse(controlMessage.toString()).approved, true);
+
+    const actionId = 'action_123456789';
+    const nonce = Buffer.alloc(12, 1).toString('base64').replace(/=+$/, '');
+    const ciphertext = Buffer.alloc(16, 2).toString('base64').replace(/=+$/, '');
+    const actionPromise = waitType(memberSocket, 'e2e_message');
+    ownerSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: member.deviceId, messageKind: 'remote_action',
+      actionId, actionKind: 'tap', nonce, ciphertext
+    }));
+    const [actionMessage] = await actionPromise;
+    const forwardedAction = JSON.parse(actionMessage.toString());
+    assert.equal(forwardedAction.fromDeviceId, owner.deviceId);
+    assert.equal(forwardedAction.actionId, actionId);
+    assert.equal(forwardedAction.ciphertext, ciphertext);
+
+    const resultPromise = waitType(ownerSocket, 'e2e_message');
+    memberSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: owner.deviceId, messageKind: 'remote_action_result',
+      actionId, actionKind: 'tap', nonce, ciphertext
+    }));
+    const [resultMessage] = await resultPromise;
+    assert.equal(JSON.parse(resultMessage.toString()).fromDeviceId, member.deviceId);
+  } finally {
+    const closes = [ownerSocket, memberSocket].map(socket => socket.readyState === WebSocket.CLOSED ? Promise.resolve() : new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
+
 test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
