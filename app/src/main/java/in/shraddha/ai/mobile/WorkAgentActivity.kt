@@ -328,8 +328,78 @@ class WorkAgentActivity : AppCompatActivity() {
         if (requestCode == voiceRequestCode && resultCode == RESULT_OK) {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
             if (spoken.isNotBlank()) {
-                input.setText(spoken)
-                sendMessage()
+                handleVoiceCommand(spoken)
+            }
+        }
+    }
+
+    /**
+     * Routes spoken save/delete/update/send requests to a visible page control.
+     * Exact target is inspected and shown for approval before the click.
+     */
+    private fun handleVoiceCommand(spoken: String) {
+        val command = spoken.trim()
+        if (command.isBlank()) return
+        val intent = when {
+            Regex("(?i)\\b(delete|remove|erase)\\b|डिलीट|हटाओ|मिटाओ").containsMatchIn(command) -> "delete"
+            Regex("(?i)\\b(save|store)\\b|सेव|सहेज").containsMatchIn(command) -> "save"
+            Regex("(?i)\\b(update|edit|change)\\b|अपडेट|बदल").containsMatchIn(command) -> "update"
+            Regex("(?i)\\b(send|submit)\\b|भेजो|भेजना|सेंड").containsMatchIn(command) -> "send"
+            Regex("(?i)\\b(upload|attach)\\b|अपलोड").containsMatchIn(command) -> "upload"
+            Regex("(?i)\\bdownload\\b|डाउनलोड").containsMatchIn(command) -> "download"
+            else -> null
+        }
+        if (intent == null) { input.setText(command); sendMessage(); return }
+        if (intent == "upload" || intent == "download") {
+            input.setText(command)
+            addMessage("assistant", "Upload/Download के लिए file picker या सुरक्षित download destination की पुष्टि आवश्यक है। यह काम अभी स्वतः execute नहीं होगा; App Operator में review के लिए भेज रही हूँ।")
+            handoffToOperator()
+            return
+        }
+        if (currentUrl.isBlank() || browserPanel.visibility != View.VISIBLE) {
+            input.setText(command)
+            addMessage("assistant", "पहले Browser tab में संबंधित वेबसाइट खोलें। फिर यही voice command दें; cross-app काम App Operator में review होगा।")
+            handoffToOperator()
+            return
+        }
+        inspectVoiceActionTargets(intent, command)
+    }
+
+    private fun inspectVoiceActionTargets(intent: String, command: String) {
+        val verbs = when (intent) {
+            "save" -> listOf("save", "store", "submit", "सहेज", "सेव", "जमा")
+            "delete" -> listOf("delete", "remove", "erase", "trash", "हट", "मिटा", "डिलीट")
+            "update" -> listOf("update", "edit", "change", "save", "अपडेट", "बदल", "संशोधन")
+            else -> listOf("send", "submit", "post", "message", "भेज", "सेंड", "जमा")
+        }
+        val verbsJson = org.json.JSONArray(verbs).toString()
+        val script = """(function(){const verbs=$verbsJson;const n=s=>(s||'').replace(/ +/g,' ').trim().toLocaleLowerCase();const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&!e.disabled;};const es=[...document.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]')].filter(visible).map(e=>({label:(e.innerText||e.value||e.getAttribute('aria-label')||e.title||'').replace(/ +/g,' ').trim().slice(0,100)})).filter(x=>x.label&&verbs.some(v=>n(x.label).includes(n(v))));return JSON.stringify({title:document.title,url:location.href,matches:es.slice(0,12)});})()"""
+        browser.evaluateJavascript(script) { raw ->
+            val decoded = runCatching { org.json.JSONTokener(raw).nextValue().toString() }.getOrDefault("")
+            val result = runCatching { org.json.JSONObject(decoded) }.getOrNull()
+            val matches = result?.optJSONArray("matches")
+            val labels = (0 until (matches?.length() ?: 0)).mapNotNull { matches?.optJSONObject(it)?.optString("label")?.takeIf { it.isNotBlank() } }.distinct()
+            if (labels.isEmpty()) {
+                addMessage("assistant", "इस पेज पर “$intent” से मिलता visible control नहीं मिला। कोई कार्रवाई नहीं की गई।")
+                capturePageText()
+                return@evaluateJavascript
+            }
+            val host = runCatching { Uri.parse(currentUrl).host.orEmpty() }.getOrDefault("")
+            if (labels.size == 1) {
+                val selected = labels.first()
+                android.app.AlertDialog.Builder(this).setTitle("Voice action की पुष्टि")
+                    .setMessage("आपने कहा: $command\nवेबसाइट: $host\nControl: $selected\n\nइससे डेटा बदल/भेजा/हटाया जा सकता है। क्या इसी exact action की अनुमति है?")
+                    .setNegativeButton("रद्द", null)
+                    .setPositiveButton("हाँ, अभी करें") { _, _ -> executeBrowserClick(selected) }.show()
+            } else {
+                android.app.AlertDialog.Builder(this).setTitle("कौन-सा control?")
+                    .setItems(labels.toTypedArray()) { _, which ->
+                        val selected = labels[which]
+                        android.app.AlertDialog.Builder(this).setTitle("अंतिम अनुमति")
+                            .setMessage("वेबसाइट: $host\nControl: $selected\nकार्य: $intent\n\nक्या इसे क्लिक करें?")
+                            .setNegativeButton("रद्द", null)
+                            .setPositiveButton("हाँ, करें") { _, _ -> executeBrowserClick(selected) }.show()
+                    }.setNegativeButton("रद्द", null).show()
             }
         }
     }
