@@ -451,8 +451,11 @@ const server = http.createServer(async (req, res) => {
       let callHistoryReady = false;
       let callHistoryError = '';
       if (callHistoryConfig.configured) {
-        try { getCallHistoryStore(); callHistoryReady = true; }
-        catch (error) { callHistoryError = String(error.message || 'Call-history store configuration failed').slice(0, 180); }
+        try {
+          const store = getCallHistoryStore();
+          if (store) await store.db.collection('telephony_call_history').limit(1).get();
+          callHistoryReady = Boolean(store);
+        } catch (error) { callHistoryError = String(error.message || 'Call-history store configuration failed').slice(0, 180); }
       }
       return json(res, 200, {
         provider: 'edesy',
