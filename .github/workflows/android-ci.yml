@@ -6,14 +6,8 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
-  pull_request:
-    branches:
-      - main
-      - integration/master-feature-consolidation-2026-11
-  # Integration commits are validated by the open PR event; main pushes run after merge.
-  push:
-    branches:
-      - main
+  # Full automatic integration checks run in android-build and master-integration-merge.
+  # Keep this workflow manual-only to avoid duplicate emulator runs.
   workflow_dispatch:
 
 permissions:
