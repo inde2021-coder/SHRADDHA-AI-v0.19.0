@@ -43,7 +43,7 @@ import `in`.shraddha.ai.brain.PersistentChatMemory
 class MainActivity : AppCompatActivity() {
     private val assistantDisplayName: String
         get() = getSharedPreferences("nova_prefs", MODE_PRIVATE)
-            .getString("assistant_name", "Shraddha AI")?.trim()?.takeIf { it.isNotEmpty() } ?: "Shraddha AI"
+            .getString("assistant_name", "Shraddha AI")?.filterNot { it.isISOControl() }?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: "Shraddha AI"
     private lateinit var status: TextView
     private lateinit var pageRoot: LinearLayout
     private lateinit var shell: LinearLayout
