@@ -310,6 +310,7 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       return json(res, 200, {
         provider: 'edesy',
+        agentName: String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\\p{L}\\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI',
         configured: edesyConfigured(),
         capabilities: {
           inboundWebSocketAudio: edesyConfigured(),
@@ -519,6 +520,8 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 })
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 telephonyWss.on('connection', carrier => {
   carrier.on('error', () => {});
+  const callAgentName = String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI')
+    .replace(/[^\\p{L}\\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   let callSampleRate = 16000;
   let liveFinalized = false;
@@ -585,7 +588,7 @@ telephonyWss.on('connection', carrier => {
     type: 'session.start',
     session: {
       model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1',
-      instructions: (process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.') +
+      instructions: (process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are ${callAgentName}, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.') +
         (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
           ? ' If text transcript saving is enabled, after disclosing that you are an AI, clearly explain that a text transcript may be saved only if the caller consents. Ask the caller to press 1 to consent; if they do not press 1, do not save any transcript. Tell them they can press 0 at any time to stop and discard the transcript. Never say that audio is recorded; audio is not recorded.'
           : ' No call transcript is saved. Do not imply that the call is recorded.'),
@@ -593,7 +596,7 @@ telephonyWss.on('connection', carrier => {
         role: 'developer',
         content: [{
           type: 'input_text',
-          text: 'Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main Shraddha AI, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.' +
+          text: 'Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main ${callAgentName}, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.' +
             (process.env.CALL_TRANSCRIPTS_ENABLED === 'true'
               ? ' Before discussing the call, clearly ask the caller to press 1 if they consent to saving a text transcript. No press-1 means no transcript is saved. Pressing 0 at any time stops and discards it. Do not claim audio is recorded.'
               : ' Do not save a call transcript; no audio recording is made.')
