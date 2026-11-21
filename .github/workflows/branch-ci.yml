@@ -9,10 +9,6 @@ on:
   push:
     branches:
       - "**"
-  pull_request:
-    branches:
-      - main
-      - redesign-v0.19.2
   workflow_dispatch:
 
 permissions:
