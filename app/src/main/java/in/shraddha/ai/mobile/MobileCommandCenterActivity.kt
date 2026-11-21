@@ -72,6 +72,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         root.addView(action("Web Search • browser में खोजें") { webSearch(command.text.toString().removePrefix("वेब पर खोजो ").removePrefix("search web ").trim()) })
         root.addView(action("Code Assistant • AI workspace") { openAiWorkspace() })
         root.addView(action("Media Control • Play / Pause") { media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) })
+        root.addView(action("Clipboard AI • Transform selected text") { openClipboardTools() })
         root.addView(action("Media Control • Next / Previous") {
             android.app.AlertDialog.Builder(this).setTitle("Media action")
                 .setItems(arrayOf("Next track", "Previous track")) { _, which ->
@@ -175,6 +176,50 @@ class MobileCommandCenterActivity : AppCompatActivity() {
 
     private fun openMainPage(page: String) {
         startActivity(Intent(this, `in`.shraddha.ai.MainActivity::class.java).putExtra("initial_page", page))
+    }
+
+    private fun openClipboardTools() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val existing = if (clipboard.hasPrimaryClip()) clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty() else ""
+        val editor = EditText(this).apply {
+            setText(existing)
+            hint = "यहाँ text paste करें या पहले clipboard से पढ़ें"
+            setTextColor(Color.WHITE)
+            setHintTextColor(0xFF8793AA.toInt())
+            minLines = 5
+            maxLines = 12
+            gravity = android.view.Gravity.TOP
+            setPadding(14, 12, 14, 12)
+            setBackgroundColor(0xFF172238.toInt())
+        }
+        val choices = arrayOf("Trim spaces", "UPPERCASE", "lowercase", "Collapse whitespace", "Remove blank lines")
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Clipboard AI • Local text tools")
+            .setMessage("Text केवल इस फोन पर process होगा। कोई clipboard history save नहीं होगी।")
+            .setView(editor)
+            .setNeutralButton("Read Clipboard") { _, _ ->
+                editor.setText(if (clipboard.hasPrimaryClip()) clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty() else "")
+            }
+            .setItems(choices) { _, which ->
+                val source = editor.text.toString()
+                if (source.isBlank()) { status.text = "पहले text paste या enter करें।"; return@setItems }
+                val transformed = when (which) {
+                    0 -> source.trim()
+                    1 -> source.uppercase(Locale.ROOT)
+                    2 -> source.lowercase(Locale.ROOT)
+                    3 -> source.replace(Regex("\\s+"), " ").trim()
+                    else -> source.lineSequence().filter { it.isNotBlank() }.joinToString("\\n")
+                }
+                android.app.AlertDialog.Builder(this).setTitle("Transformed text • Review")
+                    .setMessage(transformed.take(3500))
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Copy to Clipboard") { _, _ ->
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Shraddha transformed text", transformed))
+                        status.text = "Transformed text clipboard में copy किया।"
+                    }.show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun openOperator() {
