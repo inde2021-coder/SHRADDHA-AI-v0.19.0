@@ -11,6 +11,9 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
@@ -36,7 +39,7 @@ object DeviceLinkManager {
     @Volatile var onPeerMessage: ((JSONObject) -> Unit)? = null
     @Volatile var onE2EVerification: ((String, String) -> Unit)? = null
     private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
-    private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
+    private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false, val sendSequence: AtomicLong = AtomicLong(0), @Volatile var lastScreenSequence: Long = -1, @Volatile var lastCameraSequence: Long = -1)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
@@ -129,13 +132,33 @@ object DeviceLinkManager {
                 val idLength = frame[0].toInt() and 0xFF
                 if (idLength !in 1..64 || frame.size <= 2 + idLength) return
                 val sourceId = frame.copyOfRange(1, 1 + idLength).toString(Charsets.UTF_8)
-                val frameType = frame[1 + idLength].toInt() and 0xFF
-                if (frameType !in 1..2) return
-                val jpegLength = frame.size - (2 + idLength)
-                if (jpegLength !in 4..DeviceFrameValidation.MAX_JPEG_BYTES) return
-                val jpeg = frame.copyOfRange(2 + idLength, frame.size)
-                if (!DeviceFrameValidation.isValidJpeg(jpeg)) return
-                if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
+                val encryptedType = frame[1 + idLength].toInt() and 0xFF
+                if (encryptedType !in 0x81..0x82) return // Plaintext visual frames are rejected.
+                val frameType = encryptedType and 0x7F
+                val headerOffset = 2 + idLength
+                if (frame.size < headerOffset + 8 + 12 + 16) return
+                val state = peerKeys[sourceId] ?: return
+                if (!state.localConfirmed || !state.remoteConfirmed) return
+                val sequence = ByteBuffer.wrap(frame, headerOffset + 1, 8).order(ByteOrder.BIG_ENDIAN).long
+                if (sequence < 0) return
+                synchronized(state) {
+                    val previous = if (frameType == 1) state.lastScreenSequence else state.lastCameraSequence
+                    if (sequence <= previous) return
+                    val nonce = frame.copyOfRange(headerOffset + 9, headerOffset + 21)
+                    val ciphertext = frame.copyOfRange(headerOffset + 21, frame.size)
+                    val aad = "${sessionId.orEmpty()}|$sourceId|${deviceId.orEmpty()}|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+                    val plain = runCatching {
+                        DeviceE2ECrypto.decrypt(
+                            state.key,
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(nonce),
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(ciphertext),
+                            aad
+                        )
+                    }.getOrNull() ?: return
+                    if (!DeviceFrameValidation.isValidJpeg(plain)) { plain.fill(0); return }
+                    if (frameType == 1) state.lastScreenSequence = sequence else state.lastCameraSequence = sequence
+                    if (frameType == 2) onCameraFrame?.invoke(sourceId, plain) else onScreenFrame?.invoke(sourceId, plain)
+                }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val rejectedCredential = response?.code == 401 || response?.code == 403
@@ -384,14 +407,29 @@ object DeviceLinkManager {
     }
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
         if (!DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
-        val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
-        if (target.size > 64) return false
-        val packet = ByteArray(2 + target.size + jpeg.size)
-        packet[0] = frameType.toByte()
-        packet[1] = target.size.toByte()
-        if (target.isNotEmpty()) System.arraycopy(target, 0, packet, 2, target.size)
-        System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
-        return socket?.send(ByteString.of(*packet)) == true
+        val sid = sessionId ?: return false
+        val sourceId = deviceId ?: return false
+        val targets = if (targetDeviceId != null) listOf(targetDeviceId) else peerKeys.keys.toList()
+        var sentAny = false
+        for (targetId in targets) {
+            val state = peerKeys[targetId] ?: continue
+            if (!state.localConfirmed || !state.remoteConfirmed) continue
+            val target = targetId.toByteArray(Charsets.UTF_8)
+            if (target.isEmpty() || target.size > 64) continue
+            val sequence = state.sendSequence.getAndIncrement()
+            if (sequence < 0) continue
+            val aad = "$sid|$sourceId|$targetId|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+            val sealed = runCatching { DeviceE2ECrypto.encrypt(state.key, jpeg, aad) }.getOrNull() ?: continue
+            val nonce = java.util.Base64.getDecoder().decode(sealed.nonce)
+            val ciphertext = java.util.Base64.getDecoder().decode(sealed.ciphertext)
+            val packet = ByteBuffer.allocate(2 + target.size + 8 + nonce.size + ciphertext.size)
+                .order(ByteOrder.BIG_ENDIAN)
+                .put((frameType or 0x80).toByte()).put(target.size.toByte()).put(target)
+                .putLong(sequence).put(nonce).put(ciphertext).array()
+            if (socket?.send(ByteString.of(*packet)) == true) sentAny = true
+            nonce.fill(0); ciphertext.fill(0)
+        }
+        return sentAny
     }
     /** Revokes a paired device on the relay. Only the session owner may revoke another device. */
     fun revokeRemoteDevice(targetDeviceId: String, done: (Result<Boolean>) -> Unit) {
