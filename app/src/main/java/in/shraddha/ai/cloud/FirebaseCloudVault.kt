@@ -67,15 +67,16 @@ class FirebaseCloudVault(private val context: Context) {
         runBlocking { FirebaseAuth.getInstance(initialize()).createUserWithEmailAndPassword(email.trim(), password).await().user?.uid ?: error("Account creation returned no user") }
     }
 
-    fun signInAndSave(email: String, password: String, key: String, plaintext: String): Result<String> = runCatching {
+    fun signInAndSave(email: String, password: String, key: String, plaintext: String, backupPassphrase: String = password): Result<String> = runCatching {
         require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter a valid email address." }
         require(password.isNotEmpty()) { "Account password is required." }
+        require(backupPassphrase.length >= 12) { "Use a separate backup passphrase with at least 12 characters." }
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Backup key format is invalid." }
         require(plaintext.toByteArray(Charsets.UTF_8).size <= 140_000) { "Backup is too large (maximum 140 KB)." }
         runBlocking {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(email.trim(), password).await().user ?: error("Sign-in failed")
-            val encrypted = encrypt(plaintext, password)
+            val encrypted = encrypt(plaintext, backupPassphrase)
             val record = mapOf("format" to "AES-256-GCM/PBKDF2-SHA256-v1", "payload" to encrypted, "updatedAt" to System.currentTimeMillis())
             val firestoreWrite = runCatching {
                 FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
@@ -103,9 +104,10 @@ class FirebaseCloudVault(private val context: Context) {
         }
     }
 
-    fun signInAndLoad(email: String, password: String, key: String): Result<String?> = runCatching {
+    fun signInAndLoad(email: String, password: String, key: String, backupPassphrase: String = password): Result<String?> = runCatching {
         require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter a valid email address." }
         require(password.isNotEmpty()) { "Account password is required." }
+        require(backupPassphrase.length >= 12) { "Enter the backup passphrase used when this backup was created." }
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Backup key format is invalid." }
         runBlocking {
             val app = initialize()
@@ -120,7 +122,7 @@ class FirebaseCloudVault(private val context: Context) {
             // A stale/corrupt RTDB copy must not prevent recovery from a valid Firestore
             // mirror. Authenticate and decrypt each copy independently before choosing it.
             if (!realtimePayload.isNullOrBlank()) {
-                val restored = runCatching { decrypt(realtimePayload, password) }
+                val restored = runCatching { decrypt(realtimePayload, backupPassphrase) }
                 if (restored.isSuccess) return@runBlocking restored.getOrThrow()
                 restoreErrors += "Realtime Database backup could not be decrypted."
             }
@@ -131,7 +133,7 @@ class FirebaseCloudVault(private val context: Context) {
             }.onFailure { restoreErrors += "Firestore: ${it.message ?: "read failed"}" }.getOrNull()
 
             if (!firestorePayload.isNullOrBlank()) {
-                val restored = runCatching { decrypt(firestorePayload, password) }
+                val restored = runCatching { decrypt(firestorePayload, backupPassphrase) }
                 if (restored.isSuccess) return@runBlocking restored.getOrThrow()
                 restoreErrors += "Firestore backup could not be decrypted."
             }
