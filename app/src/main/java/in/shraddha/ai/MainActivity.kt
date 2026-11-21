@@ -904,6 +904,14 @@ class MainActivity : AppCompatActivity() {
             relayUrl = edit("Cloud Relay URL", "https://your-domain.example")
             deviceName = edit("This phone name", "e.g. Main Phone")
             addView(relayUrl); addView(deviceName)
+            if (DeviceLinkManager.hasSavedPairing()) {
+                addView(actionButton("Reconnect Saved Paired Device", "Android Keystore में सुरक्षित pairing token से relay reconnect करें") {
+                    DeviceLinkManager.reconnectSaved { result -> runOnUiThread {
+                        result.onSuccess { status.text = "Saved device pairing reconnected securely." }
+                            .onFailure { status.text = "Saved pairing reconnect failed: ${it.message}" }
+                    } }
+                })
+            }
             addView(actionButton("Create Main Phone Session", "नया secure pairing code बनाएँ") {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "पहले अपना deployed HTTPS relay URL डालें।"; return@actionButton }
