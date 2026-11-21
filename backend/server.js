@@ -2,6 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { validRemoteAction } from './relay-policy.js';
+import { appendCallTranscript, clearCallTranscript } from './call-transcript.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -703,14 +704,7 @@ telephonyWss.on('connection', (carrier, request) => {
       if (callRecord.transcriptConsent) {
         const speaker = event.type === 'session.input_transcript.delta' ? 'caller' :
           event.type === 'session.output_transcript.delta' ? 'assistant' : null;
-        if (speaker) {
-          const remaining = Math.max(0, 24_000 - (callRecord.transcriptChars || 0));
-          const chunk = event.delta.slice(0, Math.min(2_000, remaining));
-          if (chunk) {
-            callRecord.transcript.push({ speaker, text: chunk, at: new Date().toISOString() });
-            callRecord.transcriptChars = (callRecord.transcriptChars || 0) + chunk.length;
-          }
-        }
+        if (speaker) appendCallTranscript(callRecord, speaker, event.delta);
       }
     }
     if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, callSampleRate), { binary: true });
@@ -744,8 +738,7 @@ telephonyWss.on('connection', (carrier, request) => {
         } else if (digit === '0') {
           callRecord.transcriptConsent = false;
           callRecord.transcriptConsentDeclined = true;
-          callRecord.transcript = [];
-          callRecord.transcriptChars = 0;
+          clearCallTranscript(callRecord);
           callRecord.transcriptConsentAt = new Date().toISOString();
           callRecord.transcriptConsentMethod = 'dtmf-0';
         }
