@@ -202,4 +202,9 @@ val downloadBiometricModels by tasks.registering {
         }
     }
 }
-tasks.named("preBuild").configure { dependsOn(downloadBiometricModels) }
+// Biometric model assets are required for packaged APKs, not for JVM unit tests.
+tasks.configureEach {
+    if (name == "mergeDebugAssets" || name == "mergeReleaseAssets") {
+        dependsOn(downloadBiometricModels)
+    }
+}
