@@ -14,6 +14,7 @@ const apiAttempts = new Map();
 const sessionCreateAttempts = new Map();
 const edesyCalls = new Map();
 let edesyActiveConnections = 0;
+const edesyPreflightAttempts = new Map();
 const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
 function resamplePcm16(input, fromRate, toRate) {
   const count = Math.floor(input.length / 2);
@@ -237,6 +238,57 @@ const server = http.createServer(async (req, res) => {
       if (!session.devices.size) sessions.delete(sessionId);
       return json(res, 200, { ok: true, revoked: targetId });
     }
+    if (req.method === 'POST' && req.url === '/api/telephony/edesy/preflight') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      if (!edesyConfigured() || !process.env.EDESY_API_KEY || !process.env.EDESY_STREAM_URL || !process.env.PUBLIC_ORIGIN) {
+        return json(res, 503, { error: 'Edesy preflight requires EDESY_STREAM_TOKEN, OPENAI_API_KEY, EDESY_API_KEY, EDESY_STREAM_URL and PUBLIC_ORIGIN.' });
+      }
+      const remote = String(req.socket.remoteAddress || 'unknown');
+      const now = Date.now();
+      const last = edesyPreflightAttempts.get(remote) || 0;
+      if (now - last < 60_000) return json(res, 429, { error: 'Edesy preflight is limited to one request per minute.' });
+      edesyPreflightAttempts.set(remote, now);
+      while (edesyPreflightAttempts.size > 500) edesyPreflightAttempts.delete(edesyPreflightAttempts.keys().next().value);
+      const streamUrl = new URL(process.env.EDESY_STREAM_URL);
+      const publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
+      if (streamUrl.protocol !== 'wss:' || streamUrl.host !== publicOrigin.host ||
+          streamUrl.pathname !== '/ws/telephony/edesy' ||
+          streamUrl.searchParams.get('token') !== process.env.EDESY_STREAM_TOKEN) {
+        return json(res, 400, { error: 'EDESY_STREAM_URL must point to this backend’s authenticated Edesy WebSocket endpoint.' });
+      }
+      const body = await readBody(req);
+      const sampleRate = Number(body.sample_rate || 16000);
+      const seconds = Number(body.seconds || 2);
+      if (![8000, 16000].includes(sampleRate) || !Number.isInteger(seconds) || seconds < 1 || seconds > 5) {
+        return json(res, 400, { error: 'sample_rate must be 8000 or 16000 and seconds must be between 1 and 5.' });
+      }
+      try {
+        const providerResponse = await fetch('https://voice-api.edesy.in/v1/stream-test', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${process.env.EDESY_API_KEY}`, 'content-type': 'application/json' },
+          signal: AbortSignal.timeout(20_000),
+          body: JSON.stringify({ stream_url: streamUrl.toString(), sample_rate: sampleRate, seconds })
+        });
+        const result = await providerResponse.json().catch(() => ({}));
+        if (!providerResponse.ok) return json(res, providerResponse.status, { error: String(result.error || result.message || 'Edesy preflight failed').slice(0, 240) });
+        const steps = Array.isArray(result.steps) ? result.steps.slice(0, 8).map(step => ({
+          step: String(step.step || '').slice(0, 40),
+          ok: step.ok === true,
+          detail: String(step.detail || '').slice(0, 240)
+        })) : [];
+        return json(res, 200, {
+          ok: result.ok === true,
+          sample_rate: sampleRate,
+          steps,
+          hint: String(result.hint || '').slice(0, 240),
+          audio_frames_received: Number(result.audio_frames_received || 0),
+          audio_bytes_received: Number(result.audio_bytes_received || 0),
+          text_frames_received: Number(result.text_frames_received || 0)
+        });
+      } catch (error) {
+        return json(res, 502, { error: String(error.message || 'Edesy preflight request failed').slice(0, 240) });
+      }
+    }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       return json(res, 200, {
@@ -251,9 +303,13 @@ const server = http.createServer(async (req, res) => {
           whatsappDelivery: false
         },
         required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'],
+        preflightReady: Boolean(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN),
         missing: [
           ...(typeof process.env.EDESY_STREAM_TOKEN !== 'string' || process.env.EDESY_STREAM_TOKEN.length < 32 ? ['EDESY_STREAM_TOKEN (32+ characters)'] : []),
-          ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : [])
+          ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : []),
+          ...(!process.env.EDESY_API_KEY ? ['EDESY_API_KEY (for provider preflight)'] : []),
+          ...(!process.env.EDESY_STREAM_URL ? ['EDESY_STREAM_URL'] : []),
+          ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : [])
         ],
         note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is bounded in-memory only; audio is not recorded.'
       });
