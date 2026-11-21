@@ -290,7 +290,10 @@ const server = http.createServer(async (req, res) => {
           body: JSON.stringify({ stream_url: (() => { const testUrl = new URL(streamUrl); testUrl.searchParams.set('mode', 'preflight'); return testUrl.toString(); })(), sample_rate: sampleRate, seconds })
         });
         const result = await providerResponse.json().catch(() => ({}));
-        if (!providerResponse.ok) return json(res, providerResponse.status, { error: redactPreflightText(result.error || result.message || 'Edesy preflight failed').slice(0, 240) });
+        if (!providerResponse.ok) {
+          const providerError = typeof result.error === 'string' ? result.error : result.error?.message || result.message || 'Edesy preflight failed';
+          return json(res, providerResponse.status, { error: redactPreflightText(providerError).slice(0, 240) });
+        }
         const steps = Array.isArray(result.steps) ? result.steps.slice(0, 8).map(step => ({
           step: String(step.step || '').slice(0, 40),
           ok: step.ok === true,
