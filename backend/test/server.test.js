@@ -596,32 +596,36 @@ test('screen frames are blocked until the sending device explicitly enables scre
       } catch { return false; }
     });
 
+    const encryptedFrame = (type, targetId, sequence, fill = 0x5a) => {
+      const target = Buffer.from(targetId, 'utf8');
+      const payload = Buffer.alloc(8 + 12 + 16, fill); // sequence + nonce + GCM tag/ciphertext
+      payload.writeBigUInt64BE(BigInt(sequence), 0);
+      return Buffer.concat([Buffer.from([type, target.length]), target, payload]);
+    };
     const firstFrame = nextWsMessage(memberSocket, (_data, isBinary) => isBinary);
     ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: false, camera: false } }));
     await waitForPermission(false);
-    const deniedJpeg = Buffer.from([0xff, 0xd8, 0x00, 0x11]);
-    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), deniedJpeg]));
+    // Legacy plaintext JPEG frames are rejected even when syntactically valid.
+    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), Buffer.from([0xff, 0xd8, 0x00, 0x11])]));
 
     ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: false } }));
     await waitForPermission(true);
-    // A sender must not bypass the Android client's 2.5 MB image limit.
-    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), Buffer.alloc(2_500_001)]));
-    // Reject unknown frame types and oversized target-device routing headers.
-    ownerSocket.send(Buffer.from([3, 0, 0xff, 0xd8]));
-    ownerSocket.send(Buffer.concat([Buffer.from([1, 65]), Buffer.alloc(65, 0x61), Buffer.from([0xff, 0xd8])]));
-    // Reject arbitrary binary payloads that do not begin with the JPEG SOI marker.
-    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), Buffer.from([0x00, 0x11, 0x22, 0x33])]));
-    const allowedJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x55]);
-    ownerSocket.send(Buffer.concat([Buffer.from([1, 0]), allowedJpeg]));
+    // Encrypted frames are bounded and must address one verified peer.
+    ownerSocket.send(encryptedFrame(0x81, member.deviceId, 1).subarray(0, 2 + member.deviceId.length + 35));
+    ownerSocket.send(Buffer.concat([Buffer.from([3, 0]), Buffer.alloc(40)]));
+    ownerSocket.send(Buffer.concat([Buffer.from([0x81, 65]), Buffer.alloc(65, 0x61), Buffer.alloc(40)]));
+    ownerSocket.send(encryptedFrame(0x81, member.deviceId, 2).subarray(0, 2 + member.deviceId.length + 35));
+    const allowedOpaque = encryptedFrame(0x81, member.deviceId, 3, 0x7a).subarray(2 + member.deviceId.length);
+    ownerSocket.send(encryptedFrame(0x81, member.deviceId, 3, 0x7a));
 
     const [frameData, isBinary] = await firstFrame;
     assert.equal(isBinary, true);
     const frame = Buffer.from(frameData);
     const sourceLength = frame[0];
     assert.equal(frame.subarray(1, 1 + sourceLength).toString('utf8'), owner.deviceId);
-    assert.equal(frame[1 + sourceLength], 1);
-    assert.deepEqual(frame.subarray(2 + sourceLength), allowedJpeg,
-      'a frame sent while screen permission was false must never reach the paired viewer');
+    assert.equal(frame[1 + sourceLength], 0x81);
+    assert.deepEqual(frame.subarray(2 + sourceLength), allowedOpaque,
+      'the relay must forward opaque ciphertext unchanged only after screen permission is enabled');
 
     const waitForCameraPermission = expected => nextWsMessage(memberSocket, (data, isBinary) => {
       if (isBinary) return false;
@@ -637,17 +641,15 @@ test('screen frames are blocked until the sending device explicitly enables scre
     ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), Buffer.from([0xff, 0xd8, 0x00, 0x22])]));
     ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { screen: true, camera: true } }));
     await waitForCameraPermission(true);
-    // Camera frames use the same strict per-image limit as screen frames.
-    ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), Buffer.alloc(2_500_001)]));
-    const allowedCameraJpeg = Buffer.from([0xff, 0xd8, 0x7a, 0x66]);
-    ownerSocket.send(Buffer.concat([Buffer.from([2, 0]), allowedCameraJpeg]));
+    const allowedCameraOpaque = encryptedFrame(0x82, member.deviceId, 4, 0x66).subarray(2 + member.deviceId.length);
+    ownerSocket.send(encryptedFrame(0x82, member.deviceId, 4, 0x66));
     const [cameraData, cameraBinary] = await firstCameraFrame;
     assert.equal(cameraBinary, true);
     const cameraFrame = Buffer.from(cameraData);
     const cameraSourceLength = cameraFrame[0];
-    assert.equal(cameraFrame[cameraSourceLength + 1], 2);
-    assert.deepEqual(cameraFrame.subarray(cameraSourceLength + 2), allowedCameraJpeg,
-      'a camera frame sent while camera permission was false must never reach the paired viewer');
+    assert.equal(cameraFrame[cameraSourceLength + 1], 0x82);
+    assert.deepEqual(cameraFrame.subarray(cameraSourceLength + 2), allowedCameraOpaque,
+      'camera ciphertext is relayed only when camera permission is enabled');
   } finally {
     ownerSocket.close();
     memberSocket.close();
