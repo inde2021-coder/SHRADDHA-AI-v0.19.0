@@ -365,6 +365,12 @@ class PcCompanionApp:
             time.sleep(0.25)
 
     def revoke_pairing(self):
+        if not messagebox.askyesno(
+            "Revoke PC pairing?",
+            "This permanently revokes this PC's relay pairing. You will need a new six-digit code to connect again. Continue?",
+            parent=self.root,
+        ):
+            return
         device_id = str(self.config.get("deviceId", ""))
         session_id = str(self.config.get("sessionId", ""))
         token = self.device_token or self._token_for_saved_device()
