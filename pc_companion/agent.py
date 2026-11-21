@@ -229,7 +229,10 @@ class PcCompanionApp:
     def _on_close(self, _ws, code, reason):
         self.screen_event.clear()
         self.control_grant_until = 0
-        self.events.put(("status", f"Disconnected ({code or 'closed'}): {str(reason or '')[:100]}"))
+        if code == 4003:
+            self.events.put(("revoked", None))
+        else:
+            self.events.put(("status", f"Disconnected ({code or 'closed'}): {str(reason or '')[:100]}"))
 
     def _publish_permissions(self):
         remote = bool(self.remote_var.get())
@@ -251,6 +254,18 @@ class PcCompanionApp:
                 kind, payload = self.events.get_nowait()
                 if kind == "status":
                     self.status_var.set(payload)
+                elif kind == "revoked":
+                    device_id = str(self.config.get("deviceId", ""))
+                    if device_id:
+                        try:
+                            keyring.delete_password(SERVICE_NAME, device_id)
+                        except Exception:
+                            pass
+                    self.config.pop("sessionId", None)
+                    self.config.pop("deviceId", None)
+                    self.device_token = None
+                    self._save_config()
+                    self.status_var.set("This PC pairing was revoked by the session owner. Join again with a new pairing code.")
                 elif kind == "message":
                     self._handle_message(payload)
                 elif kind == "opened":
