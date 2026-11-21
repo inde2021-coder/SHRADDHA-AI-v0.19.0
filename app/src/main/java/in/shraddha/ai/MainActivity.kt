@@ -92,8 +92,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::remoteConsent.isInitialized && !isShraddhaAccessibilityEnabled() && remoteConsent.isChecked) {
-            remoteConsent.isChecked = false
+        if (!isShraddhaAccessibilityEnabled()) {
+            val prefs = getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
+            val hadConsent = prefs.getBoolean("remote_control_consent", false)
+            if (hadConsent) {
+                prefs.edit().putBoolean("remote_control_consent", false).apply()
+                if (::remoteConsent.isInitialized && remoteConsent.isChecked) remoteConsent.isChecked = false
+                else if (DeviceLinkManager.sessionId != null) publishDataPermissions()
+            }
         }
     }
 
