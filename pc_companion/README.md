@@ -11,7 +11,7 @@ This is a separate Windows desktop companion for the Android Shraddha AI app. It
 5. On the PC, explicitly enable **Allow remote mouse / keyboard** and/or **Share this PC screen**.
 6. On Android, select the Windows PC and request remote control. The PC displays a local approval dialog for every control session.
 
-The PC device token is stored in Windows Credential Manager. The configuration file in %APPDATA% contains only the relay URL, session ID and device ID.
+The PC device token is stored in Windows Credential Manager only after the relay accepts the authenticated WebSocket connection. An HTTP pairing response alone is not treated as proof of a valid pairing. The configuration file in %APPDATA% contains only the relay URL, session ID and device ID.
 
 ## Controls and safety
 
