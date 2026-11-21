@@ -20,7 +20,9 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - The agent never executes arbitrary shell commands, PowerShell, scripts or file operations.
 - **Revoke PC Pairing** asks for explicit confirmation, revokes this device on the relay, and deletes its Windows Credential Manager token. A new six-digit code is required to pair again.
 - Screen sharing is off by default and sends JPEG frames only while the local checkbox is enabled.
-- P-256/HKDF/AES-GCM helper primitives and tests exist for a future cross-platform encrypted frame protocol, but they are not yet connected to the live relay transport. Current relay JPEG frames are not end-to-end encrypted; do not treat WSS as end-to-end privacy.
+- Android and Windows now exchange P-256 ECDH public keys through the authenticated relay, derive a session- and peer-bound AES-256-GCM key, and require both users to confirm the same short fingerprint out-of-band before visual sharing. Screen/camera frames use per-peer ciphertext envelopes with monotonically increasing sequence numbers; the relay forwards opaque ciphertext and rejects plaintext JPEG frames. A peer that is not mutually verified receives no visual frames.
+- Fingerprint confirmation is not automatic identity proof: compare the exact fingerprint on both devices through a separate trusted channel. If it differs or cannot be checked, reject the peer. Keys are ephemeral and must be verified again after reconnect/restart; the relay does not persist private keys.
+- This protocol is source-integrated but still requires Android↔Windows physical-device verification, replay/tamper tests and reconnect tests before production use. WSS alone is not end-to-end privacy.
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
 - PyAutoGUI's top-left fail-safe is enabled.
 - The companion does not capture microphone audio, read files, or silently send messages.
