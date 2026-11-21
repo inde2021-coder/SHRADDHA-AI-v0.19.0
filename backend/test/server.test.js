@@ -263,9 +263,9 @@ test('device revocation requires authentication and owner authority, and removes
   assert.equal(memberResponse.status, 200);
 
   const endpoint = `${baseUrl}/api/device/revoke`;
-  const payload = targetDeviceId => ({
+  const payload = (deviceId, targetDeviceId) => ({
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ sessionId: owner.sessionId, deviceId: member.deviceId, targetDeviceId })
+    body: JSON.stringify({ sessionId: owner.sessionId, deviceId, targetDeviceId })
   });
   const memberSocket = new WebSocket(
     `${baseUrl.replace(/^http/, 'ws')}/ws?sessionId=${encodeURIComponent(member.sessionId)}&deviceId=${encodeURIComponent(member.deviceId)}`,
@@ -279,32 +279,32 @@ test('device revocation requires authentication and owner authority, and removes
   );
   await once(ownerSocket, 'open');
   const ownerSocketClosed = once(ownerSocket, 'close');
-  const unauthenticated = await fetch(endpoint, payload(owner.deviceId));
+  const unauthenticated = await fetch(endpoint, payload(member.deviceId, owner.deviceId));
   assert.equal(unauthenticated.status, 401);
 
   const memberCannotRevokeOwner = await fetch(endpoint, {
-    ...payload(owner.deviceId), headers: {
+    ...payload(member.deviceId, owner.deviceId), headers: {
       'content-type': 'application/json', authorization: `Bearer ${member.deviceToken}`
     }
   });
   assert.equal(memberCannotRevokeOwner.status, 403);
 
   const invalidTarget = await fetch(endpoint, {
-    ...payload('not-a-device-id'), headers: {
+    ...payload(owner.deviceId, 'not-a-device-id'), headers: {
       'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
     }
   });
   assert.equal(invalidTarget.status, 400);
 
   const ownerRevokesMember = await fetch(endpoint, {
-    ...payload(member.deviceId), headers: {
+    ...payload(owner.deviceId, member.deviceId), headers: {
       'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
     }
   });
   assert.equal(ownerRevokesMember.status, 200);
   assert.deepEqual(await ownerRevokesMember.json(), { ok: true, revoked: member.deviceId });
   const revokedMemberCannotRevoke = await fetch(endpoint, {
-    ...payload(member.deviceId), headers: {
+    ...payload(member.deviceId, member.deviceId), headers: {
       'content-type': 'application/json', authorization: `Bearer ${member.deviceToken}`
     }
   });
@@ -313,7 +313,7 @@ test('device revocation requires authentication and owner authority, and removes
   assert.equal(memberCloseCode, 4003, 'revoking a paired device must close its active relay socket');
 
   const ownerRevokesSession = await fetch(endpoint, {
-    ...payload(owner.deviceId), headers: {
+    ...payload(owner.deviceId, owner.deviceId), headers: {
       'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
     }
   });
