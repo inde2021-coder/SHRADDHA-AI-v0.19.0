@@ -164,3 +164,18 @@ py shraddha_pc_companion.py --voice-control-phone ANDROID_DEVICE_ID --vosk-model
 Only allowlisted commands such as `go back`, `go home`, `scroll up`, `scroll down`, and `open app Settings` are accepted. The PC asks for confirmation and Android must separately approve remote control.
 
 Automatic reconnect uses bounded exponential backoff up to 60 seconds. Reconnection reuses the saved pairing token but asks for fresh local sharing/control consent; temporary control grants are not silently restored.
+
+## Android-to-Windows desktop actions
+
+When the paired PC has explicitly enabled remote control, the Android Device Universe can request these additional actions. The PC user must still approve each action locally, and the Android side must have the active paired-device control grant:
+
+- **App launcher:** allowlisted Notepad, Calculator, Paint, Explorer, Task Manager, Settings, Edge, Chrome, PowerShell and Terminal. Arbitrary shell commands and arbitrary executable paths are not accepted.
+- **System control:** lock workstation, volume keys and supported display brightness controls. Shutdown/restart are deliberately not exposed.
+- **Media control:** play/pause, next/previous track, volume up/down and mute.
+- **Screenshot AI:** save a JPEG of the active window under Pictures/Shraddha AI Screenshots. Unknown or sensitive-looking window titles are blocked. OCR remains a separate action and requires --allow-ocr.
+- **Clipboard transformations:** trim, uppercase/lowercase, collapse whitespace and remove blank lines. Likely credential content is rejected; the PC user confirms returning the transformed text. Clipboard history is not collected or retained.
+- **Web search:** live DuckDuckGo HTML search; requires internet access and returns a small bounded set of results.
+- **Code assistant:** uses only the configured local GGUF model (--offline-model); it does not silently switch to a cloud provider.
+
+These are bounded desktop actions, not unrestricted remote administration. App launch success is reported as a launch request, not proof that the app finished loading. Screenshot capture and OCR operate on the active window only. Display brightness depends on compatible hardware and the optional screen_brightness_control package. Web search depends on the external search service being reachable. The Android UI exposes the supported actions, but a real paired Windows PC test is still required before describing end-to-end operation as production verified.
+
