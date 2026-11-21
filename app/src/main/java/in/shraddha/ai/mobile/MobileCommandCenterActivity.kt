@@ -1,6 +1,6 @@
 package `in`.shraddha.ai.mobile
 
-import android.app.Activity
+import androidx.appcompat.app.AppCompatActivity
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
@@ -26,7 +26,7 @@ import `in`.shraddha.ai.notes.NoteOcrActivity
  * Mobile counterpart of the Windows companion command centre.
  * Uses Android-supported intents, Accessibility and user-approved APIs; no root or hidden settings writes.
  */
-class MobileCommandCenterActivity : Activity() {
+class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var command: EditText
     private val voiceRequest = 7401
