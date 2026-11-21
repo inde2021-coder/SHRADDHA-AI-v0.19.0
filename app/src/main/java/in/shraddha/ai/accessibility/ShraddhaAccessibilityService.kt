@@ -12,6 +12,7 @@ import org.json.JSONObject
 import android.graphics.Rect
 import `in`.shraddha.ai.operator.ScreenElement
 import `in`.shraddha.ai.operator.ScreenSnapshot
+import `in`.shraddha.ai.link.DeviceLinkManager
 
 class ShraddhaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
@@ -20,7 +21,15 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* Screen content is not uploaded or logged. */ }
     override fun onInterrupt() { }
-    override fun onDestroy() { if (active === this) active = null; super.onDestroy() }
+    override fun onUnbind(intent: Intent?): Boolean {
+        DeviceLinkManager.revokeAllRemoteControlGrants()
+        return super.onUnbind(intent)
+    }
+    override fun onDestroy() {
+        DeviceLinkManager.revokeAllRemoteControlGrants()
+        if (active === this) active = null
+        super.onDestroy()
+    }
 
     private fun setFocusedText(value: String): Boolean {
         val root = rootInActiveWindow ?: return false
