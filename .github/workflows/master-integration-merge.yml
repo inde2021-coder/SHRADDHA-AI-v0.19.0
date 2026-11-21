@@ -6,9 +6,6 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
-  push:
-    branches:
-      - integration/master-feature-consolidation-2026-11
   pull_request:
     branches:
       - main
@@ -19,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: integration-full-checks-${{ github.sha }}
+  group: integration-full-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
