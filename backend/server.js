@@ -310,7 +310,7 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       return json(res, 200, {
         provider: 'edesy',
-        agentName: String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\\p{L}\\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI',
+        agentName: String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI',
         configured: edesyConfigured(),
         capabilities: {
           inboundWebSocketAudio: edesyConfigured(),
@@ -521,7 +521,7 @@ const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 102
 telephonyWss.on('connection', carrier => {
   carrier.on('error', () => {});
   const callAgentName = String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI')
-    .replace(/[^\\p{L}\\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
+    .replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   let callSampleRate = 16000;
   let liveFinalized = false;
