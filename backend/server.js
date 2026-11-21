@@ -474,15 +474,28 @@ telephonyWss.on('connection', carrier => {
     if (carrier.readyState === WebSocket.OPEN || carrier.readyState === WebSocket.CONNECTING) carrier.close(1000, 'Call bridge closed');
   };
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
-  live.on('open', () => live.send(JSON.stringify({
+  live.on('open', () => {
+    if (closed || carrier.readyState !== WebSocket.OPEN) {
+      live.close(1000, 'Carrier call ended before AI session started');
+      return;
+    }
+    live.send(JSON.stringify({
     type: 'session.start',
     session: {
       model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1',
       instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, an AI assistant handling an inbound phone call. At the very beginning, clearly tell the caller in their language that you are an AI assistant, not a human. Then ask how you can help. Speak naturally in Hindi or English, one question at a time. Take a concise message and never claim you performed an action you cannot perform.',
+      input: [{
+        role: 'developer',
+        content: [{
+          type: 'input_text',
+          text: 'Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main Shraddha AI, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.'
+        }]
+      }],
       audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } },
       delegation: { type: 'client' }
     }
-  })));
+    }));
+  });
   live.on('message', raw => {
     if (closed) return;
     let event;
