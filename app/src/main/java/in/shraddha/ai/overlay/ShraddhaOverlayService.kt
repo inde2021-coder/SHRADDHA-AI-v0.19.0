@@ -27,7 +27,7 @@ class ShraddhaOverlayService : Service() {
     private var panel: LinearLayout? = null
     private var orbPulse: ValueAnimator? = null
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun overlayType() = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+    private fun overlayType() = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
     override fun onCreate() {
         super.onCreate()
