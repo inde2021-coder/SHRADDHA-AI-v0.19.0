@@ -5,7 +5,15 @@ bash .github/scripts/wait-for-android-emulator.sh
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 ADB="$SDK_ROOT/platform-tools/adb"
 if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb)"; fi
-SERIAL="${ANDROID_SERIAL:-emulator-5554}"
+SERIAL="${ANDROID_SERIAL:-}"
+if [[ -z "$SERIAL" && -f "${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial" ]]; then
+  SERIAL="$(cat "${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial")"
+fi
+if [[ -z "$SERIAL" ]] || ! "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; then
+  echo "ERROR: the emulator that passed readiness is no longer connected."
+  "$ADB" devices -l || true
+  exit 1
+fi
 
 dump_diagnostics() {
   echo "===== ADB devices ====="
@@ -25,7 +33,6 @@ dump_diagnostics() {
 trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 
 "$ADB" -s "$SERIAL" wait-for-device
-# Dismiss the emulator keyguard after credential-encrypted user storage is ready.
 "$ADB" -s "$SERIAL" shell input keyevent 82 || true
 "$ADB" -s "$SERIAL" shell wm dismiss-keyguard || true
 "$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk
@@ -33,10 +40,8 @@ trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 "$ADB" -s "$SERIAL" shell df -h /data
 "$ADB" devices -l
 
-# Run actual Android instrumentation (including biometric/ONNX smoke coverage).
 ./gradlew :app:connectedDebugAndroidTest --no-daemon --console=plain --stacktrace
 
-# Do not accept a green Gradle task that produced no instrumentation result files.
 report_dir="app/build/outputs/androidTest-results/connected"
 if [[ ! -d "$report_dir" ]] || ! find "$report_dir" -type f -name '*.xml' -print -quit | grep -q .; then
   echo "ERROR: connectedDebugAndroidTest produced no XML instrumentation result files."
