@@ -38,6 +38,9 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
         val localPublic = pair.public as java.security.interfaces.ECPublicKey
         val peerParams = publicKey.params
         val localParams = localPublic.params
+        val peerPrime = (peerParams.curve.field as? java.security.spec.ECFieldFp)?.p
+        val localPrime = (localParams.curve.field as? java.security.spec.ECFieldFp)?.p
+        require(peerPrime != null && peerPrime == localPrime) { "Peer key must use the same prime field" }
         require(
             peerParams.order == localParams.order &&
                 peerParams.cofactor == localParams.cofactor &&
