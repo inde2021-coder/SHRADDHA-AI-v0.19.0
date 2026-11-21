@@ -123,7 +123,7 @@ class LiveAudioIO(
                     try {
                         while (isRecording.get() && recordingGeneration.isCurrent(generation)) {
                             val read = record.read(buffer, 0, buffer.size)
-                            if (read > 0 && isRecording.get() && recordingGeneration.get() == generation) {
+                            if (read > 0 && isRecording.get() && recordingGeneration.isCurrent(generation)) {
                                 val chunk = if (read == buffer.size) buffer.clone() else buffer.copyOf(read)
                                 try {
                                     onMicAmplitude(calculateRms(chunk))
@@ -139,18 +139,18 @@ class LiveAudioIO(
                                 read == AudioRecord.ERROR_INVALID_OPERATION ||
                                 read == AudioRecord.ERROR_BAD_VALUE
                             ) {
-                                if (isRecording.get() && recordingGeneration.get() == generation) {
+                                if (isRecording.get() && recordingGeneration.isCurrent(generation)) {
                                     reportRecordingError("Microphone recording stopped unexpectedly (AudioRecord error $read).")
                                 }
                                 break
                             }
                         }
                     } catch (readError: Exception) {
-                        if (isRecording.get() && recordingGeneration.get() == generation) {
+                        if (isRecording.get() && recordingGeneration.isCurrent(generation)) {
                             reportRecordingError(readError.localizedMessage ?: "Microphone read failed.")
                         }
                     } finally {
-                        if (recordingGeneration.get() == generation) isRecording.set(false)
+                        if (recordingGeneration.finish(generation)) isRecording.set(false)
                     }
                 }, "LiveAudioIO-MicThread").apply { start() }
             } catch (error: Exception) {
