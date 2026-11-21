@@ -1,6 +1,21 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // Backup blobs must be encrypted, owner-scoped, size-bounded and explicitly
+    // labelled with the supported envelope and timestamp metadata.
+    match /users/{userId}/backups/{fileName} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && fileName.matches('^backup_[0-9]{13}_[a-f0-9]{8}[.]enc$')
+                            && request.resource.size > 0
+                            && request.resource.size <= 50 * 1024 * 1024
+                            && request.resource.contentType == 'application/octet-stream'
+                            && request.resource.metadata.format == 'AES-256-GCM/PBKDF2-SHA256-v1'
+                            && request.resource.metadata.updatedAt is string
+                            && request.resource.metadata.updatedAt.matches('^[0-9]{13}$');
+    }
+
     match /users/{userId}/{allPaths=**} {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
       allow create, update: if request.auth != null
@@ -8,8 +23,11 @@ service firebase.storage {
                             && request.resource.size < 50 * 1024 * 1024
                             && request.resource.contentType.matches(
                               'image/.*|video/.*|application/pdf|application/json|text/plain'
-                            );
+                            )
+                            // Backup paths must pass the stricter encrypted-backup rule above.
+                            && !request.resource.name.matches('users/' + userId + '/backups/.*');
     }
+
     match /{allPaths=**} { allow read, write: if false; }
   }
 }
