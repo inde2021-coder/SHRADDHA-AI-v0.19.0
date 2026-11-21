@@ -767,7 +767,6 @@ telephonyWss.on('connection', (carrier, request) => {
           consentPromptBuffer: ''
         };
         storeEdesyCall(callRecord);
-        while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
       }
       return;
     }
