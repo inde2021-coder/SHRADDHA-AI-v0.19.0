@@ -25,3 +25,16 @@ trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 # Avoid the flaky standalone "pm list packages" probe; connectedAndroidTest
 # performs the real package installation and instrumentation checks.
 ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+
+echo "Installing and launching the production debug APK..."
+"$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk
+"$ADB" -s "$SERIAL" shell monkey -p in.shraddha.ai 1
+for attempt in 1 2 3 4 5 6; do
+  if "$ADB" -s "$SERIAL" shell pidof in.shraddha.ai | grep -q '[0-9]'; then
+    echo "Shraddha AI main process is running."
+    exit 0
+  fi
+  sleep 5
+done
+echo "ERROR: Shraddha AI did not remain running after launch."
+exit 1
