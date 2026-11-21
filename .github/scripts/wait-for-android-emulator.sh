@@ -12,7 +12,7 @@ if [[ -z "$ADB" || ! -x "$ADB" ]]; then
 fi
 
 SERIAL="${ANDROID_SERIAL:-emulator-5554}"
-echo "Waiting for Android emulator $SERIAL and responsive system services..."
+echo "Waiting for Android emulator $SERIAL: boot, user unlock and Android services..."
 "$ADB" start-server
 
 deadline=$((SECONDS + 900))
@@ -21,30 +21,32 @@ ready_streak=0
 while (( SECONDS < deadline )); do
   state="$("$ADB" -s "$SERIAL" get-state 2>/dev/null || true)"
   boot="$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+  user_ce="$("$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)"
+  bootanim="$("$ADB" -s "$SERIAL" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)"
 
-  if [[ "$state" == device && "$boot" == 1 ]]; then
+  if [[ "$state" == device && "$boot" == 1 && "$user_ce" == true && "$bootanim" != running ]]; then
     package_service="$("$ADB" -s "$SERIAL" shell service check package 2>/dev/null | tr -d '\r' || true)"
     activity_service="$("$ADB" -s "$SERIAL" shell service check activity 2>/dev/null | tr -d '\r' || true)"
+    window_service="$("$ADB" -s "$SERIAL" shell service check window 2>/dev/null | tr -d '\r' || true)"
 
-    # Match the positive service-check response exactly. A substring test for
-    # "found" also matches "not found", which previously let an unready AVD
-    # proceed into connectedAndroidTest and fail APK installation.
     if [[ "$package_service" == "Service package: found" &&
-          "$activity_service" == "Service activity: found" ]]; then
-      # Verify the services can actually answer Binder-backed shell requests,
-      # not merely that stale service-manager entries exist.
+          "$activity_service" == "Service activity: found" &&
+          "$window_service" == "Service window: found" ]]; then
       package_probe="$("$ADB" -s "$SERIAL" shell pm path android 2>/dev/null | tr -d '\r' || true)"
       activity_probe="$("$ADB" -s "$SERIAL" shell am get-current-user 2>/dev/null | tr -d '\r' || true)"
-      if [[ "$package_probe" == package:* && "$activity_probe" =~ ^[0-9]+$ ]]; then
+      unlock_probe="$("$ADB" -s "$SERIAL" shell dumpsys user 2>/dev/null | tr -d '\r' || true)"
+      if [[ "$package_probe" == package:* &&
+            "$activity_probe" == 0 &&
+            ( "$unlock_probe" == *"mUserUnlocked=true"* || "$unlock_probe" == *"RUNNING_UNLOCKED"* ) ]]; then
         ready_streak=$((ready_streak + 1))
         if (( ready_streak >= 3 )); then
-          echo "Emulator $SERIAL is stable: boot complete, PackageManager and ActivityManager respond (3 consecutive checks)."
+          echo "Emulator $SERIAL is fully ready: PackageManager, ActivityManager, WindowManager and unlocked user 0 confirmed."
           "$ADB" devices -l
           exit 0
         fi
       else
         ready_streak=0
-        echo "System services are registered but not responsive yet; waiting..."
+        echo "Android services are present but user/storage probes are not ready; waiting..."
       fi
     else
       ready_streak=0
@@ -54,7 +56,7 @@ while (( SECONDS < deadline )); do
   fi
 
   if [[ "$state" != "$last_state" ]]; then
-    echo "ADB state: ${state:-unavailable}; boot_completed: ${boot:-unavailable}"
+    echo "ADB state: ${state:-unavailable}; boot_completed: ${boot:-unavailable}; user_ce_available: ${user_ce:-unavailable}; bootanim: ${bootanim:-unavailable}"
     last_state="$state"
   fi
   "$ADB" reconnect offline >/dev/null 2>&1 || true
@@ -63,7 +65,11 @@ done
 
 echo "ERROR: emulator $SERIAL did not become fully ready within 15 minutes."
 "$ADB" devices -l || true
+"$ADB" -s "$SERIAL" shell getprop sys.boot_completed || true
+"$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available || true
 "$ADB" -s "$SERIAL" shell service check package || true
 "$ADB" -s "$SERIAL" shell service check activity || true
-"$ADB" -s "$SERIAL" logcat -d -t 1000 || true
+"$ADB" -s "$SERIAL" shell service check window || true
+"$ADB" -s "$SERIAL" shell dumpsys user || true
+"$ADB" -s "$SERIAL" logcat -d -t 1200 || true
 exit 1
