@@ -1,4 +1,4 @@
-name: Master integration merge and verification
+name: Integration branch consolidation and full verification
 
 env:
   GIT_CONFIG_COUNT: "1"
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: master-integration-merge
@@ -32,7 +32,6 @@ jobs:
         with:
           ref: integration/master-feature-consolidation-2026-11
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up JDK 21 for Firebase emulators
         uses: actions/setup-java@v5
@@ -40,15 +39,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Configure Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Fetch every source branch
         run: git fetch origin --prune
 
-      - name: Merge every project branch into one integration branch
+      - name: Verify every source branch is already included in this commit
         shell: bash
         run: |
           set -euo pipefail
@@ -62,13 +56,12 @@ jobs:
             redesign-v0.19.2 \
             work/step-01-source-audit-fixes
           do
-            echo "::group::Merge origin/$branch"
-            git merge --no-edit --no-ff "origin/$branch" || {
-              git status --short
-              echo "Merge failed for $branch; stopping before tests."
+            if ! git merge-base --is-ancestor "origin/$branch" HEAD; then
+              echo "::error::Source branch $branch is not fully merged into the current integration commit."
+              echo "Merge $branch into integration and push before running the full suite."
               exit 1
-            }
-            echo "::endgroup::"
+            fi
+            echo "Verified: $branch is included in $(git rev-parse --short HEAD)"
           done
 
       - name: Validate backend JavaScript
@@ -114,9 +107,6 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
           pre-emulator-launch-script: adb start-server
           script: bash .github/scripts/android-onnx-smoke.sh
-
-      - name: Push consolidated branch only after all verification steps pass
-        run: git push origin HEAD:integration/master-feature-consolidation-2026-11
 
       - name: Upload consolidated debug APK
         if: always()
