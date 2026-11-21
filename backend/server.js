@@ -13,6 +13,15 @@ const councilAttempts = new Map();
 const apiAttempts = new Map();
 const sessionCreateAttempts = new Map();
 const edesyCalls = new Map();
+const MAX_EDESY_CALL_HISTORY = 100;
+function storeEdesyCall(record) {
+  edesyCalls.set(record.id, record);
+  while (edesyCalls.size > MAX_EDESY_CALL_HISTORY) {
+    const oldestId = edesyCalls.keys().next().value;
+    if (oldestId === undefined) break;
+    edesyCalls.delete(oldestId);
+  }
+}
 let edesyActiveConnections = 0;
 const edesyPreflightAttempts = new Map();
 const edesyConfigured = () => typeof process.env.EDESY_STREAM_TOKEN === 'string' && process.env.EDESY_STREAM_TOKEN.length >= 32 && typeof process.env.OPENAI_API_KEY === 'string' && process.env.OPENAI_API_KEY.length >= 20;
@@ -557,7 +566,7 @@ telephonyWss.on('connection', (carrier, request) => {
     } else {
       callRecord.summaryStatus = 'disabled';
     }
-    edesyCalls.set(callRecord.id, callRecord);
+    storeEdesyCall(callRecord);
   };
   const shutdown = () => {
     if (closed) return;
@@ -757,7 +766,7 @@ telephonyWss.on('connection', (carrier, request) => {
           transcriptConsentAt: null,
           consentPromptBuffer: ''
         };
-        edesyCalls.set(callRecord.id, callRecord);
+        storeEdesyCall(callRecord);
         while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
       }
       return;
