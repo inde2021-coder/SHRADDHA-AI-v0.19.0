@@ -304,26 +304,39 @@ const server = http.createServer(async (req, res) => {
       if (!upstream.ok || typeof result.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the post' });
       return json(res, 200, { ok: true, platform: 'mastodon', postId: result.id, url: typeof result.url === 'string' ? result.url : '', visibility, confirmedPreview: true });
     }
+    if (req.method === 'POST' && req.url === '/api/telephony/edesy/preflight') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const missing = [];
+      if (!edesyConfigured()) missing.push('EDESY_STREAM_TOKEN / OPENAI_API_KEY');
+      if (typeof process.env.EDESY_API_KEY !== 'string' || !process.env.EDESY_API_KEY.startsWith('sk_') || process.env.EDESY_API_KEY.length < 20) missing.push('EDESY_API_KEY (sk_... Voice API key)');
+      if (!process.env.EDESY_STREAM_URL) missing.push('EDESY_STREAM_URL');
+      if (!process.env.PUBLIC_ORIGIN) missing.push('PUBLIC_ORIGIN');
+      if (missing.length) return json(res, 503, { error: 'Edesy preflight requires complete provider and public endpoint configuration.', missing });
+      return json(res, 503, { error: 'Edesy provider preflight is not available until the external provider is provisioned.' });
+    }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const missing = [];
+      if (typeof process.env.EDESY_API_KEY !== 'string' || !process.env.EDESY_API_KEY.startsWith('sk_') || process.env.EDESY_API_KEY.length < 20) missing.push('EDESY_API_KEY (sk_... Voice API key)');
+      if (!process.env.EDESY_STREAM_URL) missing.push('EDESY_STREAM_URL');
+      if (!process.env.PUBLIC_ORIGIN) missing.push('PUBLIC_ORIGIN');
+      const agentName = String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI';
       return json(res, 200, {
-        provider: 'edesy',
-        configured: edesyConfigured(),
+        provider: 'edesy', agentName, configured: edesyConfigured(), preflightReady: false,
         capabilities: {
-          inboundWebSocketAudio: edesyConfigured(),
-          liveBidirectionalAiAudio: edesyConfigured(),
+          inboundWebSocketAudio: edesyConfigured(), liveBidirectionalAiAudio: edesyConfigured(),
           liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
           aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
-          persistentCallRecording: false,
-          whatsappDelivery: false
+          persistentCallRecording: false, whatsappDelivery: false
         },
-        required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'],
-        note: 'Requires a provisioned Edesy DID and AI Voice Agent Stream flow. Transcript capture is disabled by default and uses bounded in-memory storage only.'
+        callHistory: { durable: false, missing: ['CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)'] },
+        required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'], missing,
+        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Audio is not recorded.'
       });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      return json(res, 200, { calls: [...edesyCalls.values()].slice(-30).reverse() });
+      return json(res, 200, { calls: [...edesyCalls.values()].slice(-30).reverse(), durable: false });
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
@@ -591,7 +604,27 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
-telephonyWss.on('connection', carrier => {
+telephonyWss.on('connection', (carrier, context = {}) => {
+  carrier.on('error', () => {});
+  if (context.isEdesyPreflight === true) {
+    let metadataSeen = false;
+    carrier.on('message', (data, binary) => {
+      if (!binary) {
+        let metadata;
+        try { metadata = JSON.parse(data.toString()); } catch { carrier.close(1008, 'Invalid preflight metadata'); return; }
+        const sampleRate = Number(metadata.sampleRate);
+        if (![8000, 16000].includes(sampleRate) || metadata.mixType !== 'mono' ||
+            typeof metadata.callSid !== 'string' || metadata.callSid !== 'preflight-only') {
+          carrier.close(1008, 'Invalid preflight metadata'); return;
+        }
+        metadataSeen = true;
+        return;
+      }
+      if (!metadataSeen || data.length === 0 || data.length > 65536 || data.length % 2 !== 0) return;
+      if (carrier.readyState === WebSocket.OPEN) carrier.send(data, { binary: true });
+    });
+    return;
+  }
   let live;
   let ready = false;
   let closed = false;
@@ -735,8 +768,10 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname === '/ws/telephony/edesy') {
     const supplied = url.searchParams.get('token') || '';
-    if (!edesyConfigured() || !safeEqual(supplied, process.env.EDESY_STREAM_TOKEN)) return socket.destroy();
-    return telephonyWss.handleUpgrade(req, socket, head, ws => telephonyWss.emit('connection', ws));
+    const mode = url.searchParams.get('mode') || '';
+    if (!edesyConfigured() || !safeEqual(supplied, process.env.EDESY_STREAM_TOKEN) || (mode && mode !== 'preflight')) return socket.destroy();
+    req.isEdesyPreflight = mode === 'preflight';
+    return telephonyWss.handleUpgrade(req, socket, head, ws => telephonyWss.emit('connection', ws, req));
   }
   if (url.pathname !== '/ws') return socket.destroy();
   const session = sessions.get(url.searchParams.get('sessionId'));
