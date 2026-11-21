@@ -46,6 +46,7 @@
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
         <activity android:name=".operator.FormAutofillActivity" android:exported="false" />
         <activity android:name=".notes.NoteOcrActivity" android:exported="false" />
+        <activity android:name=".mobile.MobileCommandCenterActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
         <activity android:name=".phone.PhoneAgentActivity" android:exported="true" android:launchMode="singleTop">
