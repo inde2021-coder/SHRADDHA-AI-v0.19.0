@@ -175,6 +175,82 @@ class WorkAgentActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(button("काम करवाएँ") { handoffToOperator() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         browserPanel.addView(actions)
+        val webActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        webActions.addView(button("Click item") { requestBrowserClick() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        webActions.addView(button("Fill field") { requestBrowserFill() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        webActions.addView(button("Scroll ↓") {
+            browser.evaluateJavascript("window.scrollBy({top:Math.max(300,window.innerHeight*0.75),behavior:'smooth'}); 'scrolled';") { pageStatus.text = "वेब पेज नीचे scroll किया।" }
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        browserPanel.addView(webActions)
+    }
+
+    /** Clicks one uniquely labelled visible web control only after the user approves its exact label. */
+    private fun requestBrowserClick() {
+        val field = EditText(this).apply { hint = "बटन/लिंक का ठीक वही नाम"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()) }
+        android.app.AlertDialog.Builder(this).setTitle("वेब पेज पर क्या क्लिक करें?")
+            .setMessage("केवल एक ही exact नाम वाला visible button/link चुना जाएगा। Ambiguous result पर action नहीं होगा।")
+            .setView(field).setNegativeButton("रद्द", null)
+            .setPositiveButton("आगे") { _, _ ->
+                val label = field.text.toString().trim()
+                if (label.isBlank() || label.length > 100) { pageStatus.text = "कृपया 1-100 अक्षरों का exact label दें।"; return@setPositiveButton }
+                android.app.AlertDialog.Builder(this).setTitle("Action की अनुमति दें")
+                    .setMessage("इस वेबसाइट पर “$label” क्लिक होगा। यदि यह Send/Pay/Buy/Delete/Publish/Submit करता है, तो वेबसाइट पर परिणाम हो सकता है। क्या आप यही action चाहते हैं?")
+                    .setNegativeButton("रद्द", null)
+                    .setPositiveButton("हाँ, क्लिक करें") { _, _ -> executeBrowserClick(label) }.show()
+            }.show()
+    }
+
+    private fun executeBrowserClick(label: String) {
+        val quoted = org.json.JSONObject.quote(label)
+        val script = """(function(){const q=$quoted;const n=s=>(s||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase();const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const es=[...document.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]')].filter(e=>visible(e)&&n(e.innerText||e.value||e.getAttribute('aria-label')||e.title)===n(q));if(es.length!==1)return es.length===0?'NOT_FOUND':'AMBIGUOUS:'+es.length;es[0].click();return 'CLICKED';})()"""
+        browser.evaluateJavascript(script) { raw ->
+            val result = runCatching { org.json.JSONTokener(raw).nextValue().toString() }.getOrDefault("UNKNOWN")
+            pageStatus.text = when {
+                result == "CLICKED" -> "क्लिक action भेजा गया। अगला पेज/परिणाम जाँचें।"
+                result.startsWith("AMBIGUOUS") -> "एक से अधिक समान controls मिले; कोई क्लिक नहीं किया।"
+                result == "NOT_FOUND" -> "इस exact नाम का visible button/link नहीं मिला।"
+                else -> "वेब action का परिणाम स्पष्ट नहीं: $result"
+            }
+            capturePageText()
+        }
+    }
+
+    /** Fills one uniquely labelled, non-sensitive web field. It never submits the form. */
+    private fun requestBrowserFill() {
+        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(4), dp(8), 0) }
+        val label = EditText(this).apply { hint = "Field label / placeholder"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()) }
+        val value = EditText(this).apply { hint = "भरने वाला text"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()); minLines = 2 }
+        panel.addView(label); panel.addView(value)
+        android.app.AlertDialog.Builder(this).setTitle("वेब फॉर्म में text भरें")
+            .setMessage("Password, OTP, PIN, CVV और file fields सुरक्षित रूप से block हैं। यह action form submit नहीं करेगा।")
+            .setView(panel).setNegativeButton("रद्द", null)
+            .setPositiveButton("आगे") { _, _ ->
+                val fieldName = label.text.toString().trim()
+                val textValue = value.text.toString()
+                if (fieldName.isBlank() || fieldName.length > 100 || textValue.length > 4000) {
+                    pageStatus.text = "Field label या text की लंबाई अमान्य है।"; return@setPositiveButton
+                }
+                android.app.AlertDialog.Builder(this).setTitle("भरा जाने वाला text जाँचें")
+                    .setMessage("Field: $fieldName\nText: $textValue\n\nयह केवल field भरेगा, Submit नहीं करेगा।")
+                    .setNegativeButton("रद्द", null)
+                    .setPositiveButton("हाँ, भरें") { _, _ -> executeBrowserFill(fieldName, textValue) }.show()
+            }.show()
+    }
+
+    private fun executeBrowserFill(fieldName: String, textValue: String) {
+        val q = org.json.JSONObject.quote(fieldName)
+        val v = org.json.JSONObject.quote(textValue)
+        val script = """(function(){const q=$q,v=$v,n=s=>(s||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase();const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const es=[...document.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),textarea,[contenteditable="true"]')].filter(e=>{if(!visible(e)||e.disabled||e.readOnly)return false;const labels=[e.getAttribute('aria-label'),e.getAttribute('placeholder'),e.getAttribute('name'),e.id,[...document.querySelectorAll('label')].find(l=>l.htmlFor===e.id)?.innerText].filter(Boolean);if(/password|passcode|otp|pin|cvv|security|verification|पासवर्ड|ओटीपी|पिन/i.test(labels.join(' ')))return false;return labels.some(x=>n(x)===n(q))});if(es.length!==1)return es.length===0?'NOT_FOUND':'AMBIGUOUS:'+es.length;const e=es[0];if(e.isContentEditable){e.textContent=v;}else{const proto=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;if(!setter)return 'UNSUPPORTED';setter.call(e,v);}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));return 'FILLED';})()"""
+        browser.evaluateJavascript(script) { raw ->
+            val result = runCatching { org.json.JSONTokener(raw).nextValue().toString() }.getOrDefault("UNKNOWN")
+            pageStatus.text = when {
+                result == "FILLED" -> "Field भरा गया। Form submit नहीं किया गया।"
+                result.startsWith("AMBIGUOUS") -> "एक से अधिक matching fields मिले; कोई text नहीं भरा।"
+                result == "NOT_FOUND" -> "उस नाम का सुरक्षित visible field नहीं मिला।"
+                else -> "Field भरने का परिणाम स्पष्ट नहीं: $result"
+            }
+            capturePageText()
+        }
     }
 
     private fun showTab(tab: String) {
