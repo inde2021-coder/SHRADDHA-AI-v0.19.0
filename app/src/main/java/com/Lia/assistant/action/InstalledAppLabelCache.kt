@@ -38,7 +38,7 @@ object InstalledAppLabelCache {
         try {
             val activities = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
             for (resolveInfo in activities) {
-                val label = resolveInfo.loadLabel(pm)?.toString()?.trim() ?: continue
+                val label = resolveInfo.loadLabel(pm).toString().trim().takeIf { it.isNotEmpty() } ?: continue
                 val pkg = resolveInfo.activityInfo.packageName
                 if (label.isNotEmpty() && pkg.isNotEmpty()) {
                     cache[label.lowercase()] = pkg
