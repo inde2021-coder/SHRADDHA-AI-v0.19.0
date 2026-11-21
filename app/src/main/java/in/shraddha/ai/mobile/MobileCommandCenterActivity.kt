@@ -29,7 +29,6 @@ import `in`.shraddha.ai.notes.NoteOcrActivity
 class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var command: EditText
-    private val voiceRequest = 7401
     private var speechLanguage = "hi-IN"
     private val voiceResultLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
