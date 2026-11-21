@@ -2,10 +2,6 @@ package com.Lia.assistant
 
 import android.app.Application
 import `in`.shraddha.ai.link.DeviceLinkManager
-import com.google.firebase.FirebaseApp
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
