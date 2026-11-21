@@ -1707,6 +1707,33 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
+            addView(actionButton("Delete Firebase Account & Cloud Backups", "Recent password reauthentication के बाद दोनों cloud vault copies और Firebase account हटाएँ") {
+                val emailValue = email.text.toString().trim()
+                val passwordValue = password.text.toString()
+                if (emailValue.isBlank() || passwordValue.isBlank()) {
+                    result.text = "Account deletion से पहले signed-in email और current password भरें।"
+                    return@actionButton
+                }
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Delete Firebase account permanently?")
+                    .setMessage("यह Firebase Auth account और इस खाते की Firestore तथा Realtime Database encrypted vault copies स्थायी रूप से हटाएगा। यह फोन पर मौजूद local memory या call-history snapshots नहीं मिटाएगा। यह कार्रवाई वापस नहीं हो सकती।")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete account") { _, _ ->
+                        result.text = "Account reauthentication और cloud deletion चल रहा है…"
+                        password.text.clear()
+                        Thread {
+                            val deletion = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity)
+                                .deleteAccount(emailValue, passwordValue)
+                            runOnUiThread {
+                                result.text = deletion.fold(
+                                    { "Firebase account और cloud vault copies delete हो गईं। Local phone data अलग से manage करें." },
+                                    { "Account deletion failed: ${it.message}" }
+                                )
+                            }
+                        }.start()
+                    }
+                    .show()
+            })
             addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase account password केवल sign-in के लिए है; backup encryption अलग 12+ character passphrase से होती है। Backup passphrase याद रखें—इसके बिना cloud ciphertext restore नहीं होगा। Passphrase Firebase को नहीं भेजा जाता। Face/voice biometric templates इस backup में शामिल नहीं हैं।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
         }
     }
