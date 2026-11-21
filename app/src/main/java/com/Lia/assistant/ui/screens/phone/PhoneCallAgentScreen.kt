@@ -115,6 +115,16 @@ fun PhoneCallAgentScreen(navController: NavController) {
                         resultText = error.message ?: "Could not save backend connection."
                     }
                 }, modifier = Modifier.fillMaxWidth())
+                NovaButton(text = "Clear Saved Connection", onClick = {
+                    try {
+                        TelephonyGatewayStore.clear(context)
+                        backendUrl = ""
+                        gatewayToken = ""
+                        resultText = "Saved backend URL and gateway token were cleared."
+                    } catch (error: Exception) {
+                        resultText = error.message ?: "Could not clear saved backend connection."
+                    }
+                }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
             }
         }
 
