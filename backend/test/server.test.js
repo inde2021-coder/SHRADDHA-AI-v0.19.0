@@ -44,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('..', import.meta.url),
-    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN },
+    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: '', OPENAI_API_KEY: '' },
     stdio: 'ignore'
   });
   const deadline = Date.now() + 10_000;
