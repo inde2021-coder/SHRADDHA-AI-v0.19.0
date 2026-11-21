@@ -158,7 +158,7 @@ class MainActivity : AppCompatActivity() {
         }
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         brand.addView(TextView(this).apply {
-            text = "S H R A D D H A   /   A I"
+            text = assistantDisplayName.uppercase()
             textSize = 11f; letterSpacing = .12f; setTextColor(0xFF9F8BFF.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
