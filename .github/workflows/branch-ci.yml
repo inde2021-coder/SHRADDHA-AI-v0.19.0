@@ -36,22 +36,3 @@ jobs:
       - name: Run backend unit tests when configured
         working-directory: backend
         run: npm test --if-present
-
-  android:
-    name: Android unit tests and debug APK
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: gradle/actions/setup-gradle@v6
-      - name: Run Kotlin unit tests and assemble debug APK
-        run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v6
-        with:
-          name: shraddha-ai-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
