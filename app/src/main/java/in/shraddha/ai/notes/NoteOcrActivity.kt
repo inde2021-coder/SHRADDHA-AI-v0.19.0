@@ -77,6 +77,7 @@ class NoteOcrActivity : Activity() {
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
+        intent.getStringExtra("initial_note")?.takeIf { it.isNotBlank() }?.let { note.setText(it); status.text = "Voice command से note draft आया है। Save दबाकर सुरक्षित करें।" }
     }
 
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
