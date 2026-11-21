@@ -1964,7 +1964,7 @@ class MainActivity : AppCompatActivity() {
             status.text = message
             if (message.contains("revoked", ignoreCase = true) || message.contains("expired", ignoreCase = true)) {
                 isSessionOwner = false
-                if (::mainOnlyMode.isInitialized) mainOnlyMode.isEnabled = false
+                if (::mainOnlyMode.isInitialized) { mainOnlyMode.isEnabled = false; mainOnlyMode.isChecked = false }
                 peerIds.clear(); peerNames.clear(); peerOnline.clear()
                 if (::peerPicker.isInitialized) peerPicker.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("No paired devices"))
             }
