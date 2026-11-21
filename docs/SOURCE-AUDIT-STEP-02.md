@@ -39,7 +39,7 @@ This report records source-level findings; it does not claim an APK build or dev
    - The Edesy inbound WebSocket/GPT-Live backend bridge is now present on the active work branch, with server-side secrets and an opt-in transcript setting.
    - A real Edesy tenant, DID, configured provider flow, GPT-Live access and real two-way call test are external prerequisites.
    - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
-   - Persistent encrypted call history, caller notice/consent workflow, human takeover and WhatsApp delivery remain incomplete.
+   - The Android phone page can explicitly save, view and clear a masked call-history snapshot encrypted locally with Android Keystore AES-GCM. Automatic sync, durable backend history, caller consent workflow, human takeover and WhatsApp delivery remain incomplete.
 
 6. **Device-to-device encryption has cryptographic primitives but is not integrated into transport.**
    - `DeviceE2ECrypto` provides ephemeral P-256 ECDH, session-bound HKDF-SHA256, AES-256-GCM and session-bound fingerprints.
