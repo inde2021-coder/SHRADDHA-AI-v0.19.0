@@ -74,10 +74,11 @@ object FormExtractionClient {
                 if (key.isBlank()) return@mapNotNull null
                 ExtractedFormValue(
                     key = key,
-                    label = key,
+                    label = fieldLabel(key),
                     value = item.optString("value"),
                     confidence = item.optDouble("confidence", 0.0).toFloat().coerceIn(0f, 1f),
-                    status = item.optString("status", "review")
+                    status = item.optString("status", "review"),
+                    sourceText = item.optString("sourceText").take(240)
                 )
             }
             val warningArray = json.optJSONArray("warnings")
@@ -90,6 +91,40 @@ object FormExtractionClient {
                 warnings = warnings
             )
         }
+    }
+
+    private fun fieldLabel(key: String): String = when (key) {
+        "farmerName" -> "Farmer Name"
+        "fatherName" -> "Father's Name"
+        "motherName" -> "Mother's Name"
+        "phoneNumber" -> "Phone Number"
+        "gender" -> "Farmer Gender"
+        "identityType" -> "Identity Type"
+        "aadhaarNumber" -> "Aadhaar Number"
+        "address" -> "Address"
+        "surveyNumber" -> "Survey Number"
+        "plotNumber" -> "Plot Number"
+        "villageBlock" -> "Village / Block Number"
+        "continuousFlooding" -> "Baseline continuous flooding"
+        "previousIrrigationMethod" -> "Previous Irrigation Method"
+        "preSeasonWaterCondition" -> "Pre-season Water Condition"
+        "baselineEmissionFactorSource" -> "Baseline Emission Factor Source"
+        "typicalWaterDepthCm" -> "Typical Water Depth (cm)"
+        "irrigationsPerSeason" -> "Irrigations / Season"
+        "cropDurationDays" -> "Crop Duration (days)"
+        "riceVariety" -> "Rice Variety"
+        "season" -> "Season"
+        "historicalYieldYear" -> "Historical Yield Year"
+        "historicalYieldQtlPerAcre" -> "Historical Yield (qtl/acre)"
+        "consentSigner" -> "Signer (farmer)"
+        "consentSignedDate" -> "Signed date"
+        "consentWitness" -> "Witness"
+        "remarks" -> "Remarks"
+        "landDeedPage1" -> "Land Deed Page 1"
+        "landDeedPage2" -> "Land Deed Page 2"
+        "agreementFront" -> "Agreement Front"
+        "agreementBack" -> "Agreement Back"
+        else -> key
     }
 
     private fun compressForUpload(source: Bitmap): ByteArray {
