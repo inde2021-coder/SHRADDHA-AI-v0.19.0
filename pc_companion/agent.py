@@ -23,7 +23,7 @@ import mss
 import pyautogui
 import pyperclip
 import websocket
-from PIL import Image
+from PIL import Image, ImageTk
 
 from actions import execute_action
 from protocol import valid_pairing_ids, validate_remote_action
@@ -79,6 +79,9 @@ class PcCompanionApp:
         self.e2e_crypto = DeviceE2ECrypto()
         self.peer_keys = {}
         self.e2e_lock = threading.RLock()
+        self.frame_window = None
+        self.frame_label = None
+        self.frame_photo = None
         self._pending_pairing_auth = False
         self.config = self._load_config()
 
@@ -230,6 +233,9 @@ class PcCompanionApp:
         self.events.put(("opened", None))
 
     def _on_message(self, _ws, message):
+        if isinstance(message, (bytes, bytearray)):
+            self._handle_binary_frame(bytes(message))
+            return
         if not isinstance(message, str):
             return
         try:
@@ -303,6 +309,8 @@ class PcCompanionApp:
                     self.status_var.set("This PC pairing was revoked by the session owner. Join again with a new pairing code.")
                 elif kind == "message":
                     self._handle_message(payload)
+                elif kind == "frame":
+                    self._show_frame(*payload)
                 elif kind == "pairing_failed":
                     self._pending_pairing_auth = False
                     self.device_token = None
@@ -331,6 +339,65 @@ class PcCompanionApp:
         except queue.Empty:
             pass
         self.root.after(120, self._drain_events)
+
+    def _handle_binary_frame(self, frame):
+        try:
+            if len(frame) < 1:
+                return
+            source_length = frame[0]
+            if source_length < 1 or source_length > 64 or len(frame) < 2 + source_length + 8 + 12 + 16:
+                return
+            source_id = frame[1:1 + source_length].decode("utf-8")
+            frame_type = frame[1 + source_length]
+            if frame_type not in (0x81, 0x82):
+                return
+            sequence_offset = 2 + source_length
+            sequence = struct.unpack_from(">Q", frame, sequence_offset)[0]
+            nonce = frame[sequence_offset + 8:sequence_offset + 20]
+            ciphertext = frame[sequence_offset + 20:]
+            with self.e2e_lock:
+                state = self.peer_keys.get(source_id)
+                if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                    return
+                sequence_key = "recv_screen_sequence" if frame_type == 0x81 else "recv_camera_sequence"
+                if sequence <= state[sequence_key]:
+                    return
+                key = bytes(state["key"])
+            local_id = str(self.config.get("deviceId", ""))
+            session_id = str(self.config.get("sessionId", ""))
+            base_type = frame_type & 0x7f
+            aad = f"{session_id}|{source_id}|{local_id}|{base_type}|{sequence}".encode("utf-8")
+            nonce_b64 = base64.b64encode(nonce).decode("ascii").rstrip("=")
+            ciphertext_b64 = base64.b64encode(ciphertext).decode("ascii").rstrip("=")
+            jpeg = DeviceE2ECrypto.decrypt(key, nonce_b64, ciphertext_b64, aad)
+            if len(jpeg) < 4 or jpeg[:2] != b"\\xff\\xd8" or jpeg[-2:] != b"\\xff\\xd9":
+                return
+            with self.e2e_lock:
+                current = self.peer_keys.get(source_id)
+                if current is not state or sequence <= current[sequence_key]:
+                    return
+                current[sequence_key] = sequence
+            self.events.put(("frame", (source_id, base_type, jpeg)))
+        except Exception:
+            self.events.put(("status", "Dropped an invalid, replayed or untrusted encrypted visual frame."))
+
+    def _show_frame(self, source_id, frame_type, jpeg):
+        try:
+            from io import BytesIO
+            image = Image.open(BytesIO(jpeg)).convert("RGB")
+            image.thumbnail((1280, 800), Image.Resampling.LANCZOS)
+            if not self.frame_window or not self.frame_window.winfo_exists():
+                self.frame_window = tk.Toplevel(self.root)
+                self.frame_window.title("Shraddha AI • Encrypted paired-device screen")
+                self.frame_label = ttk.Label(self.frame_window)
+                self.frame_label.pack(fill="both", expand=True, padx=8, pady=8)
+            self.frame_photo = ImageTk.PhotoImage(image)
+            self.frame_label.configure(image=self.frame_photo,
+                                       text=f"{source_id} • {'Screen' if frame_type == 1 else 'Camera'}")
+            self.frame_window.title(f"Shraddha AI • {source_id} • {'Screen' if frame_type == 1 else 'Camera'}")
+            image.close()
+        except Exception as exc:
+            self.status_var.set(f"Could not display encrypted peer frame: {str(exc)[:120]}")
 
     def _handle_message(self, msg):
         kind = msg.get("type")
@@ -365,7 +432,8 @@ class PcCompanionApp:
                         previous["key"][:] = b"\x00" * len(previous["key"])
                     self.peer_keys[peer_id] = {"key": bytearray(key), "fingerprint": fingerprint,
                                                "local_confirmed": False, "remote_confirmed": False,
-                                               "send_sequence": 0}
+                                               "send_sequence": 0, "recv_screen_sequence": -1,
+                                               "recv_camera_sequence": -1}
                 approved = messagebox.askyesno(
                     "Shraddha AI • Verify paired-device fingerprint",
                     f"Peer device: {peer_id}\n\nFingerprint:\n{fingerprint}\n\n"
