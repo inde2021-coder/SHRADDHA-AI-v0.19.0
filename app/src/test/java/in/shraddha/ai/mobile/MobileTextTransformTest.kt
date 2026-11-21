@@ -14,11 +14,11 @@ class MobileTextTransformTest {
     }
 
     @Test fun collapseWhitespaceHandlesTabsAndNewlines() {
-        assertEquals("one two three", MobileTextTransform.apply(" one\\t two\\n three ", MobileTextTransform.Operation.COLLAPSE_WHITESPACE))
+        assertEquals("one two three", MobileTextTransform.apply(" one\t two\n three ", MobileTextTransform.Operation.COLLAPSE_WHITESPACE))
     }
 
     @Test fun removeBlankLinesPreservesNonblankLineContents() {
-        assertEquals(" first \\nsecond", MobileTextTransform.apply(" first \\n\\nsecond\\n", MobileTextTransform.Operation.REMOVE_BLANK_LINES))
+        assertEquals(" first \nsecond", MobileTextTransform.apply(" first \n\nsecond\n", MobileTextTransform.Operation.REMOVE_BLANK_LINES))
     }
 
     @Test fun emptyInputStaysEmpty() {
