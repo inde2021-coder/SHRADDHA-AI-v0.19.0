@@ -107,7 +107,7 @@ class FirebaseCloudVault(private val context: Context) {
     fun signInAndLoad(email: String, password: String, key: String, backupPassphrase: String = password): Result<String?> = runCatching {
         require(email.trim().matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Enter a valid email address." }
         require(password.isNotEmpty()) { "Account password is required." }
-        require(backupPassphrase.length >= 12) { "Enter the backup passphrase used when this backup was created." }
+        require(backupPassphrase.length >= 8) { "Enter the backup passphrase used when this backup was created." }
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Backup key format is invalid." }
         runBlocking {
             val app = initialize()
