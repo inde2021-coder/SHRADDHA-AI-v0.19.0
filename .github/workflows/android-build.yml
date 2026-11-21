@@ -111,22 +111,36 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      # Use an older, lighter API 30 image for reliable boot on hosted runners without KVM.
-      # Keep the Android emulator smoke test enabled; this checks the ONNX runtime on-device.
+      # Use a light API 28 x86_64 image and a larger data partition for packaged ONNX assets.
+      # Hosted runners lack KVM, so reserve four emulated cores and wait for Android to finish booting.
       - name: Run biometric ONNX smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
           # GitHub-hosted Linux runners lack KVM; explicitly allow QEMU TCG software CPU emulation.
           ANDROID_I_WANT_MY_TCG: "yes"
         with:
-          api-level: 30
+          api-level: 28
           emulator-boot-timeout: 1200
           arch: x86_64
           target: google_apis
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 2048 -cores 2
-          disable-animations: false
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 2048 -cores 4 -partition-size 4096
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            booted=""
+            for attempt in $(seq 1 90); do
+              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+              if [ "$booted" = "1" ]; then break; fi
+              sleep 2
+            done
+            test "$booted" = "1"
+            adb devices -l
+            adb shell getprop ro.build.version.sdk
+            adb shell df -h /data
+            adb shell cmd package list packages >/dev/null
+            ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
       - name: Upload Android instrumentation reports
         if: always()
