@@ -289,6 +289,13 @@ test('device revocation requires authentication and owner authority, and removes
   });
   assert.equal(memberCannotRevokeOwner.status, 403);
 
+  const invalidTarget = await fetch(endpoint, {
+    ...payload('not-a-device-id'), headers: {
+      'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
+    }
+  });
+  assert.equal(invalidTarget.status, 400);
+
   const ownerRevokesMember = await fetch(endpoint, {
     ...payload(member.deviceId), headers: {
       'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}`
