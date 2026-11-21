@@ -911,6 +911,11 @@ class MainActivity : AppCompatActivity() {
                             val callName = body.optString("agentName", "Shraddha AI")
                             append("\nInbound call agent name: ").append(callName)
                             if (!callName.equals(assistantDisplayName, ignoreCase = true)) append(" (update SHRADDHA_CALL_AGENT_NAME to match app name)")
+                            val historyConfig = body.optJSONObject("callHistory")
+                            append("\nEncrypted durable call history: ").append(if (historyConfig?.optBoolean("durable") == true) "READY" else "not configured")
+                            if (!historyConfig?.optString("error").isNullOrBlank()) append("\nCall history error: ").append(historyConfig?.optString("error"))
+                            val historyMissing = historyConfig?.optJSONArray("missing")
+                            if (historyMissing != null && historyMissing.length() > 0) append("\nCall history secrets missing: ").append((0 until historyMissing.length()).joinToString(", ") { historyMissing.optString(it) })
                             val missing = body.optJSONArray("missing")
                             if (missing != null && missing.length() > 0) {
                                 append("\nMissing: ")
@@ -956,6 +961,9 @@ class MainActivity : AppCompatActivity() {
                         bridgeStatus.text = if (calls == null || calls.length() == 0) {
                             "अभी कोई AI call history नहीं है।"
                         } else buildString {
+                            append("Storage: ").append(if (body.optBoolean("durable")) "Encrypted Firestore" else "temporary backend memory")
+                            if (body.optString("warning").isNotBlank()) append("\nWarning: ").append(body.optString("warning"))
+                            append("\n")
                             for (i in 0 until minOf(calls.length(), 10)) {
                                 val call = calls.optJSONObject(i) ?: continue
                                 append(call.optString("startedAt", "Unknown time"))
