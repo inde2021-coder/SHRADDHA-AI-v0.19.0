@@ -52,7 +52,11 @@ class FormAutofillExecutor(
             if (verificationDelayMillis > 0L) delay(verificationDelayMillis)
             val verification = driver.capture()
             val verified = verification?.rawElements?.any { element ->
-                element.isEditable && element.bounds == suggestion.target.bounds &&
+                element.isEditable &&
+                    element.bounds.left == suggestion.target.bounds.left &&
+                    element.bounds.top == suggestion.target.bounds.top &&
+                    element.bounds.right == suggestion.target.bounds.right &&
+                    element.bounds.bottom == suggestion.target.bounds.bottom &&
                     element.text.trim() == suggestion.value
             } == true
             results += FormFieldFillResult(
