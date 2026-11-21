@@ -9,7 +9,7 @@ if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb)"; fi
 # Prefer that value over ANDROID_SERIAL, which may be inherited stale from the runner.
 SERIAL_FILE="${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial"
 if [[ -s "$SERIAL_FILE" ]]; then
-  SERIAL="$(tr -d '\\r\\n' < "$SERIAL_FILE")"
+  SERIAL="$(tr -d '\r\n' < "$SERIAL_FILE")"
 else
   SERIAL="${ANDROID_SERIAL:-}"
 fi
