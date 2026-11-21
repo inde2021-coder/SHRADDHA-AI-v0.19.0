@@ -388,7 +388,7 @@ telephonyWss.on('connection', carrier => {
     if (carrier.readyState === WebSocket.OPEN) carrier.close();
   };
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
-  live.on('open', () => live.send(JSON.stringify({ type: 'session.start', session: { model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1', instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, a disclosed AI call assistant. Tell the caller you are an AI assistant. Speak naturally in Hindi or English, ask one question at a time, understand the reason for the call, take a concise message, and never claim you performed an action you cannot perform.', audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } }, delegation: { type: 'client' } } })));
+  live.on('open', () => live.send(JSON.stringify({ type: 'session.start', session: { model: process.env.OPENAI_LIVE_MODEL || 'gpt-live-1.1', instructions: process.env.SHRADDHA_CALL_INSTRUCTIONS || 'You are Shraddha AI, a disclosed AI call assistant. Tell the caller you are an AI assistant. Speak naturally in Hindi or English, ask one question at a time, understand the reason for the call, take a concise message, and never claim you performed an action you cannot perform.', audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } }, delegation: { type: 'client' } } })));
   live.on('message', raw => {
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
