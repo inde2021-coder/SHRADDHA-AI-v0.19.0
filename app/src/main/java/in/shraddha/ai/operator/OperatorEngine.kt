@@ -53,9 +53,7 @@ class OperatorEngine(private val emit: (OperatorEvent) -> Unit) {
         emit(OperatorEvent(OperatorTaskState.VERIFYING, "कार्रवाई के बाद स्क्रीन दोबारा जाँची जा रही है…"))
         Thread.sleep(450)
         val after = observe() ?: return false
-        if (step.expectedVisibleText.isNotBlank() && after.elements.none {
-                it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
-            }) {
+        if (!ScreenResultVerifier.containsExpectedText(after, step.expectedVisibleText)) {
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित परिणाम स्क्रीन पर सत्यापित नहीं हुआ।", after)); return false
         }
         emit(OperatorEvent(OperatorTaskState.COMPLETED, "चरण पूरा हुआ और स्क्रीन दोबारा जाँची गई।", after))
