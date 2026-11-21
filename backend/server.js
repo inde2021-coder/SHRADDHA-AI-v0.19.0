@@ -440,6 +440,7 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 telephonyWss.on('connection', carrier => {
+  carrier.on('error', () => {});
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   let callSampleRate = 16000;
   let liveFinalized = false;
