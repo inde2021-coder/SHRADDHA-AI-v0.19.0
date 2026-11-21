@@ -30,7 +30,7 @@ jobs:
       - name: Checkout full history
         uses: actions/checkout@v6
         with:
-          ref: integration/master-feature-consolidation-2026-11
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Set up JDK 21 for Firebase emulators
