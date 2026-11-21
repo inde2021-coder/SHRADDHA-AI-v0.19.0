@@ -87,6 +87,8 @@ class ShraddhaInCallService : InCallService() {
             private set
         @Volatile var isMuted: Boolean = false
             private set
+        @Volatile var availableCallEndpoints: List<CallEndpoint> = emptyList()
+            private set
 
         fun currentCallState(call: Call): Int =
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
