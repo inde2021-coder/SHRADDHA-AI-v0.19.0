@@ -8,14 +8,15 @@ import { ref as databaseRef, set as databaseSet, get as databaseGet } from "fire
 
 const projectId = "demo-shraddha-ai";
 const format = "AES-256-GCM/PBKDF2-SHA256-v1";
+const readRules = relativePath => fs.readFileSync(new URL(relativePath, import.meta.url), "utf8");
 let env;
 
 before(async () => {
   env = await initializeTestEnvironment({
     projectId,
-    firestore: { rules: fs.readFileSync("../../firestore.rules", "utf8") },
-    storage: { rules: fs.readFileSync("../../storage.rules", "utf8") },
-    database: { rules: fs.readFileSync("../database.rules.json", "utf8") }
+    firestore: { rules: readRules("../firestore.rules") },
+    storage: { rules: readRules("../storage.rules") },
+    database: { rules: readRules("../database.rules.json") }
   });
 });
 
