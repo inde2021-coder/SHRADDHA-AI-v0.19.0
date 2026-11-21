@@ -912,7 +912,7 @@ class MainActivity : AppCompatActivity() {
                 } }
             })
             addView(TextView(this@MainActivity).apply {
-                text = "WINDOWS PC: Shraddha AI PC Companion.exe चलाएँ, यही HTTPS relay URL और ऊपर बना 6-digit code डालें। PC पर remote control और screen sharing अलग-अलग opt-in हैं; हर control request PC पर approve करनी होगी।"
+                text = "WINDOWS PC: $assistantDisplayName PC Companion.exe चलाएँ, यही HTTPS relay URL और ऊपर बना 6-digit code डालें। PC पर remote control और screen sharing अलग-अलग opt-in हैं; हर control request PC पर approve करनी होगी।"
                 setTextColor(0xFFB9C8E6.toInt()); textSize = 12f; setPadding(0, dp(8), 0, dp(10))
             })
             pairingCode = edit("Pairing code", "6-digit code दूसरे फोन से")
@@ -1995,7 +1995,7 @@ class MainActivity : AppCompatActivity() {
                     return@post
                 }
                 android.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Shraddha AI • Remote action approval")
+                    .setTitle("$assistantDisplayName • Remote action approval")
                     .setMessage("Device: $fromDeviceId\nAction: $detail\n\nक्या इस एक कार्रवाई की अनुमति दें?")
                     .setNegativeButton("Deny") { _, _ ->
                         status.text = "Remote action denied by you."
