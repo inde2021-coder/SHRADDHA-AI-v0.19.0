@@ -1,8 +1,11 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { initializeApp as initializeAdminApp, cert, getApps as getAdminApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { WebSocketServer, WebSocket } from 'ws';
 import { validRemoteAction } from './relay-policy.js';
 import { appendCallTranscript, clearCallTranscript } from './call-transcript.js';
+import { encryptCallHistoryRecord, decryptCallHistoryRecord } from './call-history-crypto.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -15,6 +18,113 @@ const apiAttempts = new Map();
 const sessionCreateAttempts = new Map();
 const edesyCalls = new Map();
 const MAX_EDESY_CALL_HISTORY = 100;
+const callHistoryWriteQueues = new Map();
+let callHistoryStoreCache = null;
+
+function callHistoryConfigStatus() {
+  const missing = [];
+  const serviceJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  if (!serviceJson) missing.push('FIREBASE_SERVICE_ACCOUNT_JSON (or FIREBASE_SERVICE_ACCOUNT_BASE64)');
+  const encodedKey = String(process.env.CALL_HISTORY_ENCRYPTION_KEY || '').trim();
+  let keyValid = false;
+  if (encodedKey && /^[A-Za-z0-9+/]+={0,2}$/.test(encodedKey)) {
+    try { keyValid = Buffer.from(encodedKey, 'base64').length === 32; } catch { keyValid = false; }
+  }
+  if (!keyValid) missing.push('CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)');
+  return { configured: missing.length === 0, missing };
+}
+
+function getCallHistoryStore() {
+  const config = callHistoryConfigStatus();
+  if (!config.configured) return null;
+  if (callHistoryStoreCache) return callHistoryStoreCache;
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64
+    ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8')
+    : process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const serviceAccount = JSON.parse(raw);
+  if (!serviceAccount || typeof serviceAccount.project_id !== 'string' ||
+      typeof serviceAccount.client_email !== 'string' || typeof serviceAccount.private_key !== 'string') {
+    throw new Error('Firebase service-account JSON is incomplete.');
+  }
+  const appName = 'shraddha-encrypted-call-history';
+  const app = getAdminApps().find(item => item.name === appName) ||
+    initializeAdminApp({ credential: cert(serviceAccount), projectId: serviceAccount.project_id }, appName);
+  const key = Buffer.from(process.env.CALL_HISTORY_ENCRYPTION_KEY.trim(), 'base64');
+  if (key.length !== 32 || key.toString('base64') !== process.env.CALL_HISTORY_ENCRYPTION_KEY.trim()) {
+    key.fill(0);
+    throw new Error('CALL_HISTORY_ENCRYPTION_KEY must be canonical base64 for exactly 32 bytes.');
+  }
+  callHistoryStoreCache = { db: getFirestore(app), key };
+  return callHistoryStoreCache;
+}
+
+function callHistorySnapshot(record) {
+  return {
+    id: record.id,
+    direction: record.direction || 'inbound',
+    agentName: record.agentName || 'Shraddha AI',
+    caller: record.caller || 'Unknown caller',
+    startedAt: record.startedAt || null,
+    endedAt: record.endedAt || null,
+    status: record.status || 'unknown',
+    bridgeStatus: record.bridgeStatus || null,
+    transcriptConsent: record.transcriptConsent === true,
+    transcript: record.transcriptConsent === true && Array.isArray(record.transcript) ? record.transcript : [],
+    summaryStatus: record.summaryStatus || 'disabled',
+    summary: record.summary || '',
+    finalizationStatus: record.finalizationStatus || 'pending'
+  };
+}
+
+async function persistCallHistoryRecord(record) {
+  const store = getCallHistoryStore();
+  if (!store) {
+    record.durableStatus = 'not_configured';
+    return false;
+  }
+  const previous = callHistoryWriteQueues.get(record.id) || Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    const collection = store.db.collection('telephony_call_history');
+    const payload = encryptCallHistoryRecord(callHistorySnapshot(record), store.key);
+    await collection.doc(record.id).set({
+      format: 'AES-256-GCM/shraddha-call-history-v1',
+      payload,
+      createdAt: Date.parse(record.startedAt || '') || Date.now()
+    });
+    const retained = await collection.orderBy('createdAt', 'desc').limit(MAX_EDESY_CALL_HISTORY + 1).get();
+    if (retained.size > MAX_EDESY_CALL_HISTORY) {
+      const batch = store.db.batch();
+      retained.docs.slice(MAX_EDESY_CALL_HISTORY).forEach(document => batch.delete(document.ref));
+      await batch.commit();
+    }
+  });
+  callHistoryWriteQueues.set(record.id, next);
+  try {
+    await next;
+    record.durableStatus = 'saved';
+    return true;
+  } finally {
+    if (callHistoryWriteQueues.get(record.id) === next) callHistoryWriteQueues.delete(record.id);
+  }
+}
+
+async function loadDurableCallHistory(limit = 30) {
+  const store = getCallHistoryStore();
+  if (!store) return null;
+  const snapshot = await store.db.collection('telephony_call_history')
+    .orderBy('createdAt', 'desc').limit(Math.max(1, Math.min(100, limit))).get();
+  const records = [];
+  for (const document of snapshot.docs) {
+    try {
+      const record = decryptCallHistoryRecord(document.get('payload'), store.key, document.id);
+      records.push({ ...record, durableStatus: 'saved' });
+    } catch (error) {
+      // Never return unauthenticated or undecryptable call data.
+      process.stderr.write('Skipping unreadable encrypted call-history record: ' + String(error.message || 'decrypt failed').slice(0, 120) + '\n');
+    }
+  }
+  return records;
+}
 function storeEdesyCall(record) {
   edesyCalls.set(record.id, record);
   while (edesyCalls.size > MAX_EDESY_CALL_HISTORY) {
@@ -22,6 +132,10 @@ function storeEdesyCall(record) {
     if (oldestId === undefined) break;
     edesyCalls.delete(oldestId);
   }
+  persistCallHistoryRecord(record).catch(error => {
+    record.durableStatus = 'failed';
+    process.stderr.write('Encrypted call-history persistence failed: ' + String(error.message || 'storage error').slice(0, 160) + '\\n');
+  });
 }
 let edesyActiveConnections = 0;
 const edesyPreflightAttempts = new Map();
