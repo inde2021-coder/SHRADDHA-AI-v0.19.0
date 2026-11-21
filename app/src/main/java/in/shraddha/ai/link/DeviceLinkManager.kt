@@ -290,5 +290,58 @@ object DeviceLinkManager {
         System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
         return socket?.send(ByteString.of(*packet)) == true
     }
+    /** Revokes a paired device on the relay. Only the session owner may revoke another device. */
+    fun revokeRemoteDevice(targetDeviceId: String, done: (Result<Boolean>) -> Unit) {
+        val sid = sessionId
+        val did = deviceId
+        val bearer = deviceToken
+        val credentials = runCatching { credentialStore?.load() }.getOrNull()
+        val baseUrl = credentials?.baseUrl
+        if (sid.isNullOrBlank() || did.isNullOrBlank() || bearer.isNullOrBlank() || baseUrl.isNullOrBlank()) {
+            done(Result.failure(IllegalStateException("Connect to the paired-device relay before revoking a device.")))
+            return
+        }
+        if (targetDeviceId.isBlank() || targetDeviceId.length > 64) {
+            done(Result.failure(IllegalArgumentException("Invalid target device ID.")))
+            return
+        }
+        val endpoint = secureApiUrl(baseUrl, "/api/device/revoke")
+        if (endpoint == null) {
+            done(Result.failure(IllegalArgumentException("Device revocation requires a valid HTTPS relay URL.")))
+            return
+        }
+        val body = JSONObject().put("sessionId", sid).put("deviceId", did).put("targetDeviceId", targetDeviceId)
+        val request = Request.Builder().url(endpoint)
+            .header("Authorization", "Bearer $bearer")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) {
+                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    } else {
+                        val revoked = runCatching { JSONObject(raw).optBoolean("ok") }.getOrDefault(false)
+                        if (revoked && targetDeviceId == did) disconnect()
+                        done(Result.success(revoked))
+                    }
+                }
+            }
+        })
+    }
+
+    /** Revokes this device's local pairing and, for an owner device, the entire relay session. */
+    fun revokeCurrentPairing(done: (Result<Boolean>) -> Unit) {
+        val did = deviceId
+        if (did.isNullOrBlank()) {
+            disconnect()
+            done(Result.success(true))
+            return
+        }
+        revokeRemoteDevice(did, done)
+    }
+
     fun disconnect() { socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null; credentialStore?.clear() }
 }
