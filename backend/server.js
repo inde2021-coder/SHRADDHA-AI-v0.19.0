@@ -249,10 +249,16 @@ const server = http.createServer(async (req, res) => {
       if (now - last < 60_000) return json(res, 429, { error: 'Edesy preflight is limited to one request per minute.' });
       edesyPreflightAttempts.set(remote, now);
       while (edesyPreflightAttempts.size > 500) edesyPreflightAttempts.delete(edesyPreflightAttempts.keys().next().value);
-      const streamUrl = new URL(process.env.EDESY_STREAM_URL);
-      const publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
-      if (streamUrl.protocol !== 'wss:' || streamUrl.host !== publicOrigin.host ||
-          streamUrl.pathname !== '/ws/telephony/edesy' ||
+      let streamUrl, publicOrigin;
+      try {
+        streamUrl = new URL(process.env.EDESY_STREAM_URL);
+        publicOrigin = new URL(process.env.PUBLIC_ORIGIN);
+      } catch {
+        return json(res, 400, { error: 'EDESY_STREAM_URL or PUBLIC_ORIGIN is not a valid URL.' });
+      }
+      if (streamUrl.protocol !== 'wss:' || publicOrigin.protocol !== 'https:' ||
+          streamUrl.host !== publicOrigin.host || streamUrl.username || streamUrl.password ||
+          streamUrl.hash || streamUrl.pathname !== '/ws/telephony/edesy' ||
           streamUrl.searchParams.get('token') !== process.env.EDESY_STREAM_TOKEN) {
         return json(res, 400, { error: 'EDESY_STREAM_URL must point to this backend’s authenticated Edesy WebSocket endpoint.' });
       }
