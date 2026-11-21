@@ -418,7 +418,7 @@ const server = http.createServer(async (req, res) => {
       const prompt = extraction.prompt + '\\n\\nReturn only the JSON object. No markdown fences or commentary.';
       const result = await askVision(provider, prompt, body.imageBase64, mimeType);
       let normalized;
-      try { normalized = normalizeFormExtraction(result.answer, extraction.formType); }
+      try { normalized = normalizeFormExtraction(result.answer, extraction.formType, allowPersonalData); }
       catch { return json(res, 502, { error: 'AI could not return a valid structured field extraction. Please retry with a clearer image.' }); }
       return json(res, 200, {
         provider: result.provider,
