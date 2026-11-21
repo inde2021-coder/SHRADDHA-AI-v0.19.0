@@ -142,7 +142,12 @@ fun PhoneCallAgentScreen(navController: NavController) {
                                 append("Provider configured: ").append(body.optBoolean("configured"))
                                 append("\nPreflight ready: ").append(body.optBoolean("preflightReady"))
                                 append("\nAI name: ").append(body.optString("agentName", "Shraddha AI"))
-                                if (missingText.isNotEmpty()) append("\nMissing: ").append(missingText.joinToString(", "))
+                                val history = body.optJSONObject("callHistory")
+                                append("\nEncrypted durable call history: ").append(if (history?.optBoolean("durable") == true) "READY" else "not configured")
+                                val historyMissing = history?.optJSONArray("missing")
+                                if (historyMissing != null && historyMissing.length() > 0) append("\nCall-history secrets missing: ").append((0 until historyMissing.length()).joinToString(", ") { historyMissing.optString(it) })
+                                if (!history?.optString("error").isNullOrBlank()) append("\nCall-history error: ").append(history?.optString("error"))
+                                if (missingText.isNotEmpty()) append("\nMissing provider config: ").append(missingText.joinToString(", "))
                                 append("\n").append(body.optString("note"))
                             }
                         }
@@ -165,7 +170,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
                             val item = calls?.optJSONObject(index) ?: return@mapNotNull null
                             "${item.optString("startedAt", "Time unavailable")} • ${item.optString("caller", "Unknown caller")} • ${item.optString("status", "unknown")}"
                         }
-                        resultText = "Loaded ${callRows.size} recent call record(s). Call history is temporary backend memory."
+                        resultText = "Loaded ${callRows.size} recent call record(s). Storage: ${if (body.optBoolean("durable")) "encrypted Firestore" else "temporary backend memory"}." + if (body.optString("warning").isNotBlank()) "\\n" + body.optString("warning") else ""
                     }
                 }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY, enabled = !loading)
                 if (loading) Text("Connecting securely…", color = colors.accent, fontSize = 12.sp)
