@@ -86,6 +86,33 @@ test('AI gateway rejects missing and incorrect bearer credentials', async () => 
   }
 });
 
+test('Edesy call bridge readiness is private and reports missing external provisioning honestly', async () => {
+  const denied = await fetch(`${baseUrl}/api/telephony/edesy/status`);
+  assert.equal(denied.status, 401);
+  const response = await fetch(`${baseUrl}/api/telephony/edesy/status`, {
+    headers: { authorization: `Bearer ${TOKEN}` }
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.provider, 'edesy');
+  assert.equal(body.configured, false);
+  assert.equal(body.capabilities.inboundWebSocketAudio, false);
+  assert.equal(body.capabilities.liveBidirectionalAiAudio, false);
+  assert.equal(body.capabilities.persistentCallRecording, false);
+  assert.ok(body.required.includes('EDESY_STREAM_TOKEN'));
+  assert.ok(body.required.includes('OPENAI_API_KEY'));
+});
+
+test('Edesy call history requires gateway authentication', async () => {
+  const denied = await fetch(`${baseUrl}/api/telephony/edesy/calls`);
+  assert.equal(denied.status, 401);
+  const allowed = await fetch(`${baseUrl}/api/telephony/edesy/calls`, {
+    headers: { authorization: `Bearer ${TOKEN}` }
+  });
+  assert.equal(allowed.status, 200);
+  assert.deepEqual((await allowed.json()).calls, []);
+});
+
 test('Visual Lens validates prompt and base64 before provider invocation', async () => {
   const headers = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' };
   const emptyPrompt = await fetch(`${baseUrl}/api/vision`, {
