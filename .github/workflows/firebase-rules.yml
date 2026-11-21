@@ -19,13 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Install Firebase rules test dependencies
         working-directory: firebase/rules-tests
         run: npm install --no-audit --no-fund
       - name: Run Realtime Database emulator rules tests
         working-directory: firebase/rules-tests
-        run: npx --yes firebase-tools@13.29.1 emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-rtdb-rules "npm test"
+        run: ./node_modules/.bin/firebase emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-rtdb-rules "npm test"
