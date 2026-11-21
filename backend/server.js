@@ -13,6 +13,7 @@ const councilAttempts = new Map();
 const apiAttempts = new Map();
 const sessionCreateAttempts = new Map();
 const edesyCalls = new Map();
+let edesyActiveConnections = 0;
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 function resamplePcm16(input, fromRate, toRate) {
   const count = Math.floor(input.length / 2);
@@ -442,11 +443,11 @@ telephonyWss.on('connection', carrier => {
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
   const pendingAudio = [];
   let metadataTimer = setTimeout(() => shutdown(), 10_000);
-  const activeCalls = [...edesyCalls.values()].filter(call => call.status === 'active').length;
-  if (activeCalls >= Math.max(1, Math.min(50, Number(process.env.EDESY_MAX_CONCURRENT_CALLS) || 8))) {
+  if (edesyActiveConnections >= Math.max(1, Math.min(50, Number(process.env.EDESY_MAX_CONCURRENT_CALLS) || 8))) {
     carrier.close(1013, 'AI call capacity reached');
     return;
   }
+  edesyActiveConnections += 1;
   const finalize = () => {
     if (!callRecord) return;
     callRecord.endedAt = new Date().toISOString();
@@ -465,6 +466,7 @@ telephonyWss.on('connection', carrier => {
   const shutdown = () => {
     if (closed) return;
     closed = true;
+    edesyActiveConnections = Math.max(0, edesyActiveConnections - 1);
     clearTimeout(metadataTimer);
     pendingAudio.length = 0;
     finalize();
