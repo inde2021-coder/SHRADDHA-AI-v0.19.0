@@ -579,7 +579,31 @@ telephonyWss.on('connection', (carrier, request) => {
     if (carrier.readyState === WebSocket.OPEN || carrier.readyState === WebSocket.CONNECTING) carrier.close(1000, 'Call bridge closed');
   };
   metadataTimer = setTimeout(() => shutdown(), 10_000);
-  liveReadyTimer = setTimeout(() => { if (!ready) shutdown(); }, 20_000);
+  if (!isPreflight) liveReadyTimer = setTimeout(() => { if (!ready) shutdown(); }, 20_000);
+  if (isPreflight) {
+    carrier.on('message', (data, binary) => {
+      if (closed) return;
+      if (binary) {
+        if (!metadataSeen || data.length === 0 || data.length > 65536 || data.length % 2 !== 0) return;
+        if (carrier.readyState === WebSocket.OPEN) carrier.send(data, { binary: true });
+        return;
+      }
+      let metadata;
+      try { metadata = JSON.parse(data.toString()); } catch { return shutdown(); }
+      if (!metadataSeen) {
+        metadataSeen = true;
+        clearTimeout(metadataTimer);
+        const sampleRate = Number(metadata.sampleRate || 16000);
+        if (![8000, 16000].includes(sampleRate) || (metadata.mixType && String(metadata.mixType).toLowerCase() !== 'mono')) return shutdown();
+        ready = true;
+        return;
+      }
+      if (metadata.type === 'disconnect') shutdown();
+    });
+    carrier.on('close', shutdown);
+    carrier.on('error', shutdown);
+    return;
+  }
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
   live.on('open', () => {
     if (closed || carrier.readyState !== WebSocket.OPEN) {
