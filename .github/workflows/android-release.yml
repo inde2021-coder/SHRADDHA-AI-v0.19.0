@@ -13,6 +13,8 @@ permissions:
 
 jobs:
   release:
+    # Signed releases are manual-only; never fail ordinary integration pushes.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
