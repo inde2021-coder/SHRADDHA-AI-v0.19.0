@@ -37,7 +37,8 @@ This report records source-level findings; it does not claim an APK build or dev
 
 5. **Incoming SIM call handling is carrier-dependent and not yet production-verified.**
    - The Edesy inbound WebSocket/GPT-Live backend bridge is now present on the active work branch, with server-side secrets and an opt-in transcript setting.
-   - A real Edesy tenant, DID, configured provider flow, GPT-Live access and real two-way call test are external prerequisites.
+   - The backend now exposes an authenticated, rate-limited Edesy `/v1/stream-test` preflight and the Android Phone Call Agent page can run it. It requires `EDESY_API_KEY`, `EDESY_STREAM_URL`, `PUBLIC_ORIGIN` and the stream/OpenAI secrets.
+   - A real Edesy tenant, DID, configured provider flow, GPT-Live access and real two-way call test are still external prerequisites.
    - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
    - The Android phone page can explicitly save, view and clear a masked call-history snapshot encrypted locally with Android Keystore AES-GCM. Automatic sync, durable backend history, legal notice/retention review, human takeover and WhatsApp delivery remain incomplete; per-call DTMF consent and opt-out/purge are implemented.
 
@@ -68,7 +69,7 @@ This report records source-level findings; it does not claim an APK build or dev
 1. Complete E2E key exchange, two-sided fingerprint trust and encrypted Android/Windows frame + command transport. Make relay forwarding opaque and reject plaintext only after both clients are upgraded.
 2. Complete paired-device lifecycle UX: reconnect, revoke, owner/member role visibility, offline revocation behavior and device-to-device recovery.
 3. Finish Firebase App Check / production rules, account deletion, passphrase recovery guidance, backup/restore edge cases and live project verification.
-4. Finish call handling: Edesy DID provisioning, provider preflight, caller disclosure/consent, real bidirectional call test, Jio no-answer forwarding verification, durable encrypted call history and human takeover/summary delivery.
+4. Finish call handling: Edesy DID provisioning, real bidirectional call test, Jio no-answer forwarding verification, durable encrypted backend call history and human takeover/summary delivery. The authenticated provider preflight and per-call DTMF transcript consent gate are implemented.
 5. Finish Windows/Android file transfer, screen/camera and accessibility action result verification, including interruption/reconnect and permission revocation.
 6. Review the remaining feature matrix and implement all source-level gaps. Only after the implementation pass, run Android unit tests/lint/debug APK, backend tests, Firebase rules tests and CI; fix all failures.
 7. Create signed release only after owner configures GitHub signing secrets and the release APK passes physical install/upgrade checks.
