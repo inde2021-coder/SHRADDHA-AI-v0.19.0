@@ -41,6 +41,16 @@ class PhoneAgentActivity : AppCompatActivity() {
     private var pendingContactQuery: String? = null
     private var pendingDialNumber: String? = null
     private lateinit var pendingDialButton: Button
+    private val voiceCallResultLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spoken = if (result.resultCode == RESULT_OK) result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() else null
+        if (!spoken.isNullOrBlank()) handleVoiceCallResult(spoken)
+        else voiceStatus.text = "Voice command नहीं मिला। दोबारा बोलें।"
+    }
+    private val dialerRoleResultLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { refreshStatus() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -174,7 +184,7 @@ class PhoneAgentActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_PROMPT, "किसे फोन करना है? नाम बोलें, जैसे अमित को फोन लगाओ")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
         }
-        runCatching { startActivityForResult(speech, voiceCallRequest) }
+        runCatching { voiceCallResultLauncher.launch(speech) }
             .onFailure { voiceStatus.text = "इस फोन पर Speech Recognition उपलब्ध नहीं है: ${it.message}" }
     }
 
@@ -277,23 +287,13 @@ class PhoneAgentActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val manager = getSystemService(RoleManager::class.java)
             if (manager.isRoleAvailable(RoleManager.ROLE_DIALER) && !manager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-                startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER), roleRequest)
+                dialerRoleResultLauncher.launch(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
             } else refreshStatus()
         } else {
             val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
                 .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
-            startActivityForResult(intent, roleRequest)
+            dialerRoleResultLauncher.launch(intent)
         }
-    }
-
-    @Deprecated("Compatibility with minSdk 26")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == voiceCallRequest) {
-            val spoken = if (resultCode == RESULT_OK) data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() else null
-            if (!spoken.isNullOrBlank()) handleVoiceCallResult(spoken)
-            else voiceStatus.text = "Voice command नहीं मिला। दोबारा बोलें।"
-        } else if (requestCode == roleRequest) refreshStatus()
     }
 
     private fun refreshStatus() {
