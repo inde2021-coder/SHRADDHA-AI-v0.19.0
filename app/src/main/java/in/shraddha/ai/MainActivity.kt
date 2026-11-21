@@ -877,6 +877,27 @@ class MainActivity : AppCompatActivity() {
                     }.onFailure { bridgeStatus.text = "Status check failed: ${it.message}" }
                 } }
             })
+            addView(actionButton("Run Edesy Network Preflight", "Provider DNS, TLS, WebSocket upgrade और audio path जाँचें; कोई real call नहीं होगी") {
+                bridgeStatus.text = "Edesy preflight चल रहा है…"
+                DeviceLinkManager.telephonyPreflight(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        val steps = body.optJSONArray("steps")
+                        bridgeStatus.text = buildString {
+                            append(if (body.optBoolean("ok")) "EDESY PREFLIGHT PASSED" else "EDESY PREFLIGHT FAILED")
+                            if (steps != null) for (i in 0 until steps.length()) {
+                                val step = steps.optJSONObject(i) ?: continue
+                                append("\n").append(if (step.optBoolean("ok")) "✓ " else "✕ ")
+                                    .append(step.optString("step", "step"))
+                                val detail = step.optString("detail")
+                                if (detail.isNotBlank()) append(": ").append(detail.take(180))
+                            }
+                            append("\nAudio frames received: ").append(body.optInt("audio_frames_received"))
+                            append("\nAudio bytes received: ").append(body.optInt("audio_bytes_received"))
+                            append("\nReal Edesy DID + two-way call test is still required.")
+                        }
+                    }.onFailure { bridgeStatus.text = "Edesy preflight failed: ${it.message}" }
+                } }
+            })
             addView(actionButton("Refresh recent AI calls", "Backend की आखिरी 30 call entries दिखाएँ") {
                 DeviceLinkManager.telephonyCalls(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
                     result.onSuccess { body ->
