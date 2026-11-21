@@ -835,7 +835,21 @@ wss.on('connection', (ws, ctx) => {
     }
     let msg; try { msg = JSON.parse(data.toString()); } catch { return; }
     if (!msg || typeof msg.type !== 'string') return;
-    if (msg.type === 'control_request') {
+    if (msg.type === 'control_revoke') {
+      const requesterId = String(msg.requesterDeviceId || '');
+      const revokeIds = requesterId ? [requesterId] : [...new Set([
+        ...device.controlGrants.keys(),
+        ...device.pendingControlRequests.keys(),
+        ...[...device.pendingRemoteActions.values()].map(item => item.requesterId).filter(Boolean)
+      ])];
+      for (const id of revokeIds) {
+        device.controlGrants.delete(id);
+        device.pendingControlRequests.delete(id);
+        for (const [actionId, pending] of device.pendingRemoteActions) if (pending.requesterId === id) device.pendingRemoteActions.delete(actionId);
+        send(id, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved: false, expiresInMinutes: 0, reason: 'Remote control access was revoked by the target device.' }));
+      }
+      send(deviceId, JSON.stringify({ type: 'control_revoked', requesterDeviceId: requesterId || null, revokedCount: revokeIds.length }));
+    } else if (msg.type === 'control_request') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       if (!target || targetId === deviceId || (session.controlMode === 'master' && device.role !== 'owner')) return;
@@ -906,9 +920,18 @@ wss.on('connection', (ws, ctx) => {
         if (next[category] !== true) device.grants.delete(grantKey);
       }
       if (next.remote_control !== true) {
+        const revokedRequesters = new Set([
+          ...device.controlGrants.keys(),
+          ...device.pendingControlRequests.keys(),
+          ...[...device.pendingRemoteActions.values()].map(item => item.requesterId).filter(Boolean)
+        ]);
         device.controlGrants.clear();
         device.pendingControlRequests.clear();
         device.pendingRemoteActions.clear();
+        for (const requesterId of revokedRequesters) send(requesterId, JSON.stringify({
+          type: 'control_result', targetDeviceId: deviceId, approved: false, expiresInMinutes: 0,
+          reason: 'Remote control permission was disabled on the target device.'
+        }));
       }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'permission_status', deviceId, permissions: next }));
     } else if (msg.type === 'data_share_request') {
