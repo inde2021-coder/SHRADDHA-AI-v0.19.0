@@ -705,7 +705,7 @@ telephonyWss.on('connection', carrier => {
       const sampleRate = Number(message.sampleRate || 16000);
       if (![8000, 16000].includes(sampleRate) || (message.mixType && String(message.mixType).toLowerCase() !== 'mono')) return shutdown();
       callSampleRate = sampleRate;
-      const rawId = String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
+      const rawId = String(message.customerData?.call_sid || message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
       const callId = rawId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
       const caller = String(message.from || '');
       callRecord = {
