@@ -193,13 +193,11 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             setBackgroundColor(0xFF172238.toInt())
         }
         val choices = arrayOf("Trim spaces", "UPPERCASE", "lowercase", "Collapse whitespace", "Remove blank lines")
-        android.app.AlertDialog.Builder(this)
+        val dialog = android.app.AlertDialog.Builder(this)
             .setTitle("Clipboard AI • Local text tools")
             .setMessage("Text केवल इस फोन पर process होगा। कोई clipboard history save नहीं होगी।")
             .setView(editor)
-            .setNeutralButton("Read Clipboard") { _, _ ->
-                editor.setText(if (clipboard.hasPrimaryClip()) clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty() else "")
-            }
+            .setNeutralButton("Read Clipboard", null)
             .setItems(choices) { _, which ->
                 val source = editor.text.toString()
                 if (source.isBlank()) { status.text = "पहले text paste या enter करें।"; return@setItems }
@@ -214,7 +212,13 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                     }.show()
             }
             .setNegativeButton("Close", null)
-            .show()
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                editor.setText(if (clipboard.hasPrimaryClip()) clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty() else "")
+            }
+        }
+        dialog.show()
     }
 
     private fun openOperator() {
