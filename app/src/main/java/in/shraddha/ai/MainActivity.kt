@@ -890,6 +890,41 @@ class MainActivity : AppCompatActivity() {
                     }.onFailure { bridgeStatus.text = "Call history load failed: ${it.message}" }
                 } }
             })
+            addView(actionButton("Save Recent Calls Encrypted on This Phone", "Masked caller and call summaries are stored locally with Android Keystore AES-GCM") {
+                DeviceLinkManager.telephonyCalls(relayUrl.text.toString().trim(), gatewayToken.text.toString().trim()) { result -> runOnUiThread {
+                    result.onSuccess { body ->
+                        EncryptedFeatureStore(this@MainActivity).put("call_history", body.toString())
+                            .onSuccess { bridgeStatus.text = "Recent call history saved as encrypted local data. No audio recording was saved." }
+                            .onFailure { bridgeStatus.text = "Encrypted local save failed: ${it.message}" }
+                    }.onFailure { bridgeStatus.text = "Call history fetch failed: ${it.message}" }
+                } }
+            })
+            addView(actionButton("View Locally Saved Encrypted Call History", "Show the last saved local snapshot") {
+                val saved = EncryptedFeatureStore(this@MainActivity).get("call_history")
+                saved.onSuccess { raw ->
+                    val calls = runCatching { org.json.JSONObject(raw).optJSONArray("calls") }.getOrNull()
+                    bridgeStatus.text = if (calls == null || calls.length() == 0) "No locally saved call history." else buildString {
+                        for (i in 0 until minOf(calls.length(), 10)) {
+                            val call = calls.optJSONObject(i) ?: continue
+                            append(call.optString("startedAt", "Unknown time"))
+                            append(" • ").append(call.optString("caller", "Unknown caller"))
+                            append(" • ").append(call.optString("status", "unknown"))
+                            if (call.optString("summaryStatus") == "ready") append("\nSummary: ").append(call.optString("summary").take(240))
+                            append("\n")
+                        }
+                    }
+                }.onFailure { bridgeStatus.text = "Saved call history could not be decrypted: ${it.message}" }
+            })
+            addView(actionButton("Clear Saved Call History", "Delete the local encrypted call-history snapshot") {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Clear saved call history?")
+                    .setMessage("This deletes only the encrypted call-history snapshot stored on this phone.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear") { _, _ ->
+                        val removed = EncryptedFeatureStore(this@MainActivity).remove("call_history")
+                        bridgeStatus.text = if (removed) "Saved local call history cleared." else "Saved call history could not be cleared."
+                    }.show()
+            })
             addView(TextView(this@MainActivity).apply {
                 text = "महत्वपूर्ण: केवल Jio no-answer forwarding उपयोग करें। Unconditional forwarding चालू न करें। पहले Edesy DID पर वास्तविक दो-तरफ़ा call, AI की शुरुआती पहचान, hang-up और interruption जाँचें। उसके बाद ही Jio से current forwarding code/delay/charges की पुष्टि करें। Android सामान्य SIM call का audio सीधे AI को नहीं दे सकता।"
                 textSize = 12f
