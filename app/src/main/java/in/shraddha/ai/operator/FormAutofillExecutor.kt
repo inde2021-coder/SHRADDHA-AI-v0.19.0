@@ -4,6 +4,7 @@ import com.Lia.assistant.agent.core.CapturedScreen
 import com.Lia.assistant.agent.core.DriverResult
 import com.Lia.assistant.agent.core.ScreenDriver
 import com.Lia.assistant.agent.core.ScreenObservation
+import kotlinx.coroutines.delay
 
 data class FormFieldFillResult(
     val fieldKey: String,
@@ -41,6 +42,8 @@ class FormAutofillExecutor(private val driver: ScreenDriver) {
                 results += FormFieldFillResult(value.key, false, "The selected field could not be filled")
                 continue
             }
+            // Give the target app time to commit the accessibility text change before verifying.
+            delay(350)
             val verification = driver.capture()
             val verified = verification?.rawElements?.any { element ->
                 element.isEditable && element.bounds == suggestion.target.bounds &&
