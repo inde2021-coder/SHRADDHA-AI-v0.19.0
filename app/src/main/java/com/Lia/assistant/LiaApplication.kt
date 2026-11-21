@@ -22,8 +22,10 @@ class LiaApplication : Application() {
                 val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
                 val timestamp = sdf.format(Date())
                 val crashFile = File(getExternalFilesDir(null), "crash_$timestamp.txt")
+                val assistantName = getSharedPreferences("nova_prefs", MODE_PRIVATE)
+                    .getString("assistant_name", "Shraddha AI")?.trim()?.take(40).takeUnless { it.isNullOrBlank() } ?: "Shraddha AI"
                 crashFile.writeText(buildString {
-                    appendLine("=== Lia AI Crash Report ===")
+                    appendLine("=== $assistantName Crash Report ===")
                     appendLine("Thread: ${thread.name}")
                     appendLine("Exception: ${throwable::class.qualifiedName}")
                     appendLine("Message: ${throwable.message}")
