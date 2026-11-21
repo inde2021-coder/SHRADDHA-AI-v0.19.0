@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: integration/master-feature-consolidation-2026-11
           fetch-depth: 0
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload consolidated debug APK
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shraddha-ai-master-integration-debug-apk
           path: app/build/outputs/apk/debug/*.apk
