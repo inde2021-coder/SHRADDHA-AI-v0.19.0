@@ -209,7 +209,7 @@ fun VoiceScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Microphone and notification permissions are required. Tap the microphone control below to enable the visible, continuous voice session.",
+                        text = "Microphone and notification permissions are required. Tap the microphone control below to enable the visible, continuous voice session. If Android no longer shows the permission prompt, enable both permissions in this app's system settings.",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
                         fontSize = 16.sp,
