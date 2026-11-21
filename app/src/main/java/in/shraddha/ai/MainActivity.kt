@@ -97,8 +97,10 @@ class MainActivity : AppCompatActivity() {
             val hadConsent = prefs.getBoolean("remote_control_consent", false)
             if (hadConsent) {
                 prefs.edit().putBoolean("remote_control_consent", false).apply()
-                if (::remoteConsent.isInitialized && remoteConsent.isChecked) remoteConsent.isChecked = false
-                else if (DeviceLinkManager.sessionId != null) publishDataPermissions()
+                if (::remoteConsent.isInitialized) {
+                    if (remoteConsent.isChecked) remoteConsent.isChecked = false
+                    else if (DeviceLinkManager.sessionId != null) publishDataPermissions()
+                }
             }
         }
     }
