@@ -76,6 +76,10 @@ function callHistorySnapshot(record) {
     transcript: record.transcriptConsent === true && Array.isArray(record.transcript) ? record.transcript : [],
     summaryStatus: record.summaryStatus || 'disabled',
     summary: record.summary || '',
+    summaryError: String(record.summaryError || '').slice(0, 180),
+    usageSeconds: Number.isFinite(Number(record.usageSeconds)) ? Number(record.usageSeconds) : null,
+    finalUsageSeconds: Number.isFinite(Number(record.finalUsageSeconds)) ? Number(record.finalUsageSeconds) : null,
+    finalReason: String(record.finalReason || '').slice(0, 80),
     finalizationStatus: record.finalizationStatus || 'pending'
   };
 }
