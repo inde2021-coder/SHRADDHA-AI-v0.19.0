@@ -15,6 +15,7 @@ Set these in the backend hosting dashboard (not in Android or GitHub):
 - `GATEWAY_TOKEN` — existing app gateway token.
 - `EDESY_STREAM_TOKEN` — long random token for the Edesy WebSocket URL.
 - `OPENAI_API_KEY` — server-side OpenAI key with Live API access.
+- `OPENAI_LIVE_MODEL` — defaults to `gpt-live-1.1` (current Live primary WebSocket model).
 - Optional: `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_VOICE`, `SHRADDHA_CALL_INSTRUCTIONS`.
 
 ## Edesy setup
