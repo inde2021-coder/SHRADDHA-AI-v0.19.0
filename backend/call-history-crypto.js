@@ -24,12 +24,17 @@ export function encryptCallHistoryRecord(record, key) {
     cipher.setAAD(Buffer.from(AAD_PREFIX + record.id, 'utf8'));
     const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
     const tag = cipher.getAuthTag();
-    return {
-      version: 1,
-      iv: iv.toString('base64'),
-      tag: tag.toString('base64'),
-      ciphertext: ciphertext.toString('base64')
-    };
+    try {
+      return {
+        version: 1,
+        iv: iv.toString('base64'),
+        tag: tag.toString('base64'),
+        ciphertext: ciphertext.toString('base64')
+      };
+    } finally {
+      ciphertext.fill(0);
+      tag.fill(0);
+    }
   } finally {
     plaintext.fill(0);
     iv.fill(0);
