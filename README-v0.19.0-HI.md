@@ -6,6 +6,7 @@
 - `app/src/main/java/in/shraddha/ai/` — SHRADDHA core, Universal App Operator, security, Firebase, device link और vision.
 - `app/src/main/java/com/Lia/assistant/` — उसी APK में merged Shraddha AI voice और Compose UI, live audio, memory/personality, Forge और accessibility agent.
 - `pc_companion/` — SHRADDHA AI का अलग Windows PC Companion; Android Device Universe से HTTPS relay के जरिए pair होता है।
+- Phone Call Agent — Edesy inbound bridge readiness, authenticated audio preflight और recent call history; backend URL और gateway token Android Keystore-backed encrypted storage में रखे जाते हैं। SIM forwarding Jio network पर no-answer conditional forwarding से ही काम करेगा।
 - `desktop-companion/Shraddha AI_ULTRA_APP/` — Shraddha AI desktop assistant/Coder/Website Forge source. यह Windows PC Companion executable से अलग codebase है।
 - `docs/integration/Shraddha AI-Shraddha AI-FULL-MERGE-v0.19.0-HI.md` — merge ledger और boundaries.
 - `pc_companion/README.md` — Windows companion setup और safety boundaries.
