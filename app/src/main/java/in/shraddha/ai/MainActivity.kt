@@ -895,6 +895,8 @@ class MainActivity : AppCompatActivity() {
                                 val detail = step.optString("detail")
                                 if (detail.isNotBlank()) append(": ").append(detail.take(180))
                             }
+                            val hint = body.optString("hint")
+                            if (hint.isNotBlank()) append("\nHint: ").append(hint.take(240))
                             append("\nAudio frames received: ").append(body.optInt("audio_frames_received"))
                             append("\nAudio bytes received: ").append(body.optInt("audio_bytes_received"))
                             append("\nReal Edesy DID + two-way call test is still required.")
