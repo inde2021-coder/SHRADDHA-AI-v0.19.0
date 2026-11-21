@@ -23,14 +23,15 @@ This report records source-level findings; it does not claim an APK build or dev
 
 3. **Firebase remains configuration-driven and requires production lifecycle verification.**
    - Firebase Auth, Firestore, Realtime Database, Storage and Messaging dependencies are present.
-   - Rules, App Check, account lifecycle, key recovery, backup restore and permission-denial cases need live project tests.
-   - The vault's password-derived encryption key still needs a reviewed password-change/recovery design before production use.
+   - Rules, App Check, account lifecycle, backup restore and permission-denial cases need live project tests.
+   - Firebase account authentication is now separated from a 12+ character backup encryption passphrase. The passphrase is never sent to Firebase; old backups require the original account password in the passphrase field if no separate passphrase was used.
+   - Password/passphrase field clearing and PBKDF2 transient-buffer wiping are implemented. Recovery of a forgotten backup passphrase is intentionally impossible; users must preserve it securely.
    - No Firebase credentials should be committed.
 
 4. **Voice service is now wired into the primary Android application; physical-device validation remains outstanding.**
    - The primary manifest now registers `com.Lia.assistant.LiaApplication`, the integrated Compose voice activity and the microphone foreground service with the microphone FGS type.
    - The main Shraddha workspace now exposes a dedicated 3D Voice Agent entry.
-   - The voice screen uses one microphone activation/deactivation control; the foreground service and persistent notification keep the user-started session alive when the screen is closed. Automatic restart after process death remains disabled to avoid silently resurrecting microphone capture.
+   - The voice screen uses one microphone activation/deactivation control; explicit user intent is persisted so a manual stop remains off across screen recreation. The foreground service and persistent notification keep an active user-started session alive when the screen is closed. The service is not sticky; OS process death recovery still depends on the user reopening Voice.
    - Android microphone foreground-service restrictions, visible notification, stop/restart behavior, lock-screen behavior, OEM battery restrictions, permission revocation and Android 14/15 behavior have not been physically tested.
    - Continuous listening must remain explicitly user-controlled and visibly indicated.
 
@@ -40,7 +41,18 @@ This report records source-level findings; it does not claim an APK build or dev
    - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
    - Persistent encrypted call history, caller notice/consent workflow, human takeover and WhatsApp delivery remain incomplete.
 
-6. **Release verification remains a separate gate.**
+6. **Device-to-device encryption has cryptographic primitives but is not integrated into transport.**
+   - `DeviceE2ECrypto` provides ephemeral P-256 ECDH, session-bound HKDF-SHA256, AES-256-GCM and session-bound fingerprints.
+   - Unit tests cover matching peer keys, AAD authentication, different sessions, malformed inputs, nonce freshness and tamper rejection; these tests have not been run after the latest source changes.
+   - Android frame transport and Windows Companion still use the existing relay frame protocol. The relay can inspect JPEG frames. Do not claim end-to-end encrypted screen/camera sharing or encrypted command transport yet.
+   - A secure transport rollout still requires two-sided fingerprint comparison/approval, encrypted frame envelopes, replay/session binding, Android + Windows client support, and relay rejection of plaintext after migration.
+
+7. **Paired-device revocation has a server API and Android/Windows UI paths.**
+   - Relay revocation authenticates the device token, restricts cross-device revocation to the owner, clears grants/pending requests, and closes revoked sockets with code 4003.
+   - Android and Windows clear locally stored credentials when the relay confirms or signals revocation.
+   - Full physical paired-device tests remain outstanding.
+
+8. **Release verification remains a separate gate.**
    - CI must be run after the implementation pass, then every Android/backend/Firebase failure must be fixed.
    - A debug APK is not a production-signed release. Production signing requires owner-provided secrets and a physical install/upgrade test.
 
@@ -51,14 +63,15 @@ This report records source-level findings; it does not claim an APK build or dev
 - Android CI workflow exists and runs unit tests plus `:app:assembleDebug` on pushes to `main` and `work/**`.
 - Main branch remains untouched; work is isolated on `work/step-01-source-audit-fixes`.
 
-## Next implementation order
+## Remaining implementation order (no final CI run until implementation pass is complete)
 
-1. Repair biometric build blockers: add reviewed dependencies, implement the three missing classes behind interfaces, register the activity safely, and add unit tests. Keep matching disabled until real model files and license checks are complete.
-2. Consolidate Accessibility ownership and document exact user setup/consent.
-3. Add Firebase rules tests, auth lifecycle, encrypted backup/restore tests and key recovery design.
-4. Run CI and fix every compile/test failure.
-5. Perform physical-device voice, camera, permission, lifecycle and OEM tests.
-6. Only then update feature status to verified.
+1. Complete E2E key exchange, two-sided fingerprint trust and encrypted Android/Windows frame + command transport. Make relay forwarding opaque and reject plaintext only after both clients are upgraded.
+2. Complete paired-device lifecycle UX: reconnect, revoke, owner/member role visibility, offline revocation behavior and device-to-device recovery.
+3. Finish Firebase App Check / production rules, account deletion, passphrase recovery guidance, backup/restore edge cases and live project verification.
+4. Finish call handling: Edesy DID provisioning, provider preflight, caller disclosure/consent, real bidirectional call test, Jio no-answer forwarding verification, durable encrypted call history and human takeover/summary delivery.
+5. Finish Windows/Android file transfer, screen/camera and accessibility action result verification, including interruption/reconnect and permission revocation.
+6. Review the remaining feature matrix and implement all source-level gaps. Only after the implementation pass, run Android unit tests/lint/debug APK, backend tests, Firebase rules tests and CI; fix all failures.
+7. Create signed release only after owner configures GitHub signing secrets and the release APK passes physical install/upgrade checks.
 
 ## Acceptance criteria for Step 2
 
