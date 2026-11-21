@@ -777,7 +777,9 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                 "collapse_whitespace": lambda value: re.sub(r"\s+", " ", value).strip(),
                 "remove_blank_lines": lambda value: "\n".join(line for line in value.splitlines() if line.strip())
             }[operation](safe)
-            if not await asyncio.to_thread(confirm, f"Return transformed clipboard text to the paired phone? {transformed[:120]!r}"):\n                return "clipboard_transform_rejected_by_pc_user"\n            return json.dumps({"status": "clipboard_transformed", "operation": operation, "text": transformed[:20000]}, ensure_ascii=False)
+            if not await asyncio.to_thread(confirm, f"Return transformed clipboard text to the paired phone? {transformed[:120]!r}"):
+                return "clipboard_transform_rejected_by_pc_user"
+            return json.dumps({"status": "clipboard_transformed", "operation": operation, "text": transformed[:20000]}, ensure_ascii=False)
         except Exception as exc:
             return "clipboard_transform_unavailable:" + type(exc).__name__
     if kind == "web_search":
@@ -870,7 +872,8 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             answer = result.get("choices", [{}])[0].get("message", {}).get("content", "")
             if not isinstance(answer, str) or not answer.strip():
                 return "offline_ai_returned_no_answer"
-            status = "code_assistant_complete" if kind == "code_assistant" else "offline_inference_complete"\n            return json.dumps({"status": status, "answer": answer[:10000]}, ensure_ascii=False)
+            status = "code_assistant_complete" if kind == "code_assistant" else "offline_inference_complete"
+            return json.dumps({"status": status, "answer": answer[:10000]}, ensure_ascii=False)
         except Exception as exc:
             return "offline_inference_failed: " + str(exc)[:180]
     if kind in {"ocr", "file_list", "file_read", "file_search"}:
