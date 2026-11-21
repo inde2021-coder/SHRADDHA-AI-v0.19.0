@@ -28,7 +28,11 @@ function callHistoryConfigStatus() {
   const encodedKey = String(process.env.CALL_HISTORY_ENCRYPTION_KEY || '').trim();
   let keyValid = false;
   if (encodedKey && /^[A-Za-z0-9+/]+={0,2}$/.test(encodedKey)) {
-    try { keyValid = Buffer.from(encodedKey, 'base64').length === 32; } catch { keyValid = false; }
+    try {
+      const decodedKey = Buffer.from(encodedKey, 'base64');
+      keyValid = decodedKey.length === 32 && decodedKey.toString('base64') === encodedKey;
+      decodedKey.fill(0);
+    } catch { keyValid = false; }
   }
   if (!keyValid) missing.push('CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)');
   return { configured: missing.length === 0, missing };
@@ -134,7 +138,7 @@ function storeEdesyCall(record) {
   }
   persistCallHistoryRecord(record).catch(error => {
     record.durableStatus = 'failed';
-    process.stderr.write('Encrypted call-history persistence failed: ' + String(error.message || 'storage error').slice(0, 160) + '\\n');
+    process.stderr.write('Encrypted call-history persistence failed: ' + String(error.message || 'storage error').slice(0, 160) + '\n');
   });
 }
 let edesyActiveConnections = 0;
@@ -440,17 +444,23 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const callHistoryConfig = callHistoryConfigStatus();
+      let callHistoryReady = false;
+      let callHistoryError = '';
+      if (callHistoryConfig.configured) {
+        try { getCallHistoryStore(); callHistoryReady = true; }
+        catch (error) { callHistoryError = String(error.message || 'Call-history store configuration failed').slice(0, 180); }
+      }
       return json(res, 200, {
         provider: 'edesy',
         agentName: String(process.env.SHRADDHA_CALL_AGENT_NAME || 'Shraddha AI').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || 'Shraddha AI',
-        callHistory: { durable: callHistoryConfig.configured, missing: callHistoryConfig.missing },
+        callHistory: { durable: callHistoryReady, configured: callHistoryConfig.configured, missing: callHistoryConfig.missing, error: callHistoryError },
         configured: edesyConfigured(),
         capabilities: {
           inboundWebSocketAudio: edesyConfigured(),
           liveBidirectionalAiAudio: edesyConfigured(),
           liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
           aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
-          durableEncryptedCallHistory: callHistoryConfig.configured,
+          durableEncryptedCallHistory: callHistoryReady,
           persistentCallRecording: false,
           whatsappDelivery: false
         },
@@ -464,7 +474,7 @@ const server = http.createServer(async (req, res) => {
           ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : []),
           ...(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN && !edesyPreflightReady() ? ['EDESY_STREAM_URL / PUBLIC_ORIGIN mismatch'] : [])
         ],
-        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is encrypted at rest in Firestore when FIREBASE_SERVICE_ACCOUNT_JSON and CALL_HISTORY_ENCRYPTION_KEY are configured; otherwise it is bounded in-memory only. Audio is not recorded.'
+        note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Call history is encrypted at rest in Firestore when the durable call-history store is ready; otherwise it is bounded in-memory only. Audio is not recorded.'
       });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
