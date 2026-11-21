@@ -128,7 +128,8 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
             background = rounded(0xFF111B2D.toInt(), 16)
         }
-        showHome()
+        val initialPage = intent.getStringExtra("initial_page")
+        if (initialPage in setOf("devices", "assistant", "expert", "lab", "people", "cloud", "future", "permissions")) showPage(initialPage!!) else showHome()
         installLinkCallbacks()
         handlePairingIntent(intent)
     }
@@ -136,6 +137,8 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        val initialPage = intent.getStringExtra("initial_page")
+        if (initialPage in setOf("devices", "assistant", "expert", "lab", "people", "cloud", "future", "permissions")) showPage(initialPage!!)
         handlePairingIntent(intent)
     }
 
