@@ -3,7 +3,15 @@ import math
 import re
 
 _ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll"}
+_DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
+_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 _SECRET_TEXT = re.compile(r"(?i)(?:\b(?:password|passcode|otp|one[- ]time code|pin|cvv|security code|recovery phrase)\b|पासवर्ड|ओटीपी|पिन)")
+
+
+def valid_pairing_ids(session_id, device_id):
+    """Validate the opaque identifiers accepted by the relay before making requests."""
+    return isinstance(session_id, str) and _SESSION_ID.fullmatch(session_id) is not None and \
+        isinstance(device_id, str) and _DEVICE_ID.fullmatch(device_id) is not None
 
 
 def _number(value):
