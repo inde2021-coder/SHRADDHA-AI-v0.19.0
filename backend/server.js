@@ -496,7 +496,7 @@ telephonyWss.on('connection', carrier => {
           text: 'Greet the caller immediately before waiting for them to speak. First clearly disclose in Hindi and English as appropriate: “Namaste, main Shraddha AI, ek AI assistant hoon.” Then ask how you can help and pause to listen. Do not claim to be a human.'
         }]
       }],
-      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } },
+      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'nira' } },
       delegation: { type: 'client' }
     }
     }));
