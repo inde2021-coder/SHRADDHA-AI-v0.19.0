@@ -23,7 +23,7 @@ This report records source-level findings; it does not claim an APK build or dev
 
 3. **Firebase remains configuration-driven and requires production lifecycle verification.**
    - Firebase Auth, Firestore, Realtime Database, Storage and Messaging dependencies are present.
-   - Rules, App Check, account lifecycle, backup restore and permission-denial cases need live project tests.
+   - The Cloud & Data screen now supports reauthenticated deletion of the Firebase account and both encrypted vault copies. Live deletion, backup restore, permission-denial and account-lifecycle tests remain outstanding; Firestore and RTDB deletion cannot be atomic across both services.
    - The Android named vault app now installs the Firebase App Check Debug provider in debug builds and Play Integrity provider in non-debug builds. Debug-token registration, release signing fingerprint registration, App Check metrics and enforcement remain Firebase Console owner actions.
    - Firebase account authentication is now separated from a 12+ character backup encryption passphrase. The passphrase is never sent to Firebase; old backups require the original account password in the passphrase field if no separate passphrase was used.
    - Password/passphrase field clearing and PBKDF2 transient-buffer wiping are implemented. Recovery of a forgotten backup passphrase is intentionally impossible; users must preserve it securely.
@@ -41,7 +41,7 @@ This report records source-level findings; it does not claim an APK build or dev
    - The Edesy inbound WebSocket/GPT-Live backend bridge is present, with server-side secrets and configurable inbound call-agent naming.
    - The Android Phone Call Agent page can run an authenticated, rate-limited Edesy provider preflight. Its dedicated WebSocket mode echoes bounded PCM and does not create an AI session or real call-history entry.
    - Backend tests now cover the authenticated preflight route, missing provider configuration, PCM echo, and the guarantee that preflight does not pollute call history. These new tests have not been run yet.
-   - Transcript saving is off by default. If enabled, the assistant must clearly issue a consent prompt, the caller must press DTMF 1, and DTMF 0 at any time purges the transcript. No audio is recorded.
+   - Transcript saving is off by default. If enabled, the assistant must clearly issue a consent prompt, the caller must press DTMF 1, and DTMF 0 at any time purges the transcript. Transcript text is capped at 24,000 characters per call and call history at 100 in-memory records. No audio is recorded.
    - A real Edesy tenant, DID, configured inbound flow, GPT-Live access and real two-way call test are still external prerequisites.
    - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
    - The Android phone page can explicitly save, view and clear a masked call-history snapshot encrypted locally with Android Keystore AES-GCM. Automatic durable backend history, legal notice/retention review, human takeover and WhatsApp delivery remain incomplete.
@@ -55,7 +55,7 @@ This report records source-level findings; it does not claim an APK build or dev
 
 7. **Paired-device revocation has a server API and Android/Windows UI paths.**
    - Relay revocation authenticates the device token, restricts cross-device revocation to the owner, clears grants/pending requests, and closes revoked sockets with code 4003.
-   - Android and Windows clear locally stored credentials when the relay confirms or signals revocation. Android can also revoke its own saved pairing over HTTPS from Keystore credentials while the WebSocket is disconnected; it does not claim success if the relay cannot confirm.
+   - Android manual disconnect now preserves Keystore-encrypted pairing for reconnect; confirmed revocation clears it. Windows persists a newly joined token only after relay WebSocket authentication and clears stale tokens after definitive 401/403. Android and Windows clear locally stored credentials when the relay confirms or signals revocation. Android can also revoke its own saved pairing over HTTPS from Keystore credentials while the WebSocket is disconnected; it does not claim success if the relay cannot confirm.
    - The authenticated WebSocket `connected` event now reports the caller's owner/member role; Android restores owner-only controls after reconnect and Windows shows its role.
    - Backend tests cover owner/member role restoration and revoke authorization; these new tests have not been run yet.
    - Full physical paired-device tests remain outstanding.
@@ -75,7 +75,7 @@ This report records source-level findings; it does not claim an APK build or dev
 
 1. Complete E2E key exchange, two-sided fingerprint trust and encrypted Android/Windows frame + command transport. Make relay forwarding opaque and reject plaintext only after both clients are upgraded.
 2. Complete paired-device lifecycle UX: reconnect, revoke, owner/member role visibility, offline revocation behavior and device-to-device recovery.
-3. Finish Firebase App Check / production rules, account deletion, passphrase recovery guidance, backup/restore edge cases and live project verification.
+3. Finish Firebase Console App Check registration/enforcement, production rules publication, live account-deletion/backup-restore/permission-denial tests and live project verification. A forgotten backup passphrase remains unrecoverable by design; no recovery-key workflow exists.
 4. Finish call handling: Edesy DID provisioning, real bidirectional call test, Jio no-answer forwarding verification, durable encrypted backend call history and human takeover/summary delivery. The authenticated provider preflight and per-call DTMF transcript consent gate are implemented.
 5. Finish Windows/Android file transfer and encrypted screen/camera transport. Both direct OperatorEngine actions and learned workflows capture fresh post-action screens and poll for expected visible text for up to five seconds; the shared verifier excludes password fields and is unit-tested. Real-app end-to-end verification, stronger state-difference checks, interruption/reconnect and permission-revocation tests remain outstanding.
 6. Review the remaining feature matrix and implement all source-level gaps. Only after the implementation pass, run Android unit tests/lint/debug APK, backend tests, Firebase rules tests and CI; fix all failures.
