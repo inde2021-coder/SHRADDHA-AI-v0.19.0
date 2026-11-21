@@ -521,15 +521,6 @@ class PcCompanionApp:
             })
             self.control_grant_until = time.time() + minutes * 60 if approved else 0
             self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
-        elif kind == "remote_action":
-            if not self.remote_var.get() or time.time() > self.control_grant_until:
-                self.status_var.set("Ignored action: no active local PC approval.")
-                return
-            action = validate_remote_action(msg.get("action"))
-            if not action:
-                self.status_var.set("Ignored invalid or unsupported remote action.")
-                return
-            self._execute(action)
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
 
