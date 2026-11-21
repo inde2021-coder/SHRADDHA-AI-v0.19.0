@@ -1515,11 +1515,12 @@ class MainActivity : AppCompatActivity() {
             val firebaseDatabaseUrl = edit("Realtime Database URL", "https://project-default-rtdb.firebaseio.com").apply { setText(BuildConfig.FIREBASE_DATABASE_URL) }
             addView(firebaseApiKey); addView(firebaseAppId); addView(firebaseProjectId); addView(firebaseSenderId); addView(firebaseBucket); addView(firebaseDatabaseUrl)
             val email = edit("Email", "name@example.com")
-            val password = edit("Password (कम-से-कम 8 अक्षर)", "Firebase account password").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
+            val password = edit("Firebase account password", "Account sign-in password").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
+            val backupPassphrase = edit("Separate backup encryption passphrase (12+ characters)", "Keep this safe; needed to restore on another device").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
             val note = edit("Cloud memory note", "यह note encrypted रूप में sync होगा").apply { minLines = 3; isSingleLine = false }
             val consent = CheckBox(this@MainActivity).apply { text = "मैं इस note/local conversation recap को अपने Firebase खाते में encrypted रूप में sync करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val result = TextView(this@MainActivity).apply { setTextColor(0xFFBFE8D2.toInt()); textSize = 13f }
-            addView(email); addView(password); addView(note)
+            addView(email); addView(password); addView(backupPassphrase); addView(note)
             addView(actionButton("Load Encrypted Local Conversation Recap", "Requires Encrypted Conversation Memory to be ON") {
                 val recap = PersistentChatMemory.recap(this@MainActivity)
                 if (recap.isNullOrBlank()) result.text = "No saved recap found. Enable Encrypted Conversation Memory and use Shraddha first."
@@ -1546,19 +1547,19 @@ class MainActivity : AppCompatActivity() {
             })
             addView(actionButton("Sign In & Sync Encrypted Memory", "Cloud में केवल encrypted payload जाएगा; password/biometric data upload नहीं होगा") {
                 if (!consent.isChecked) { result.text = "पहले cloud sync consent checkbox चुनें।"; return@actionButton }
-                if (email.text.isNullOrBlank() || password.text.length < 8 || note.text.isNullOrBlank()) { result.text = "Email, password और memory note भरें।"; return@actionButton }
-                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val noteValue = note.text.toString()
+                if (email.text.isNullOrBlank() || password.text.length < 8 || backupPassphrase.text.length < 12 || note.text.isNullOrBlank()) { result.text = "Email, account password, 12+ character backup passphrase और memory note भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val backupPassphraseValue = backupPassphrase.text.toString(); val noteValue = note.text.toString()
                 result.text = "Sign-in और encrypted upload चल रहा है…"
-                Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSave(emailValue, passwordValue, "personal_memory", noteValue)
+                Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSave(emailValue, passwordValue, "personal_memory", noteValue, backupPassphraseValue)
                     runOnUiThread { result.text = r.fold({ "Encrypted cloud backup saved for account ${it}." }, { "Sync failed: ${it.message}" }) }
                 }.start()
             })
             addView(actionButton("Restore Encrypted Memory", "उसी email और password से दूसरे device पर restore करें") {
                 if (!consent.isChecked) { result.text = "Restore से पहले cloud consent चुनें।"; return@actionButton }
-                if (email.text.isNullOrBlank() || password.text.length < 8) { result.text = "Email और password भरें।"; return@actionButton }
-                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
+                if (email.text.isNullOrBlank() || password.text.length < 8 || backupPassphrase.text.length < 12) { result.text = "Email, account password और backup passphrase भरें।"; return@actionButton }
+                val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val backupPassphraseValue = backupPassphrase.text.toString()
                 result.text = "Encrypted backup download और decrypt हो रहा है…"
-                Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory")
+                Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory", backupPassphraseValue)
                     runOnUiThread {
                         result.text = r.fold({ value ->
                             if (value == null) "इस account में backup नहीं मिला।"
@@ -1570,7 +1571,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
-            addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase client config secret नहीं होता, लेकिन database rules जरूरी हैं। Password किसी server पर नहीं भेजा जाता; उससे client पर encryption key बनती है। Face/voice biometric templates इस backup में शामिल नहीं हैं। Firebase project config सेट किए बिना cloud buttons काम नहीं करेंगे।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
+            addView(TextView(this@MainActivity).apply { text = "सुरक्षा: Firebase account password केवल sign-in के लिए है; backup encryption अलग 12+ character passphrase से होती है। Backup passphrase याद रखें—इसके बिना cloud ciphertext restore नहीं होगा। Passphrase Firebase को नहीं भेजा जाता। Face/voice biometric templates इस backup में शामिल नहीं हैं।"; setTextColor(0xFF9EABC2.toInt()); textSize = 12f; setPadding(0, dp(10), 0, 0) })
         }
     }
 
