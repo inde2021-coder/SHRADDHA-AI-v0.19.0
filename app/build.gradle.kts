@@ -42,6 +42,25 @@ android {
         buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${firebaseConfigValue("FIREBASE_STORAGE_BUCKET").ifBlank { "shraddha-ai-1d3bf.firebasestorage.app" }}\"")
         buildConfigField("String", "FIREBASE_DATABASE_URL", "\"${firebaseConfigValue("FIREBASE_DATABASE_URL").ifBlank { "https://shraddha-ai-1d3bf-default-rtdb.firebaseio.com" }}\"")
     }
+    // Release signing is configured only when CI signing secrets are present.
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = File(requireNotNull(releaseKeystorePath))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
     buildFeatures { buildConfig = true; compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
