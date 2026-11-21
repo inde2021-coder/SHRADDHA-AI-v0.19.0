@@ -115,7 +115,7 @@ jobs:
           name: shraddha-ai-master-integration-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
-pc-companion-windows:
+  pc-companion-windows:
     name: Windows PC companion tests and EXE package
     runs-on: windows-latest
     timeout-minutes: 35
