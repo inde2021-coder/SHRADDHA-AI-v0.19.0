@@ -72,9 +72,11 @@ object DeviceLinkManager {
             done(Result.failure(IllegalStateException("DeviceLinkManager must be initialized by the Application before pairing.")))
             return
         }
-        // Supersede any in-flight connection before starting a new pairing/reconnect.
-        // Listener callbacks from the old socket must never overwrite or erase the new identity.
-        socket?.close(1000, "Superseded by a newer connection")
+        // Detach the previous socket before closing it. Its asynchronous callbacks
+        // must already see that they are stale, even if they race the new connect call.
+        val previousSocket = socket
+        socket = null
+        previousSocket?.close(1000, "Superseded by a newer connection")
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
         val completionDelivered = AtomicBoolean(false)
         val url = parsed.newBuilder().scheme("wss").addPathSegments("ws")
