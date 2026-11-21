@@ -18,7 +18,7 @@ object ScreenOcrEngine {
     )
 
     private val sensitive = Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|upi|account number|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड|यूपीआई""")
-    private val longDigits = Regex("""(?<!\d)\d{4,}(?!\d)""")
+    private val privateIdentifiers = Regex("""(?<!\d)\d{12}(?!\d)|\b[A-Z]{5}\d{4}[A-Z]\b""")
 
     fun recognize(bitmap: Bitmap, done: (Result<List<OcrLine>>) -> Unit) {
         val image = InputImage.fromBitmap(bitmap, 0)
