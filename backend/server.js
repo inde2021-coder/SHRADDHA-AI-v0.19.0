@@ -232,7 +232,7 @@ const server = http.createServer(async (req, res) => {
       }
       const session = sessions.get(sessionId);
       const actor = session?.devices.get(actorId);
-      const bearer = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+      const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (!session || !actor || !safeEqual(actor.token, bearer)) return json(res, 401, { error: 'Device authentication is invalid or the device was already revoked' });
       if (targetId === actorId) {
         if (actor.role === 'owner') {
