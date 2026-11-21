@@ -58,8 +58,7 @@ fun NovaTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            window.statusBarColor = novaColors.background.toArgb()
-            window.navigationBarColor = novaColors.background.toArgb()
+            window.decorView.setBackgroundColor(novaColors.background.toArgb())
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !isDark
             insetsController.isAppearanceLightNavigationBars = !isDark
