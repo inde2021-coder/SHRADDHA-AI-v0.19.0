@@ -310,7 +310,8 @@ class PcCompanionApp:
         kind = msg.get("type")
         if kind == "connected":
             peers = msg.get("devices", [])
-            self.status_var.set(f"Connected • {len(peers)} other paired device(s).")
+            role = "Owner" if msg.get("role") == "owner" else "Member"
+            self.status_var.set(f"Connected as {role} • {len(peers)} other paired device(s).")
         elif kind == "peer_status":
             self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
         elif kind == "control_request":
