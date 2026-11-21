@@ -51,3 +51,19 @@ Source-level changes are included. Android APK build and physical-device end-to-
 - The council endpoint requires `GATEWAY_TOKEN`; set at least two provider API keys. It is advice-only and never executes device or account actions.
 - The offline local council plan is retained as a separate no-network feature.
 - Live provider success still depends on deployment, valid API keys, quotas and network; no provider round-trip is claimed in this offline build environment.
+
+## v0.19.0 implementation and verification update — 2026-11-20
+
+### Implemented and source/CI verified
+- Local Knowledge Graph is now connected to the Future Intelligence UI and persisted in a dedicated Android Keystore AES-GCM slot. User-entered memories can be created, searched, linked, deleted and reset. Input and graph size are bounded; legacy preference data migrates to the encrypted slot on first load.
+- Password-protected portable backup supports encrypted export and validated restore of supported user-managed app data. PBKDF2-HMAC-SHA256 (210,000 rounds) derives the AES-256-GCM key; tampering and wrong passphrases are rejected. Passphrase character arrays are wiped after use.
+- Task Planner includes create/edit/delete/complete/reschedule, local reminders, reboot/app-update restoration and optional daily briefing. Backup restore rebuilds reminder alarms; disabling the briefing cancels its alarm.
+- Operator learned workflows request approval immediately before each sensitive step, resume from the approved step without replaying completed steps, and can be stopped from the Operator UI. Closing the Operator activity requests stop; an already-dispatched external action cannot be recalled.
+- Latest Android CI #331 passed backend tests, Android unit tests, Android static lint, debug APK build, ABI verification and checksum verification. See `docs/BUILD-TEST-REPORT-v0.19.0.md` for artifact and hashes.
+
+### Not complete until tested or externally provisioned
+- No physical Android device is attached to this CI environment; microphone, camera, Accessibility, OEM background behavior, calls/SMS/WhatsApp and notifications still need device testing.
+- Firebase and AI provider account flows need the user's project configuration, rules, API keys and real round-trip tests.
+- Windows companion must be installed and paired on an actual PC and phone.
+- Offline LLM inference, smart-home integrations, signed plugin sandbox, unattended social publishing, certified biometric anti-spoofing, full live-citation research and automatic CAD/media generation remain incomplete or external-integration dependent.
+- Debug APK success is not a production-signed release. Production signing requires the owner's keystore and secrets.

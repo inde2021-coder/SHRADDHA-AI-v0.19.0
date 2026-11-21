@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.PlayArrow
@@ -41,6 +42,7 @@ import androidx.navigation.NavController
 import com.Lia.assistant.action.AppLauncher
 import com.Lia.assistant.action.InstalledAppLabelCache
 import com.Lia.assistant.forge.ForgeController
+import `in`.shraddha.ai.operator.OperatorActivity
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import kotlinx.coroutines.CoroutineScope
@@ -88,6 +90,14 @@ fun QuickActionsScreen(
                         AppLauncher.launch(context, it)
                     }
                 }
+            }
+        ),
+        QuickActionTile(
+            title = "Control Any App",
+            phrase = "\"Read screen, tap, type, swipe and verify\"" ,
+            icon = Icons.Default.Apps,
+            onClick = {
+                context.startActivity(android.content.Intent(context, OperatorActivity::class.java))
             }
         ),
         QuickActionTile(

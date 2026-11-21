@@ -19,9 +19,9 @@ val LocalBottomBarInset = compositionLocalOf { 80.dp }
 fun Modifier.nightSky(): Modifier = this.drawBehind {
     val gradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF15113A),
-            Color(0xFF0C0924),
-            Color(0xFF06050E)
+            Color(0xFF172541),
+            Color(0xFF0D1829),
+            Color(0xFF070C16)
         )
     )
     drawRect(brush = gradient)
@@ -37,7 +37,7 @@ fun Modifier.nightSky(): Modifier = this.drawBehind {
         val radius = 0.8f + random.nextFloat() * 1.4f
         val alpha = 0.15f + random.nextFloat() * 0.45f
         drawCircle(
-            color = Color(0xFFEEE9FF).copy(alpha = alpha),
+            color = Color(0xFFD8EEFF).copy(alpha = alpha),
             radius = radius,
             center = Offset(x, y)
         )
@@ -52,8 +52,8 @@ fun Modifier.depthSurface(
     .shadow(
         elevation = elevation,
         shape = shape,
-        ambientColor = Color(0x6606050E),
-        spotColor = Color(0x8015113A)
+        ambientColor = Color(0x99030A14),
+        spotColor = Color(0x80213B5A)
     )
     .border(
         width = 1.dp,

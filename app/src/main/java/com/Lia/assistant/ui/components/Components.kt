@@ -44,9 +44,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.LocalNovaReducedMotion
 import com.Lia.assistant.ui.theme.depthSurface
@@ -96,43 +98,35 @@ fun NovaButton(
     enabled: Boolean = true
 ) {
     val colors = LocalNovaColors.current
-    val reducedMotion = LocalNovaReducedMotion.current
-    val scale = remember { Animatable(1f) }
-
+    val buttonShape = RoundedCornerShape(18.dp)
     val bgModifier = when (type) {
         NovaButtonType.PRIMARY -> Modifier
-            .background(if (enabled) colors.accent else colors.surfaceBorder)
+            .depthSurface(shape = buttonShape, elevation = if (enabled) 4.dp else 0.dp, rimColor = colors.rimLight)
+            .background(
+                brush = Brush.linearGradient(
+                    if (enabled) listOf(colors.accent, colors.accentSecondary)
+                    else listOf(colors.surfaceBorder, colors.surfaceRaised)
+                ),
+                shape = buttonShape
+            )
         NovaButtonType.SECONDARY -> Modifier
-            .depthSurface(shape = RoundedCornerShape(50), elevation = 2.dp)
-            .background(colors.surfaceGlass)
+            .depthSurface(shape = buttonShape, elevation = 3.dp, rimColor = colors.rimLight)
+            .background(colors.surfaceGlass, buttonShape)
         NovaButtonType.TEXT -> Modifier
     }
 
     val contentColor = when (type) {
-        NovaButtonType.PRIMARY -> colors.onAccent
+        NovaButtonType.PRIMARY -> if (enabled) colors.onAccent else colors.textTertiary
         NovaButtonType.SECONDARY -> colors.textPrimary
         NovaButtonType.TEXT -> colors.accent
     }
 
     Box(
         modifier = modifier
-            .scale(scale.value)
-            .defaultMinSize(minWidth = 84.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(50))
+            .defaultMinSize(minWidth = 96.dp, minHeight = 50.dp)
+            .clip(buttonShape)
             .then(bgModifier)
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                detectTapGestures(
-                    onPress = {
-                        if (!reducedMotion) {
-                            scale.animateTo(0.96f, tween(80))
-                            tryAwaitRelease()
-                            scale.animateTo(1f, tween(100))
-                        }
-                        onClick()
-                    }
-                )
-            }
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp)
             .semantics { contentDescription = text },
         contentAlignment = Alignment.Center
@@ -154,7 +148,10 @@ fun NovaButton(
                 text = text,
                 color = contentColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
+                fontSize = 13.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -166,7 +163,8 @@ fun NovaTextField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    secret: Boolean = false
 ) {
     val colors = LocalNovaColors.current
     val shape = RoundedCornerShape(16.dp)
@@ -195,6 +193,7 @@ fun NovaTextField(
                 color = colors.textPrimary,
                 fontSize = 15.sp
             ),
+            visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             cursorBrush = SolidColor(colors.accent),
             modifier = Modifier.fillMaxWidth()
         )

@@ -1,0 +1,31 @@
+name: Firebase Realtime Database Rules
+on:
+  push:
+    branches: ["work/**"]
+    paths:
+      - "firebase/**"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "firebase/**"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
+permissions:
+  contents: read
+jobs:
+  realtime-database-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Firebase rules test dependencies
+        working-directory: firebase/rules-tests
+        run: npm install --no-audit --no-fund
+      - name: Run Realtime Database emulator rules tests
+        working-directory: firebase/rules-tests
+        run: npx --yes firebase-tools@13.29.1 emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-rtdb-rules "npm test"

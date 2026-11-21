@@ -1,11 +1,6 @@
 name: Master integration merge and verification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/master-integration-merge.yml
   pull_request:
     branches:
       - integration/master-feature-consolidation-2026-11
@@ -23,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - name: Checkout integration branch with full history
+      - name: Checkout full history
         uses: actions/checkout@v4
         with:
           ref: integration/master-feature-consolidation-2026-11
@@ -64,17 +59,16 @@ jobs:
       - name: Push consolidated branch
         run: git push origin HEAD:integration/master-feature-consolidation-2026-11
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Validate backend JavaScript
+        run: |
+          node --version
+          node --check backend/server.js
+          node --check backend/telephony-audio.js
 
-      - name: Validate backend JavaScript and run backend tests
+      - name: Run backend tests
         working-directory: backend
         run: |
           npm install --no-audit --no-fund
-          node --check server.js
-          node --check telephony-audio.js
           npm test
 
       - name: Run Firebase security rules tests

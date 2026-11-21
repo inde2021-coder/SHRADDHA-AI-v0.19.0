@@ -87,11 +87,11 @@ fun NovaOrb(
 
     // Palette per state
     val (coreColor, rimColor, haloColor) = when (state) {
-        NovaOrbState.IDLE -> Triple(Color(0xFF9C27B0), colors.lotus, Color(0x33FF6FAE))
-        NovaOrbState.LISTENING -> Triple(Color(0xFF00838F), colors.lagoon, Color(0x403FE0D0))
-        NovaOrbState.THINKING -> Triple(Color(0xFF5E35B1), Color(0xFF7C4DFF), Color(0x407C4DFF))
+        NovaOrbState.IDLE -> Triple(Color(0xFF273A68), colors.lotus, Color(0x557C8FFF))
+        NovaOrbState.LISTENING -> Triple(Color(0xFF145C70), colors.lagoon, Color(0x5562E5D0))
+        NovaOrbState.THINKING -> Triple(Color(0xFF3E347A), colors.accentSecondary, Color(0x559B8CFF))
         NovaOrbState.SPEAKING -> Triple(colors.accentSecondary, colors.accent, colors.accentGlow)
-        NovaOrbState.CONNECTING -> Triple(Color(0xFFE65100), colors.accent, Color(0x33FFB547))
+        NovaOrbState.CONNECTING -> Triple(Color(0xFF315E87), colors.accent, Color(0x5573D7FF))
         NovaOrbState.ERROR -> Triple(Color(0xFFB71C1C), colors.error, Color(0x40FF5252))
     }
 

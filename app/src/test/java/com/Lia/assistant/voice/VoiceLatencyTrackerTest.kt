@@ -29,6 +29,17 @@ class VoiceLatencyTrackerTest {
     }
 
     @Test
+    fun reconnectBackoffGrowsAndCapsAtThirtySeconds() {
+        assertEquals(1_200L, VoiceLatencyTracker.reconnectDelayMs(0))
+        assertEquals(2_400L, VoiceLatencyTracker.reconnectDelayMs(1))
+        assertEquals(4_800L, VoiceLatencyTracker.reconnectDelayMs(2))
+        assertEquals(9_600L, VoiceLatencyTracker.reconnectDelayMs(3))
+        assertEquals(19_200L, VoiceLatencyTracker.reconnectDelayMs(4))
+        assertEquals(30_000L, VoiceLatencyTracker.reconnectDelayMs(5))
+        assertEquals(30_000L, VoiceLatencyTracker.reconnectDelayMs(99))
+    }
+
+    @Test
     fun testReconnectCounter() {
         assertEquals(0, VoiceLatencyTracker.reconnectCount.value)
         VoiceLatencyTracker.incrementReconnect()

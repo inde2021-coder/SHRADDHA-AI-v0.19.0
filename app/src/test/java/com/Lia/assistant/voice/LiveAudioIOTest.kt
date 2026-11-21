@@ -7,10 +7,26 @@ import org.junit.Test
 class LiveAudioIOTest {
 
     @Test
+    fun testRmsEmptyAndOddLengthBuffers() {
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf()), 0f)
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf(1)), 0f)
+    }
+
+    @Test
     fun testRmsSilence() {
         val silence = ByteArray(2048) { 0 }
         val rms = LiveAudioIO.calculateRms(silence)
         assertEquals(0f, rms, 0.0001f)
+    }
+
+    @Test
+    fun testRmsNegativeFullScale() {
+        val negativeFullScale = ByteArray(2048)
+        for (i in 0 until 1024) {
+            negativeFullScale[i * 2] = 0x00
+            negativeFullScale[i * 2 + 1] = 0x80.toByte()
+        }
+        assertEquals(1f, LiveAudioIO.calculateRms(negativeFullScale), 0.0001f)
     }
 
     @Test
@@ -23,5 +39,36 @@ class LiveAudioIOTest {
         }
         val rms = LiveAudioIO.calculateRms(maxWave)
         assertTrue("RMS should be close to 1.0", rms > 0.99f)
+    }
+
+    @Test
+    fun testRmsHandlesEmptyAndIncompleteSample() {
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf()), 0.0001f)
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf(0x7F)), 0.0001f)
+        assertEquals(0f, LiveAudioIO.calculateRms(byteArrayOf(0x00, 0x00, 0x7F)), 0.0001f)
+    }
+
+    @Test
+    fun staleMicrophoneGenerationCannotFinishNewCapture() {
+        val gate = RecordingGenerationGate()
+        val first = gate.begin()
+        assertTrue(gate.isCurrent(first))
+
+        gate.invalidate()
+        val second = gate.begin()
+        assertTrue(gate.isCurrent(second))
+        assertTrue(!gate.isCurrent(first))
+
+        assertTrue(!gate.finish(first))
+        assertTrue("Old recorder must not invalidate the new capture", gate.isCurrent(second))
+        assertTrue(gate.finish(second))
+        assertTrue(!gate.isCurrent(second))
+    }
+
+    @Test
+    fun testRmsHandlesNegativeFullScale() {
+        val negativeFullScale = byteArrayOf(0x00, 0x80.toByte())
+        val rms = LiveAudioIO.calculateRms(negativeFullScale)
+        assertTrue("RMS should be normalized and clamped", rms in 0.99f..1.0f)
     }
 }

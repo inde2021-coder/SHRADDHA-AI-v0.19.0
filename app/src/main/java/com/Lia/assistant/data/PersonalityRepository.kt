@@ -83,7 +83,7 @@ object PersonalityRepository {
     }
 
     suspend fun setAssistantName(context: Context, name: String) {
-        val trimmed = name.trim().ifEmpty { AssistantBrand.NAME }
+        val trimmed = name.filterNot { it.isISOControl() }.trim().take(40).ifEmpty { AssistantBrand.NAME }
         NovaPreferences.putString(context, NovaPreferences.Keys.ASSISTANT_NAME, trimmed)
         context.assistantDataStore.edit { prefs ->
             prefs[KEY_NAME] = trimmed

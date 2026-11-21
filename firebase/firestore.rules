@@ -6,10 +6,11 @@ service cloud.firestore {
       allow create, update: if request.auth != null
                             && request.auth.uid == userId
                             && documentId.matches('^[a-zA-Z0-9_-]{1,64}$')
+                            && request.resource.data.keys().hasAll(['format', 'payload', 'updatedAt'])
                             && request.resource.data.keys().hasOnly(['format', 'payload', 'updatedAt'])
                             && request.resource.data.format == 'AES-256-GCM/PBKDF2-SHA256-v1'
                             && request.resource.data.payload is string
-                            && request.resource.data.payload.size() < 200000
+                            && request.resource.data.payload.size() <= 190000
                             && request.resource.data.updatedAt is int;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }

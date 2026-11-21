@@ -5,15 +5,21 @@ object NaturalLanguageWorkflowRouter {
     data class Route(val profile: AppTrainingProfile, val workflowName: String, val confidence: Float, val values: Map<String, String>, val note: String)
     data class Result(val route: Route? = null, val message: String)
 
-    private val stopWords = setOf("please", "karo", "kar", "do", "folder", "from", "in", "inside", "se", "ko", "mein", "में", "से", "को", "करो", "कर", "दो", "फोल्डर", "download", "downloads", "pictures", "picture", "documents", "document", "dcim")
+    private val stopWords = setOf("please", "karo", "kar", "do", "folder", "from", "in", "inside", "se", "ko", "mein", "में", "से", "को", "करो", "कर", "दो", "फोल्डर", "downloads", "pictures", "picture", "documents", "document", "dcim")
     private val synonymGroups = listOf(
         setOf("add", "create", "new", "जोड़", "बनाओ", "बनाना", "नया"),
         setOf("customer", "client", "contact", "ग्राहक", "कस्टमर"),
         setOf("upload", "attach", "select", "अपलोड", "लगाओ", "जोड़ो"),
-        setOf("file", "फ़ाइल", "फाइल", "document", "photo", "image", "फ़ोटो", "तस्वीर"),
-        setOf("invoice", "bill", "receipt", "चालान", "बिल"),
+        setOf("file", "फ़ाइल", "फाइल", "document", "दस्तावेज़", "दस्तावेज", "photo", "image", "फ़ोटो", "तस्वीर"),
+        setOf("invoice", "bill", "receipt", "इनवॉइस", "इनवॉयस", "चालान", "बिल"),
         setOf("search", "find", "lookup", "खोज", "ढूंढ", "सर्च"),
-        setOf("save", "submit", "done", "सेव", "जमा", "सबमिट")
+        setOf("save", "submit", "done", "सेव", "जमा", "सबमिट", "सहेज"),
+        setOf("delete", "remove", "erase", "trash", "हटाओ", "हटाना", "मिटाओ", "डिलीट"),
+        setOf("update", "edit", "change", "modify", "अपडेट", "बदलना", "बदलो", "संशोधन"),
+        setOf("send", "share", "forward", "message", "भेजो", "भेजना", "सेंड", "साझा"),
+        setOf("download", "fetch", "export", "डाउनलोड", "उतारो", "निकालो"),
+        setOf("report", "रिपोर्ट", "विवरण", "प्रतिवेदन"),
+        setOf("upload", "attach", "select", "अपलोड", "लगाओ", "संलग्न")
     )
 
     fun route(command: String, profile: AppTrainingProfile): Result {

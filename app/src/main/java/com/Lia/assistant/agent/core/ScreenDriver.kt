@@ -82,7 +82,7 @@ class AccessibilityScreenDriver : ScreenDriver {
 
     override suspend fun setText(element: UiElement, text: String): DriverResult {
         val service = NovaAccessibilityService.instance ?: return DriverResult.FAILED
-        val res = service.typeText(text)
+        val res = service.typeTextAtBounds(element.bounds, text)
         return if (res == "typed") DriverResult.OK else DriverResult.FAILED
     }
 
