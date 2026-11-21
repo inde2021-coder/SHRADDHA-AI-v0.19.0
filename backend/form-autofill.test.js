@@ -51,3 +51,19 @@ test('unsupported form types safely expose no fillable fields', () => {
   assert.deepEqual(result.fields, []);
   assert.deepEqual(supportedFormTypes(), ['farmer', 'plot', 'boundary', 'land_deed', 'consent', 'unknown']);
 });
+
+test('normalizer strips sensitive values unless personal-data consent is explicit', () => {
+  const modelOutput = {
+    fields: [
+      { key: 'farmerName', value: 'Ravi Patil', confidence: 0.99, sourceText: 'Ravi Patil', status: 'ready' },
+      { key: 'phoneNumber', value: '9876543210', confidence: 0.99, sourceText: '9876543210', status: 'ready' },
+      { key: 'aadhaarNumber', value: '123456789012', confidence: 0.99, sourceText: '123456789012', status: 'ready' }
+    ]
+  };
+  const restricted = normalizeFormExtraction(modelOutput, 'farmer', false);
+  assert.equal(restricted.fields.find(f => f.key === 'farmerName').value, 'Ravi Patil');
+  assert.equal(restricted.fields.find(f => f.key === 'phoneNumber').value, '');
+  assert.equal(restricted.fields.find(f => f.key === 'aadhaarNumber').value, '');
+  const consented = normalizeFormExtraction(modelOutput, 'farmer', true);
+  assert.equal(consented.fields.find(f => f.key === 'phoneNumber').value, '9876543210');
+});
