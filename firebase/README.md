@@ -25,3 +25,7 @@ The account password is not uploaded. The vault encryption key is derived from t
 Realtime Database rules restrict each authenticated account to its own UID path and validate the encrypted record shape/size. Rules files in this repository are **not automatically published** to the Firebase project. The project owner must publish them in Firebase Console or authorize a Firebase CLI deployment. Never put service-account private keys in this repository.
 
 Storage uploads and FCM handlers are not implemented by this change; their SDK dependencies remain preparatory only. The encrypted cloud vault is an on-demand backup/restore mirror, not a continuous real-time sync listener.
+
+## Account deletion
+
+The Cloud & Data screen includes a confirmed account-deletion action. It reauthenticates the currently signed-in email/password, deletes the account's Firestore and Realtime Database `vault` copies, then deletes the Firebase Authentication user and signs out. If either database deletion fails, the account deletion stops and reports failure; because Firestore and Realtime Database do not share a transaction, a partial cloud-copy deletion can occur and should be retried. Local on-device memories and encrypted call-history snapshots are not deleted by this cloud-account action.
