@@ -6,6 +6,9 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -62,7 +65,15 @@ jobs:
           done
 
       - name: Check integrated diff for whitespace errors
-        run: git diff --check origin/main...HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            diff_base="origin/$GITHUB_BASE_REF"
+          else
+            diff_base="$(git rev-parse HEAD^)"
+          fi
+          git diff --check "$diff_base...HEAD"
 
       - name: Validate backend JavaScript
         run: |
@@ -111,13 +122,13 @@ jobs:
         env:
           ANDROID_I_WANT_MY_TCG: "yes"
         with:
-          api-level: 30
+          api-level: 35
           emulator-boot-timeout: 1200
           arch: x86_64
           target: google_apis
-          profile: pixel_2
+          profile: pixel_5
           disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot-load -no-snapshot-save -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 2 -partition-size 4096
           pre-emulator-launch-script: adb start-server
           script: bash .github/scripts/android-onnx-smoke.sh
 
