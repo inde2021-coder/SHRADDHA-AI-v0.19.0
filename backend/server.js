@@ -599,7 +599,7 @@ telephonyWss.on('connection', carrier => {
               : ' Do not save a call transcript; no audio recording is made.')
         }]
       }],
-      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'nira' } },
+      audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice: process.env.OPENAI_LIVE_VOICE || 'marin' } },
       delegation: { type: 'client' }
     }
     }));
