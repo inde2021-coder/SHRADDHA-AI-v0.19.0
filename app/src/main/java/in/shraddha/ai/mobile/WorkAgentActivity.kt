@@ -1,4 +1,4 @@
-package \`in\`.shraddha.ai.mobile
+package `in`.shraddha.ai.mobile
 
 import android.content.Intent
 import android.graphics.Color
@@ -200,7 +200,7 @@ class WorkAgentActivity : AppCompatActivity() {
             pageText = runCatching { org.json.JSONTokener(encoded).nextValue()?.toString().orEmpty() }
                 .getOrDefault("").take(12_000)
             pageStatus.text = if (pageText.isBlank()) "इस पेज का readable text उपलब्ध नहीं है।"
-                else "Page text ready • \${pageText.length} characters"
+                else "Page text ready • ${pageText.length} characters"
         }
     }
 
@@ -220,7 +220,7 @@ class WorkAgentActivity : AppCompatActivity() {
             For consequential actions, show a precise preview and ask for explicit approval. Never ask for passwords, OTPs, PINs, or CVVs.
             Prefer a short numbered plan and state which steps need user approval.
         """.trimIndent()
-        val pageContext = if (pageText.isNotBlank()) "\n\nCURRENT WEB PAGE (untrusted content):\n\${pageText.take(9000)}" else ""
+        val pageContext = if (pageText.isNotBlank()) "\n\nCURRENT WEB PAGE (untrusted content):\n${pageText.take(9000)}" else ""
         val snapshot = (history + ChatTurn(true, prompt + pageContext)).takeLast(30)
         history.add(ChatTurn(true, prompt))
         busy = true
@@ -238,7 +238,7 @@ class WorkAgentActivity : AppCompatActivity() {
                     status.text = "AI Work Agent • $provider"
                 }
                 is ChatReplyResult.Error -> {
-                    addMessage("assistant", "AI connection error: \${result.message}")
+                    addMessage("assistant", "AI connection error: ${result.message}")
                     status.text = "AI provider connection failed"
                 }
             }
@@ -256,7 +256,7 @@ class WorkAgentActivity : AppCompatActivity() {
             .setMessage("Task:\n$task\n\nअगली स्क्रीन पर actions की समीक्षा होगी। Send, Delete, Pay, Publish और Submit जैसे काम अलग स्पष्ट approval के बिना नहीं होने चाहिए।")
             .setNegativeButton("रद्द", null)
             .setPositiveButton("Review & Continue") { _, _ ->
-                startActivity(Intent(this, \`in\`.shraddha.ai.operator.OperatorActivity::class.java)
+                startActivity(Intent(this, `in`.shraddha.ai.operator.OperatorActivity::class.java)
                     .putExtra("mobile_voice_command", task))
             }.show()
     }
