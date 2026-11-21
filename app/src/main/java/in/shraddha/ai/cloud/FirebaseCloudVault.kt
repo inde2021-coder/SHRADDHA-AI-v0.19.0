@@ -5,6 +5,9 @@ import `in`.shraddha.ai.BuildConfig
 import android.content.Context
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.database.FirebaseDatabase
@@ -58,7 +61,15 @@ class FirebaseCloudVault(private val context: Context) {
         val options = FirebaseOptions.Builder().setApiKey(apiKey).setApplicationId(appId)
             .setProjectId(projectId).setGcmSenderId(senderId).setDatabaseUrl(databaseUrl)
             .apply { if (storageBucket.isNotBlank()) setStorageBucket(storageBucket) }.build()
-        return FirebaseApp.initializeApp(context, options, APP_NAME) ?: error("Firebase initialization failed")
+        val app = FirebaseApp.initializeApp(context, options, APP_NAME)
+            ?: error("Firebase initialization failed")
+        val providerFactory = if (BuildConfig.DEBUG) {
+            DebugAppCheckProviderFactory.getInstance()
+        } else {
+            PlayIntegrityAppCheckProviderFactory.getInstance()
+        }
+        FirebaseAppCheck.getInstance(app).installAppCheckProviderFactory(providerFactory)
+        return app
     }
 
     fun createAccount(email: String, password: String): Result<String> = runCatching {
