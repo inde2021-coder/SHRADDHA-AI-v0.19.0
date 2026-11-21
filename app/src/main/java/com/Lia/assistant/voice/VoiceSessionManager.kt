@@ -223,16 +223,24 @@ object VoiceSessionManager {
                 _statusText.value = "Working on it..."
 
                 if (name == "build_website") {
-                    val forgePrompt = args.optString("prompt", "")
-                    ForgeController.start(currentContext, forgePrompt)
-                    val resp = JSONObject().apply { put("result", "forge_started") }
-                    client?.sendToolResponse(id, name, resp)
+                    val response = runCatching {
+                        ForgeController.start(currentContext, args.optString("prompt", ""))
+                        JSONObject().put("result", "forge_started").put("success", true)
+                    }.getOrElse { error ->
+                        JSONObject().put("success", false).put("error", (error.localizedMessage ?: "Website build could not start").take(300))
+                    }
+                    client?.sendToolResponse(id, name, response)
                     _state.value = NovaOrbState.LISTENING
+                    _statusText.value = "Listening..."
                     return
                 }
 
                 scope.launch {
-                    val result = ActionExecutor.execute(currentContext, name, args)
+                    val result = runCatching { ActionExecutor.execute(currentContext, name, args) }
+                        .getOrElse { error ->
+                            JSONObject().put("success", false)
+                                .put("error", (error.localizedMessage ?: "Action failed").take(300))
+                        }
                     if (sessionEpoch.get() == currentEpoch) {
                         client?.sendToolResponse(id, name, result)
                         _state.value = NovaOrbState.LISTENING
