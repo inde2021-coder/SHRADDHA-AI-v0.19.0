@@ -1,66 +1,85 @@
-# Shraddha AI — Edesy Internet Calling
+# Shraddha AI — Edesy Media Streams + OpenAI GPT-Live
 
 ## Implemented backend path
 
 - `GET /api/telephony/edesy/status` — gateway-authenticated readiness status.
+- `GET /api/telephony/edesy/calls` — gateway-authenticated, bounded in-memory call history.
 - `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=...` — provider WebSocket ingress, protected by a long random server-side token.
-- Edesy sends its first JSON call-metadata frame, then binary 16 kHz mono L16 PCM frames. The bridge forwards audio to OpenAI Live over a server-owned WebSocket and returns generated audio to Edesy.
-- PCM16 audio is resampled between Edesy's 16 kHz stream and OpenAI Live's 24 kHz stream.
-- OpenAI API keys stay on the backend. The Android app does not receive provider credentials.
+- Edesy sends one JSON metadata frame, then binary mono L16 PCM16 frames. The bridge forwards audio to an OpenAI GPT-Live primary WebSocket and returns generated audio to Edesy.
+- The bridge resamples Edesy 16 kHz PCM to GPT-Live 24 kHz PCM in both directions.
+- Caller interruption triggers Edesy's documented `{"type":"killAudio"}` control frame.
+- OpenAI API keys and the Edesy stream token stay on the backend; neither is stored in Android.
 
-## Server environment
+## Backend environment
 
-Set these in the backend hosting dashboard (not in Android or GitHub):
+Configure these only in the backend hosting dashboard:
 
 - `GATEWAY_TOKEN` — existing app gateway token.
-- `EDESY_STREAM_TOKEN` — long random token for the Edesy WebSocket URL.
-- `OPENAI_API_KEY` — server-side OpenAI key with Live API access.
-- `OPENAI_LIVE_MODEL` — defaults to `gpt-live-1.1` (current Live primary WebSocket model).
-- Optional: `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_VOICE`, `SHRADDHA_CALL_INSTRUCTIONS`.
+- `EDESY_STREAM_TOKEN` — long random token used by the Edesy WebSocket URL.
+- `OPENAI_API_KEY` — project key with GPT-Live access.
+- Optional: `OPENAI_LIVE_MODEL` (default `gpt-live-1`), `OPENAI_LIVE_VOICE` (default `marin`), `SHRADDHA_CALL_INSTRUCTIONS`.
+- `CALL_TRANSCRIPTS_ENABLED=false` by default. Only enable after caller notice/consent, retention and legal review.
+
+Never commit real secrets or paste them into chat.
 
 ## Edesy setup
 
 1. Create an Edesy tenant at https://voice-app.edesy.in and complete required KYC.
-2. Provision an Indian DID number and verify inbound calling on the provider's test facility.
-3. Create an AI Voice Agent / Stream flow and set the bot WebSocket URL to `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN`.
-4. Set the stream sample rate to 16 kHz and confirm the provider sends mono L16 PCM binary frames plus a JSON metadata frame first.
-5. Route the purchased DID to that flow and place a test call from a separate phone.
-6. Check `GET /api/telephony/edesy/status` with the existing gateway bearer token.
+2. Provision an Indian DID number. Record its Edesy phone-number resource ID and account API key.
+3. Deploy the Shraddha backend on a public HTTPS host and verify `/health`.
+4. Configure Edesy's Media Streams inbound route. Example request (replace placeholders; keep the Edesy API key private):
 
-Provider documentation:
-- https://www.edesy.in/docs/sip-trunk-for-ai-voice-agents/connect/websocket-streaming
-- https://edesy.in/docs/ivr/nodes/stream-to-ai
-- https://developers.openai.com/api/docs/guides/voice-websockets
+```bash
+curl -X PUT "https://voice-api.edesy.in/v1/phone-numbers/PHONE_NUMBER_ID/inbound" \
+  -H "Authorization: Bearer EDESY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target": "media_stream",
+    "stream_url": "wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN",
+    "sample_rate": 16000
+  }'
+```
 
+5. Run Edesy's `POST /v1/stream-test` preflight for the stream URL before placing a call. Resolve DNS, TLS, WebSocket upgrade and audio checks first.
+6. Confirm the number is routed to `media_stream` at 16 kHz mono. The adapter expects the first text frame to be call metadata, followed by binary L16 PCM frames.
+7. With the app's secure gateway URL/token configured, open Phone Agent and tap **Refresh Edesy AI call history**. The UI calls the protected status/history endpoints; it does not expose provider secrets.
+
+### Expected provider frames
+
+Metadata is a JSON text frame with fields such as `callSid`, `direction`, `from`, `to`, `callerName` and `sampleRate`. The server masks caller numbers in stored history.
+
+- Edesy → backend: binary signed 16-bit little-endian mono PCM.
+- Backend → Edesy: binary signed 16-bit little-endian mono PCM.
+- Backend → Edesy barge-in: `{"type":"killAudio"}`.
+- Backend → Edesy hang-up: `{"type":"disconnect"}`.
 
 ## Personal SIM fallback: ring the owner first, then Shraddha AI
 
-This is the selected call experience. The caller continues to dial the user's existing personal SIM number.
+The caller continues to dial the user's existing Jio SIM number.
 
-1. On the mobile operator account/SIM, enable **conditional call forwarding on no reply / no answer** to the Edesy DID number. Do not enable unconditional forwarding.
-2. Set the operator's no-answer delay (where supported) to a comfortable interval, typically 20–30 seconds, so the handset rings first.
-3. Leave call forwarding on busy and unreachable disabled unless the owner explicitly wants those cases routed to the AI too.
-4. Configure the Edesy DID's inbound route to the AI Voice Agent Stream flow described above.
-5. Test from a second phone: (a) answer the SIM call and confirm the AI does not join; (b) ignore the call and confirm it forwards after the configured delay; (c) reject/busy and unreachable cases should follow the separately configured operator rules.
-6. Verify with the mobile operator the forwarding activation method, supported delay, and charges. Activation codes and charges vary by operator and plan; do not copy a generic USSD code without carrier confirmation.
+1. On the Jio account/SIM, enable **conditional call forwarding on no reply / no answer** to the provisioned Edesy DID. Do not enable unconditional forwarding.
+2. Set a no-answer delay (where supported) so the handset rings first, typically 20–30 seconds.
+3. Leave busy and unreachable forwarding disabled unless separately requested.
+4. Verify with Jio the activation method, supported delay and forwarding charges; carrier codes and charges can vary.
+5. Test from another phone: answer the SIM call (AI must not join); then ignore a call and confirm that it forwards to Edesy and the AI can hear and speak in both directions.
+6. Test caller hang-up, caller interruption/barge-in, network loss and forwarding disable/recovery.
 
-**Important:** No-answer forwarding is a mobile-network feature, not an Android app feature. The handset rings first; if unanswered, the operator forwards the call to the Edesy DID. The caller still dialled only the original SIM number. Forwarded-leg charges may apply according to the SIM operator, in addition to Edesy DID/minute and AI usage charges.
+**Important:** No-answer forwarding is a carrier feature, not an Android app feature. The handset rings first; if unanswered, Jio forwards the call to the Edesy DID. The caller continues to dial the original SIM number. Forwarded-leg charges may apply in addition to Edesy DID/minute and OpenAI usage.
 
-The Edesy DID and AI voice flow must be provisioned and tested before enabling forwarding on the personal SIM. Keep the ability to disable no-answer forwarding from the handset/operator account as a fallback.
+Do not enable personal-SIM forwarding until a real Edesy test call confirms bidirectional audio and hang-up behavior.
 
 ## Important limitations / release gate
 
-- This is a backend integration implementation, not proof of a working paid Edesy account or successful PSTN call.
-- Edesy account, DID, API credentials, OpenAI Live API key/access, hosting environment variables, and provider flow configuration must be supplied/configured by the account owner.
-- The current adapter assumes the Edesy Stream node's documented first JSON metadata frame and subsequent binary L16 frames. Confirm actual deployed provider frame behavior with a real test call before production.
-- Optional live transcript capture and AI post-call summaries are disabled by default. They require `CALL_TRANSCRIPTS_ENABLED=true`, `EDESY_TRANSCRIPTION_CONSENT_SOURCE=provider_ivr`, and explicit per-call metadata `transcription_consent: true` plus `consent_source: "provider_ivr"`. Configure the Edesy IVR to play the notice and collect an affirmative caller action (for example, DTMF confirmation) before attaching these fields to the initial metadata frame. Missing, false, or untrusted consent metadata means no transcript is retained and no summary is generated. Merely enabling an environment variable is not caller consent. The current history is bounded server memory only and disappears on process restart. Durable encrypted storage, actual Edesy IVR consent-flow provisioning, audio recording, and WhatsApp delivery remain unimplemented; the backend only enforces the consent metadata gate.
-- Play an upfront notice that the caller is speaking with an AI assistant. Recording/transcription requires appropriate notice, consent, retention controls, and legal review.
-- Never expose the stream token or OpenAI API key in the Android app, logs, client settings, or public repository.
-- Do not point a personal SIM's unconditional forwarding at this number until inbound routing, audio in both directions, hang-up behavior, interruption handling, cost, and failover have been tested end-to-end.
+- This is source-level backend integration, not proof of a provisioned Edesy account or a successful PSTN call.
+- Edesy tenant, DID, API credentials, backend secrets, inbound route and OpenAI GPT-Live access must be configured by the account owner.
+- The adapter assumes Edesy's documented initial JSON metadata frame and binary L16 frames. The real account's deployed stream must be tested before production.
+- Transcript capture and AI summaries are disabled by default. If enabled, records are bounded in server memory and disappear on restart. Durable encrypted storage, caller-specific consent, recording, caller screening, human takeover and WhatsApp delivery are not implemented.
+- The assistant must disclose that it is an AI. Recording/transcription needs appropriate notice, consent and retention controls.
+- The Edesy token is in the WebSocket URL query string because it is used as the provider connection secret; ensure reverse-proxy access logs redact query strings.
+- Do not enable unconditional SIM forwarding before inbound routing, two-way audio, interruption, cost and failover are verified.
 
-## Cost reference
+## Official provider references
 
-Edesy's published SIP trunk pricing lists ₹0.50/minute (60-second billing pulse), DID rental from ₹449/month, and 18% GST excluded. Confirm current charges, number availability, KYC, and whether the chosen AI Voice Agent Stream feature is included before paying:
-https://edesy.in/docs/sip-trunking/getting-started/pricing-and-limits
-
-OpenAI Live usage is billed separately. Actual total cost depends on model, audio duration, and usage pricing.
+- Edesy Media Streams: https://www.edesy.in/docs/voice-api/streaming/media-streams
+- Edesy WebSocket streaming: https://www.edesy.in/docs/sip-trunk-for-ai-voice-agents/connect/websocket-streaming
+- OpenAI GPT-Live WebSockets: https://developers.openai.com/api/docs/guides/voice-websockets
