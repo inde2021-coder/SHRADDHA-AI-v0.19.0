@@ -1006,7 +1006,40 @@ wss.on('connection', (ws, ctx) => {
       const approved = Boolean(requester && pendingUntil >= Date.now() && msg.approved === true && device.sharePermissions?.remote_control === true);
       if (approved) device.controlGrants.set(requesterId, Date.now() + Math.min(5, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
       send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request expired, denied, or target permission is disabled.' }));
-    } else if (msg.type === 'remote_action') {
+    } else if (msg.type === 'e2e_message') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const kind = String(msg.messageKind || '');
+      const actionId = String(msg.actionId || '');
+      const actionKind = String(msg.actionKind || '');
+      const nonce = String(msg.nonce || '');
+      const ciphertext = String(msg.ciphertext || '');
+      if (!target || targetId === deviceId || !['remote_action', 'remote_action_result'].includes(kind) ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
+          !/^[A-Za-z0-9+/]{16}$/.test(nonce) ||
+          ciphertext.length < 22 || ciphertext.length > 32_000 ||
+          !/^[A-Za-z0-9+/]+$/.test(ciphertext)) return;
+      const nonceBytes = Buffer.from(nonce, 'base64');
+      const cipherBytes = Buffer.from(ciphertext, 'base64');
+      if (nonceBytes.length !== 12 || nonceBytes.toString('base64').replace(/=+$/, '') !== nonce ||
+          cipherBytes.length < 16 || cipherBytes.toString('base64').replace(/=+$/, '') !== ciphertext) return;
+      if (kind === 'remote_action') {
+        const grantExpiry = target.controlGrants?.get(deviceId) || 0;
+        const allowedKinds = ['tap','swipe','type','click_text','open_app','home','back','scroll'];
+        if (grantExpiry < Date.now() || !allowedKinds.includes(actionKind)) return;
+        target.pendingRemoteActions ||= new Map();
+        if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
+        target.pendingRemoteActions.set(actionId, { requesterId: deviceId, expiresAt: Date.now() + 60_000 });
+      } else {
+        const pending = device.pendingRemoteActions?.get(actionId);
+        const grantExpiry = device.controlGrants?.get(targetId) || 0;
+        if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() || grantExpiry < Date.now()) return;
+        device.pendingRemoteActions.delete(actionId);
+      }
+      send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind: kind,
+        actionId, actionKind: actionKind.slice(0, 32), nonce, ciphertext }));
+    } else if (msg.type === 'remote_action') { return; // Plaintext remote actions are no longer accepted.
+
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const expiresAt = target?.controlGrants?.get(deviceId) || 0;
@@ -1029,7 +1062,8 @@ wss.on('connection', (ws, ctx) => {
       const actionId = randomBytes(12).toString('hex');
       target.pendingRemoteActions.set(actionId, { requesterId: deviceId, expiresAt: Date.now() + 60_000 });
       send(targetId, JSON.stringify({ type: 'remote_action', actionId, fromDeviceId: deviceId, action: msg.action }));
-    } else if (msg.type === 'remote_action_result') {
+    } else if (msg.type === 'remote_action_result') { return; // Plaintext remote action results are no longer accepted.
+
       const actionId = String(msg.actionId || '');
       const pending = device.pendingRemoteActions.get(actionId);
       device.pendingRemoteActions.delete(actionId);
