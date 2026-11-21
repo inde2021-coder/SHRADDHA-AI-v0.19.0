@@ -399,7 +399,7 @@ class WorkAgentActivity : AppCompatActivity() {
             "save" -> listOf("save", "store", "submit", "सहेज", "सेव", "जमा")
             "delete" -> listOf("delete", "remove", "erase", "trash", "हट", "मिटा", "डिलीट")
             "update" -> listOf("update", "edit", "change", "save", "अपडेट", "बदल", "संशोधन")
-            "upload" -> listOf("choose file", "browse", "select file", "attach file", "फ़ाइल चुनें", "फाइल चुनें", "ब्राउज़")
+            "upload" -> listOf("choose file", "browse", "select file", "attach file", "upload", "अपलोड", "फ़ाइल चुनें", "फाइल चुनें", "ब्राउज़")
             "download" -> listOf("download", "डाउनलोड")
             else -> listOf("send", "submit", "post", "message", "भेज", "सेंड", "जमा")
         }
