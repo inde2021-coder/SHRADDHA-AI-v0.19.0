@@ -215,6 +215,7 @@ test('device revocation requires authentication and owner authority, and removes
     { headers: { authorization: `Bearer ${member.deviceToken}` } }
   );
   await once(memberSocket, 'open');
+  const memberSocketClosed = once(memberSocket, 'close');
   const unauthenticated = await fetch(endpoint, payload(owner.deviceId));
   assert.equal(unauthenticated.status, 401);
 
@@ -232,7 +233,6 @@ test('device revocation requires authentication and owner authority, and removes
   });
   assert.equal(ownerRevokesMember.status, 200);
   assert.deepEqual(await ownerRevokesMember.json(), { ok: true, revoked: member.deviceId });
-  const memberSocketClosed = once(memberSocket, 'close');
   const [memberCloseCode] = await memberSocketClosed;
   assert.equal(memberCloseCode, 4003, 'revoking a paired device must close its active relay socket');
 
