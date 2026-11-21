@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Shraddha AI</string>
+    <string name="accessibility_description">Shraddha AI accessibility service reads on-screen content and performs device actions only when enabled and authorized by you.</string>
 </resources>
