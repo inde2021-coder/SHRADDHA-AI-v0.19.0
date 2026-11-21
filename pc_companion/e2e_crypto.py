@@ -73,7 +73,9 @@ class DeviceE2ECrypto:
 
     @staticmethod
     def encrypt(key, plaintext, associated_data):
-        if len(key) != 32 or len(plaintext) > MAX_PLAINTEXT_BYTES or len(associated_data) > MAX_AAD_BYTES:
+        if (not isinstance(key, bytes) or len(key) != 32 or
+                not isinstance(plaintext, bytes) or len(plaintext) > MAX_PLAINTEXT_BYTES or
+                not isinstance(associated_data, bytes) or len(associated_data) > MAX_AAD_BYTES):
             raise ValueError("Invalid AES-GCM key, plaintext or associated-data size")
         nonce = os.urandom(12)
         ciphertext = AESGCM(key).encrypt(nonce, plaintext, associated_data)
@@ -83,7 +85,8 @@ class DeviceE2ECrypto:
 
     @staticmethod
     def decrypt(key, nonce_base64, ciphertext_base64, associated_data):
-        if len(key) != 32 or len(associated_data) > MAX_AAD_BYTES:
+        if (not isinstance(key, bytes) or len(key) != 32 or
+                not isinstance(associated_data, bytes) or len(associated_data) > MAX_AAD_BYTES):
             raise ValueError("Invalid AES-GCM key or associated-data size")
         nonce = _b64decode(nonce_base64, 16, 16)
         ciphertext = _b64decode(ciphertext_base64, 22, 3_333_356)
