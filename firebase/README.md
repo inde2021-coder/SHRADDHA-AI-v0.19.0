@@ -9,7 +9,10 @@ The Android app is registered as `in.shraddha.ai` in Firebase project `shraddha-
 3. Enable **Realtime Database** and confirm its URL is `https://shraddha-ai-1d3bf-default-rtdb.firebaseio.com`.
 4. Publish the Firestore rules and `firebase/database.rules.json` in this folder. Do not use public/test-mode rules in production.
 5. Build/install the app, open **Cloud & Data**, create an account, then explicitly opt in before backup or restore.
-6. Enable Firebase App Check (Play Integrity for Play builds) before production release.
+6. Enable Firebase App Check. The Android app now installs the Debug provider for debug builds and Play Integrity for non-debug/release builds.
+7. For debug builds, copy the App Check debug token printed by the SDK to Logcat and register it only in the Firebase Console's App Check debug-token list. Never commit or share that token.
+8. Register the release app's signing certificate fingerprints and Play Integrity configuration in Firebase Console. Verify valid tokens in App Check metrics before enforcing App Check on Auth/Firestore/Realtime Database.
+9. Do not enforce App Check until the debug token and Play Integrity release path have both been verified on the intended distribution channel.
 
 ## Cloud memory format
 
