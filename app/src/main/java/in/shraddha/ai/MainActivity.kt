@@ -862,6 +862,11 @@ class MainActivity : AppCompatActivity() {
                         val caps = body.optJSONObject("capabilities")
                         bridgeStatus.text = buildString {
                             append(if (configured) "Server secrets configured." else "Server secrets missing.")
+                            val missing = body.optJSONArray("missing")
+                            if (missing != null && missing.length() > 0) {
+                                append("\nMissing: ")
+                                append((0 until missing.length()).joinToString(", ") { missing.optString(it) })
+                            }
                             append("\nInbound WebSocket: ").append(if (caps?.optBoolean("inboundWebSocketAudio") == true) "ready" else "not ready")
                             append("\nGPT-Live audio bridge: ").append(if (caps?.optBoolean("liveBidirectionalAiAudio") == true) "ready" else "not ready")
                             append("\nTranscript saving: ").append(if (caps?.optBoolean("liveTranscripts") == true) "available only after caller presses 1; press 0 to purge" else "OFF")
