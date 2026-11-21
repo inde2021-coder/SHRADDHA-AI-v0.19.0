@@ -221,6 +221,60 @@ const server = http.createServer(async (req, res) => {
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
+    if (req.method === 'POST' && req.url === '/api/device/revoke') {
+      const body = await readBody(req);
+      const sessionId = String(body.sessionId || '');
+      const actorId = String(body.deviceId || '');
+      const targetId = String(body.targetDeviceId || '');
+      if (!/^[A-Za-z0-9_-]{20,64}$/.test(sessionId) ||
+          !/^[a-f0-9]{24}$/i.test(actorId) || !/^[a-f0-9]{24}$/i.test(targetId)) {
+        return json(res, 400, { error: 'sessionId, deviceId and targetDeviceId must be valid identifiers' });
+      }
+      const session = sessions.get(sessionId);
+      const actor = session?.devices.get(actorId);
+      const bearer = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+      if (!session || !actor || !safeEqual(actor.token, bearer)) return json(res, 401, { error: 'Device authentication is invalid or the device was already revoked' });
+      if (targetId === actorId) {
+        if (actor.role === 'owner') {
+          for (const [id, peer] of session.devices) {
+            peer.controlGrants?.clear();
+            peer.pendingControlRequests?.clear();
+            peer.pendingRemoteActions?.clear();
+            peer.pendingDataShares?.clear();
+            peer.grants?.clear();
+            peer.incomingTransfers?.clear();
+            try { peer.socket?.close(4003, 'Owner revoked the entire paired session'); } catch {}
+          }
+          session.devices.clear();
+          sessions.delete(sessionId);
+          return json(res, 200, { ok: true, revoked: 'session' });
+        }
+        for (const [id, peer] of session.devices) {
+          if (id !== actorId && peer.socket?.readyState === WebSocket.OPEN) {
+            peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId: actorId, name: actor.name, online: false, revoked: true }));
+          }
+        }
+        actor.controlGrants?.clear();
+        actor.pendingControlRequests?.clear();
+        actor.pendingRemoteActions?.clear();
+        actor.pendingDataShares?.clear();
+        actor.grants?.clear();
+        actor.incomingTransfers?.clear();
+        try { actor.socket?.close(4003, 'Device revoked its own pairing'); } catch {}
+        session.devices.delete(actorId);
+        if (!session.devices.size) sessions.delete(sessionId);
+        return json(res, 200, { ok: true, revoked: actorId });
+      }
+      if (actor.role !== 'owner') return json(res, 403, { error: 'Only the session owner can revoke another paired device' });
+      if (!session.devices.has(targetId)) return json(res, 400, { error: 'Target device does not belong to this session' });
+      if (!revokePairedDevice(session, targetId, actorId)) return json(res, 400, { error: 'Target device could not be revoked' });
+      for (const [id, peer] of session.devices) {
+        if (id !== actorId && peer.socket?.readyState === WebSocket.OPEN) {
+          peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId: targetId, online: false, revoked: true }));
+        }
+      }
+      return json(res, 200, { ok: true, revoked: targetId });
+    }
     if (req.method === 'POST' && req.url === '/api/social/publish') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const body = await readBody(req, 12 * 1024);
