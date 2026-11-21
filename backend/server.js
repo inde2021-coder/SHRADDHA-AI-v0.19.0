@@ -701,9 +701,16 @@ telephonyWss.on('connection', (carrier, request) => {
         }
       }
       if (callRecord.transcriptConsent) {
-        if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
-        if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'assistant', text: event.delta, at: new Date().toISOString() });
-        if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
+        const speaker = event.type === 'session.input_transcript.delta' ? 'caller' :
+          event.type === 'session.output_transcript.delta' ? 'assistant' : null;
+        if (speaker) {
+          const remaining = Math.max(0, 24_000 - (callRecord.transcriptChars || 0));
+          const chunk = event.delta.slice(0, Math.min(2_000, remaining));
+          if (chunk) {
+            callRecord.transcript.push({ speaker, text: chunk, at: new Date().toISOString() });
+            callRecord.transcriptChars = (callRecord.transcriptChars || 0) + chunk.length;
+          }
+        }
       }
     }
     if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, callSampleRate), { binary: true });
@@ -738,6 +745,7 @@ telephonyWss.on('connection', (carrier, request) => {
           callRecord.transcriptConsent = false;
           callRecord.transcriptConsentDeclined = true;
           callRecord.transcript = [];
+          callRecord.transcriptChars = 0;
           callRecord.transcriptConsentAt = new Date().toISOString();
           callRecord.transcriptConsentMethod = 'dtmf-0';
         }
@@ -764,6 +772,7 @@ telephonyWss.on('connection', (carrier, request) => {
           endedAt: null,
           status: 'active',
           transcript: [],
+          transcriptChars: 0,
           transcriptConsentRequested: false,
           transcriptConsent: false,
           transcriptConsentDeclined: false,
