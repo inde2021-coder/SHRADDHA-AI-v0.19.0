@@ -359,41 +359,6 @@ object DeviceLinkManager {
         System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
         return socket?.send(ByteString.of(*packet)) == true
     }
-    /** Refreshes this device's role and the current paired-device roster from the authenticated relay. */
-    fun getSessionInfo(done: (Result<JSONObject>) -> Unit) {
-        val credentials = runCatching { credentialStore?.load() }.getOrNull()
-        if (credentials == null) {
-            done(Result.failure(IllegalStateException("No saved device credentials are available.")))
-            return
-        }
-        val parsed = credentials.baseUrl.toHttpUrlOrNull()
-        if (parsed == null || parsed.scheme != "https" || parsed.host.isBlank()) {
-            done(Result.failure(IllegalArgumentException("Session info requires a valid HTTPS relay URL.")))
-            return
-        }
-        val endpoint = parsed.newBuilder()
-            .addPathSegments("api/device/info")
-            .addQueryParameter("sessionId", credentials.sessionId)
-            .addQueryParameter("deviceId", credentials.deviceId)
-            .build()
-        val request = Request.Builder().url(endpoint)
-            .header("Authorization", "Bearer ${credentials.token}")
-            .get().build()
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) {
-                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
-                    } else {
-                        done(runCatching { JSONObject(raw) })
-                    }
-                }
-            }
-        })
-    }
-
     /** Revokes a paired device on the relay. Only the session owner may revoke another device. */
     fun revokeRemoteDevice(targetDeviceId: String, done: (Result<Boolean>) -> Unit) {
         val sid = sessionId
