@@ -10,6 +10,7 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -52,6 +53,7 @@ class LiveAudioIO(
 
     private var audioTrack: AudioTrack? = null
     private val isRecording = AtomicBoolean(false)
+    private val recordingGeneration = AtomicLong(0)
     private val recordingErrorReported = AtomicBoolean(false)
     private var recordThread: Thread? = null
     private val recordingLock = Any()
@@ -63,6 +65,7 @@ class LiveAudioIO(
         synchronized(recordingLock) {
             if (isRecording.get()) return
             recordingErrorReported.set(false)
+            val generation = recordingGeneration.incrementAndGet()
 
             val minBuf = AudioRecord.getMinBufferSize(
                 MIC_SAMPLE_RATE,
@@ -119,9 +122,9 @@ class LiveAudioIO(
                 recordThread = Thread({
                     val buffer = ByteArray(MIC_CHUNK_SIZE)
                     try {
-                        while (isRecording.get()) {
+                        while (isRecording.get() && recordingGeneration.get() == generation) {
                             val read = record.read(buffer, 0, buffer.size)
-                            if (read > 0) {
+                            if (read > 0 && isRecording.get() && recordingGeneration.get() == generation) {
                                 val chunk = if (read == buffer.size) buffer.clone() else buffer.copyOf(read)
                                 try {
                                     onMicAmplitude(calculateRms(chunk))
@@ -137,21 +140,22 @@ class LiveAudioIO(
                                 read == AudioRecord.ERROR_INVALID_OPERATION ||
                                 read == AudioRecord.ERROR_BAD_VALUE
                             ) {
-                                if (isRecording.get()) {
+                                if (isRecording.get() && recordingGeneration.get() == generation) {
                                     reportRecordingError("Microphone recording stopped unexpectedly (AudioRecord error $read).")
                                 }
                                 break
                             }
                         }
                     } catch (readError: Exception) {
-                        if (isRecording.get()) {
+                        if (isRecording.get() && recordingGeneration.get() == generation) {
                             reportRecordingError(readError.localizedMessage ?: "Microphone read failed.")
                         }
                     } finally {
-                        isRecording.set(false)
+                        if (recordingGeneration.get() == generation) isRecording.set(false)
                     }
                 }, "LiveAudioIO-MicThread").apply { start() }
             } catch (error: Exception) {
+                recordingGeneration.compareAndSet(generation, generation + 1)
                 isRecording.set(false)
                 if (audioRecord === createdRecord) audioRecord = null
                 try { createdRecord?.stop() } catch (_: Exception) {}
@@ -179,6 +183,7 @@ class LiveAudioIO(
 
     fun stopRecording() {
         synchronized(recordingLock) {
+            recordingGeneration.incrementAndGet()
             isRecording.set(false)
             val thread = recordThread
             recordThread = null
