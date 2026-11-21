@@ -286,7 +286,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), incomingTransfers: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -333,7 +333,7 @@ const server = http.createServer(async (req, res) => {
       const session = sessions.get(pair.sessionId);
       if (!session || session.devices.size >= 8) return json(res, 409, { error: 'Session unavailable or device limit reached' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingDataShares: new Map(), incomingTransfers: new Map(), frameWindowStart: 0, frameCount: 0, remoteActionWindowStart: 0, remoteActionCount: 0 });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
@@ -1014,30 +1014,37 @@ wss.on('connection', (ws, ctx) => {
       const actionKind = String(msg.actionKind || '');
       const nonce = String(msg.nonce || '');
       const ciphertext = String(msg.ciphertext || '');
-      if (!target || targetId === deviceId || !['remote_action', 'remote_action_result'].includes(kind) ||
+      if (!target || targetId === deviceId || !['remote_action', 'remote_action_result', 'file_transfer_chunk'].includes(kind) ||
           !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
           !/^[A-Za-z0-9+/]{16}$/.test(nonce) ||
-          ciphertext.length < 22 || ciphertext.length > 32_000 ||
+          ciphertext.length < 22 || ciphertext.length > (kind === 'file_transfer_chunk' ? 120_000 : 32_000) ||
           !/^[A-Za-z0-9+/]+$/.test(ciphertext)) return;
       const nonceBytes = Buffer.from(nonce, 'base64');
       const cipherBytes = Buffer.from(ciphertext, 'base64');
       if (nonceBytes.length !== 12 || nonceBytes.toString('base64').replace(/=+$/, '') !== nonce ||
           cipherBytes.length < 16 || cipherBytes.toString('base64').replace(/=+$/, '') !== ciphertext) return;
-      if (kind === 'remote_action') {
+      if (kind === 'file_transfer_chunk') {
+        const transferId = String(msg.transferId || '');
+        const index = Number(msg.index);
+        const transfer = target.incomingTransfers?.get(transferId);
+        if (transferId !== actionId || !transfer || transfer.fromDeviceId !== deviceId || transfer.expiresAt < Date.now() ||
+            !Number.isSafeInteger(index) || index < 0 || index >= transfer.chunkCount) return;
+      } else if (kind === 'remote_action') {
         const grantExpiry = target.controlGrants?.get(deviceId) || 0;
         const allowedKinds = ['tap','swipe','type','click_text','open_app','home','back','scroll'];
         if (grantExpiry < Date.now() || !allowedKinds.includes(actionKind)) return;
         target.pendingRemoteActions ||= new Map();
         if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
         target.pendingRemoteActions.set(actionId, { requesterId: deviceId, expiresAt: Date.now() + 60_000 });
-      } else {
+      } else if (kind === 'remote_action_result') {
         const pending = device.pendingRemoteActions?.get(actionId);
         const grantExpiry = device.controlGrants?.get(targetId) || 0;
         if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() || grantExpiry < Date.now()) return;
         device.pendingRemoteActions.delete(actionId);
       }
       send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind: kind,
-        actionId, actionKind: actionKind.slice(0, 32), nonce, ciphertext }));
+        actionId, actionKind: actionKind.slice(0, 32), transferId: String(msg.transferId || '').slice(0, 64),
+        index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, nonce, ciphertext }));
     } else if (msg.type === 'remote_action') { return; // Plaintext remote actions are no longer accepted.
 
       const targetId = String(msg.targetDeviceId || '');
@@ -1129,6 +1136,7 @@ wss.on('connection', (ws, ctx) => {
       const category = String(msg.category || '');
       if (!target || targetId === deviceId || !['contacts','media','documents','messages','calendar','location','device_status','ai_memory'].includes(category)) return;
       const requestId = String(msg.requestId || randomBytes(12).toString('hex')).slice(0, 80);
+      if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
       target.pendingDataShares.set(`${deviceId}:${category}`, { requestId, expiresAt: Date.now() + 60_000 });
       send(targetId, JSON.stringify({ type: 'data_share_request', fromDeviceId: deviceId, category, requestId, itemLabel: String(msg.itemLabel || '').slice(0,120) }));
     } else if (msg.type === 'data_share_response') {
@@ -1139,9 +1147,9 @@ wss.on('connection', (ws, ctx) => {
       const pendingKey = `${requesterId}:${category}`;
       const pending = device.pendingDataShares.get(pendingKey);
       device.pendingDataShares.delete(pendingKey);
-      const approved = Boolean(pending && pending.expiresAt >= Date.now() && msg.approved === true && device.sharePermissions?.[category] === true);
+      const approved = Boolean(pending && pending.requestId === String(msg.requestId || '') && pending.expiresAt >= Date.now() && msg.approved === true && device.sharePermissions?.[category] === true);
       if (approved) device.grants.set(pendingKey, Date.now() + Math.min(15, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
-      send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, approved, expiresInMinutes: approved ? Math.min(15, Math.max(1, Number(msg.minutes) || 5)) : 0 }));
+      send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, requestId: pending?.requestId || '', approved, expiresInMinutes: approved ? Math.min(15, Math.max(1, Number(msg.minutes) || 5)) : 0 }));
     } else if (msg.type === 'data_share_payload') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
@@ -1152,6 +1160,71 @@ wss.on('connection', (ws, ctx) => {
       if (!target || target.sharePermissions?.[category] !== true || !expiresAt || expiresAt < Date.now() || payload.length > 900_000 || !payload) return;
       target.grants.delete(grantKey);
       send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category, fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100), payload }));
+    } else if (msg.type === 'file_transfer_start') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const requestId = String(msg.requestId || '');
+      const transferId = String(msg.transferId || '');
+      const fileName = String(msg.fileName || '').replace(/[\\/\\x00-\\x1f]/g, '_').slice(0, 120);
+      const sizeBytes = Number(msg.sizeBytes);
+      const chunkCount = Number(msg.chunkCount);
+      const sha256 = String(msg.sha256 || '').toLowerCase();
+      const grantKey = `${deviceId}:documents`;
+      const grantExpiry = target?.grants?.get(grantKey) || 0;
+      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true ||
+          !grantExpiry || grantExpiry < Date.now() || !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) || !fileName ||
+          !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 100 * 1024 * 1024 ||
+          !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
+          chunkCount !== Math.ceil(sizeBytes / 49152) || !/^[a-f0-9]{64}$/.test(sha256)) return;
+      target.grants.delete(grantKey);
+      target.incomingTransfers ||= new Map();
+      if (target.incomingTransfers.size >= 8) return;
+      target.incomingTransfers.set(transferId, {
+        fromDeviceId: deviceId, requestId, fileName, sizeBytes, chunkCount, sha256,
+        receivedChunks: new Set(), expiresAt: Date.now() + 30 * 60_000
+      });
+      send(targetId, JSON.stringify({ type: 'file_transfer_start', fromDeviceId: deviceId,
+        transferId, fileName, sizeBytes, chunkCount, sha256, chunkBytes: 49152 }));
+    } else if (msg.type === 'file_transfer_resume') {
+      const sourceId = String(msg.targetDeviceId || '');
+      const source = session.devices.get(sourceId);
+      const transferId = String(msg.transferId || '');
+      const transfer = device.incomingTransfers?.get(transferId);
+      if (!source || sourceId === deviceId || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now()) return;
+      const missingIndexes = [];
+      for (let i = 0; i < transfer.chunkCount && missingIndexes.length < 2200; i++) {
+        if (!transfer.receivedChunks.has(i)) missingIndexes.push(i);
+      }
+      send(sourceId, JSON.stringify({ type: 'file_transfer_resume', fromDeviceId: deviceId, transferId, missingIndexes }));
+    } else if (msg.type === 'file_transfer_ack') {
+      const sourceId = String(msg.targetDeviceId || '');
+      const source = session.devices.get(sourceId);
+      const transferId = String(msg.transferId || '');
+      const transfer = device.incomingTransfers?.get(transferId);
+      const index = Number(msg.index);
+      if (!source || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() ||
+          !Number.isSafeInteger(index) || index < -1 || index >= transfer.chunkCount) return;
+      if (index >= 0) transfer.receivedChunks.add(index);
+      if (msg.complete === true) {
+        if (transfer.receivedChunks.size !== transfer.chunkCount || msg.ok !== true) return;
+        device.incomingTransfers.delete(transferId);
+      }
+      send(sourceId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId,
+        index, complete: msg.complete === true, ok: msg.ok === true }));
+    } else if (msg.type === 'file_transfer_cancel') {
+      const targetId = String(msg.targetDeviceId || '');
+      const target = session.devices.get(targetId);
+      const transferId = String(msg.transferId || '');
+      const localTransfer = device.incomingTransfers?.get(transferId);
+      const remoteTransfer = target?.incomingTransfers?.get(transferId);
+      if (!target || targetId === deviceId || (!localTransfer && !remoteTransfer) ||
+          (localTransfer && localTransfer.fromDeviceId !== targetId) ||
+          (remoteTransfer && remoteTransfer.fromDeviceId !== deviceId)) return;
+      device.incomingTransfers?.delete(transferId);
+      target.incomingTransfers?.delete(transferId);
+      send(targetId, JSON.stringify({ type: 'file_transfer_cancel', fromDeviceId: deviceId, transferId,
+        reason: String(msg.reason || 'cancelled').slice(0, 120) }));
     } else if (msg.type === 'e2e_key_offer') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
