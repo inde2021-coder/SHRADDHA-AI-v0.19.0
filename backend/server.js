@@ -672,7 +672,8 @@ telephonyWss.on('connection', (carrier, request) => {
         callRecord.consentPromptBuffer = (callRecord.consentPromptBuffer + event.delta).slice(-800).toLowerCase();
         const promptText = callRecord.consentPromptBuffer;
         const asksForPressOne = promptText.includes('press 1') || promptText.includes('press one') ||
-          promptText.includes('दबाएं 1') || promptText.includes('दबाएँ 1') || promptText.includes('प्रेस 1');
+          promptText.includes('दबाएं 1') || promptText.includes('दबाएँ 1') ||
+          promptText.includes('एक दबाएं') || promptText.includes('एक दबाएँ') || promptText.includes('प्रेस 1');
         const mentionsTranscript = promptText.includes('transcript') || promptText.includes('प्रतिलिपि') || promptText.includes('लिखित');
         const mentionsConsent = promptText.includes('consent') || promptText.includes('agree') ||
           promptText.includes('सहमति') || promptText.includes('सहमत') ||
