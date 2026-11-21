@@ -122,12 +122,8 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 2 -partition-size 4096
-          disable-animations: true
-          pre-emulator-launch-script: |
-            adb kill-server || true
-            adb start-server
-            adb devices
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 2048 -cores 2
+          disable-animations: false
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
       - name: Upload Android instrumentation reports
