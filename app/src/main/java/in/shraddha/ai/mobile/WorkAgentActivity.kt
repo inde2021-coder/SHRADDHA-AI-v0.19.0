@@ -57,6 +57,24 @@ class WorkAgentActivity : AppCompatActivity() {
     private val voiceRequestCode = 7412
     private val fileRequestCode = 7413
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private val voiceResultLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            if (spoken.isNotBlank()) handleVoiceCommand(spoken)
+        }
+    }
+    private val fileResultLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val selected = if (result.resultCode == RESULT_OK && result.data != null) {
+            WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+        } else null
+        fileChooserCallback?.onReceiveValue(selected)
+        fileChooserCallback = null
+        pageStatus.text = if (selected != null) "File website के upload field को दिया गया। Form अपने-आप submit नहीं हुआ।" else "File selection रद्द।"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -185,7 +203,7 @@ class WorkAgentActivity : AppCompatActivity() {
                     type = "*/*"
                 }
                 return try {
-                    startActivityForResult(picker, fileRequestCode)
+                    fileResultLauncher.launch(picker)
                     true
                 } catch (_: Exception) {
                     fileChooserCallback?.onReceiveValue(null)
@@ -349,24 +367,8 @@ class WorkAgentActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN,en-IN")
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha को अपना काम बताइए")
         }
-        runCatching { startActivityForResult(intent, voiceRequestCode) }
+        runCatching { voiceResultLauncher.launch(intent) }
             .onFailure { status.text = "इस फोन पर speech recognition उपलब्ध नहीं है।" }
-    }
-
-    @Deprecated("Speech recognizer compatibility callback")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == voiceRequestCode && resultCode == RESULT_OK) {
-            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
-            if (spoken.isNotBlank()) handleVoiceCommand(spoken)
-        } else if (requestCode == fileRequestCode) {
-            val result = if (resultCode == RESULT_OK && data != null) {
-                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-            } else null
-            fileChooserCallback?.onReceiveValue(result)
-            fileChooserCallback = null
-            pageStatus.text = if (result != null) "File website के upload field को दिया गया। Form अपने-आप submit नहीं हुआ।" else "File selection रद्द।"
-        }
     }
 
     /**
