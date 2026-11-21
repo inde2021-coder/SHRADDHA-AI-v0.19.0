@@ -143,7 +143,12 @@ fun biometricSha256(file: File): String {
 val downloadBiometricModels by tasks.registering {
     val outputDir = layout.projectDirectory.dir("src/main/assets/biometric-models")
     outputs.files(biometricModelAssets.map { outputDir.file(it.fileName) })
-    outputs.upToDateWhen { false }
+    outputs.upToDateWhen {
+        biometricModelAssets.all { model ->
+            val cached = File(outputDir.asFile, model.fileName)
+            cached.isFile && biometricSha256(cached) == model.sha256
+        }
+    }
     doLast {
         val directory = outputDir.asFile
         directory.mkdirs()
