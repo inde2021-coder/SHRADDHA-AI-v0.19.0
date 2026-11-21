@@ -470,8 +470,8 @@ telephonyWss.on('connection', carrier => {
     clearTimeout(metadataTimer);
     pendingAudio.length = 0;
     finalize();
-    if (live && live.readyState === WebSocket.OPEN) live.close();
-    if (carrier.readyState === WebSocket.OPEN) carrier.close();
+    if (live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) live.close(1000, 'Carrier call ended');
+    if (carrier.readyState === WebSocket.OPEN || carrier.readyState === WebSocket.CONNECTING) carrier.close(1000, 'Call bridge closed');
   };
   live = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY } });
   live.on('open', () => live.send(JSON.stringify({
@@ -484,6 +484,7 @@ telephonyWss.on('connection', carrier => {
     }
   })));
   live.on('message', raw => {
+    if (closed) return;
     let event;
     try { event = JSON.parse(raw.toString()); } catch { return; }
     if (event.type === 'session.started') {
@@ -506,6 +507,7 @@ telephonyWss.on('connection', carrier => {
   live.on('error', shutdown);
   live.on('close', shutdown);
   carrier.on('message', (data, binary) => {
+    if (closed) return;
     if (binary) {
       if (closed || !metadataSeen || data.length === 0 || data.length > 65536 || data.length % 2 !== 0) return;
       const pcm16 = Buffer.from(data);
