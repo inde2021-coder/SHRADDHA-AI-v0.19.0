@@ -9,8 +9,8 @@ class DeviceE2ECryptoTest {
     @Test fun p256PeersDeriveSameKeyAndFingerprint() {
         val android = DeviceE2ECrypto.create()
         val windows = DeviceE2ECrypto.create()
-        val (androidKey, androidFingerprint) = android.derivePeerKey(windows.publicKeyBase64(), "android-1", "windows-1")
-        val (windowsKey, windowsFingerprint) = windows.derivePeerKey(android.publicKeyBase64(), "windows-1", "android-1")
+        val (androidKey, androidFingerprint) = android.derivePeerKey(windows.publicKeyBase64(), "session-1", "android-1", "windows-1")
+        val (windowsKey, windowsFingerprint) = windows.derivePeerKey(android.publicKeyBase64(), "session-1", "windows-1", "android-1")
         assertArrayEquals(androidKey, windowsKey)
         assertEquals(androidFingerprint, windowsFingerprint)
     }
@@ -18,8 +18,8 @@ class DeviceE2ECryptoTest {
     @Test fun aesGcmAuthenticatesPayloadAndAssociatedData() {
         val alice = DeviceE2ECrypto.create()
         val bob = DeviceE2ECrypto.create()
-        val (keyA, _) = alice.derivePeerKey(bob.publicKeyBase64(), "a", "b")
-        val (keyB, _) = bob.derivePeerKey(alice.publicKeyBase64(), "b", "a")
+        val (keyA, _) = alice.derivePeerKey(bob.publicKeyBase64(), "session-1", "a", "b")
+        val (keyB, _) = bob.derivePeerKey(alice.publicKeyBase64(), "session-1", "b", "a")
         val aad = "a|b|remote_action".toByteArray()
         val plain = """{"kind":"back"}""".toByteArray()
         val sealed = DeviceE2ECrypto.encrypt(keyA, plain, aad)
@@ -36,15 +36,15 @@ class DeviceE2ECryptoTest {
         val a = DeviceE2ECrypto.create()
         val b = DeviceE2ECrypto.create()
         val c = DeviceE2ECrypto.create()
-        val (ab, _) = a.derivePeerKey(b.publicKeyBase64(), "a", "b")
-        val (ac, _) = a.derivePeerKey(c.publicKeyBase64(), "a", "c")
+        val (ab, _) = a.derivePeerKey(b.publicKeyBase64(), "session-1", "a", "b")
+        val (ac, _) = a.derivePeerKey(c.publicKeyBase64(), "session-1", "a", "c")
         assertNotEquals(ab.toList(), ac.toList())
     }
 
     @Test fun rejectsOversizedEncodedInputsBeforeDecoding() {
         val crypto = DeviceE2ECrypto.create()
         try {
-            crypto.derivePeerKey("A".repeat(100_000), "android", "windows")
+            crypto.derivePeerKey("A".repeat(100_000), "session-1", "android", "windows")
             throw AssertionError("Oversized public key must be rejected")
         } catch (_: IllegalArgumentException) { }
         try {
@@ -54,6 +54,28 @@ class DeviceE2ECryptoTest {
         try {
             DeviceE2ECrypto.decrypt(ByteArray(32), "AAAAAAAAAAAAAAAA", "A".repeat(4_000_000), byteArrayOf())
             throw AssertionError("Oversized ciphertext must be rejected before decoding")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun sessionIdIsCryptographicallyBoundIntoPeerKeyAndFingerprint() {
+        val alice = DeviceE2ECrypto.create()
+        val bob = DeviceE2ECrypto.create()
+        val (keyOne, fingerprintOne) = alice.derivePeerKey(bob.publicKeyBase64(), "session-one", "alice", "bob")
+        val (keyTwo, fingerprintTwo) = alice.derivePeerKey(bob.publicKeyBase64(), "session-two", "alice", "bob")
+        assertNotEquals(keyOne.toList(), keyTwo.toList())
+        assertNotEquals(fingerprintOne, fingerprintTwo)
+    }
+
+    @Test fun rejectsInvalidSessionBinding() {
+        val alice = DeviceE2ECrypto.create()
+        val bob = DeviceE2ECrypto.create()
+        try {
+            alice.derivePeerKey(bob.publicKeyBase64(), "", "alice", "bob")
+            throw AssertionError("Blank session binding must be rejected")
+        } catch (_: IllegalArgumentException) { }
+        try {
+            alice.derivePeerKey(bob.publicKeyBase64(), "x".repeat(129), "alice", "bob")
+            throw AssertionError("Oversized session binding must be rejected")
         } catch (_: IllegalArgumentException) { }
     }
 
