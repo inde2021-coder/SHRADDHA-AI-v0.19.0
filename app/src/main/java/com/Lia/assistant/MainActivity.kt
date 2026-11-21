@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         appState = NovaAppState(this)
+        title = appState.assistantName
         handleIntent(intent)
 
         setContent {
