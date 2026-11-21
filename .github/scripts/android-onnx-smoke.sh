@@ -5,15 +5,22 @@ bash .github/scripts/wait-for-android-emulator.sh
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 ADB="$SDK_ROOT/platform-tools/adb"
 if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb)"; fi
-SERIAL="${ANDROID_SERIAL:-}"
-if [[ -z "$SERIAL" && -f "${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial" ]]; then
-  SERIAL="$(cat "${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial")"
+# The readiness probe writes the exact emulator serial it verified.
+# Prefer that value over ANDROID_SERIAL, which may be inherited stale from the runner.
+SERIAL_FILE="${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial"
+if [[ -s "$SERIAL_FILE" ]]; then
+  SERIAL="$(tr -d '\\r\\n' < "$SERIAL_FILE")"
+else
+  SERIAL="${ANDROID_SERIAL:-}"
 fi
 if [[ -z "$SERIAL" ]] || ! "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; then
   echo "ERROR: the emulator that passed readiness is no longer connected."
   "$ADB" devices -l || true
   exit 1
 fi
+# Pin every subsequent ADB/Gradle operation to the emulator that passed readiness.
+export ANDROID_SERIAL="$SERIAL"
+echo "Using verified Android emulator: $ANDROID_SERIAL"
 
 dump_diagnostics() {
   echo "===== ADB devices ====="
