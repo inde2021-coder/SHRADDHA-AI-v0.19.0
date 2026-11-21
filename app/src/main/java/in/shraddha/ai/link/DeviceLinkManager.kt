@@ -348,6 +348,15 @@ object DeviceLinkManager {
         if (actionId.isBlank() || actionId.length > 64) false else socket?.send(JSONObject().put("type", "remote_action_result").put("actionId", actionId).put("ok", ok).put("reason", reason.take(240)).toString()) == true
     fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
+    /** Immediately revoke every remote-control grant issued by this phone. */
+    fun revokeAllRemoteControlGrants(): Boolean =
+        socket?.send(JSONObject().put("type", "control_revoke").toString()) == true
+
+    /** Revoke one requester's remote-control grant on this phone. */
+    fun revokeRemoteControlGrant(requesterDeviceId: String): Boolean {
+        if (!requesterDeviceId.matches(Regex("^[a-fA-F0-9]{24}$"))) return false
+        return socket?.send(JSONObject().put("type", "control_revoke").put("requesterDeviceId", requesterDeviceId).toString()) == true
+    }
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
         if (!DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
         val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
