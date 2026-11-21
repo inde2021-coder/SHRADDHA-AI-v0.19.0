@@ -441,6 +441,7 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 })
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 telephonyWss.on('connection', carrier => {
   let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
+  let callSampleRate = 16000;
   const pendingAudio = [];
   let metadataTimer = null;
   let liveReadyTimer = null;
@@ -510,7 +511,7 @@ telephonyWss.on('connection', carrier => {
       clearTimeout(liveReadyTimer);
       while (pendingAudio.length && live.readyState === WebSocket.OPEN && !closed) {
         const queued = pendingAudio.shift();
-        const pcm24 = resamplePcm16(queued, 16000, 24000);
+        const pcm24 = resamplePcm16(queued, callSampleRate, 24000);
         live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
       }
     }
@@ -520,7 +521,7 @@ telephonyWss.on('connection', carrier => {
       if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
       if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
     }
-    if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, 16000), { binary: true });
+    if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, callSampleRate), { binary: true });
     if (event.type === 'error') console.error('Live voice error:', String(event.error && event.error.message || 'unknown').slice(0, 180));
   });
   live.on('error', shutdown);
@@ -535,7 +536,7 @@ telephonyWss.on('connection', carrier => {
         pendingAudio.push(pcm16);
         return;
       }
-      const pcm24 = resamplePcm16(pcm16, 16000, 24000);
+      const pcm24 = resamplePcm16(pcm16, callSampleRate, 24000);
       live.send(JSON.stringify({ type: 'session.input_audio.append', audio: pcm24.toString('base64') }));
       return;
     }
@@ -545,6 +546,9 @@ telephonyWss.on('connection', carrier => {
       metadataSeen = true;
       clearTimeout(metadataTimer);
       if (message.direction && message.direction !== 'inbound') return shutdown();
+      const sampleRate = Number(message.sampleRate || 16000);
+      if (![8000, 16000].includes(sampleRate) || (message.mixType && String(message.mixType).toLowerCase() !== 'mono')) return shutdown();
+      callSampleRate = sampleRate;
       const rawId = String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex'));
       const callId = rawId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120) || randomBytes(12).toString('hex');
       const caller = String(message.from || '');
