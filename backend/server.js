@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { hasExplicitTranscriptConsent } from './telephony-consent.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -136,7 +137,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/status') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      return json(res, 200, { provider: 'edesy', configured: edesyConfigured(), capabilities: { inboundWebSocketAudio: edesyConfigured(), liveBidirectionalAiAudio: edesyConfigured(), liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true', aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true', persistentCallRecording: false, whatsappDelivery: false }, required: ['EDESY_STREAM_TOKEN','OPENAI_API_KEY'], note: 'Requires a provisioned Edesy DID and AI Voice Agent Stream flow. Live transcripts and post-call summaries require CALL_TRANSCRIPTS_ENABLED=true and are kept in bounded server memory only; no audio recording is stored.' });
+      return json(res, 200, { provider: 'edesy', configured: edesyConfigured(), capabilities: { inboundWebSocketAudio: edesyConfigured(), liveBidirectionalAiAudio: edesyConfigured(), liveTranscripts: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && process.env.EDESY_TRANSCRIPTION_CONSENT_SOURCE === 'provider_ivr', aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && process.env.EDESY_TRANSCRIPTION_CONSENT_SOURCE === 'provider_ivr', persistentCallRecording: false, whatsappDelivery: false }, required: ['EDESY_STREAM_TOKEN','OPENAI_API_KEY'], note: 'Requires a provisioned Edesy DID and AI Voice Agent Stream flow. Live transcripts and post-call summaries require CALL_TRANSCRIPTS_ENABLED=true and are kept in bounded server memory only; no audio recording is stored.' });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
@@ -363,13 +364,13 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 3 * 1024 * 1024 });
 const telephonyWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 telephonyWss.on('connection', carrier => {
-  let live, ready = false, closed = false, metadataSeen = false, callRecord = null;
+  let live, ready = false, closed = false, metadataSeen = false, callRecord = null, transcriptionConsented = false;
   const finalize = () => {
     if (!callRecord) return;
     callRecord.endedAt = new Date().toISOString();
     callRecord.status = 'ended';
     const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text).join('\\n').slice(0, 24000);
-    if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
+    if (transcriptionConsented && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
       callRecord.summaryStatus = 'pending';
       askProvider('openai', 'Summarize this phone call in Hindi. Return: caller intent, key details, commitments, and clear next actions. Do not invent facts.\\n\\n' + transcriptText)
         .then(summary => { callRecord.summary = summary.slice(0, 6000); callRecord.summaryStatus = 'ready'; })
@@ -393,7 +394,7 @@ telephonyWss.on('connection', carrier => {
     try { event = JSON.parse(raw.toString()); } catch { return; }
     if (event.type === 'session.started') ready = true;
     if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) carrier.send(JSON.stringify({ type: 'killAudio' }));
-    if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
+    if (callRecord && transcriptionConsented && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
       if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text: event.delta, at: new Date().toISOString() });
       if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text: event.delta, at: new Date().toISOString() });
       if (callRecord.transcript.length > 1000) callRecord.transcript.splice(0, callRecord.transcript.length - 1000);
@@ -416,7 +417,8 @@ telephonyWss.on('connection', carrier => {
       metadataSeen = true;
       if (message.direction && message.direction !== 'inbound') return shutdown();
       const caller = String(message.from || '');
-      callRecord = { id: String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex')).slice(0, 120), direction: String(message.direction || 'inbound'), caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller', callerName: String(message.caller_name || message.callerName || '').slice(0, 80), startedAt: new Date().toISOString(), endedAt: null, status: 'active', transcript: [] };
+      transcriptionConsented = hasExplicitTranscriptConsent(message);
+      callRecord = { id: String(message.call_sid || message.callSid || message.call_id || randomBytes(12).toString('hex')).slice(0, 120), direction: String(message.direction || 'inbound'), caller: caller.length >= 4 ? '••••' + caller.slice(-4) : 'Unknown caller', callerName: String(message.caller_name || message.callerName || '').slice(0, 80), startedAt: new Date().toISOString(), endedAt: null, status: 'active', transcriptionConsent: transcriptionConsented, transcript: [] };
       edesyCalls.set(callRecord.id, callRecord);
       while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);
       return;
