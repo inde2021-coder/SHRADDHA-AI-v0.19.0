@@ -44,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('..', import.meta.url),
-    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: '', OPENAI_API_KEY: '', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '' },
+    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '' },
     stdio: 'ignore'
   });
   const deadline = Date.now() + 10_000;
@@ -96,15 +96,32 @@ test('Edesy call bridge readiness is private and reports missing external provis
   assert.equal(response.status, 200);
   assert.equal(body.provider, 'edesy');
   assert.equal(body.agentName, 'Shraddha AI');
-  assert.equal(body.configured, false);
+  assert.equal(body.configured, true);
   assert.equal(body.preflightReady, false);
-  assert.equal(body.capabilities.inboundWebSocketAudio, false);
-  assert.equal(body.capabilities.liveBidirectionalAiAudio, false);
+  assert.equal(body.capabilities.inboundWebSocketAudio, true);
+  assert.equal(body.capabilities.liveBidirectionalAiAudio, true);
   assert.equal(body.capabilities.persistentCallRecording, false);
   assert.ok(body.required.includes('EDESY_STREAM_TOKEN'));
   assert.ok(body.required.includes('OPENAI_API_KEY'));
-  assert.ok(body.missing.includes('EDESY_STREAM_TOKEN (32+ characters)'));
-  assert.ok(body.missing.includes('OPENAI_API_KEY'));
+  assert.ok(body.missing.includes('EDESY_API_KEY (for provider preflight)'));
+  assert.ok(body.missing.includes('EDESY_STREAM_URL'));
+  assert.ok(body.missing.includes('PUBLIC_ORIGIN'));
+});
+
+test('Edesy preflight WebSocket echoes bounded PCM without opening an AI call', async () => {
+  const token = 'e'.repeat(40);
+  const socket = new WebSocket(`${baseUrl.replace('http:', 'ws:')}/ws/telephony/edesy?token=${token}&mode=preflight`);
+  await once(socket, 'open');
+  const frame = Buffer.from(Array.from({ length: 320 }, (_, index) => index % 256));
+  const echoPromise = nextWsMessage(socket, (_data, binary) => binary);
+  socket.send(JSON.stringify({ sampleRate: 16000, mixType: 'mono', callSid: 'preflight-only', direction: 'outbound' }));
+  socket.send(frame, { binary: true });
+  const [echo, isBinary] = await echoPromise;
+  assert.equal(isBinary, true);
+  assert.deepEqual(Buffer.from(echo), frame);
+  const closed = once(socket, 'close');
+  socket.close();
+  await closed;
 });
 
 test('Edesy preflight requires gateway auth and server-side provider configuration', async () => {
