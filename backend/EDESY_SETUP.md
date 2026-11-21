@@ -15,7 +15,7 @@ Set these only in the backend host's secret/environment settings:
 
 - `GATEWAY_TOKEN` — existing app API gateway secret.
 - `EDESY_STREAM_TOKEN` — long random secret (32+ characters) for the provider WebSocket.
-- `EDESY_API_KEY` — Edesy provider API key, used only by the server to run the provider preflight.
+- `EDESY_API_KEY` — Edesy Voice API key (`sk_...`), used only by the server to run the provider preflight.
 - `EDESY_STREAM_URL` — exact public `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN` URL.
 - `PUBLIC_ORIGIN` — the matching HTTPS origin, for example `https://YOUR_BACKEND_HOST`.
 - `OPENAI_API_KEY` — OpenAI project key with GPT-Live access.
