@@ -28,6 +28,7 @@ Coordinates are normalized to the target display. Text is limited to 2,000 chara
 
 - End-to-end encryption for screen frames and AI-to-AI messages is not yet integrated. Current WSS protects transport only; the relay can read JPEG frame contents.
 - Owner-controlled device revocation and self-revocation are implemented through `POST /api/device/revoke`; revocation state is in-memory with the relay session and is lost if the backend process restarts. Owner transfer and a complete device-specific permission matrix remain future work.
+- Android manual disconnect now closes the live socket but preserves the Keystore-encrypted pairing for `reconnectSaved()`. Confirmed server-side revocation clears the local credential.
 - Per-session quotas, stronger abuse controls, audit log and relay authentication/rate limits.
 - WebRTC direct transport or TURN fallback for lower latency and reduced relay bandwidth.
 - Physical-device QA across OEM Android builds, screen density/orientation changes and app-specific Accessibility behavior.
