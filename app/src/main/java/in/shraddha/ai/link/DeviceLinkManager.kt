@@ -361,10 +361,10 @@ object DeviceLinkManager {
     }
     /** Revokes a paired device on the relay. Only the session owner may revoke another device. */
     fun revokeRemoteDevice(targetDeviceId: String, done: (Result<Boolean>) -> Unit) {
-        val sid = sessionId
-        val did = deviceId
-        val bearer = deviceToken
         val credentials = runCatching { credentialStore?.load() }.getOrNull()
+        val sid = sessionId ?: credentials?.sessionId
+        val did = deviceId ?: credentials?.deviceId
+        val bearer = deviceToken ?: credentials?.token
         val baseUrl = credentials?.baseUrl
         if (sid.isNullOrBlank() || did.isNullOrBlank() || bearer.isNullOrBlank() || baseUrl.isNullOrBlank()) {
             done(Result.failure(IllegalStateException("Connect to the paired-device relay before revoking a device.")))
