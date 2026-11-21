@@ -57,6 +57,8 @@ This report records source-level findings; it does not claim an APK build or dev
    - Relay revocation authenticates the device token, restricts cross-device revocation to the owner, clears grants/pending requests, and closes revoked sockets with code 4003.
    - Android manual disconnect now preserves Keystore-encrypted pairing for reconnect; confirmed revocation clears it. Windows persists a newly joined token only after relay WebSocket authentication and clears stale tokens after definitive 401/403. Android and Windows clear locally stored credentials when the relay confirms or signals revocation. Android can also revoke its own saved pairing over HTTPS from Keystore credentials while the WebSocket is disconnected; it does not claim success if the relay cannot confirm.
    - The authenticated WebSocket `connected` event now reports the caller's owner/member role; Android restores owner-only controls after reconnect and Windows shows its role.
+   - Android Accessibility service unbind/destroy now revokes all remote-control grants; the relay invalidates grants and notifies requesters. Turning off the remote-control sharing permission also revokes active and pending grants.
+   - Backend tests cover immediate grant revocation and permission-disable notifications; these new tests have not been run yet.
    - Backend tests cover owner/member role restoration and revoke authorization; these new tests have not been run yet.
    - Full physical paired-device tests remain outstanding.
 
