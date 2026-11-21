@@ -30,9 +30,11 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var command: EditText
     private val voiceRequest = 7401
+    private var speechLanguage = "hi-IN"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        speechLanguage = getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE).getString("speech_language", "hi-IN") ?: "hi-IN"
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 20, 20, 20)
@@ -61,6 +63,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         }
         root.addView(command)
         root.addView(action("🎙️ Voice Control • बोलकर command दें") { captureVoice() })
+        root.addView(action("Voice Language • Hindi / English") { chooseVoiceLanguage() })
         root.addView(action("▶ Command चलाएँ") { runCommand(command.text.toString()) })
         root.addView(action("Task Automation + App Control") { openOperator() })
         root.addView(action("Calls by Voice • WhatsApp & SMS") { startActivity(Intent(this, `in`.shraddha.ai.phone.PhoneAgentActivity::class.java)) })
@@ -118,11 +121,22 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
     }
 
+    private fun chooseVoiceLanguage() {
+        val labels = arrayOf("हिंदी (India)", "English (India)")
+        android.app.AlertDialog.Builder(this).setTitle("Voice recognition language")
+            .setSingleChoiceItems(labels, if (speechLanguage == "hi-IN") 0 else 1) { dialog, which ->
+                speechLanguage = if (which == 0) "hi-IN" else "en-IN"
+                getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE).edit().putString("speech_language", speechLanguage).apply()
+                status.text = if (which == 0) "Hindi voice recognition चुना गया।" else "English voice recognition चुना गया।"
+                dialog.dismiss()
+            }.setNegativeButton("Close", null).show()
+    }
+
     private fun captureVoice() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN,en-IN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (speechLanguage == "hi-IN") "hi-IN,en-IN" else "en-IN,hi-IN")
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha को mobile command बताइए")
         }
         runCatching { startActivityForResult(intent, voiceRequest) }
