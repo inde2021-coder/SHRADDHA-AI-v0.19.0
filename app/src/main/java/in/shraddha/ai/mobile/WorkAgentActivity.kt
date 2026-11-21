@@ -127,7 +127,7 @@ class WorkAgentActivity : AppCompatActivity() {
         urlInput = EditText(this).apply {
             hint = "https://example.com या खोजने के लिए शब्द"
             setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt())
-            singleLine = true; setPadding(dp(10), dp(8), dp(10), dp(8))
+            setSingleLine(true); setPadding(dp(10), dp(8), dp(10), dp(8))
             setBackgroundColor(0xFF172238.toInt())
         }
         addressRow.addView(urlInput, LinearLayout.LayoutParams(0, dp(48), 1f))
