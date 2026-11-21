@@ -190,6 +190,71 @@ test('device session creates scoped random credentials and a six-digit pairing c
   assert.equal(body.expiresInSeconds, 300);
 });
 
+test('disabling a data-sharing category clears pending and active grants and notifies requester', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Share Requester' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Share Target', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace('http:', 'ws:');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner);
+  const ownerConnected = nextWsMessage(ownerSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(ownerSocket, 'open'); await ownerConnected;
+  const memberSocket = connect(member);
+  const memberConnected = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+  });
+  await once(memberSocket, 'open'); await memberConnected;
+
+  memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { media: true } }));
+  const requestPromise = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'data_share_request'; } catch { return false; }
+  });
+  ownerSocket.send(JSON.stringify({ type: 'data_share_request', targetDeviceId: member.deviceId, category: 'media', itemLabel: 'Photo' }));
+  const [requestMessage] = await requestPromise;
+  assert.equal(JSON.parse(requestMessage.toString()).fromDeviceId, owner.deviceId);
+
+  const approvedPromise = nextWsMessage(ownerSocket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'data_share_result' && msg.approved === true; } catch { return false; }
+  });
+  memberSocket.send(JSON.stringify({ type: 'data_share_response', requesterDeviceId: owner.deviceId, category: 'media', approved: true, minutes: 5 }));
+  const [approvedMessage] = await approvedPromise;
+  assert.equal(JSON.parse(approvedMessage.toString()).category, 'media');
+
+  const pendingRequest = nextWsMessage(memberSocket, data => {
+    try { return JSON.parse(data.toString()).type === 'data_share_request'; } catch { return false; }
+  });
+  ownerSocket.send(JSON.stringify({ type: 'data_share_request', targetDeviceId: member.deviceId, category: 'media', itemLabel: 'Second photo' }));
+  await pendingRequest;
+
+  const revokedPromise = nextWsMessage(ownerSocket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'data_share_result' && msg.approved === false && msg.reason.includes('disabled'); } catch { return false; }
+  });
+  memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { media: false } }));
+  const [revokedMessage] = await revokedPromise;
+  assert.equal(JSON.parse(revokedMessage.toString()).targetDeviceId, member.deviceId);
+
+  const ownerClosed = once(ownerSocket, 'close');
+  const memberClosed = once(memberSocket, 'close');
+  ownerSocket.close(); memberSocket.close();
+  await Promise.all([ownerClosed, memberClosed]);
+  await fetch(`${baseUrl}/api/device/revoke`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${owner.deviceToken}` },
+    body: JSON.stringify({ sessionId: owner.sessionId, deviceId: owner.deviceId, targetDeviceId: owner.deviceId })
+  });
+});
+
 test('target device can revoke active remote-control grants immediately', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
