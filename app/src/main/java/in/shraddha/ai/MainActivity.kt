@@ -1076,6 +1076,42 @@ class MainActivity : AppCompatActivity() {
                 if (prompt.isBlank() || prompt.length > 4000) status.text = "Offline prompt 1-4000 characters का होना चाहिए।"
                 else sendRemote(JSONObject().put("kind", "offline_chat").put("prompt", prompt))
             })
+            addView(actionButton("OPEN APP ON WINDOWS PC", "Allowlisted apps only • PC confirmation required") {
+                val name = remoteAppName.text.toString().trim()
+                if (name.isBlank()) status.text = "Windows app का नाम लिखें।"
+                else sendRemote(JSONObject().put("kind", "open_app").put("name", name))
+            })
+            addView(actionButton("WINDOWS SYSTEM CONTROL • LOCK", "PC पर local confirmation के बाद workstation lock होगा") {
+                sendRemote(JSONObject().put("kind", "system_control").put("command", "lock"))
+            })
+            addView(actionButton("WINDOWS VOLUME UP / DOWN", "सिर्फ media key control") {
+                sendRemote(JSONObject().put("kind", "system_control").put("command", "volume_up"))
+            })
+            addView(actionButton("WINDOWS BRIGHTNESS UP", "Supported display पर brightness बढ़ाएँ") {
+                sendRemote(JSONObject().put("kind", "system_control").put("command", "brightness_up"))
+            })
+            addView(actionButton("WINDOWS MEDIA • PLAY / PAUSE", "चल रहे media player को control करें") {
+                sendRemote(JSONObject().put("kind", "media_control").put("command", "play_pause"))
+            })
+            addView(actionButton("WINDOWS MEDIA • NEXT TRACK", "अगला media track") {
+                sendRemote(JSONObject().put("kind", "media_control").put("command", "next"))
+            })
+            addView(actionButton("CAPTURE WINDOWS SCREENSHOT", "Active non-sensitive window • PC local confirmation") {
+                sendRemote(JSONObject().put("kind", "screenshot"))
+            })
+            addView(actionButton("TRANSFORM WINDOWS CLIPBOARD • UPPERCASE", "Clipboard content sensitive pattern पर block होगा; PC owner result भेजने की पुष्टि करेगा") {
+                sendRemote(JSONObject().put("kind", "clipboard_transform").put("operation", "uppercase"))
+            })
+            addView(actionButton("SEARCH THE WEB FROM WINDOWS", "Internet required • DuckDuckGo results returned to Shraddha") {
+                val query = pcSearchQuery.text.toString().trim()
+                if (query.length !in 2..160) status.text = "Web search query 2-160 characters की होनी चाहिए।"
+                else sendRemote(JSONObject().put("kind", "web_search").put("query", query))
+            })
+            addView(actionButton("WINDOWS CODE ASSISTANT • LOCAL MODEL", "PC पर GGUF local model और अलग confirmation जरूरी") {
+                val prompt = offlinePrompt.text.toString().trim()
+                if (prompt.isBlank() || prompt.length > 4000) status.text = "Code prompt 1-4000 characters का होना चाहिए।"
+                else sendRemote(JSONObject().put("kind", "code_assistant").put("prompt", prompt))
+            })
             addView(actionButton("Send Remote Home", "फोन की Home screen पर जाएँ") { sendRemote(JSONObject().put("kind", "home")) })
             addView(actionButton("Send Remote Back", "पिछली screen पर जाएँ") { sendRemote(JSONObject().put("kind", "back")) })
             addView(actionButton("Disconnect This Phone", "इस device का live connection बंद करें") { DeviceLinkManager.disconnect(); status.text = "This phone disconnected." })
