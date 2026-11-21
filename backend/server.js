@@ -948,29 +948,27 @@ wss.on('connection', (ws, ctx) => {
   ws.send(JSON.stringify({ type: 'connected', deviceId, role: device.role, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
   for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: true }));
   ws.on('message', (data, isBinary) => {
-    if (isBinary) { // Frame protocol: [1-byte device-id length][device-id UTF-8][1-byte frame type][JPEG]. Client payload starts with frame type (1=screen, 2=camera).
+    if (isBinary) {
+      // Visual protocol v2: [encrypted frame type 0x81/0x82][target length][target id]
+      // [uint64 sequence][12-byte nonce][AES-256-GCM ciphertext+tag]. Plain JPEG is rejected.
       const idBytes = Buffer.from(deviceId, 'utf8');
       const clientFrame = Buffer.from(data);
-      if (clientFrame.length < 2 || ![1, 2].includes(clientFrame[0])) return;
-      const frameType = clientFrame[0];
+      if (clientFrame.length < 2 || ![0x81, 0x82].includes(clientFrame[0])) return;
+      const frameType = clientFrame[0] & 0x7f;
       const permission = frameType === 1 ? 'screen' : 'camera';
       if (device.sharePermissions?.[permission] !== true) return;
       const now = Date.now();
       if (now - device.frameWindowStart >= 1000) { device.frameWindowStart = now; device.frameCount = 0; }
       if (++device.frameCount > 10) return;
       const targetLength = clientFrame[1];
-      // Device IDs are short opaque identifiers; reject oversized routing headers and
-      // oversized JPEGs before allocating/relaying a frame to every paired device.
-      if (targetLength > 64 || clientFrame.length < 2 + targetLength + 1) return;
-      const targetId = targetLength ? clientFrame.subarray(2, 2 + targetLength).toString('utf8') : '';
-      if (targetId && (!session.devices.has(targetId) || targetId === deviceId)) return;
-      const jpeg = clientFrame.subarray(2 + targetLength);
-      if (jpeg.length < 4 || jpeg.length > 2_500_000) return;
-      // Only relay JPEG payloads; reject arbitrary binary blobs disguised as camera/screen frames.
-      if (jpeg[0] !== 0xff || jpeg[1] !== 0xd8) return;
-      const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([frameType]), jpeg]);
-      if (targetId) send(targetId, framed, true);
-      else for (const [id] of session.devices) if (id !== deviceId) send(id, framed, true);
+      if (targetLength < 1 || targetLength > 64 || clientFrame.length < 2 + targetLength + 8 + 12 + 16) return;
+      const targetId = clientFrame.subarray(2, 2 + targetLength).toString('utf8');
+      if (!session.devices.has(targetId) || targetId === deviceId) return;
+      const encryptedPayload = clientFrame.subarray(2 + targetLength);
+      if (encryptedPayload.length > 2_500_036) return;
+      // The relay deliberately cannot validate JPEG content: it only forwards bounded opaque ciphertext.
+      const framed = Buffer.concat([Buffer.from([idBytes.length]), idBytes, Buffer.from([clientFrame[0]]), encryptedPayload]);
+      send(targetId, framed, true);
       return;
     }
     let msg; try { msg = JSON.parse(data.toString()); } catch { return; }
