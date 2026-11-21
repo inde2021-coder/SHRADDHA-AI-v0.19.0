@@ -1047,6 +1047,10 @@ class MainActivity : AppCompatActivity() {
                 text = "WINDOWS PC: $assistantDisplayName PC Companion.exe चलाएँ, यही HTTPS relay URL और ऊपर बना 6-digit code डालें। PC पर remote control और screen sharing अलग-अलग opt-in हैं; हर control request PC पर approve करनी होगी।"
                 setTextColor(0xFFB9C8E6.toInt()); textSize = 12f; setPadding(0, dp(8), 0, dp(10))
             })
+            addView(TextView(this@MainActivity).apply {
+                text = "Encryption status: WSS protects data in transit, but screen/camera JPEG frames are not yet end-to-end encrypted. The relay can technically inspect shared frames. Do not share sensitive screens until E2E frame transport and two-device fingerprint verification are complete."
+                setTextColor(0xFFFFC56B.toInt()); textSize = 12f; setPadding(0, dp(2), 0, dp(10))
+            })
             pairingCode = edit("Pairing code", "6-digit code दूसरे फोन से")
             addView(pairingCode)
             addView(actionButton("Join Another Phone", "इस फोन को मौजूदा device group में जोड़ें") {
