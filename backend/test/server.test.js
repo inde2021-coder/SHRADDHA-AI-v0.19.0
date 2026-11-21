@@ -103,7 +103,7 @@ test('Edesy call bridge readiness is private and reports missing external provis
   assert.equal(body.capabilities.persistentCallRecording, false);
   assert.ok(body.required.includes('EDESY_STREAM_TOKEN'));
   assert.ok(body.required.includes('OPENAI_API_KEY'));
-  assert.ok(body.missing.includes('EDESY_API_KEY (for provider preflight)'));
+  assert.ok(body.missing.includes('EDESY_API_KEY (sk_... Voice API key)'));
   assert.ok(body.missing.includes('EDESY_STREAM_URL'));
   assert.ok(body.missing.includes('PUBLIC_ORIGIN'));
 });
