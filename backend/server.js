@@ -9,6 +9,7 @@ import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
 import { buildVisionPrompt } from './vision-analysis.js';
+import { buildFormExtractionPrompt, normalizeFormExtraction } from './form-autofill.js';
 import { resamplePcm16 } from './telephony-audio.js';
 
 const PORT = Number(process.env.PORT || 8787);
@@ -23,7 +24,7 @@ const apiAttempts = new Map();
 const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/form/extract']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
@@ -403,6 +404,29 @@ const server = http.createServer(async (req, res) => {
       const analysis = buildVisionPrompt(body.mode, body.prompt.trim());
       const result = await askVision(provider, analysis.prompt, body.imageBase64, mimeType);
       return json(res, 200, { provider: result.provider, requestedProvider: provider, mode: analysis.mode, answer: result.answer, routing: provider === 'auto' ? 'automatic_failover' : 'fixed' });
+    }
+    if (req.method === 'POST' && req.url === '/api/form/extract') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const body = await readBody(req, 5 * 1024 * 1024);
+      if (body.cloudProcessingConsent !== true) return json(res, 403, { error: 'Explicit cloud-processing consent is required before sending form images to an AI provider.' });
+      if (typeof body.imageBase64 !== 'string' || body.imageBase64.length > 4_200_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.imageBase64)) return json(res, 400, { error: 'imageBase64 is missing or too large' });
+      const mimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType) ? body.mimeType : 'image/jpeg';
+      const provider = ['auto', 'openai', 'gemini', 'anthropic'].includes(body.provider) ? body.provider : 'auto';
+      const formType = typeof body.formType === 'string' ? body.formType.slice(0, 40) : 'unknown';
+      const allowPersonalData = body.personalDataConsent === true;
+      const extraction = buildFormExtractionPrompt(formType, body.instruction, allowPersonalData);
+      const prompt = extraction.prompt + '\\n\\nReturn only the JSON object. No markdown fences or commentary.';
+      const result = await askVision(provider, prompt, body.imageBase64, mimeType);
+      let normalized;
+      try { normalized = normalizeFormExtraction(result.answer, extraction.formType); }
+      catch { return json(res, 502, { error: 'AI could not return a valid structured field extraction. Please retry with a clearer image.' }); }
+      return json(res, 200, {
+        provider: result.provider,
+        requestedProvider: provider,
+        ...normalized,
+        automationPolicy: { autoFillAllowed: false, requiresReview: true, submitRequiresExplicitApproval: true },
+        privacy: { cloudProcessingConsent: true, personalDataConsent: allowPersonalData, noServerImageStorage: true }
+      });
     }
     if (req.method === 'POST' && req.url === '/api/voice/synthesize') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
