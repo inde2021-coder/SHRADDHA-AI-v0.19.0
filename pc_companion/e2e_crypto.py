@@ -73,12 +73,12 @@ class DeviceE2ECrypto:
 
     @staticmethod
     def encrypt(key, plaintext, associated_data):
-        if (not isinstance(key, bytes) or len(key) != 32 or
+        if (not isinstance(key, (bytes, bytearray, memoryview)) or len(key) != 32 or
                 not isinstance(plaintext, bytes) or len(plaintext) > MAX_PLAINTEXT_BYTES or
                 not isinstance(associated_data, bytes) or len(associated_data) > MAX_AAD_BYTES):
             raise ValueError("Invalid AES-GCM key, plaintext or associated-data size")
         nonce = os.urandom(12)
-        ciphertext = AESGCM(key).encrypt(nonce, plaintext, associated_data)
+        ciphertext = AESGCM(bytes(key)).encrypt(nonce, plaintext, associated_data)
         if len(ciphertext) > MAX_CIPHERTEXT_BYTES:
             raise ValueError("Ciphertext exceeds the frame limit")
         return _b64encode(nonce), _b64encode(ciphertext)
