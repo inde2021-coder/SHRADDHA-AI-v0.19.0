@@ -1549,7 +1549,10 @@ class MainActivity : AppCompatActivity() {
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString()
                 result.text = "Firebase account बनाया जा रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).createAccount(emailValue, passwordValue)
-                    runOnUiThread { result.text = r.fold({ "Account created: ${it}" }, { "Firebase error: ${it.message}" }) }
+                    runOnUiThread {
+                        password.text.clear()
+                        result.text = r.fold({ "Account created: ${it}" }, { "Firebase error: ${it.message}" })
+                    }
                 }.start()
             })
             addView(actionButton("Sign In & Sync Encrypted Memory", "Cloud में केवल encrypted payload जाएगा; password/biometric data upload नहीं होगा") {
@@ -1558,7 +1561,11 @@ class MainActivity : AppCompatActivity() {
                 val emailValue = email.text.toString().trim(); val passwordValue = password.text.toString(); val backupPassphraseValue = backupPassphrase.text.toString(); val noteValue = note.text.toString()
                 result.text = "Sign-in और encrypted upload चल रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndSave(emailValue, passwordValue, "personal_memory", noteValue, backupPassphraseValue)
-                    runOnUiThread { result.text = r.fold({ "Encrypted cloud backup saved for account ${it}." }, { "Sync failed: ${it.message}" }) }
+                    runOnUiThread {
+                        password.text.clear()
+                        backupPassphrase.text.clear()
+                        result.text = r.fold({ "Encrypted cloud backup saved for account ${it}." }, { "Sync failed: ${it.message}" })
+                    }
                 }.start()
             })
             addView(actionButton("Restore Encrypted Memory", "उसी email और password से दूसरे device पर restore करें") {
@@ -1568,6 +1575,8 @@ class MainActivity : AppCompatActivity() {
                 result.text = "Encrypted backup download और decrypt हो रहा है…"
                 Thread { val r = `in`.shraddha.ai.cloud.FirebaseCloudVault(this@MainActivity).signInAndLoad(emailValue, passwordValue, "personal_memory", backupPassphraseValue)
                     runOnUiThread {
+                        password.text.clear()
+                        backupPassphrase.text.clear()
                         result.text = r.fold({ value ->
                             if (value == null) "इस account में backup नहीं मिला।"
                             else PersistentChatMemory.restore(this@MainActivity, value).fold(
