@@ -39,6 +39,7 @@ import org.json.JSONArray
 import `in`.shraddha.ai.future.UserBackupManager
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.PersistentChatMemory
+import com.Lia.assistant.data.TelephonyGatewayStore
 
 class MainActivity : AppCompatActivity() {
     private val assistantDisplayName: String
@@ -845,8 +846,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun addTelephonySection(root: LinearLayout) {
         section(root, "INCOMING SIM CALL → SHRADDHA AI", "आपका सामान्य SIM पहले बजेगा। Jio का no-answer forwarding Edesy DID पर जाने के बाद AI कॉल संभालेगा।") {
+            val savedBackendUrl = TelephonyGatewayStore.baseUrl(this@MainActivity)
+            val savedGatewayToken = TelephonyGatewayStore.token(this@MainActivity)
+            if (savedBackendUrl.isNotBlank()) relayUrl.setText(savedBackendUrl)
+            if (savedGatewayToken.isNotBlank()) gatewayToken.setText(savedGatewayToken)
             addView(relayUrl)
             addView(gatewayToken)
+            addView(actionButton("Save Backend Connection Securely", "HTTPS URL और gateway token को Android Keystore encrypted store में रखें") {
+                try {
+                    TelephonyGatewayStore.save(this@MainActivity, relayUrl.text.toString(), gatewayToken.text.toString())
+                    status.text = "Phone Call Agent backend URL और gateway token encrypted storage में save हुए।"
+                } catch (error: Exception) {
+                    status.text = "Backend connection save नहीं हुआ: ${error.message}"
+                }
+            })
+            addView(actionButton("Clear Saved Backend Connection", "Encrypted backend URL और gateway token हटाएँ") {
+                try {
+                    TelephonyGatewayStore.clear(this@MainActivity)
+                    relayUrl.setText("")
+                    gatewayToken.setText("")
+                    bridgeStatus.text = "Saved backend connection cleared."
+                } catch (error: Exception) {
+                    bridgeStatus.text = "Could not clear saved backend connection: ${error.message}"
+                }
+            })
             val bridgeStatus = TextView(this@MainActivity).apply {
                 text = "AI call bridge status अभी जाँचा नहीं गया।"
                 textSize = 13f
