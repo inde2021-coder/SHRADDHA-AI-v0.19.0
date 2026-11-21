@@ -41,6 +41,7 @@ object DeviceLinkManager {
     private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false, val sendSequence: AtomicLong = AtomicLong(0), @Volatile var lastScreenSequence: Long = -1, @Volatile var lastCameraSequence: Long = -1)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
+    private val pendingActionPeers = ConcurrentHashMap<String, String>()
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
@@ -118,6 +119,9 @@ object DeviceLinkManager {
                         "peer_status" -> { val peerId = msg.optString("deviceId"); if (msg.optBoolean("revoked")) peerKeys.remove(peerId)?.key?.fill(0) else if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) sendE2EKeyOffer(peerId); onStatus?.invoke(if (msg.optBoolean("revoked")) "${msg.optString("name", "Device")}: pairing revoked" else "${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}"); onPeerMessage?.invoke(msg) }
                         "e2e_key_offer" -> { val peerId = msg.optString("fromDeviceId"); val sid = sessionId.orEmpty(); val localId = deviceId.orEmpty(); if (peerId.isNotBlank() && sid.isNotBlank() && localId.isNotBlank()) { runCatching { e2eCrypto.derivePeerKey(msg.optString("publicKey"), sid, localId, peerId) }.onSuccess { (key, fingerprint) -> peerKeys.put(peerId, PeerKeyState(key, fingerprint))?.key?.fill(0); onE2EVerification?.invoke(peerId, fingerprint) }.onFailure { onStatus?.invoke("Peer E2E key offer rejected: ${it.message ?: "invalid key"}") } } }
                         "e2e_key_confirm" -> { val peerId = msg.optString("fromDeviceId"); val state = peerKeys[peerId]; if (state != null && state.fingerprint == msg.optString("fingerprint")) { state.remoteConfirmed = true; onStatus?.invoke(if (state.localConfirmed) "End-to-end peer verified: $peerId" else "Peer confirmed fingerprint; local confirmation is still required.") } else onStatus?.invoke("E2E fingerprint mismatch. Do not trust this peer.") }
+                        "e2e_message" -> handleE2EMessage(msg)
+                        "remote_action" -> onStatus?.invoke("Blocked plaintext remote action. End-to-end encryption is required.")
+                        "remote_action_result" -> onStatus?.invoke("Blocked plaintext remote action result. End-to-end encryption is required.")
                         "control_mode" -> onPeerMessage?.invoke(msg)
                         "remote_action" -> onRemoteAction?.invoke(msg.optString("fromDeviceId"), msg.optString("actionId"), msg.optJSONObject("action") ?: JSONObject())
                         "remote_action_result" -> onRemoteActionResult?.invoke(msg.optString("targetDeviceId"), msg.optString("actionId"), msg.optBoolean("ok"), msg.optString("reason"))
@@ -203,7 +207,64 @@ object DeviceLinkManager {
 
     fun isE2ETrusted(peerId: String): Boolean = peerKeys[peerId]?.let { it.localConfirmed && it.remoteConfirmed } == true
 
-    private fun clearE2EKeys() { peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear() }
+    private fun sendEncryptedPeerMessage(targetDeviceId: String, kind: String, payload: JSONObject, actionId: String, actionKind: String = ""): Boolean {
+        val state = peerKeys[targetDeviceId] ?: return false
+        val sid = sessionId ?: return false
+        val source = deviceId ?: return false
+        if (!state.localConfirmed || !state.remoteConfirmed || !actionId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) {
+            onStatus?.invoke("Encrypted action blocked: mutually verify the peer fingerprint first.")
+            return false
+        }
+        val aad = "$sid|$source|$targetDeviceId|$kind|$actionId".toByteArray(Charsets.UTF_8)
+        val sealed = runCatching { DeviceE2ECrypto.encrypt(state.key, payload.toString().toByteArray(Charsets.UTF_8), aad) }.getOrNull() ?: return false
+        val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
+            .put("messageKind", kind).put("actionId", actionId).put("actionKind", actionKind.take(32))
+            .put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
+        return socket?.send(message.toString()) == true
+    }
+
+    private fun handleE2EMessage(msg: JSONObject) {
+        val peerId = msg.optString("fromDeviceId")
+        val kind = msg.optString("messageKind")
+        val actionId = msg.optString("actionId")
+        val state = peerKeys[peerId] ?: return
+        val sid = sessionId ?: return
+        val local = deviceId ?: return
+        if (!state.localConfirmed || !state.remoteConfirmed || kind !in setOf("remote_action", "remote_action_result") ||
+            !actionId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return
+        val aad = "$sid|$peerId|$local|$kind|$actionId".toByteArray(Charsets.UTF_8)
+        val plain = runCatching { DeviceE2ECrypto.decrypt(state.key, msg.optString("nonce"), msg.optString("ciphertext"), aad) }.getOrNull() ?: return
+        try {
+            val payload = JSONObject(plain.toString(Charsets.UTF_8))
+            if (kind == "remote_action") {
+                val action = payload.optJSONObject("action") ?: payload
+                if (action.optString("kind").isBlank()) return
+                pendingActionPeers[actionId] = peerId
+                onRemoteAction?.invoke(peerId, actionId, action)
+            } else {
+                onRemoteActionResult?.invoke(peerId, actionId, payload.optBoolean("ok"), payload.optString("reason").take(240))
+            }
+        } finally { plain.fill(0) }
+    }
+
+    fun sendAction(targetDeviceId: String, action: JSONObject): Boolean {
+        val actionId = java.util.UUID.randomUUID().toString().replace("-", "")
+        return sendEncryptedPeerMessage(targetDeviceId, "remote_action", JSONObject().put("action", action), actionId, action.optString("kind"))
+    }
+
+    fun respondRemoteAction(actionId: String, ok: Boolean, reason: String = ""): Boolean {
+        val peerId = pendingActionPeers[actionId] ?: return false
+        val sent = sendEncryptedPeerMessage(peerId, "remote_action_result",
+            JSONObject().put("ok", ok).put("reason", reason.take(240)), actionId)
+        if (sent) pendingActionPeers.remove(actionId, peerId)
+        return sent
+    }
+
+    private fun clearE2EKeys() {
+        peerKeys.values.forEach { it.key.fill(0) }
+        peerKeys.clear()
+        pendingActionPeers.clear()
+    }
 
     private fun secureApiUrl(baseUrl: String, path: String): String? {
         val parsed = baseUrl.trim().trimEnd('/').toHttpUrlOrNull() ?: return null
