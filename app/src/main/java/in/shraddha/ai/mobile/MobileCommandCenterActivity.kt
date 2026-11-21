@@ -203,13 +203,8 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             .setItems(choices) { _, which ->
                 val source = editor.text.toString()
                 if (source.isBlank()) { status.text = "पहले text paste या enter करें।"; return@setItems }
-                val transformed = when (which) {
-                    0 -> source.trim()
-                    1 -> source.uppercase(Locale.ROOT)
-                    2 -> source.lowercase(Locale.ROOT)
-                    3 -> source.replace(Regex("\\s+"), " ").trim()
-                    else -> source.lineSequence().filter { it.isNotBlank() }.joinToString("\n")
-                }
+                val operation = MobileTextTransform.Operation.values()[which]
+                val transformed = MobileTextTransform.apply(source, operation)
                 android.app.AlertDialog.Builder(this).setTitle("Transformed text • Review")
                     .setMessage(transformed.take(3500))
                     .setNegativeButton("Cancel", null)
