@@ -63,6 +63,7 @@ class VoiceForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopping = true
+            NovaPreferences.putBoolean(this, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
             inactiveMonitor?.cancel()
             VoiceSessionManager.stop()
             releaseVoiceWakeLock()
@@ -103,6 +104,7 @@ class VoiceForegroundService : Service() {
             VoiceSessionManager.isActive.first { active -> !active }
             if (!stopping) {
                 stopping = true
+                NovaPreferences.putBoolean(this@VoiceForegroundService, NovaPreferences.Keys.VOICE_SESSION_ENABLED, false)
                 releaseVoiceWakeLock()
                 OverlayEdgeGlowController.stop(this@VoiceForegroundService)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
