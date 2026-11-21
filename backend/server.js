@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
@@ -764,6 +764,7 @@ wss.on('connection', (ws, ctx) => {
       const frameType = clientFrame[0];
       // A paired socket is not implicit permission to watch another device.
       if (!canShareVisualFrame(device.sharePermissions, frameType)) return;
+      if (!consumeVisualFrameBudget(device, Date.now(), 10)) return;
       const targetLength = clientFrame[1];
       if (targetLength < 1 || targetLength > 64 || clientFrame.length < 2 + targetLength + 8 + 12 + 16) return;
       const targetId = clientFrame.subarray(2, 2 + targetLength).toString('utf8');
