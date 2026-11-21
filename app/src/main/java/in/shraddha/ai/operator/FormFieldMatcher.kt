@@ -8,7 +8,8 @@ data class ExtractedFormValue(
     val label: String,
     val value: String,
     val confidence: Float,
-    val status: String
+    val status: String,
+    val sourceText: String = ""
 )
 
 data class FormFillSuggestion(
