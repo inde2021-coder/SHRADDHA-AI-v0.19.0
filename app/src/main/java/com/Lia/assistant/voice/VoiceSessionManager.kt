@@ -12,6 +12,7 @@ import `in`.shraddha.ai.brain.PersistentChatMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,7 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
 object VoiceSessionManager {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessionMutex = Mutex()
     private val sessionEpoch = AtomicLong(0)
 
@@ -284,7 +285,13 @@ object VoiceSessionManager {
         }
 
         client = GeminiLiveClient(liveListener)
-        client?.connect(apiKey, prompt, voiceName)
+        try {
+            client?.connect(apiKey, prompt, voiceName)
+        } catch (error: Exception) {
+            _lastError.value = error.localizedMessage ?: "Voice connection could not start."
+            _statusText.value = "Voice connection failed • retrying"
+            if (_isActive.value) scheduleReconnect()
+        }
     }
 
     private fun scheduleReconnect() {
