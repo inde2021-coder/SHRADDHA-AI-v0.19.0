@@ -101,6 +101,8 @@ test('Edesy call bridge readiness is private and reports missing external provis
   assert.equal(body.capabilities.persistentCallRecording, false);
   assert.ok(body.required.includes('EDESY_STREAM_TOKEN'));
   assert.ok(body.required.includes('OPENAI_API_KEY'));
+  assert.ok(body.missing.includes('EDESY_STREAM_TOKEN (32+ characters)'));
+  assert.ok(body.missing.includes('OPENAI_API_KEY'));
 });
 
 test('Edesy call history requires gateway authentication', async () => {
