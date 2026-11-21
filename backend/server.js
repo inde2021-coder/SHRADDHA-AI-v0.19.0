@@ -328,7 +328,7 @@ const server = http.createServer(async (req, res) => {
         missing: [
           ...(typeof process.env.EDESY_STREAM_TOKEN !== 'string' || process.env.EDESY_STREAM_TOKEN.length < 32 ? ['EDESY_STREAM_TOKEN (32+ characters)'] : []),
           ...(typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY.length < 20 ? ['OPENAI_API_KEY'] : []),
-          ...(typeof process.env.EDESY_API_KEY !== 'string' || process.env.EDESY_API_KEY.length < 20 ? ['EDESY_API_KEY (for provider preflight)'] : []),
+          ...(typeof process.env.EDESY_API_KEY !== 'string' || process.env.EDESY_API_KEY.length < 20 ? ['EDESY_API_KEY (sk_... Voice API key)'] : []),
           ...(!process.env.EDESY_STREAM_URL ? ['EDESY_STREAM_URL'] : []),
           ...(!process.env.PUBLIC_ORIGIN ? ['PUBLIC_ORIGIN'] : []),
           ...(process.env.EDESY_API_KEY && process.env.EDESY_STREAM_URL && process.env.PUBLIC_ORIGIN && !edesyPreflightReady() ? ['EDESY_STREAM_URL / PUBLIC_ORIGIN mismatch'] : [])
