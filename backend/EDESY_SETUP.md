@@ -16,7 +16,7 @@ Set these only in the backend host's secret/environment settings:
 - `GATEWAY_TOKEN` — existing app API gateway secret.
 - `EDESY_STREAM_TOKEN` — long random secret for the provider WebSocket.
 - `OPENAI_API_KEY` — OpenAI project key with GPT-Live access.
-- Optional: `OPENAI_LIVE_MODEL` (default `gpt-live-1.1`), `OPENAI_LIVE_VOICE`, `SHRADDHA_CALL_INSTRUCTIONS`.
+- Optional: `OPENAI_LIVE_MODEL` (default `gpt-live-1.1`), `OPENAI_LIVE_VOICE` (defaults to the Hindi-capable `nira` voice), `SHRADDHA_CALL_INSTRUCTIONS`.
 - `CALL_TRANSCRIPTS_ENABLED=false` by default. Enable only after caller notice/consent and retention review.
 
 ## Provision Edesy
