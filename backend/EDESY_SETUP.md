@@ -19,6 +19,7 @@ Set these only in the backend host's secret/environment settings:
 - `EDESY_STREAM_URL` — exact public `wss://YOUR_BACKEND_HOST/ws/telephony/edesy?token=YOUR_EDESY_STREAM_TOKEN` URL.
 - `PUBLIC_ORIGIN` — the matching HTTPS origin, for example `https://YOUR_BACKEND_HOST`.
 - `OPENAI_API_KEY` — OpenAI project key with GPT-Live access.
+- `SHRADDHA_CALL_AGENT_NAME` — name spoken by the inbound call assistant. Keep it aligned with the editable name in the Android app.
 - Optional: `OPENAI_LIVE_MODEL` (default `gpt-live-1.1`), `OPENAI_LIVE_VOICE`, `SHRADDHA_CALL_INSTRUCTIONS`.
 - `CALL_TRANSCRIPTS_ENABLED=false` by default. If enabled, the assistant asks the caller to press 1 before any transcript is stored; pressing 0 at any time stops storage and purges the transcript accumulated for that call. If the assistant does not clearly issue the consent prompt, transcript capture remains off. No audio is recorded. Enable only after legal notice and retention review.
 
