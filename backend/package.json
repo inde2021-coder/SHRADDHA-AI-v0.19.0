@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check relay-policy.js",
+    "check": "node --check server.js && node --check telephony-audio.js",
     "test": "node --test"
   },
   "engines": {
