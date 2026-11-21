@@ -34,9 +34,7 @@ class PhoneAgentActivity : AppCompatActivity() {
     private lateinit var voiceStatus: TextView
     private lateinit var edesyHistory: TextView
     private var tts: TextToSpeech? = null
-    private val voiceCallRequest = 903
     private val contactsPermissionRequest = 904
-    private val roleRequest = 901
     private val callPermissionRequest = 902
     private var pendingContactQuery: String? = null
     private var pendingDialNumber: String? = null
