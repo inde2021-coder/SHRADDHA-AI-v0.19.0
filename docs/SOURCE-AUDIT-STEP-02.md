@@ -38,6 +38,7 @@ This report records source-level findings; it does not claim an APK build or dev
 5. **Incoming SIM call handling is carrier-dependent and not yet production-verified.**
    - The Edesy inbound WebSocket/GPT-Live backend bridge is present, with server-side secrets and configurable inbound call-agent naming.
    - The Android Phone Call Agent page can run an authenticated, rate-limited Edesy provider preflight. Its dedicated WebSocket mode echoes bounded PCM and does not create an AI session or real call-history entry.
+   - Backend tests now cover the authenticated preflight route, missing provider configuration, PCM echo, and the guarantee that preflight does not pollute call history. These new tests have not been run yet.
    - Transcript saving is off by default. If enabled, the assistant must clearly issue a consent prompt, the caller must press DTMF 1, and DTMF 0 at any time purges the transcript. No audio is recorded.
    - A real Edesy tenant, DID, configured inbound flow, GPT-Live access and real two-way call test are still external prerequisites.
    - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
