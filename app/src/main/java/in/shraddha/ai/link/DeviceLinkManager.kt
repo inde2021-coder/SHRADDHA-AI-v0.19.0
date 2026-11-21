@@ -393,7 +393,7 @@ object DeviceLinkManager {
                         done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
                     } else {
                         val revoked = runCatching { JSONObject(raw).optBoolean("ok") }.getOrDefault(false)
-                        if (revoked && targetDeviceId == did) disconnect()
+                        if (revoked && targetDeviceId == did) disconnect(clearSavedPairing = true)
                         done(Result.success(revoked))
                     }
                 }
@@ -436,7 +436,7 @@ object DeviceLinkManager {
                         done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
                     } else {
                         val revoked = runCatching { JSONObject(raw).optBoolean("ok") }.getOrDefault(false)
-                        if (revoked) disconnect()
+                        if (revoked) disconnect(clearSavedPairing = true)
                         done(Result.success(revoked))
                     }
                 }
@@ -444,5 +444,18 @@ object DeviceLinkManager {
         })
     }
 
-    fun disconnect() { socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null; credentialStore?.clear() }
+    /**
+     * Closes the live relay connection. Keep the encrypted pairing by default so
+     * reconnectSaved() works after a temporary/manual disconnect. A confirmed
+     * server-side revocation must explicitly clear the local credential.
+     */
+    fun disconnect(clearSavedPairing: Boolean = false) {
+        val active = socket
+        socket = null
+        active?.close(1000, "User disconnected")
+        sessionId = null
+        deviceId = null
+        deviceToken = null
+        if (clearSavedPairing) credentialStore?.clear()
+    }
 }
