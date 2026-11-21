@@ -208,7 +208,7 @@ const server = http.createServer(async (req, res) => {
       if (!/^[A-Za-z0-9_-]{16,64}$/.test(sessionId) || !/^[a-f0-9]{24,64}$/i.test(deviceId)) return json(res, 400, { error: 'Invalid session or device identifier' });
       const session = sessions.get(sessionId);
       const caller = session?.devices.get(deviceId);
-      const bearer = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+      const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (!caller || !safeEqual(caller.token, bearer)) return json(res, 401, { error: 'Valid device credentials are required' });
       return json(res, 200, {
         ok: true,
