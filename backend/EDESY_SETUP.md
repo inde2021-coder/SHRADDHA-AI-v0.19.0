@@ -48,6 +48,12 @@ The caller continues to dial the existing Jio SIM number. This is carrier call f
 
 Do not use generic USSD codes without Jio confirming the current code and plan support. Forwarded-call charges, Edesy DID/minute charges and GPT-Live usage are separate.
 
+## Deployment topology
+
+- This Node backend currently keeps paired-device sessions, active relay sockets and recent call history in process memory. Run it as one persistent WebSocket-capable service instance for reliable Android/Windows pairing and Edesy call handling.
+- Do not horizontally scale this in-memory relay across multiple instances without first moving session state and socket fan-out to a shared Redis/pub/sub layer. Two paired devices reaching different instances will not share the same in-memory session.
+- Vercel Functions support WebSockets, but each connection is pinned to one function instance and closes at the configured maximum duration. A Vercel deployment therefore needs an external shared store/pub-sub for the device relay and explicit reconnect/session recovery for long calls.
+
 ## Release gates and limitations
 
 - Code integration does not prove that an Edesy tenant, DID, provider flow or paid API access has been provisioned.
