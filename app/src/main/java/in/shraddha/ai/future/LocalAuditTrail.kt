@@ -17,9 +17,14 @@ class LocalAuditTrail(context: Context) {
 
     @Synchronized
     fun append(event: String, outcome: String, detail: String = ""): Result<Unit> = runCatching {
+        // Purge historical plaintext before touching encrypted records.
         check(legacyPrefs.edit().remove("events").commit()) { "Could not purge legacy plaintext audit history" }
         val arr = JSONArray(store.get(key).getOrThrow().ifBlank { "[]" })
-        arr.put(JSONObject().put("at", System.currentTimeMillis()).put("event", event.take(80)).put("outcome", outcome.take(40)).put("detail", detail.take(240)))
+        arr.put(JSONObject()
+            .put("at", System.currentTimeMillis())
+            .put("event", event.take(80))
+            .put("outcome", outcome.take(40))
+            .put("detail", detail.take(240)))
         while (arr.length() > 300) arr.remove(0)
         store.put(key, arr.toString()).getOrThrow()
     }
@@ -28,9 +33,11 @@ class LocalAuditTrail(context: Context) {
     fun exportText(): Result<String> = runCatching {
         check(legacyPrefs.edit().remove("events").commit()) { "Could not purge legacy plaintext audit history" }
         val arr = JSONArray(store.get(key).getOrThrow().ifBlank { "[]" })
-        (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let {
-            "${it.optLong("at")} | ${it.optString("event")} | ${it.optString("outcome")} | ${it.optString("detail")}"
-        } }.joinToString("\n")
+        (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let {
+                "${it.optLong("at")} | ${it.optString("event")} | ${it.optString("outcome")} | ${it.optString("detail")}"
+            }
+        }.joinToString("\n")
     }
 
     @Synchronized
