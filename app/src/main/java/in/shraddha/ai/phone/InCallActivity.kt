@@ -96,12 +96,13 @@ class InCallActivity : AppCompatActivity() {
         }
         val number = call.details?.handle?.schemeSpecificPart
         callerLabel.text = number?.takeLast(4)?.let { "Caller ••••$it" } ?: "Unknown caller"
-        stateLabel.text = when (call.state) {
+        val callState = ShraddhaInCallService.currentCallState(call)
+        stateLabel.text = when (callState) {
             Call.STATE_RINGING -> "Incoming call"
             Call.STATE_DIALING, Call.STATE_CONNECTING -> "Connecting"
             Call.STATE_ACTIVE -> "Call connected"
             Call.STATE_HOLDING -> "Call on hold"
-            else -> "Call status: ${call.state}"
+            else -> "Call status: $callState"
         }
     }
 
