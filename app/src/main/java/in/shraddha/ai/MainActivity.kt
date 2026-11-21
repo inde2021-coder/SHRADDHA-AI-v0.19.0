@@ -2985,6 +2985,20 @@ class MainActivity : AppCompatActivity() {
                 normalized.startsWith("click ") -> JSONObject().put("kind", "click_text").put("label", spoken.substringAfter("click ").trim())
                 normalized.startsWith("लिखो ") -> JSONObject().put("kind", "type").put("text", spoken.substringAfter("लिखो ").take(500))
                 normalized.startsWith("type ") -> JSONObject().put("kind", "type").put("text", spoken.substringAfter("type ").take(500))
+                normalized.startsWith("ऐप खोलो ") -> JSONObject().put("kind", "open_app").put("name", spoken.substringAfter("ऐप खोलो ").trim())
+                normalized.startsWith("open app ") -> JSONObject().put("kind", "open_app").put("name", spoken.substringAfter("open app ").trim())
+                normalized in listOf("आवाज बढ़ाओ", "volume बढ़ाओ", "volume up", "आवाज तेज करो") -> JSONObject().put("kind", "system_control").put("command", "volume_up")
+                normalized in listOf("आवाज कम करो", "volume down", "आवाज घटाओ") -> JSONObject().put("kind", "system_control").put("command", "volume_down")
+                normalized in listOf("कंप्यूटर लॉक करो", "पीसी लॉक करो", "lock pc", "lock computer") -> JSONObject().put("kind", "system_control").put("command", "lock")
+                normalized in listOf("ब्राइटनेस बढ़ाओ", "brightness up", "screen bright करो") -> JSONObject().put("kind", "system_control").put("command", "brightness_up")
+                normalized in listOf("म्यूजिक चलाओ", "play pause", "music play pause") -> JSONObject().put("kind", "media_control").put("command", "play_pause")
+                normalized in listOf("अगला गाना", "next song", "next track") -> JSONObject().put("kind", "media_control").put("command", "next")
+                normalized in listOf("स्क्रीनशॉट लो", "screenshot लो", "take screenshot") -> JSONObject().put("kind", "screenshot")
+                normalized.startsWith("वेब पर खोजो ") -> JSONObject().put("kind", "web_search").put("query", spoken.substringAfter("वेब पर खोजो ").trim().take(160))
+                normalized.startsWith("search web ") -> JSONObject().put("kind", "web_search").put("query", spoken.substringAfter("search web ").trim().take(160))
+                normalized in listOf("clipboard uppercase", "क्लिपबोर्ड uppercase") -> JSONObject().put("kind", "clipboard_transform").put("operation", "uppercase")
+                normalized in listOf("clipboard साफ करो", "क्लिपबोर्ड trim करो") -> JSONObject().put("kind", "clipboard_transform").put("operation", "trim")
+                normalized.startsWith("code assistant ") -> JSONObject().put("kind", "code_assistant").put("prompt", spoken.substringAfter("code assistant ").trim().take(4000))
                 else -> null
             }
             if (action == null) { status.text = "आवाज़ समझ नहीं आई या command allowlist में नहीं है: $spoken"; return }
