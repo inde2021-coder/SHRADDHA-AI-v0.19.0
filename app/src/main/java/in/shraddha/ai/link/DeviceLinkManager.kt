@@ -241,6 +241,39 @@ object DeviceLinkManager {
     fun telephonyCalls(baseUrl: String, gatewayToken: String, done: (Result<JSONObject>) -> Unit) =
         getAuthenticated(baseUrl, "/api/telephony/edesy/calls", gatewayToken, done)
 
+    fun telephonyPreflight(
+        baseUrl: String,
+        gatewayToken: String,
+        sampleRate: Int = 16000,
+        seconds: Int = 2,
+        done: (Result<JSONObject>) -> Unit
+    ) {
+        require(sampleRate == 8000 || sampleRate == 16000)
+        require(seconds in 1..5)
+        val endpoint = secureApiUrl(baseUrl, "/api/telephony/edesy/preflight")
+        if (endpoint == null) {
+            done(Result.failure(IllegalArgumentException("Preflight requires a valid HTTPS backend URL.")))
+            return
+        }
+        val payload = JSONObject().put("sample_rate", sampleRate).put("seconds", seconds)
+        val builder = Request.Builder().url(endpoint)
+            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+        if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
+        client.newCall(builder.build()).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val raw = it.body?.string().orEmpty()
+                    if (!it.isSuccessful) {
+                        done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    } else {
+                        done(runCatching { JSONObject(raw) })
+                    }
+                }
+            }
+        })
+    }
+
     private fun getAuthenticated(baseUrl: String, path: String, gatewayToken: String, done: (Result<JSONObject>) -> Unit) {
         val endpoint = secureApiUrl(baseUrl, path)
         if (endpoint == null) {
