@@ -95,6 +95,7 @@ test('Edesy call bridge readiness is private and reports missing external provis
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.provider, 'edesy');
+  assert.equal(body.agentName, 'Shraddha AI');
   assert.equal(body.configured, false);
   assert.equal(body.preflightReady, false);
   assert.equal(body.capabilities.inboundWebSocketAudio, false);
