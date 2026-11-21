@@ -4,6 +4,7 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.OperatorEvent
 import `in`.shraddha.ai.operator.OperatorTaskState
 import `in`.shraddha.ai.operator.ScreenSnapshot
+import `in`.shraddha.ai.operator.ScreenResultVerifier
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.files.DeviceFileLocator
 import `in`.shraddha.ai.future.LocalAuditTrail
@@ -61,7 +62,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 return false
             }
             val after: ScreenSnapshot = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
-            if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
+            if (!ScreenResultVerifier.containsExpectedText(after, step.expectedText)) return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
             audit.append("operator_step", "verified", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.VERIFYING, "चरण ${index + 1} पूरा; स्क्रीन दोबारा पढ़ी गई।", after))
         }
