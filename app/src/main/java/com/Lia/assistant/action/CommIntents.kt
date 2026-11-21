@@ -1,15 +1,14 @@
 package com.Lia.assistant.action
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
 import java.net.URLEncoder
 
-/** Opens user-reviewable communication composers; never sends or calls without a user tap. */
 object CommIntents {
     /** Starts a call only with Android's CALL_PHONE permission; otherwise opens the dialer for a user tap. */
     fun placeCall(context: Context, phoneNumber: String): String {
@@ -81,6 +80,5 @@ object CommIntents {
         } catch (_: Exception) {
             "whatsapp_failed"
         }
-        return "whatsapp_not_installed"
     }
 }
