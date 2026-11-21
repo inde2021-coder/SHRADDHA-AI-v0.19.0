@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-const MAX_RECORD_BYTES = 64_000;
+const MAX_RECORD_BYTES = 160_000;
 const AAD_PREFIX = 'shraddha-call-history-v1|';
 
 function validateKey(key) {
@@ -54,7 +54,7 @@ export function decryptCallHistoryRecord(envelope, key, expectedId) {
   };
   const iv = decode(envelope.iv, 16, 16);
   const tag = decode(envelope.tag, 24, 24);
-  const ciphertext = decode(envelope.ciphertext, 4, 90_000);
+  const ciphertext = decode(envelope.ciphertext, 4, 220_000);
   if (iv.length !== 12 || tag.length !== 16 || ciphertext.length < 1 || ciphertext.length > MAX_RECORD_BYTES) {
     throw new Error('Call-history encrypted payload size is invalid.');
   }
