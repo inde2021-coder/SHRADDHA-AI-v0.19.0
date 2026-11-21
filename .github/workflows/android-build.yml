@@ -69,6 +69,7 @@ jobs:
 
       - name: Test Firebase Firestore and Storage security rules
         run: |
+          git config --global init.defaultBranch main
           npm install --prefix firebase/rules-tests --no-audit --no-fund
           ./firebase/rules-tests/node_modules/.bin/firebase emulators:exec --project demo-shraddha-ai --only firestore,storage,database "npm --prefix firebase/rules-tests test"
 
