@@ -12,7 +12,7 @@ let env;
 
 before(async () => {
   env = await initializeTestEnvironment({
-    projectId: "demo-shraddha-rtdb-rules",
+    projectId: "demo-shraddha-ai",
     database: { host: "127.0.0.1", port: 9000, rules }
   });
 });
