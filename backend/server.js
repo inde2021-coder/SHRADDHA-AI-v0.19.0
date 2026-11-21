@@ -458,6 +458,7 @@ telephonyWss.on('connection', carrier => {
     callRecord.endedAt = new Date().toISOString();
     callRecord.status = ready ? 'ended' : 'failed';
     callRecord.bridgeStatus = ready ? 'connected' : 'startup_failed';
+    callRecord.consentPromptBuffer = '';
     const transcriptText = callRecord.transcript.map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text).join('\n').slice(0, 24000);
     if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
       callRecord.summaryStatus = 'pending';
