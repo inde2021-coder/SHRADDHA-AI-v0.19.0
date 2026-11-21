@@ -28,7 +28,7 @@ export function hasExplicitTranscriptConsentPrompt(text) {
   const asksForPressOne = prompt.includes('press 1') || prompt.includes('press one') ||
     prompt.includes('दबाएं 1') || prompt.includes('दबाएँ 1') ||
     prompt.includes('एक दबाएं') || prompt.includes('एक दबाएँ') || prompt.includes('प्रेस 1');
-  const mentionsTranscript = prompt.includes('transcript') || prompt.includes('प्रतिलिपि') || prompt.includes('लिखित');
+  const mentionsTranscript = prompt.includes('transcript') || prompt.includes('ट्रांसक्रिप्ट') || prompt.includes('प्रतिलिपि') || prompt.includes('लिखित');
   const mentionsConsent = prompt.includes('consent') || prompt.includes('agree') ||
     prompt.includes('सहमति') || prompt.includes('सहमत') ||
     prompt.includes('अनुमति') || prompt.includes('मंजूरी');
