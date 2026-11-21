@@ -15,8 +15,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-import com.Lia.assistant.data.NovaPreferences
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -38,8 +36,6 @@ fun AboutScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalNovaColors.current
-    val context = LocalContext.current
-    val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
 
     Column(
         modifier = modifier
@@ -82,7 +78,7 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = assistantName,
+            text = appState.assistantName,
             fontFamily = SerifFontFamily,
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
@@ -90,7 +86,7 @@ fun AboutScreen(
         )
 
         Text(
-            text = "Version 0.19.2",
+            text = "Version 0.19.0",
             fontSize = 13.sp,
             color = colors.textSecondary
         )
@@ -107,7 +103,7 @@ fun AboutScreen(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "$assistantName is a Hindi, Hinglish and English personal AI companion with voice interaction, multi-provider AI chat, secure personal memory, visual tools and device assistance. Available features depend on device permissions, configured provider services and connected devices.",
+                    text = "${appState.assistantName} is a Hindi, Hinglish and English personal AI companion with voice interaction, multi-provider AI chat, secure personal memory, visual tools and device assistance. Available features depend on device permissions, configured provider services and connected devices.",
                     fontSize = 14.sp,
                     color = colors.textPrimary,
                     lineHeight = 22.sp
