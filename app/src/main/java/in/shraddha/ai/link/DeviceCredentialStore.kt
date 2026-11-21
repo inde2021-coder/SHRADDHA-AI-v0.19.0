@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -43,13 +44,24 @@ internal class DeviceCredentialStore(context: Context) {
         val payloadText = preferences.getString("payload", null) ?: return null
         return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(),
-                GCMParameterSpec(128, Base64.decode(ivText, Base64.NO_WRAP)))
-            val clear = cipher.doFinal(Base64.decode(payloadText, Base64.NO_WRAP))
+            val iv = Base64.decode(ivText, Base64.NO_WRAP)
+            val payload = Base64.decode(payloadText, Base64.NO_WRAP)
+            require(iv.size == 12) { "Invalid credential IV" }
+            require(payload.size >= 16) { "Invalid credential ciphertext" }
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(payload)
             try {
                 val json = JSONObject(clear.toString(Charsets.UTF_8))
-                Credentials(json.getString("sessionId"), json.getString("deviceId"),
-                    json.getString("deviceToken"), json.getString("baseUrl"))
+                val sessionId = json.getString("sessionId")
+                val deviceId = json.getString("deviceId")
+                val token = json.getString("deviceToken")
+                val baseUrl = json.getString("baseUrl").trim().trimEnd('/')
+                val parsedUrl = baseUrl.toHttpUrlOrNull()
+                require(sessionId.isNotBlank() && sessionId.length <= 128) { "Invalid saved session ID" }
+                require(deviceId.isNotBlank() && deviceId.length <= 64) { "Invalid saved device ID" }
+                require(token.length in 24..512) { "Invalid saved device token" }
+                require(parsedUrl?.scheme == "https" && !parsedUrl.host.isNullOrBlank()) { "Invalid saved relay URL" }
+                Credentials(sessionId, deviceId, token, baseUrl)
             } finally { clear.fill(0) }
         } catch (_: Exception) {
             clear()
