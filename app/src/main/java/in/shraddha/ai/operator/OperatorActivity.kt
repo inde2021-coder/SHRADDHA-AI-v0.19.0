@@ -18,6 +18,7 @@ class OperatorActivity : Activity() {
     private lateinit var appName: EditText
     private lateinit var target: EditText
     private lateinit var typed: EditText
+    private lateinit var expectedVisibleText: EditText
     private lateinit var commandInput: EditText
     @Volatile private var activeRunner: AdaptiveWorkflowRunner? = null
 
@@ -29,7 +30,8 @@ class OperatorActivity : Activity() {
         appName = field("ऐप का नाम (जैसे Chrome)")
         target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
         typed = field("फोकस किए गए सामान्य टेक्स्ट फील्ड में लिखें")
-        root.addView(appName); root.addView(target); root.addView(typed)
+        expectedVisibleText = field("कार्रवाई के बाद स्क्रीन पर क्या दिखना चाहिए? (वैकल्पिक)")
+        root.addView(appName); root.addView(target); root.addView(typed); root.addView(expectedVisibleText)
         commandInput = field("श्रद्धा को निर्देश दें: जैसे Rahul.jpg upload करो")
         root.addView(commandInput)
         root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
@@ -39,14 +41,14 @@ class OperatorActivity : Activity() {
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
         root.addView(action("■  चल रहा Workflow रोकें") { activeRunner?.stop() ?: run { log.text = "अभी कोई Workflow सक्रिय नहीं है।" } })
         root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
-        root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) })
-        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString())) })
-        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperatorStep(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString())) })
+        root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString(), expectedVisibleText = expectedVisibleText.text.toString())) })
+        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString(), expectedVisibleText = expectedVisibleText.text.toString())) })
+        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperatorStep(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString(), expectedVisibleText = expectedVisibleText.text.toString())) })
         root.addView(action("Back / Home / Scroll") {
             val choices = arrayOf("Back", "Home", "Scroll forward")
             android.app.AlertDialog.Builder(this).setTitle("कार्रवाई चुनें").setItems(choices) { _, which ->
                 val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
-                runOperatorStep(OperatorStep(type))
+                runOperatorStep(OperatorStep(type, expectedVisibleText = expectedVisibleText.text.toString()))
             }.show()
         })
         log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE0E6F5.toInt()); setPadding(14, 18, 14, 18) }
