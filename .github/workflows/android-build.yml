@@ -36,7 +36,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Check backend JavaScript syntax
         uses: actions/setup-node@v6
