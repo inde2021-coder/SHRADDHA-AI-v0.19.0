@@ -446,8 +446,14 @@ object DeviceLinkManager {
     }
 
     fun updateSharePermissions(permissions: JSONObject): Boolean = socket?.send(JSONObject().put("type", "permission_update").put("permissions", permissions).toString()) == true
-    fun requestDataShare(targetDeviceId: String, category: String, itemLabel: String = ""): Boolean = socket?.send(JSONObject().put("type", "data_share_request").put("targetDeviceId", targetDeviceId).put("category", category).put("itemLabel", itemLabel).put("requestId", java.util.UUID.randomUUID().toString()).toString()) == true
-    fun respondDataShare(requesterDeviceId: String, category: String, approved: Boolean, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "data_share_response").put("requesterDeviceId", requesterDeviceId).put("category", category).put("approved", approved).put("minutes", minutes).toString()) == true
+    fun requestDataShare(targetDeviceId: String, category: String, itemLabel: String = "", requestId: String = java.util.UUID.randomUUID().toString()): Boolean =
+        requestId.matches(Regex("^[A-Za-z0-9_-]{12,64}$")) &&
+            socket?.send(JSONObject().put("type", "data_share_request").put("targetDeviceId", targetDeviceId)
+                .put("category", category).put("itemLabel", itemLabel).put("requestId", requestId).toString()) == true
+    fun respondDataShare(requesterDeviceId: String, category: String, approved: Boolean, minutes: Int = 5, requestId: String = ""): Boolean =
+        requestId.matches(Regex("^[A-Za-z0-9_-]{12,64}$")) &&
+            socket?.send(JSONObject().put("type", "data_share_response").put("requesterDeviceId", requesterDeviceId)
+                .put("category", category).put("requestId", requestId).put("approved", approved).put("minutes", minutes).toString()) == true
     fun sendSharedPayload(targetDeviceId: String, category: String, fileName: String, mimeType: String, base64Payload: String): Boolean = socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("payload", base64Payload).toString()) == true
     fun sendSignal(targetDeviceId: String, signal: JSONObject): Boolean = socket?.send(JSONObject().put("type", "signal").put("targetDeviceId", targetDeviceId).put("signal", signal).toString()) == true
     fun requestRemoteControl(targetDeviceId: String, minutes: Int = 5): Boolean = socket?.send(JSONObject().put("type", "control_request").put("targetDeviceId", targetDeviceId).put("minutes", minutes.coerceIn(1, 5)).toString()) == true
