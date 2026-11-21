@@ -106,4 +106,3 @@ class WorkflowEngine {
         return s.copy(status = WorkflowStatus.FAILED, message = reason.take(240))
     }
 }
-

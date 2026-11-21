@@ -736,5 +736,3 @@ test('remote action schema rejects malformed and out-of-range commands', () => {
   assert.equal(validRemoteAction({ kind: 'shell', command: 'rm -rf /' }), false);
   assert.equal(validRemoteAction(null), false);
 });
-
-

@@ -1,7 +1,7 @@
 # Shraddha AI — Non-main Branch Deep Audit (2026-11-20)
 
-Repository: `inde2021-coder/SHRADDHA-AI-v0.19.0`  
-Audit type: read-only branch comparison + targeted source review.  
+Repository: `inde2021-coder/SHRADDHA-AI-v0.19.0`
+Audit type: read-only branch comparison + targeted source review.
 Important: this is a static source audit. I did not claim physical-device, carrier, live-provider, Firebase-emulator, or Windows runtime verification.
 
 ## 1. Branch inventory

@@ -178,4 +178,3 @@ When the paired PC has explicitly enabled remote control, the Android Device Uni
 - **Code assistant:** uses only the configured local GGUF model (--offline-model); it does not silently switch to a cloud provider.
 
 These are bounded desktop actions, not unrestricted remote administration. App launch success is reported as a launch request, not proof that the app finished loading. Screenshot capture and OCR operate on the active window only. Display brightness depends on compatible hardware and the optional screen_brightness_control package. Web search depends on the external search service being reachable. The Android UI exposes the supported actions, but a real paired Windows PC test is still required before describing end-to-end operation as production verified.
-
