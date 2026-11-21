@@ -36,11 +36,12 @@ This report records source-level findings; it does not claim an APK build or dev
    - Continuous listening must remain explicitly user-controlled and visibly indicated.
 
 5. **Incoming SIM call handling is carrier-dependent and not yet production-verified.**
-   - The Edesy inbound WebSocket/GPT-Live backend bridge is now present on the active work branch, with server-side secrets and an opt-in transcript setting.
-   - The backend now exposes an authenticated, rate-limited Edesy `/v1/stream-test` preflight and the Android Phone Call Agent page can run it. It requires `EDESY_API_KEY`, `EDESY_STREAM_URL`, `PUBLIC_ORIGIN` and the stream/OpenAI secrets.
-   - A real Edesy tenant, DID, configured provider flow, GPT-Live access and real two-way call test are still external prerequisites.
+   - The Edesy inbound WebSocket/GPT-Live backend bridge is present, with server-side secrets and configurable inbound call-agent naming.
+   - The Android Phone Call Agent page can run an authenticated, rate-limited Edesy provider preflight. Its dedicated WebSocket mode echoes bounded PCM and does not create an AI session or real call-history entry.
+   - Transcript saving is off by default. If enabled, the assistant must clearly issue a consent prompt, the caller must press DTMF 1, and DTMF 0 at any time purges the transcript. No audio is recorded.
+   - A real Edesy tenant, DID, configured inbound flow, GPT-Live access and real two-way call test are still external prerequisites.
    - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
-   - The Android phone page can explicitly save, view and clear a masked call-history snapshot encrypted locally with Android Keystore AES-GCM. Automatic sync, durable backend history, legal notice/retention review, human takeover and WhatsApp delivery remain incomplete; per-call DTMF consent and opt-out/purge are implemented.
+   - The Android phone page can explicitly save, view and clear a masked call-history snapshot encrypted locally with Android Keystore AES-GCM. Automatic durable backend history, legal notice/retention review, human takeover and WhatsApp delivery remain incomplete.
 
 6. **Device-to-device encryption has cryptographic primitives but is not integrated into transport.**
    - `DeviceE2ECrypto` provides ephemeral P-256 ECDH, session-bound HKDF-SHA256, AES-256-GCM and session-bound fingerprints.
