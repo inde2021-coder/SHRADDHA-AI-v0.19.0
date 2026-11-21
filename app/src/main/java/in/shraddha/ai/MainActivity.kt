@@ -273,6 +273,7 @@ class MainActivity : AppCompatActivity() {
             addView(workspaceTile("◈  EXPERT STUDIO", "Engineering • Medical information • Agriculture • Law • Creator") { showPage("expert") })
             addView(workspaceTile("⌘  DEVICE UNIVERSE", "Paired phones • PC companion • Remote screen") { showPage("devices") })
             addView(workspaceTile("▣  APP OPERATOR", "Visual UI control • Workflow • Verification") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.operator.OperatorActivity::class.java)) })
+            addView(workspaceTile("▤  PRIVATE NOTES + OCR", "Hindi / English image text extraction • Local notes • Clipboard copy") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.notes.NoteOcrActivity::class.java)) })
             addView(workspaceTile("◇  AI PROJECT LAB", "Agents • Code • Website • App • Automation") { showPage("lab") })
             
             addView(workspaceTile("◎  PEOPLE MEMORY", "Consent-based person profiles and recognition roadmap") { showPage("people") })
