@@ -15,7 +15,7 @@ SERIAL="${ANDROID_SERIAL:-emulator-5554}"
 echo "Waiting for Android emulator $SERIAL: boot, user unlock and Android services..."
 "$ADB" start-server
 
-deadline=$((SECONDS + 900))
+deadline=$((SECONDS + 300))
 last_state=unknown
 ready_streak=0
 while (( SECONDS < deadline )); do
@@ -67,10 +67,10 @@ while (( SECONDS < deadline )); do
     last_state="$state"
   fi
   "$ADB" reconnect offline >/dev/null 2>&1 || true
-  sleep 5
+  sleep 3
 done
 
-echo "ERROR: emulator $SERIAL did not become fully ready within 15 minutes."
+echo "ERROR: emulator $SERIAL did not become fully ready within 5 minutes."
 "$ADB" devices -l || true
 "$ADB" -s "$SERIAL" shell getprop sys.boot_completed || true
 "$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available || true
