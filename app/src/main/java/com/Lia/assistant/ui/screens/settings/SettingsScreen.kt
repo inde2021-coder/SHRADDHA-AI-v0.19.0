@@ -453,7 +453,7 @@ fun SettingsScreen(
                 NovaTextField(
                     value = nameInput,
                     onValueChange = { nameInput = it },
-                    placeholder = "Shraddha AI"
+                    placeholder = "Enter assistant name"
                 )
             },
             confirmButton = {
