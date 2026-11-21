@@ -27,10 +27,10 @@ class ShraddhaInCallService : InCallService() {
         }
         callbacks[call] = callback
         call.registerCallback(callback)
-        saveEvent(call, call.state)
+        saveEvent(call, currentCallState(call))
         sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
 
-        if (call.state == Call.STATE_RINGING || call.state == Call.STATE_DIALING || call.state == Call.STATE_CONNECTING) {
+        if (currentCallState(call) == Call.STATE_RINGING || currentCallState(call) == Call.STATE_DIALING || currentCallState(call) == Call.STATE_CONNECTING) {
             val screen = Intent(this, InCallActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             runCatching { startActivity(screen) }
@@ -74,6 +74,16 @@ class ShraddhaInCallService : InCallService() {
             private set
         @Volatile var isMuted: Boolean = false
             private set
+
+        fun currentCallState(call: Call): Int =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                call.details?.state ?: Call.STATE_DISCONNECTED
+            } else {
+                legacyCallState(call)
+            }
+
+        @Suppress("DEPRECATION")
+        private fun legacyCallState(call: Call): Int = call.state
 
         fun toggleMute() {
             isMuted = !isMuted
