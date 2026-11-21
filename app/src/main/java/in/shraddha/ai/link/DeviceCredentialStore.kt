@@ -60,7 +60,7 @@ internal class DeviceCredentialStore(context: Context) {
                 require(sessionId.isNotBlank() && sessionId.length <= 128) { "Invalid saved session ID" }
                 require(deviceId.isNotBlank() && deviceId.length <= 64) { "Invalid saved device ID" }
                 require(token.length in 24..512) { "Invalid saved device token" }
-                require(parsedUrl?.scheme == "https" && !parsedUrl.host.isNullOrBlank()) { "Invalid saved relay URL" }
+                require(parsedUrl != null && parsedUrl.scheme == "https" && parsedUrl.host.isNotBlank()) { "Invalid saved relay URL" }
                 Credentials(sessionId, deviceId, token, baseUrl)
             } finally { clear.fill(0) }
         } catch (_: Exception) {
