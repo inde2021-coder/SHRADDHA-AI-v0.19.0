@@ -228,8 +228,11 @@ class PcCompanionApp:
             self.events.put(("status", "Ignored malformed relay message."))
 
     def _on_error(self, _ws, error):
+        status_code = getattr(error, "status_code", None)
         if self._pending_pairing_auth:
             self.events.put(("pairing_failed", f"Relay authentication failed: {str(error)[:140]}"))
+        elif status_code in (401, 403):
+            self.events.put(("credential_rejected", status_code))
         else:
             self.events.put(("status", f"Relay error: {str(error)[:160]}"))
 
@@ -263,6 +266,18 @@ class PcCompanionApp:
                 kind, payload = self.events.get_nowait()
                 if kind == "status":
                     self.status_var.set(payload)
+                elif kind == "credential_rejected":
+                    device_id = str(self.config.get("deviceId", ""))
+                    if device_id:
+                        try:
+                            keyring.delete_password(SERVICE_NAME, device_id)
+                        except Exception:
+                            pass
+                    self.config.pop("sessionId", None)
+                    self.config.pop("deviceId", None)
+                    self.device_token = None
+                    self._save_config()
+                    self.status_var.set(f"Saved PC pairing was rejected by relay (HTTP {payload}). Pair this PC again.")
                 elif kind == "revoked":
                     device_id = str(self.config.get("deviceId", ""))
                     if device_id:
