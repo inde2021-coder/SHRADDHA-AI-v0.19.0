@@ -22,7 +22,7 @@ object TelephonyGatewayStore {
         val cleanUrl = baseUrl.trim().trimEnd('/')
         val uri = runCatching { URI(cleanUrl) }.getOrNull()
             ?: throw IllegalArgumentException("Enter a valid backend URL.")
-        require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() &&
+        require(uri.scheme?.equals("https", ignoreCase = true) == true && !uri.host.isNullOrBlank() &&
             uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null) {
             "Backend URL must be HTTPS and must not contain credentials, query parameters or fragments."
         }
