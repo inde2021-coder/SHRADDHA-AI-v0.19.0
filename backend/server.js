@@ -222,6 +222,7 @@ const server = http.createServer(async (req, res) => {
       const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (!caller || !safeEqual(caller.token, bearer)) return json(res, 401, { error: 'Valid device credentials are required' });
       const targetId = typeof body.targetDeviceId === 'string' && body.targetDeviceId ? body.targetDeviceId : deviceId;
+      if (!/^[a-f0-9]{24}$/i.test(targetId)) return json(res, 400, { error: 'Invalid target device identifier' });
       if (targetId !== deviceId && caller.role !== 'owner') return json(res, 403, { error: 'Only the session owner can revoke another device' });
       const target = session.devices.get(targetId);
       if (!target) return json(res, 404, { error: 'Target device was not found' });
