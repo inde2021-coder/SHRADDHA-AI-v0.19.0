@@ -8,39 +8,39 @@ Scope: Android Gradle configuration, manifest, package/source layout, biometric 
 **Step 2 static source audit: COMPLETE. Android build/runtime: NOT VERIFIED.**
 This report records source-level findings; it does not claim an APK build or device test.
 
-## Confirmed blockers and defects
+## Confirmed blockers and defects (rechecked against current work branch)
 
-1. **Biometric module cannot compile as currently represented.**
-   - `app/src/main/java/in/shraddha/ai/biometric/` contains only `BiometricCaptureActivity.kt`.
-   - That activity references `LocalBiometricModelEngine`, `BiometricLivenessGate`, and `BiometricConsentVault`, but those implementations are absent from this package tree.
-   - `app/build.gradle.kts` does not declare the CameraX, ML Kit Face Detection, or AndroidX ExifInterface artifacts imported by the activity.
-   - `BiometricCaptureActivity` is not declared in `AndroidManifest.xml`.
-   - Therefore the camera/voice enrollment and matching flow is not a build-ready, callable feature. Do not advertise it as working.
+1. **Biometric model files remain external prerequisites; source/dependency blockers listed in the original audit are stale.**
+   - Current work branch contains `BiometricCaptureActivity`, `BiometricConsentVault`, `BiometricLivenessGate`, `BiometricModelDownloader`, `BiometricVoiceChallenge`, and `LocalBiometricModelEngine`.
+   - `app/build.gradle.kts` declares CameraX, ML Kit Face Detection, ExifInterface, Google Tasks and ONNX Runtime dependencies.
+   - `AndroidManifest.xml` already registers the consent-gated biometric activity.
+   - Model weights remain user/device downloaded external files. Verify exact provenance, licenses, tensor contracts, SHA-256, preprocessing and real-device performance before use.
+   - Blink/head-turn challenges and a MiniFASNet score are not certified presentation-attack detection. The feature must not be marketed as secure identity authentication or certified anti-spoofing.
 
-2. **Biometric model files are external prerequisites.**
-   - Runtime code explicitly requires app-private `filesDir/biometric-models/sface.onnx` or `ecapa-any-length.onnx`.
-   - No model weights are present in the inspected Android biometric source directory. Model provenance, license, expected tensor shape, preprocessing, quantization and benchmark evidence are not documented here.
-   - A random spoken phrase plus face landmark challenge is not certified presentation-attack detection. It must not be described as secure anti-spoofing.
+2. **Accessibility service ownership has been consolidated in the current work branch manifest.**
+   - Only Shraddha's `ShraddhaAccessibilityService` is declared in the primary app manifest; the duplicate Lia service is not registered there.
+   - Runtime permission, service lifecycle, OEM compatibility and action safety still require physical-device validation.
 
-3. **Manifest contains two independent Accessibility services.**
-   - Shraddha's `ShraddhaAccessibilityService` and the merged LIA `NovaAccessibilityService` are both exported behind Android's `BIND_ACCESSIBILITY_SERVICE` permission.
-   - This can confuse setup and produce overlapping event/action handling. Consolidation or an explicit supported-service choice and regression tests are needed.
-
-4. **Firebase is configuration-driven, not verified end-to-end.**
-   - `FirebaseCloudVault` initializes Firebase manually from BuildConfig values and uses Firebase Auth + Firestore.
-   - The repository report says live Firebase tests were not run. Rules, account lifecycle, key recovery, backup restore and permission-denial cases remain unverified.
-   - The vault derives an AES key from the account password. This couples data recovery to password retention/change and needs a reviewed key-management/recovery design before production use.
+3. **Firebase remains configuration-driven and requires production lifecycle verification.**
+   - Firebase Auth, Firestore, Realtime Database, Storage and Messaging dependencies are present.
+   - Rules, App Check, account lifecycle, key recovery, backup restore and permission-denial cases need live project tests.
+   - The vault's password-derived encryption key still needs a reviewed password-change/recovery design before production use.
    - No Firebase credentials should be committed.
 
-5. **Voice service requires real device validation.**
-   - The merged voice foreground service starts `VoiceSessionManager` and returns `START_STICKY`.
-   - Android microphone foreground-service restrictions, visible notification, stop/restart behavior, lock-screen behavior, OEM battery restrictions, permission revocation and Android 14/15 behavior have not been tested on physical devices.
+4. **Voice service requires real-device validation.**
+   - The foreground voice service and session manager source are present.
+   - Android microphone foreground-service restrictions, visible notification, stop/restart behavior, lock-screen behavior, OEM battery restrictions, permission revocation and Android 14/15 behavior have not been physically tested.
    - Continuous listening must remain explicitly user-controlled and visibly indicated.
 
-6. **Release verification is incomplete.**
-   - The existing v0.19.0 build report explicitly records Gradle/Kotlin compile, APK build/install, runtime tests, provider tests and MYRA pairing as NOT RUN / NOT VERIFIED.
-   - CI workflow was added in Step 1. The first observed run (#55, commit `b6a2d1d`) failed during `Run unit tests`; the APK build step was skipped. The available run metadata does not expose the failing assertion/stack trace, so the exact unit-test cause remains to be retrieved from Actions logs and fixed.
-   - Gradle wrapper is configured for Gradle 8.11.1; AGP is 8.9.1 and JDK 17 is specified. Compatibility appears intentionally aligned, but only CI can confirm resolution and compilation.
+5. **Incoming SIM call handling is carrier-dependent and not yet production-verified.**
+   - The Edesy inbound WebSocket/GPT-Live backend bridge is now present on the active work branch, with server-side secrets and an opt-in transcript setting.
+   - A real Edesy tenant, DID, configured provider flow, GPT-Live access and real two-way call test are external prerequisites.
+   - Jio no-answer forwarding must not be enabled until the Edesy call path passes real-device tests. Android InCallService cannot capture ordinary SIM call audio on standard Android.
+   - Persistent encrypted call history, caller notice/consent workflow, human takeover and WhatsApp delivery remain incomplete.
+
+6. **Release verification remains a separate gate.**
+   - CI must be run after the implementation pass, then every Android/backend/Firebase failure must be fixed.
+   - A debug APK is not a production-signed release. Production signing requires owner-provided secrets and a physical install/upgrade test.
 
 ## Existing Step 1 changes rechecked
 
