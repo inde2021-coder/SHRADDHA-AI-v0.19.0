@@ -178,7 +178,7 @@ class FirebaseCloudVault(private val context: Context) {
             }
         } finally {
             spec.clearPassword()
-            passwordChars.fill('\\u0000')
+            passwordChars.fill('\u0000')
         }
     }
 }
