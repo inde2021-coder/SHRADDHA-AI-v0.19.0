@@ -48,7 +48,7 @@ object CommIntents {
             return "sms_permission_required"
         }
         return try {
-            val sms = SmsManager.getDefault()
+            val sms = context.getSystemService(SmsManager::class.java) ?: return "sms_send_failed"
             val parts = sms.divideMessage(message)
             if (parts.size > 1) sms.sendMultipartTextMessage(cleanRecipient, null, parts, null, null)
             else sms.sendTextMessage(cleanRecipient, null, message, null, null)
