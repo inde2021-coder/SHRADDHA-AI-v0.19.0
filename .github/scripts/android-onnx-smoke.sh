@@ -44,7 +44,9 @@ trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 "$ADB" -s "$SERIAL" shell wm dismiss-keyguard || true
 "$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk
 "$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available
-"$ADB" -s "$SERIAL" shell df -h /data
+# Disk usage is diagnostic only: Android SELinux may deny df access to protected mounts.
+# Do not fail emulator instrumentation when the shell user cannot stat /metadata or /linkerconfig.
+"$ADB" -s "$SERIAL" shell df -h /data || true
 "$ADB" devices -l
 
 ./gradlew :app:connectedDebugAndroidTest --no-daemon --console=plain --stacktrace
