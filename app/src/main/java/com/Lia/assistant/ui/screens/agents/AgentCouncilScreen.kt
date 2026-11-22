@@ -183,7 +183,12 @@ fun AgentCouncilScreen(
                         Checkbox(
                             checked = provider in selectedProviders,
                             onCheckedChange = { checked ->
-                                selectedProviders = if (checked) selectedProviders + provider else selectedProviders - provider
+                                val next = if (checked) selectedProviders + provider else selectedProviders - provider
+                                selectedProviders = next
+                                if (next.isNotEmpty()) {
+                                    val requiredPerProvider = ((specialists.toInt() + 4) + next.size - 1) / next.size
+                                    callsPerProvider = maxOf(callsPerProvider, requiredPerProvider.toFloat())
+                                }
                             }
                         )
                         Text(provider, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -201,6 +206,10 @@ fun AgentCouncilScreen(
             Slider(value = specialists, onValueChange = {
                 specialists = it
                 maxCalls = maxOf(maxCalls, it.toInt() + 4).coerceAtMost(9).toFloat()
+                if (selectedProviders.isNotEmpty()) {
+                    val requiredPerProvider = ((it.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
+                    callsPerProvider = maxOf(callsPerProvider, requiredPerProvider.toFloat())
+                }
             }, valueRange = 1f..5f, steps = 3)
             Text("Total provider calls: ${maxCalls.toInt()} (minimum required: $minimumCalls)", color = colors.textPrimary, fontSize = 12.sp)
             if (minimumCalls < 9) {
@@ -216,12 +225,16 @@ fun AgentCouncilScreen(
             val minimumPerProvider = if (selectedProviders.isEmpty()) 1 else
                 ((specialists.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
             Text("Maximum calls per provider: ${callsPerProvider.toInt().coerceAtLeast(minimumPerProvider)} (minimum required: $minimumPerProvider)", color = colors.textPrimary, fontSize = 12.sp)
-            Slider(
-                value = callsPerProvider.coerceAtLeast(minimumPerProvider.toFloat()),
-                onValueChange = { callsPerProvider = it },
-                valueRange = minimumPerProvider.toFloat()..9f,
-                steps = (9 - minimumPerProvider - 1).coerceAtLeast(0)
-            )
+            if (minimumPerProvider < 9) {
+                Slider(
+                    value = callsPerProvider.coerceAtLeast(minimumPerProvider.toFloat()),
+                    onValueChange = { callsPerProvider = it },
+                    valueRange = minimumPerProvider.toFloat()..9f,
+                    steps = (9 - minimumPerProvider - 1).coerceAtLeast(0)
+                )
+            } else {
+                Text("All nine calls must be allowed for the selected provider set.", color = colors.textTertiary, fontSize = 10.sp)
+            }
             Text("Time limit: ${durationSeconds.toInt() / 60} min ${durationSeconds.toInt() % 60} sec", color = colors.textPrimary, fontSize = 12.sp)
             Slider(value = durationSeconds, onValueChange = { durationSeconds = it }, valueRange = 30f..600f, steps = 18)
             Text("प्रत्येक Agent का output अधिकतम 9,000 characters तक सीमित रहेगा।", color = colors.textTertiary, fontSize = 10.sp)
@@ -270,7 +283,7 @@ fun AgentCouncilScreen(
                                         specialistCount = specialists.toInt(),
                                         budget = CouncilExecutionBudget(
                                             maxProviderCalls = maxCalls.toInt().coerceAtLeast(minimumCalls),
-                                            maxCallsPerProvider = callsPerProvider.toInt(),
+                                            maxCallsPerProvider = callsPerProvider.toInt().coerceAtLeast(minimumPerProvider),
                                             maxDurationMs = durationSeconds.toLong() * 1_000L,
                                             maxOutputCharactersPerStage = 9_000
                                         )
