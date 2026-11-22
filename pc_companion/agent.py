@@ -585,7 +585,7 @@ class PcCompanionApp:
             return
         import secrets
         action_id = secrets.token_urlsafe(18).replace("-", "_")
-        sent = self._send_e2e_message(peer_id, "remote_action", {"action": action}, action_id, kind)
+        sent = self._send_e2e_message(peer_id, "remote_action", action, action_id, kind)
         self.status_var.set("Encrypted action sent. Android will show its own consent and per-action approval." if sent
                             else "Could not send action. Check connection and peer verification.")
 
