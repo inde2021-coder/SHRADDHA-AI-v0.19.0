@@ -152,8 +152,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # Use the macOS host GPU and enough guest resources for the arm64 emulator.
-      # Software SwiftShader previously failed to register an ADB device before boot timeout.
+      # Run the x86_64 guest on the Ubuntu KVM runner with adequate RAM/CPU.
+      # Keep SwiftShader for headless Linux; wait-for-android-emulator.sh verifies the actual ADB serial.
       - name: Run biometric ONNX smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
