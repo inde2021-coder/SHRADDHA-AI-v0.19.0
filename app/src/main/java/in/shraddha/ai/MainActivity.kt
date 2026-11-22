@@ -1118,10 +1118,16 @@ class MainActivity : AppCompatActivity() {
                 if (prompt.isBlank() || prompt.length > 4000) status.text = "Offline prompt 1-4000 characters का होना चाहिए।"
                 else sendRemote(JSONObject().put("kind", "offline_chat").put("prompt", prompt))
             })
-            addView(actionButton("WINDOWS CODE ASSISTANT", "Configured local GGUF model से code समझें, debug करें और patch draft करें; कोई file अपने-आप नहीं बदलेगी") {
+            addView(actionButton("WINDOWS CODE ASSISTANT", "Optional approved-folder path की file पढ़कर local GGUF model से code समझें/debug करें; बदलाव के लिए अलग file-write approval चाहिए") {
                 val prompt = offlinePrompt.text.toString().trim()
-                if (prompt.isBlank() || prompt.length > 4000) status.text = "Code prompt 1-4000 characters का होना चाहिए।"
-                else sendRemote(JSONObject().put("kind", "code_assistant").put("prompt", prompt))
+                if (prompt.isBlank() || prompt.length > 4000) {
+                    status.text = "Code prompt 1-4000 characters का होना चाहिए।"
+                } else {
+                    val action = JSONObject().put("kind", "code_assistant").put("prompt", prompt)
+                    val relative = pcRelativePath.text.toString().trim()
+                    if (relative.isNotBlank()) action.put("path", relative)
+                    sendRemote(action)
+                }
             })
             addView(actionButton("OPEN APP ON WINDOWS PC", "Allowlisted apps only • PC confirmation required") {
                 val name = remoteAppName.text.toString().trim()
