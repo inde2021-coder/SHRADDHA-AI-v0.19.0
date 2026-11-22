@@ -1,5 +1,6 @@
 package com.Lia.assistant.ui.screens.privacy
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
