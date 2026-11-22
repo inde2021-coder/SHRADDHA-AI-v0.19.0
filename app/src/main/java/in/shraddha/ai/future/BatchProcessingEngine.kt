@@ -56,6 +56,7 @@ class BatchProcessingEngine(
     fun run(
         batchId: String,
         records: List<Record>,
+        retryFailed: Boolean = false,
         processor: (Record) -> Unit
     ): Report {
         require(batchId.matches(Regex("[A-Za-z0-9_-]{1,48}"))) { "Invalid batch ID" }
@@ -70,6 +71,10 @@ class BatchProcessingEngine(
         validateCheckpoint(checkpoint, records)
         val states = checkpoint.getJSONArray("states")
         val errors = checkpoint.getJSONArray("errors")
+        if (retryFailed) records.indices.filter { states.getString(it) == State.FAILED.name }.forEach {
+            states.put(it, State.PENDING.name)
+            errors.put(it, JSONObject.NULL)
+        }
         val hashes = records.map { fingerprint(it.values) }
         val savedHashes = checkpoint.optJSONArray("record_hashes") ?: error("Checkpoint fingerprints are missing")
         require(savedHashes.length() == hashes.size) { "Checkpoint fingerprints are incomplete" }
