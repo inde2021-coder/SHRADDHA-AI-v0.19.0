@@ -5,6 +5,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import `in`.shraddha.ai.brain.PersistentChatMemory
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.LanguagePreference
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.Personality
+import com.Lia.assistant.data.PersonalityRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -31,8 +38,21 @@ class UserBackupManager(context: Context) {
         require(tasks.length <= 100_000) { "Task planner data is too large" }
         val twin = app.getSharedPreferences("shraddha_digital_twin", Context.MODE_PRIVATE)
         val memoryEnabled = PersistentChatMemory.isEnabled(app)
+        val prefs = app.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE)
+        val settings = JSONObject()
+            .put("userName", prefs.getString(NovaPreferences.Keys.USER_NAME, "Friend").orEmpty().take(60))
+            .put("themeMode", prefs.getString(NovaPreferences.Keys.THEME_MODE, "DARK"))
+            .put("reducedMotion", prefs.getBoolean(NovaPreferences.Keys.REDUCED_MOTION, false))
+            .put("orbStyle", prefs.getString(NovaPreferences.Keys.ORB_STYLE, "SATURN"))
+            .put("personality", prefs.getString(NovaPreferences.Keys.PERSONALITY, Personality.NORMAL.name))
+            .put("language", prefs.getString(NovaPreferences.Keys.LANGUAGE, LanguagePreference.AUTO.name))
+            .put("voiceName", prefs.getString(NovaPreferences.Keys.VOICE_NAME, "Aoede").orEmpty().take(80))
+            .put("speechSpeed", prefs.getFloat(NovaPreferences.Keys.SPEECH_SPEED, 1.0f).toDouble())
+            .put("voiceVolume", prefs.getFloat(NovaPreferences.Keys.VOICE_VOLUME, 1.0f).toDouble())
+            .put("aiProvider", prefs.getString(NovaPreferences.Keys.AI_PROVIDER, "GEMINI"))
         val payload = JSONObject()
-            .put("schema", "shraddha-backup-v2")
+            .put("schema", "shraddha-backup-v3")
+            .put("settings", settings)
             .put("createdAt", System.currentTimeMillis())
             .put("assistantName", app.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE).getString("assistant_name", "Shraddha AI").orEmpty().take(60))
             .put("knowledgeGraph", graphJson)
@@ -50,7 +70,20 @@ class UserBackupManager(context: Context) {
 
     fun restore(envelope: String, passphrase: CharArray): Result<Unit> = runCatching {
         val backup = JSONObject(SecureBackupCodec.decrypt(envelope, passphrase))
-        require(backup.optString("schema") == "shraddha-backup-v2") { "Unsupported backup schema" }
+        val schema = backup.optString("schema")
+        require(schema in setOf("shraddha-backup-v2", "shraddha-backup-v3")) { "Unsupported backup schema" }
+        val settings = backup.optJSONObject("settings") ?: JSONObject()
+        val userName = settings.optString("userName", "Friend").filterNot { it.isISOControl() }.trim().take(60).ifBlank { "Friend" }
+        val themeMode = settings.optString("themeMode", "DARK").uppercase().takeIf { it in setOf("DARK", "LIGHT", "SYSTEM") } ?: "DARK"
+        val orbStyle = settings.optString("orbStyle", "SATURN").uppercase().takeIf { it in setOf("SATURN", "CLASSIC", "ENERGY", "NEON", "AURA") } ?: "SATURN"
+        val personality = Personality.fromString(settings.optString("personality", Personality.NORMAL.name))
+        val language = LanguagePreference.fromString(settings.optString("language", LanguagePreference.AUTO.name))
+        val voiceName = settings.optString("voiceName", "Aoede").filterNot { it.isISOControl() }.trim().take(80).ifBlank { "Aoede" }
+        val speechSpeed = settings.optDouble("speechSpeed", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(0.5f, 2.0f) ?: 1.0f
+        val voiceVolume = settings.optDouble("voiceVolume", 1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(0.1f, 1.0f) ?: 1.0f
+        val aiProvider = settings.optString("aiProvider", "GEMINI").uppercase().takeIf {
+            it in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+        } ?: "GEMINI"
 
         val graphJson = backup.getJSONObject("knowledgeGraph")
         val graph = KnowledgeGraph()
@@ -116,8 +149,24 @@ class UserBackupManager(context: Context) {
             .putString("name", twin.optString("name").take(80))
             .putString("language", twin.optString("language", "Hindi").take(40))
             .putString("style", twin.optString("style", "step-by-step").take(80)).commit()) { "Could not restore digital twin settings" }
-        check(app.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE).edit().putString("assistant_name", assistantName).commit()) {
-            "Could not restore assistant name"
+        check(app.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE).edit()
+            .putString(NovaPreferences.Keys.ASSISTANT_NAME, assistantName)
+            .putString(NovaPreferences.Keys.USER_NAME, userName)
+            .putString(NovaPreferences.Keys.THEME_MODE, themeMode)
+            .putBoolean(NovaPreferences.Keys.REDUCED_MOTION, settings.optBoolean("reducedMotion", false))
+            .putString(NovaPreferences.Keys.ORB_STYLE, orbStyle)
+            .putString(NovaPreferences.Keys.PERSONALITY, personality.name)
+            .putString(NovaPreferences.Keys.LANGUAGE, language.name)
+            .putString(NovaPreferences.Keys.VOICE_NAME, voiceName)
+            .putFloat(NovaPreferences.Keys.SPEECH_SPEED, speechSpeed)
+            .putFloat(NovaPreferences.Keys.VOICE_VOLUME, voiceVolume)
+            .putString(NovaPreferences.Keys.AI_PROVIDER, aiProvider)
+            .commit()) { "Could not restore assistant preferences" }
+        runBlocking(Dispatchers.IO) {
+            PersonalityRepository.setAssistantName(app, assistantName)
+            PersonalityRepository.setPersonality(app, personality)
+            PersonalityRepository.setLanguage(app, language)
+            PersonalityRepository.setVoiceName(app, voiceName)
         }
         if (restoreMemory) {
             PersistentChatMemory.setEnabled(app, true)
