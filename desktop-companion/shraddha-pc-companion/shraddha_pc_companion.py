@@ -270,6 +270,8 @@ def write_safe_text_file(root: str, relative: str, content: str, overwrite: bool
     import tempfile
     from pathlib import Path
 
+    if not isinstance(content, str) or len(content) > 256_000:
+        raise ValueError("Text/code content must be at most 256 KB")
     base, candidate = safe_relative_path(root, relative)
     allowed = {".txt", ".md", ".csv", ".json", ".log", ".py", ".js", ".kt", ".html", ".css", ".xml", ".yaml", ".yml"}
     if candidate == base or candidate.suffix.lower() not in allowed:
