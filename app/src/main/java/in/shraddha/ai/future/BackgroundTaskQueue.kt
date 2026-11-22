@@ -23,7 +23,7 @@ object BackgroundTaskQueue {
 
     fun enqueue(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID {
         val cleanGoal = goal.trim()
-        require(cleanGoal.isNotBlank() && cleanGoal.length <= 4000) { "Task must contain 1-4000 characters" }
+        require(cleanGoal.isNotBlank() && cleanGoal.length <= 2000) { "Task must contain 1-2000 characters" }
         require(provider.uppercase() in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
             "Unsupported AI provider"
         }
