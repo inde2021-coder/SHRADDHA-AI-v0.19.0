@@ -476,7 +476,6 @@ class WorkAgentActivity : AppCompatActivity() {
         }
         input.setText("")
         addMessage("user", "Multi-Agent task: $task")
-        val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
         val language = NovaPreferences.getString(this, NovaPreferences.Keys.LANGUAGE, "AUTO")
         busy = true
         status.text = "Multi-Agent Team शुरू हो रही है…"
@@ -492,13 +491,13 @@ class WorkAgentActivity : AppCompatActivity() {
             }
             busy = false
             result.onSuccess { report ->
-                val transcript = report.stages.joinToString("\\n\\n") { stage ->
-                    "【${stage.role}】\\n${stage.output}"
+                val transcript = report.stages.joinToString("\n\n") { stage ->
+                    "【${stage.role}】\n${stage.output}"
                 }
-                addMessage("assistant", "Multi-Agent Team पूरा हुआ • ${report.provider}\\n\\nVerifier की अंतिम रिपोर्ट:\\n${report.finalAnswer}\\n\\nपूरी specialist रिपोर्ट:\\n$transcript")
+                addMessage("assistant", "Multi-Agent Team पूरा हुआ • ${report.provider}\n\nVerifier की अंतिम रिपोर्ट:\n${report.finalAnswer}\n\nपूरी specialist रिपोर्ट:\n$transcript")
                 status.text = "Multi-Agent Team • 5/5 stages complete • Verifier output ready"
             }.onFailure { error ->
-                addMessage("assistant", "Multi-Agent Team पूरा नहीं हुआ। Pipeline सुरक्षित रूप से रोक दी गई।\\nकारण: ${error.message ?: "अज्ञात provider error"}")
+                addMessage("assistant", "Multi-Agent Team पूरा नहीं हुआ। Pipeline सुरक्षित रूप से रोक दी गई।\nकारण: ${error.message ?: "अज्ञात provider error"}")
                 status.text = "Multi-Agent failed • partial work is not marked complete"
             }
         }
