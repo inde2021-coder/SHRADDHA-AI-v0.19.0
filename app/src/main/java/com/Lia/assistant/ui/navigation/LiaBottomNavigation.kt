@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.ui.fx.LiaOrb3D
+import com.Lia.assistant.ui.fx.NovaOrbStyle
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.voice.NovaOrbState
@@ -109,7 +110,9 @@ fun LiaBottomNavigation(
             LiaOrb3D(
                 state = NovaOrbState.IDLE,
                 size = 58.dp,
-                amplitude = 0f
+                amplitude = 0f,
+                style = NovaOrbStyle.SATURN,
+                assistantName = "Shraddha AI"
             )
         }
     }

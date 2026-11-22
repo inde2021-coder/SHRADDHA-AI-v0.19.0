@@ -209,6 +209,14 @@ fun ChatScreen(
         }
     }
 
+    // Receive text entered on the home screen's "Ask me anything" field.
+    LaunchedEffect(Unit) {
+        val pendingPrompt = navController.previousBackStackEntry
+            ?.savedStateHandle
+            ?.remove<String>("home_prompt")
+        if (!pendingPrompt.isNullOrBlank()) sendMessage(pendingPrompt)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
