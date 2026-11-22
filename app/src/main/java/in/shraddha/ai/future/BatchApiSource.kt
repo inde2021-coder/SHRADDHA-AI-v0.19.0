@@ -25,7 +25,7 @@ class BatchApiSource(
 
     fun read(config: Config): List<BatchProcessingEngine.Record> {
         val uri = URI(config.url)
-        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { "API source must use HTTPS without embedded credentials" }
+        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.rawFragment == null) { "API source must use HTTPS without embedded credentials" }
         require(config.pageSize in 1..BatchProcessingEngine.MAX_RECORDS)
         require(config.firstPage >= 0 && config.maxPages in 1..BatchProcessingEngine.MAX_RECORDS)
         require(config.dataField.matches(Regex("[A-Za-z_][A-Za-z0-9_]{0,63}")))
@@ -44,7 +44,9 @@ class BatchApiSource(
                 "&" + encode(config.pageSizeParameter) + "=" + config.pageSize
             val builder = Request.Builder().url(url).get()
             config.headers.forEach { (key, value) -> builder.header(key, value) }
-            client.newCall(builder.build()).execute().use { response ->
+            // Prevent authorization headers from being forwarded through redirects.
+            val safeClient = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+            safeClient.newCall(builder.build()).execute().use { response ->
                 if (!response.isSuccessful) throw IllegalStateException("API returned HTTP ${response.code}")
                 val responseBody = response.body ?: throw IllegalArgumentException("API response body is empty")
                 require(responseBody.contentLength() <= 8L * 1024 * 1024 || responseBody.contentLength() < 0) { "API response exceeds 8 MB" }
@@ -66,6 +68,7 @@ class BatchApiSource(
                 for (i in 0 until array.length()) {
                     val item = array.optJSONObject(i) ?: throw IllegalArgumentException("API record $i is not an object")
                     val id = item.optString("id").ifBlank { "api_${page}_${i + 1}" }
+                    require(id.isNotBlank() && id.length <= 32) { "API record ID must be 1-32 characters" }
                     require(ids.add(id)) { "Duplicate API record ID: $id" }
                     result += BatchProcessingEngine.Record(id, item)
                     require(result.size <= BatchProcessingEngine.MAX_RECORDS) { "API source exceeds 1,000 records" }
