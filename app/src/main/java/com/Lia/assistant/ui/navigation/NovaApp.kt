@@ -31,6 +31,7 @@ import com.Lia.assistant.ui.screens.permissions.PermissionsScreen
 import com.Lia.assistant.ui.screens.personality.PersonalityScreen
 import com.Lia.assistant.ui.screens.privacy.PrivacyScreen
 import com.Lia.assistant.ui.screens.profile.ProfileScreen
+import com.Lia.assistant.ui.screens.phone.PhoneCallAgentScreen
 import com.Lia.assistant.ui.screens.quickactions.QuickActionsScreen
 import com.Lia.assistant.ui.screens.settings.SettingsScreen
 import com.Lia.assistant.ui.screens.settings.ApiKeysScreen
@@ -108,6 +109,7 @@ fun NovaApp(appState: NovaAppState) {
                             onOpenApiKeys = { navController.navigate("api_keys") }
                         )
                     }
+                    composable("phone_call_agent") { PhoneCallAgentScreen(navController) }
 
                     // Flavor-specific routes (e.g. accessibility disclosure in direct)
                     registerAccessibilityDisclosureRoute(navController)
