@@ -66,13 +66,19 @@ def e2e_associated_data(session_id: str, sender_id: str, receiver_id: str, kind:
 
 
 async def send_e2e_message(ws, peer_keys: dict, session_id: str, sender_id: str, target_id: str,
-                           kind: str, correlation: str, payload: dict, action_kind: str = "", index: int = -1):
+                           kind: str, correlation: str, payload: dict, action_kind: str = "", index: int = -1,
+                           category: str = ""):
     import base64, json, secrets
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     state = peer_keys.get(target_id)
     if not state or not state.get("local_confirmed") or not state.get("remote_confirmed"):
         raise RuntimeError("E2E peer fingerprint is not mutually verified")
-    aad_correlation = f"{correlation}:{index}" if kind == "file_transfer_chunk" else correlation
+    if kind == "file_transfer_chunk":
+        aad_correlation = f"{correlation}:{index}"
+    elif kind == "data_share_payload":
+        aad_correlation = f"{correlation}|{category}"
+    else:
+        aad_correlation = correlation
     nonce = secrets.token_bytes(12)
     ciphertext = AESGCM(state["key"]).encrypt(
         nonce, json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
@@ -85,6 +91,8 @@ async def send_e2e_message(ws, peer_keys: dict, session_id: str, sender_id: str,
         envelope.update({"transferId": correlation, "index": index})
     elif kind == "clipboard_payload":
         envelope.update({"requestId": correlation})
+    elif kind == "data_share_payload":
+        envelope.update({"requestId": correlation, "category": category})
     else:
         envelope.update({"actionId": correlation, "actionKind": action_kind[:32]})
     await ws.send(json.dumps(envelope))
@@ -101,7 +109,14 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
     action_id = str(message.get("actionId", ""))
     transfer_id = str(message.get("transferId", ""))
     index = int(message.get("index", -1))
-    correlation = f"{transfer_id}:{index}" if kind == "file_transfer_chunk" else (str(message.get("requestId", "")) if kind == "clipboard_payload" else action_id)
+    if kind == "file_transfer_chunk":
+        correlation = f"{transfer_id}:{index}"
+    elif kind in {"clipboard_payload", "data_share_payload"}:
+        correlation = str(message.get("requestId", ""))
+        if kind == "data_share_payload":
+            correlation += "|" + str(message.get("category", ""))
+    else:
+        correlation = action_id
     aad = e2e_associated_data(session_id, peer_id, local_id, kind, correlation)
     nonce_text = str(message.get("nonce", ""))
     ciphertext_text = str(message.get("ciphertext", ""))
@@ -122,6 +137,9 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
         normalized.update({"type": "file_transfer_chunk", "transferId": transfer_id, "index": index})
     elif kind == "clipboard_payload":
         normalized.update({"type": "data_share_payload", "category": "clipboard", "requestId": correlation})
+    elif kind == "data_share_payload":
+        normalized.update({"type": "data_share_payload", "category": str(message.get("category", "")),
+                           "requestId": str(message.get("requestId", ""))})
     else:
         raise ValueError("Unsupported encrypted message kind")
     return normalized
@@ -1359,6 +1377,44 @@ async def run_once(args) -> None:
                         import pyperclip
                         await asyncio.to_thread(pyperclip.copy, text_value)
                         print("Clipboard text copied locally.")
+                elif kind == "data_share_payload":
+                    try:
+                        import base64, hashlib, tempfile
+                        category = str(message.get("category", ""))
+                        if category not in {"media", "files", "documents"}:
+                            raise ValueError("Unsupported shared-file category")
+                        size = int(message.get("sizeBytes", -1))
+                        if size < 1 or size > 650_000:
+                            raise ValueError("Shared attachment exceeds the 650 KB quick-share limit")
+                        encoded = str(message.get("payload", ""))
+                        raw = base64.b64decode(encoded, validate=True)
+                        if len(raw) != size:
+                            raise ValueError("Shared attachment byte length mismatch")
+                        expected = str(message.get("sha256", "")).lower()
+                        if not re.fullmatch(r"[a-f0-9]{64}", expected) or hashlib.sha256(raw).hexdigest() != expected:
+                            raise ValueError("Shared attachment SHA-256 verification failed")
+                        supplied_name = str(message.get("fileName", "shared-file"))[:120]
+                        safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(supplied_name).name).strip(" .") or "shared-file"
+                        if not await asyncio.to_thread(confirm, f"Save verified {category} attachment '{safe_name}' to Downloads/Shraddha Transfers?"):
+                            print("Shared attachment declined by PC user.")
+                        else:
+                            destination_dir = Path.home() / "Downloads" / "Shraddha Transfers"
+                            destination_dir.mkdir(parents=True, exist_ok=True)
+                            destination = destination_dir / safe_name
+                            stem, suffix = destination.stem, destination.suffix
+                            counter = 1
+                            while destination.exists():
+                                destination = destination_dir / f"{stem} ({counter}){suffix}"
+                                counter += 1
+                            with tempfile.NamedTemporaryFile(prefix=".shraddha-", suffix=".part", dir=destination_dir, delete=False) as temp_file:
+                                temp_path = Path(temp_file.name)
+                                temp_file.write(raw)
+                                temp_file.flush()
+                                os.fsync(temp_file.fileno())
+                            os.replace(temp_path, destination)
+                            print(f"Saved SHA-256 verified attachment: {destination}")
+                    except Exception as exc:
+                        print("Shared attachment rejected:", str(exc)[:200])
                 elif kind == "peer_status":
                     peer_id = str(message.get("deviceId", ""))
                     if message.get("online") is True and peer_id and peer_id != device_id and peer_id not in peer_keys:
