@@ -9,17 +9,27 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Transparent multi-role orchestration. Every role is a real provider call, not a simulated agent. */
 data class CouncilRole(val name: String, val responsibility: String, val output: String)
 data class CouncilPlan(val goal: String, val roles: List<CouncilRole>, val guardrails: List<String>)
 data class CouncilStageResult(val role: String, val output: String)
+data class CouncilProviderUsage(val provider: String, val calls: Int)
+data class CouncilExecutionBudget(
+    val maxProviderCalls: Int = 9,
+    val maxCallsPerProvider: Int = 9,
+    val maxDurationMs: Long = 300_000,
+    val maxOutputCharactersPerStage: Int = 9_000
+)
 data class CouncilExecutionReport(
     val goal: String,
     val provider: String,
     val stages: List<CouncilStageResult>,
     val completed: Boolean,
-    val finalAnswer: String
+    val finalAnswer: String,
+    val providerUsage: List<CouncilProviderUsage> = emptyList(),
+    val elapsedMs: Long = 0
 )
 
 object AgentCouncil {
@@ -106,7 +116,8 @@ object AgentCouncil {
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
         shouldContinue: () -> Boolean = { true },
         assistantName: String = AssistantBrand.FULL_NAME,
-        onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> }
+        onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
+        budget: CouncilExecutionBudget = CouncilExecutionBudget()
     ): Result<CouncilExecutionReport> {
         require(specialistCount in 1..5) { "Run between one and five specialist agents" }
         val plan = plan(goal)
@@ -119,6 +130,11 @@ object AgentCouncil {
             CouncilRole("Specialist " + index, "Independently solve the goal using shared plan and research evidence", "Independent solution " + index)
         }
         val roles = listOf(plan.roles[0], plan.roles[1]) + specialists + listOf(plan.roles[3], plan.roles[4])
+        require(budget.maxProviderCalls in roles.size..9) { "Provider-call budget must cover every required stage and cannot exceed nine calls." }
+        require(budget.maxCallsPerProvider in 1..9) { "Per-provider call budget must be between one and nine." }
+        require(budget.maxDurationMs in 10_000..600_000) { "Council time budget must be between 10 seconds and 10 minutes." }
+        require(budget.maxOutputCharactersPerStage in 1_000..9_000) { "Stage output limit must be between 1,000 and 9,000 characters." }
+
         val assignments = roles.mapIndexed { index, role -> role.name to providers[index % providers.size] }.toMap()
         val providerLabel = assignments.values.distinct().joinToString(" → ")
         val system = """
@@ -129,13 +145,19 @@ object AgentCouncil {
         """.trimIndent()
         val outputs = java.util.Collections.synchronizedList(mutableListOf<CouncilStageResult>())
         val progressIndex = java.util.concurrent.atomic.AtomicInteger(0)
+        val callCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val providerCounts = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
+        val startedAt = System.nanoTime()
         val total = roles.size
+
+        fun elapsedMs(): Long = ((System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(0L)
+
         fun promptFor(role: CouncilRole, prior: List<CouncilStageResult>): String = buildString {
-            append("USER GOAL:\n").append(plan.goal).append("\n\n")
-            append("ROLE: ").append(role.name).append("\nRESPONSIBILITY: ").append(role.responsibility).append("\n")
+            append("USER GOAL:\\n").append(plan.goal).append("\\n\\n")
+            append("ROLE: ").append(role.name).append("\\nRESPONSIBILITY: ").append(role.responsibility).append("\\n")
             if (prior.isNotEmpty()) {
-                append("\nSHARED EVIDENCE AND PRIOR OUTPUTS (verify; do not assume true):\n")
-                prior.forEach { append("### ").append(it.role).append("\n").append(it.output.take(5000)).append("\n\n") }
+                append("\\nSHARED EVIDENCE AND PRIOR OUTPUTS (verify; do not assume true):\\n")
+                prior.forEach { append("### ").append(it.role).append("\\n").append(it.output.take(5000)).append("\\n\\n") }
             }
             when {
                 role.name == "Planner" -> append("Define measurable acceptance criteria, dependencies, risks and execution order.")
@@ -145,49 +167,60 @@ object AgentCouncil {
                 else -> append("Verify the original goal against all prior work. Give PASS/FAIL per criterion and list unverified work and blockers.")
             }
         }
+
+        suspend fun runStage(role: CouncilRole, prior: List<CouncilStageResult>): CouncilStageResult {
+            if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
+            val provider = assignments.getValue(role.name)
+            val currentCall = callCount.incrementAndGet()
+            if (currentCall > budget.maxProviderCalls) {
+                throw IllegalStateException("Council provider-call budget exceeded before " + role.name)
+            }
+            val providerCalls = providerCounts.computeIfAbsent(provider) { java.util.concurrent.atomic.AtomicInteger(0) }.incrementAndGet()
+            if (providerCalls > budget.maxCallsPerProvider) {
+                throw IllegalStateException(provider + " provider-call budget exceeded before " + role.name)
+            }
+            onProgress(role.name, progressIndex.incrementAndGet(), total)
+            val remainingMs = budget.maxDurationMs - elapsedMs()
+            if (remainingMs <= 0L) throw IllegalStateException("Council time budget exceeded before " + role.name)
+            val raw = withTimeoutOrNull(remainingMs) {
+                executor(role, provider, system, promptFor(role, prior))
+            } ?: throw IllegalStateException("Council time budget exceeded during " + role.name)
+            val answer = raw.trim()
+            require(answer.isNotBlank()) { role.name + " returned an empty result" }
+            val bounded = answer.take(budget.maxOutputCharactersPerStage)
+            onStageCompleted(role.name, provider, bounded)
+            return CouncilStageResult(role.name, bounded)
+        }
+
         return try {
             val results = coroutineScope {
                 val foundation = listOf(plan.roles[0], plan.roles[1]).map { role ->
-                    async(Dispatchers.IO) {
-                        if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
-                        onProgress(role.name, progressIndex.incrementAndGet(), total)
-                        val provider = assignments.getValue(role.name)
-                        val answer = executor(role, provider, system, promptFor(role, emptyList())).trim()
-                        require(answer.isNotBlank()) { role.name + " returned an empty result" }
-                        val bounded = answer.take(9000)
-                        onStageCompleted(role.name, provider, bounded)
-                        CouncilStageResult(role.name, bounded)
-                    }
+                    async(Dispatchers.IO) { runStage(role, emptyList()) }
                 }.awaitAll()
                 outputs.addAll(foundation)
 
                 val specialistResults = specialists.map { role ->
-                    async(Dispatchers.IO) {
-                        if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
-                        onProgress(role.name, progressIndex.incrementAndGet(), total)
-                        val provider = assignments.getValue(role.name)
-                        val answer = executor(role, provider, system, promptFor(role, outputs.toList())).trim()
-                        require(answer.isNotBlank()) { role.name + " returned an empty result" }
-                        val bounded = answer.take(9000)
-                        onStageCompleted(role.name, provider, bounded)
-                        CouncilStageResult(role.name, bounded)
-                    }
+                    async(Dispatchers.IO) { runStage(role, outputs.toList()) }
                 }.awaitAll()
                 outputs.addAll(specialistResults)
 
                 listOf(plan.roles[3], plan.roles[4]).forEach { role ->
-                    if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
-                    onProgress(role.name, progressIndex.incrementAndGet(), total)
-                    val provider = assignments.getValue(role.name)
-                    val answer = executor(role, provider, system, promptFor(role, outputs.toList())).trim()
-                    require(answer.isNotBlank()) { role.name + " returned an empty result" }
-                    val bounded = answer.take(9000)
-                    onStageCompleted(role.name, provider, bounded)
-                    outputs.add(CouncilStageResult(role.name, bounded))
+                    outputs.add(runStage(role, outputs.toList()))
                 }
                 outputs.toList()
             }
-            Result.success(CouncilExecutionReport(plan.goal, providerLabel, results, true, results.last().output))
+            val usage = providerCounts.entries
+                .map { CouncilProviderUsage(it.key, it.value.get()) }
+                .sortedBy { it.provider }
+            Result.success(CouncilExecutionReport(
+                goal = plan.goal,
+                provider = providerLabel,
+                stages = results,
+                completed = true,
+                finalAnswer = results.last().output,
+                providerUsage = usage,
+                elapsedMs = elapsedMs()
+            ))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -204,7 +237,8 @@ object AgentCouncil {
         specialistCount: Int = 3,
         shouldContinue: () -> Boolean = { true },
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
-        onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> }
+        onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
+        budget: CouncilExecutionBudget = CouncilExecutionBudget()
     ): Result<CouncilExecutionReport> {
         val configured = MainBrainProviderGateway.configuredProviders(context)
         val selected = preferredProviders.map { it.uppercase() }.distinct().filter { it in configured }
@@ -212,7 +246,7 @@ object AgentCouncil {
         val assistantName = getAssistantName(context)
         return executeParallel(goal, language, selected, specialistCount, { _, provider, system, prompt ->
             withContext(Dispatchers.IO) { MainBrainProviderGateway.complete(context, provider, system, prompt) }
-        }, onProgress, shouldContinue, assistantName, onStageCompleted)
+        }, onProgress, shouldContinue, assistantName, onStageCompleted, budget)
     }
 
     /** Runs the pipeline through the user's currently selected, configured AI provider. */
