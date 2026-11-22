@@ -202,6 +202,15 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
+                name = "download_file",
+                description = "Downloads a user-requested file from a public HTTPS URL using Android Download Manager. Rejects non-HTTPS, local/private hosts and unsafe file names. Returns queued status only; do not claim completion until Android Download Manager reports it.",
+                params = mapOf("url" to "Public HTTPS URL", "file_name" to "Safe destination file name in Downloads"),
+                required = listOf("url", "file_name")
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
                 name = "daily_briefing",
                 description = "Schedules or disables the user-opted-in daily research briefing. ENABLE requires user-selected topics and local 24-hour time HH:MM. DISABLE stops future briefings. The first briefing is scheduled near the selected local time, then repeats about every 24 hours; Android battery/network policies may delay delivery. No messages or external actions are sent.",
                 params = mapOf(
