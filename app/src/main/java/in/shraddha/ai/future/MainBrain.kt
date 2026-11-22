@@ -79,8 +79,15 @@ class MainBrain(
                         .put("action", "voice_action_journal_unavailable")
                         .put("message", "सुरक्षित action journal save नहीं हुई; Website Forge launch नहीं किया गया।")
                 }
-                val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
-                if (journal.finish(taskId, result)) result else JSONObject()
+                val result = runCatching {
+                    com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+                }.getOrElse { error ->
+                    JSONObject().put("status", "error")
+                        .put("action", "website_forge_launch_failed")
+                        .put("message", error.localizedMessage ?: "Website Forge launch failed.")
+                }
+                if (journal.finish(taskId, result)) return result
+                return JSONObject()
                     .put("status", "verification_pending")
                     .put("action", "voice_action_result_not_journaled")
                     .put("message", "Website Forge launch का result सुरक्षित रूप से save नहीं हुआ। दोबारा launch करने से पहले Forge की स्थिति जाँचें।")
