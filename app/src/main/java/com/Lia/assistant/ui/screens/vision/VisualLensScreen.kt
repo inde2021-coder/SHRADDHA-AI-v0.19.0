@@ -1,5 +1,7 @@
 package com.Lia.assistant.ui.screens.vision
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Text
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
