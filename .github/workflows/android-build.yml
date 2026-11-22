@@ -31,7 +31,6 @@ jobs:
     # Hosted runners may not expose KVM. Explicitly permit QEMU TCG when the action disables hardware acceleration.
     env:
       ANDROID_I_WANT_MY_TCG: "yes"
-    if: ${{ (github.event_name != 'pull_request' || github.base_ref != 'main') && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
