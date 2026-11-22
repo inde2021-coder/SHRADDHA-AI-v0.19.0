@@ -20,6 +20,7 @@ class BiometricModelSmokeTest {
         assertFalse("Large ONNX models must not be bundled in the APK", bundled.any { it.endsWith(".onnx") })
 
         val directory = File(context.filesDir, "biometric-models")
+        directory.deleteRecursively() // Keep the on-demand assertion deterministic across repeated test runs.
         val faceFile = File(directory, "sface.onnx")
         val speakerFile = File(directory, "ecapa-any-length.onnx")
         BiometricModelInstaller.ensureInstalled(context, "face")
