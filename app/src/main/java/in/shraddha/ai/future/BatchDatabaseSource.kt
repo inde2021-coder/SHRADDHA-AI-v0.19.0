@@ -23,7 +23,7 @@ object BatchDatabaseSource {
         columns?.forEach { require(identifier.matches(it)) { "Invalid column name" } }
         orderBy?.let { require(it.split(',').all { part -> part.trim().split(Regex("\\s+")).let { bits -> bits.size in 1..2 && identifier.matches(bits[0]) && (bits.size == 1 || bits[1].uppercase() in setOf("ASC", "DESC")) } }) { "Invalid sort expression" } }
 
-        val projection = columns?.distinct()?.toTypedArray()
+        val projection = columns?.let { (it.toList() + idColumn).distinct().toTypedArray() }
         val result = ArrayList<BatchProcessingEngine.Record>()
         database.query(table, projection, null, null, null, null, orderBy, (maxRecords + 1).toString()).use { cursor ->
             val idIndex = cursor.getColumnIndex(idColumn)
