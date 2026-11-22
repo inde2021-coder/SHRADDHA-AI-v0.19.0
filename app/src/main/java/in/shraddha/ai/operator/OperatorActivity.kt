@@ -40,6 +40,7 @@ class OperatorActivity : Activity() {
         root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
         root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
         root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
+        root.addView(action("फोन restart के बाद Interrupted Action जाँचें") { reviewInterruptedOperatorActions() })
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
         root.addView(action("फॉर्म इमेज → AI Autofill Review") { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
@@ -65,6 +66,63 @@ class OperatorActivity : Activity() {
 
 
 
+
+    /** Shows restart-recovery evidence and asks before scheduling any remaining steps. */
+    private fun reviewInterruptedOperatorActions() {
+        Thread {
+            val engine = OperatorEngine(
+                emit = { event -> runOnUiThread {
+                    log.text = "${event.state}: ${event.message}\n" + log.text.take(4500)
+                } },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+            )
+            val brain = `in`.shraddha.ai.future.MainBrain(
+                executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
+                context = this@OperatorActivity
+            )
+            val reviews = runCatching { brain.reviewInterruptedWorkflows() }.getOrDefault(emptyList())
+            runOnUiThread {
+                if (reviews.isEmpty()) {
+                    log.text = "कोई ऐसा interrupted Operator action नहीं मिला जिसके लिए journal उपलब्ध हो।\n" + log.text.take(4500)
+                    return@runOnUiThread
+                }
+                val labels = reviews.map { review ->
+                    val status = if (review.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE)
+                        "परिणाम सत्यापित" else "मानवीय जाँच आवश्यक"
+                    "${review.title} • ${review.action} • ${review.stepId} • ${status}"
+                }.toTypedArray()
+                android.app.AlertDialog.Builder(this@OperatorActivity)
+                    .setTitle("Interrupted Operator actions")
+                    .setItems(labels) { _, which ->
+                        val selected = reviews[which]
+                        if (selected.recovery != `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE) {
+                            android.app.AlertDialog.Builder(this@OperatorActivity)
+                                .setTitle("Automatic resume रोका गया")
+                                .setMessage("इस action का परिणाम स्क्रीन से निश्चित रूप से सत्यापित नहीं हुआ। इसे दोबारा नहीं चलाया जाएगा। पहले संबंधित ऐप में स्थिति जाँचें।")
+                                .setPositiveButton("ठीक है", null).show()
+                        } else {
+                            android.app.AlertDialog.Builder(this@OperatorActivity)
+                                .setTitle("अगले चरण जारी करें?")
+                                .setMessage("पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।")
+                                .setNegativeButton("अभी नहीं", null)
+                                .setPositiveButton("जारी करें") { _, _ ->
+                                    Thread {
+                                        val queued = brain.resumeInterruptedWorkflow(selected.workflowId)
+                                        val result = if (queued != null) brain.startNextWorkflow() else null
+                                        runOnUiThread {
+                                            if (result != null) showMainBrainResult(brain, result)
+                                            else log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\n" + log.text.take(4500)
+                                        }
+                                    }.start()
+                                }.show()
+                        }
+                    }
+                    .setNegativeButton("बंद करें", null)
+                    .show()
+            }
+        }.start()
+    }
 
     /** Accepts a validated Council proposal only after a human reviews the complete action list. */
     private fun handleCouncilOperatorPlan(source: android.content.Intent?) {
