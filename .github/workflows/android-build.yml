@@ -218,7 +218,6 @@ jobs:
 
   windows-companion:
     name: Windows PC companion native checks
-    if: ${{ (github.event_name != 'pull_request' || github.base_ref != 'main') && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: windows-latest
     steps:
       - name: Checkout
