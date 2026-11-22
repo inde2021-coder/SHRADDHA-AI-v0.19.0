@@ -83,11 +83,13 @@ class OperatorActionJournal(context: Context) {
         val current = ShraddhaAccessibilityService.captureVisibleScreen()
             ?: return Recovery.REVIEW_REQUIRED
         val decision = assess(
-            entry.packageName,
-            entry.beforeFingerprint,
-            entry.expectedVisibleText,
-            entry.expectedTextAbsentBefore,
-            current
+            expectedPackage = entry.packageName,
+            beforeFingerprint = entry.beforeFingerprint,
+            expectedText = entry.expectedVisibleText,
+            expectedTextAbsentBefore = entry.expectedTextAbsentBefore,
+            currentPackage = current.packageName,
+            currentFingerprint = fingerprint(current),
+            visibleText = current.elements.flatMap { listOf(it.text, it.description) }
         )
         return if (decision == Recovery.VERIFIED_COMPLETE) {
             if (save(entry.copy(state = "RECOVERED_VERIFIED", updatedAt = System.currentTimeMillis()))) {
@@ -140,16 +142,17 @@ class OperatorActionJournal(context: Context) {
             beforeFingerprint: String,
             expectedText: String,
             expectedTextAbsentBefore: Boolean,
-            current: ScreenSnapshot
+            currentPackage: String,
+            currentFingerprint: String,
+            visibleText: Collection<String>
         ): Recovery {
             val expected = expectedText.trim()
-            if (expectedPackage.isBlank() || current.packageName != expectedPackage ||
-                beforeFingerprint.isBlank() || fingerprintForTest(current) == beforeFingerprint ||
+            if (expectedPackage.isBlank() || currentPackage != expectedPackage ||
+                beforeFingerprint.isBlank() || beforeFingerprint == currentFingerprint ||
                 expected.isBlank() || !expectedTextAbsentBefore) return Recovery.REVIEW_REQUIRED
-            val visible = current.elements.any {
-                it.text.contains(expected, true) || it.description.contains(expected, true)
-            }
-            return if (visible) Recovery.VERIFIED_COMPLETE else Recovery.REVIEW_REQUIRED
+            return if (visibleText.any { it.contains(expected, true) }) {
+                Recovery.VERIFIED_COMPLETE
+            } else Recovery.REVIEW_REQUIRED
         }
 
         internal fun fingerprintForTest(snapshot: ScreenSnapshot): String {
