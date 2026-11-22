@@ -37,13 +37,14 @@ class BackgroundAgentWorker(
         val goal = payload?.optString(BackgroundTaskQueue.KEY_GOAL).orEmpty()
         val provider = payload?.optString(BackgroundTaskQueue.KEY_PROVIDER).orEmpty()
         val language = payload?.optString(BackgroundTaskQueue.KEY_LANGUAGE) ?: "AUTO"
+        val specialistCount = payload?.optInt(BackgroundTaskQueue.KEY_SPECIALIST_COUNT, 3) ?: 3
         if (goal.isBlank() || provider.isBlank()) {
             scheduler.fail(schedulerTaskId, "Encrypted background task payload is incomplete.")
             return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Encrypted background task payload is incomplete."))
         }
 
         val result = withContext(Dispatchers.IO) {
-            MainBrain.executeBackgroundCouncil(applicationContext, goal, language, provider, shouldContinue = { !isStopped }, onProgress = { role, index, total ->
+            MainBrain.executeBackgroundCouncil(applicationContext, goal, language, provider, specialistCount, shouldContinue = { !isStopped }, onProgress = { role, index, total ->
                 if (!isStopped) setProgressAsync(workDataOf(
                     BackgroundTaskQueue.KEY_PROGRESS_ROLE to role,
                     BackgroundTaskQueue.KEY_PROGRESS_INDEX to index,
