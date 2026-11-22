@@ -280,12 +280,13 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        activeOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
+        val homeOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
             setVoiceState(VoiceSessionManager.state.value)
             setAmplitude(VoiceSessionManager.amplitude.value)
             setMuted(VoiceSessionManager.muted.value)
         }
-        heroTop.addView(activeOrb, LinearLayout.LayoutParams(dp(138), dp(138)))
+        activeOrb = homeOrb
+        heroTop.addView(homeOrb, LinearLayout.LayoutParams(dp(138), dp(138)))
         heroBody.addView(heroTop)
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Live voice engine") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
@@ -397,7 +398,7 @@ class MainActivity : AppCompatActivity() {
         pageRoot.removeAllViews()
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(14)) }
         top.addView(Button(this).apply { text = "‹  Home"; isAllCaps = false; setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF283454.toInt()); setOnClickListener { showHome() } })
-        top.addView(TextView(this).apply { text = when(page) { "assistant" -> "AI ASSISTANT"; "expert" -> "EXPERT HUB"; "devices" -> "DEVICE CONTROL"; "data" -> "DATA SHARING"; "lab" -> "AI LAB"; "kids" -> "KIDS UNIVERSE"; "people" -> "PERSON MEMORY"; "cloud" -> "SECURE CLOUD SYNC"; "future" -> "FUTURE INTELLIGENCE"; else -> "PERMISSIONS" }; textSize = 13f; setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD); setPadding(dp(14), 0, 0, 0) })
+        top.addView(TextView(this).apply { text = when(page) { "assistant" -> "AI ASSISTANT"; "expert" -> "EXPERT HUB"; "devices" -> "DEVICE CONTROL"; "data" -> "DATA SHARING"; "lab" -> "AI LAB"; "kids" -> "KIDS UNIVERSE"; "people" -> "PERSON MEMORY"; "cloud" -> "SECURE CLOUD SYNC"; "future" -> "FUTURE INTELLIGENCE"; else -> "PERMISSIONS" }; textSize = 13f; setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD); setPadding(dp(14), 0, 0, 0) })
         pageRoot.addView(top)
         updateBottomNavigation()
         if (page == "assistant") {
@@ -405,12 +406,13 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER
                 setPadding(dp(8), dp(2), dp(8), dp(14))
             }
-            activeOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
+            val assistantOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
                 setVoiceState(VoiceSessionManager.state.value)
                 setAmplitude(VoiceSessionManager.amplitude.value)
                 setMuted(VoiceSessionManager.muted.value)
             }
-            assistantHero.addView(activeOrb, LinearLayout.LayoutParams(dp(188), dp(188)))
+            activeOrb = assistantOrb
+            assistantHero.addView(assistantOrb, LinearLayout.LayoutParams(dp(188), dp(188)))
             assistantHero.addView(TextView(this).apply {
                 text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
