@@ -76,6 +76,24 @@ class SharedTaskSchedulerTest {
         assertTrue(scheduler.snapshot().isEmpty())
     }
 
+    @Test fun restoreResumesOnlyUnclaimedPendingWorkAndNeverReplaysRunningWork() {
+        val source = SharedTaskScheduler()
+        source.submitAll(listOf(
+            SharedTaskScheduler.Task("pending", "Safe queued task", payload = "typed-plan"),
+            SharedTaskScheduler.Task("running", "Interrupted task")
+        ))
+        source.claimReady()
+        val saved = source.snapshot()
+        val restored = SharedTaskScheduler()
+        restored.restore(saved)
+
+        assertEquals(SharedTaskScheduler.State.PENDING, restored.get("pending")?.state)
+        assertEquals("typed-plan", restored.get("pending")?.task?.payload)
+        assertEquals(SharedTaskScheduler.State.FAILED, restored.get("running")?.state)
+        assertTrue(restored.get("running")?.error?.contains("not replayed") == true)
+        assertEquals(listOf("pending"), restored.claimReady().map { it.task.id })
+    }
+
     @Test fun onlyRunningTasksCanBeCompletedAndCancellationIsExplicit() {
         val scheduler = SharedTaskScheduler()
         scheduler.submitAll(listOf(SharedTaskScheduler.Task("a", "A")))
