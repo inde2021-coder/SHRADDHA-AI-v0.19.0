@@ -303,8 +303,8 @@ class OperatorActivity : Activity() {
     }
 
     private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, resume: Boolean = false) {
-        lateinit var runner: AdaptiveWorkflowRunner
-        runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+        lateinit var emit: (`in`.shraddha.ai.operator.OperatorEvent) -> Unit
+        emit = { event -> runOnUiThread {
             val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
             log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
             if (event.state == OperatorTaskState.WAITING_CONFIRMATION) {
@@ -313,13 +313,22 @@ class OperatorActivity : Activity() {
                     .setMessage("${event.message}\n\nयह अनुमति केवल इसी एक चरण के लिए होगी। अगले जोखिम वाले चरण पर फिर पूछा जाएगा।")
                     .setNegativeButton("नहीं", null)
                     .setPositiveButton("हाँ, केवल यह चरण") { _, _ ->
-                        Thread { runner.run(profile, name, values, confirmed = true, resume = true) }.start()
+                        Thread {
+                            `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
+                                this@OperatorActivity, profile, name, values,
+                                confirmed = true, resume = true, onEvent = emit
+                            )
+                        }.start()
                     }.show()
             }
         } }
-        Thread { runner.run(profile, name, values, confirmed = false, resume = resume) }.start()
+        Thread {
+            `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
+                this, profile, name, values,
+                confirmed = false, resume = resume, onEvent = emit
+            )
+        }.start()
     }
-
     private fun field(hintText: String) = EditText(this).apply {
         hint = hintText; setHintTextColor(0xFF8290AA.toInt()); setTextColor(Color.WHITE); textSize = 14f
         setSingleLine(true); setPadding(14, 10, 14, 10)
