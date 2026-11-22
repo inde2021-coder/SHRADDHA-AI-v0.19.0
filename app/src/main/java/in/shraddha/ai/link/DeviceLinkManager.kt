@@ -95,8 +95,19 @@ object DeviceLinkManager {
                 return
             }
         }
-        lastBaseUrl = baseUrl; lastPair = pair
-        sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
+        if (sessionId == pair.sessionId && deviceId == pair.deviceId && socket != null) {
+            done(Result.success(pair))
+            return
+        }
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectPending = false
+        socket?.close(1000, "Replacing device session connection")
+        socket = null
+        lastBaseUrl = baseUrl
+        lastPair = pair
+        sessionId = pair.sessionId
+        deviceId = pair.deviceId
+        deviceToken = pair.token
         val completionDelivered = AtomicBoolean(false)
         val wsBase = baseUrl.trim().trimEnd('/').replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
         val url = "$wsBase/ws?sessionId=${pair.sessionId}&deviceId=${pair.deviceId}"
@@ -245,8 +256,17 @@ object DeviceLinkManager {
                 if (envelope.frameType == 2) onCameraFrame?.invoke(envelope.sourceDeviceId, jpeg)
                 else onScreenFrame?.invoke(envelope.sourceDeviceId, jpeg)
             }
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t)); scheduleReconnect(baseUrl, pair) }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason"); if (code != 1000) scheduleReconnect(baseUrl, pair) }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (socket === webSocket) socket = null
+                onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
+                if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
+                scheduleReconnect(baseUrl, pair)
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (socket === webSocket) socket = null
+                onStatus?.invoke("Disconnected: $reason")
+                if (code != 1000) scheduleReconnect(baseUrl, pair)
+            }
         })
     }
 
