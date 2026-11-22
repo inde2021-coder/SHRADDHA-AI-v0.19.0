@@ -3431,7 +3431,13 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
             NovaOrbState.ERROR -> .22f
             NovaOrbState.IDLE -> .55f
         }
-        val rotation = motionPhase * 360f * spinRate
+        val styleSpin = when (orbStyle) {
+            NovaOrbStyle.MINIMAL -> .42f
+            NovaOrbStyle.SATURN -> .78f
+            NovaOrbStyle.ARCHER -> 1.08f
+            else -> 1f
+        }
+        val rotation = motionPhase * 360f * spinRate * styleSpin
 
         // Soft atmospheric halo behind the core.
         paint.style = Paint.Style.FILL
@@ -3468,7 +3474,7 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
         for (i in 0 until ringCount) {
             canvas.save()
             canvas.rotate(rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f, cx, cy)
-            canvas.scale(1f, if (i == 1) .34f else .48f, cx, cy)
+            canvas.scale(if (orbStyle == NovaOrbStyle.SATURN && i == 0) 1.55f else 1f, if (orbStyle == NovaOrbStyle.SATURN && i == 0) .25f else if (i == 1) .34f else .48f, cx, cy)
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = base * (if (i == 0) .027f else .016f)
             paint.color = ringColors[i]
