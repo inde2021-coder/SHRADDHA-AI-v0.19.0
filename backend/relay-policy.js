@@ -38,10 +38,16 @@ export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes
   return expected > 0 && byteLength === expected;
 }
 
+export const ALLOWED_REMOTE_ACTION_KINDS = new Set([
+  'tap','swipe','scroll','back','home','type','click_text','open_app','ocr',
+  'file_list','file_read','file_search','offline_chat','code_assistant',
+  'media_control','system_control','screenshot','clipboard_transform','web_search'
+]);
+
 export function validRemoteActionEnvelope(actionId, action, now = Date.now()) {
   return typeof actionId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(actionId) &&
     action && typeof action === 'object' && !Array.isArray(action) &&
-    ['tap','swipe','type','click_text','open_app','home','back','scroll','ocr','file_list','file_read','file_search','offline_chat'].includes(action.kind) &&
+    ALLOWED_REMOTE_ACTION_KINDS.has(action.kind) &&
     Number.isFinite(now);
 }
 
