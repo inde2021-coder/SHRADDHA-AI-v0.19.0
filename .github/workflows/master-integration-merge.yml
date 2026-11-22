@@ -53,9 +53,15 @@ jobs:
             main \
             audit-fixes-v0.19.1 \
             feature/ai-phone-agent-foundation \
+            feature/complete-remaining-shraddha-features \
+            fix/android-emulator-stability-2026-11 \
+            fix/android-onnx-df-diagnostic-2026-11 \
             integration/branch-hardening-2026-11 \
             integration/firebase-rtdb-rules-tested \
             integration/redesign-phone-agent-2026-11 \
+            integration/master-feature-consolidation-2026-11 \
+            optimization/apk-size-without-feature-loss \
+            redesign/shraddha-ai-neon-glass-home \
             redesign-v0.19.2 \
             work/step-01-source-audit-fixes
           do
