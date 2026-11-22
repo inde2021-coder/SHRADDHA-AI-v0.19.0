@@ -4,6 +4,9 @@ import `in`.shraddha.ai.operator.PlannedOperatorAction
 import `in`.shraddha.ai.operator.TaskPlannerOperatorBridge
 import `in`.shraddha.ai.operator.OperatorStep
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
+import android.content.Context
+import org.json.JSONObject
+import java.util.UUID
 import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 
 /**
@@ -53,6 +56,25 @@ class MainBrain(
             )
             return council to session
         }
+
+        /** Voice tools enter the Main Brain boundary before the typed, policy-checked tool executor. */
+        suspend fun executeVoiceTool(context: Context, toolName: String, args: JSONObject): JSONObject =
+            com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+
+        /** WorkManager remains the durable execution engine; all app enqueue requests enter here. */
+        fun enqueueBackgroundCouncil(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID =
+            BackgroundTaskQueue.enqueueFromMainBrain(context.applicationContext, goal, provider, language)
+
+        /** Background workers call back through Main Brain rather than selecting providers themselves. */
+        fun executeBackgroundCouncil(
+            context: Context,
+            goal: String,
+            language: String,
+            provider: String,
+            shouldContinue: () -> Boolean,
+            onProgress: (String, Int, Int) -> Unit
+        ): Result<CouncilExecutionReport> =
+            AgentCouncil.executeWithConfiguredProvider(context.applicationContext, goal, language, provider, shouldContinue, onProgress)
     }
 
     private val scheduler = SharedTaskScheduler(1)
