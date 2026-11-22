@@ -166,6 +166,11 @@ class MainActivity : AppCompatActivity() {
         handlePairingIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        activeOrb?.setReducedMotion(NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false))
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -280,7 +285,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        val homeOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
+        val homeOrb = ShraddhaOrbView(this, assistantDisplayName, NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false)).apply {
             setVoiceState(VoiceSessionManager.state.value)
             setAmplitude(VoiceSessionManager.amplitude.value)
             setMuted(VoiceSessionManager.muted.value)
@@ -3292,7 +3297,7 @@ object VoiceCommandParser {
 
 
 /** Animated 3D energy core. Motion and accessibility state follow the real voice session. */
-private class ShraddhaOrbView(context: android.content.Context, private val assistantName: String) : View(context) {
+private class ShraddhaOrbView(context: android.content.Context, private val assistantName: String, private var reducedMotion: Boolean) : View(context) {
     private var voiceState: NovaOrbState = NovaOrbState.IDLE
     private var microphoneAmplitude: Float = 0f
     private var microphoneMuted: Boolean = false
@@ -3345,7 +3350,15 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (!animator.isStarted) animator.start()
+        if (!reducedMotion && !animator.isStarted) animator.start()
+    }
+
+    fun setReducedMotion(enabled: Boolean) {
+        if (reducedMotion == enabled) return
+        reducedMotion = enabled
+        if (enabled) animator.cancel()
+        else if (isAttachedToWindow && !animator.isStarted) animator.start()
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -3354,7 +3367,7 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
         val cy = height / 2f
         val base = minOf(width, height) * .285f
         if (base <= 0f) return
-        val wave = (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
+        val wave = if (reducedMotion) 0f else (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
         val statePulse = if (microphoneMuted && voiceState == NovaOrbState.LISTENING) .012f else when (voiceState) {
             NovaOrbState.LISTENING -> .045f + microphoneAmplitude * .11f
             NovaOrbState.SPEAKING -> .065f + microphoneAmplitude * .10f
@@ -3372,7 +3385,7 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
             NovaOrbState.ERROR -> .22f
             NovaOrbState.IDLE -> .55f
         }
-        val rotation = phase * 360f * spinRate
+        val rotation = if (reducedMotion) 0f else phase * 360f * spinRate
 
         // Soft atmospheric halo behind the core.
         paint.style = Paint.Style.FILL
