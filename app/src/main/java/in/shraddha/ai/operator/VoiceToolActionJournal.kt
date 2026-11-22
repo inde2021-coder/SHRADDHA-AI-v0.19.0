@@ -55,6 +55,21 @@ class VoiceToolActionJournal(context: Context) {
         return store.put(key, completed.toString()).isSuccess
     }
 
+    /** Explicit user attestation after inspecting the target app; this never replays the action. */
+    @Synchronized
+    fun markManuallyVerified(taskId: String): Boolean {
+        val current = read() ?: return false
+        if (current.taskId != taskId || current.state != "EXECUTING") return false
+        val verified = JSONObject()
+            .put("task_id", current.taskId)
+            .put("tool", current.tool)
+            .put("state", "MANUALLY_VERIFIED")
+            .put("action", current.action)
+            .put("result_status", "user_checked_target_app")
+            .put("updated_at", System.currentTimeMillis())
+        return store.put(key, verified.toString()).isSuccess
+    }
+
     @Synchronized
     fun latest(): Entry? = read()
 
