@@ -144,8 +144,8 @@ class MainBrain(
         }
 
         /** WorkManager remains the durable execution engine; all app enqueue requests enter here. */
-        fun enqueueBackgroundCouncil(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID =
-            BackgroundTaskQueue.enqueueFromMainBrain(context.applicationContext, goal, provider, language)
+        fun enqueueBackgroundCouncil(context: Context, goal: String, provider: String, language: String = "AUTO", specialistCount: Int = 3): UUID =
+            BackgroundTaskQueue.enqueueFromMainBrain(context.applicationContext, goal, provider, language, specialistCount)
 
         /** Background workers call back through Main Brain rather than selecting providers themselves. */
         suspend fun executeBackgroundCouncil(
@@ -153,6 +153,7 @@ class MainBrain(
             goal: String,
             language: String,
             provider: String,
+            specialistCount: Int = 3,
             shouldContinue: () -> Boolean,
             onProgress: (String, Int, Int) -> Unit
         ): Result<CouncilExecutionReport> =
@@ -161,7 +162,7 @@ class MainBrain(
                 goal = goal,
                 language = language,
                 preferredProviders = provider.split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() },
-                specialistCount = 3,
+                specialistCount = specialistCount,
                 shouldContinue = shouldContinue,
                 onProgress = onProgress
             )
