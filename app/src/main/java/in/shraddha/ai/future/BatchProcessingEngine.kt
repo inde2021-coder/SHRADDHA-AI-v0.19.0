@@ -71,6 +71,9 @@ class BatchProcessingEngine(
         val states = checkpoint.getJSONArray("states")
         val errors = checkpoint.getJSONArray("errors")
         val hashes = records.map { fingerprint(it.values) }
+        val savedHashes = checkpoint.optJSONArray("record_hashes") ?: error("Checkpoint fingerprints are missing")
+        require(savedHashes.length() == hashes.size) { "Checkpoint fingerprints are incomplete" }
+        hashes.indices.forEach { require(savedHashes.getString(it) == hashes[it]) { "Record content changed since checkpoint; refusing unsafe resume" } }
         val firstByHash = HashSet<String>()
         for (i in records.indices) {
             if (!firstByHash.add(hashes[i]) && states.getString(i) == State.PENDING.name) {
@@ -146,6 +149,7 @@ class BatchProcessingEngine(
     private fun newCheckpoint(records: List<Record>) = JSONObject()
         .put("version", 1).put("total", records.size)
         .put("record_ids", JSONArray().also { a -> records.forEach { a.put(it.id) } })
+        .put("record_hashes", JSONArray().also { a -> records.forEach { a.put(fingerprint(it.values)) } })
         .put("states", JSONArray().also { a -> records.forEach { _ -> a.put(State.PENDING.name) } })
         .put("errors", JSONArray().also { a -> records.forEach { _ -> a.put(JSONObject.NULL) } })
         .put("updated_at", System.currentTimeMillis())
@@ -155,7 +159,8 @@ class BatchProcessingEngine(
         require(checkpoint.optInt("total") == records.size) { "Checkpoint record count does not match input" }
         val ids = checkpoint.optJSONArray("record_ids") ?: error("Checkpoint IDs are missing")
         val states = checkpoint.optJSONArray("states") ?: error("Checkpoint states are missing")
-        require(ids.length() == records.size && states.length() == records.size) { "Checkpoint is incomplete" }
+        val hashes = checkpoint.optJSONArray("record_hashes") ?: error("Checkpoint fingerprints are missing")
+        require(ids.length() == records.size && states.length() == records.size && hashes.length() == records.size) { "Checkpoint is incomplete" }
         records.indices.forEach { require(ids.getString(it) == records[it].id) { "Input order/identity changed; refusing unsafe resume" } }
     }
 
