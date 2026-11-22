@@ -123,9 +123,48 @@ class MainBrain(
             confirmed: Boolean,
             resume: Boolean,
             onEvent: (`in`.shraddha.ai.operator.OperatorEvent) -> Unit
-        ): Boolean =
-            `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(context.applicationContext, onEvent)
-                .run(profile, workflowName, values, confirmed, resume)
+        ): Boolean {
+            val appContext = context.applicationContext
+            val scheduler = MainBrainSchedulerRuntime.get(appContext)
+            val taskId = "learned_" + UUID.randomUUID().toString().replace("-", "")
+            // Persist only routing metadata here. Workflow inputs and checkpoints remain in
+            // the encrypted AppProfile/WorkflowCheckpoint stores; secrets are not copied
+            // into the scheduler payload.
+            val payload = JSONObject()
+                .put("kind", "learned_workflow")
+                .put("package", profile.packageName)
+                .put("workflow", workflowName.take(120))
+                .put("resume", resume)
+                .toString()
+            runCatching {
+                scheduler.submitAll(listOf(SharedTaskScheduler.Task(
+                    id = taskId,
+                    title = "Learned workflow: ${workflowName.take(100)}",
+                    priority = 2,
+                    payload = payload
+                )))
+            }.getOrElse { return false }
+
+            // All foreground, voice and learned automation compete for the same capacity.
+            // If a higher-priority task owns the slot, do not bypass the shared scheduler.
+            if (scheduler.claimSpecific(taskId) == null) {
+                runCatching { scheduler.cancel(taskId) }
+                return false
+            }
+            return try {
+                val completed = `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(appContext, onEvent)
+                    .run(profile, workflowName, values, confirmed, resume)
+                if (completed) scheduler.complete(taskId)
+                else scheduler.fail(taskId, "Learned workflow paused, awaiting approval, or failed; resume only from its verified checkpoint.")
+                completed
+            } catch (cancelled: CancellationException) {
+                runCatching { scheduler.cancel(taskId) }
+                throw cancelled
+            } catch (error: Exception) {
+                runCatching { scheduler.fail(taskId, error.message ?: "Learned workflow failed") }
+                false
+            }
+        }
     }
 
     private val requests = linkedMapOf<String, WorkflowRequest>()
