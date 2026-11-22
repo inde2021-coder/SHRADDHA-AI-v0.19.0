@@ -62,7 +62,7 @@ fun AboutScreen(
         AssistantBrand.FULL_NAME
     ).trim().ifBlank { AssistantBrand.FULL_NAME }
 
-    val versionName = rememberAppVersion(context)
+    val appDetails = rememberAppDetails(context)
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
@@ -88,7 +88,7 @@ fun AboutScreen(
         Text(assistantName, fontFamily = SerifFontFamily, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
         Text("YOUR PERSONAL AI COMPANION", color = colors.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
         Spacer(Modifier.height(7.dp))
-        Text("Version $versionName  •  Android", color = colors.textSecondary, fontSize = 12.sp)
+        Text("Version ${appDetails.versionName}  •  Build ${appDetails.versionCode}", color = colors.textSecondary, fontSize = 12.sp)
 
         Spacer(Modifier.height(20.dp))
         InfoCard(title = "About the app", icon = { Icon(Icons.Default.Info, null, tint = colors.accent) }) {
@@ -108,6 +108,14 @@ fun AboutScreen(
             AboutBullet("Optional phone, app and screen assistance")
             AboutBullet("Custom assistant avatar and animated orb styles")
             AboutBullet("Some features require user permissions, service setup or a compatible device")
+        }
+
+        Spacer(Modifier.height(12.dp))
+        InfoCard(title = "App information", icon = { Icon(Icons.Default.Info, null, tint = colors.accent) }) {
+            AboutDetail("Application ID", appDetails.applicationId)
+            AboutDetail("Minimum Android", "Android 8.0 (API 26) or newer")
+            AboutDetail("Languages", "Hindi • Hinglish • English")
+            AboutDetail("AI provider options", "Gemini • OpenAI • Groq • Claude • Perplexity")
         }
 
         Spacer(Modifier.height(12.dp))
@@ -160,6 +168,15 @@ private fun InfoCard(title: String, icon: @Composable () -> Unit, content: @Comp
 }
 
 @Composable
+private fun AboutDetail(label: String, value: String) {
+    val colors = LocalNovaColors.current
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(label, color = colors.textSecondary, fontSize = 10.sp)
+        Text(value, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
 private fun AboutBullet(text: String) {
     val colors = LocalNovaColors.current
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
@@ -168,13 +185,27 @@ private fun AboutBullet(text: String) {
     }
 }
 
+private data class ShraddhaAppDetails(
+    val versionName: String,
+    val versionCode: Long,
+    val applicationId: String
+)
+
 @Composable
-private fun rememberAppVersion(context: Context): String {
+private fun rememberAppDetails(context: Context): ShraddhaAppDetails {
     return androidx.compose.runtime.remember(context) {
         runCatching {
             @Suppress("DEPRECATION")
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Unknown"
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            val code = if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+            ShraddhaAppDetails(
+                versionName = info.versionName?.takeIf { it.isNotBlank() } ?: "Unknown",
+                versionCode = code,
+                applicationId = context.packageName
+            )
+        }.getOrElse {
+            ShraddhaAppDetails("Unknown", 0L, context.packageName)
+        }
     }
 }
 
