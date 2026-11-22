@@ -166,7 +166,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         )
         FeatureRow(
             FeatureInfo("💬", "WhatsApp & SMS", "मैसेज बोलकर भेजें", NeonPurple) { navController.navigate("voice") },
-            FeatureInfo("📷", "Visual Lens", "कैमरा से पूछें", Color(0xFFFFB84D)) { navController.navigate("quick_actions") }
+            FeatureInfo("📷", "Visual Lens", "लाइव कैमरा से पूछें", Color(0xFFFFB84D)) { navController.navigate("visual_lens") }
         )
         FeatureRow(
             FeatureInfo("🖥", "Read Screen / PC", "स्क्रीन और PC कंट्रोल", NeonBlue) { navController.navigate("quick_actions") },
