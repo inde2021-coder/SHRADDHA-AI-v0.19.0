@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "file_write", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
 
 
 def create_e2e_identity():
@@ -169,7 +169,7 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
     if kind == "web_search":
         query = action.get("query")
         return isinstance(query, str) and 2 <= len(query.strip()) <= 160
-    if kind in {"file_list", "file_read", "file_search"} and not file_root:
+    if kind in {"file_list", "file_read", "file_search", "file_write"} and not file_root:
         return False
     if kind == "file_list":
         return isinstance(action.get("path", ""), str) and len(action.get("path", "")) <= 500
@@ -180,6 +180,13 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         relative = action.get("path", "")
         limit = action.get("limit", 20)
         return isinstance(relative, str) and len(relative) <= 500 and isinstance(query, str) and 0 < len(query.strip()) <= 120 and isinstance(limit, int) and not isinstance(limit, bool) and 1 <= limit <= 50
+    if kind == "file_write":
+        relative = action.get("path")
+        content = action.get("content")
+        overwrite = action.get("overwrite", False)
+        return (isinstance(relative, str) and 0 < len(relative) <= 500 and
+                isinstance(content, str) and len(content) <= 256_000 and
+                isinstance(overwrite, bool))
     if kind in {"tap", "swipe"}:
         keys = ("x", "y") if kind == "tap" else ("x1", "y1", "x2", "y2")
         try:
@@ -212,13 +219,23 @@ def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | Non
 
 
 def safe_relative_path(root: str, relative: str):
-    """Resolve a relative path under an explicitly approved root; reject traversal."""
+    """Resolve only a relative path below the approved root; reject traversal and symlink components."""
     from pathlib import Path
     base = Path(root).expanduser().resolve()
-    candidate = (base / relative).resolve()
-    if candidate != base and base not in candidate.parents:
+    raw = Path(relative or ".")
+    if raw.is_absolute() or any(part == ".." for part in raw.parts):
+        raise ValueError("Only relative paths inside the approved file root are allowed")
+    candidate = base
+    for part in raw.parts:
+        if part in {"", "."}:
+            continue
+        candidate = candidate / part
+        if candidate.is_symlink():
+            raise ValueError("Symlinks are not allowed in the approved file workspace")
+    resolved = candidate.resolve()
+    if resolved != base and base not in resolved.parents:
         raise ValueError("Path escapes the approved file root")
-    return base, candidate
+    return base, resolved
 
 
 def list_safe_files(root: str, relative: str = "") -> list[dict]:
@@ -227,7 +244,7 @@ def list_safe_files(root: str, relative: str = "") -> list[dict]:
         raise ValueError("Folder does not exist")
     results = []
     for item in sorted(folder.iterdir(), key=lambda p: p.name.casefold())[:100]:
-        if item.is_symlink():
+        if item.is_symlink() or item.name == ".shraddha-backups":
             continue
         results.append({"name": item.name[:180], "type": "folder" if item.is_dir() else "file",
                         "size": item.stat().st_size if item.is_file() else 0})
@@ -236,7 +253,7 @@ def list_safe_files(root: str, relative: str = "") -> list[dict]:
 
 def read_safe_text_file(root: str, relative: str) -> str:
     _, candidate = safe_relative_path(root, relative)
-    if candidate.is_symlink() or not candidate.is_file():
+    if not candidate.is_file():
         raise ValueError("Only regular files can be read")
     if candidate.suffix.lower() not in {".txt", ".md", ".csv", ".json", ".log", ".py", ".js", ".kt", ".html", ".css", ".xml", ".yaml", ".yml"}:
         raise ValueError("File type is not allowed for text preview")
@@ -244,6 +261,61 @@ def read_safe_text_file(root: str, relative: str) -> str:
         raise ValueError("File exceeds 256 KB preview limit")
     return candidate.read_text(encoding="utf-8", errors="replace")[:256_000]
 
+
+def write_safe_text_file(root: str, relative: str, content: str, overwrite: bool = False) -> dict:
+    """Atomically create/update one approved text file; updates always keep a local backup."""
+    import hashlib
+    import os
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    base, candidate = safe_relative_path(root, relative)
+    allowed = {".txt", ".md", ".csv", ".json", ".log", ".py", ".js", ".kt", ".html", ".css", ".xml", ".yaml", ".yml"}
+    if candidate == base or candidate.suffix.lower() not in allowed:
+        raise ValueError("Only named text/code files with an approved extension can be written")
+    if not candidate.parent.exists() or not candidate.parent.is_dir():
+        raise ValueError("Parent folder must already exist inside the approved root")
+    if candidate.exists() and not overwrite:
+        raise FileExistsError("File already exists; explicit overwrite approval is required")
+    if candidate.exists() and not candidate.is_file():
+        raise ValueError("Only regular files can be replaced")
+
+    backup_relative = ""
+    if candidate.exists():
+        backup_dir = base / ".shraddha-backups"
+        if backup_dir.is_symlink():
+            raise ValueError("Backup directory cannot be a symlink")
+        backup_dir.mkdir(exist_ok=True)
+        relative_key = candidate.relative_to(base).as_posix().encode("utf-8")
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        backup_name = hashlib.sha256(relative_key).hexdigest()[:16] + "_" + stamp + candidate.suffix + ".bak"
+        backup_path = backup_dir / backup_name
+        if backup_path.exists():
+            backup_path = backup_dir / (hashlib.sha256(relative_key).hexdigest()[:16] + "_" + str(time.time_ns()) + candidate.suffix + ".bak")
+        shutil.copy2(candidate, backup_path)
+        backup_relative = backup_path.relative_to(base).as_posix()
+
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", delete=False,
+                                         dir=str(candidate.parent), prefix=".shraddha-", suffix=".tmp") as handle:
+            temp_path = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if candidate.exists() and not overwrite:
+            raise FileExistsError("File appeared during write; refusing to overwrite")
+        os.replace(temp_path, candidate)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return {"path": candidate.relative_to(base).as_posix(), "bytes": candidate.stat().st_size,
+            "backup": backup_relative, "status": "file_written"}
 
 
 def redact_ocr_text(raw: str) -> str:
@@ -876,7 +948,7 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             return json.dumps({"status": status, "answer": answer[:10000]}, ensure_ascii=False)
         except Exception as exc:
             return "offline_inference_failed: " + str(exc)[:180]
-    if kind in {"ocr", "file_list", "file_read", "file_search"}:
+    if kind in {"ocr", "file_list", "file_read", "file_search", "file_write"}:
         if kind == "ocr":
             try:
                 import pygetwindow
@@ -907,6 +979,12 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                 return json.dumps({"status": "file_list", "items": list_safe_files(file_root, action.get("path", ""))}, ensure_ascii=False)
             if kind == "file_search":
                 return json.dumps({"status": "file_search", "matches": search_safe_text_files(file_root, action.get("path", ""), action["query"], action.get("limit", 20))}, ensure_ascii=False)
+            if kind == "file_write":
+                preview = action["content"][:400].replace("\\n", " ")
+                if not await asyncio.to_thread(confirm, f"Create/update {action['path']!r} under approved root? overwrite={action.get('overwrite', False)}. Backup is created before overwrite. Preview: {preview!r}"):
+                    return "file_write_rejected_by_pc_user"
+                result = write_safe_text_file(file_root, action["path"], action["content"], action.get("overwrite", False))
+                return json.dumps(result, ensure_ascii=False)
             return json.dumps({"status": "file_read", "path": action["path"], "text": read_safe_text_file(file_root, action["path"])}, ensure_ascii=False)
         except Exception as exc:
             return "file_access_blocked: " + str(exc)[:180]
