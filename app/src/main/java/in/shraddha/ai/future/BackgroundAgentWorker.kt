@@ -120,7 +120,9 @@ class BackgroundAgentWorker(
                     "COMPLETED",
                     "Planner, Researcher, Specialists, Critic and Verifier finished. Final answer saved.",
                     finalAnswer = report.finalAnswer,
-                    attempt = attempt
+                    attempt = attempt,
+                    providerUsage = report.providerUsage.joinToString(",") { "${it.provider}:${it.calls}" },
+                    elapsedMs = report.elapsedMs
                 )
                 if (saved.isFailure) {
                     val message = "Council finished, but its final evidence status could not be saved securely."
