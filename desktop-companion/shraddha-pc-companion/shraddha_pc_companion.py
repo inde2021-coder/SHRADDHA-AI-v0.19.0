@@ -1380,6 +1380,7 @@ async def run_once(args) -> None:
                 elif kind == "data_share_payload":
                     try:
                         import base64, hashlib, tempfile
+                        temp_path = None
                         category = str(message.get("category", ""))
                         if category not in {"media", "documents"}:
                             raise ValueError("Unsupported shared-file category")
@@ -1400,6 +1401,8 @@ async def run_once(args) -> None:
                             raise ValueError("Shared attachment SHA-256 verification failed")
                         supplied_name = str(message.get("fileName", "shared-file"))[:120]
                         safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(supplied_name).name).strip(" .") or "shared-file"
+                        if safe_name.split(".")[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
+                            safe_name = "_" + safe_name
                         if not await asyncio.to_thread(confirm, f"Save verified {category} attachment '{safe_name}' to Downloads/Shraddha Transfers?"):
                             print("Shared attachment declined by PC user.")
                         else:
@@ -1417,8 +1420,12 @@ async def run_once(args) -> None:
                                 temp_file.flush()
                                 os.fsync(temp_file.fileno())
                             os.replace(temp_path, destination)
+                            temp_path = None
                             print(f"Saved SHA-256 verified attachment: {destination}")
                     except Exception as exc:
+                        if temp_path is not None:
+                            try: temp_path.unlink(missing_ok=True)
+                            except Exception: pass
                         print("Shared attachment rejected:", str(exc)[:200])
                 elif kind == "peer_status":
                     peer_id = str(message.get("deviceId", ""))
