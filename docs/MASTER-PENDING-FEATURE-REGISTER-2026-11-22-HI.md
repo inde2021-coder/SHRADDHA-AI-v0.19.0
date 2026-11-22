@@ -128,3 +128,8 @@ The following cannot be completed by source changes alone and must remain clearl
 - Remaining pairing/timeline UI copy now reads the configured assistant name in those locations; a full hardcoded-name audit is still pending.
 - Screen/camera frame relay was corrected to use mutually verified E2E encryption, session-bound AAD and replay checks. Tests were authored but deliberately not run yet.
 - No tests or builds have been run for these pending-branch commits, following the user's instruction to finish the implementation pass first.
+
+
+### File transfer protocol correction — 22 November
+
+A cross-layer source review found Android's previous 48,000-byte chunk sizing did not match the relay's 48 KiB (49,152-byte) contract and could create an empty trailing chunk at exact boundaries. The pending branch now uses one shared Android protocol helper for chunk count, sender/receiver offsets and final chunk size, aligned with the backend. Regression tests were added but not run. The 20 MB app cap, resumable/process-death edge cases, malware scanning and real-device transfer tests remain.
