@@ -1,81 +1,107 @@
 # Shraddha AI vs STONIC — Verified Feature Gap Audit
 
-Audit basis: current `optimization/apk-size-without-feature-loss` branch source, plus STONIC's public product and release notes checked 2026-11-22. This is a code-evidence audit, not a claim that every existing module is production-ready.
+Audit basis: current `optimization/apk-size-without-feature-loss` branch source, including Android, backend, and both Windows companion implementations. This is a source audit, not a claim that every feature has passed physical-device testing.
 
-## Already present in Shraddha AI — do not duplicate
+## Capabilities already present — do not duplicate
 
-| Capability | Evidence in repository | Audit status |
+| Capability | Repository evidence | Actual limits |
 |---|---|---|
-| Natural voice conversation | `VoiceSessionManager`, `GeminiLiveClient`, `LiveAudioIO`, Hindi/English language handling | Present; improve reliability and tool integration |
-| Persistent conversation / personal memory | `ConversationMemory`, `PersistentChatMemory`, `SecureMemoryVault`, `UnifiedMemoryRepository` | Present; encrypted history is opt-in and cloud sync is consent-gated |
-| Phone app and UI control | `LiaToolCatalog`, Accessibility Operator, trained workflows, screen OCR | Present; actions are constrained and sensitive actions require confirmation |
-| Windows PC companion | `pc_companion/agent.py`, secure pairing, E2E peer keys, local approval | Present but currently limited to mouse, keyboard, shortcuts, scrolling and screen sharing |
-| Web/mobile work surface | `WorkAgentActivity` | Present; embedded browser + chat + reviewed hand-off |
-| Tasks and reminders | `TaskPlannerActivity`, `ReminderReceiver` | Present; local reminders and a basic daily briefing schedule |
-| Visual understanding | `vision/LiveEyesCameraService`, `backend/vision-analysis.js`, OCR and screen share | Present in progress; live camera analysis is not yet a complete conversational visual agent |
-| Website/code creation | `WebsiteForgeClient`, Website Forge UI, PC companion source includes coder tools | Present in parts; end-to-end code agent is not yet integrated as one verified workflow |
+| Continuous voice | `VoiceSessionManager`, `GeminiLiveClient`, `LiveAudioIO`, foreground voice service | User-started; microphone pauses on disconnect; OEM/battery reliability needs device testing |
+| Encrypted memory | `ConversationMemory`, `PersistentChatMemory`, `SecureMemoryVault`, `UnifiedMemoryRepository` | Local persistence is opt-in; cloud sync is separately consent-gated |
+| Android app automation | `LiaToolCatalog`, Accessibility Operator, trained workflows, OCR, checkpoint/verification | Requires Android permissions; consequential actions need explicit confirmation |
+| Camera-as-eyes | `LiveEyesCameraService`, `VisualLensScreen` | Headless Camera2 foreground service, no preview surface, privacy indicator/notification, throttled visual analysis and voice context handoff; requires camera permission + HTTPS vision gateway and physical-device testing |
+| PC control and vision | `desktop-companion/shraddha-pc-companion/` | Advanced companion supports approved-root read-only file list/read/search, active-window OCR, offline GGUF inference, code-assistant prompts, web search, clipboard, screen sharing and selected phone control; local and Android approvals remain required |
+| Legacy PC companion | `pc_companion/` | Separate older implementation with a narrower action set; do not confuse it with the advanced desktop companion |
+| Mobile web work surface | `WorkAgentActivity` | Embedded browser, page inspection, reviewed click/fill, downloads and App Operator hand-off; not unrestricted browser automation |
+| Reminders / planning | `TaskPlannerActivity`, `ReminderReceiver`, `AutonomousTaskPlanner` | Local reminders and DAG planning exist; they were not a durable AI job runner before this branch's new queue |
+| File transfer | `SecureFileTransfer`, advanced Windows companion transfer protocol | Chunk manifest/relay support exists, but complete Android file-picker UI, disk-backed receive/resume queue and end-to-end device verification remain incomplete |
+| Provider routing | `GeminiTextClient`, `MultiProviderChatClient` | Supports configured providers; credentials must be added by the user |
+| Creator / engineering | `CreatorStudioEngine`, `EngineeringWorkbench`, Website Forge | Some outputs are plans/templates; rendered video, production CAD and complete build/deploy automation are not shipped |
 
-## Verified gaps to build — avoid pretending stubs are complete
+## Implemented in this branch from the gap audit
 
-### P0 — Real multi-agent execution (not only planning)
-- Current `AgentCouncil.plan()` creates role descriptions and explicitly says it does not contact external agents or execute actions.
-- Build a real orchestrator with Planner, Researcher, Builder/Specialist, Critic and Verifier workers.
-- Shared task state, explicit dependencies, bounded parallelism, cancellation, retries, progress events and a final verification report.
-- Agents must use real configured providers/tools; UI must distinguish planned, running, completed, failed and blocked work.
+### 1. Real provider-backed multi-role team
+- Replaced the plan-only `AgentCouncil` with real sequential Planner → Researcher → Specialist → Critic → Verifier provider calls.
+- Uses the user's selected configured provider (Gemini, OpenAI, Groq, Claude or Perplexity where configured).
+- Exposes progress in the Mobile Work Agent.
+- Stops at the first failed/empty stage; does not label partial output complete.
+- Supports cancellation between stages.
+- Added unit tests for role order, progress, fail-fast and cancellation.
+- Limitation: this is a five-role pipeline using the selected provider, not parallel independent external agents or a multi-provider swarm.
 
-### P0 — Full PC work agent with observable verification
-- Current Windows `actions.py` supports a small allowlist: tap, swipe, type, open Start-menu shortcut, home, back and scroll. It does not provide file operations, code editing/running or process management.
-- Add permission-scoped file search/read/write/move, app/window inspection, process diagnostics and project-aware code workflows.
-- Keep local PC approval for control sessions; show a visible action timeline and Stop control.
-- Require exact confirmation before overwrite, delete, install, send, publish, shutdown or settings changes. Never expose arbitrary unrestricted shell execution.
+### 2. Persistent background task queue
+- Added WorkManager-backed network-constrained background execution for the five-role team.
+- Added queue and Stop controls to the Mobile Work Agent.
+- Persists scheduled work across process/app restarts; the OS may reschedule after interruption.
+- Reports stage progress and final Verifier output; cancellation is checked between role calls.
+- Limits task payload and WorkManager output to stay within its Data size constraints.
+- Limitation: provider calls already in flight cannot be interrupted by the current synchronous provider clients; process death may restart the task from the beginning rather than resume at an individual role checkpoint.
 
-### P1 — Background task engine
-- Current Task Planner stores reminders and schedules a daily briefing; it is not a durable multi-step job runner.
-- Add persistent task queue, resumable checkpoints, retry policy, foreground/background progress notifications, cancellation and completion callbacks.
-- Long-running downloads, code builds, file operations and research should continue safely without blocking the voice conversation.
+### 3. Live Eyes compile fix
+- Added the missing announcement-throttle state required by the existing headless camera service so the Kotlin source can compile.
+- The feature still requires physical Android validation for camera start/stop, privacy indicator, OEM background behaviour, network failures, battery and voice handoff.
 
-### P1 — Proactive Awareness / personalised “Your World”
-- Current daily briefing is a scheduled local reminder, not a source-aware personalised briefing.
-- Add user-selected interests/goals, quiet hours, a reviewable daily digest, current web research with citations, and explicit pause/disable controls.
-- Do not infer sensitive interests or send unsolicited messages/actions.
+### 4. Windows companion verification pipeline
+- Updated Windows CI to run tests and package both the legacy companion and the advanced `desktop-companion/shraddha-pc-companion` implementation on this working branch.
 
-### P1 — Shared phone ↔ PC workspace and conversation continuity
-- Current PC pairing and Android work surfaces exist, but the PC README documents that the companion does not read files, capture microphone audio or silently send messages.
-- Unify task handoff, selected files, conversation history, status and approvals across phone and PC.
-- Preserve end-to-end encryption for peer data and re-verify device identity after reconnects.
+## Remaining Stonic gaps — continue implementation
 
-### P2 — Skills and integrations framework
-- Add installable, versioned skills with declared permissions, tool schemas, provenance, health checks and revocation.
-- Skills must not gain permissions implicitly; every sensitive action remains user-approved.
-- Avoid duplicate one-off integrations when a reusable skill can serve multiple workflows.
+### P0 — Cross-device durable workspace
+- Finish file transfer end-to-end: Android picker, receiver approval, disk-backed chunk persistence, resume after app/process restart, hash verification, cancellation and Android↔Windows integration tests.
+- Share task state, conversation handoff, selected files, status and approvals across Android and Windows.
+- Keep E2E peer identity verification and per-device permissions.
 
-### P2 — Character and awareness controls
-- Provide editable character name, voice, personality and behaviour as a single profile applied consistently across voice, chat, notifications and PC companion.
-- Add an explicit Awareness toggle, quiet hours, interruption controls and user-visible reasons when Shraddha speaks first.
+### P0 — Full project-aware coding agent
+- Existing code-assistant and Website Forge pieces are not a verified end-to-end code agent.
+- Add project workspace selection, file tree/context, bounded file edits, diff preview, tests/build execution in a sandbox, logs, rollback and deploy preview.
+- Never execute arbitrary shell commands from an untrusted model response. Require local approval for install, execute, overwrite, delete and deploy.
+
+### P1 — True multi-provider orchestration
+- Current new team uses one selected provider for all five roles.
+- Add optional role-to-provider mapping for 2–5 configured providers, credential availability checks, bounded parallelism for independent research, shared evidence store, conflict resolution, cost/time budgets and deterministic final verification.
+- A missing provider key must produce a clear setup requirement, not a simulated agent.
+
+### P1 — Personalised, source-aware proactive briefing
+- Current daily briefing is primarily local scheduling and agenda data.
+- Add user-selected interests and goals, source-linked web research, quiet hours, review-before-action, pause/disable controls and clear data-source provenance.
+- No hidden tracking or unsolicited messages.
+
+### P1 — Versioned skills and integrations
+- Current plugin metadata validates scopes but does not execute sandboxed third-party code.
+- Add signed/versioned skill manifests, declared permissions, isolated execution, audit events, health checks, revocation and explicit user consent per scope.
+- Do not load arbitrary downloaded code into the app process.
+
+### P2 — Advanced PC file operations
+- Advanced Windows companion deliberately supports safe read-only file browsing, not arbitrary editing/deletion/execution.
+- Add transactional file edits with diff preview, backup/rollback and local confirmation. Add process/app diagnostics with a strict allowlist and visible action timeline.
+- Keep arbitrary shell execution disabled.
+
+### P2 — Unified awareness and personality
+- Apply the editable assistant name, voice, personality and language profile consistently across Android voice/chat, notifications and Windows companion.
+- Add user-visible awareness state, quiet hours, interruption rules and a global emergency stop/revoke dashboard.
 
 ## Differentiators to take Shraddha beyond STONIC
 
-1. **Phone-native + PC-native agent:** one task can work across Android apps, Windows apps and browser surfaces with shared progress and approvals.
-2. **Hindi-first multimodal interaction:** Hindi/English voice, camera-as-eyes, screen context, OCR and files in one conversation.
-3. **Verified execution:** every action reports evidence of success/failure; never say a task is complete merely because a command was sent.
-4. **Offline/local-first modes:** local reminders, encrypted memory and supported on-device tasks remain useful without cloud connectivity.
-5. **Open provider routing:** Gemini, OpenAI, Claude, Groq and compatible providers can be configured without tying the product to one vendor.
-6. **Privacy dashboard:** clear indicators for microphone, camera, screen, memory, cloud sync and connected devices, with immediate stop/revoke controls.
+1. One Hindi-first agent across Android and Windows, not separate assistants.
+2. Camera-as-eyes + screen + files + voice context in one conversation, with visible OS privacy indicators.
+3. Verified execution: every action reports observed success/failure; a sent command is not proof of completion.
+4. Local-first encrypted memory, reminders and offline inference when configured.
+5. User-selected provider routing with transparent provider, source and cost reporting.
+6. Privacy dashboard for microphone, camera, screen, memory, cloud sync and paired devices.
 
-## Delivery order and acceptance criteria
+## Delivery order
 
-1. Finish the current camera-as-eyes implementation and prove start/stop, camera privacy indicator, stale-frame suppression, live question context and voice handoff on a physical Android device.
-2. Implement the durable task engine and connect existing Task Planner/Work Agent to it.
-3. Upgrade AgentCouncil from a plan-only stub to real provider-backed workers and verifier tests.
-4. Expand Windows PC companion using least-privilege tools, local approval and a visible action/verification timeline.
-5. Add source-aware personalised briefing, shared workspace and versioned skills.
-6. Run Android unit tests, backend tests, PC companion tests, build/release checks and physical phone↔PC integration tests. Merge to `main` only after required checks pass.
+1. Finish and test the new multi-agent pipeline and persistent background queue.
+2. Finish cross-device file transfer and shared workspace.
+3. Build project-aware coding agent with sandboxed execution and verification.
+4. Implement true multi-provider orchestration and source-aware briefing.
+5. Add signed skills framework and unified privacy/personality controls.
+6. Run Android unit tests/build, emulator smoke, backend tests, both Windows companion suites/packages, then physical Android↔Windows testing. Merge into `main` only after required CI checks and device tests pass.
 
-## STONIC references
+## STONIC public references
 
 - https://stonicai.com/
 - https://stonicai.com/releases
 - https://stonicai.com/changelog/
-- https://stonicai.vercel.app/capabilities
 
-STONIC is primarily a Windows desktop product. Its public release notes describe voice, memory, characters, PC computer agent, file attachments, web search, background work and agent workflows. The feature list above is based on published descriptions; availability can vary by release.
+STONIC public descriptions are used as a feature comparison reference. Feature availability can vary by release; this repository audit is grounded in source files, not marketing claims.
