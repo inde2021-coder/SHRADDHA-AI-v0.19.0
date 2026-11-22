@@ -204,7 +204,7 @@ fun DataVaultScreen(navController: NavController) {
                             val result = withContext(Dispatchers.IO) {
                                 runCatching {
                                     try { UserBackupManager(context).export(secret) }
-                                    finally { secret.fill('\\u0000') }
+                                    finally { secret.fill('\u0000') }
                                 }
                             }
                             result.onSuccess {
@@ -267,7 +267,7 @@ fun DataVaultScreen(navController: NavController) {
                     isBusy = true
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
-                            try { UserBackupManager(context).restore(envelope, secret) } finally { secret.fill('\\u0000') }
+                            try { UserBackupManager(context).restore(envelope, secret) } finally { secret.fill('\u0000') }
                         }
                         status = result.fold(
                             onSuccess = { "Backup restored. Reopen affected screens to refresh their state." },
