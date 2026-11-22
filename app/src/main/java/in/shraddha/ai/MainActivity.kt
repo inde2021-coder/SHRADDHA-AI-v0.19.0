@@ -190,7 +190,7 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = "Single-use Shraddha device pairing QR code"
             })
             addView(TextView(this@MainActivity).apply {
-                text = "Pairing code  $code\\nValid for 5 minutes • One successful join only\\nScan with the other Shraddha AI app."
+                text = "Pairing code  $code\\nValid for 5 minutes • One successful join only\\nScan with the other $assistantDisplayName app."
                 gravity = android.view.Gravity.CENTER; textSize = 14f; setTextColor(0xFFE7EAF5.toInt()); setPadding(0, dp(10), 0, 0)
             })
         }
@@ -932,7 +932,7 @@ class MainActivity : AppCompatActivity() {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "पहले अपना deployed HTTPS relay URL डालें।"; return@actionButton }
                 DeviceLinkManager.createSession(url, deviceName.text.toString().ifBlank { "$assistantDisplayName Phone" }) { result -> runOnUiThread {
-                    result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "One-time pairing invite created. Scan the QR on the other Shraddha AI app."; showPairingQr(url, it.code) }
+                    result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "One-time pairing invite created. Scan the QR on the other $assistantDisplayName app."; showPairingQr(url, it.code) }
                         .onFailure { status.text = "Pairing error: ${it.message}" }
                 } }
             })
@@ -1640,7 +1640,7 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { briefingOutput.text = "Briefing input invalid: ${it.message}" }
             })
 
-            val timelineTitle = edit("Life Timeline • event title", "उदाहरण: Shraddha AI milestone")
+            val timelineTitle = edit("Life Timeline • event title", "उदाहरण: $assistantDisplayName milestone")
             val timelineCategory = edit("Event category", "work / personal / project")
             val timelineNote = edit("Event note", "केवल वही जानकारी जो आप खुद सेव करना चाहते हैं")
             val timelineQuery = edit("Search timeline", "keyword")
