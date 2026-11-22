@@ -18,7 +18,7 @@ This register consolidates the user's earlier feature requests and the current s
 
 | Request | Current source observation | Remaining work |
 |---|---|---|
-| Renameable assistant identity; new name replaces “Shraddha AI” in UI and voice | Assistant name preference and dynamic voice prompt/status use exist. | Audit every screen, notification, accessibility label, TTS string, desktop companion and exported document for hardcoded product-name leakage. |
+| Renameable assistant identity; new name replaces “Shraddha AI” in UI and voice | Assistant name preference and dynamic voice prompt/status use exist. 23 Nov source pass updates Settings labels, About clipboard label, Home core label and Voice fallback/error strings. | Continue auditing every screen, notification, accessibility label, TTS string, desktop companion and exported document; launcher app label remains static by Android design. |
 | Continuous microphone after explicit activation; one mic control; no repeated connect/disconnect sounds | Voice session manager, foreground service and reconnect backoff exist. | Verify audio focus, mute, app background/foreground, process death, permission revocation, OEM battery restrictions and explicit stop on physical devices. |
 | Hindi and English conversations | Language detection/preference and Hindi/English voice challenge paths exist. | End-to-end Hindi/English quality and provider fallback evaluation. |
 | Custom Shraddha voice | TTS client/gateway configuration exists. | Licensed voice weights, deployed HTTPS TTS service, secrets and quality/latency verification. No model or voice license may be fabricated. |
@@ -30,7 +30,7 @@ This register consolidates the user's earlier feature requests and the current s
 
 | Request | Current source observation | Remaining work |
 |---|---|---|
-| Multi-agent council | Sequential council and provider routing existed. Pending branch adds parallel Planner/Researcher, 1–5 Specialists, Critic and Verifier, and a WorkManager UI entry point. | Build/test later; add budgets, per-stage durable evidence, cancellation, retry policy and provider usage accounting. |
+| Multi-agent council | Parallel Planner/Researcher, 1–5 Specialists, Critic and Verifier are routed through Main Brain and WorkManager. 23 Nov source pass adds the Multi-Agent Workspace route from Home/Quick Actions. | Source now includes provider-call/time limits, per-provider call caps, encrypted per-stage evidence, cancellation/retry status and provider usage accounting. Exact monetary spend estimation and checkpoint-level resume remain; no final build/device verification yet. |
 | Autonomous project manager | Task planner, workflow lifecycle and project tracker exist. | Persisted dependency-aware execution, real task adapters, resumable steps, progress, checkpoints, rollback and explicit approvals. |
 | Self-review / verification engine | Acceptance-check scoring and reporting exist. | Make verification mandatory for every generated artifact and workflow; block completion on failed required checks. |
 | Deep research with citations | Backend/provider research paths exist. | Real source retrieval, URL validation, evidence provenance, citation checks and no unsupported “researched” claims. |
@@ -38,7 +38,7 @@ This register consolidates the user's earlier feature requests and the current s
 | Predictive assistant / digital twin | Opt-in repeated-event suggestions and editable memory primitives exist. | Persistent signal source, feedback loop, schedule/quiet hours, explainability and strict no-covert-monitoring controls. |
 | Meeting intelligence | Transcript marker extraction exists. | Consent-based audio/transcription, diarization, correction UI, calendar and export integration. |
 | Voice-created workflows | Existing app training and workflow router exist. | Voice authoring, safe review, app-specific recovery and reusable workflow editing. |
-| Background task runner | WorkManager queue and scheduler exist. | Ensure durable progress/evidence, retry/backoff, interruption handling and recovery after provider timeout/process death. |
+| Background task runner | WorkManager queue and scheduler exist. 23 Nov source pass adds encrypted per-stage evidence, attempt history, cancellation status, retry-pending status, per-provider call counts and elapsed time. | Checkpoint-level resume (skip already completed stages safely), process-death/provider-timeout recovery verification and task-history UX remain. |
 
 ## C. Phone, app and screen control
 
@@ -47,7 +47,7 @@ This register consolidates the user's earlier feature requests and the current s
 | Open/control apps by voice | Accessibility Operator and app launch/action tools exist. | Expand supported actions, app-specific workflows, OCR fallback, canvas/WebView limitations and Android-version/device matrix. |
 | Read current screen | Accessibility snapshot and opt-in OCR exist. | Permission-denied/revoked flows, sensitive-field filtering, protected-screen handling and user-visible session indicator. |
 | WhatsApp/SMS hands-free | Message composer and explicit send approval paths exist. | Official supported APIs/intent flows, robust recipient resolution, exact preview and user-tap send; chat history/search is not claimed. |
-| Calls by voice | Dialer/call controls and phone-agent source exist. | Verify real SIM call flows, contact disambiguation, call audio routing and emergency handling on device. |
+| Calls by voice | Dialer/call controls and PhoneCallAgentScreen exist; 23 Nov pass registers the SIM Call Agent route and exposes it in Quick Actions. | Verify real SIM call flows, contact disambiguation, call audio routing, Edesy DID/Jio forwarding and emergency handling on device. |
 | Notifications | Metadata-only encrypted listener/history and quiet hours exist. | Rich per-app rules, action support, retention controls and Android OEM/version testing. |
 | Clipboard control | Consent-gated relay and integrity checks exist. | True E2E encryption/key agreement, key rotation, replay protection and multi-device tests. |
 | File transfer | SAF-based 100 MiB sender/receiver, 48 KB encrypted chunks, SHA-256, receiver approval, save-location picker, pause/resume and cancellation exist in source. | Real-device interruption/process-death resume, relay quotas, malware scanning and device-matrix tests remain. |
@@ -56,7 +56,7 @@ This register consolidates the user's earlier feature requests and the current s
 
 | Request | Current source observation | Remaining work |
 |---|---|---|
-| Camera Visual Lens Q&A | Camera/screen capture services exist. Pending branch now encrypts visual frames with mutually verified ECDH/AES-GCM keys, session/device/frame/sequence-bound AAD and replay checks; source-level protocol tests were added. | Full live camera-frame-to-AI pipeline, grounding, camera permission lifecycle, physical-device latency and privacy tests. |
+| Camera Visual Lens Q&A | Camera/screen capture services exist. Pending branch now encrypts visual frames with mutually verified ECDH/AES-GCM keys, session/device/frame/sequence-bound AAD and replay checks; 23 Nov pass routes Live Eyes through the selected AI provider and adds a voice Q&A entry from Visual Lens. | Full live camera-frame-to-AI grounding, camera permission lifecycle, physical-device latency and privacy tests. |
 | Camera live translation/subtitles | Translation request validation and provider text path exist. | Streaming speech/camera translation, subtitle overlay, offline language packs and quality testing. |
 | Object intelligence/tracking | Vision request path exists. | Continuous frame pipeline, object grounding/tracking and on-device fallback. |
 | 3D environment mapping | Validated landmark model exists. | ARCore/depth capture, SLAM, persistence, renderer and calibration. |
@@ -138,6 +138,19 @@ The following cannot be completed by source changes alone and must remain clearl
 
 A cross-layer source review found Android's previous 48,000-byte chunk sizing did not match the relay's 48 KiB (49,152-byte) contract and could create an empty trailing chunk at exact boundaries. The pending branch now uses one shared Android protocol helper for chunk count, sender/receiver offsets and final chunk size, aligned with the backend. Regression tests were added but not run. The 100 MiB app cap, resumable/process-death edge cases, malware scanning and real-device transfer tests remain.
 
+
+## Source completion pass — 23 November 2026 (not yet verified)
+
+- Added `CouncilEvidenceStore` backed by the existing encrypted feature store. Planner, Researcher, each Specialist, Critic and Verifier outputs are stored per task and retry attempt; status, final answer, provider call counts and elapsed time are retained without placing raw outputs or API keys in WorkManager Data.
+- Added `CouncilExecutionBudget`: maximum total provider calls, per-provider call cap, global execution deadline and bounded per-stage output. Background queue persists the selected limits and Main Brain enforces them.
+- Added a Multi-Agent Workspace with configured-provider selection, 1–5 specialist control, total/per-provider call budgets, time limit, language selection, live WorkManager status, saved stage evidence, result display and cancellation. Registered it in Home, Quick Actions and navigation.
+- Cancellation now records a durable CANCELLED status; transient failures can be marked RETRY_PENDING and partial evidence is retained. A retry currently starts a new attempt rather than resuming from the last completed stage.
+- Added regression-test source for provider budgets, stage callbacks and encrypted evidence persistence. Tests have not been run for these newest commits.
+- Registered the existing Phone Call Agent screen in navigation and Quick Actions.
+- Live Eyes now uses the selected AI provider rather than hardcoded Gemini; Visual Lens has an explicit voice Q&A route when camera service is active.
+- Assistant rename audit updated Settings labels, About clipboard label, Home core label and Voice fallback/error text. Full cross-app/desktop/export audit remains open.
+- All 14 existing source branches were compared and consolidated into the current working branch. Neon Glass Home Screen/avatar and the emulator diagnostic fix are included as merge parents. Main remains untouched.
+- A draft integration PR triggered CI verification runs prematurely before this no-test rule was re-read. Those runs exposed and prompted fixes for whitespace, a shared test-IP rate-limit collision and missing Compose imports. They are not final acceptance results and do not cover the newest source changes. The draft PR was closed during the source-completion pass; do not trigger further tests until implementation is complete.
 
 ## Historical design constraints recovered from prior chats
 
