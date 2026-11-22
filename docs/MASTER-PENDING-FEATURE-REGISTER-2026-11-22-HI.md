@@ -166,3 +166,6 @@ The repository also contains the user's LIA visual reference at `reference/lia-a
 ### Assistant rename boundary
 
 The pending branch updates the configured name in the main UI, About/Profile/Quick Actions/Visual Lens/phone-agent copy, voice agent prompts, overlay, keyboard, Firebase notifications and screen/camera foreground notifications. Android's app-drawer/launcher label remains a package-level static label; arbitrary per-user dynamic launcher labels require a user-pinned dynamic shortcut and cannot be silently rewritten by the app. Do not claim the launcher label itself is dynamically renamed.
+
+
+The Privacy screen's old generic claims have been replaced with a source-accurate description of encrypted local memory, provider/backend data paths, Visual Lens, E2E device transfer and known limitations. A confirmation-gated **Stop all local live sessions** action now stops voice, live camera, remote camera, screen sharing and disconnects this phone's device relay. It deliberately does not claim to revoke paired-device records; permanent revocation remains in Device Center.
