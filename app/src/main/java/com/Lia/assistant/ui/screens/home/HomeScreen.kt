@@ -48,6 +48,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import `in`.shraddha.ai.R
 import com.Lia.assistant.data.NovaAppState
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.NovaOrbState
@@ -62,7 +63,7 @@ private val MutedText = Color(0xFFB9B5CC)
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
     val voiceState by VoiceSessionManager.state.collectAsState()
-    val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
+    val assistantName = appState.assistantName.ifBlank { AssistantBrand.FULL_NAME }
     var askText by remember { mutableStateOf("") }
     val voiceLabel = when (voiceState) {
         NovaOrbState.LISTENING -> "Listening…"
