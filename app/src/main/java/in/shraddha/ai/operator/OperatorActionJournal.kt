@@ -152,7 +152,7 @@ class OperatorActionJournal(context: Context) {
             return if (visible) Recovery.VERIFIED_COMPLETE else Recovery.REVIEW_REQUIRED
         }
 
-        private fun fingerprintForTest(snapshot: ScreenSnapshot): String {
+        internal fun fingerprintForTest(snapshot: ScreenSnapshot): String {
             val canonical = buildString {
                 append(snapshot.packageName).append('|').append(snapshot.activityName)
                 snapshot.elements.forEach { element ->
