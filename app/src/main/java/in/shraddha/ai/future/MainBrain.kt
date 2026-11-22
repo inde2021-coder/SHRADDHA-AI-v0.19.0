@@ -384,6 +384,36 @@ class MainBrain(
             }
     }
 
+    /** Enqueue only the steps after a journal-verified interrupted action; never replays it. */
+    @Synchronized
+    fun resumeInterruptedWorkflow(workflowId: String): SharedTaskScheduler.Snapshot? {
+        val journal = actionJournal ?: return null
+        val original = scheduler.get(workflowId) ?: return null
+        if (original.state != SharedTaskScheduler.State.FAILED ||
+            original.error?.startsWith("Process stopped during execution; action was not replayed.") != true) return null
+        val recovery = journal.reconcileInterrupted(workflowId)
+        if (recovery != OperatorActionJournal.Recovery.VERIFIED_COMPLETE) return null
+        val entry = journal.get(workflowId) ?: return null
+        val request = decodeRequest(original.task.payload) ?: return null
+        val completedIndex = request.actions.indexOfFirst { it.id == entry.stepId }
+        if (completedIndex < 0) return null
+        val remaining = request.actions.drop(completedIndex + 1)
+        if (remaining.isEmpty()) return null
+        val remainingIds = remaining.map { it.id }.toSet()
+        val safeRemaining = remaining.map { action ->
+            action.copy(dependsOn = action.dependsOn.intersect(remainingIds))
+        }
+        val resumed = WorkflowRequest(
+            id = "resume_" + UUID.randomUUID().toString().replace("-", ""),
+            title = request.title.take(120) + " (resume)",
+            actions = safeRemaining,
+            priority = request.priority
+        )
+        audit("operator_recovery", "resume_enqueued",
+            "original=" + workflowId + "; verified_step=" + entry.stepId + "; remaining=" + safeRemaining.size)
+        return enqueueOperatorWorkflow(resumed)
+    }
+
     @Synchronized
     fun queueSnapshot(): List<SharedTaskScheduler.Snapshot> = scheduler.snapshot()
 
