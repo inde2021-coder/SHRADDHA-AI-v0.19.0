@@ -114,6 +114,46 @@ class MainBrain(
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeWithConfiguredProvider(context.applicationContext, goal, language, provider, shouldContinue, onProgress)
 
+        /** Consent-gated form extraction is serialized through the shared Main Brain scheduler. */
+        fun extractForm(
+            context: Context,
+            image: android.graphics.Bitmap,
+            formType: String,
+            instruction: String = "",
+            provider: String = "auto",
+            cloudProcessingConsent: Boolean,
+            personalDataConsent: Boolean = false
+        ): Result<`in`.shraddha.ai.operator.FormExtractionResult> {
+            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val taskId = "form_" + UUID.randomUUID().toString().replace("-", "")
+            val payload = JSONObject().put("kind", "form_extraction")
+                .put("formType", formType).put("provider", provider).toString()
+            runCatching {
+                scheduler.submitAll(listOf(SharedTaskScheduler.Task(
+                    id = taskId,
+                    title = "Form extraction: ${formType.take(40)}",
+                    priority = 2,
+                    payload = payload
+                )))
+            }.getOrElse { return Result.failure(it) }
+            if (scheduler.claimSpecific(taskId) == null) {
+                runCatching { scheduler.cancel(taskId) }
+                return Result.failure(IllegalStateException("Main Brain is busy with a higher-priority task."))
+            }
+            return try {
+                val result = `in`.shraddha.ai.operator.FormExtractionClient.extract(
+                    context.applicationContext, image, formType, instruction, provider,
+                    cloudProcessingConsent, personalDataConsent
+                )
+                if (result.isSuccess) scheduler.complete(taskId)
+                else scheduler.fail(taskId, result.exceptionOrNull()?.message ?: "Form extraction failed")
+                result
+            } catch (error: Exception) {
+                runCatching { scheduler.fail(taskId, error.message ?: "Form extraction failed") }
+                Result.failure(error)
+            }
+        }
+
         /** Learned app automations run as a sub-step of the already scheduled Main Brain voice task. */
         fun runLearnedWorkflow(
             context: Context,
