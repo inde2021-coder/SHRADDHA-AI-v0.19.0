@@ -12,6 +12,7 @@ import okio.ByteString
 import org.json.JSONObject
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
@@ -39,6 +40,9 @@ object DeviceLinkManager {
     private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
+    private val nextVisualFrameSequence = ConcurrentHashMap<String, AtomicLong>()
+    private val receivedVisualFrameSequence = mutableMapOf<String, Long>()
+    private val receivedVisualFrameLock = Any()
 
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
@@ -158,14 +162,41 @@ object DeviceLinkManager {
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
             }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                val frame = bytes.toByteArray()
-                if (frame.isEmpty()) return
-                val idLength = frame[0].toInt() and 0xFF
-                if (idLength <= 0 || frame.size <= 2 + idLength) return
-                val sourceId = frame.copyOfRange(1, 1 + idLength).toString(Charsets.UTF_8)
-                val frameType = frame[1 + idLength].toInt() and 0xFF
-                val jpeg = frame.copyOfRange(2 + idLength, frame.size)
-                if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
+                val envelope = DeviceFrameValidation.decodeFromRelay(bytes.toByteArray()) ?: run {
+                    onStatus?.invoke("Rejected malformed encrypted visual frame.")
+                    return
+                }
+                val state = peerKeys[envelope.sourceDeviceId]
+                if (state == null || !state.localConfirmed || !state.remoteConfirmed) {
+                    onStatus?.invoke("Visual frame blocked: peer fingerprint is not mutually verified.")
+                    return
+                }
+                val sequenceKey = envelope.sourceDeviceId + ":" + envelope.frameType
+                val jpeg = try {
+                    val aad = "$sessionId|\${envelope.sourceDeviceId}|$deviceId|visual_frame|\${envelope.frameType}|\${envelope.sequence}"
+                        .toByteArray(Charsets.UTF_8)
+                    synchronized(receivedVisualFrameLock) {
+                        if (envelope.sequence <= (receivedVisualFrameSequence[sequenceKey] ?: 0L)) return
+                        val plain = DeviceE2ECrypto.decrypt(
+                            state.key,
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(envelope.nonce),
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(envelope.ciphertext),
+                            aad
+                        )
+                        if (!DeviceFrameValidation.isValidJpeg(plain)) {
+                            plain.fill(0)
+                            onStatus?.invoke("Rejected decrypted visual data that is not a bounded JPEG.")
+                            return
+                        }
+                        receivedVisualFrameSequence[sequenceKey] = envelope.sequence
+                        plain
+                    }
+                } catch (_: Exception) {
+                    onStatus?.invoke("Visual frame authentication failed; encrypted frame discarded.")
+                    return
+                }
+                if (envelope.frameType == 2) onCameraFrame?.invoke(envelope.sourceDeviceId, jpeg)
+                else onScreenFrame?.invoke(envelope.sourceDeviceId, jpeg)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t)); scheduleReconnect(baseUrl, pair) }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason"); if (code != 1000) scheduleReconnect(baseUrl, pair) }
@@ -432,15 +463,30 @@ object DeviceLinkManager {
             .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
-        if (jpeg.size > 2_500_000 || frameType !in 1..2) return false
-        val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
-        if (target.size > 255) return false
-        val packet = ByteArray(2 + target.size + jpeg.size)
-        packet[0] = frameType.toByte()
-        packet[1] = target.size.toByte()
-        if (target.isNotEmpty()) System.arraycopy(target, 0, packet, 2, target.size)
-        System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
-        return socket?.send(ByteString.of(*packet)) == true
+        if (!DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
+        val target = targetDeviceId?.trim().orEmpty()
+        if (target.isBlank()) return false
+        val state = peerKeys[target]
+        if (state == null || !state.localConfirmed || !state.remoteConfirmed) {
+            onStatus?.invoke("Visual sharing blocked: verify the target device fingerprint on both devices first.")
+            return false
+        }
+        val localSession = sessionId ?: return false
+        val localDevice = deviceId ?: return false
+        val sequenceKey = target + ":" + frameType
+        val sequence = nextVisualFrameSequence.computeIfAbsent(sequenceKey) { AtomicLong(0L) }.incrementAndGet()
+        if (sequence <= 0L) return false
+        return try {
+            val aad = "$localSession|$localDevice|$target|visual_frame|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+            val sealed = DeviceE2ECrypto.encrypt(state.key, jpeg, aad)
+            val nonce = java.util.Base64.getDecoder().decode(sealed.nonce)
+            val ciphertext = java.util.Base64.getDecoder().decode(sealed.ciphertext)
+            val packet = DeviceFrameValidation.encodeForRelay(frameType, target, sequence, nonce, ciphertext)
+            socket?.send(ByteString.of(*packet)) == true
+        } catch (_: Exception) {
+            onStatus?.invoke("Could not encrypt visual frame; frame was not sent.")
+            false
+        }
     }
-    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear(); lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
+    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear(); nextVisualFrameSequence.clear(); synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }; lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
 }
