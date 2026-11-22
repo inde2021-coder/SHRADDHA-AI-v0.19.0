@@ -1460,6 +1460,53 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
+            addView(actionButton("RUN LOCAL PARALLEL COUNCIL IN BACKGROUND", "Phone-local encrypted provider keys • 3 parallel specialists • background progress") {
+                val goalText = councilGoal.text.toString().trim()
+                val selectedProviders = providersField.text.toString().split(',')
+                    .map { it.trim().lowercase() }
+                    .mapNotNull { name -> when (name) {
+                        "gemini" -> "GEMINI"
+                        "openai" -> "OPENAI"
+                        "groq" -> "GROQ"
+                        "claude", "anthropic" -> "CLAUDE"
+                        "perplexity" -> "PERPLEXITY"
+                        else -> null
+                    } }.distinct().take(5)
+                if (goalText.isBlank() || selectedProviders.isEmpty()) {
+                    councilOutput.text = "Task goal और कम-से-कम एक supported provider चुनें। API keys Settings में configured होनी चाहिए।"
+                    return@actionButton
+                }
+                try {
+                    val workId = `in`.shraddha.ai.future.BackgroundTaskQueue.enqueue(
+                        this@MainActivity, goalText, selectedProviders.joinToString(","), "AUTO"
+                    )
+                    councilOutput.text = "Parallel AI team queue में भेजी गई। Work ID: " + workId +
+                        "\nPlanner + Researcher parallel चलेंगे, फिर 3 Specialists, Critic और Verifier।"
+                    androidx.work.WorkManager.getInstance(this@MainActivity)
+                        .getWorkInfoByIdLiveData(workId)
+                        .observe(this@MainActivity) { info ->
+                            if (info == null) return@observe
+                            val message = when (info.state) {
+                                androidx.work.WorkInfo.State.ENQUEUED -> "Queued — network मिलने पर शुरू होगा."
+                                androidx.work.WorkInfo.State.RUNNING -> {
+                                    val role = info.progress.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_ROLE).orEmpty()
+                                    val index = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_INDEX, 0)
+                                    val total = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_TOTAL, 7)
+                                    "Working: " + role + " (" + index + "/" + total + ")"
+                                }
+                                androidx.work.WorkInfo.State.SUCCEEDED -> "Completed. Verifier report:\n" +
+                                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
+                                androidx.work.WorkInfo.State.FAILED -> "Failed: " +
+                                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
+                                androidx.work.WorkInfo.State.CANCELLED -> "Cancelled by WorkManager."
+                                else -> "Waiting for background worker."
+                            }
+                            councilOutput.text = "Parallel council • " + message
+                        }
+                } catch (error: Exception) {
+                    councilOutput.text = "Parallel council queue failed: " + (error.localizedMessage ?: "Unknown error")
+                }
+            })
         }
         section(root, "AUTONOMOUS PROJECT WORKSPACE", "Milestones और progress फोन में local save होते हैं। यह tracker है, background में अपने-आप काम चलाने वाला executor नहीं।") {
             val projectName=edit("Project name","उदाहरण: Website launch")
