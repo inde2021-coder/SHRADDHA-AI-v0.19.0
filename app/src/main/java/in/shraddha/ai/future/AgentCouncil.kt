@@ -3,6 +3,7 @@ package `in`.shraddha.ai.future
 import android.content.Context
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.ProviderKeyStore
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
@@ -90,15 +91,59 @@ object AgentCouncil {
     }
 
     /** Runs the pipeline through the user's currently selected, configured AI provider. */
+    /** Round-robin role assignment across every provider with a locally configured key. */
+    fun assignProviders(roles: List<CouncilRole>, providers: List<String>): Map<String, String> {
+        require(roles.isNotEmpty()) { "At least one agent role is required" }
+        val clean = providers.map { it.uppercase() }.distinct()
+        require(clean.isNotEmpty() && clean.size <= 5 && clean.all {
+            it in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+        }) { "Configure between one and five supported providers" }
+        return roles.mapIndexed { index, role -> role.name to clean[index % clean.size] }.toMap()
+    }
+
     fun executeWithConfiguredProvider(
         context: Context,
         goal: String,
         language: String = "AUTO",
-        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
-        shouldContinue: () -> Boolean = { true }
+        preferredProvider: String? = null,
+        shouldContinue: () -> Boolean = { true },
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> {
-        val provider = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
-        return executeWithProvider(context, goal, language, provider, onProgress, shouldContinue)
+        val preferred = (preferredProvider ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")).uppercase()
+        val candidates = (listOf(preferred) + listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")).distinct()
+        val configured = candidates.filter { provider ->
+            runCatching {
+                if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
+                else ProviderKeyStore.has(context, provider)
+            }.getOrDefault(false)
+        }.take(5)
+        if (configured.isEmpty()) return Result.failure(IllegalStateException("No AI provider API key is configured. Add at least one provider key in Settings."))
+        return executeWithProviderSet(context, goal, language, configured, shouldContinue, onProgress)
+    }
+
+    fun executeWithProviderSet(
+        context: Context,
+        goal: String,
+        language: String = "AUTO",
+        providerNames: List<String>,
+        shouldContinue: () -> Boolean = { true },
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
+    ): Result<CouncilExecutionReport> {
+        val assignments = assignProviders(plan(goal).roles, providerNames)
+        val providerLabel = assignments.values.distinct().joinToString(" → ")
+        return execute(goal, language, providerLabel, { role, system, prompt ->
+            val provider = assignments.getValue(role.name)
+            val turns = listOf(ChatTurn(true, prompt))
+            val response = if (provider == "GEMINI") {
+                GeminiTextClient.reply(ApiKeyStore.getKey(context), system, turns)
+            } else {
+                MultiProviderChatClient.reply(context, provider, system, turns)
+            }
+            when (response) {
+                is ChatReplyResult.Success -> response.text
+                is ChatReplyResult.Error -> error("$provider provider error: ${response.message}")
+            }
+        }, onProgress, shouldContinue)
     }
 
     fun executeWithProvider(
