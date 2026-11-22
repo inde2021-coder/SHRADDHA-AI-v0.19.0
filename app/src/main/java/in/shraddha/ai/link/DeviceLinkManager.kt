@@ -381,7 +381,7 @@ object DeviceLinkManager {
         return sendSharedPayload(targetDeviceId, "clipboard", requestId, "clipboard.txt", "text/plain", Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong(), digest, "clipboard_text")
     }
     fun startFileTransfer(targetDeviceId: String, requestId: String, transferId: String, fileName: String, sizeBytes: Long, chunkCount: Int, sha256: String): Boolean {
-        if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..(20_000_000L) || chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || DeviceFileTransferProtocol.chunkCount(sizeBytes) != chunkCount) return false
+        if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || DeviceFileTransferProtocol.chunkCount(sizeBytes) != chunkCount) return false
         return socket?.send(JSONObject().put("type", "file_transfer_start").put("targetDeviceId", targetDeviceId).put("requestId", requestId).put("transferId", transferId).put("fileName", fileName.take(120)).put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()).toString()) == true
     }
     fun sendFileTransferChunk(targetDeviceId: String, transferId: String, index: Int, bytes: ByteArray): Boolean {
