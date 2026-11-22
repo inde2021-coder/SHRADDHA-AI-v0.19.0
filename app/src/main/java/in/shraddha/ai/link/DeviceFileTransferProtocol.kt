@@ -3,7 +3,7 @@ package `in`.shraddha.ai.link
 /** One source of truth for Android file-transfer chunk sizing and bounds. */
 internal object DeviceFileTransferProtocol {
     const val CHUNK_BYTES = 48 * 1024
-    const val MAX_FILE_BYTES = 20_000_000L
+    const val MAX_FILE_BYTES = 100L * 1024L * 1024L
     const val MAX_CHUNKS = ((MAX_FILE_BYTES + CHUNK_BYTES - 1) / CHUNK_BYTES).toInt()
 
     fun chunkCount(sizeBytes: Long): Int? {
