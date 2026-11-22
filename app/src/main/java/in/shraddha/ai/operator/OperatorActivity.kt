@@ -119,8 +119,7 @@ class OperatorActivity : Activity() {
                     val detail = event.snapshot?.let { "\\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
                     log.text = "${event.state}: ${event.message}$detail\\n\\n" + log.text.take(5000)
                 } },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
-                context = this@OperatorActivity
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
             )
             val brain = `in`.shraddha.ai.future.MainBrain(
                 executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
