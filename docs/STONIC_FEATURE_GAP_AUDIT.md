@@ -22,12 +22,12 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 
 ### 1. Real provider-backed multi-role team
 - Replaced the plan-only `AgentCouncil` with real sequential Planner → Researcher → Specialist → Critic → Verifier provider calls.
-- Uses the user's selected configured provider (Gemini, OpenAI, Groq, Claude or Perplexity where configured).
+- Routes the five roles round-robin across 1–5 locally configured providers (Gemini, OpenAI, Groq, Claude and Perplexity).
 - Exposes progress in the Mobile Work Agent.
 - Stops at the first failed/empty stage; does not label partial output complete.
 - Supports cancellation between stages.
 - Added unit tests for role order, progress, fail-fast and cancellation.
-- Limitation: this is a five-role pipeline using the selected provider, not parallel independent external agents or a multi-provider swarm.
+- Limitation: roles run sequentially, not in parallel; no independent external agent services are contacted.
 
 ### 2. Persistent background task queue
 - Added WorkManager-backed network-constrained background execution for the five-role team.
@@ -47,7 +47,8 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 ## Remaining Stonic gaps — continue implementation
 
 ### P0 — Cross-device durable workspace
-- Finish file transfer end-to-end: Android picker, receiver approval, disk-backed chunk persistence, resume after app/process restart, hash verification, cancellation and Android↔Windows integration tests.
+- Android SAF file picker, receiver approval, app-private receive staging, persisted URI grants, chunk-index checkpoints, resume after activity/process recreation, SHA-256 verification and cancellation are now implemented.
+- Remaining: physical Android↔Windows reconnect/interruption/100 MiB tests; relay-side transfer metadata is in-memory for 30 minutes and does not survive relay restart.
 - Share task state, conversation handoff, selected files, status and approvals across Android and Windows.
 - Keep E2E peer identity verification and per-device permissions.
 
@@ -57,8 +58,8 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 - Never execute arbitrary shell commands from an untrusted model response. Require local approval for install, execute, overwrite, delete and deploy.
 
 ### P1 — True multi-provider orchestration
-- Current new team uses one selected provider for all five roles.
-- Add optional role-to-provider mapping for 2–5 configured providers, credential availability checks, bounded parallelism for independent research, shared evidence store, conflict resolution, cost/time budgets and deterministic final verification.
+- Current new team assigns roles round-robin across 1–5 configured providers and checks locally stored credentials before execution.
+- Remaining: bounded parallelism for independent research, shared evidence store, conflict resolution, cost/time budgets and deterministic final verification.
 - A missing provider key must produce a clear setup requirement, not a simulated agent.
 
 ### P1 — Personalised, source-aware proactive briefing
