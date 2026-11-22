@@ -146,3 +146,6 @@ The Android chunked file-transfer cap is now aligned with the relay's 100 MiB ma
 
 
 The local background council now has a 1–5 specialist-count control, persists that choice into WorkManager, and exposes task cancellation. Per-provider cost/time budgets and durable per-stage evidence are still pending. Source changes and regression tests are not yet verified.
+
+
+Visual Lens UI now uses the shared dark-teal/cyan glass components, the configured assistant name, and a process-aware service state (OFF/STARTING/ACTIVE) rather than a screen-local running flag. Service status is polled while the screen is open and refreshed on resume. This source change is not yet built or device-verified.
