@@ -145,7 +145,7 @@ fun AboutScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(COPYRIGHT_TEXT, color = colors.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(5.dp))
-                Text("SHRADDHA AI • Built with care in India", color = colors.textSecondary, fontSize = 10.sp)
+                Text("${assistantName.uppercase()} • Built with care in India", color = colors.textSecondary, fontSize = 10.sp)
             }
         }
         Spacer(Modifier.height(16.dp))
