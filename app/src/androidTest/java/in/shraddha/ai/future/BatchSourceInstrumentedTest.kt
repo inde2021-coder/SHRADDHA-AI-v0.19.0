@@ -1,4 +1,4 @@
-package \`in\`.shraddha.ai.future
+package `in`.shraddha.ai.future
 
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
