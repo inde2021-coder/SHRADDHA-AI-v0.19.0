@@ -1,5 +1,6 @@
 package `in`.shraddha.ai.link
 
+import android.content.Context
 import android.util.Base64
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong
 object DeviceLinkManager {
     private val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
     private val reconnectHandler = Handler(Looper.getMainLooper())
+    @Volatile private var appContext: Context? = null
     @Volatile private var lastBaseUrl: String? = null
     @Volatile private var lastPair: PairResult? = null
     @Volatile private var reconnectAttempts = 0
@@ -47,6 +49,31 @@ object DeviceLinkManager {
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
+    fun initialize(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    fun createSession(context: Context, baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) {
+        initialize(context)
+        createSession(baseUrl, name, done)
+    }
+
+    fun joinSession(context: Context, baseUrl: String, name: String, code: String, done: (Result<PairResult>) -> Unit) {
+        initialize(context)
+        joinSession(baseUrl, name, code, done)
+    }
+
+    fun restore(context: Context, done: (Result<PairResult>) -> Unit) {
+        initialize(context)
+        val credentials = DeviceCredentialStore(context.applicationContext).load()
+        if (credentials == null) {
+            done(Result.failure(IllegalStateException("No valid saved device pairing was found on this phone.")))
+            return
+        }
+        val pair = PairResult("", credentials.sessionId, credentials.deviceId, credentials.token)
+        saveAndConnect(credentials.baseUrl, pair, done)
+    }
+
     fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
         result.mapCatching { body -> PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
             .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
@@ -58,6 +85,16 @@ object DeviceLinkManager {
     }
 
     private fun saveAndConnect(baseUrl: String, pair: PairResult, done: (Result<PairResult>) -> Unit) {
+        val app = appContext
+        if (app != null) {
+            val persisted = runCatching {
+                DeviceCredentialStore(app).save(pair.sessionId, pair.deviceId, pair.token, baseUrl)
+            }
+            if (persisted.isFailure) {
+                done(Result.failure(persisted.exceptionOrNull() ?: IllegalStateException("Could not save device credentials securely.")))
+                return
+            }
+        }
         lastBaseUrl = baseUrl; lastPair = pair
         sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
         val completionDelivered = AtomicBoolean(false)
@@ -510,5 +547,26 @@ object DeviceLinkManager {
             false
         }
     }
-    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear(); nextVisualFrameSequence.clear(); synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }; lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
+    fun disconnect(context: Context, clearSavedCredentials: Boolean = false) {
+        initialize(context)
+        disconnect(clearSavedCredentials)
+    }
+
+    fun disconnect(clearSavedCredentials: Boolean = false) {
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectPending = false
+        reconnectAttempts = 0
+        peerKeys.values.forEach { it.key.fill(0) }
+        peerKeys.clear()
+        nextVisualFrameSequence.clear()
+        synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
+        if (clearSavedCredentials) appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
+        lastBaseUrl = null
+        lastPair = null
+        socket?.close(1000, "User disconnected")
+        socket = null
+        sessionId = null
+        deviceId = null
+        deviceToken = null
+    }
 }
