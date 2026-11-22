@@ -50,7 +50,7 @@ This register consolidates the user's earlier feature requests and the current s
 | Calls by voice | Dialer/call controls and phone-agent source exist. | Verify real SIM call flows, contact disambiguation, call audio routing and emergency handling on device. |
 | Notifications | Metadata-only encrypted listener/history and quiet hours exist. | Rich per-app rules, action support, retention controls and Android OEM/version testing. |
 | Clipboard control | Consent-gated relay and integrity checks exist. | True E2E encryption/key agreement, key rotation, replay protection and multi-device tests. |
-| File transfer | SAF-based 20 MB sender/receiver, 48 KB encrypted chunks, SHA-256, receiver approval, save-location picker, pause/resume and cancellation exist in source. | Real-device interruption/process-death resume, relay quotas, malware scanning and device-matrix tests remain. |
+| File transfer | SAF-based 100 MiB sender/receiver, 48 KB encrypted chunks, SHA-256, receiver approval, save-location picker, pause/resume and cancellation exist in source. | Real-device interruption/process-death resume, relay quotas, malware scanning and device-matrix tests remain. |
 
 ## D. Visual Lens and spatial intelligence
 
@@ -132,9 +132,14 @@ The following cannot be completed by source changes alone and must remain clearl
 
 ### File transfer protocol correction — 22 November
 
-A cross-layer source review found Android's previous 48,000-byte chunk sizing did not match the relay's 48 KiB (49,152-byte) contract and could create an empty trailing chunk at exact boundaries. The pending branch now uses one shared Android protocol helper for chunk count, sender/receiver offsets and final chunk size, aligned with the backend. Regression tests were added but not run. The 20 MB app cap, resumable/process-death edge cases, malware scanning and real-device transfer tests remain.
+A cross-layer source review found Android's previous 48,000-byte chunk sizing did not match the relay's 48 KiB (49,152-byte) contract and could create an empty trailing chunk at exact boundaries. The pending branch now uses one shared Android protocol helper for chunk count, sender/receiver offsets and final chunk size, aligned with the backend. Regression tests were added but not run. The 100 MiB app cap, resumable/process-death edge cases, malware scanning and real-device transfer tests remain.
 
 
 ## Historical design constraints recovered from prior chats
 
 The user explicitly accepted the complete redesign on 18 November 2026 with these binding requirements: dark teal + cyan Premium Glass direction; redesign every module, not just Orb/Home; preserve existing functionality, MainActivity/Launcher and the retained LIA source; keep Hindi/English; show real loading/success/error/permission states; do not create fake/demo controls or indicate the microphone is active when it is not. The current shared styling is only the common visual foundation, not the completed screen-by-screen redesign.
+
+
+### Transfer capacity update — 22 November
+
+The Android chunked file-transfer cap is now aligned with the relay's 100 MiB manifest limit (48 KiB chunks, 2,134 maximum chunks). The earlier Android-only 20 MB cap has been raised in the protocol helper, sender, receiver and boundary test. This is source-only; 100 MiB throughput, storage pressure, process-death resume, and low-storage behavior must be validated on physical devices before calling the larger limit production-ready.
