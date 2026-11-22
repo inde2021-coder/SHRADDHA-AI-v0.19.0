@@ -118,6 +118,8 @@ fun AgentCouncilScreen(
     }
 
     val minimumCalls = specialists.toInt() + 4
+    val minimumPerProvider = if (selectedProviders.isEmpty()) 1 else
+        ((specialists.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
     val isRunning = workInfo?.state == WorkInfo.State.RUNNING ||
         workInfo?.state == WorkInfo.State.ENQUEUED ||
         workInfo?.state == WorkInfo.State.BLOCKED
@@ -222,8 +224,6 @@ fun AgentCouncilScreen(
             } else {
                 Text("All nine calls are required for five specialists.", color = colors.textTertiary, fontSize = 10.sp)
             }
-            val minimumPerProvider = if (selectedProviders.isEmpty()) 1 else
-                ((specialists.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
             Text("Maximum calls per provider: ${callsPerProvider.toInt().coerceAtLeast(minimumPerProvider)} (minimum required: $minimumPerProvider)", color = colors.textPrimary, fontSize = 12.sp)
             if (minimumPerProvider < 9) {
                 Slider(
