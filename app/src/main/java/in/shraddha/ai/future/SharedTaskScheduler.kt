@@ -142,6 +142,22 @@ class SharedTaskScheduler(
         return current.copy(state = State.CANCELLED).also { entries[taskId] = it; notifyChanged() }
     }
 
+    /**
+     * Re-queues only an interrupted task explicitly recognized by its adapter as retry-safe.
+     * Device actions and unknown task types remain FAILED and are never replayed.
+     */
+    @Synchronized
+    fun requeueInterrupted(taskId: String, isRetrySafe: (Task) -> Boolean): Snapshot? {
+        val current = entries[taskId] ?: return null
+        val interrupted = current.state == State.FAILED &&
+            current.error?.startsWith("Process stopped during execution; action was not replayed.") == true
+        if (!interrupted || !isRetrySafe(current.task)) return null
+        return current.copy(state = State.PENDING, error = null).also {
+            entries[taskId] = it
+            notifyChanged()
+        }
+    }
+
     @Synchronized
     fun get(taskId: String): Snapshot? = entries[taskId]
 
