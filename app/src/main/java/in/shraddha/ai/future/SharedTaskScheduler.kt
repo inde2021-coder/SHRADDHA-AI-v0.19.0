@@ -87,6 +87,39 @@ class SharedTaskScheduler(
         return claimed
     }
 
+    /** Claim one exact task when its dependencies and shared capacity permit execution. */
+    @Synchronized
+    fun claimSpecific(taskId: String): Snapshot? {
+        val current = entries[taskId] ?: return null
+        if (current.state != State.PENDING) return null
+        if (entries.values.count { it.state == State.RUNNING } >= maxParallel) return null
+        if (!current.task.dependsOn.all { entries[it]?.state == State.SUCCEEDED }) return null
+        return current.copy(state = State.RUNNING).also {
+            entries[taskId] = it
+            notifyChanged()
+        }
+    }
+
+    /** Claim the next ready task matching an adapter's task type. */
+    @Synchronized
+    fun claimReadyMatching(predicate: (Snapshot) -> Boolean): List<Snapshot> {
+        val running = entries.values.count { it.state == State.RUNNING }
+        val slots = (maxParallel - running).coerceAtLeast(0)
+        if (slots == 0) return emptyList()
+        val ready = entries.values
+            .filter { item ->
+                item.state == State.PENDING && predicate(item) &&
+                    item.task.dependsOn.all { dependency -> entries[dependency]?.state == State.SUCCEEDED }
+            }
+            .sortedWith(compareBy<Snapshot> { it.task.priority }.thenBy { it.submittedOrder })
+            .take(slots)
+        val claimed = ready.map { item ->
+            item.copy(state = State.RUNNING).also { entries[item.task.id] = it }
+        }
+        if (claimed.isNotEmpty()) notifyChanged()
+        return claimed
+    }
+
     @Synchronized
     fun complete(taskId: String): Snapshot = transition(taskId, State.SUCCEEDED, null)
 
