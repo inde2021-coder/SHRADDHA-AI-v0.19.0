@@ -1,5 +1,7 @@
 package com.Lia.assistant.ui.screens.profile
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,9 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessKeySection
 import com.Lia.assistant.ui.components.NovaButton
+import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaGlassCard
 import com.Lia.assistant.ui.components.NovaTextField
 import com.Lia.assistant.ui.theme.LocalNovaColors
@@ -48,77 +51,70 @@ fun ProfileScreen(
     val colors = LocalNovaColors.current
     val context = LocalContext.current
     var nameInput by remember { mutableStateOf(appState.userName) }
+    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // The selected image remains usable for this session if the provider disallows persistence.
+            }
+            appState.applyAssistantAvatar(context, uri)
+        }
+    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .nightSky()
-            .padding(16.dp)
+        modifier = modifier.fillMaxSize().nightSky().padding(16.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = colors.textPrimary
-                )
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
             }
-            Text(
-                text = "Profile",
-                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                color = colors.textPrimary
-            )
+            Text("Shraddha Profile", style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.textPrimary)
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Avatar
         Box(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .size(90.dp)
-                .clip(CircleShape)
-                .background(colors.accentGlow),
+            modifier = Modifier.align(Alignment.CenterHorizontally).size(132.dp)
+                .clip(CircleShape).background(colors.accentGlow),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = "Avatar",
-                tint = colors.accent,
-                modifier = Modifier.size(48.dp)
+            AsyncImage(
+                model = appState.assistantAvatarUri ?: com.Lia.assistant.R.drawable.shraddha_ai_avatar,
+                contentDescription = "Shraddha AI avatar",
+                modifier = Modifier.fillMaxSize().clip(CircleShape)
             )
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "SHRADDHA AI AVATAR",
+            color = colors.accent,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        NovaButton(text = "Change Image", onClick = { avatarPicker.launch(arrayOf("image/*")) })
+        NovaButton(
+            text = "Use Default Shraddha Image",
+            onClick = { appState.applyAssistantAvatar(context, null) },
+            type = NovaButtonType.TEXT
+        )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
+        Spacer(modifier = Modifier.height(18.dp))
         NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column {
-                Text(
-                    text = "Your Display Name",
-                    fontSize = 13.sp,
-                    color = colors.textSecondary
-                )
+                Text("Your Display Name", fontSize = 13.sp, color = colors.textSecondary)
                 Spacer(modifier = Modifier.height(8.dp))
-                NovaTextField(
-                    value = nameInput,
-                    onValueChange = { nameInput = it },
-                    placeholder = "Enter your name"
-                )
+                NovaTextField(value = nameInput, onValueChange = { nameInput = it }, placeholder = "Enter your name")
                 Spacer(modifier = Modifier.height(12.dp))
-                NovaButton(
-                    text = "Save Name",
-                    onClick = { appState.applyUserName(context, nameInput) }
-                )
+                NovaButton(text = "Save Name", onClick = { appState.applyUserName(context, nameInput) })
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Flavor-specific AccessKeySection (active in direct, stub in play)
         AccessKeySection()
     }
 }
