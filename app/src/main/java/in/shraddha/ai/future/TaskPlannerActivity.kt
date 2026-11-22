@@ -63,6 +63,7 @@ class TaskPlannerActivity : AppCompatActivity() {
                     scheduleDailyBriefing()
                     toast("Daily briefing scheduled around 8:00 AM")
                 } else {
+                    if (::researchToggle.isInitialized && researchToggle.isChecked) researchToggle.isChecked = false
                     cancelDailyBriefing()
                     toast("Daily briefing disabled")
                 }
@@ -104,6 +105,11 @@ class TaskPlannerActivity : AppCompatActivity() {
             }
         }
         root.addView(researchToggle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        root.addView(TextView(this).apply {
+            text = "Privacy: केवल आपके लिखे topics Perplexity को web research के लिए भेजे जाएँगे। यह feature default में OFF है; tasks, contacts या notifications का content नहीं भेजा जाता।"
+            textSize = 11f; setTextColor(0xFF9EABC2.toInt())
+            setPadding(dp(4), 0, dp(4), dp(10))
+        })
         root.addView(TextView(this).apply {
             text = "YOUR TASKS"; textSize = 11f; letterSpacing = .12f
             setTextColor(Color.rgb(159, 139, 255)); setPadding(dp(2), dp(8), 0, dp(8))
