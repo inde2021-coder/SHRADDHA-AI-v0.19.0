@@ -40,7 +40,7 @@ object BackgroundTaskQueue {
             SharedTaskScheduler.Task(
                 id = schedulerTaskId,
                 title = cleanGoal.take(160),
-                priority = 3,
+                priority = 5,
                 payload = JSONObject().put(KEY_PROVIDER, provider.uppercase())
                     .put(KEY_LANGUAGE, language.take(20)).toString()
             )
