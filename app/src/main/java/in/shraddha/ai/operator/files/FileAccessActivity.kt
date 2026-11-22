@@ -33,6 +33,9 @@ class FileAccessActivity : Activity() {
         root.addView(button("Destination folder चुनें") { chooseDestination() })
         root.addView(button("फ़ाइल Copy करें") { copyOrMove(false) })
         root.addView(button("फ़ाइल Move करें") { android.app.AlertDialog.Builder(this).setTitle("फ़ाइल Move करें?").setMessage("पहले destination में copy और size verification होगा। उसके बाद ही source delete करने की कोशिश होगी।").setNegativeButton("रद्द", null).setPositiveButton("Move") { _, _ -> copyOrMove(true) }.show() })
+        root.addView(button("फ़ाइल का नाम बदलें") { renameSelected() })
+        root.addView(button("फ़ाइल Delete करें") { deleteSelected() })
+        root.addView(button("फ़ाइल Share / Upload करें") { shareSelected() })
         status = TextView(this).apply { setTextColor(0xFFE5EAF5.toInt()); text = "फ़ाइल का पूरा नाम दें। समान नाम की कई फ़ाइलें हों तो सही फ़ाइल चुननी होगी।"; setPadding(0,16,0,16) }
         root.addView(status)
         root.addView(button("बंद करें") { finish() })
@@ -128,6 +131,49 @@ class FileAccessActivity : Activity() {
                 }, { "File operation failed: ${it.message}" })
             }
         }.start()
+    }
+
+    private fun renameSelected() {
+        val uri = selectedUri ?: run { status.text = "पहले फ़ाइल चुनें।"; return }
+        val input = EditText(this).apply { setText(selectedName); setSelection(text.length) }
+        android.app.AlertDialog.Builder(this).setTitle("नया फ़ाइल नाम").setView(input)
+            .setNegativeButton("रद्द", null)
+            .setPositiveButton("नाम बदलें") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isBlank() || newName.contains("/") || newName.contains(String(charArrayOf(92)))) {
+                    status.text = "मान्य फ़ाइल नाम दें।"
+                } else {
+                    val renamed = runCatching { androidx.documentfile.provider.DocumentFile.fromSingleUri(this, uri)?.renameTo(newName) == true }.getOrDefault(false)
+                    if (renamed) { selectedName = newName; filename.setText(newName); status.text = "फ़ाइल का नाम बदल गया: $newName" }
+                    else status.text = "नाम नहीं बदला। इस provider में rename अनुमति उपलब्ध नहीं है।"
+                }
+            }.show()
+    }
+
+    private fun deleteSelected() {
+        val uri = selectedUri ?: run { status.text = "पहले फ़ाइल चुनें।"; return }
+        android.app.AlertDialog.Builder(this).setTitle("स्थायी रूप से Delete करें?")
+            .setMessage("फ़ाइल: $selectedName. यह कार्रवाई वापस नहीं हो सकती।")
+            .setNegativeButton("रद्द", null)
+            .setPositiveButton("Delete") { _, _ ->
+                val deleted = runCatching { androidx.documentfile.provider.DocumentFile.fromSingleUri(this, uri)?.delete() == true }.getOrDefault(false)
+                status.text = if (deleted) "फ़ाइल delete हो गई: $selectedName" else "फ़ाइल delete नहीं हुई। Provider ने अनुमति नहीं दी।"
+                if (deleted) { selectedUri = null; selectedName = "" }
+            }.show()
+    }
+
+    private fun shareSelected() {
+        val uri = selectedUri ?: run { status.text = "पहले फ़ाइल चुनें।"; return }
+        runCatching {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = selectedMime.ifBlank { "*/*" }
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = android.content.ClipData.newUri(contentResolver, selectedName, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, "फ़ाइल किस ऐप में भेजें / Upload करें?"))
+            status.text = "Android Sharesheet खुल गया। भेजने के लिए destination app चुनें।"
+        }.onFailure { status.text = "Share नहीं खुला: ${it.message}" }
     }
 
     private fun requestMediaPermissions() {
