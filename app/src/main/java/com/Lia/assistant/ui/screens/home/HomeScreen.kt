@@ -185,6 +185,10 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             FeatureInfo("🤖", "Multi-agent Team", "काम बाँटें और verify करें", NeonBlue) { navController.navigate("agent_council") },
             FeatureInfo("🔑", "AI Provider Keys", "अपनी API keys जोड़ें", NeonMint) { navController.navigate("api_keys") }
         )
+        FeatureRow(
+            FeatureInfo("🖥️", "Device Center", "Windows PC और paired devices", NeonBlue) { navController.navigate("device_center") },
+            FeatureInfo("📞", "SIM Call Agent", "Incoming call assistant", NeonMint) { navController.navigate("phone_call_agent") }
+        )
         SectionHeading("PERSONALIZE", "अपना AI अनुभव चुनें")
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
