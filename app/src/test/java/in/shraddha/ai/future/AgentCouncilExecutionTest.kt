@@ -152,7 +152,7 @@ class AgentCouncilExecutionTest {
         assertEquals(5, result.providerUsage.sumOf { it.calls })
         assertTrue(result.providerUsage.all { it.calls <= 3 })
         assertTrue(result.stages.all { it.output.length <= 1_000 })
-        assertTrue(result.elapsedMs in 0..30_000)
+        assertTrue(result.elapsedMs >= 0L && result.elapsedMs <= 30_000L)
     }
 
     @Test fun executeParallelRejectsBudgetsThatCannotCoverRequiredStages() = runBlocking {
