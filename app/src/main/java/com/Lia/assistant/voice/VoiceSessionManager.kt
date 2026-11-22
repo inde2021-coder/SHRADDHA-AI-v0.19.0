@@ -5,7 +5,6 @@ import com.Lia.assistant.action.InstalledAppLabelCache
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
-import com.Lia.assistant.forge.ForgeController
 import `in`.shraddha.ai.brain.PersistentChatMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
