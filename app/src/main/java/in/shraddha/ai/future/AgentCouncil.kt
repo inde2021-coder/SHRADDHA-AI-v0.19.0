@@ -105,7 +105,8 @@ object AgentCouncil {
         executor: suspend (role: CouncilRole, provider: String, system: String, prompt: String) -> String,
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
         shouldContinue: () -> Boolean = { true },
-        assistantName: String = AssistantBrand.FULL_NAME
+        assistantName: String = AssistantBrand.FULL_NAME,
+        onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> {
         require(specialistCount in 1..5) { "Run between one and five specialist agents" }
         val plan = plan(goal)
@@ -150,9 +151,12 @@ object AgentCouncil {
                     async(Dispatchers.IO) {
                         if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
                         onProgress(role.name, progressIndex.incrementAndGet(), total)
-                        val answer = executor(role, assignments.getValue(role.name), system, promptFor(role, emptyList())).trim()
+                        val provider = assignments.getValue(role.name)
+                        val answer = executor(role, provider, system, promptFor(role, emptyList())).trim()
                         require(answer.isNotBlank()) { role.name + " returned an empty result" }
-                        CouncilStageResult(role.name, answer.take(9000))
+                        val bounded = answer.take(9000)
+                        onStageCompleted(role.name, provider, bounded)
+                        CouncilStageResult(role.name, bounded)
                     }
                 }.awaitAll()
                 outputs.addAll(foundation)
@@ -161,9 +165,12 @@ object AgentCouncil {
                     async(Dispatchers.IO) {
                         if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
                         onProgress(role.name, progressIndex.incrementAndGet(), total)
-                        val answer = executor(role, assignments.getValue(role.name), system, promptFor(role, outputs.toList())).trim()
+                        val provider = assignments.getValue(role.name)
+                        val answer = executor(role, provider, system, promptFor(role, outputs.toList())).trim()
                         require(answer.isNotBlank()) { role.name + " returned an empty result" }
-                        CouncilStageResult(role.name, answer.take(9000))
+                        val bounded = answer.take(9000)
+                        onStageCompleted(role.name, provider, bounded)
+                        CouncilStageResult(role.name, bounded)
                     }
                 }.awaitAll()
                 outputs.addAll(specialistResults)
@@ -171,9 +178,12 @@ object AgentCouncil {
                 listOf(plan.roles[3], plan.roles[4]).forEach { role ->
                     if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
                     onProgress(role.name, progressIndex.incrementAndGet(), total)
-                    val answer = executor(role, assignments.getValue(role.name), system, promptFor(role, outputs.toList())).trim()
+                    val provider = assignments.getValue(role.name)
+                    val answer = executor(role, provider, system, promptFor(role, outputs.toList())).trim()
                     require(answer.isNotBlank()) { role.name + " returned an empty result" }
-                    outputs.add(CouncilStageResult(role.name, answer.take(9000)))
+                    val bounded = answer.take(9000)
+                    onStageCompleted(role.name, provider, bounded)
+                    outputs.add(CouncilStageResult(role.name, bounded))
                 }
                 outputs.toList()
             }
@@ -193,7 +203,8 @@ object AgentCouncil {
         preferredProviders: List<String>,
         specialistCount: Int = 3,
         shouldContinue: () -> Boolean = { true },
-        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
+        onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> {
         val configured = MainBrainProviderGateway.configuredProviders(context)
         val selected = preferredProviders.map { it.uppercase() }.distinct().filter { it in configured }
@@ -201,7 +212,7 @@ object AgentCouncil {
         val assistantName = getAssistantName(context)
         return executeParallel(goal, language, selected, specialistCount, { _, provider, system, prompt ->
             withContext(Dispatchers.IO) { MainBrainProviderGateway.complete(context, provider, system, prompt) }
-        }, onProgress, shouldContinue, assistantName)
+        }, onProgress, shouldContinue, assistantName, onStageCompleted)
     }
 
     /** Runs the pipeline through the user's currently selected, configured AI provider. */
