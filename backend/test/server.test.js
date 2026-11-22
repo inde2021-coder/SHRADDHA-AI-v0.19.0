@@ -344,6 +344,7 @@ test('small shared files require a one-time grant and end-to-end encrypted envel
       try { return JSON.parse(data.toString()).type === type; } catch { return false; }
     });
     memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { media: true } }));
+    await new Promise(resolve => setTimeout(resolve, 50));
     const requestPromise = waitType(memberSocket, 'data_share_request');
     ownerSocket.send(JSON.stringify({ type: 'data_share_request', targetDeviceId: member.deviceId, category: 'media', itemLabel: 'Photo attachment' }));
     const [requestMessage] = await requestPromise;
