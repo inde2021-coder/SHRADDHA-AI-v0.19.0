@@ -119,3 +119,19 @@ The old `autoTapSend` helper still exists in the legacy accessibility class, but
 10. Add Android emulator/instrumentation tests, backend integration/security tests, desktop CI, dependency/license scanning, release signing and AAB/APK release verification.
 
 **Release rule:** Keep PR #4 as Draft and do not merge into `main` until P0/P1 blockers are fixed and the Android, backend, desktop, carrier and real-device tests have passed.
+
+
+## Pending-branch source re-check — 22 November 2026
+
+This addendum checks the current pending-features branch, not the older audited commit above. Several findings from the 20 November audit are now stale and must not be repeated as current facts without rechecking:
+
+| Earlier finding | Current source observation | Remaining qualification |
+|---|---|---|
+| P0-1 visual relay ignored screen/camera permission | `backend/server.js` now calls `canShareVisualFrame(device.sharePermissions, frameType)` before forwarding binary visual frames and applies a per-device frame budget. | Permission toggles and encrypted frame transport still need real-device verification. |
+| P0-3 remote actions had no per-action approval/result | Plaintext remote actions are rejected. Encrypted action envelopes require an active remote-control grant; Android displays a target-side approval dialog for each received action and sends a result with before/after screen observations. | Verify expiry/revocation races, screen-capture failure behavior and the complete phone-to-phone session on physical devices. |
+| P1-5 Gemini API key was stored in plaintext | Current `ApiKeyStore.kt` stores the Gemini key using AES-GCM with a non-exportable Android Keystore key and migrates/removes the legacy plaintext preference. | Review provider-specific key stores and verify restore/Keystore-loss behavior on device. |
+| P1-10 biometric engine was a deliberate stub | Current `LocalBiometricModelEngine.kt` contains ONNX Runtime loading and inference paths for face/speaker models; capture flow and consent vault are present. | Model provenance/licensing, actual device inference, calibrated FAR/FRR/EER and independent certified PAD evidence are still required. A blink/head-turn/phrase challenge is not certified anti-spoofing. |
+| P1-11 file transfer was one-shot only | A bounded chunk-envelope validator and encrypted peer-message path exist in source. | End-to-end chunk scheduling, durable resume, progress/cancel, quotas and malware scanning still require implementation and device tests. |
+| P1-12 device revocation was incomplete | Relay policy includes owner-only device revocation and clears grants/pending actions. | Persistent credential revocation across process/server restart and physical multi-device tests remain. |
+
+The current pending branch also adds a parallel Android multi-agent execution path and exposes it in Advanced AI Lab through WorkManager. That new path is **not yet built or tested**. This addendum is a source inspection only; it does not change any item to runtime-validated.
