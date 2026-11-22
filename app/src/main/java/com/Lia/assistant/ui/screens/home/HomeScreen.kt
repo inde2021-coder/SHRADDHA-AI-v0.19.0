@@ -77,7 +77,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 .background(Brush.linearGradient(listOf(Cyan, Violet)))
                 .border(1.dp, Color(0xAA8BEAFF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                 AsyncImage(
-                    model = appState.assistantAvatarUri ?: com.Lia.assistant.R.drawable.shraddha_ai_avatar,
+                    model = appState.assistantAvatarUri ?: in.shraddha.ai.R.drawable.shraddha_ai_avatar,
                     contentDescription = "Shraddha AI avatar",
                     modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
                 )
