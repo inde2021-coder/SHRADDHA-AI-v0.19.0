@@ -53,6 +53,8 @@ class CouncilEvidenceStore(context: Context) {
         message: String,
         finalAnswer: String? = null,
         attempt: Int = 0,
+        providerUsage: String? = null,
+        elapsedMs: Long? = null,
         updatedAt: Long = System.currentTimeMillis()
     ): Result<Unit> = runCatching {
         require(attempt in 0..99) { "Council attempt is out of range." }
@@ -66,6 +68,8 @@ class CouncilEvidenceStore(context: Context) {
             .put("attempt", attempt)
             .put("updatedAt", updatedAt)
         if (finalAnswer != null) record.put("finalAnswer", finalAnswer.take(9_000))
+        if (providerUsage != null) record.put("providerUsage", providerUsage.take(1_000))
+        if (elapsedMs != null) record.put("elapsedMs", elapsedMs.coerceAtLeast(0L))
         store.put(prefix(taskId) + "status", record.toString()).getOrThrow()
     }
 
