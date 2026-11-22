@@ -232,37 +232,40 @@ fun VoiceScreen(
                 }
             }
 
-            // One microphone control: tap once to end the active session,
-            // tap again to start it. The close control above only dismisses this screen.
-            val micShape = RoundedCornerShape(50)
-            Box(
-                modifier = Modifier
-                    .depthSurface(shape = micShape, elevation = 6.dp)
-                    .clip(micShape)
-                    .background(colors.surfaceGlass)
-                    .clickable {
-                        if (isActive) VoiceForegroundService.stop(context)
-                        else if (hasKey && hasRecordAudioPermission) VoiceForegroundService.start(context)
-                    }
-                    .padding(horizontal = 28.dp, vertical = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            if (hasKey && hasRecordAudioPermission) {
+                // One microphone control: tap once to end the active session,
+                // tap again to start it. The close control above only dismisses this screen.
+                val micShape = RoundedCornerShape(50)
+                Box(
+                    modifier = Modifier
+                        .depthSurface(shape = micShape, elevation = 6.dp)
+                        .clip(micShape)
+                        .background(colors.surfaceGlass)
+                        .clickable {
+                            if (isActive) VoiceForegroundService.stop(context)
+                            else if (hasKey && hasRecordAudioPermission) VoiceForegroundService.start(context)
+                        }
+                        .padding(horizontal = 28.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = if (isActive) "Turn microphone off" else "Turn microphone on",
-                        tint = if (isActive) colors.accent else colors.textPrimary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Text(
-                        text = if (isActive) "MICROPHONE ON · TAP TO TURN OFF" else "MICROPHONE OFF · TAP TO TURN ON",
-                        color = colors.textPrimary,
-                        fontSize = 12.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = if (isActive) "Turn microphone off" else "Turn microphone on",
+                            tint = if (isActive) colors.accent else colors.textPrimary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Text(
+                            text = if (isActive) "MICROPHONE ON · TAP TO TURN OFF" else "MICROPHONE OFF · TAP TO TURN ON",
+                            color = colors.textPrimary,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
+    
             }
         }
     }
