@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,9 +19,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
@@ -28,194 +32,190 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import in.shraddha.ai.R
-import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
-import com.Lia.assistant.ui.fx.LiaOrb3D
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.NovaOrbState
 import com.Lia.assistant.voice.VoiceSessionManager
 
-private val Cyan = Color(0xFF48DFFF)
-private val Violet = Color(0xFF9B7BFF)
-private val Mint = Color(0xFF4CE4C4)
-private val Glass = Color(0xCC101D33)
+private val NeonPurple = Color(0xFF9D4DFF)
+private val NeonPink = Color(0xFFE45DFF)
+private val NeonBlue = Color(0xFF53CFFF)
+private val MutedText = Color(0xFFB9B5CC)
 
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
     val voiceState by VoiceSessionManager.state.collectAsState()
-    val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
-    val stateLabel = when (voiceState) {
-        NovaOrbState.LISTENING -> "LISTENING • I'M HERE"
-        NovaOrbState.THINKING -> "THINKING • ONE MOMENT"
-        NovaOrbState.SPEAKING -> "SPEAKING • SHRADDHA AI"
-        NovaOrbState.CONNECTING -> "CONNECTING SECURELY"
-        NovaOrbState.ERROR -> "VOICE CONNECTION NEEDS ATTENTION"
-        else -> "READY WHEN YOU ARE"
+    var askText by remember { mutableStateOf("") }
+    val voiceLabel = when (voiceState) {
+        NovaOrbState.LISTENING -> "Listening…"
+        NovaOrbState.THINKING -> "Thinking…"
+        NovaOrbState.SPEAKING -> "Speaking…"
+        NovaOrbState.CONNECTING -> "Connecting…"
+        NovaOrbState.ERROR -> "Voice connection needs attention"
+        else -> "Always here when you need me"
+    }
+
+    fun openChat() {
+        val prompt = askText.trim()
+        if (prompt.isNotEmpty()) {
+            navController.currentBackStackEntry?.savedStateHandle?.set("home_prompt", prompt)
+        }
+        askText = ""
+        navController.navigate("chat") { launchSingleTop = true }
     }
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp).padding(bottom = 112.dp),
+            .padding(horizontal = 17.dp)
+            .padding(bottom = 104.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
-                .background(Brush.linearGradient(listOf(Cyan, Violet)))
-                .border(1.dp, Color(0xAA8BEAFF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                AsyncImage(
-                    model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_avatar,
-                    contentDescription = "Shraddha AI avatar",
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
-                )
-            }
-            Column(Modifier.padding(start = 11.dp)) {
-                Text(assistantName, color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("YOUR INTELLIGENT AI COMPANION", color = Cyan, fontSize = 8.sp, letterSpacing = 1.15.sp, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 13.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HeaderButton(Icons.Default.Menu, "Quick actions") { navController.navigate("quick_actions") }
+            Spacer(Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(assistantName.uppercase(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.1.sp)
+                Text("YOUR AI ASSISTANT", color = Color(0xFFBBA4DF), fontSize = 7.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.3.sp)
             }
             Spacer(Modifier.weight(1f))
-            HeaderIcon(Icons.Default.History, "History") { navController.navigate("history") }
-            Spacer(Modifier.width(8.dp))
-            HeaderIcon(Icons.Default.Settings, "Settings") { navController.navigate("settings") }
+            HeaderButton(Icons.Default.Settings, "Settings") { navController.navigate("settings") }
         }
 
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(23.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF152D4B), Color(0xFF241A49), Color(0xFF111B35))))
-            .border(1.dp, Color(0x6678DFFF), RoundedCornerShape(23.dp)).padding(17.dp)) {
-            Text(if (appState.userName.isNotBlank()) "नमस्ते, ${appState.userName}!" else "नमस्ते!", color = Color(0xFF9DEAFF), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Text("मैं $assistantName हूँ", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
-            Text("आज मैं आपकी किस तरह मदद कर सकती हूँ?", color = Color(0xFFBED0E8), fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
-        }
-
-        Spacer(Modifier.height(14.dp))
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF10294A), Color(0xFF11152F), Color(0xFF090F1E))))
-            .border(1.dp, Color(0x6677DFFF), RoundedCornerShape(28.dp)).padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("SHRADDHA CORE", color = Cyan, fontSize = 9.sp, letterSpacing = 2.sp, fontWeight = FontWeight.ExtraBold)
-                Text("VOICE  •  VISION  •  MEMORY", color = Color(0xFFB7C8E0), fontSize = 9.sp, letterSpacing = 1.sp)
-                Box(Modifier.size(226.dp).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(Color(0x6637DFFF), Color(0x222B5CCB), Color.Transparent)))
-                    .clickable { navController.navigate("voice") }, contentAlignment = Alignment.Center) {
-                    LiaOrb3D(state = voiceState, size = 204.dp, amplitude = amplitude, assistantName = assistantName)
-                }
-                Row(Modifier.clip(CircleShape).background(Color(0xCC132943))
-                    .border(1.dp, Color(0x6678DFFF), CircleShape).padding(horizontal = 13.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Icon(Icons.Default.GraphicEq, null, tint = Mint, modifier = Modifier.size(14.dp))
-                    Text(stateLabel, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                }
-                Spacer(Modifier.height(13.dp))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PrimaryAction("🎙", "Talk to Shraddha", Modifier.weight(1f)) { navController.navigate("voice") }
-                    PrimaryAction("✉", "Ask Anything", Modifier.weight(1f)) { navController.navigate("chat") }
+        Spacer(Modifier.height(4.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth().height(326.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_hero,
+                contentDescription = "$assistantName portrait",
+                modifier = Modifier.size(width = 310.dp, height = 310.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+            Box(
+                modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-2).dp)
+                    .size(82.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFF35105D), Color(0xFF16062D), Color(0xFF090817))))
+                    .border(2.dp, NeonPurple, CircleShape)
+                    .clickable { navController.navigate("voice") },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(67.dp).clip(CircleShape)
+                        .background(Brush.radialGradient(listOf(Color(0xFF5E1B9D), Color(0xFF251047))))
+                        .border(1.dp, Color(0xFFDC8BFF), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Mic, contentDescription = "Talk to $assistantName", tint = Color.White, modifier = Modifier.size(31.dp))
                 }
             }
         }
 
-        SectionTitle("QUICK ACCESS", "आपके रोज़मर्रा के AI टूल")
-        FeatureGrid(
-            Feature("📞", "Calls by Voice", "आवाज़ से कॉल", Mint) { navController.navigate("voice") },
-            Feature("💬", "WhatsApp & SMS", "मैसेज बोलकर भेजें", Violet) { navController.navigate("quick_actions") },
-            Feature("📷", "Visual Lens", "कैमरे से पूछें", Color(0xFFFFB85C)) { navController.navigate("visual_lens") },
-            Feature("🖥", "Screen & PC", "स्क्रीन / PC कंट्रोल", Cyan) { navController.navigate("quick_actions") },
-            Feature("📁", "File Manager", "फाइलें खोजें", Mint) { navController.navigate("quick_actions") },
-            Feature("🌐", "Web Search", "नई जानकारी खोजें", Color(0xFFFFB85C)) { navController.navigate("chat") },
-            Feature("⌨", "Code Assistant", "कोड और वेबसाइट", Violet) { navController.navigate("forge") },
-            Feature("🧠", "Memory & Persona", "यादें और व्यक्तित्व", Mint) { navController.navigate("personality") }
-        )
+        Text("Tap to Talk", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp)
+        Spacer(Modifier.height(3.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = NeonPurple, modifier = Modifier.size(14.dp))
+            Text(voiceLabel, color = MutedText, fontSize = 10.sp)
+        }
 
-        SectionTitle("MAKE IT YOURS", "अपनी पसंद के अनुसार SHRADDHA")
-        SettingLink("🎨", "Orb & Launcher Styles", "Classic  •  Energy  •  Neon  •  Aura") { navController.navigate("orb_style") }
-        Spacer(Modifier.height(9.dp))
-        SettingLink("✎", "Assistant Name", assistantName) { navController.navigate("profile") }
-        Spacer(Modifier.height(9.dp))
-        SettingLink("🤖", "AI Providers & Voice Settings", "अपना AI provider और voice configure करें") { navController.navigate("settings") }
-        Spacer(Modifier.height(16.dp))
-    }
-}
+        Spacer(Modifier.height(22.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
+                .background(Color(0xFF111020))
+                .border(1.dp, Color(0xFF44305D), RoundedCornerShape(17.dp))
+                .padding(start = 12.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(NeonPurple, Color(0xFF5D3CB3)))),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.SmartToy, null, tint = Color.White, modifier = Modifier.size(17.dp)) }
+            Spacer(Modifier.width(9.dp))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (askText.isBlank()) Text("Ask me anything…", color = Color(0xFF8C879C), fontSize = 12.sp)
+                BasicTextField(
+                    value = askText,
+                    onValueChange = { askText = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Box(
+                Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
+                    .background(Brush.horizontalGradient(listOf(NeonPurple, Color(0xFF7239D2))))
+                    .clickable { openChat() },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send to chat", tint = Color.White, modifier = Modifier.size(19.dp)) }
+        }
 
-private data class Feature(val icon: String, val title: String, val subtitle: String, val accent: Color, val action: () -> Unit)
-
-@Composable
-private fun FeatureGrid(vararg items: Feature) {
-    items.toList().chunked(2).forEach { pair ->
+        Spacer(Modifier.height(13.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            pair.forEach { item -> FeatureTile(item, Modifier.weight(1f)) }
-            if (pair.size == 1) Spacer(Modifier.weight(1f))
+            HomeShortcut("Chat", "Ask with text", "CHAT", Modifier.weight(1f)) { navController.navigate("chat") }
+            HomeShortcut("Visual Lens", "Ask with camera", "LENS", Modifier.weight(1f)) { navController.navigate("visual_lens") }
+            HomeShortcut("Create", "Build a website", "FORGE", Modifier.weight(1f)) {
+                navController.navigate("quick_actions")
+            }
         }
-        Spacer(Modifier.height(9.dp))
+        Spacer(Modifier.height(14.dp))
+        Text("QUICK ACCESS", color = Color(0xFF8C6EC6), fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Spacer(Modifier.height(5.dp))
+        Text("Your assistant. Your tools. One place.", color = MutedText, fontSize = 10.sp)
     }
 }
 
 @Composable
-private fun FeatureTile(item: Feature, modifier: Modifier = Modifier) {
-    Row(modifier.height(68.dp).clip(RoundedCornerShape(17.dp))
-        .background(Brush.linearGradient(listOf(Color(0xE61A3150), Color(0xE6171A36))))
-        .border(1.dp, item.accent.copy(alpha = 0.55f), RoundedCornerShape(17.dp))
-        .clickable(onClick = item.action).padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(item.icon, fontSize = 22.sp)
-        Column(Modifier.padding(start = 8.dp)) {
-            Text(item.title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(item.subtitle, color = Color(0xFFB7C8E0), fontSize = 9.sp, maxLines = 1)
-        }
+private fun HeaderButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    Box(
+        Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF171527))
+            .border(1.dp, Color(0x553A3156), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = description, tint = Color(0xFFE8DDFB), modifier = Modifier.size(19.dp))
     }
 }
 
 @Composable
-private fun SectionTitle(title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 10.dp)) {
-        Text(title, color = Cyan, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp)
-        Text(subtitle, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 3.dp))
-    }
-}
-
-@Composable
-private fun HeaderIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
-    Box(Modifier.size(40.dp).clip(CircleShape).background(Color(0xCC142944))
-        .border(1.dp, Color(0x6676DFFF), CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, description, tint = Color.White, modifier = Modifier.size(19.dp))
-    }
-}
-
-@Composable
-private fun PrimaryAction(icon: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Row(modifier.height(48.dp).clip(RoundedCornerShape(16.dp))
-        .background(Brush.horizontalGradient(listOf(Color(0xFF087CB8), Color(0xFF5533A9))))
-        .border(1.dp, Color(0xAA7DEBFF), RoundedCornerShape(16.dp))
-        .clickable(onClick = onClick).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        Text(icon, fontSize = 17.sp)
-        Text(label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 6.dp), textAlign = TextAlign.Center, maxLines = 1)
-    }
-}
-
-@Composable
-private fun SettingLink(icon: String, title: String, subtitle: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Glass)
-        .border(1.dp, Color(0x5576CFFF), RoundedCornerShape(18.dp))
-        .clickable(onClick = onClick).padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(icon, fontSize = 23.sp)
-        Column(Modifier.weight(1f).padding(start = 11.dp)) {
-            Text(title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color(0xFFB8C8E3), fontSize = 10.sp, maxLines = 1)
-        }
-        Text("›", color = Cyan, fontSize = 24.sp)
+private fun HomeShortcut(title: String, subtitle: String, tag: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF121126))
+            .border(1.dp, Color(0x443A2A58), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick).padding(horizontal = 9.dp, vertical = 11.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(tag, color = NeonBlue, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+        Spacer(Modifier.height(5.dp))
+        Text(title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = MutedText, fontSize = 8.sp, maxLines = 1)
     }
 }
