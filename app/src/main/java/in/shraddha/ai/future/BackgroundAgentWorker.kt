@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -64,8 +65,9 @@ class BackgroundAgentWorker(
             attempt = attempt
         ).getOrThrow()
 
-        val result = withContext(Dispatchers.IO) {
-            MainBrain.executeBackgroundCouncil(
+        val result = try {
+            withContext(Dispatchers.IO) {
+                MainBrain.executeBackgroundCouncil(
                 context = applicationContext,
                 goal = goal,
                 language = language,
@@ -103,8 +105,20 @@ class BackgroundAgentWorker(
                         attempt = attempt
                     ).getOrThrow()
                 },
-                budget = budget
-            )
+                    budget = budget
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            runCatching { scheduler.cancel(schedulerTaskId) }
+            runCatching {
+                evidence.saveStatus(
+                    schedulerTaskId,
+                    "CANCELLED",
+                    "WorkManager cancelled the worker. Completed stage evidence is retained; no final result is claimed.",
+                    attempt = attempt
+                )
+            }
+            throw cancelled
         }
 
         if (isStopped) {
