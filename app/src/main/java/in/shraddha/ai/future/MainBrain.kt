@@ -72,7 +72,18 @@ class MainBrain(
             // validating/opening the Forge UI. Do not occupy a parent slot and then deadlock
             // while the Forge task claims the same single-worker scheduler.
             if (toolName == "build_website") {
-                return com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+                val journal = `in`.shraddha.ai.operator.VoiceToolActionJournal(context.applicationContext)
+                val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
+                if (!journal.begin(taskId, toolName)) {
+                    return JSONObject().put("status", "error")
+                        .put("action", "voice_action_journal_unavailable")
+                        .put("message", "सुरक्षित action journal save नहीं हुई; Website Forge launch नहीं किया गया।")
+                }
+                val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+                if (journal.finish(taskId, result)) result else JSONObject()
+                    .put("status", "verification_pending")
+                    .put("action", "voice_action_result_not_journaled")
+                    .put("message", "Website Forge launch का result सुरक्षित रूप से save नहीं हुआ। दोबारा launch करने से पहले Forge की स्थिति जाँचें।")
             }
             val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
             val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
