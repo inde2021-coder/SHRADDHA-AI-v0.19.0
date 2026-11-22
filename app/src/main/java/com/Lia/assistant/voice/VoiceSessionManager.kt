@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.Lia.assistant.action.InstalledAppLabelCache
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
@@ -405,7 +406,7 @@ object VoiceSessionManager {
         return true
     }
 
-    /** Speaks a camera observation through the configured Shraddha voice when the voice session is active. */
+    /** Speaks a camera observation through the configured assistant voice when the voice session is active. */
     fun announceVisualObservation(context: Context, text: String) {
         val clean = text.trim().take(1200)
         if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return
@@ -413,7 +414,7 @@ object VoiceSessionManager {
         scope.launch {
             val assistantName = runCatching {
                 PersonalityRepository.getAssistantName(context.applicationContext)
-            }.getOrDefault("Shraddha AI")
+            }.getOrDefault(AssistantBrand.FULL_NAME)
             if (sessionEpoch.get() == epoch && _isActive.value && _state.value == NovaOrbState.LISTENING) {
                 speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
             }
@@ -444,7 +445,7 @@ object VoiceSessionManager {
                     }
                 }
             }.onFailure { error ->
-                _lastError.value = error.localizedMessage ?: "Shraddha custom voice engine unavailable"
+                _lastError.value = error.localizedMessage ?: "Custom voice engine unavailable"
                 _state.value = NovaOrbState.ERROR
                 _statusText.value = "$assistantName voice engine setup required — no Google voice fallback"
             }
