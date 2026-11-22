@@ -97,7 +97,7 @@ class LiveEyesCameraService : Service() {
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (now - lastAnalysisAt < ANALYSIS_INTERVAL_MS || !requestInFlight.compareAndSet(false, true)) return@setOnImageAvailableListener
                     val buffer = image.planes[0].buffer
-                    val jpeg = ByteArray(buffer.remaining()).also(buffer::get)
+                    val jpeg = ByteArray(buffer.remaining()).also { buffer.get(it) }
                     if (jpeg.isEmpty() || jpeg.size > MAX_FRAME_BYTES) {
                         jpeg.fill(0); requestInFlight.set(false); return@setOnImageAvailableListener
                     }
