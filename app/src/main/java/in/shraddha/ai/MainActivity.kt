@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var pageScroll: ScrollView
     private var currentPage: String = "home"
     private var activeOrb: ShraddhaOrbView? = null
+    private var activeCouncilWorkId: java.util.UUID? = null
     private lateinit var relayUrl: EditText
     private lateinit var deviceName: EditText
     private lateinit var pairingCode: EditText
@@ -1512,6 +1513,8 @@ class MainActivity : AppCompatActivity() {
                     val workId = `in`.shraddha.ai.future.BackgroundTaskQueue.enqueue(
                         this@MainActivity, goalText, selectedProviders.joinToString(","), "AUTO"
                     )
+                    activeCouncilWorkId = workId
+                    getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().putString("active_work_id", workId.toString()).apply()
                     councilOutput.text = "Parallel AI team queue में भेजी गई। Work ID: " + workId +
                         "\nPlanner + Researcher parallel चलेंगे, फिर 3 Specialists, Critic और Verifier।"
                     androidx.work.WorkManager.getInstance(this@MainActivity)
@@ -1534,9 +1537,29 @@ class MainActivity : AppCompatActivity() {
                                 else -> "Waiting for background worker."
                             }
                             councilOutput.text = "Parallel council • " + message
+                            if (info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
+                                info.state == androidx.work.WorkInfo.State.FAILED ||
+                                info.state == androidx.work.WorkInfo.State.CANCELLED) {
+                                activeCouncilWorkId = null
+                                getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().remove("active_work_id").apply()
+                            }
                         }
                 } catch (error: Exception) {
                     councilOutput.text = "Parallel council queue failed: " + (error.localizedMessage ?: "Unknown error")
+                }
+            })
+            addView(actionButton("CANCEL BACKGROUND COUNCIL", "Stops the queued/running multi-agent task") {
+                val workId = activeCouncilWorkId
+                    ?: getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).getString("active_work_id", null)?.let {
+                        runCatching { java.util.UUID.fromString(it) }.getOrNull()
+                    }
+                if (workId == null) {
+                    councilOutput.text = "No saved background council task is available to cancel."
+                } else {
+                    `in`.shraddha.ai.future.BackgroundTaskQueue.cancel(this@MainActivity, workId)
+                    activeCouncilWorkId = null
+                    getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().remove("active_work_id").apply()
+                    councilOutput.text = "Cancellation requested for background task " + workId
                 }
             })
         }
