@@ -78,6 +78,7 @@ fun AgentCouncilScreen(
     var durationSeconds by remember { mutableStateOf(300f) }
     var workId by remember { mutableStateOf<UUID?>(null) }
     var workInfo by remember { mutableStateOf<WorkInfo?>(null) }
+    var workInfoResolved by remember { mutableStateOf(false) }
     var stageEvidence by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -98,10 +99,15 @@ fun AgentCouncilScreen(
         val id = workId
         if (id == null) {
             workInfo = null
+            workInfoResolved = true
             onDispose { }
         } else {
+            workInfoResolved = false
             val liveData = WorkManager.getInstance(context.applicationContext).getWorkInfoByIdLiveData(id)
-            val observer = Observer<WorkInfo?> { info -> workInfo = info }
+            val observer = Observer<WorkInfo?> { info ->
+                workInfo = info
+                workInfoResolved = true
+            }
             liveData.observe(lifecycleOwner, observer)
             onDispose { liveData.removeObserver(observer) }
         }
@@ -119,9 +125,7 @@ fun AgentCouncilScreen(
     val minimumCalls = specialists.toInt() + 4
     val minimumPerProvider = if (selectedProviders.isEmpty()) 1 else
         ((specialists.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
-    val isRunning = workInfo?.state == WorkInfo.State.RUNNING ||
-        workInfo?.state == WorkInfo.State.ENQUEUED ||
-        workInfo?.state == WorkInfo.State.BLOCKED
+    val isRunning = workId != null && (!workInfoResolved || workInfo?.state?.isFinished != true)
     val statusColor = when (workInfo?.state) {
         WorkInfo.State.SUCCEEDED -> Color(0xFF58D6A5)
         WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> Color(0xFFFF8585)
