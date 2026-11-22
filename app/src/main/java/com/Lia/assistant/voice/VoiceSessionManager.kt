@@ -1,6 +1,9 @@
 package com.Lia.assistant.voice
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import com.Lia.assistant.action.InstalledAppLabelCache
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
@@ -107,8 +110,25 @@ object VoiceSessionManager {
                 scope.launch {
                     if (_isActive.value && audioEpoch.get() == currentAudioEpoch) {
                         _lastError.value = message
-                        _state.value = NovaOrbState.ERROR
-                        _statusText.value = "Microphone unavailable: $message"
+                        val hasMicrophonePermission = ContextCompat.checkSelfPermission(
+                            appContext ?: context.applicationContext,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (!hasMicrophonePermission) {
+                            // Permission revocation is a user decision, not a transient
+                            // audio failure. Do not retry or reopen the microphone.
+                            _state.value = NovaOrbState.ERROR
+                            _statusText.value = "Microphone permission was revoked. Re-enable it to continue."
+                        } else {
+                            // AudioRecord can fail after a successful Live API connection
+                            // (device contention, route changes or a transient read error).
+                            // Reuse the bounded reconnect path so stopRecording() releases
+                            // the failed AudioRecord before a fresh session is attempted.
+                            _state.value = NovaOrbState.CONNECTING
+                            _statusText.value = "Microphone interrupted; reconnecting..."
+                            scheduleReconnect()
+                        }
                     }
                 }
             }
