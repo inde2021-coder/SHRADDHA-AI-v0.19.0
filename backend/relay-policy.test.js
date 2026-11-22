@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -64,6 +64,21 @@ test('remote action envelopes require a unique opaque id and allowlisted action'
   assert.equal(validRemoteActionEnvelope('action_12345678', { kind: 'tap' }), true);
   assert.equal(validRemoteActionEnvelope('../bad', { kind: 'tap' }), false);
   assert.equal(validRemoteActionEnvelope('action_12345678', { kind: 'shell' }), false);
+});
+
+test('advanced consent-gated PC companion actions are relayed only from the explicit allowlist', () => {
+  for (const kind of [
+    'tap','swipe','scroll','back','home','type','click_text','open_app','ocr',
+    'file_list','file_read','file_search','offline_chat','code_assistant',
+    'media_control','system_control','screenshot','clipboard_transform','web_search'
+  ]) {
+    assert.equal(ALLOWED_REMOTE_ACTION_KINDS.has(kind), true, kind);
+    assert.equal(validRemoteActionEnvelope('action_12345678', { kind }), true, kind);
+  }
+  for (const kind of ['shell','powershell','delete_file','unknown']) {
+    assert.equal(ALLOWED_REMOTE_ACTION_KINDS.has(kind), false, kind);
+    assert.equal(validRemoteActionEnvelope('action_12345678', { kind }), false, kind);
+  }
 });
 
 test('only the owner can revoke another paired device and revocation clears grants', () => {
