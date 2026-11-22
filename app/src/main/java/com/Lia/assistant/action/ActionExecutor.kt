@@ -31,6 +31,28 @@ object ActionExecutor {
         }
 
         when (toolName) {
+            "download_file" -> {
+                val rawUrl = args.optString("url").trim()
+                val name = args.optString("file_name").trim().replace(Regex("[^A-Za-z0-9._ -]"), "_").take(120)
+                val uri = runCatching { java.net.URI(rawUrl).normalize() }.getOrNull()
+                val host = uri?.host?.lowercase().orEmpty()
+                val ipv4 = host.split(".").mapNotNull { it.toIntOrNull() }
+                val privateIpv4 = ipv4.size == 4 && (ipv4[0] == 10 || ipv4[0] == 127 || ipv4[0] == 0 || ipv4[0] == 169 && ipv4[1] == 254 || ipv4[0] == 192 && ipv4[1] == 168 || ipv4[0] == 172 && ipv4[1] in 16..31)
+                val valid = uri != null && uri.scheme.equals("https", true) && host.isNotBlank() && !host.endsWith(".local") && host != "localhost" && host != "::1" && !privateIpv4 && uri.userInfo == null && name.isNotBlank() && !name.contains("..")
+                if (!valid) {
+                    result.put("status", "error").put("action", "download_url_rejected")
+                    result.put("message", "सिर्फ सार्वजनिक HTTPS URL और मान्य file name से download किया जा सकता है।")
+                } else {
+                    val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+                    val request = android.app.DownloadManager.Request(android.net.Uri.parse(uri.toString()))
+                        .setTitle(name).setDescription("Shraddha AI file download")
+                        .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name)
+                    val downloadId = manager.enqueue(request)
+                    result.put("status", "queued").put("action", "download_queued").put("download_id", downloadId)
+                    result.put("file_name", name).put("message", "Download Android Download Manager में queue हो गया है। पूरा होने की सूचना Android देगा; अभी download complete होने का दावा नहीं है।")
+                }
+            }
             "daily_briefing" -> {
                 val action = args.optString("action", "ENABLE").uppercase()
                 if (action == "DISABLE" || action == "STOP") {
