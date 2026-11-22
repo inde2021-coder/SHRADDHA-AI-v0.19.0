@@ -74,14 +74,37 @@ object DeviceLinkManager {
         saveAndConnect(credentials.baseUrl, pair, done)
     }
 
-    fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
-        result.mapCatching { body -> PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
-            .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
+    private fun normalizedRelayBaseUrl(raw: String): String {
+        val url = raw.trim().trimEnd('/')
+        require(url.length in 10..500 && !url.contains(" ")) { "Relay URL is invalid." }
+        val uri = java.net.URI(url)
+        require(uri.scheme.equals("https", ignoreCase = true) && uri.host != null) { "A secure HTTPS relay URL is required." }
+        require(uri.userInfo == null && uri.query == null && uri.fragment == null) {
+            "Relay URL must not contain credentials, query parameters or fragments."
+        }
+        return url
     }
 
-    fun joinSession(baseUrl: String, name: String, code: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/join", JSONObject().put("deviceName", name).put("pairingCode", code)) { result ->
-        result.mapCatching { body -> PairResult("", body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
-            .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
+    fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) {
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        post(safeBaseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
+            result.mapCatching { body ->
+                PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken"))
+            }.onSuccess { saveAndConnect(safeBaseUrl, it, done) }
+                .onFailure { done(Result.failure(it)) }
+        }
+    }
+
+    fun joinSession(baseUrl: String, name: String, code: String, done: (Result<PairResult>) -> Unit) {
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        post(safeBaseUrl, "/api/device/join", JSONObject().put("deviceName", name).put("pairingCode", code)) { result ->
+            result.mapCatching { body ->
+                PairResult("", body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken"))
+            }.onSuccess { saveAndConnect(safeBaseUrl, it, done) }
+                .onFailure { done(Result.failure(it)) }
+        }
     }
 
     private fun saveAndConnect(baseUrl: String, pair: PairResult, done: (Result<PairResult>) -> Unit) {
