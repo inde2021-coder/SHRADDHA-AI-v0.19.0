@@ -150,4 +150,9 @@ Unit-test source was added for the relay envelope and ECDH/AES-GCM round-trip in
 
 ### File-transfer manifest/chunk alignment correction — 22 November
 
-A further source audit found Android used 48,000-byte chunk reads and a mismatched chunk-count formula while the relay validates 48 KiB (49,152-byte) chunks. Exact boundaries could produce a bogus extra chunk and a relay manifest rejection. The pending branch now centralizes Android transfer chunk sizing at 48 KiB and applies it consistently to manifest calculation, sender seeking/reads, receiver expected lengths and receiver file offsets. The app's current cap remains 20 MB. Boundary regression tests were authored but not executed; do not mark file transfer runtime-validated until the consolidated tests and phone-to-phone interruption tests pass.
+A further source audit found Android used 48,000-byte chunk reads and a mismatched chunk-count formula while the relay validates 48 KiB (49,152-byte) chunks. Exact boundaries could produce a bogus extra chunk and a relay manifest rejection. The pending branch now centralizes Android transfer chunk sizing at 48 KiB and applies it consistently to manifest calculation, sender seeking/reads, receiver expected lengths and receiver file offsets. The app's current cap remains 100 MiB. Boundary regression tests were authored but not executed; do not mark file transfer runtime-validated until the consolidated tests and phone-to-phone interruption tests pass.
+
+
+### Transfer capacity update — 22 November
+
+The Android chunked file-transfer cap is now aligned with the relay's 100 MiB manifest limit (48 KiB chunks, 2,134 maximum chunks). The earlier Android-only 20 MB cap has been raised in the protocol helper, sender, receiver and boundary test. This is source-only; 100 MiB throughput, storage pressure, process-death resume, and low-storage behavior must be validated on physical devices before calling the larger limit production-ready.
