@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaGlassCard
@@ -55,6 +57,10 @@ fun DataVaultScreen(navController: NavController) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
     val scope = rememberCoroutineScope()
+    val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME)
+        .trim().ifBlank { AssistantBrand.FULL_NAME }
+    val backupFileName = assistantName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+        .ifBlank { "assistant" } + "-backup.sba"
     var passphrase by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
@@ -160,7 +166,7 @@ fun DataVaultScreen(navController: NavController) {
                 color = colors.textSecondary, fontSize = 11.sp
             )
             Text(
-                "Excluded: API keys, gateway tokens, passwords, biometric templates and device-pairing secrets.",
+                "Excluded: API keys, gateway tokens, passwords, biometrics, device-pairing secrets, Project Lab plans, Expert Studio results and multi-agent evidence.",
                 color = colors.textSecondary, fontSize = 11.sp
             )
         }
@@ -196,12 +202,15 @@ fun DataVaultScreen(navController: NavController) {
                         confirmation = ""
                         scope.launch {
                             val result = withContext(Dispatchers.IO) {
-                                runCatching { UserBackupManager(context).export(secret) }
+                                runCatching {
+                                    try { UserBackupManager(context).export(secret) }
+                                    finally { secret.fill('\\u0000') }
+                                }
                             }
                             result.onSuccess {
                                 pendingExport = it
                                 status = "Choose where to save the encrypted backup file."
-                                exportLauncher.launch("shraddha-backup.sba")
+                                exportLauncher.launch(backupFileName)
                             }.onFailure {
                                 status = it.message ?: "Backup creation failed."
                                 isBusy = false
@@ -258,7 +267,7 @@ fun DataVaultScreen(navController: NavController) {
                     isBusy = true
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
-                            UserBackupManager(context).restore(envelope, secret)
+                            try { UserBackupManager(context).restore(envelope, secret) } finally { secret.fill('\\u0000') }
                         }
                         status = result.fold(
                             onSuccess = { "Backup restored. Reopen affected screens to refresh their state." },
