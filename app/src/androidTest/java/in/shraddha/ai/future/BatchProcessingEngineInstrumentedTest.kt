@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.future
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.json.JSONObject
@@ -51,6 +52,22 @@ class BatchProcessingEngineInstrumentedTest {
         assertEquals(1, rows.size)
         assertEquals("42", rows.single().values.getString("id"))
         assertEquals("Radhe Krishna", rows.single().values.getString("name"))
+    }
+
+    @Test fun readsSqliteRecordsWithBoundedReadOnlyAdapter() {
+        val database = SQLiteDatabase.create(null)
+        try {
+            database.execSQL("CREATE TABLE contacts (id TEXT PRIMARY KEY, name TEXT, score INTEGER)")
+            database.execSQL("INSERT INTO contacts VALUES ('c1', 'Indra', 7)")
+            database.execSQL("INSERT INTO contacts VALUES ('c2', 'Shraddha', 9)")
+            val rows = BatchDatabaseSource.read(database, "contacts", columns = arrayOf("name", "score"), orderBy = "id ASC")
+            assertEquals(2, rows.size)
+            assertEquals("c1", rows.first().id)
+            assertEquals("Indra", rows.first().values.getString("name"))
+            assertEquals(9L, rows.last().values.getLong("score"))
+        } finally {
+            database.close()
+        }
     }
 
     @Test fun duplicateRowsAreReportedAndFailedRowsCanBeRetried() {
