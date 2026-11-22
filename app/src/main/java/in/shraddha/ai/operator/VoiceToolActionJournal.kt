@@ -26,6 +26,9 @@ class VoiceToolActionJournal(context: Context) {
     fun begin(taskId: String, tool: String): Boolean {
         if (!taskId.matches(Regex("voice_[A-Fa-f0-9]{32}"))) return false
         if (!tool.matches(Regex("[a-zA-Z0-9_]{1,80}"))) return false
+        // Never overwrite an unresolved action from a previous process/session.
+        val previous = read()
+        if (previous?.state == "EXECUTING") return false
         val payload = JSONObject()
             .put("task_id", taskId)
             .put("tool", tool)
