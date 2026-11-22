@@ -8,6 +8,7 @@ import android.content.Context
 import org.json.JSONObject
 import org.json.JSONArray
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 
 /**
@@ -59,9 +60,44 @@ class MainBrain(
             return council to session
         }
 
-        /** Voice tools enter the Main Brain boundary before the typed, policy-checked tool executor. */
-        suspend fun executeVoiceTool(context: Context, toolName: String, args: JSONObject): JSONObject =
-            com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+        /**
+         * Voice device/app tools are serialized through the same durable scheduler as Operator
+         * and WorkManager. A process death while RUNNING marks the call failed; it is never replayed.
+         */
+        suspend fun executeVoiceTool(context: Context, toolName: String, args: JSONObject): JSONObject {
+            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
+            val payload = JSONObject().put("tool", toolName).put("args", args).toString()
+            val submitted = runCatching {
+                scheduler.submitAll(listOf(SharedTaskScheduler.Task(
+                    id = taskId,
+                    title = "Voice tool: ${toolName.take(100)}",
+                    priority = 2,
+                    payload = payload
+                ))).single()
+            }.getOrElse { error ->
+                return JSONObject().put("status", "error")
+                    .put("message", error.message ?: "Main Brain could not queue the voice tool.")
+            }
+            if (scheduler.claimSpecific(taskId) == null) {
+                runCatching { scheduler.cancel(taskId) }
+                return JSONObject().put("status", "scheduler_busy")
+                    .put("message", "Main Brain is executing a higher-priority task. Please retry after it finishes.")
+                    .put("task_id", submitted.task.id)
+            }
+            return try {
+                val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+                scheduler.complete(taskId)
+                result
+            } catch (cancelled: CancellationException) {
+                runCatching { scheduler.cancel(taskId) }
+                throw cancelled
+            } catch (error: Exception) {
+                runCatching { scheduler.fail(taskId, error.message ?: "Voice tool failed") }
+                JSONObject().put("status", "error")
+                    .put("message", error.localizedMessage ?: "Main Brain tool execution failed.")
+            }
+        }
 
         /** WorkManager remains the durable execution engine; all app enqueue requests enter here. */
         fun enqueueBackgroundCouncil(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID =
