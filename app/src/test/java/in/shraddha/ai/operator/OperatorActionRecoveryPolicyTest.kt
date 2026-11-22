@@ -1,100 +1,58 @@
 package `in`.shraddha.ai.operator
 
-import android.graphics.Rect
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class OperatorActionRecoveryPolicyTest {
-    private fun screen(activity: String, text: String = "") = ScreenSnapshot(
-        packageName = "com.example.target",
-        activityName = activity,
-        capturedAt = 1L,
-        elements = if (text.isBlank()) emptyList() else listOf(
-            ScreenElement(
-                id = "result",
-                text = text,
-                description = "",
-                className = "android.widget.TextView",
-                bounds = Rect(0, 0, 1, 1),
-                clickable = false,
-                editable = false,
-                scrollable = false,
-                password = false
-            )
-        )
+    private fun assess(
+        expectedPackage: String = "com.example.target",
+        beforeFingerprint: String = "before",
+        expectedText: String = "Message sent",
+        expectedAbsentBefore: Boolean = true,
+        currentPackage: String = "com.example.target",
+        currentFingerprint: String = "after",
+        visibleText: List<String> = listOf("Message sent successfully")
+    ) = OperatorActionJournal.assess(
+        expectedPackage, beforeFingerprint, expectedText, expectedAbsentBefore,
+        currentPackage, currentFingerprint, visibleText
     )
 
     @Test fun newlyVisiblePostconditionOnChangedScreenCanVerifyCompletion() {
-        val before = screen("ComposeActivity")
-        val after = screen("SentActivity", "Message sent successfully")
-        assertEquals(
-            OperatorActionJournal.Recovery.VERIFIED_COMPLETE,
-            OperatorActionJournal.assess(
-                "com.example.target",
-                OperatorActionJournal.fingerprintForTest(before),
-                "Message sent",
-                true,
-                after
-            )
-        )
+        assertEquals(OperatorActionJournal.Recovery.VERIFIED_COMPLETE, assess())
     }
 
     @Test fun unchangedScreenNeverVerifiesCompletion() {
-        val current = screen("ComposeActivity", "Message sent")
         assertEquals(
             OperatorActionJournal.Recovery.REVIEW_REQUIRED,
-            OperatorActionJournal.assess(
-                "com.example.target",
-                OperatorActionJournal.fingerprintForTest(current),
-                "Message sent",
-                true,
-                current
-            )
+            assess(beforeFingerprint = "same", currentFingerprint = "same")
         )
     }
 
     @Test fun missingPostconditionRequiresHumanReview() {
-        val before = screen("ComposeActivity")
-        val after = screen("ComposeActivity", "Send")
         assertEquals(
             OperatorActionJournal.Recovery.REVIEW_REQUIRED,
-            OperatorActionJournal.assess(
-                "com.example.target",
-                OperatorActionJournal.fingerprintForTest(before),
-                "Message sent",
-                true,
-                after
-            )
+            assess(visibleText = listOf("Compose", "Send"))
         )
     }
 
-    @Test fun postconditionThatWasAlreadyVisibleBeforeActionIsNotProof() {
-        val before = screen("ComposeActivity", "Saved")
-        val after = screen("SavedActivity", "Saved")
+    @Test fun postconditionAlreadyVisibleBeforeActionIsNotProof() {
         assertEquals(
             OperatorActionJournal.Recovery.REVIEW_REQUIRED,
-            OperatorActionJournal.assess(
-                "com.example.target",
-                OperatorActionJournal.fingerprintForTest(before),
-                "Saved",
-                false,
-                after
-            )
+            assess(expectedText = "Saved", expectedAbsentBefore = false, visibleText = listOf("Saved"))
         )
     }
 
     @Test fun changedScreenInDifferentAppRequiresHumanReview() {
-        val before = screen("ComposeActivity")
-        val after = screen("SentActivity", "Message sent")
         assertEquals(
             OperatorActionJournal.Recovery.REVIEW_REQUIRED,
-            OperatorActionJournal.assess(
-                "com.example.other",
-                OperatorActionJournal.fingerprintForTest(before),
-                "Message sent",
-                true,
-                after
-            )
+            assess(currentPackage = "com.example.other")
+        )
+    }
+
+    @Test fun emptyPostconditionNeverAuthorizesResume() {
+        assertEquals(
+            OperatorActionJournal.Recovery.REVIEW_REQUIRED,
+            assess(expectedText = "", visibleText = listOf("Anything"))
         )
     }
 }
