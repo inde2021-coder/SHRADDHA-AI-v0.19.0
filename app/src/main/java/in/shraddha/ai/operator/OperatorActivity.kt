@@ -177,7 +177,8 @@ class OperatorActivity : Activity() {
             )
             val brain = `in`.shraddha.ai.future.MainBrain(
                 executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
+                context = this@OperatorActivity
             )
             val id = "operator-" + java.util.UUID.randomUUID().toString().take(8)
             brain.enqueueOperatorWorkflow(
