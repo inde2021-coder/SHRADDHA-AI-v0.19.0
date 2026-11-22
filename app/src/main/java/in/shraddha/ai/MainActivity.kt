@@ -884,7 +884,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("Allow once") { _, _ ->
                     DeviceLinkManager.respondDataShare(from, category, requestId, true, 5)
                     if (category == "documents") {
-                        startActivity(Intent(this@MainActivity, \`in\`.shraddha.ai.link.DeviceTransferActivity::class.java)
+                        startActivity(Intent(this@MainActivity, `in`.shraddha.ai.link.DeviceTransferActivity::class.java)
                             .putExtra("peer", from))
                     }
                 }
