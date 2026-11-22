@@ -118,7 +118,8 @@ object DeviceLinkManager {
                         "e2e_key_offer" -> {
                             val peerId = msg.optString("fromDeviceId")
                             val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), deviceId.orEmpty(), peerId)
-                            peerKeys[peerId] = PeerKeyState(derived.first, derived.second)
+                            peerKeys.put(peerId, PeerKeyState(derived.first, derived.second))?.key?.fill(0)
+                            clearVisualFrameState(peerId)
                             onE2EVerification?.invoke(peerId, derived.second)
                         }
                         "e2e_key_confirm" -> {
@@ -143,6 +144,7 @@ object DeviceLinkManager {
                         "device_revoked" -> {
                             val revokedId = msg.optString("deviceId")
                             peerKeys.remove(revokedId)?.key?.fill(0)
+                            clearVisualFrameState(revokedId)
                             onPeerMessage?.invoke(msg)
                         }
                         "peer_status" -> {
@@ -405,6 +407,13 @@ object DeviceLinkManager {
         if (state.fingerprint != fingerprint) return false
         state.localConfirmed = true
         return socket?.send(JSONObject().put("type", "e2e_key_confirm").put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
+    }
+
+    private fun clearVisualFrameState(peerId: String) {
+        nextVisualFrameSequence.keys.removeAll { it.startsWith(peerId + ":") }
+        synchronized(receivedVisualFrameLock) {
+            receivedVisualFrameSequence.keys.removeAll { it.startsWith(peerId + ":") }
+        }
     }
 
     fun isE2ETrusted(peerId: String): Boolean =
