@@ -93,7 +93,11 @@ class SharedTaskScheduler(
         val current = entries[taskId] ?: return null
         if (current.state != State.PENDING) return null
         if (entries.values.count { it.state == State.RUNNING } >= maxParallel) return null
-        if (!current.task.dependsOn.all { entries[it]?.state == State.SUCCEEDED }) return null
+        val nextReady = entries.values.filter { item ->
+            item.state == State.PENDING &&
+                item.task.dependsOn.all { dependency -> entries[dependency]?.state == State.SUCCEEDED }
+        }.minWithOrNull(compareBy<Snapshot> { it.task.priority }.thenBy { it.submittedOrder })
+        if (nextReady?.task?.id != taskId) return null
         return current.copy(state = State.RUNNING).also {
             entries[taskId] = it
             notifyChanged()
@@ -106,14 +110,15 @@ class SharedTaskScheduler(
         val running = entries.values.count { it.state == State.RUNNING }
         val slots = (maxParallel - running).coerceAtLeast(0)
         if (slots == 0) return emptyList()
-        val ready = entries.values
+        val nextReady = entries.values
             .filter { item ->
-                item.state == State.PENDING && predicate(item) &&
+                item.state == State.PENDING &&
                     item.task.dependsOn.all { dependency -> entries[dependency]?.state == State.SUCCEEDED }
             }
             .sortedWith(compareBy<Snapshot> { it.task.priority }.thenBy { it.submittedOrder })
-            .take(slots)
-        val claimed = ready.map { item ->
+            .firstOrNull()
+        if (nextReady == null || !predicate(nextReady)) return emptyList()
+        val claimed = listOf(nextReady).take(slots).map { item ->
             item.copy(state = State.RUNNING).also { entries[item.task.id] = it }
         }
         if (claimed.isNotEmpty()) notifyChanged()
