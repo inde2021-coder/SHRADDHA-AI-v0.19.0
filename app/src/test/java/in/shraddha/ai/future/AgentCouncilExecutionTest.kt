@@ -130,11 +130,11 @@ class AgentCouncilExecutionTest {
 
     @Test fun executeParallelRejectsInvalidSpecialistCountAndProviderList() = runBlocking {
         val invalidCount = runCatching {
-            AgentCouncil.executeParallel("Goal", providerNames = listOf("GEMINI"), specialistCount = 0) { _, _, _, _ -> "ok" }
+            AgentCouncil.executeParallel("Goal", providerNames = listOf("GEMINI"), specialistCount = 0, executor = { _, _, _, _ -> "ok" })
         }
         assertTrue(invalidCount.isFailure)
         val invalidProvider = runCatching {
-            AgentCouncil.executeParallel("Goal", providerNames = listOf("UNKNOWN"), specialistCount = 1) { _, _, _, _ -> "ok" }
+            AgentCouncil.executeParallel("Goal", providerNames = listOf("UNKNOWN"), specialistCount = 1, executor = { _, _, _, _ -> "ok" })
         }
         assertTrue(invalidProvider.isFailure)
     }
