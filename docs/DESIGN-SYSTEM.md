@@ -31,3 +31,6 @@ The native energy core now respects the saved Reduced Motion preference: its con
 
 
 The Visual Lens workspace now uses the shared teal glass cards/buttons and the configured assistant identity. Its active/starting/off label is backed by process-aware service state rather than a screen-local boolean, so reopening the screen does not falsely claim that the camera is running. The foreground camera service continues to expose Android's privacy indicator and notification.
+
+
+The native Home energy core now reads the saved `NovaOrbStyle` selection, including Nova, Aurora, Plasma, Glass, Energy, Minimal, Archer and Saturn presets. The native renderer changes ring count, palette, orbital geometry and motion rate by preset, and refreshes the choice when the activity resumes.
