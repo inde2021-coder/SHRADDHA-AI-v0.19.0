@@ -44,6 +44,12 @@ class BackgroundAgentWorker(
         val provider = payload?.optString(BackgroundTaskQueue.KEY_PROVIDER).orEmpty()
         val language = payload?.optString(BackgroundTaskQueue.KEY_LANGUAGE) ?: "AUTO"
         val specialistCount = payload?.optInt(BackgroundTaskQueue.KEY_SPECIALIST_COUNT, 3) ?: 3
+        val budget = CouncilExecutionBudget(
+            maxProviderCalls = payload?.optInt(BackgroundTaskQueue.KEY_MAX_PROVIDER_CALLS, 9) ?: 9,
+            maxCallsPerProvider = payload?.optInt(BackgroundTaskQueue.KEY_MAX_CALLS_PER_PROVIDER, 9) ?: 9,
+            maxDurationMs = payload?.optLong(BackgroundTaskQueue.KEY_MAX_DURATION_MS, 300_000L) ?: 300_000L,
+            maxOutputCharactersPerStage = payload?.optInt(BackgroundTaskQueue.KEY_MAX_OUTPUT_CHARS, 9_000) ?: 9_000
+        )
         if (goal.isBlank() || provider.isBlank()) {
             val message = "Encrypted background task payload is incomplete."
             scheduler.fail(schedulerTaskId, message)
@@ -96,7 +102,8 @@ class BackgroundAgentWorker(
                         "Attempt ${attempt + 1}: $role output saved securely; next stage pending.",
                         attempt = attempt
                     ).getOrThrow()
-                }
+                },
+                budget = budget
             )
         }
 
