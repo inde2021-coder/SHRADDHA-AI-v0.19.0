@@ -85,7 +85,7 @@ fun AgentCouncilScreen(
 
     LaunchedEffect(Unit) {
         configuredProviders = withContext(Dispatchers.IO) {
-            runCatching { MainBrainProviderGateway.configuredProviders(context.applicationContext) }
+            runCatching { MainBrainProviderGateway.configuredProviders(context.applicationContext, preferredProvider = "GEMINI") }
                 .getOrDefault(emptyList())
         }
         selectedProviders = configuredProviders.take(1).toSet()
@@ -203,14 +203,25 @@ fun AgentCouncilScreen(
                 maxCalls = maxOf(maxCalls, it.toInt() + 4).coerceAtMost(9).toFloat()
             }, valueRange = 1f..5f, steps = 3)
             Text("Total provider calls: ${maxCalls.toInt()} (minimum required: $minimumCalls)", color = colors.textPrimary, fontSize = 12.sp)
+            if (minimumCalls < 9) {
+                Slider(
+                    value = maxCalls.coerceAtLeast(minimumCalls.toFloat()),
+                    onValueChange = { maxCalls = it },
+                    valueRange = minimumCalls.toFloat()..9f,
+                    steps = (9 - minimumCalls - 1).coerceAtLeast(0)
+                )
+            } else {
+                Text("All nine calls are required for five specialists.", color = colors.textTertiary, fontSize = 10.sp)
+            }
+            val minimumPerProvider = if (selectedProviders.isEmpty()) 1 else
+                ((specialists.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
+            Text("Maximum calls per provider: ${callsPerProvider.toInt().coerceAtLeast(minimumPerProvider)} (minimum required: $minimumPerProvider)", color = colors.textPrimary, fontSize = 12.sp)
             Slider(
-                value = maxCalls.coerceAtLeast(minimumCalls.toFloat()),
-                onValueChange = { maxCalls = it },
-                valueRange = minimumCalls.toFloat()..9f,
-                steps = (9 - minimumCalls - 1).coerceAtLeast(0)
+                value = callsPerProvider.coerceAtLeast(minimumPerProvider.toFloat()),
+                onValueChange = { callsPerProvider = it },
+                valueRange = minimumPerProvider.toFloat()..9f,
+                steps = (9 - minimumPerProvider - 1).coerceAtLeast(0)
             )
-            Text("Maximum calls per provider: ${callsPerProvider.toInt()}", color = colors.textPrimary, fontSize = 12.sp)
-            Slider(value = callsPerProvider, onValueChange = { callsPerProvider = it }, valueRange = 1f..9f, steps = 7)
             Text("Time limit: ${durationSeconds.toInt() / 60} min ${durationSeconds.toInt() % 60} sec", color = colors.textPrimary, fontSize = 12.sp)
             Slider(value = durationSeconds, onValueChange = { durationSeconds = it }, valueRange = 30f..600f, steps = 18)
             Text("प्रत्येक Agent का output अधिकतम 9,000 characters तक सीमित रहेगा।", color = colors.textTertiary, fontSize = 10.sp)
@@ -254,7 +265,7 @@ fun AgentCouncilScreen(
                                     BackgroundTaskQueue.enqueue(
                                         context = context.applicationContext,
                                         goal = goal,
-                                        provider = selectedProviders.joinToString(","),
+                                        provider = selectedProviders.sorted().joinToString(","),
                                         language = language,
                                         specialistCount = specialists.toInt(),
                                         budget = CouncilExecutionBudget(
