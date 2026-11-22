@@ -122,9 +122,16 @@ class MainBrain(
             values: Map<String, String>,
             confirmed: Boolean,
             resume: Boolean,
+            withinMainBrainTask: Boolean = false,
             onEvent: (`in`.shraddha.ai.operator.OperatorEvent) -> Unit
         ): Boolean {
             val appContext = context.applicationContext
+            if (withinMainBrainTask) {
+                return runCatching {
+                    `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(appContext, onEvent)
+                        .run(profile, workflowName, values, confirmed, resume)
+                }.getOrDefault(false)
+            }
             val scheduler = MainBrainSchedulerRuntime.get(appContext)
             val taskId = "learned_" + UUID.randomUUID().toString().replace("-", "")
             // Persist only routing metadata here. Workflow inputs and checkpoints remain in
