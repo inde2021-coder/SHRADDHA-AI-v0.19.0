@@ -65,6 +65,12 @@ class MainBrain(
          * and WorkManager. A process death while RUNNING marks the call failed; it is never replayed.
          */
         suspend fun executeVoiceTool(context: Context, toolName: String, args: JSONObject): JSONObject {
+            // Website Forge creates its own long-running Main Brain scheduler task after
+            // validating/opening the Forge UI. Do not occupy a parent slot and then deadlock
+            // while the Forge task claims the same single-worker scheduler.
+            if (toolName == "build_website") {
+                return com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+            }
             val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
             val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("tool", toolName).put("args", args).toString()
