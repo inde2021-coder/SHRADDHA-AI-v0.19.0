@@ -60,6 +60,10 @@ class CouncilEvidenceStore(context: Context) {
         require(attempt in 0..99) { "Council attempt is out of range." }
         val allowed = setOf("QUEUED", "RUNNING", "RETRY_PENDING", "COMPLETED", "FAILED", "CANCELLED")
         require(status in allowed) { "Unsupported council task status." }
+        val statusKey = prefix(taskId) + "status"
+        val previous = store.get(statusKey).getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
         val record = JSONObject()
             .put("schemaVersion", 1)
             .put("taskId", taskToken(taskId))
@@ -67,10 +71,13 @@ class CouncilEvidenceStore(context: Context) {
             .put("message", message.take(1_000))
             .put("attempt", attempt)
             .put("updatedAt", updatedAt)
-        if (finalAnswer != null) record.put("finalAnswer", finalAnswer.take(9_000))
-        if (providerUsage != null) record.put("providerUsage", providerUsage.take(1_000))
-        if (elapsedMs != null) record.put("elapsedMs", elapsedMs.coerceAtLeast(0L))
-        store.put(prefix(taskId) + "status", record.toString()).getOrThrow()
+        val answer = finalAnswer ?: previous?.optString("finalAnswer")?.takeIf { it.isNotBlank() }
+        val usage = providerUsage ?: previous?.optString("providerUsage")?.takeIf { it.isNotBlank() }
+        val duration = elapsedMs ?: previous?.optLong("elapsedMs")?.takeIf { it > 0L }
+        if (answer != null) record.put("finalAnswer", answer.take(9_000))
+        if (usage != null) record.put("providerUsage", usage.take(1_000))
+        if (duration != null) record.put("elapsedMs", duration.coerceAtLeast(0L))
+        store.put(statusKey, record.toString()).getOrThrow()
     }
 
     fun readTask(taskId: String): Result<List<JSONObject>> = runCatching {
