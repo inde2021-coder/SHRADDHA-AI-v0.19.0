@@ -147,7 +147,6 @@ class OperatorActivity : Activity() {
                                             else -> log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\\n" + log.text.take(4500)
                                         }
                                     }
-                                    }
                                 }.start()
                             }.show()
                     }
