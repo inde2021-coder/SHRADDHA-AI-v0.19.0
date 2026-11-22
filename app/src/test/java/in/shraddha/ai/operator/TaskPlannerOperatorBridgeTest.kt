@@ -95,4 +95,35 @@ class TaskPlannerOperatorBridgeTest {
             PlannedOperatorAction("same", "Second", OperatorStep(OperatorActionType.HOME))
         ))
     }
+    @Test fun actionIsNeverDispatchedWhenWriteAheadJournalCannotCommit() {
+        var executions = 0
+        val bridge = TaskPlannerOperatorBridge(
+            executeVerified = { _, _ -> executions++; true },
+            beforeExecute = { _, _ -> false }
+        )
+        bridge.createPlan("journal-gate", "Journal gate", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK))
+        ))
+        val failed = bridge.start()
+        assertEquals(0, executions)
+        assertEquals(WorkflowStatus.FAILED, failed.workflow.status)
+        assertTrue(failed.workflow.message.contains("journal", ignoreCase = true))
+    }
+
+    @Test fun workflowStopsWhenVerifiedResultCannotBePersisted() {
+        var executions = 0
+        val bridge = TaskPlannerOperatorBridge(
+            executeVerified = { _, _ -> executions++; true },
+            beforeExecute = { _, _ -> true },
+            afterExecute = { _, _, verified -> verified && false }
+        )
+        bridge.createPlan("journal-commit", "Journal commit", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK))
+        ))
+        val failed = bridge.start()
+        assertEquals(1, executions)
+        assertEquals(WorkflowStatus.FAILED, failed.workflow.status)
+        assertTrue(failed.workflow.message.contains("journal", ignoreCase = true))
+    }
+
 }
