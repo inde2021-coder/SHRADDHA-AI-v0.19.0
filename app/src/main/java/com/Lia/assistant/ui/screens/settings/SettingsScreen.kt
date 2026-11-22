@@ -286,6 +286,12 @@ fun SettingsScreen(
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
+                    title = "API Keys",
+                    subtitle = "Create and securely add keys for Gemini, OpenAI, Groq, Claude and Perplexity",
+                    icon = Icons.Default.Key,
+                    onClick = { navController.navigate("api_keys") }
+                )
+                NovaSettingsRow(
                     title = "AI Provider",
                     subtitle = "Tap to switch between supported providers",
                     icon = Icons.Default.Key,
