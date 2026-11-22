@@ -1,6 +1,5 @@
 package com.Lia.assistant.ui.screens.agents
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -46,7 +46,6 @@ import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
-import `in`.shraddha.ai.future.BackgroundAgentWorker
 import `in`.shraddha.ai.future.BackgroundTaskQueue
 import `in`.shraddha.ai.future.CouncilEvidenceStore
 import `in`.shraddha.ai.future.CouncilExecutionBudget
@@ -165,7 +164,9 @@ fun AgentCouncilScreen(
                 placeholder = "Shraddha को बताएं कि कौन-सा काम पूरा करना है…",
                 singleLine = false
             )
-            Text("${goal.length}/2000", color = colors.textTertiary, fontSize = 10.sp, modifier = Modifier.align(Alignment.End))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Text("${goal.length}/2000", color = colors.textTertiary, fontSize = 10.sp)
+            }
         }
 
         NovaGlassCard {
