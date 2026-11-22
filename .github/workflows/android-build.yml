@@ -159,7 +159,6 @@ jobs:
         with:
           api-level: 35
           emulator-boot-timeout: 900
-          disable-linux-hw-accel: false
           cores: 4
           ram-size: 4096M
           disk-size: 4096M
