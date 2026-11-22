@@ -27,7 +27,7 @@ import websocket
 from PIL import Image, ImageTk
 
 from actions import execute_action
-from protocol import valid_pairing_ids, validate_remote_action
+from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
 from e2e_crypto import DeviceE2ECrypto
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
