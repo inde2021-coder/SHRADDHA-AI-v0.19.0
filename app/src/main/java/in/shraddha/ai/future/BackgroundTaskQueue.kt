@@ -18,18 +18,20 @@ object BackgroundTaskQueue {
     const val KEY_GOAL = "goal"
     const val KEY_PROVIDER = "provider"
     const val KEY_LANGUAGE = "language"
+    const val KEY_SPECIALIST_COUNT = "specialist_count"
     const val KEY_PROGRESS_ROLE = "progress_role"
     const val KEY_PROGRESS_INDEX = "progress_index"
     const val KEY_PROGRESS_TOTAL = "progress_total"
     const val KEY_FINAL_REPORT = "final_report"
     const val KEY_ERROR = "error"
 
-    fun enqueue(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID =
-        MainBrain.enqueueBackgroundCouncil(context, goal, provider, language)
+    fun enqueue(context: Context, goal: String, provider: String, language: String = "AUTO", specialistCount: Int = 3): UUID =
+        MainBrain.enqueueBackgroundCouncil(context, goal, provider, language, specialistCount)
 
-    internal fun enqueueFromMainBrain(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID {
+    internal fun enqueueFromMainBrain(context: Context, goal: String, provider: String, language: String = "AUTO", specialistCount: Int = 3): UUID {
         val cleanGoal = goal.trim()
         require(cleanGoal.isNotBlank() && cleanGoal.length <= 2000) { "Task must contain 1-2000 characters" }
+        require(specialistCount in 1..5) { "Choose between one and five specialist agents" }
         val providers = provider.split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() }.distinct()
         require(providers.isNotEmpty() && providers.size <= 5 && providers.all {
             it in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
@@ -45,7 +47,8 @@ object BackgroundTaskQueue {
                 payload = JSONObject().put("kind", "background_council")
                     .put(KEY_GOAL, cleanGoal)
                     .put(KEY_PROVIDER, providers.joinToString(","))
-                    .put(KEY_LANGUAGE, language.take(20)).toString()
+                    .put(KEY_LANGUAGE, language.take(20))
+                    .put(KEY_SPECIALIST_COUNT, specialistCount).toString()
             )
         ))
         val request = OneTimeWorkRequestBuilder<BackgroundAgentWorker>()
