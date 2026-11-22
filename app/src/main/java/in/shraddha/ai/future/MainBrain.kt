@@ -204,7 +204,7 @@ class MainBrain(
         AgentCouncil.execute(goal, language, provider, executor, onProgress, shouldContinue)
 
     private fun encodeRequest(request: WorkflowRequest): String {
-        val dependencies = JSONArray().apply { request.dependsOn.sorted().forEach(::put) }
+        val dependencies = JSONArray().apply { request.dependsOn.sorted().forEach { put(it) } }
         val actions = JSONArray().apply {
             request.actions.forEach { action ->
                 put(JSONObject()
@@ -214,7 +214,7 @@ class MainBrain(
                     .put("estimatedMinutes", action.estimatedMinutes)
                     .put("risk", action.risk.name)
                     .put("requiresApproval", action.requiresApproval)
-                    .put("dependsOn", JSONArray().apply { action.dependsOn.sorted().forEach(::put) })
+                    .put("dependsOn", JSONArray().apply { action.dependsOn.sorted().forEach { put(it) } })
                     .put("step", JSONObject()
                         .put("action", action.step.action.name)
                         .put("target", action.step.target)
