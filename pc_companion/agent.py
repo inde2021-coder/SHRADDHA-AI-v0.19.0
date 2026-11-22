@@ -86,6 +86,9 @@ class PcCompanionApp:
         self._pending_pairing_auth = False
         self.pending_pc_send = None
         self.pc_incoming = {}
+        self.remote_target_var = tk.StringVar()
+        self.remote_action_var = tk.StringVar(value="home")
+        self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
 
         self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
@@ -126,6 +129,16 @@ class PcCompanionApp:
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
         ttk.Checkbutton(frame, text="Share this PC screen with paired devices",
                         variable=self.screen_var, command=self._publish_permissions).pack(anchor="w", pady=4)
+        ttk.Separator(frame).pack(fill="x", pady=8)
+        ttk.Label(frame, text="CONTROL PAIRED ANDROID (phone approval required)").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
+        ttk.Label(frame, text="Android device ID").pack(anchor="w")
+        ttk.Combobox(frame, textvariable=self.remote_action_var,
+                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe"),
+                     state="readonly").pack(fill="x", pady=3)
+        ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
+        ttk.Label(frame, text="Action value: app name / text / scroll amount").pack(anchor="w")
+        ttk.Button(frame, text="Send approved action to Android", command=self.send_remote_action_to_phone).pack(anchor="w", pady=5)
         ttk.Label(frame, textvariable=self.status_var, foreground="#146c43", wraplength=510).pack(anchor="w", pady=(10, 4))
         ttk.Label(frame, text="Safety: every control request opens a local approval dialog. F12 or Disconnect stops access. Screen sharing is off by default.",
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
@@ -494,6 +507,9 @@ class PcCompanionApp:
             if message_kind == "file_transfer_chunk":
                 self._handle_incoming_file_chunk(msg, peer_id)
                 return
+            if message_kind == "remote_action_result":
+                self._handle_phone_remote_action_result(msg, peer_id, action_id, action_kind)
+                return
             if message_kind != "remote_action" or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):
                 self.status_var.set("Ignored unsupported encrypted peer message.")
                 return
@@ -541,6 +557,53 @@ class PcCompanionApp:
             self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
+
+    def send_remote_action_to_phone(self):
+        peer_id = self.remote_target_var.get().strip()
+        kind = self.remote_action_var.get()
+        value = self.remote_value_var.get().strip()
+        if not peer_id or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("Select a paired Android device with a mutually verified fingerprint first.")
+            return
+        action = {"kind": kind}
+        if kind == "open_app":
+            action["appName"] = value
+        elif kind == "type":
+            action["text"] = value
+        elif kind == "scroll":
+            try:
+                action["amount"] = int(value)
+            except ValueError:
+                self.status_var.set("Scroll amount must be an integer from -20 to 20.")
+                return
+        elif kind == "tap":
+            action.update(x=0.5, y=0.5)
+        elif kind == "swipe":
+            action.update(x1=0.5, y1=0.75, x2=0.5, y2=0.25)
+        if kind in ("open_app", "type") and not value:
+            self.status_var.set("Enter the app name or text for this action.")
+            return
+        import secrets
+        action_id = secrets.token_urlsafe(18).replace("-", "_")
+        sent = self._send_e2e_message(peer_id, "remote_action", {"action": action}, action_id, kind)
+        self.status_var.set("Encrypted action sent. Android will show its own consent and per-action approval." if sent
+                            else "Could not send action. Check connection and peer verification.")
+
+    def _handle_phone_remote_action_result(self, msg, peer_id, action_id, action_kind):
+        if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):
+            return
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            key = bytes(state["key"]) if state and state["local_confirmed"] and state["remote_confirmed"] else None
+        if key is None:
+            return
+        try:
+            aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|remote_action_result|{action_id}".encode("utf-8")
+            plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+            result = json.loads(plain.decode("utf-8"))
+            self.status_var.set(f"Android {action_kind}: {str(result.get('result', 'No result'))[:220]}")
+        except Exception as exc:
+            self.status_var.set(f"Could not verify Android action result: {str(exc)[:120]}")
 
     def choose_file_for_phone(self):
         peer_id = __import__("tkinter.simpledialog", fromlist=["askstring"]).askstring(
