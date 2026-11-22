@@ -96,7 +96,7 @@ class FormAutofillActivity : Activity() {
                 val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
                     ?: error("Image open nahi hui.")
                 try {
-                    FormExtractionClient.extract(
+                    `in`.shraddha.ai.future.MainBrain.extractForm(
                         this, bitmap, type,
                         cloudProcessingConsent = true,
                         personalDataConsent = allowPersonalData
