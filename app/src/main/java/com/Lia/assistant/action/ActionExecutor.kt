@@ -83,7 +83,7 @@ object ActionExecutor {
                     result.put("message", "Unsupported file operation.")
                 } else {
                     withContext(Dispatchers.Main.immediate) {
-                        val intent = android.content.Intent(context, in.shraddha.ai.operator.files.FileAccessActivity::class.java)
+                        val intent = android.content.Intent(context, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)
                             .putExtra("requested_operation", operation)
                         if (context !is android.app.Activity) intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
