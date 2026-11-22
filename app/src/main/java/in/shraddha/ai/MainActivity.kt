@@ -1407,9 +1407,10 @@ class MainActivity : AppCompatActivity() {
             val endpoint = edit("Secure backend URL (HTTPS)", "https://your-domain.example")
             val tokenField = edit("Gateway token (required)", "Bearer token").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
             val providersField = edit("Providers (comma separated)", "gemini,openai")
+            val specialistCountField = edit("Parallel specialist agents (1-5)", "Default: 3").apply { setText("3"); inputType = android.text.InputType.TYPE_CLASS_NUMBER }
             val councilGoal = edit("Council task / goal", "उदाहरण: एक सुरक्षित Android app architecture तैयार करो").apply { minLines = 3; isSingleLine = false }
             val councilOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background = rounded(0xFF0C1525.toInt(),14) }
-            addView(endpoint); addView(tokenField); addView(providersField); addView(councilGoal); addView(councilOutput)
+            addView(endpoint); addView(tokenField); addView(providersField); addView(specialistCountField); addView(councilGoal); addView(councilOutput)
             addView(actionButton("RUN LIVE 5-ROLE AI COUNCIL", "Uses configured provider APIs • network and API charges may apply") {
                 val base = endpoint.text.toString().trim().trimEnd('/')
                 val goalText = councilGoal.text.toString().trim()
@@ -1495,6 +1496,7 @@ class MainActivity : AppCompatActivity() {
             })
             addView(actionButton("RUN LOCAL PARALLEL COUNCIL IN BACKGROUND", "Phone-local encrypted provider keys • 3 parallel specialists • background progress") {
                 val goalText = councilGoal.text.toString().trim()
+                val specialistCount = specialistCountField.text.toString().toIntOrNull()?.takeIf { it in 1..5 }
                 val selectedProviders = providersField.text.toString().split(',')
                     .map { it.trim().lowercase() }
                     .mapNotNull { name -> when (name) {
@@ -1505,18 +1507,18 @@ class MainActivity : AppCompatActivity() {
                         "perplexity" -> "PERPLEXITY"
                         else -> null
                     } }.distinct().take(5)
-                if (goalText.isBlank() || selectedProviders.isEmpty()) {
-                    councilOutput.text = "Task goal और कम-से-कम एक supported provider चुनें। API keys Settings में configured होनी चाहिए।"
+                if (goalText.isBlank() || selectedProviders.isEmpty() || specialistCount == null) {
+                    councilOutput.text = "Task goal, 1-5 specialist agents और कम-से-कम एक supported provider चुनें। API keys Settings में configured होनी चाहिए।"
                     return@actionButton
                 }
                 try {
                     val workId = `in`.shraddha.ai.future.BackgroundTaskQueue.enqueue(
-                        this@MainActivity, goalText, selectedProviders.joinToString(","), "AUTO"
+                        this@MainActivity, goalText, selectedProviders.joinToString(","), "AUTO", specialistCount
                     )
                     activeCouncilWorkId = workId
                     getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().putString("active_work_id", workId.toString()).apply()
                     councilOutput.text = "Parallel AI team queue में भेजी गई। Work ID: " + workId +
-                        "\nPlanner + Researcher parallel चलेंगे, फिर 3 Specialists, Critic और Verifier।"
+                        "\nPlanner + Researcher parallel चलेंगे, फिर " + specialistCount + " Specialists, Critic और Verifier।"
                     androidx.work.WorkManager.getInstance(this@MainActivity)
                         .getWorkInfoByIdLiveData(workId)
                         .observe(this@MainActivity) { info ->
