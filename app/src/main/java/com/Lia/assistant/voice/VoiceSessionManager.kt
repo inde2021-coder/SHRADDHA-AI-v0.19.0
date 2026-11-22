@@ -245,21 +245,10 @@ object VoiceSessionManager {
                     runCatching {
                         val goal = args.optString("goal").trim()
                         require(goal.isNotBlank() && goal.length <= 1000) { "Goal must contain 1-1000 characters" }
-                        val council = `in`.shraddha.ai.future.AgentCouncil.plan(goal)
-                        val actions = council.roles.mapIndexed { index, role ->
-                            `in`.shraddha.ai.future.ShraddhaIntegrationHub.Action(
-                                id = role.name.lowercase().replace(Regex("[^a-z0-9_-]"), "_"),
-                                title = role.responsibility,
-                                dependsOn = if (index == 0) emptySet() else setOf(council.roles[index - 1].name.lowercase().replace(Regex("[^a-z0-9_-]"), "_")),
-                                priority = if (role.name == "Verifier" || role.name == "Critic") 1 else 2,
-                                estimatedMinutes = 10
-                            )
-                        }
-                        val hub = `in`.shraddha.ai.future.ShraddhaIntegrationHub()
-                        val session = hub.createPlan(
+                        val (council, session) = `in`.shraddha.ai.future.MainBrain.createCouncilPlan(
+                            goal = goal,
                             workflowId = "voice-council-" + java.util.UUID.randomUUID().toString().take(8),
-                            title = goal.take(120),
-                            actions = actions
+                            title = goal.take(120)
                         )
                         val roles = org.json.JSONArray()
                         council.roles.forEach { role ->
