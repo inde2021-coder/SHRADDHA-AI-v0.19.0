@@ -35,6 +35,7 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
         if (store.get("firebase_fcm_consent").getOrNull() != "true" ||
             store.get("firebase_push_consent").getOrNull() != "true") return
         val type = message.data["type"].orEmpty()
+        val assistantName = assistantName()
         val safeMessage = when (type) {
             "device_paired" -> "A device was paired with your $assistantName account."
             "task_handoff" -> "A task handoff is waiting for your review."
@@ -45,7 +46,12 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
         showNotification(safeMessage)
     }
 
+    private fun assistantName(): String =
+        NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME)
+            .trim().ifBlank { AssistantBrand.NAME }
+
     private fun showNotification(message: String) {
+        val assistantName = assistantName()
         val channelId = "shraddha_updates"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
