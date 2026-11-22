@@ -193,6 +193,10 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             FeatureInfo("🧠", "Expert Studio", "Engineering, farming और research", NeonBlue) { navController.navigate("expert_studio") },
             FeatureInfo("👁️", "Visual Lens", "Camera से सवाल पूछें", NeonMint) { navController.navigate("visual_lens") }
         )
+        FeatureRow(
+            FeatureInfo("🗂️", "Project Lab", "Projects और milestones ट्रैक करें", NeonBlue) { navController.navigate("project_lab") },
+            FeatureInfo("⚙️", "Task Automation", "काम और workflows", NeonMint) { navController.navigate("quick_actions") }
+        )
         SectionHeading("PERSONALIZE", "अपना AI अनुभव चुनें")
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
