@@ -138,7 +138,7 @@ To share the active Windows app window back to Android, use --share-screen; the 
 
 ## File transfer, clipboard, voice commands and recovery
 
-File transfer protocol supports 48 KiB chunks, files up to 100 MiB, a SHA-256 manifest, per-chunk acknowledgements and transfer cancellation. A device must first request and receive the receiver's one-time Documents share approval. The Android relay API exposes start/chunk/ack/cancel calls; a complete Android file-picker UI, disk-backed receive/resume queue and end-to-end device tests are still required before calling the whole feature finished.
+File transfer supports 48 KiB chunks, files up to 100 MiB, a SHA-256 manifest, per-chunk acknowledgements, pause/resume and cancellation. A device must first request and receive the receiver's one-time Documents share approval. Android now provides a SAF file picker, app-private disk-backed receive staging, persisted source/destination URI grants, chunk-index checkpoints, resume after activity/process recreation and final SHA-256 verification. The relay keeps transfer metadata only in memory for up to 30 minutes, so a relay restart or expired transfer still requires a new transfer. Physical Android↔Windows reconnect, interruption and 100 MiB throughput tests remain required before production sign-off.
 
 Windows clipboard sync is a one-shot operation and requires the receiver to approve the Clipboard share request. Install `pyperclip` on Windows:
 
