@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
@@ -112,6 +113,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         },
         QuickTile("Project Lab", "Create plans and track milestones", Icons.Default.AccountTree) {
             navController.navigate("project_lab")
+        },
+        QuickTile("Data Vault", "Encrypted backup and restore", Icons.Default.Security) {
+            navController.navigate("data_vault")
         }
     )
 
