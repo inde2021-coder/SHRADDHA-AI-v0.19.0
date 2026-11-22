@@ -31,6 +31,34 @@ object ActionExecutor {
         }
 
         when (toolName) {
+            "daily_briefing" -> {
+                val action = args.optString("action", "ENABLE").uppercase()
+                if (action == "DISABLE" || action == "STOP") {
+                    val stopped = `in`.shraddha.ai.future.DailyBriefingScheduler.cancel(context)
+                    result.put("status", if (stopped.isSuccess) "success" else "error")
+                    result.put("action", "daily_briefing_disabled")
+                    result.put("message", if (stopped.isSuccess) "Daily Briefing बंद कर दी गई है।" else (stopped.exceptionOrNull()?.message ?: "Briefing बंद नहीं हुई।"))
+                } else if (action == "ENABLE" || action == "START" || action == "UPDATE") {
+                    val time = args.optString("time", "08:00").trim()
+                    val match = Regex("^(?:([01]?[0-9]|2[0-3])):([0-5][0-9])$").matchEntire(time)
+                    if (match == null) {
+                        result.put("status", "error"); result.put("message", "समय HH:MM (24-hour) format में दें, जैसे 08:00।")
+                    } else {
+                        val hour = match.groupValues[1].toInt()
+                        val minute = match.groupValues[2].toInt()
+                        val scheduled = `in`.shraddha.ai.future.DailyBriefingScheduler.schedule(context, args.optString("topics"), hour, minute)
+                        result.put("status", if (scheduled.isSuccess) "success" else "error")
+                        result.put("action", if (scheduled.isSuccess) "daily_briefing_scheduled" else "daily_briefing_schedule_failed")
+                        scheduled.getOrNull()?.let {
+                            result.put("topics", it.topics).put("local_time", "%02d:%02d".format(it.hour, it.minute))
+                                .put("first_run_in_minutes", it.initialDelayMillis / 60000L)
+                        }
+                        result.put("message", scheduled.exceptionOrNull()?.message ?: "Daily Briefing schedule हो गई। अगली briefing आपके चुने हुए स्थानीय समय पर, फिर लगभग हर 24 घंटे में आएगी।")
+                    }
+                } else {
+                    result.put("status", "error"); result.put("message", "action ENABLE या DISABLE होना चाहिए।")
+                }
+            }
             "manage_files" -> {
                 val operation = args.optString("operation", "manage").uppercase()
                 val allowed = setOf("MANAGE", "FIND", "OPEN", "COPY", "MOVE", "RENAME", "DELETE", "SHARE", "IMPORT", "EXPORT")
