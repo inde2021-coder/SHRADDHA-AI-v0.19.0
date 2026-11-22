@@ -199,6 +199,12 @@ object DeviceLinkManager {
                             val revokedId = msg.optString("deviceId")
                             peerKeys.remove(revokedId)?.key?.fill(0)
                             clearVisualFrameState(revokedId)
+                            if (revokedId.isNotBlank() && revokedId == deviceId) {
+                                appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
+                                onStatus?.invoke("This phone's device pairing was revoked by the relay.")
+                                disconnect(clearSavedCredentials = false)
+                                return
+                            }
                             onPeerMessage?.invoke(msg)
                         }
                         "peer_status" -> {
