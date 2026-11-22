@@ -1,5 +1,7 @@
 package `in`.shraddha.ai.future
 
+import java.util.UUID
+
 /** Local-first project planner. It tracks work; it does not execute external actions. */
 enum class MilestoneState { TODO, IN_PROGRESS, BLOCKED, DONE }
 data class ProjectMilestone(val id:String, val title:String, val state:MilestoneState = MilestoneState.TODO, val dependsOn:List<String> = emptyList(), val note:String = "")
@@ -9,7 +11,7 @@ object ProjectWorkspace {
         require(title.isNotBlank()) { "Project title is required" }
         val clean=milestoneTitles.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         require(clean.isNotEmpty()) { "Add at least one milestone" }
-        return ProjectPlan("p-${System.currentTimeMillis()}",title.trim(),clean.mapIndexed { i,s -> ProjectMilestone("m${i+1}",s) })
+        return ProjectPlan("p-" + UUID.randomUUID().toString().replace("-", ""),title.trim(),clean.mapIndexed { i,s -> ProjectMilestone("m${i+1}",s) })
     }
     fun update(plan:ProjectPlan, milestoneId:String, state:MilestoneState, note:String = ""):ProjectPlan {
         require(plan.milestones.any { it.id==milestoneId }) { "Milestone not found" }
