@@ -355,13 +355,13 @@ fun DeviceCenterScreen(navController: NavController) {
                 type = NovaButtonType.SECONDARY
             )
             NovaButton(
-                text = "Forget Pairing & Disconnect",
+                text = "Clear This Phone’s Saved Pairing",
                 onClick = {
                     DeviceLinkManager.disconnect(context, clearSavedCredentials = true)
                     connected = false
                     peers = emptyList()
                     pairingCode = ""
-                    status = "Disconnected and saved pairing credentials were cleared."
+                    status = "Disconnected and this phone’s saved credentials were cleared. Other paired devices still need separate revocation."
                 },
                 modifier = Modifier.fillMaxWidth(),
                 type = NovaButtonType.TEXT
