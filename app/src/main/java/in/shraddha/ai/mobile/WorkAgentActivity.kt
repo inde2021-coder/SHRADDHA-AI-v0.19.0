@@ -133,6 +133,9 @@ class WorkAgentActivity : AppCompatActivity() {
         row.addView(button("Send") { sendMessage() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         row.addView(button("काम App में करें") { handoffToOperator() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         chatPanel.addView(row)
+        chatPanel.addView(button("🤖 Multi-Agent Team • Planner → Researcher → Builder → Critic → Verifier") {
+            runMultiAgentTask()
+        })
         addMessage("assistant", "नमस्ते! मैं आपके साथ वेबसाइट और फोन ऐप पर काम करने के लिए तैयार हूँ। पहले बताइए क्या करना है।")
     }
 
@@ -462,6 +465,43 @@ class WorkAgentActivity : AppCompatActivity() {
                     addMessage("assistant", "$fileName डाउनलोड queue में जोड़ी गई। Android notification में progress देखें।")
                 }.onFailure { pageStatus.text = "Download शुरू नहीं हुआ: ${it.message}" }
             }.show()
+    }
+
+    /** Runs five real provider-backed specialist passes and shows progress plus the verifier report. */
+    private fun runMultiAgentTask() {
+        val task = input.text.toString().trim().ifBlank { history.lastOrNull { it.isUser }?.text.orEmpty() }
+        if (task.isBlank() || busy) {
+            if (task.isBlank()) addMessage("assistant", "पहले multi-agent team के लिए काम लिखें।")
+            return
+        }
+        input.setText("")
+        addMessage("user", "Multi-Agent task: $task")
+        val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
+        val language = NovaPreferences.getString(this, NovaPreferences.Keys.LANGUAGE, "AUTO")
+        busy = true
+        status.text = "Multi-Agent Team शुरू हो रही है…"
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                `in`.shraddha.ai.future.AgentCouncil.executeWithConfiguredProvider(
+                    this@WorkAgentActivity, task, language
+                ) { role, index, total ->
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) status.text = "Multi-Agent $index/$total • $role"
+                    }
+                }
+            }
+            busy = false
+            result.onSuccess { report ->
+                val transcript = report.stages.joinToString("\\n\\n") { stage ->
+                    "【${stage.role}】\\n${stage.output}"
+                }
+                addMessage("assistant", "Multi-Agent Team पूरा हुआ • ${report.provider}\\n\\nVerifier की अंतिम रिपोर्ट:\\n${report.finalAnswer}\\n\\nपूरी specialist रिपोर्ट:\\n$transcript")
+                status.text = "Multi-Agent Team • 5/5 stages complete • Verifier output ready"
+            }.onFailure { error ->
+                addMessage("assistant", "Multi-Agent Team पूरा नहीं हुआ। Pipeline सुरक्षित रूप से रोक दी गई।\\nकारण: ${error.message ?: "अज्ञात provider error"}")
+                status.text = "Multi-Agent failed • partial work is not marked complete"
+            }
+        }
     }
 
     private fun sendMessage() {
