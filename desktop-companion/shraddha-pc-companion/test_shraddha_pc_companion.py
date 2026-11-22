@@ -255,6 +255,12 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": ""}, offline_model=object()))
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "x" * 4001}, offline_model=object()))
 
+    def test_code_assistant_can_load_only_an_approved_project_file(self):
+        action = {"kind": "code_assistant", "prompt": "Review this file", "path": "src/main.py"}
+        self.assertFalse(validate_action(action, offline_model=object(), file_root=""))
+        self.assertTrue(validate_action(action, offline_model=object(), file_root="C:/Approved"))
+        self.assertFalse(validate_action({**action, "path": "x" * 501}, offline_model=object(), file_root="C:/Approved"))
+
     def test_ocr_redacts_credentials_adjacent_values_and_long_numbers(self):
         raw = chr(10).join(["Account number", "123456789012", "Public heading", "OTP: 123456", "654321", "Visible note"])
         safe = redact_ocr_text(raw)
