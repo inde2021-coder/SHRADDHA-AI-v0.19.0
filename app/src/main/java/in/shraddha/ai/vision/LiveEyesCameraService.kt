@@ -18,6 +18,8 @@ import android.os.HandlerThread
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.link.DeviceLinkManager
 import java.util.concurrent.atomic.AtomicBoolean
@@ -42,7 +44,8 @@ class LiveEyesCameraService : Service() {
             return START_NOT_STICKY
         }
         stopped = false
-        startForeground(NOTIFICATION_ID, notification("Shraddha AI Eyes चालू हैं"))
+        val assistantName = assistantName()
+        startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             stopSelf()
             return START_NOT_STICKY
@@ -64,16 +67,20 @@ class LiveEyesCameraService : Service() {
         val channelId = "shraddha_live_eyes"
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(channelId, "Shraddha AI Eyes", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(channelId, "${assistantName()} Eyes", NotificationManager.IMPORTANCE_LOW))
         }
         val stopIntent = Intent(this, LiveEyesCameraService::class.java).setAction(ACTION_STOP)
         val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
         val stopPendingIntent = PendingIntent.getService(this, 74, stopIntent, pendingFlags)
         return Notification.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Shraddha AI Eyes")
+            .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("${assistantName()} Eyes")
             .setContentText(message).setOngoing(true)
             .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build()
     }
+
+    private fun assistantName(): String =
+        NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME)
+            .trim().ifBlank { AssistantBrand.NAME }
 
     private fun updateNotification(message: String) {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(message))
