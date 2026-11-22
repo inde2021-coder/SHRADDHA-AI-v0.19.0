@@ -9,6 +9,7 @@ on:
   push:
     branches-ignore:
       - integration/master-feature-consolidation-2026-11
+      - feature/complete-pending-shraddha-features
   workflow_dispatch:
 
 permissions:
