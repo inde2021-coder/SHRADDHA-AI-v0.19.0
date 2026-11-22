@@ -78,6 +78,7 @@ class OperatorActionJournal(context: Context) {
      */
     fun reconcileInterrupted(workflowId: String): Recovery {
         val entry = get(workflowId) ?: return Recovery.NO_JOURNAL
+        if (entry.state == "VERIFIED" || entry.state == "RECOVERED_VERIFIED") return Recovery.VERIFIED_COMPLETE
         if (entry.state != "EXECUTING") return Recovery.NOT_INTERRUPTED
         val current = ShraddhaAccessibilityService.captureVisibleScreen()
             ?: return Recovery.REVIEW_REQUIRED
