@@ -310,6 +310,15 @@ fun AgentCouncilScreen(
                 if (role.isNotBlank() && total > 0) {
                     Text("Current stage: $role ($index/$total)", color = colors.textSecondary, fontSize = 12.sp)
                 }
+                stageEvidence.lastOrNull { it.has("status") && !it.has("output") }?.let { status ->
+                    val usage = status.optString("providerUsage")
+                    if (usage.isNotBlank()) {
+                        Text("Provider calls: $usage", color = colors.textSecondary, fontSize = 11.sp)
+                    }
+                    if (status.has("elapsedMs")) {
+                        Text("Elapsed: ${status.optLong("elapsedMs") / 1000}s", color = colors.textTertiary, fontSize = 10.sp)
+                    }
+                }
                 info.outputData.getString(BackgroundTaskQueue.KEY_FINAL_REPORT)?.let { report ->
                     Spacer(Modifier.height(8.dp))
                     Text("VERIFIER REPORT", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
