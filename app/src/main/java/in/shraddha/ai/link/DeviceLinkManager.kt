@@ -111,7 +111,7 @@ object DeviceLinkManager {
         val app = appContext
         if (app != null) {
             val persisted = runCatching {
-                DeviceCredentialStore(app).save(pair.sessionId, pair.deviceId, pair.token, baseUrl)
+                DeviceCredentialStore(app).save(pair.sessionId, pair.deviceId, pair.token, baseUrl).getOrThrow()
             }
             if (persisted.isFailure) {
                 done(Result.failure(persisted.exceptionOrNull() ?: IllegalStateException("Could not save device credentials securely.")))
