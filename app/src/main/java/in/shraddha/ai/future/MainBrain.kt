@@ -95,15 +95,12 @@ class MainBrain(
     private val requests = linkedMapOf<String, WorkflowRequest>()
     private val bridges = linkedMapOf<String, TaskPlannerOperatorBridge>()
     private var activeWorkflowId: String? = null
-    private val durableStore = context?.applicationContext?.let(::MainBrainSchedulerStore)
-    private val scheduler = SharedTaskScheduler(1) { snapshots -> durableStore?.save(snapshots) }
+    private val scheduler = context?.applicationContext?.let(MainBrainSchedulerRuntime::get)
+        ?: SharedTaskScheduler(1)
     init {
         require(maxParallelWorkflows == 1) { "Android UI Operator currently supports one active workflow at a time" }
-        durableStore?.load()?.let { saved ->
-            scheduler.restore(saved)
-            saved.filter { it.state == SharedTaskScheduler.State.PENDING }.forEach { snapshot ->
-                decodeRequest(snapshot.task.payload)?.let { requests[it.id] = it }
-            }
+        scheduler.snapshot().filter { it.state == SharedTaskScheduler.State.PENDING }.forEach { snapshot ->
+            decodeRequest(snapshot.task.payload)?.let { requests[it.id] = it }
         }
     }
 
@@ -138,7 +135,7 @@ class MainBrain(
     @Synchronized
     fun startNextWorkflow(): MainBrainExecutionResult {
         check(activeWorkflowId == null) { "A workflow is already active; approve or finish it first" }
-        val claimed = scheduler.claimReady().firstOrNull()
+        val claimed = scheduler.claimReadyMatching { requests.containsKey(it.task.id) }.firstOrNull()
             ?: return MainBrainExecutionResult.NoReadyWorkflow(scheduler.snapshot())
         val request = requests[claimed.task.id]
         if (request == null) {
