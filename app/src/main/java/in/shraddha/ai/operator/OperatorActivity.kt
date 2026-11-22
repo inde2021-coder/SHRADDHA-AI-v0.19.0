@@ -176,7 +176,19 @@ class OperatorActivity : Activity() {
                 android.app.AlertDialog.Builder(this@OperatorActivity)
                     .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
                     .setMessage(details + if (interrupted) "\n\nफोन बंद/restart होने के समय action चल रहा था। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
-                    .setPositiveButton("ठीक है", null)
+                    .setPositiveButton(if (interrupted) "मैंने target app जाँच लिया" else "ठीक है") { _, _ ->
+                        if (interrupted) {
+                            val verified = runCatching {
+                                VoiceToolActionJournal(this@OperatorActivity)
+                                    .markManuallyVerified(entry.taskId)
+                            }.getOrDefault(false)
+                            Toast.makeText(
+                                this@OperatorActivity,
+                                if (verified) "Voice action को manually verified mark किया। कोई action दोबारा नहीं चलाया गया।" else "Verification save नहीं हुई।",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                     .setNegativeButton("बंद करें", null)
                     .show()
             }
