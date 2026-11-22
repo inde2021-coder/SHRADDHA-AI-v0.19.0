@@ -45,14 +45,14 @@ class OperatorActivity : Activity() {
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
         root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
-        root.addView(action("ऐप खोलें") { runOperator { it.execute(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) } })
-        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperator { it.execute(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString())) } })
-        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperator { it.execute(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString())) } })
+        root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) })
+        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString(), requiresConfirmation = true)) })
+        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperatorStep(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString(), requiresConfirmation = true)) })
         root.addView(action("Back / Home / Scroll") {
             val choices = arrayOf("Back", "Home", "Scroll forward")
             android.app.AlertDialog.Builder(this).setTitle("कार्रवाई चुनें").setItems(choices) { _, which ->
                 val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
-                runOperator { it.execute(OperatorStep(type)) }
+                runOperatorStep(OperatorStep(type))
             }.show()
         })
         log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE0E6F5.toInt()); setPadding(14, 18, 14, 18) }
@@ -339,7 +339,7 @@ class OperatorActivity : Activity() {
         text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
         setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
     }
-    private fun runOperator(work: (OperatorEngine) -> Unit) {
+    /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */\n    private fun runOperatorStep(step: OperatorStep) {\n        val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY\n        val engine = OperatorEngine(\n            emit = { event -> runOnUiThread {\n                val detail = event.snapshot?.let { "\\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()\n                log.text = "${event.state}: ${event.message}$detail\\n\\n" + log.text.take(5000)\n            } },\n            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }\n        )\n        val brain = `in`.shraddha.ai.future.MainBrain(\n            executeVerified = { action, confirmed -> engine.execute(action, confirmed) },\n            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("manual_$event", outcome, detail) },\n            context = this\n        )\n        Thread {\n            try {\n                val id = "manual-" + java.util.UUID.randomUUID().toString().replace("-", "").take(20)\n                brain.enqueueOperatorWorkflow(`in`.shraddha.ai.future.MainBrain.WorkflowRequest(\n                    id = id,\n                    title = "Manual ${step.action.name}",\n                    actions = listOf(PlannedOperatorAction(\n                        id = "step_1", title = step.action.name, step = step,\n                        risk = risk, requiresApproval = risk == Risk.SENSITIVE || step.requiresConfirmation\n                    ))\n                ))\n                val result = brain.startNextWorkflow()\n                runOnUiThread { showMainBrainResult(brain, result) }\n            } catch (error: Exception) {\n                runOnUiThread { log.text = "Main Brain FAILED: ${error.localizedMessage ?: "Action could not be queued"}\\n" + log.text.take(4500) }\n            }\n        }.start()\n    }\n    private fun runOperator(work: (OperatorEngine) -> Unit) {
         Thread {
             val engine = OperatorEngine(
                 emit = { event -> runOnUiThread {
