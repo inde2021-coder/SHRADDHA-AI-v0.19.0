@@ -3,6 +3,7 @@ package `in`.shraddha.ai.future
 import `in`.shraddha.ai.operator.PlannedOperatorAction
 import `in`.shraddha.ai.operator.TaskPlannerOperatorBridge
 import `in`.shraddha.ai.operator.OperatorStep
+import `in`.shraddha.ai.operator.OperatorActionJournal
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import android.content.Context
 import org.json.JSONObject
@@ -25,6 +26,8 @@ class MainBrain(
     private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> },
     context: Context? = null
 ) {
+    private val appContext = context?.applicationContext
+    private val actionJournal = appContext?.let(::OperatorActionJournal)
     data class WorkflowRequest(
         val id: String,
         val title: String,
@@ -258,7 +261,7 @@ class MainBrain(
     private val requests = linkedMapOf<String, WorkflowRequest>()
     private val bridges = linkedMapOf<String, TaskPlannerOperatorBridge>()
     private var activeWorkflowId: String? = null
-    private val scheduler = context?.applicationContext?.let(MainBrainSchedulerRuntime::get)
+    private val scheduler = appContext?.let(MainBrainSchedulerRuntime::get)
         ?: SharedTaskScheduler(1)
     init {
         require(maxParallelWorkflows == 1) { "Android UI Operator currently supports one active workflow at a time" }
@@ -305,7 +308,17 @@ class MainBrain(
             scheduler.fail(claimed.task.id, "Queued workflow request is missing")
             return MainBrainExecutionResult.Failed(claimed.task.id, "Queued workflow request is missing", scheduler.snapshot())
         }
-        val bridge = TaskPlannerOperatorBridge(executeVerified = executeVerified, audit = audit)
+        val bridge = TaskPlannerOperatorBridge(
+            executeVerified = executeVerified,
+            audit = audit,
+            beforeExecute = { workflowId, action ->
+                // Durable write-ahead journal is mandatory for app-backed Operator execution.
+                actionJournal?.begin(workflowId, action) ?: false
+            },
+            afterExecute = { workflowId, action, verified ->
+                actionJournal?.finish(workflowId, action, verified) ?: false
+            }
+        )
         bridges[request.id] = bridge
         activeWorkflowId = request.id
         return runCatching {
@@ -344,6 +357,31 @@ class MainBrain(
             activeWorkflowId = null
             MainBrainExecutionResult.Failed(id, error.message ?: "Approval flow failed", scheduler.snapshot())
         }
+    }
+
+    data class InterruptedWorkflowReview(
+        val workflowId: String,
+        val title: String,
+        val stepId: String,
+        val action: String,
+        val recovery: OperatorActionJournal.Recovery
+    )
+
+    /** Reconcile interrupted Operator actions after process restart; this method never replays. */
+    @Synchronized
+    fun reviewInterruptedWorkflows(): List<InterruptedWorkflowReview> {
+        val journal = actionJournal ?: return emptyList()
+        return scheduler.snapshot()
+            .filter { it.state == SharedTaskScheduler.State.FAILED &&
+                it.error?.startsWith("Process stopped during execution; action was not replayed.") == true }
+            .mapNotNull { snapshot ->
+                val entry = journal.get(snapshot.task.id) ?: return@mapNotNull null
+                val recovery = journal.reconcileInterrupted(snapshot.task.id)
+                audit("operator_recovery", recovery.name.lowercase(),
+                    "workflow=" + snapshot.task.id + "; step=" + entry.stepId + "; action=" + entry.action)
+                InterruptedWorkflowReview(snapshot.task.id, snapshot.task.title,
+                    entry.stepId, entry.action, recovery)
+            }
     }
 
     @Synchronized
