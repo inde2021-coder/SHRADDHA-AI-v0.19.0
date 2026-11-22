@@ -11,7 +11,7 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 
 | # | Feature | Current implementation | Remaining integration |
 |---:|---|---|---|
-| 1 | Multi-Agent Intelligence | Dependency-aware Android council engine now runs Planner + Researcher concurrently, fans out 1–5 independent Specialists across configured providers, shares their evidence with Critic and Verifier, and is wired into durable WorkManager background council jobs. | Android Advanced AI Lab now exposes a local background-council action with provider selection and WorkManager progress/result observation. Specialist/provider budgets, per-provider cost/time budgets, persistent per-stage evidence and cross-device cancellation/recovery remain. This path is source-added but not yet CI-verified. |
+| 1 | Multi-Agent Intelligence | Dependency-aware Android council engine now runs Planner + Researcher concurrently, fans out 1–5 independent Specialists across configured providers, shares their evidence with Critic and Verifier, and is wired into durable WorkManager background council jobs. | Android Advanced AI Lab now exposes a local background-council action with provider selection, a 1–5 specialist-count control, cancellation and WorkManager progress/result observation. Specialist/provider budgets, per-provider cost/time budgets, persistent per-stage evidence and cross-device cancellation/recovery remain. This path is source-added but not yet CI-verified. |
 | 2 | Autonomous Task Planner | Backend task planning, WorkflowEngine lifecycle and new dependency-aware DAG planner. | Persisted plans, calendar/task inputs, planner UI, resumable execution wired to Operator. |
 | 3 | Personal Knowledge Brain | KnowledgeGraph, LocalKnowledgeBase, encrypted memory and Firebase vault exist. | Unified ingestion/indexing, embedding retrieval, source provenance and cross-device sync UI. |
 | 4 | Predictive Assistant | Opt-in suggestions from manually recorded repeated events added. | Persistent event source, user feedback loop and scheduled suggestion UI; no hidden tracking. |
@@ -183,3 +183,8 @@ A source-only cross-layer review found that the Android sender used 48,000-byte 
 ### Transfer capacity update — 22 November
 
 The Android chunked file-transfer cap is now aligned with the relay's 100 MiB manifest limit (48 KiB chunks, 2,134 maximum chunks). The earlier Android-only 20 MB cap has been raised in the protocol helper, sender, receiver and boundary test. This is source-only; 100 MiB throughput, storage pressure, process-death resume, and low-storage behavior must be validated on physical devices before calling the larger limit production-ready.
+
+
+### Configurable specialist fan-out — 22 November
+
+The local background council now persists the user's selected 1–5 Specialist count through the queue payload and Worker into the parallel orchestration engine. The Advanced AI Lab validates the range before enqueueing; the task summary reports the selected fan-out. No tests have been run.
