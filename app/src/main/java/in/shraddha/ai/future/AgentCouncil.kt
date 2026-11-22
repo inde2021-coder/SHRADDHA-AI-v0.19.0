@@ -94,6 +94,17 @@ object AgentCouncil {
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> {
         val provider = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
+        return executeWithProvider(context, goal, language, provider, onProgress)
+    }
+
+    fun executeWithProvider(
+        context: Context,
+        goal: String,
+        language: String = "AUTO",
+        providerName: String,
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
+    ): Result<CouncilExecutionReport> {
+        val provider = providerName.uppercase()
         return execute(goal, language, provider, { _, system, prompt ->
             val turns = listOf(ChatTurn(true, prompt))
             val response = if (provider == "GEMINI") {
