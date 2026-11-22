@@ -194,3 +194,8 @@ The Advanced AI Lab now restores the latest WorkManager council ID after Activit
 
 
 The WorkManager council worker now applies a bounded retry policy for transient provider failures (network I/O, timeout, HTTP 429 and HTTP 5xx), with at most two retries. Permanent errors fail the task and are surfaced to the UI. In-flight synchronous provider calls still cannot be forcibly cancelled; this change is not yet tested.
+
+
+### End-to-end encryption for quick-share attachments — 22 November
+
+The Android quick-share path previously sent small attachment payloads as plaintext JSON through the relay. It now uses the same mutually verified ECDH/AES-GCM peer channel as clipboard text, with the one-time request ID and share category bound into authenticated data. The relay validates the category permission and consumes the exact one-time grant before forwarding only opaque ciphertext. Plaintext `data_share_payload` messages are rejected. The Windows companion now decrypts the category-bound envelope, validates type/size/Base64/SHA-256, asks the local user again, and saves to a sanitized Downloads folder without overwriting an existing file. Android and Windows regression tests were added; they have not been run.
