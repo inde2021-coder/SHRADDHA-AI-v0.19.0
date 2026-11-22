@@ -28,3 +28,6 @@ The native Home/Assistant 3D energy core now observes the real voice session sta
 
 
 The native energy core now respects the saved Reduced Motion preference: its continuous animator stops and the visual state remains static while accessibility state labels remain truthful. The preference is refreshed when the activity resumes.
+
+
+The Visual Lens workspace now uses the shared teal glass cards/buttons and the configured assistant identity. Its active/starting/off label is backed by process-aware service state rather than a screen-local boolean, so reopening the screen does not falsely claim that the camera is running. The foreground camera service continues to expose Android's privacy indicator and notification.
