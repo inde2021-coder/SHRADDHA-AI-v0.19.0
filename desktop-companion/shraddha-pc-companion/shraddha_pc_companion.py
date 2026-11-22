@@ -1153,7 +1153,7 @@ async def run_once(args) -> None:
                 print("Restored interrupted incoming transfer; missing chunks will be requested after reconnect.")
         except Exception as exc: print("Could not restore previous transfer:", str(exc)[:160])
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
-        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen, "documents": allow_file_receive}}))
+        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen, "documents": allow_file_receive, "media": allow_file_receive}}))
         print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
         if phone_action:
             await ws.send(json.dumps({"type": "control_request", "targetDeviceId": args.control_phone, "minutes": 2}))
@@ -1290,7 +1290,7 @@ async def run_once(args) -> None:
                     requester_id = str(message.get("fromDeviceId", ""))
                     category = str(message.get("category", ""))
                     request_id = str(message.get("requestId", ""))
-                    allowed = (category == "documents" and allow_file_receive) or (category == "clipboard" and allow_control)
+                    allowed = (category in {"documents", "media"} and allow_file_receive) or (category == "clipboard" and allow_control)
                     approved = bool(allowed and await asyncio.to_thread(confirm, f"Allow one-time {category} share request from paired device {requester_id}?"))
                     await ws.send(json.dumps({"type": "data_share_response", "requesterDeviceId": requester_id, "category": category, "requestId": request_id, "approved": approved, "minutes": 5 if approved else 0}))
                 elif kind == "data_share_result" and clipboard_send and message.get("requestId") == clipboard_send[0]:
@@ -1381,7 +1381,7 @@ async def run_once(args) -> None:
                     try:
                         import base64, hashlib, tempfile
                         category = str(message.get("category", ""))
-                        if category not in {"media", "files", "documents"}:
+                        if category not in {"media", "documents"}:
                             raise ValueError("Unsupported shared-file category")
                         if str(message.get("contentType", "")) != "file":
                             raise ValueError("Unsupported shared attachment content type")
