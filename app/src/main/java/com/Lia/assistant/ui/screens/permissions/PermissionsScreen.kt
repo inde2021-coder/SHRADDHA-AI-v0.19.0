@@ -1,14 +1,12 @@
 package com.Lia.assistant.ui.screens.permissions
 
 import android.Manifest
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.text.TextUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -232,7 +230,7 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(special("overlay", "Display over other apps", "Required only for floating assistant overlay", overlay, "overlay"))
         add(special("accessibility", "Accessibility service", "Allows approved on-screen interaction; enable only if needed", accessibility, "accessibility"))
         add(special("notification_listener", "Notification access", "Reads notifications only after special access is enabled", listener, "notification_listener"))
-        add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission"))
+        add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission", Build.VERSION.SDK_INT >= 28))
         add(declared("android.permission.FOREGROUND_SERVICE_MICROPHONE", "Microphone foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
         add(declared("android.permission.FOREGROUND_SERVICE_CAMERA", "Camera foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
         add(PermissionRow("media_projection", "Screen capture", "Android grants screen capture per session; it is not a persistent permission", AccessState.NOT_AVAILABLE))
