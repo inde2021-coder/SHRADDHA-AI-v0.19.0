@@ -80,7 +80,7 @@ class OperatorActionJournal(context: Context) {
         val entry = get(workflowId) ?: return Recovery.NO_JOURNAL
         if (entry.state == "VERIFIED" || entry.state == "RECOVERED_VERIFIED") return Recovery.VERIFIED_COMPLETE
         if (entry.state == "MANUALLY_VERIFIED") return Recovery.MANUALLY_VERIFIED
-        if (entry.state != "EXECUTING") return Recovery.NOT_INTERRUPTED
+        if (entry.state !in setOf("EXECUTING", "FAILED")) return Recovery.NOT_INTERRUPTED
         val current = ShraddhaAccessibilityService.captureVisibleScreen()
             ?: return Recovery.REVIEW_REQUIRED
         val decision = assess(
@@ -102,7 +102,7 @@ class OperatorActionJournal(context: Context) {
     /** User-confirmed recovery after they manually inspected the target app. */
     fun markManuallyVerified(workflowId: String): Boolean {
         val entry = get(workflowId) ?: return false
-        if (entry.state != "EXECUTING") return false
+        if (entry.state !in setOf("EXECUTING", "FAILED")) return false
         return save(entry.copy(state = "MANUALLY_VERIFIED", updatedAt = System.currentTimeMillis()))
     }
 
