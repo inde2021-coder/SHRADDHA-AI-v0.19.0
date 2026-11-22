@@ -169,3 +169,10 @@ The pending branch updates the configured name in the main UI, About/Profile/Qui
 
 
 The Privacy screen's old generic claims have been replaced with a source-accurate description of encrypted local memory, provider/backend data paths, Visual Lens, E2E device transfer and known limitations. A confirmation-gated **Stop all local live sessions** action now stops voice, live camera, remote camera, screen sharing and disconnects this phone's device relay. It deliberately does not claim to revoke paired-device records; permanent revocation remains in Device Center.
+
+## Follow-up source work — 23 November 2026 (not yet verified)
+
+- Voice session now routes transient AudioRecord failures through the existing bounded reconnect path. If Android microphone permission was revoked, it stops retrying and reports that permission must be restored.
+- Voice screen now exposes one microphone ON/OFF action rather than separate mute/stop controls. Setup-incomplete states do not show an inert microphone action; the screen close action only dismisses the screen.
+- OpenAI text chat now selects the currently documented gpt-5.5 model and sends max_completion_tokens rather than the deprecated max_tokens field. Provider account access, quota and live API compatibility still require later verification.
+- These are source changes only. No manual build, unit test, emulator test or live provider call has been run during this feature-completion pass.
