@@ -126,7 +126,16 @@ jobs:
             SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager -print -quit)"
           fi
           test -x "$SDKMANAGER"
+          set +e
+          set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
+          license_status=${PIPESTATUS[1]}
+          set -e
+          set -o pipefail
+          if [[ "$license_status" -ne 0 ]]; then
+            echo "::error::sdkmanager license acceptance failed with exit code $license_status"
+            exit "$license_status"
+          fi
           "$SDKMANAGER" --install \
             "platform-tools" \
             "emulator" \
