@@ -49,6 +49,27 @@ class AgentCouncilExecutionTest {
         assertEquals(listOf("Planner", "Researcher"), calls)
     }
 
+    @Test fun configuredProvidersAreAssignedAcrossRolesInStableRoundRobinOrder() {
+        val roles = AgentCouncil.plan("Test multi-provider routing").roles
+        val assignments = AgentCouncil.assignProviders(roles, listOf("GEMINI", "OPENAI", "GROQ"))
+        assertEquals(
+            listOf("GEMINI", "OPENAI", "GROQ", "GEMINI", "OPENAI"),
+            roles.map { assignments.getValue(it.name) }
+        )
+    }
+
+    @Test fun providerRoutingRejectsUnknownOrEmptyProviderSets() {
+        val roles = AgentCouncil.plan("Test invalid routing").roles
+        try {
+            AgentCouncil.assignProviders(roles, emptyList())
+            throw AssertionError("Empty provider set must be rejected")
+        } catch (_: IllegalArgumentException) { }
+        try {
+            AgentCouncil.assignProviders(roles, listOf("UNSUPPORTED"))
+            throw AssertionError("Unknown provider must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
     @Test fun cancellationStopsBeforeTheNextRole() {
         var keepRunning = true
         val calls = mutableListOf<String>()
