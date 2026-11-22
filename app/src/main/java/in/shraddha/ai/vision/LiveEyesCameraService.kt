@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -61,12 +62,17 @@ class LiveEyesCameraService : Service() {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel(channelId, "Shraddha AI Eyes", NotificationManager.IMPORTANCE_LOW))
         }
+        val stopIntent = Intent(this, LiveEyesCameraService::class.java).setAction(ACTION_STOP)
+        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
+        val stopPendingIntent = PendingIntent.getService(this, 74, stopIntent, pendingFlags)
         return if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Shraddha AI Eyes")
-            .setContentText(message).setOngoing(true).build()
+            .setContentText(message).setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build()
         else @Suppress("DEPRECATION") (Notification.Builder(this)
             .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Shraddha AI Eyes")
-            .setContentText(message).setOngoing(true).build())
+            .setContentText(message).setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build())
     }
 
     private fun updateNotification(message: String) {
