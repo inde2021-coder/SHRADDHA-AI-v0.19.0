@@ -144,7 +144,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
                             resultText = buildString {
                                 append("Provider configured: ").append(body.optBoolean("configured"))
                                 append("\nPreflight ready: ").append(body.optBoolean("preflightReady"))
-                                append("\nAI name: ").append(body.optString("agentName", assistantName))
+                                append("\nAI name: ").append(assistantName)
                                 val history = body.optJSONObject("callHistory")
                                 append("\nEncrypted durable call history: ").append(if (history?.optBoolean("durable") == true) "READY" else "not configured")
                                 val historyMissing = history?.optJSONArray("missing")
