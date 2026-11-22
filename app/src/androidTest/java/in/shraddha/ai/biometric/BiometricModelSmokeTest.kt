@@ -16,6 +16,18 @@ import org.junit.runner.RunWith
 class BiometricModelSmokeTest {
     @Test fun selectedModelsDownloadVerifyAndRunOnDevice() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        val modelSpecs = BiometricModelInstaller.supportedModels().associateBy { it.kind }
+        assertEquals(setOf("face", "speaker", "anti_spoof"), modelSpecs.keys)
+        assertEquals(
+            "c59760b0a30dd905e3757cbb9ddf5dde22f9a099dc3e74de77c263cbb202e67c",
+            modelSpecs.getValue("speaker").sha256
+        )
+        assertTrue(modelSpecs.getValue("speaker").url.contains("/dd6e443/"))
+        assertEquals(38_696_353L, modelSpecs.getValue("face").expectedBytes)
+        assertEquals(
+            "d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b",
+            modelSpecs.getValue("anti_spoof").sha256
+        )
         val bundled = context.assets.list("biometric-models").orEmpty()
         assertFalse("Large ONNX models must not be bundled in the APK", bundled.any { it.endsWith(".onnx") })
 
