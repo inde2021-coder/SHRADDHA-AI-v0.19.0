@@ -50,7 +50,7 @@ jobs:
         with:
           api-level: 30
           emulator-boot-timeout: 1200
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
           # Avoid the action's post-boot settings-service calls; they caused Broken pipe (32) on TCG.
