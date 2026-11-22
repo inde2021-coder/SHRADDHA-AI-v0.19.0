@@ -44,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('..', import.meta.url),
-    env: { ...process.env, PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '', CALL_TRANSCRIPTS_ENABLED: 'false', SHRADDHA_CALL_AGENT_NAME: '', FIREBASE_SERVICE_ACCOUNT_JSON: '', FIREBASE_SERVICE_ACCOUNT_BASE64: '', CALL_HISTORY_ENCRYPTION_KEY: '' },
+    env: { ...process.env, TRUST_PROXY: 'true', PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '', CALL_TRANSCRIPTS_ENABLED: 'false', SHRADDHA_CALL_AGENT_NAME: '', FIREBASE_SERVICE_ACCOUNT_JSON: '', FIREBASE_SERVICE_ACCOUNT_BASE64: '', CALL_HISTORY_ENCRYPTION_KEY: '' },
     stdio: 'ignore'
   });
   const deadline = Date.now() + 10_000;
@@ -707,7 +707,7 @@ test('end-to-end remote actions require a live control grant and relay opaque ci
 
 test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.81' },
     body: JSON.stringify({ deviceName: 'Frame Owner' })
   });
   const owner = await ownerResponse.json();
