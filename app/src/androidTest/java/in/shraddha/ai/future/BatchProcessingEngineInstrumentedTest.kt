@@ -10,7 +10,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference\nimport java.io.ByteArrayInputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipOutputStream
+import java.util.concurrent.atomic.AtomicReference
+import java.io.ByteArrayInputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
