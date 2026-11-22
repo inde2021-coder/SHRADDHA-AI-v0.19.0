@@ -203,7 +203,7 @@ class MainBrain(
             }
         }
 
-        /** Learned app automations run as a sub-step of the already scheduled Main Brain voice task. */
+        /** Learned app automations use the active voice task slot or claim their own shared slot. */
         fun runLearnedWorkflow(
             context: Context,
             profile: `in`.shraddha.ai.operator.learning.AppTrainingProfile,
@@ -211,10 +211,48 @@ class MainBrain(
             values: Map<String, String>,
             confirmed: Boolean,
             resume: Boolean,
+            withinMainBrainTask: Boolean = false,
             onEvent: (`in`.shraddha.ai.operator.OperatorEvent) -> Unit
-        ): Boolean =
-            `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(context.applicationContext, onEvent)
-                .run(profile, workflowName, values, confirmed, resume)
+        ): Boolean {
+            val appContext = context.applicationContext
+            if (withinMainBrainTask) {
+                return runCatching {
+                    `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(appContext, onEvent)
+                        .run(profile, workflowName, values, confirmed, resume)
+                }.getOrDefault(false)
+            }
+            val scheduler = MainBrainSchedulerRuntime.get(appContext)
+            val taskId = "learned_" + UUID.randomUUID().toString().replace("-", "")
+            val payload = JSONObject().put("kind", "learned_workflow")
+                .put("package", profile.packageName)
+                .put("workflow", workflowName.take(120))
+                .put("resume", resume).toString()
+            runCatching {
+                scheduler.submitAll(listOf(SharedTaskScheduler.Task(
+                    id = taskId,
+                    title = "Learned workflow: ${workflowName.take(100)}",
+                    priority = 2,
+                    payload = payload
+                )))
+            }.getOrElse { return false }
+            if (scheduler.claimSpecific(taskId) == null) {
+                runCatching { scheduler.cancel(taskId) }
+                return false
+            }
+            return try {
+                val completed = `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(appContext, onEvent)
+                    .run(profile, workflowName, values, confirmed, resume)
+                if (completed) scheduler.complete(taskId)
+                else scheduler.fail(taskId, "Learned workflow paused or failed; resume only from its verified checkpoint.")
+                completed
+            } catch (cancelled: CancellationException) {
+                runCatching { scheduler.cancel(taskId) }
+                throw cancelled
+            } catch (error: Exception) {
+                runCatching { scheduler.fail(taskId, error.message ?: "Learned workflow failed") }
+                false
+            }
+        }
     }
 
     private val requests = linkedMapOf<String, WorkflowRequest>()
