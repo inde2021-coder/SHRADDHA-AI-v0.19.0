@@ -188,3 +188,6 @@ The Android chunked file-transfer cap is now aligned with the relay's 100 MiB ma
 ### Configurable specialist fan-out — 22 November
 
 The local background council now persists the user's selected 1–5 Specialist count through the queue payload and Worker into the parallel orchestration engine. The Advanced AI Lab validates the range before enqueueing; the task summary reports the selected fan-out. No tests have been run.
+
+
+The Advanced AI Lab now restores the latest WorkManager council ID after Activity recreation and reattaches its progress/result observer. A cancel control can cancel the restored task as well. This survives screen/activity recreation; it does not claim that in-flight provider reasoning resumes mid-stage after process death.
