@@ -34,7 +34,6 @@ class LiveEyesCameraService : Service() {
     private val requestInFlight = AtomicBoolean(false)
     @Volatile private var previousObservation = ""
     @Volatile private var stopped = false
-    private var lastContextSentAt = 0L
     @Volatile private var lastAnnouncedAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
