@@ -21,6 +21,8 @@ class BackgroundAgentWorker(
         val scheduler = MainBrainSchedulerRuntime.get(applicationContext)
         val evidence = CouncilEvidenceStore(applicationContext)
         val attempt = runAttemptCount.coerceIn(0, 99)
+        val usageLock = Any()
+        val usageCounts = linkedMapOf<String, Int>()
 
         // WorkManager may restart this provider-reasoning task after process death.
         // Previous stage evidence is retained encrypted; retries are a new attempt and
@@ -62,7 +64,9 @@ class BackgroundAgentWorker(
             schedulerTaskId,
             "RUNNING",
             "Attempt ${attempt + 1}: provider council started. Completed stages are saved separately.",
-            attempt = attempt
+            attempt = attempt,
+            providerUsage = "",
+            elapsedMs = 0L
         ).getOrThrow()
 
         val result = try {
@@ -105,7 +109,20 @@ class BackgroundAgentWorker(
                         attempt = attempt
                     ).getOrThrow()
                 },
-                    budget = budget
+                    budget = budget,
+                    onProviderCall = { providerName, providerCalls, totalCalls, elapsed ->
+                        synchronized(usageLock) {
+                            usageCounts[providerName] = maxOf(usageCounts[providerName] ?: 0, providerCalls)
+                            evidence.saveStatus(
+                                schedulerTaskId,
+                                "RUNNING",
+                                "Attempt ${attempt + 1}: provider call $totalCalls started.",
+                                attempt = attempt,
+                                providerUsage = usageCounts.toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" },
+                                elapsedMs = elapsed
+                            ).getOrThrow()
+                        }
+                    }
                 )
             }
         } catch (cancelled: CancellationException) {
