@@ -125,7 +125,7 @@ fun AgentCouncilScreen(
     val minimumCalls = specialists.toInt() + 4
     val minimumPerProvider = if (selectedProviders.isEmpty()) 1 else
         ((specialists.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
-    val isRunning = workId != null && (!workInfoResolved || workInfo?.state?.isFinished != true)
+    val isRunning = workId != null && (!workInfoResolved || (workInfo != null && workInfo?.state?.isFinished != true))
     val statusColor = when (workInfo?.state) {
         WorkInfo.State.SUCCEEDED -> Color(0xFF58D6A5)
         WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> Color(0xFFFF8585)
