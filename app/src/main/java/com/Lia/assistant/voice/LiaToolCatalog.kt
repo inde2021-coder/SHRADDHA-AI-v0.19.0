@@ -200,6 +200,15 @@ object LiaToolCatalog {
             )
         )
 
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "manage_files",
+                description = "Opens Shraddha AI secure Android file manager for user-authorized file operations. Search/open/copy/move/rename/delete/share/import/export are performed only after the user selects the exact file and destination. Delete, move and rename require a visible confirmation. Share opens Android Sharesheet; the user chooses the destination app. Never claim an upload or send completed until the app reports it.",
+                params = mapOf("operation" to "One of: manage, find, open, copy, move, rename, delete, share, import, export"),
+                required = listOf("operation")
+            )
+        )
+
         return array
     }
 }
