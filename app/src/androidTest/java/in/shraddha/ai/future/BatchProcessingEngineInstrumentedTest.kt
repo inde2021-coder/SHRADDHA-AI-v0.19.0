@@ -1,4 +1,4 @@
-package \`in\`.shraddha.ai.future
+package `in`.shraddha.ai.future
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
