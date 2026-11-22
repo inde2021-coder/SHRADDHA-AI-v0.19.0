@@ -22,13 +22,13 @@ class BackgroundAgentWorker(
         if (isStopped) return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Task cancelled before it started."))
 
         val result = withContext(Dispatchers.IO) {
-            AgentCouncil.executeWithProvider(applicationContext, goal, language, provider, onProgress = { role, index, total ->
+            AgentCouncil.executeWithConfiguredProvider(applicationContext, goal, language, preferredProvider = provider, shouldContinue = { !isStopped }, onProgress = { role, index, total ->
                 if (!isStopped) setProgressAsync(workDataOf(
                     BackgroundTaskQueue.KEY_PROGRESS_ROLE to role,
                     BackgroundTaskQueue.KEY_PROGRESS_INDEX to index,
                     BackgroundTaskQueue.KEY_PROGRESS_TOTAL to total
                 ))
-            }, shouldContinue = { !isStopped })
+            })
         }
         if (isStopped) return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Task cancelled; partial output is not marked complete."))
         return result.fold(
