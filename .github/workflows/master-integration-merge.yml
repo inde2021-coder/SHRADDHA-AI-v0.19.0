@@ -122,12 +122,16 @@ jobs:
         with:
           api-level: 35
           emulator-boot-timeout: 1200
+          disable-linux-hw-accel: false
+          cores: 4
+          ram-size: 4096M
+          disk-size: 4096M
           arch: x86_64
           target: default
           profile: pixel_2
           disable-animations: true
           # KVM-backed x86_64 emulator; allocate enough guest resources to complete first boot.
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot-load -no-snapshot-save -noaudio -no-boot-anim -camera-back none -camera-front none -memory 4096 -cores 4 -partition-size 4096
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot-load -no-snapshot-save -noaudio -no-boot-anim -camera-back none -camera-front none
           pre-emulator-launch-script: adb start-server
           script: bash .github/scripts/android-onnx-smoke.sh
 
