@@ -14,6 +14,8 @@ data class WorkflowCheckpoint(
     val totalSteps: Int,
     val state: String,
     val expectedText: String = "",
+    val beforeScreenFingerprint: String = "",
+    val expectedTextAbsentBefore: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -42,6 +44,8 @@ class WorkflowCheckpointStore(context: Context) {
                     totalSteps = o.getInt("totalSteps"),
                     state = o.getString("state"),
                     expectedText = o.optString("expectedText"),
+                    beforeScreenFingerprint = o.optString("beforeScreenFingerprint"),
+                    expectedTextAbsentBefore = o.optBoolean("expectedTextAbsentBefore", false),
                     updatedAt = o.optLong("updatedAt")
                 )
             }.getOrNull() }
@@ -57,6 +61,8 @@ class WorkflowCheckpointStore(context: Context) {
             .put("totalSteps", checkpoint.totalSteps)
             .put("state", checkpoint.state)
             .put("expectedText", checkpoint.expectedText.take(300))
+            .put("beforeScreenFingerprint", checkpoint.beforeScreenFingerprint.take(128))
+            .put("expectedTextAbsentBefore", checkpoint.expectedTextAbsentBefore)
             .put("updatedAt", checkpoint.updatedAt)
         return encrypted.put(key(checkpoint.packageName, checkpoint.workflowName), json.toString()).isSuccess
     }
@@ -77,9 +83,10 @@ class WorkflowCheckpointStore(context: Context) {
 internal object InterruptedStepRecovery {
     enum class Decision { VERIFIED_COMPLETE, AMBIGUOUS }
 
-    fun assess(expectedText: String, visibleText: Collection<String>): Decision {
+    fun assess(expectedText: String, visibleText: Collection<String>, beforeScreenFingerprint: String, currentScreenFingerprint: String, expectedTextAbsentBefore: Boolean): Decision {
         val expected = expectedText.trim()
-        if (expected.isBlank()) return Decision.AMBIGUOUS
+        if (expected.isBlank() || beforeScreenFingerprint.isBlank() ||
+            beforeScreenFingerprint == currentScreenFingerprint || !expectedTextAbsentBefore) return Decision.AMBIGUOUS
         val matched = visibleText.any { visible ->
             visible.contains(expected, ignoreCase = true)
         }
