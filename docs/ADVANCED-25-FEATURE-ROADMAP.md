@@ -11,7 +11,7 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 
 | # | Feature | Current implementation | Remaining integration |
 |---:|---|---|---|
-| 1 | Multi-Agent Intelligence | AgentCouncil role planner and provider comparison/council endpoints exist. | Real parallel specialist execution, shared evidence state, critic/verifier loops, cost/time budgets and UI. |
+| 1 | Multi-Agent Intelligence | Dependency-aware Android council engine now runs Planner + Researcher concurrently, fans out 1–5 independent Specialists across configured providers, shares their evidence with Critic and Verifier, and is wired into durable WorkManager background council jobs. | Full UI controls for specialist/provider budgets, per-provider cost/time budgets, persistent per-stage evidence and cross-device cancellation/recovery remain. This new path is source-added but not yet CI-verified. |
 | 2 | Autonomous Task Planner | Backend task planning, WorkflowEngine lifecycle and new dependency-aware DAG planner. | Persisted plans, calendar/task inputs, planner UI, resumable execution wired to Operator. |
 | 3 | Personal Knowledge Brain | KnowledgeGraph, LocalKnowledgeBase, encrypted memory and Firebase vault exist. | Unified ingestion/indexing, embedding retrieval, source provenance and cross-device sync UI. |
 | 4 | Predictive Assistant | Opt-in suggestions from manually recorded repeated events added. | Persistent event source, user feedback loop and scheduled suggestion UI; no hidden tracking. |
@@ -147,3 +147,16 @@ speaker capture already have user-started on-device sample capture, model
 inference, consent-gated encrypted templates and match/identify flows, but
 threshold calibration and anti-spoof certification/device accuracy testing
 remain release blockers.
+
+
+## Parallel council implementation update (22 November 2026)
+
+The pending-features branch now includes a dependency-aware parallel council execution path:
+- Planner and Researcher execute concurrently.
+- One to five independent Specialist workers execute concurrently after the shared foundation outputs are available.
+- Critic compares the independent solutions; Verifier performs the final acceptance review.
+- Provider assignment is distributed across one to five configured providers; background task payloads accept a comma-separated provider set.
+- Durable WorkManager background council jobs now call this parallel path; progress is reported by stage and cancellation is checked between stages.
+- The original sequential API remains available for compatibility.
+
+**Not yet verified:** this change has not been built or tested, by instruction. UI for selecting specialist count and provider set, provider spend/time budgets, durable per-stage evidence, and process-death recovery of in-flight provider calls remain to be completed. A provider call already in flight cannot be forcibly interrupted by the current synchronous gateway client.
