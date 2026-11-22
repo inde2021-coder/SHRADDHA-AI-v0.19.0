@@ -869,7 +869,7 @@ class PcCompanionApp:
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
-                                              {"ok": bool(ok), "reason": "" if ok else str(message)[:240]},
+                                              {"ok": bool(ok), "result": str(message)[:240]},
                                               action_id, action.get("kind", ""))
                 if not sent:
                     self.status_var.set("Action finished, but encrypted result could not be delivered.")
@@ -880,7 +880,7 @@ class PcCompanionApp:
             self.status_var.set(message)
             if peer_id and action_id:
                 self._send_e2e_message(peer_id, "remote_action_result",
-                                       {"ok": False, "reason": message}, action_id, action.get("kind", ""))
+                                       {"ok": False, "result": message[:240]}, action_id, action.get("kind", ""))
 
     def _open_start_menu_shortcut(self, app_name):
         roots = [
