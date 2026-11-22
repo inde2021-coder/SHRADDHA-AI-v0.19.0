@@ -191,3 +191,6 @@ The local background council now persists the user's selected 1–5 Specialist c
 
 
 The Advanced AI Lab now restores the latest WorkManager council ID after Activity recreation and reattaches its progress/result observer. A cancel control can cancel the restored task as well. This survives screen/activity recreation; it does not claim that in-flight provider reasoning resumes mid-stage after process death.
+
+
+The WorkManager council worker now applies a bounded retry policy for transient provider failures (network I/O, timeout, HTTP 429 and HTTP 5xx), with at most two retries. Permanent errors fail the task and are surfaced to the UI. In-flight synchronous provider calls still cannot be forcibly cancelled; this change is not yet tested.
