@@ -27,8 +27,9 @@ class DailyBriefingResearchWorker(
         if (!prefs.getBoolean(KEY_ENABLED, false) || prefs.getString(KEY_SAVED_TOPICS, "").orEmpty() != topics) {
             return Result.failure()
         }
+        if (isStopped || !isStillEnabled(prefs, topics)) return Result.failure()
         if (!ProviderKeyStore.has(applicationContext, "PERPLEXITY")) {
-            postNotification("Daily research needs setup", "Add a Perplexity API key in AI Provider Settings to enable source-linked morning research.")
+            if (isStillEnabled(prefs, topics)) postNotification("Daily research needs setup", "Add a Perplexity API key in AI Provider Settings to enable source-linked morning research.")
             return Result.failure()
         }
         val prompt = """
@@ -51,7 +52,7 @@ class DailyBriefingResearchWorker(
         val answer = when (response) {
             is ChatReplyResult.Success -> response.text.trim()
             is ChatReplyResult.Error -> {
-                postNotification("Morning research unavailable", response.message.take(1000))
+                if (isStillEnabled(prefs, topics)) postNotification("Morning research unavailable", response.message.take(1000))
                 return Result.failure()
             }
         }
@@ -65,6 +66,9 @@ class DailyBriefingResearchWorker(
         postNotification("Shraddha AI • Morning research", answer.take(3500))
         return Result.success()
     }
+
+    private fun isStillEnabled(prefs: android.content.SharedPreferences, topics: String): Boolean =
+        prefs.getBoolean(KEY_ENABLED, false) && prefs.getString(KEY_SAVED_TOPICS, "").orEmpty() == topics
 
     private fun postNotification(title: String, body: String) {
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
