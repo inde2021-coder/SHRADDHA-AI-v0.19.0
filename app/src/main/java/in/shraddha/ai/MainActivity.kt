@@ -418,7 +418,11 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER
                 setPadding(dp(8), dp(2), dp(8), dp(14))
             }
-            val assistantOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
+            val assistantOrb = ShraddhaOrbView(
+                this, assistantDisplayName,
+                NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false),
+                NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name))
+            ).apply {
                 setVoiceState(VoiceSessionManager.state.value)
                 setAmplitude(VoiceSessionManager.amplitude.value)
                 setMuted(VoiceSessionManager.muted.value)
