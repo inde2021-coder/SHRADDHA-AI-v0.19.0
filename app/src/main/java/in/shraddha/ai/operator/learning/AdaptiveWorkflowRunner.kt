@@ -73,7 +73,13 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 return fail("Interrupted action के बाद अलग ऐप खुला है। सुरक्षा के लिए automatic resume रोक दिया गया।")
             }
             val visible = current.elements.flatMap { listOf(it.text, it.description) }.filter { it.isNotBlank() }
-            when (InterruptedStepRecovery.assess(saved.expectedText, visible)) {
+            when (InterruptedStepRecovery.assess(
+                expectedText = saved.expectedText,
+                visibleText = visible,
+                beforeScreenFingerprint = saved.beforeScreenFingerprint,
+                currentScreenFingerprint = recoveryFingerprint(current),
+                expectedTextAbsentBefore = saved.expectedTextAbsentBefore
+            )) {
                 InterruptedStepRecovery.Decision.VERIFIED_COMPLETE -> {
                     val next = saved.nextStep + 1
                     val recoveredStep = steps[saved.nextStep]
@@ -147,8 +153,15 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 nextStep = index,
                 totalSteps = steps.size,
                 state = "EXECUTING",
-                // Never persist the entered value: only a user-authored, non-secret postcondition.
-                expectedText = step.expectedText.take(300)
+                // Checkpoints are encrypted at rest. Store only the postcondition, never
+                // the text/value entered into a field.
+                expectedText = step.expectedText.take(300),
+                beforeScreenFingerprint = recoveryFingerprint(before),
+                expectedTextAbsentBefore = step.expectedText.isNotBlank() &&
+                    before.elements.none { element ->
+                        element.text.contains(step.expectedText, true) ||
+                            element.description.contains(step.expectedText, true)
+                    }
             ))
             if (!inFlightSaved) return fail("इस चरण का encrypted recovery checkpoint save नहीं हुआ; सुरक्षा के लिए action execute नहीं किया गया।")
             audit.append("operator_step", "started", "${profile.packageName}:${step.action}")
@@ -199,5 +212,18 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         emit(OperatorEvent(OperatorTaskState.COMPLETED, "सीखे गए वर्कफ़्लो के सभी चरण पूरे और सत्यापित हुए।", ShraddhaAccessibilityService.captureVisibleScreen()))
         return true
     }
+    private fun recoveryFingerprint(snapshot: ScreenSnapshot): String {
+        val canonical = buildString {
+            append(snapshot.packageName).append('|').append(snapshot.activityName)
+            snapshot.elements.forEach { element ->
+                append('|').append(element.id).append(':').append(element.text).append(':')
+                    .append(element.description).append(':').append(element.bounds.flattenToString())
+            }
+        }
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    }
+
     private fun fail(message: String): Boolean { emit(OperatorEvent(OperatorTaskState.FAILED, message)); return false }
 }
