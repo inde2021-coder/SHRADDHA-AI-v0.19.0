@@ -35,9 +35,14 @@ class WorkflowCheckpointStore(context: Context) {
             ?.let { raw -> runCatching {
                 val o = JSONObject(raw)
                 WorkflowCheckpoint(
-                    o.getString("packageName"), o.getString("workflowName"),
-                    o.getString("workflowHash"), o.getInt("nextStep"),
-                    o.getInt("totalSteps"), o.getString("state"), o.optString("expectedText"), o.optLong("updatedAt")
+                    packageName = o.getString("packageName"),
+                    workflowName = o.getString("workflowName"),
+                    workflowHash = o.getString("workflowHash"),
+                    nextStep = o.getInt("nextStep"),
+                    totalSteps = o.getInt("totalSteps"),
+                    state = o.getString("state"),
+                    expectedText = o.optString("expectedText"),
+                    updatedAt = o.optLong("updatedAt")
                 )
             }.getOrNull() }
 
