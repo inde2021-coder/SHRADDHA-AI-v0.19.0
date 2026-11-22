@@ -1,6 +1,9 @@
 package `in`.shraddha.ai.link
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,4 +21,38 @@ class DeviceFrameValidationTest {
     @Test fun rejectsOversizedJpegFrames() {
         assertFalse(DeviceFrameValidation.isValidJpeg(ByteArray(DeviceFrameValidation.MAX_JPEG_BYTES + 1)))
     }
+
+    @Test fun encryptedVisualFrameSurvivesRelayEnvelopeAndRetainsAuthenticatedFields() {
+        val nonce = ByteArray(12) { it.toByte() }
+        val ciphertext = ByteArray(32) { (it + 1).toByte() }
+        val senderPacket = DeviceFrameValidation.encodeForRelay(2, "target-device", 42L, nonce, ciphertext)
+        val targetLength = senderPacket[1].toInt() and 0xff
+        val opaquePayload = senderPacket.copyOfRange(2 + targetLength, senderPacket.size)
+        val source = "source-device".toByteArray(Charsets.UTF_8)
+        val relayPacket = byteArrayOf(source.size.toByte()) + source + byteArrayOf(senderPacket[0]) + opaquePayload
+
+        val decoded = DeviceFrameValidation.decodeFromRelay(relayPacket)
+        assertTrue(decoded != null)
+        assertEquals("source-device", decoded!!.sourceDeviceId)
+        assertEquals(2, decoded.frameType)
+        assertEquals(42L, decoded.sequence)
+        assertArrayEquals(nonce, decoded.nonce)
+        assertArrayEquals(ciphertext, decoded.ciphertext)
+    }
+
+    @Test fun encryptedVisualFrameCodecRejectsInvalidTypeTargetSequenceAndEnvelope() {
+        val nonce = ByteArray(12)
+        val ciphertext = ByteArray(16)
+        assertThrows(IllegalArgumentException::class.java) {
+            DeviceFrameValidation.encodeForRelay(3, "peer", 1L, nonce, ciphertext)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DeviceFrameValidation.encodeForRelay(1, "", 1L, nonce, ciphertext)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DeviceFrameValidation.encodeForRelay(1, "peer", 0L, nonce, ciphertext)
+        }
+        assertFalse(DeviceFrameValidation.decodeFromRelay(byteArrayOf(0, 0x81.toByte())) != null)
+    }
+
 }
