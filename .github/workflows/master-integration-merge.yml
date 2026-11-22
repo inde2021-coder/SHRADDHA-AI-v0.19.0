@@ -115,7 +115,7 @@ jobs:
         timeout-minutes: 50
         run: |
           chmod +x ./gradlew
-          timeout --signal=TERM --kill-after=60s 45m ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest :app:assembleDebug --stacktrace
+          ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
       - name: Run Android emulator instrumentation, ONNX and app launch checks
         uses: reactivecircus/android-emulator-runner@v2
