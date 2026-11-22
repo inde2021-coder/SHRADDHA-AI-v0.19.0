@@ -61,7 +61,7 @@ class BatchProcessingEngine(
         require(batchId.matches(Regex("[A-Za-z0-9_-]{1,48}"))) { "Invalid batch ID" }
         require(records.size in 1..MAX_RECORDS) { "Batch must contain 1-$MAX_RECORDS records" }
         require(records.map { it.id }.distinct().size == records.size) { "Record IDs must be unique" }
-        records.forEach { require(it.id.isNotBlank() && it.id.length <= 120) }
+        records.forEach { require(it.id.isNotBlank() && it.id.length <= 32) { "Record IDs must be 1-32 characters" } }
 
         val key = checkpointPrefix + batchId
         val loaded = store.get(key).getOrNull().orEmpty()
@@ -107,7 +107,7 @@ class BatchProcessingEngine(
                         states.put(index, State.SUCCEEDED.name)
                         errors.put(index, JSONObject.NULL)
                     } else {
-                        val reason = (result.exceptionOrNull()?.message ?: "Processing failed").take(500)
+                        val reason = (result.exceptionOrNull()?.message ?: "Processing failed").take(24)
                         states.put(index, State.FAILED.name)
                         errors.put(index, reason)
                     }
@@ -174,7 +174,7 @@ class BatchProcessingEngine(
             "$key=${value.opt(key)?.toString().orEmpty()}"
         }
         return MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+            .take(12).joinToString("") { "%02x".format(it) }
     }
 
     companion object { const val MAX_RECORDS = 1000 }
