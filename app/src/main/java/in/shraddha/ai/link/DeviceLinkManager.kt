@@ -348,11 +348,11 @@ object DeviceLinkManager {
         return sendSharedPayload(targetDeviceId, "clipboard", requestId, "clipboard.txt", "text/plain", Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong(), digest, "clipboard_text")
     }
     fun startFileTransfer(targetDeviceId: String, requestId: String, transferId: String, fileName: String, sizeBytes: Long, chunkCount: Int, sha256: String): Boolean {
-        if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..(20_000_000L) || chunkCount !in 1..2200 || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || chunkCount != ((sizeBytes + 49151) / 49152).toInt()) return false
+        if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..(20_000_000L) || chunkCount !in 1..2200 || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || chunkCount != ((sizeBytes + 49151) / 48000).toInt()) return false
         return socket?.send(JSONObject().put("type", "file_transfer_start").put("targetDeviceId", targetDeviceId).put("requestId", requestId).put("transferId", transferId).put("fileName", fileName.take(120)).put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()).toString()) == true
     }
     fun sendFileTransferChunk(targetDeviceId: String, transferId: String, index: Int, bytes: ByteArray): Boolean {
-        if (transferId.isBlank() || index !in 0..2199 || bytes.isEmpty() || bytes.size > 49152) return false
+        if (transferId.isBlank() || index !in 0..2199 || bytes.isEmpty() || bytes.size > 48000) return false
         val payload = JSONObject().put("payload", Base64.encodeToString(bytes, Base64.NO_WRAP))
         return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_chunk", payload, transferId, index)
     }
