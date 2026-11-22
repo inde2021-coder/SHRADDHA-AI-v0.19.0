@@ -3355,7 +3355,7 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
         val base = minOf(width, height) * .285f
         if (base <= 0f) return
         val wave = (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
-        val statePulse = when (voiceState) {
+        val statePulse = if (microphoneMuted && voiceState == NovaOrbState.LISTENING) .012f else when (voiceState) {
             NovaOrbState.LISTENING -> .045f + microphoneAmplitude * .11f
             NovaOrbState.SPEAKING -> .065f + microphoneAmplitude * .10f
             NovaOrbState.THINKING -> .045f
@@ -3364,7 +3364,7 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
             NovaOrbState.IDLE -> .012f
         }
         val pulse = 1f + statePulse * wave
-        val spinRate = when (voiceState) {
+        val spinRate = if (microphoneMuted && voiceState == NovaOrbState.LISTENING) .55f else when (voiceState) {
             NovaOrbState.LISTENING -> 1.2f
             NovaOrbState.THINKING -> .68f
             NovaOrbState.SPEAKING -> 1.55f
