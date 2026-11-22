@@ -107,6 +107,7 @@ class WorkAgentActivity : AppCompatActivity() {
         browserPanel.visibility = View.GONE
         root.addView(button("← वापस") { finish() })
         setContentView(root)
+        restoreBackgroundTask()
         intent.getStringExtra("work_prompt")?.takeIf { it.isNotBlank() }?.let {
             input.setText(it)
             sendMessage()
@@ -477,7 +478,24 @@ class WorkAgentActivity : AppCompatActivity() {
     }
 
     /** Queues durable provider-backed work; WorkManager resumes it after process/app restarts. */
+    private fun restoreBackgroundTask() {
+        val saved = getSharedPreferences("shraddha_work_agent", MODE_PRIVATE)
+            .getString("active_background_work_id", null) ?: return
+        val id = runCatching { UUID.fromString(saved) }.getOrNull() ?: run {
+            getSharedPreferences("shraddha_work_agent", MODE_PRIVATE).edit().remove("active_background_work_id").apply()
+            return
+        }
+        backgroundWorkId = id
+        status.text = "Restoring background task status…"
+        observeBackgroundTask(id)
+    }
+
+    /** Queues one durable job and persists its ID so status/cancel survive Activity recreation. */
     private fun queueBackgroundTask() {
+        if (backgroundWorkId != null) {
+            addMessage("assistant", "एक background task पहले से tracked है। उसे पूरा होने दें या Stop दबाएँ।")
+            return
+        }
         val task = input.text.toString().trim().ifBlank { history.lastOrNull { it.isUser }?.text.orEmpty() }
         if (task.isBlank()) {
             addMessage("assistant", "पहले background task का विवरण लिखें।")
@@ -493,9 +511,15 @@ class WorkAgentActivity : AppCompatActivity() {
         }
         input.setText("")
         backgroundWorkId = id
+        getSharedPreferences("shraddha_work_agent", MODE_PRIVATE).edit()
+            .putString("active_background_work_id", id.toString()).apply()
         addMessage("user", "Background task queued: $task")
         addMessage("assistant", "काम सुरक्षित background queue में डाल दिया गया है। App बंद होने पर भी WorkManager इसे network उपलब्ध होने पर चलाएगा। Task ID: $id")
         status.text = "Background task queued • $provider"
+        observeBackgroundTask(id)
+    }
+
+    private fun observeBackgroundTask(id: UUID) {
         WorkManager.getInstance(applicationContext).getWorkInfoByIdLiveData(id).observe(this) { info ->
             if (info == null || isFinishing || isDestroyed) return@observe
             val stage = info.progress.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_ROLE)
@@ -506,18 +530,30 @@ class WorkAgentActivity : AppCompatActivity() {
                 androidx.work.WorkInfo.State.RUNNING -> status.text = "Background task $index/$total • ${stage ?: "Starting"}"
                 androidx.work.WorkInfo.State.SUCCEEDED -> {
                     val report = info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
-                    addMessage("assistant", "Background Multi-Agent task completed. Verifier report:\\n$report")
+                    addMessage("assistant", "Background Multi-Agent task completed. Verifier report:\n$report")
                     status.text = "Background task completed • verifier report ready"
+                    clearTrackedBackgroundTask(id)
                 }
                 androidx.work.WorkInfo.State.FAILED -> {
                     val error = info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
-                    addMessage("assistant", "Background task failed; it is not marked complete.\\n$error")
+                    addMessage("assistant", "Background task failed; it is not marked complete.\n$error")
                     status.text = "Background task failed"
+                    clearTrackedBackgroundTask(id)
                 }
-                androidx.work.WorkInfo.State.CANCELLED -> status.text = "Background task cancelled"
+                androidx.work.WorkInfo.State.CANCELLED -> {
+                    status.text = "Background task cancelled"
+                    addMessage("assistant", "Background task cancelled. Partial work is not marked complete.")
+                    clearTrackedBackgroundTask(id)
+                }
                 androidx.work.WorkInfo.State.BLOCKED -> status.text = "Background task blocked by another queued task"
             }
         }
+    }
+
+    private fun clearTrackedBackgroundTask(id: UUID) {
+        if (backgroundWorkId == id) backgroundWorkId = null
+        getSharedPreferences("shraddha_work_agent", MODE_PRIVATE).edit()
+            .remove("active_background_work_id").apply()
     }
 
     private fun stopBackgroundTask() {
@@ -529,7 +565,6 @@ class WorkAgentActivity : AppCompatActivity() {
         `in`.shraddha.ai.future.BackgroundTaskQueue.cancel(this, id)
         status.text = "Background task cancellation requested"
         addMessage("assistant", "Background task रोकने का अनुरोध भेज दिया गया है।")
-        backgroundWorkId = null
     }
 
     /** Runs five real provider-backed specialist passes and shows progress plus the verifier report. */
