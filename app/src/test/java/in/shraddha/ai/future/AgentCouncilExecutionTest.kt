@@ -3,6 +3,10 @@ package `in`.shraddha.ai.future
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Test
 
 class AgentCouncilExecutionTest {
@@ -85,6 +89,54 @@ class AgentCouncilExecutionTest {
         )
         assertTrue(result.isFailure)
         assertEquals(listOf("Planner"), calls)
+    }
+
+
+    @Test fun executeParallelRunsFoundationAndSpecialistsConcurrentlyThenCriticAndVerifier() = runBlocking {
+        val active = AtomicInteger(0)
+        val peak = AtomicInteger(0)
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val result = AgentCouncil.executeParallel(
+            goal = "Design and verify a secure multi-step automation",
+            language = "Hindi",
+            providerNames = listOf("GEMINI", "OPENAI", "GROQ"),
+            specialistCount = 3,
+            executor = { role, provider, _, prompt ->
+                assertTrue(provider in listOf("GEMINI", "OPENAI", "GROQ"))
+                if (role.name.startsWith("Specialist")) {
+                    assertTrue(prompt.contains("Planner"))
+                    assertTrue(prompt.contains("Researcher"))
+                }
+                val running = active.incrementAndGet()
+                peak.updateAndGet { old -> maxOf(old, running) }
+                delay(60)
+                calls.add(role.name)
+                active.decrementAndGet()
+                "Verified stage output: " + role.name
+            }
+        ).getOrThrow()
+
+        assertTrue("Planner and Researcher must overlap", peak.get() >= 2)
+        assertEquals(7, result.stages.size)
+        assertEquals("Critic", result.stages[result.stages.size - 2].role)
+        assertEquals("Verifier", result.stages.last().role)
+        assertTrue(result.stages.take(2).map { it.role }.containsAll(listOf("Planner", "Researcher")))
+        assertEquals("Verified stage output: Verifier", result.finalAnswer)
+        val firstSpecialist = calls.indexOfFirst { it.startsWith("Specialist") }
+        assertTrue(firstSpecialist >= 2)
+        assertTrue(calls.indexOf("Critic") > calls.indexOfLast { it.startsWith("Specialist") })
+        assertTrue(calls.indexOf("Verifier") > calls.indexOf("Critic"))
+    }
+
+    @Test fun executeParallelRejectsInvalidSpecialistCountAndProviderList() = runBlocking {
+        val invalidCount = runCatching {
+            AgentCouncil.executeParallel("Goal", providerNames = listOf("GEMINI"), specialistCount = 0) { _, _, _, _ -> "ok" }
+        }
+        assertTrue(invalidCount.isFailure)
+        val invalidProvider = runCatching {
+            AgentCouncil.executeParallel("Goal", providerNames = listOf("UNKNOWN"), specialistCount = 1) { _, _, _, _ -> "ok" }
+        }
+        assertTrue(invalidProvider.isFailure)
     }
 
     @Test fun rejectsBlankGoalsAndBoundsTheStoredGoal() {
