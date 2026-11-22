@@ -134,6 +134,18 @@ class SharedTaskScheduler(
         return transition(taskId, State.FAILED, reason.take(500))
     }
 
+    /** Fail a task that was persisted before its adapter claimed it; never auto-execute it. */
+    @Synchronized
+    fun failPending(taskId: String, reason: String): Snapshot {
+        require(reason.isNotBlank()) { "Failure reason is required" }
+        val current = requireTask(taskId)
+        require(current.state == State.PENDING) { "Only pending tasks can be failed before claim" }
+        return current.copy(state = State.FAILED, error = reason.take(500)).also {
+            entries[taskId] = it
+            notifyChanged()
+        }
+    }
+
     /** Cancellation is explicit; running work must also be stopped by its execution adapter. */
     @Synchronized
     fun cancel(taskId: String): Snapshot {
