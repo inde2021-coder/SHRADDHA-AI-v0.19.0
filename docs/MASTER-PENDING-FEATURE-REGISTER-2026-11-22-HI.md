@@ -177,3 +177,6 @@ The Privacy screen's old generic claims have been replaced with a source-accurat
 - OpenAI text chat now selects the currently documented gpt-5.5 model and sends max_completion_tokens rather than the deprecated max_tokens field. Provider account access, quota and live API compatibility still require later verification.
 - These are source changes only. No manual build, unit test, emulator test or live provider call has been run during this feature-completion pass.
 - API Keys screen now uses the shared layered-glass cards and raised aqua action buttons; provider key entry/reveal/remove behavior is retained.
+
+
+Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with category/request-bound AAD. The relay rejects plaintext `data_share_payload`, enforces the target's category permission and consumes the exact one-time grant. The Windows companion decrypts, verifies the bounded file and SHA-256, asks for local save approval and writes to a sanitized Downloads path. Android, relay and Windows regression tests have been added but not executed.
