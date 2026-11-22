@@ -35,6 +35,7 @@ class LiveEyesCameraService : Service() {
     @Volatile private var previousObservation = ""
     @Volatile private var stopped = false
     private var lastContextSentAt = 0L
+    @Volatile private var lastAnnouncedAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -55,6 +56,7 @@ class LiveEyesCameraService : Service() {
         }
         closeCamera()
         previousObservation = ""
+        lastAnnouncedAt = 0L
         openHeadlessCamera(config.baseUrl, config.gatewayToken)
         return START_NOT_STICKY
     }
