@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -77,13 +78,12 @@ fun ExpertStudioScreen(navController: NavController) {
     var expandedEntry by remember { mutableStateOf<ExpertProjectLibrary.Entry?>(null) }
 
     LaunchedEffect(Unit) {
-        gatewayConfigured = VoiceGatewaySettings.isConfigured(context)
+        gatewayConfigured = withContext(Dispatchers.IO) { VoiceGatewaySettings.isConfigured(context) }
         library = withContext(Dispatchers.IO) {
             ExpertProjectLibrary(context).load().getOrDefault(emptyList())
         }
-        provider = EXPERT_PROVIDERS.firstOrNull {
-            it == provider
-        } ?: EXPERT_PROVIDERS.first()
+        val preferred = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").trim().uppercase()
+        provider = preferred.takeIf { it in EXPERT_PROVIDERS } ?: EXPERT_PROVIDERS.first()
     }
 
     fun saveResult(title: String, content: String, workspace: String, task: String, usedProvider: String) {
@@ -245,11 +245,12 @@ fun ExpertStudioScreen(navController: NavController) {
                 }
             }
             Text("The selected provider must also be enabled on your secure backend.", color = colors.textTertiary, fontSize = 10.sp)
+            Text("Medical output is educational only; legal output is general information; engineering/civil work is conceptual and is not professional certification.", color = colors.textSecondary, fontSize = 10.sp)
         }
 
         NovaGlassCard {
             Text("EXPERT DOMAIN", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            EXPERT_DOMAINS.chunked(5).forEach { row ->
+            EXPERT_DOMAINS.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     row.forEach { item ->
                         FilterChip(
@@ -299,15 +300,17 @@ fun ExpertStudioScreen(navController: NavController) {
                 )
             }
             Text("COMPARE PROVIDERS", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                EXPERT_PROVIDERS.forEach { item ->
-                    FilterChip(
-                        selected = item in compareSelection,
-                        onClick = {
-                            compareSelection = if (item in compareSelection) compareSelection - item else compareSelection + item
-                        },
-                        label = { Text(item, fontSize = 9.sp) }
-                    )
+            EXPERT_PROVIDERS.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { item ->
+                        FilterChip(
+                            selected = item in compareSelection,
+                            onClick = {
+                                compareSelection = if (item in compareSelection) compareSelection - item else compareSelection + item
+                            },
+                            label = { Text(item, fontSize = 9.sp) }
+                        )
+                    }
                 }
             }
             NovaButton(
