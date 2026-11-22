@@ -155,7 +155,8 @@ class MainBrain(
             provider: String,
             specialistCount: Int = 3,
             shouldContinue: () -> Boolean,
-            onProgress: (String, Int, Int) -> Unit
+            onProgress: (String, Int, Int) -> Unit,
+            onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> }
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeParallelWithConfiguredProviders(
                 context = context.applicationContext,
@@ -164,7 +165,8 @@ class MainBrain(
                 preferredProviders = provider.split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() },
                 specialistCount = specialistCount,
                 shouldContinue = shouldContinue,
-                onProgress = onProgress
+                onProgress = onProgress,
+                onStageCompleted = onStageCompleted
             )
 
         /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
