@@ -69,7 +69,7 @@ test('remote action envelopes require a unique opaque id and allowlisted action'
 test('advanced consent-gated PC companion actions are relayed only from the explicit allowlist', () => {
   for (const kind of [
     'tap','swipe','scroll','back','home','type','click_text','open_app','ocr',
-    'file_list','file_read','file_search','offline_chat','code_assistant',
+    'file_list','file_read','file_search','file_write','offline_chat','code_assistant',
     'media_control','system_control','screenshot','clipboard_transform','web_search'
   ]) {
     assert.equal(ALLOWED_REMOTE_ACTION_KINDS.has(kind), true, kind);
