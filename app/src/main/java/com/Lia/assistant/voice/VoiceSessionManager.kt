@@ -138,7 +138,7 @@ object VoiceSessionManager {
         _statusText.value = if (isResuming) "Reconnecting..." else "Connecting..."
 
         val ephemeralToken = try {
-            VoiceGatewaySettings.fetchEphemeralToken(currentContext)
+            `in`.shraddha.ai.future.MainBrainProviderGateway.fetchLiveVoiceToken(currentContext)
         } catch (error: Exception) {
             if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
             val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
