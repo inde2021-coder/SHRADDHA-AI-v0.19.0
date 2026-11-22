@@ -169,6 +169,21 @@ class SharedTaskScheduler(
             entries[safe.task.id] = safe
             sequence = maxOf(sequence, safe.submittedOrder)
         }
+        var propagatedFailure: Boolean
+        do {
+            propagatedFailure = false
+            entries.values.toList().forEach { item ->
+                if (item.state == State.PENDING && item.task.dependsOn.any { dependency ->
+                        entries[dependency]?.state in setOf(State.FAILED, State.CANCELLED)
+                    }) {
+                    entries[item.task.id] = item.copy(
+                        state = State.FAILED,
+                        error = "A dependency did not complete; this task was not resumed."
+                    )
+                    propagatedFailure = true
+                }
+            }
+        } while (propagatedFailure)
         notifyChanged()
     }
 
