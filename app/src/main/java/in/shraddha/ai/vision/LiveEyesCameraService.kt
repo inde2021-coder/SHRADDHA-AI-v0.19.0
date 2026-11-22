@@ -113,7 +113,7 @@ class LiveEyesCameraService : Service() {
                     lastAnalysisAt = now
                     val context = previousObservation.takeLast(900)
                     val prompt = buildString {
-                        append("You are Shraddha AI's live visual eyes. Describe only what is clearly visible in this current camera view. ")
+                        append("You are " + assistantName() + "'s live visual eyes. Describe only what is clearly visible in this current camera view. ")
                         append("Identify useful objects, people only by visible non-sensitive context, text/signs, surroundings and safety-relevant changes. ")
                         append("Compare with the previous observation when useful; do not invent movement or details. ")
                         if (context.isNotBlank()) append("Previous observation: ").append(context).append(". ")
