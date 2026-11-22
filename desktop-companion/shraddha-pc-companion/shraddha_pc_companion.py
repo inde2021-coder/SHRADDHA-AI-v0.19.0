@@ -984,7 +984,7 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             if kind == "file_search":
                 return json.dumps({"status": "file_search", "matches": search_safe_text_files(file_root, action.get("path", ""), action["query"], action.get("limit", 20))}, ensure_ascii=False)
             if kind == "file_write":
-                preview = action["content"][:400].replace("\\n", " ")
+                preview = action["content"][:400].replace("\n", " ")
                 if not await asyncio.to_thread(confirm, f"Create/update {action['path']!r} under approved root? overwrite={action.get('overwrite', False)}. Backup is created before overwrite. Preview: {preview!r}"):
                     return "file_write_rejected_by_pc_user"
                 result = write_safe_text_file(file_root, action["path"], action["content"], action.get("overwrite", False))
