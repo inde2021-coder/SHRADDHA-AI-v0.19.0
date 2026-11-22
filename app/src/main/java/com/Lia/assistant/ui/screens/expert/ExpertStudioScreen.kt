@@ -230,6 +230,15 @@ fun ExpertStudioScreen(navController: NavController) {
                 Text("Expert tools do not run in demo mode. Add the HTTPS backend URL and gateway token in Settings first.", color = colors.textSecondary, fontSize = 11.sp)
                 NovaButton("Open Settings", onClick = { navController.navigate("settings") }, type = NovaButtonType.SECONDARY)
             }
+            NovaButton(
+                text = "Refresh Backend Status",
+                onClick = {
+                    scope.launch {
+                        gatewayConfigured = withContext(Dispatchers.IO) { VoiceGatewaySettings.isConfigured(context) }
+                    }
+                },
+                type = NovaButtonType.TEXT
+            )
         }
 
         NovaGlassCard {
