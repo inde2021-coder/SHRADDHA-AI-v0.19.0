@@ -28,9 +28,11 @@ class CouncilEvidenceStore(context: Context) {
         role: String,
         provider: String,
         output: String,
+        attempt: Int = 0,
         completedAt: Long = System.currentTimeMillis()
     ): Result<Unit> = runCatching {
-        val roleToken = role.lowercase().replace(Regex("[^a-z0-9_-]"), "_").take(20)
+        require(attempt in 0..99) { "Council attempt is out of range." }
+        val roleToken = role.lowercase().replace(Regex("[^a-z0-9_-]"), "_").take(12)
         require(roleToken.isNotBlank()) { "Council role is missing." }
         require(output.isNotBlank() && output.length <= 9_000) { "Council stage output is empty or too large." }
         val record = JSONObject()
@@ -42,7 +44,7 @@ class CouncilEvidenceStore(context: Context) {
             .put("output", output)
             .put("status", "COMPLETED")
             .put("completedAt", completedAt)
-        store.put(prefix(taskId) + roleToken, record.toString()).getOrThrow()
+        store.put(prefix(taskId) + roleToken + "_a" + attempt, record.put("attempt", attempt).toString()).getOrThrow()
     }
 
     fun saveStatus(
@@ -50,8 +52,10 @@ class CouncilEvidenceStore(context: Context) {
         status: String,
         message: String,
         finalAnswer: String? = null,
+        attempt: Int = 0,
         updatedAt: Long = System.currentTimeMillis()
     ): Result<Unit> = runCatching {
+        require(attempt in 0..99) { "Council attempt is out of range." }
         val allowed = setOf("QUEUED", "RUNNING", "RETRY_PENDING", "COMPLETED", "FAILED", "CANCELLED")
         require(status in allowed) { "Unsupported council task status." }
         val record = JSONObject()
@@ -59,6 +63,7 @@ class CouncilEvidenceStore(context: Context) {
             .put("taskId", taskToken(taskId))
             .put("status", status)
             .put("message", message.take(1_000))
+            .put("attempt", attempt)
             .put("updatedAt", updatedAt)
         if (finalAnswer != null) record.put("finalAnswer", finalAnswer.take(9_000))
         store.put(prefix(taskId) + "status", record.toString()).getOrThrow()
