@@ -176,3 +176,4 @@ The Privacy screen's old generic claims have been replaced with a source-accurat
 - Voice screen now exposes one microphone ON/OFF action rather than separate mute/stop controls. Setup-incomplete states do not show an inert microphone action; the screen close action only dismisses the screen.
 - OpenAI text chat now selects the currently documented gpt-5.5 model and sends max_completion_tokens rather than the deprecated max_tokens field. Provider account access, quota and live API compatibility still require later verification.
 - These are source changes only. No manual build, unit test, emulator test or live provider call has been run during this feature-completion pass.
+- API Keys screen now uses the shared layered-glass cards and raised aqua action buttons; provider key entry/reveal/remove behavior is retained.
