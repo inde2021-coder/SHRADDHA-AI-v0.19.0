@@ -25,6 +25,9 @@ concurrency:
 jobs:
   merge-and-test:
     runs-on: ubuntu-24.04
+    # Hosted runners may not expose KVM. Explicitly permit QEMU TCG when the action disables hardware acceleration.
+    env:
+      ANDROID_I_WANT_MY_TCG: "yes"
     timeout-minutes: 120
     steps:
       - name: Checkout full history
@@ -150,7 +153,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          emulator-boot-timeout: 1200
+          emulator-boot-timeout: 1800
           cores: 4
           ram-size: 4096M
           disk-size: 4096M
