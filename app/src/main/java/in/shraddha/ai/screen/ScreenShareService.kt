@@ -18,6 +18,8 @@ import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import `in`.shraddha.ai.link.DeviceLinkManager
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import java.io.ByteArrayOutputStream
 
 /** User-started screen sharing. Android's MediaProjection consent dialog is required every session. */
@@ -50,14 +52,15 @@ class ScreenShareService : Service() {
     }
 
     private fun createNotification() {
+        val assistantName = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
         val channelId = "shraddha_screen_share"
         if (Build.VERSION.SDK_INT >= 26) {
-            val channel = NotificationChannel(channelId, "Shraddha live screen sharing", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, "$assistantName live screen sharing", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Shraddha AI screen sharing is active")
-            .setContentText("Your screen is being shared with the selected paired device. Stop it in Shraddha AI to end.")
+            .setContentTitle("$assistantName screen sharing is active")
+            .setContentText("Your screen is being shared with the selected paired device. Stop it in $assistantName to end.")
             .setSmallIcon(android.R.drawable.ic_menu_view).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(41, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         else startForeground(41, notification)
