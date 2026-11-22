@@ -35,20 +35,30 @@ object MainBrainProviderGateway {
     suspend fun fetchLiveVoiceToken(context: Context): String =
         VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
 
-    fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
+    fun reply(
+        context: Context,
+        providerName: String,
+        systemInstruction: String,
+        history: List<ChatTurn>
+    ): ChatReplyResult {
         val provider = providerName.uppercase()
-        require(provider in supportedProviders) { "Unsupported AI provider: $provider" }
-        val turns = listOf(ChatTurn(true, prompt.take(8_000)))
-        val response = if (provider == "GEMINI") {
-            val key = ApiKeyStore.getKey(context)
-            require(key.isNotBlank()) { "GEMINI API key is missing." }
-            GeminiTextClient.reply(key, systemInstruction.take(8_000), turns)
+        if (provider !in supportedProviders) return ChatReplyResult.Error("Unsupported AI provider: $provider")
+        if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
+        val boundedHistory = history.takeLast(40).map { it.copy(text = it.text.take(8_000)) }
+        return if (provider == "GEMINI") {
+            val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
+                return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: ${it.message}")
+            }
+            if (key.isBlank()) ChatReplyResult.Error("GEMINI API key is missing.")
+            else GeminiTextClient.reply(key, systemInstruction.take(8_000), boundedHistory)
         } else {
-            MultiProviderChatClient.reply(context, provider, systemInstruction, turns)
-        }
-        return when (response) {
-            is ChatReplyResult.Success -> response.text
-            is ChatReplyResult.Error -> error("$provider provider error: ${response.message}")
+            MultiProviderChatClient.reply(context, provider, systemInstruction.take(8_000), boundedHistory)
         }
     }
+
+    fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String =
+        when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
+            is ChatReplyResult.Success -> result.text
+            is ChatReplyResult.Error -> error("$providerName provider error: ${result.message}")
+        }
 }
