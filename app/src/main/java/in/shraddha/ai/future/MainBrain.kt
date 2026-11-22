@@ -313,10 +313,10 @@ class MainBrain(
             audit = audit,
             beforeExecute = { workflowId, action ->
                 // Durable write-ahead journal is mandatory for app-backed Operator execution.
-                actionJournal?.begin(workflowId, action) ?: false
+                actionJournal?.begin(workflowId, action) ?: (appContext == null)
             },
             afterExecute = { workflowId, action, verified ->
-                actionJournal?.finish(workflowId, action, verified) ?: false
+                actionJournal?.finish(workflowId, action, verified) ?: (appContext == null)
             }
         )
         bridges[request.id] = bridge
