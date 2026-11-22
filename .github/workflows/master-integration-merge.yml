@@ -120,7 +120,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
-      - name: Explicitly install Android Emulator and API 35 x86_64 system image
+      - name: Explicitly install Android Emulator and API 30 x86_64 system image
         shell: bash
         run: |
           set -euo pipefail
@@ -145,23 +145,23 @@ jobs:
             "platform-tools" \
             "emulator" \
             "platforms;android-35" \
-            "system-images;android-35;default;x86_64"
+            "system-images;android-30;default;x86_64"
           "$ANDROID_HOME/emulator/emulator" -version
           "$ANDROID_HOME/platform-tools/adb" version
 
       - name: Run Android emulator instrumentation, ONNX and app launch checks
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
           emulator-boot-timeout: 1800
-          cores: 4
-          ram-size: 4096M
+          cores: 2
+          ram-size: 2048M
           disk-size: 4096M
           arch: x86_64
           target: default
           profile: pixel_2
           disable-animations: true
-          # KVM-backed x86_64 emulator; allocate enough guest resources to complete first boot.
+          # Use a lean API 30 x86_64 image with bounded guest resources; API 30 is within the app's minSdk/target compatibility range.
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot-load -no-snapshot-save -noaudio -no-boot-anim -camera-back none -camera-front none
           pre-emulator-launch-script: adb start-server
           script: bash .github/scripts/android-onnx-smoke.sh
