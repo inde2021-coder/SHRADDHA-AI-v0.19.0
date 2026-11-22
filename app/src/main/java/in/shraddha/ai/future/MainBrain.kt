@@ -94,17 +94,34 @@ class MainBrain(
                     .put("message", "Main Brain is executing a higher-priority task. Please retry after it finishes.")
                     .put("task_id", submitted.task.id)
             }
+            val journal = `in`.shraddha.ai.operator.VoiceToolActionJournal(context.applicationContext)
+            if (!journal.begin(taskId, toolName)) {
+                runCatching { scheduler.fail(taskId, "Encrypted voice action journal could not be committed; action was not executed.") }
+                return JSONObject().put("status", "error")
+                    .put("action", "voice_action_journal_unavailable")
+                    .put("message", "सुरक्षित action journal save नहीं हुई; कोई action execute नहीं किया गया।")
+            }
             return try {
                 val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args, withinMainBrainTask = true)
-                scheduler.complete(taskId)
-                result
+                if (!journal.finish(taskId, result)) {
+                    runCatching { scheduler.fail(taskId, "Action result could not be durably journaled; automatic replay is prohibited.") }
+                    JSONObject().put("status", "verification_pending")
+                        .put("action", "voice_action_result_not_journaled")
+                        .put("message", "Action execute हो सकता है, लेकिन उसका result सुरक्षित रूप से save नहीं हुआ। इसे दोबारा अपने-आप नहीं चलाया जाएगा; target app में जाँच करें।")
+                } else {
+                    scheduler.complete(taskId)
+                    result
+                }
             } catch (cancelled: CancellationException) {
-                runCatching { scheduler.cancel(taskId) }
+                runCatching { scheduler.fail(taskId, "Voice action interrupted; journal remains for manual review.") }
                 throw cancelled
             } catch (error: Exception) {
-                runCatching { scheduler.fail(taskId, error.message ?: "Voice tool failed") }
-                JSONObject().put("status", "error")
+                val failed = JSONObject().put("status", "error")
+                    .put("action", "voice_tool_failed")
                     .put("message", error.localizedMessage ?: "Main Brain tool execution failed.")
+                if (journal.finish(taskId, failed)) runCatching { scheduler.fail(taskId, error.message ?: "Voice tool failed") }
+                else runCatching { scheduler.fail(taskId, "Voice tool failed and its result could not be journaled; review required.") }
+                failed
             }
         }
 
