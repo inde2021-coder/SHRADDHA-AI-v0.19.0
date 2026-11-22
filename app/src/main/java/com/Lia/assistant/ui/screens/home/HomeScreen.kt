@@ -212,9 +212,9 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniFeature("🧠", "Memory") { navController.navigate("personality") }
-            MiniFeature("🤖", "Multiple AI") { navController.navigate("settings") }
-            MiniFeature("📱", "Phone ↔ PC") { navController.navigate("quick_actions") }
+            MiniFeature("🧠", "Memory", Modifier.weight(1f)) { navController.navigate("personality") }
+            MiniFeature("🤖", "Multiple AI", Modifier.weight(1f)) { navController.navigate("settings") }
+            MiniFeature("📱", "Phone ↔ PC", Modifier.weight(1f)) { navController.navigate("quick_actions") }
         }
         Spacer(Modifier.height(14.dp))
     }
@@ -283,9 +283,9 @@ private fun HomeActionButton(emoji: String, label: String, modifier: Modifier = 
 }
 
 @Composable
-private fun MiniFeature(emoji: String, label: String, onClick: () -> Unit) {
+private fun MiniFeature(emoji: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        Modifier.weightedMini().clip(RoundedCornerShape(15.dp)).background(Color(0xCC132641))
+        modifier.clip(RoundedCornerShape(15.dp)).background(Color(0xCC132641))
             .border(1.dp, Color(0x5576CFFF), RoundedCornerShape(15.dp))
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -296,4 +296,3 @@ private fun MiniFeature(emoji: String, label: String, onClick: () -> Unit) {
     }
 }
 
-private fun Modifier.weightedMini(): Modifier = this.then(Modifier.fillMaxWidth())
