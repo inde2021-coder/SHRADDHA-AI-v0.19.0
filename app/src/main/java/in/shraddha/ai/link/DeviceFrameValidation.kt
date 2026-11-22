@@ -55,15 +55,15 @@ internal object DeviceFrameValidation {
         val buffer = ByteBuffer.wrap(packet).order(ByteOrder.BIG_ENDIAN)
         val sourceLength = buffer.get().toInt() and 0xff
         require(sourceLength in 1..MAX_DEVICE_ID_BYTES && buffer.remaining() >= sourceLength + 1 + SEQUENCE_BYTES + NONCE_BYTES + GCM_TAG_BYTES)
-        val sourceBytes = ByteArray(sourceLength).also(buffer::get)
+        val sourceBytes = ByteArray(sourceLength).also { buffer.get(it) }
         val sourceId = sourceBytes.toString(Charsets.UTF_8)
         require(sourceId.isNotBlank() && sourceId.none { it.isISOControl() })
         val encodedType = buffer.get().toInt() and 0xff
         require(encodedType == 0x81 || encodedType == 0x82)
         val sequence = buffer.long
         require(sequence > 0)
-        val nonce = ByteArray(NONCE_BYTES).also(buffer::get)
-        val ciphertext = ByteArray(buffer.remaining()).also(buffer::get)
+        val nonce = ByteArray(NONCE_BYTES).also { buffer.get(it) }
+        val ciphertext = ByteArray(buffer.remaining()).also { buffer.get(it) }
         require(ciphertext.size in GCM_TAG_BYTES..(MAX_JPEG_BYTES + GCM_TAG_BYTES))
         RelayedFrame(sourceId, encodedType and 0x7f, sequence, nonce, ciphertext)
     }.getOrNull()
