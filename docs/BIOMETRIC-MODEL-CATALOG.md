@@ -22,7 +22,7 @@ Models are downloaded only after the user taps the corresponding button. Files a
 - SHA-256: `c59760b0a30dd905e3757cbb9ddf5dde22f9a099dc3e74de77c263cbb202e67c`
 - Model card size: approximately 42.3 MB
 - License: Apache-2.0; derived from SpeechBrain's `spkrec-ecapa-voxceleb`. Preserve attribution and the license.
-- Input contract: float32 `[1, samples]`, mono 16 kHz waveform. The ONNX graph includes the 80-band filterbank and normalization. Output is a 192-dimensional embedding compared with cosine similarity.
+- Input contract: `waveform` float32 `[1, samples]`, mono 16 kHz audio. The ONNX graph includes the 80-band filterbank and normalization. Output: `embedding`, float32 192-dimensional vector compared with cosine similarity. The Android adapter must use these exact tensor names.
 - Training data: VoxCeleb 1 and 2, mostly English public-figure interviews. Accent, language, age, microphone and room conditions can materially affect similarity.
 - Similarity is not proof of identity. Do not use it as sole authentication, access control, attendance enforcement or other high-stakes decision.
 
