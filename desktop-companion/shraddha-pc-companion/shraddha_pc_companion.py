@@ -151,7 +151,12 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return False
     if kind in {"offline_chat", "code_assistant"}:
         prompt = action.get("prompt")
-        return offline_model is not None and isinstance(prompt, str) and 0 < len(prompt.strip()) <= 4000
+        if offline_model is None or not isinstance(prompt, str) or not 0 < len(prompt.strip()) <= 4000:
+            return False
+        if kind == "code_assistant" and "path" in action:
+            relative = action.get("path")
+            return bool(file_root) and isinstance(relative, str) and 0 < len(relative) <= 500
+        return True
     if kind == "open_app":
         name = action.get("name")
         return isinstance(name, str) and name.strip().casefold() in {"notepad", "calculator", "paint", "file explorer", "explorer", "task manager", "settings", "edge", "chrome", "powershell", "terminal"}
@@ -926,12 +931,22 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
             return "blocked_ui_automation_unavailable"
     if kind in {"offline_chat", "code_assistant"}:
         prompt = action["prompt"].strip()
+        if kind == "code_assistant" and action.get("path"):
+            try:
+                file_context = await asyncio.to_thread(read_safe_text_file, file_root, action["path"])
+            except Exception as exc:
+                return "code_context_read_failed: " + str(exc)[:180]
+            prompt += "\n\nCURRENT APPROVED PROJECT FILE (read-only context; do not assume it has been changed):\n"
+            prompt += file_context[:12000]
+            if len(file_context) > 12000:
+                prompt += "\n[File context truncated at 12,000 characters.]"
         if not await asyncio.to_thread(confirm, "Run this prompt on the local offline PC model? " + prompt[:160]):
             return "offline_ai_request_rejected_by_pc_user"
         system_prompt = (
             "You are Shraddha AI Code Assistant running locally on this PC without network access. "
-            "Explain, write and debug code carefully. Prefer minimal safe patches, identify assumptions, "
-            "and never claim to have changed files or run tests unless tools actually did so."
+            "Explain, write and debug code carefully. If a current file is supplied, preserve its intent and return a complete revised file or a minimal patch as requested. "
+            "State assumptions and risks. Never claim to have changed files or run tests unless tools actually did so. "
+            "Your response is a proposal only; file changes require a separate approved file_write action."
             if kind == "code_assistant" else
             "You are Shraddha AI running locally on this PC without network access. Be accurate, concise, and state uncertainty. Never claim to have performed external actions."
         )
@@ -943,7 +958,7 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=900 if kind == "code_assistant" else 600
+                max_tokens=1800 if kind == "code_assistant" else 600
             )
             answer = result.get("choices", [{}])[0].get("message", {}).get("content", "")
             if not isinstance(answer, str) or not answer.strip():
