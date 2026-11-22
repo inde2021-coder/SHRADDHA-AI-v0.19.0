@@ -186,7 +186,7 @@ class DeviceTransferActivity : Activity() {
         when (msg.optString("type")) {
             "connected" -> if (sourcePeer.isNotBlank() && transferId.isNotBlank()) resumeTransfer()
             "data_share_result" -> if (msg.optString("requestId") == requestId) {
-                if (msg.optBoolean("approved")) beginSend() else status.text = "Receiver denied Documents access."
+                if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
                 sourcePeer = msg.optString("fromDeviceId"); transferId = msg.optString("transferId")
@@ -197,7 +197,7 @@ class DeviceTransferActivity : Activity() {
                 if (incomingSize !in 1L..(100L * 1024 * 1024) || incomingCount !in 1..2200 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
-                    .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected") }
+                    .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
                     .setPositiveButton("Choose save location") { _, _ ->
                         val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
                         incomingFile = File(inbox, "recv_$transferId.part")
@@ -214,14 +214,14 @@ class DeviceTransferActivity : Activity() {
                     status.text = "Receiver selected a destination. Sending file chunks…"
                     startSending(emptyList())
                 } else if (index >= 0) { lastAck = maxOf(lastAck, index); status.text = "Receiver acknowledged chunk ${index + 1}." }
-                if (msg.optBoolean("complete")) status.text = "Receiver verified and saved file successfully."
+                if (msg.optBoolean("complete")) { status.text = "Receiver verified and saved file successfully."; clearTransferState() }
             }
             "file_transfer_resume" -> {
                 val array = msg.optJSONArray("missingIndexes") ?: return
                 val indexes = (0 until array.length()).map { array.optInt(it, -1) }.filter { it >= 0 }
                 if (indexes.isNotEmpty()) startSending(indexes) else status.text = "Receiver reports no missing chunks."
             }
-            "file_transfer_cancel" -> status.text = "Transfer cancelled: ${msg.optString("reason")}"
+            "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
         }
     }
 
@@ -333,6 +333,9 @@ class DeviceTransferActivity : Activity() {
             }
         }
         status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
+        if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
+            verifyIncoming()
+        }
         if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
             runCatching { saveIncoming(pendingSaveUri!!) }
                 .onFailure { status.text = "Verified file restored. Re-select the save destination to finish." }
