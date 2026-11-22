@@ -89,6 +89,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.compose.ui:ui")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.ui:ui-graphics")
