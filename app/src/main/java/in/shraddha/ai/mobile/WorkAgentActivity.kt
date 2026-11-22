@@ -24,6 +24,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.work.WorkManager
+import java.util.UUID
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.voice.ChatReplyResult
@@ -54,6 +56,7 @@ class WorkAgentActivity : AppCompatActivity() {
     private var pageText = ""
     private var currentUrl = ""
     private var busy = false
+    private var backgroundWorkId: UUID? = null
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private val voiceResultLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -136,6 +139,12 @@ class WorkAgentActivity : AppCompatActivity() {
         chatPanel.addView(button("🤖 Multi-Agent Team • Planner → Researcher → Builder → Critic → Verifier") {
             runMultiAgentTask()
         })
+        val backgroundActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        backgroundActions.addView(button("Queue Background Task") { queueBackgroundTask() },
+            LinearLayout.LayoutParams(0, dp(44), 1f))
+        backgroundActions.addView(button("Stop Background Task") { stopBackgroundTask() },
+            LinearLayout.LayoutParams(0, dp(44), 1f))
+        chatPanel.addView(backgroundActions)
         addMessage("assistant", "नमस्ते! मैं आपके साथ वेबसाइट और फोन ऐप पर काम करने के लिए तैयार हूँ। पहले बताइए क्या करना है।")
     }
 
@@ -465,6 +474,62 @@ class WorkAgentActivity : AppCompatActivity() {
                     addMessage("assistant", "$fileName डाउनलोड queue में जोड़ी गई। Android notification में progress देखें।")
                 }.onFailure { pageStatus.text = "Download शुरू नहीं हुआ: ${it.message}" }
             }.show()
+    }
+
+    /** Queues durable provider-backed work; WorkManager resumes it after process/app restarts. */
+    private fun queueBackgroundTask() {
+        val task = input.text.toString().trim().ifBlank { history.lastOrNull { it.isUser }?.text.orEmpty() }
+        if (task.isBlank()) {
+            addMessage("assistant", "पहले background task का विवरण लिखें।")
+            return
+        }
+        val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
+        val language = NovaPreferences.getString(this, NovaPreferences.Keys.LANGUAGE, "AUTO")
+        val id = try {
+            `in`.shraddha.ai.future.BackgroundTaskQueue.enqueue(this, task, provider, language)
+        } catch (error: Exception) {
+            addMessage("assistant", "Background task queue नहीं हुआ: ${error.message}")
+            return
+        }
+        input.setText("")
+        backgroundWorkId = id
+        addMessage("user", "Background task queued: $task")
+        addMessage("assistant", "काम सुरक्षित background queue में डाल दिया गया है। App बंद होने पर भी WorkManager इसे network उपलब्ध होने पर चलाएगा। Task ID: $id")
+        status.text = "Background task queued • $provider"
+        WorkManager.getInstance(applicationContext).getWorkInfoByIdLiveData(id).observe(this) { info ->
+            if (info == null || isFinishing || isDestroyed) return@observe
+            val stage = info.progress.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_ROLE)
+            val index = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_INDEX, 0)
+            val total = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_TOTAL, 5)
+            when (info.state) {
+                androidx.work.WorkInfo.State.ENQUEUED -> status.text = "Background task waiting for network…"
+                androidx.work.WorkInfo.State.RUNNING -> status.text = "Background task $index/$total • ${stage ?: "Starting"}"
+                androidx.work.WorkInfo.State.SUCCEEDED -> {
+                    val report = info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
+                    addMessage("assistant", "Background Multi-Agent task completed. Verifier report:\\n$report")
+                    status.text = "Background task completed • verifier report ready"
+                }
+                androidx.work.WorkInfo.State.FAILED -> {
+                    val error = info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
+                    addMessage("assistant", "Background task failed; it is not marked complete.\\n$error")
+                    status.text = "Background task failed"
+                }
+                androidx.work.WorkInfo.State.CANCELLED -> status.text = "Background task cancelled"
+                androidx.work.WorkInfo.State.BLOCKED -> status.text = "Background task blocked by another queued task"
+            }
+        }
+    }
+
+    private fun stopBackgroundTask() {
+        val id = backgroundWorkId
+        if (id == null) {
+            addMessage("assistant", "इस screen पर कोई background task चुना नहीं गया है।")
+            return
+        }
+        `in`.shraddha.ai.future.BackgroundTaskQueue.cancel(this, id)
+        status.text = "Background task cancellation requested"
+        addMessage("assistant", "Background task रोकने का अनुरोध भेज दिया गया है।")
+        backgroundWorkId = null
     }
 
     /** Runs five real provider-backed specialist passes and shows progress plus the verifier report. */
