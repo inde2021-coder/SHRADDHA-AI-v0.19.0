@@ -47,7 +47,7 @@ import com.Lia.assistant.ui.fx.LiaOrb3D
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
-import in.shraddha.ai.R
+import `in`.shraddha.ai.R
 
 private val NeonBlue = Color(0xFF36D8FF)
 private val NeonPurple = Color(0xFF9A55FF)
