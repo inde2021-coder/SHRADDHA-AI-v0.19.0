@@ -125,6 +125,21 @@ class SharedTaskScheduler(
         return claimed
     }
 
+    /** Completes a process-interrupted task only after its adapter proves the last action. */
+    @Synchronized
+    fun completeInterrupted(taskId: String, verified: Boolean): Snapshot {
+        require(verified) { "Interrupted tasks require explicit verified completion evidence" }
+        val current = requireTask(taskId)
+        require(current.state == State.FAILED &&
+            current.error?.startsWith("Process stopped during execution; action was not replayed.") == true) {
+            "Only an interrupted failed task can be completed through recovery"
+        }
+        return current.copy(state = State.SUCCEEDED, error = null).also {
+            entries[taskId] = it
+            notifyChanged()
+        }
+    }
+
     @Synchronized
     fun complete(taskId: String): Snapshot = transition(taskId, State.SUCCEEDED, null)
 
