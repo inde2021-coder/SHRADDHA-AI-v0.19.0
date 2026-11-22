@@ -138,10 +138,15 @@ class OperatorActivity : Activity() {
                                         selected.workflowId,
                                         manuallyVerified = !machineVerified
                                     )
-                                    val result = if (queued != null) brain.startNextWorkflow() else null
+                                    val alreadyCompleted = queued?.state == `in`.shraddha.ai.future.SharedTaskScheduler.State.SUCCEEDED
+                                    val result = if (queued != null && !alreadyCompleted) brain.startNextWorkflow() else null
                                     runOnUiThread {
-                                        if (result != null) showMainBrainResult(brain, result)
-                                        else log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\n" + log.text.take(4500)
+                                        when {
+                                            alreadyCompleted -> log.text = "Journal ने workflow के सभी चरण पूरे सत्यापित किए। कोई action दोबारा नहीं चलाया गया।\\n" + log.text.take(4500)
+                                            result != null -> showMainBrainResult(brain, result)
+                                            else -> log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\\n" + log.text.take(4500)
+                                        }
+                                    }
                                     }
                                 }.start()
                             }.show()
