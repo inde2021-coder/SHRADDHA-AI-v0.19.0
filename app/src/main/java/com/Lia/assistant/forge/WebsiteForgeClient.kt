@@ -62,6 +62,14 @@ object WebsiteForgeClient {
                 }
             }
         }
+        if (!success && ForgeController.state.value.phase != ForgePhase.FAILED) {
+            ForgeController.updateState {
+                it.copy(
+                    phase = ForgePhase.FAILED,
+                    error = "Website Forge could not complete after its retry. Please try again."
+                )
+            }
+        }
     }
 
     private suspend fun executeStream(
