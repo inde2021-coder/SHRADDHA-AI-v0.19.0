@@ -1537,11 +1537,15 @@ class MainActivity : AppCompatActivity() {
                                 else -> "Waiting for background worker."
                             }
                             councilOutput.text = "Parallel council • " + message
-                            if (info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
+                            if ((info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
                                 info.state == androidx.work.WorkInfo.State.FAILED ||
-                                info.state == androidx.work.WorkInfo.State.CANCELLED) {
+                                info.state == androidx.work.WorkInfo.State.CANCELLED) &&
+                                activeCouncilWorkId == workId) {
                                 activeCouncilWorkId = null
-                                getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().remove("active_work_id").apply()
+                                val prefs = getSharedPreferences("shraddha_agent_work", MODE_PRIVATE)
+                                if (prefs.getString("active_work_id", null) == workId.toString()) {
+                                    prefs.edit().remove("active_work_id").apply()
+                                }
                             }
                         }
                 } catch (error: Exception) {
