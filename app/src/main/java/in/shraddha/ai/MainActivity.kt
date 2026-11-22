@@ -232,7 +232,7 @@ class MainActivity : AppCompatActivity() {
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         brand.addView(TextView(this).apply {
             text = "S H R A D D H A   /   A I"
-            textSize = 11f; letterSpacing = .12f; setTextColor(0xFF9F8BFF.toInt())
+            textSize = 11f; letterSpacing = .12f; setTextColor(0xFF8CE8E7.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         brand.addView(TextView(this).apply {
@@ -251,7 +251,7 @@ class MainActivity : AppCompatActivity() {
 
         val hero = MaterialCardView(this).apply {
             radius = dp(30).toFloat(); cardElevation = dp(12).toFloat()
-            strokeWidth = dp(1); strokeColor = 0xFF6357B9.toInt()
+            strokeWidth = dp(1); strokeColor = 0xFF14505C.toInt()
             setCardBackgroundColor(0xFF11182C.toInt())
         }
         val heroBody = LinearLayout(this).apply {
@@ -259,7 +259,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1B2044.toInt(), 0xFF111B2B.toInt(), 0xFF0B1421.toInt())
+                intArrayOf(0xFF102A35.toInt(), 0xFF111B2B.toInt(), 0xFF0B1421.toInt())
             ).apply { cornerRadius = dp(30).toFloat() }
         }
         hero.addView(heroBody)
@@ -267,7 +267,7 @@ class MainActivity : AppCompatActivity() {
         val intro = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         intro.addView(TextView(this).apply {
             text = "PERSONAL AI • MULTI-AGENT"
-            textSize = 9f; letterSpacing = .12f; setTextColor(0xFF9FBCFF.toInt())
+            textSize = 9f; letterSpacing = .12f; setTextColor(0xFF68E7EA.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         intro.addView(TextView(this).apply {
@@ -358,7 +358,7 @@ class MainActivity : AppCompatActivity() {
         val accent = View(this).apply {
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF9D7BFF.toInt(), 0xFF35C9DF.toInt())
+                intArrayOf(0xFF49D8D2.toInt(), 0xFF35C9DF.toInt())
             ).apply { cornerRadius = dp(4).toFloat() }
         }
         tile.addView(accent, LinearLayout.LayoutParams(dp(4), dp(42)))
@@ -371,7 +371,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 13.5f
             letterSpacing = .02f
             maxLines = 2
-            setTextColor(0xFFF0F1FF.toInt())
+            setTextColor(0xFFEAFBFC.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         copy.addView(TextView(this).apply {
@@ -387,7 +387,7 @@ class MainActivity : AppCompatActivity() {
             text = "›"
             textSize = 27f
             gravity = android.view.Gravity.CENTER
-            setTextColor(0xFFBCA9FF.toInt())
+            setTextColor(0xFF8CE8E7.toInt())
         }, LinearLayout.LayoutParams(dp(22), -1))
         tile.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
         return tile
@@ -397,7 +397,7 @@ class MainActivity : AppCompatActivity() {
         currentPage = page
         pageRoot.removeAllViews()
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(14)) }
-        top.addView(Button(this).apply { text = "‹  Home"; isAllCaps = false; setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF283454.toInt()); setOnClickListener { showHome() } })
+        top.addView(Button(this).apply { text = "‹  Home"; isAllCaps = false; setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF173D59.toInt()); setOnClickListener { showHome() } })
         top.addView(TextView(this).apply { text = when(page) { "assistant" -> "AI ASSISTANT"; "expert" -> "EXPERT HUB"; "devices" -> "DEVICE CONTROL"; "data" -> "DATA SHARING"; "lab" -> "AI LAB"; "kids" -> "KIDS UNIVERSE"; "people" -> "PERSON MEMORY"; "cloud" -> "SECURE CLOUD SYNC"; "future" -> "FUTURE INTELLIGENCE"; else -> "PERMISSIONS" }; textSize = 13f; setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD); setPadding(dp(14), 0, 0, 0) })
         pageRoot.addView(top)
         updateBottomNavigation()
@@ -416,7 +416,7 @@ class MainActivity : AppCompatActivity() {
             assistantHero.addView(TextView(this).apply {
                 text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
-                setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
             })
             assistantHero.addView(actionButton("🎙  Speak to $assistantDisplayName", "Live Hindi / English voice session • Tap to open") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             pageRoot.addView(assistantHero)
@@ -482,7 +482,7 @@ class MainActivity : AppCompatActivity() {
             background = android.graphics.drawable.GradientDrawable().apply {
                 setColor(0xFF10182A.toInt())
                 cornerRadii = floatArrayOf(dp(18).toFloat(), dp(18).toFloat(), dp(18).toFloat(), dp(18).toFloat(), 0f, 0f, 0f, 0f)
-                setStroke(dp(1), 0xFF273653.toInt())
+                setStroke(dp(1), 0xFF173D59.toInt())
             }
             listOf(
                 Triple("⌂", "Home", "home"),
@@ -496,7 +496,7 @@ class MainActivity : AppCompatActivity() {
                     isClickable = true; isFocusable = true; setPadding(dp(4), dp(4), dp(4), dp(4))
                     addView(TextView(this@MainActivity).apply {
                         text = item.first; textSize = 19f; gravity = android.view.Gravity.CENTER
-                        setTextColor(0xFFBFAEFF.toInt())
+                        setTextColor(0xFF8CE8E7.toInt())
                     })
                     addView(TextView(this@MainActivity).apply {
                         text = item.second; textSize = 10f; gravity = android.view.Gravity.CENTER
@@ -516,9 +516,9 @@ class MainActivity : AppCompatActivity() {
         for (i in 0 until bottomNav.childCount) {
             val tab = bottomNav.getChildAt(i) as? LinearLayout ?: continue
             val selected = tab.tag == activePage
-            tab.background = if (selected) rounded(0xFF202B49.toInt(), 14) else null
+            tab.background = if (selected) rounded(0xFF12323D.toInt(), 14) else null
             for (j in 0 until tab.childCount) {
-                (tab.getChildAt(j) as? TextView)?.setTextColor(if (selected) 0xFFE3D9FF.toInt() else 0xFF9EABC2.toInt())
+                (tab.getChildAt(j) as? TextView)?.setTextColor(if (selected) 0xFFD2FCFF.toInt() else 0xFF9EABC2.toInt())
             }
         }
     }
@@ -563,7 +563,7 @@ class MainActivity : AppCompatActivity() {
             val plannerProvider = Spinner(this@MainActivity).apply {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
             }
-            addView(TextView(this@MainActivity).apply { text = "AI Task Planner"; setTextColor(0xFFBFAEFF.toInt()); textSize = 16f; setPadding(0, dp(6), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "AI Task Planner"; setTextColor(0xFF8CE8E7.toInt()); textSize = 16f; setPadding(0, dp(6), 0, dp(6)) })
             addView(plannerProvider)
             val goal = edit("Task goal", "उदाहरण: दूसरे फोन पर Chrome खोलकर मौसम वेबसाइट दिखाओ").apply { isSingleLine = false; minLines = 3 }
             addView(goal)
@@ -577,7 +577,7 @@ class MainActivity : AppCompatActivity() {
                     planResult.text = result.getOrElse { "Planner error: ${it.message}" }
                 } }
             })
-            addView(TextView(this@MainActivity).apply { text = "Multi-Model Council • एक सवाल को 2-3 AI providers से compare करें"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(14), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "Multi-Model Council • एक सवाल को 2-3 AI providers से compare करें"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(14), 0, dp(6)) })
             val councilPrompt = edit("Compare question", "किसी निर्णय या समस्या पर अलग-अलग AI राय पूछें").apply { isSingleLine = false; minLines = 2 }
             addView(councilPrompt)
             val councilProviders = CheckBox(this@MainActivity).apply { text = "Gemini"; isChecked = true; setTextColor(-1) }
@@ -595,7 +595,7 @@ class MainActivity : AppCompatActivity() {
                     councilResult.text = result.getOrElse { "Compare error: ${it.message}" }
                 } }
             })
-            addView(TextView(this@MainActivity).apply { text = "AI PROVIDER STATUS & KNOWLEDGE TOOLS"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "AI PROVIDER STATUS & KNOWLEDGE TOOLS"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val providerStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
             addView(providerStatus)
             addView(actionButton("Check Configured AI Providers", "API keys server पर ही रहेंगी; केवल configured status दिखेगा") {
@@ -615,7 +615,7 @@ class MainActivity : AppCompatActivity() {
                 DeviceLinkManager.summarize(url, gatewayToken.text.toString(), plannerProvider.selectedItem.toString(), content) { result -> runOnUiThread { summarizeResult.text = result.getOrElse { "Summarize failed: ${it.message}" } } }
             })
 
-            addView(TextView(this@MainActivity).apply { text = "ON-DEVICE INTELLIGENCE • इंटरनेट के बिना भी"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "ON-DEVICE INTELLIGENCE • इंटरनेट के बिना भी"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val offlineInput = edit("Offline voice/text command", "जैसे: WhatsApp खोलो / स्क्रीन पढ़ो / टॉर्च चालू करो")
             addView(offlineInput)
             val offlineResult = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
@@ -655,7 +655,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
 
-            addView(TextView(this@MainActivity).apply { text = "ENCRYPTED PERSONAL MEMORY VAULT"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "ENCRYPTED PERSONAL MEMORY VAULT"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val vault = SecureMemoryVault(this@MainActivity)
             val secureMemory = edit("Private memory", "निजी पसंद, project facts या चुने हुए notes लिखें").apply { isSingleLine = false; minLines = 3 }
             secureMemory.setText(vault.load().getOrElse { "" })
@@ -668,7 +668,7 @@ class MainActivity : AppCompatActivity() {
                 if (vault.clear()) { secureMemory.setText(""); status.text = "Encrypted local memory cleared." } else status.text = "Vault clear नहीं हो पाया।"
             })
 
-            addView(TextView(this@MainActivity).apply { text = "LOCAL KNOWLEDGE RETRIEVAL (RAG-LITE)"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "LOCAL KNOWLEDGE RETRIEVAL (RAG-LITE)"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val knowledgeQuery = edit("Search personal notes", "अपने saved notes में कोई सवाल खोजें")
             addView(knowledgeQuery)
             val knowledgeResult = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
@@ -702,11 +702,11 @@ class MainActivity : AppCompatActivity() {
             val providerPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity")) }
             addView(relayUrl)
             addView(gatewayToken)
-            addView(TextView(this@MainActivity).apply { text = "Select expert department"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f })
+            addView(TextView(this@MainActivity).apply { text = "Select expert department"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f })
             addView(workspacePicker)
-            addView(TextView(this@MainActivity).apply { text = "Select work mode"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
+            addView(TextView(this@MainActivity).apply { text = "Select work mode"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
             addView(taskPicker)
-            addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
+            addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
             addView(providerPicker)
             val request = edit("Practical project / problem", "जैसे 2BHK का conceptual floor plan तैयार करो, मोटर की fault diagnosis करो, या फसल की समस्या का विश्लेषण करो").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
             addView(request)
@@ -801,7 +801,7 @@ class MainActivity : AppCompatActivity() {
             }
             addView(TextView(this@MainActivity).apply {
                 text = "LIVE VISUAL SHARING • अलग-अलग स्पष्ट अनुमति"
-                setTextColor(0xFFB9A9FF.toInt()); textSize = 13f; setPadding(0, dp(12), 0, dp(4))
+                setTextColor(0xFF8CE8E7.toInt()); textSize = 13f; setPadding(0, dp(12), 0, dp(4))
             })
             listOf("screen" to "इस फोन की स्क्रीन साझा करने दें", "camera" to "इस फोन का कैमरा साझा करने दें").forEach { (key, label) ->
                 val toggle = Switch(this@MainActivity).apply {
@@ -1300,7 +1300,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "ADVANCED CAPABILITY MAP", "हर क्षमता की वास्तविक स्थिति साफ दिखाई जाती है। Roadmap का अर्थ है कि वह अभी पूर्ण रूप से उपलब्ध नहीं है।") {
             val grouped = catalog.groupBy { it.group }
             grouped.forEach { (group, items) ->
-                addView(TextView(this@MainActivity).apply { text = group.uppercase(); textSize = 11f; letterSpacing = .08f; setTextColor(0xFFBFAEFF.toInt()); setPadding(0, dp(10), 0, dp(5)) })
+                addView(TextView(this@MainActivity).apply { text = group.uppercase(); textSize = 11f; letterSpacing = .08f; setTextColor(0xFF8CE8E7.toInt()); setPadding(0, dp(10), 0, dp(5)) })
                 items.forEach { item ->
                     val state = when(item.state) {
                         `in`.shraddha.ai.future.CapabilityState.AVAILABLE -> "AVAILABLE"
@@ -1602,7 +1602,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "25 ADVANCED SYSTEMS • LIVE WORKSPACE", "नए engines को सुरक्षित local storage और वास्तविक UI controls से जोड़ना। जिन systems को external model, sensor या companion चाहिए, उनकी सीमा साफ दिखाई जाएगी।") {
             val meetingText = edit("Meeting transcript / notes", "DECISION: launch after QA\\nACTION: @team: test Android release\\nQUESTION: who owns deployment?").apply { isSingleLine = false; minLines = 4 }
             val meetingOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "09 • MEETING INTELLIGENCE"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f })
+            addView(TextView(this@MainActivity).apply { text = "09 • MEETING INTELLIGENCE"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f })
             addView(meetingText); addView(meetingOutput)
             addView(actionButton("EXTRACT DECISIONS & ACTION ITEMS", "Only explicit DECISION:, ACTION: and QUESTION: transcript markers are extracted") {
                 runCatching { `in`.shraddha.ai.future.MeetingIntelligence.parse(meetingText.text.toString()) }
@@ -1621,7 +1621,7 @@ class MainActivity : AppCompatActivity() {
 
             val taskLines = edit("Task plan • one per line: id|title|dependency IDs|priority 1-5|minutes", "research|Research requirements||2|30\\nbuild|Build feature|research|1|90\\ntest|Test feature|build|1|45").apply { isSingleLine = false; minLines = 4 }
             val taskOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "02 • AUTONOMOUS TASK PLANNER + SELF-REVIEW"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "02 • AUTONOMOUS TASK PLANNER + SELF-REVIEW"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(taskLines); addView(taskOutput)
             addView(actionButton("BUILD DEPENDENCY-AWARE TASK PLAN", "DAG ordering, cycle detection and estimated duration • planning only, no automatic actions") {
                 runCatching {
@@ -1651,7 +1651,7 @@ class MainActivity : AppCompatActivity() {
 
             val briefingLines = edit("Daily briefing items • priority|kind|time|title", "1|task|09:00|Review release build\\n2|event|11:30|Project meeting\\n3|reminder|17:00|Call supplier").apply { isSingleLine = false; minLines = 3 }
             val briefingOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "10 • SMART DAILY BRIEFING"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "10 • SMART DAILY BRIEFING"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(briefingLines); addView(briefingOutput)
             addView(actionButton("GENERATE DAILY BRIEFING", "Uses only the tasks/events you enter; no calendar is read without a connector") {
                 runCatching {
@@ -1672,7 +1672,7 @@ class MainActivity : AppCompatActivity() {
             val timelineNote = edit("Event note", "केवल वही जानकारी जो आप खुद सेव करना चाहते हैं")
             val timelineQuery = edit("Search timeline", "keyword")
             val timelineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "21 • LIFE TIMELINE + 22 • CONTEXT RECALL"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "21 • LIFE TIMELINE + 22 • CONTEXT RECALL"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(timelineTitle); addView(timelineCategory); addView(timelineNote); addView(timelineQuery); addView(timelineOutput)
             fun loadTimeline(): org.json.JSONArray = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_timeline").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
             addView(actionButton("SAVE TIMELINE EVENT", "Explicit user-entered event • encrypted with Android Keystore") {
@@ -1703,7 +1703,7 @@ class MainActivity : AppCompatActivity() {
             val skillOutputText = edit("Your approved output", "वह उत्तर जो आपने सही माना").apply { isSingleLine = false; minLines = 2 }
             val skillConsent = CheckBox(this@MainActivity).apply { text = "मैं इस example को future personalization के लिए save करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val skillStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
-            addView(TextView(this@MainActivity).apply { text = "23 • PERSONAL SKILL LEARNING"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "23 • PERSONAL SKILL LEARNING"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(skillName); addView(skillInput); addView(skillOutputText); addView(skillConsent); addView(skillStatus)
             addView(actionButton("SAVE APPROVED SKILL EXAMPLE", "Explicit consent • encrypted local storage • user can delete") {
                 runCatching {
@@ -1727,7 +1727,7 @@ class MainActivity : AppCompatActivity() {
             val routineAction = edit("Proposed routine action", "Prepare briefing draft and show it for review")
             val routineConsent = CheckBox(this@MainActivity).apply { text = "इस routine को enabled proposal के रूप में save करें; actions फिर भी approval माँगेंगे।"; setTextColor(0xFFE4E9F5.toInt()) }
             val routineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
-            addView(TextView(this@MainActivity).apply { text = "24 • SMART ROUTINE AUTOMATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "24 • SMART ROUTINE AUTOMATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(routineTrigger); addView(routineAction); addView(routineConsent); addView(routineOutput)
             addView(actionButton("SAVE APPROVAL-GATED ROUTINE", "Routine proposal only; no background action is executed") {
                 runCatching {
@@ -1743,7 +1743,7 @@ class MainActivity : AppCompatActivity() {
             val wakeConsent = CheckBox(this@MainActivity).apply { text = "मैं microphone wake phrase detection के लिए स्पष्ट अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val wakeStatus = TextView(this@MainActivity).apply { setTextColor(0xFFFFC98A.toInt()); textSize = 12f }
             var wakeGate = `in`.shraddha.ai.future.WakePhraseGate("Hey Shraddha")
-            addView(TextView(this@MainActivity).apply { text = "07 • WAKE PHRASE FOUNDATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "07 • WAKE PHRASE FOUNDATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(wakePhrase); addView(wakeConsent); addView(wakeStatus)
             addView(actionButton("ARM WAKE PHRASE STATE", "This validates consent/state only. Acoustic wake-word model is not bundled or running.") {
                 runCatching {
@@ -1764,7 +1764,7 @@ class MainActivity : AppCompatActivity() {
             val translationTarget = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("en", "hi", "mr", "es", "fr", "de")) }
             val translationText = edit("Text to translate", "यहाँ text लिखें").apply { isSingleLine = false; minLines = 2 }
             val translationOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "12 • AI TRANSLATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "12 • AI TRANSLATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(translationSource); addView(translationTarget); addView(translationText); addView(translationOutput)
             addView(actionButton("TRANSLATE USING CONFIGURED AI", "Provider-based text translation • live camera overlay is not yet connected") {
                 runCatching { `in`.shraddha.ai.future.LiveTranslationEngine.prepare(translationText.text.toString(), translationSource.selectedItem.toString(), translationTarget.selectedItem.toString()) }
@@ -1811,7 +1811,7 @@ class MainActivity : AppCompatActivity() {
 
             val troubleCategory = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("network", "battery", "electrical", "general")) }
             val troubleOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "13 • VISUAL TROUBLESHOOTING PLAYBOOKS"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "13 • VISUAL TROUBLESHOOTING PLAYBOOKS"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(troubleCategory); addView(troubleOutput)
             addView(actionButton("SHOW SAFE TROUBLESHOOTING STEPS", "Safety-first guide; not a diagnosis or automatic device repair") {
                 val steps = `in`.shraddha.ai.future.VisualTroubleshootingEngine.playbook(troubleCategory.selectedItem.toString())
@@ -1837,7 +1837,7 @@ class MainActivity : AppCompatActivity() {
                 val events = runCatching { val saved = EncryptedFeatureStore(this@MainActivity).get(`in`.shraddha.ai.future.ShraddhaNotificationListener.ENCRYPTED_EVENTS_KEY).getOrThrow(); if (saved.isBlank()) 0 else org.json.JSONArray(saved).length() }.getOrDefault(0)
                 notificationStatus.text = "OS notification access: ${if (access) "GRANTED" else "NOT GRANTED"}\nMetadata capture: ${if (notificationConsent.isChecked) "ON" else "OFF"}\nStored metadata events: $events / 100\nNotification content is never read; notifications are never dismissed."
             }
-            addView(TextView(this@MainActivity).apply { text = "19 • SMART NOTIFICATION MANAGER"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "19 • SMART NOTIFICATION MANAGER"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(notificationConsent); addView(quietHoursConsent); addView(notificationStatus)
             addView(actionButton("SAVE NOTIFICATION PRIVACY SETTINGS", "Metadata-only, local, bounded history; off by default") {
                 notificationPrefs.edit()
