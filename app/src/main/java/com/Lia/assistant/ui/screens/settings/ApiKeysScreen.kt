@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,8 +40,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
+import `in`.shraddha.ai.future.MainBrainProviderGateway
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaGlassCard
@@ -85,6 +90,9 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     }
     val inputs = remember { mutableStateMapOf<String, String>() }
     val revealed = remember { mutableStateMapOf<String, Boolean>() }
+    val testStatus = remember { mutableStateMapOf<String, String>() }
+    val testing = remember { mutableStateMapOf<String, Boolean>() }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
@@ -180,6 +188,43 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                         Toast.makeText(context, "Key remove nahi hui.", Toast.LENGTH_SHORT).show()
                                     }
                             }
+                        )
+                    }
+                    NovaButton(
+                        text = if (testing[provider.id] == true) "Testing…" else "Test Connection",
+                        type = NovaButtonType.SECONDARY,
+                        onClick = {
+                            testing[provider.id] = true
+                            testStatus[provider.id] = "Sending one short provider request; usage charges may apply."
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        MainBrainProviderGateway.complete(
+                                            context,
+                                            provider.id,
+                                            "You are a provider connectivity check. Reply with exactly the word OK.",
+                                            "Reply with exactly the word OK."
+                                        )
+                                    }
+                                }
+                                testStatus[provider.id] = result.fold(
+                                    onSuccess = { reply ->
+                                        if (reply.contains("OK", ignoreCase = true)) "Connection successful: provider returned a response."
+                                        else "Provider responded, but the test reply was unexpected."
+                                    },
+                                    onFailure = { error -> "Connection failed: ${error.message ?: "Unknown provider error"}" }
+                                )
+                                testing[provider.id] = false
+                            }
+                        },
+                        enabled = configured[provider.id] == true && testing[provider.id] != true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    testStatus[provider.id]?.takeIf { it.isNotBlank() }?.let { message ->
+                        Text(
+                            message,
+                            color = if (message.startsWith("Connection successful")) colors.accent else colors.textSecondary,
+                            fontSize = 10.sp
                         )
                     }
                     NovaButton(
