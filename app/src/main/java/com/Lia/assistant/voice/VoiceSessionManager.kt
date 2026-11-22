@@ -280,18 +280,6 @@ object VoiceSessionManager {
                     return
                 }
 
-                if (name == "build_website") {
-                    val response = runCatching {
-                        ForgeController.start(currentContext, args.optString("prompt", ""))
-                        JSONObject().put("result", "forge_started").put("success", true)
-                    }.getOrElse { error ->
-                        JSONObject().put("success", false).put("error", (error.localizedMessage ?: "Website build could not start").take(300))
-                    }
-                    client?.sendToolResponse(id, name, response)
-                    _state.value = NovaOrbState.LISTENING
-                    _statusText.value = "Listening..."
-                    return
-                }
 
                 val toolJob = scope.launch(start = CoroutineStart.LAZY) {
                     val result = try {
