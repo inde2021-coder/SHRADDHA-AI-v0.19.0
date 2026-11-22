@@ -79,6 +79,7 @@ class OperatorActionJournal(context: Context) {
     fun reconcileInterrupted(workflowId: String): Recovery {
         val entry = get(workflowId) ?: return Recovery.NO_JOURNAL
         if (entry.state == "VERIFIED" || entry.state == "RECOVERED_VERIFIED") return Recovery.VERIFIED_COMPLETE
+        if (entry.state == "MANUALLY_VERIFIED") return Recovery.MANUALLY_VERIFIED
         if (entry.state != "EXECUTING") return Recovery.NOT_INTERRUPTED
         val current = ShraddhaAccessibilityService.captureVisibleScreen()
             ?: return Recovery.REVIEW_REQUIRED
@@ -96,6 +97,13 @@ class OperatorActionJournal(context: Context) {
                 Recovery.VERIFIED_COMPLETE
             } else Recovery.REVIEW_REQUIRED
         } else Recovery.REVIEW_REQUIRED
+    }
+
+    /** User-confirmed recovery after they manually inspected the target app. */
+    fun markManuallyVerified(workflowId: String): Boolean {
+        val entry = get(workflowId) ?: return false
+        if (entry.state != "EXECUTING") return false
+        return save(entry.copy(state = "MANUALLY_VERIFIED", updatedAt = System.currentTimeMillis()))
     }
 
     fun clear(workflowId: String): Boolean = encrypted.remove(key(workflowId))
@@ -134,7 +142,7 @@ class OperatorActionJournal(context: Context) {
             .joinToString("") { "%02x".format(it) }
     }
 
-    enum class Recovery { VERIFIED_COMPLETE, REVIEW_REQUIRED, NO_JOURNAL, NOT_INTERRUPTED }
+    enum class Recovery { VERIFIED_COMPLETE, MANUALLY_VERIFIED, REVIEW_REQUIRED, NO_JOURNAL, NOT_INTERRUPTED }
 
     companion object {
         internal fun assess(
