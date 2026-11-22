@@ -68,12 +68,13 @@ object ForgeController {
 
         buildJob?.cancel()
         buildJob = scope.launch {
-            WebsiteForgeClient.forgeWebsite(
+            val started = `in`.shraddha.ai.future.MainBrain.forgeWebsite(
                 context = context,
                 prompt = trimmed,
                 isEdit = false,
                 initialHtml = null
             )
+            if (!started) updateState { it.copy(phase = ForgePhase.FAILED, error = "Main Brain scheduler is busy. Try again after the current task finishes.") }
         }
 
         return ForgeStartResult.Started("Starting the Forge for '$trimmed'.")
@@ -109,12 +110,13 @@ object ForgeController {
 
         buildJob?.cancel()
         buildJob = scope.launch {
-            WebsiteForgeClient.forgeWebsite(
+            val started = `in`.shraddha.ai.future.MainBrain.forgeWebsite(
                 context = context,
                 prompt = trimmed,
                 isEdit = true,
                 initialHtml = existingHtml
             )
+            if (!started) updateState { it.copy(phase = ForgePhase.FAILED, error = "Main Brain scheduler is busy. Try again after the current task finishes.") }
         }
 
         return ForgeStartResult.Started("Refining your website with '$trimmed'...")
