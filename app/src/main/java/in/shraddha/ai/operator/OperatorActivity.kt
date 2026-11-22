@@ -339,7 +339,40 @@ class OperatorActivity : Activity() {
         text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
         setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
     }
-    /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */\n    private fun runOperatorStep(step: OperatorStep) {\n        val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY\n        val engine = OperatorEngine(\n            emit = { event -> runOnUiThread {\n                val detail = event.snapshot?.let { "\\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()\n                log.text = "${event.state}: ${event.message}$detail\\n\\n" + log.text.take(5000)\n            } },\n            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }\n        )\n        val brain = `in`.shraddha.ai.future.MainBrain(\n            executeVerified = { action, confirmed -> engine.execute(action, confirmed) },\n            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("manual_$event", outcome, detail) },\n            context = this\n        )\n        Thread {\n            try {\n                val id = "manual-" + java.util.UUID.randomUUID().toString().replace("-", "").take(20)\n                brain.enqueueOperatorWorkflow(`in`.shraddha.ai.future.MainBrain.WorkflowRequest(\n                    id = id,\n                    title = "Manual ${step.action.name}",\n                    actions = listOf(PlannedOperatorAction(\n                        id = "step_1", title = step.action.name, step = step,\n                        risk = risk, requiresApproval = risk == Risk.SENSITIVE || step.requiresConfirmation\n                    ))\n                ))\n                val result = brain.startNextWorkflow()\n                runOnUiThread { showMainBrainResult(brain, result) }\n            } catch (error: Exception) {\n                runOnUiThread { log.text = "Main Brain FAILED: ${error.localizedMessage ?: "Action could not be queued"}\\n" + log.text.take(4500) }\n            }\n        }.start()\n    }\n    private fun runOperator(work: (OperatorEngine) -> Unit) {
+    /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */
+    private fun runOperatorStep(step: OperatorStep) {
+        val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY
+        val engine = OperatorEngine(
+            emit = { event -> runOnUiThread {
+                val detail = event.snapshot?.let { "\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
+                log.text = "${event.state}: ${event.message}$detail\n\n" + log.text.take(5000)
+            } },
+            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+        )
+        val brain = `in`.shraddha.ai.future.MainBrain(
+            executeVerified = { action, confirmed -> engine.execute(action, confirmed) },
+            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("manual_$event", outcome, detail) },
+            context = this
+        )
+        Thread {
+            try {
+                val id = "manual-" + java.util.UUID.randomUUID().toString().replace("-", "").take(20)
+                brain.enqueueOperatorWorkflow(`in`.shraddha.ai.future.MainBrain.WorkflowRequest(
+                    id = id,
+                    title = "Manual ${step.action.name}",
+                    actions = listOf(PlannedOperatorAction(
+                        id = "step_1", title = step.action.name, step = step,
+                        risk = risk, requiresApproval = risk == Risk.SENSITIVE || step.requiresConfirmation
+                    ))
+                ))
+                val result = brain.startNextWorkflow()
+                runOnUiThread { showMainBrainResult(brain, result) }
+            } catch (error: Exception) {
+                runOnUiThread { log.text = "Main Brain FAILED: ${error.localizedMessage ?: "Action could not be queued"}\n" + log.text.take(4500) }
+            }
+        }.start()
+    }
+    private fun runOperator(work: (OperatorEngine) -> Unit) {
         Thread {
             val engine = OperatorEngine(
                 emit = { event -> runOnUiThread {
