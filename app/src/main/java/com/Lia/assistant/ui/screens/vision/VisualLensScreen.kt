@@ -179,6 +179,13 @@ fun VisualLensScreen(navController: NavController) {
                         type = NovaButtonType.SECONDARY
                     )
                 }
+                NovaButton(
+                    text = "Ask ${assistantName} about this view",
+                    onClick = { navController.navigate("voice") },
+                    modifier = Modifier.fillMaxWidth(),
+                    type = NovaButtonType.SECONDARY,
+                    enabled = active
+                )
             }
         }
         Spacer(Modifier.height(4.dp))
