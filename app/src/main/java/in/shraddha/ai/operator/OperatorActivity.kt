@@ -176,11 +176,7 @@ class OperatorActivity : Activity() {
                 android.app.AlertDialog.Builder(this@OperatorActivity)
                     .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
                     .setMessage(details + if (interrupted) "\n\nफोन बंद/restart होने के समय action चल रहा था। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
-                    .setPositiveButton("Target app खोलें") { _, _ ->
-                        val launch = packageManager.getLaunchIntentForPackage(entry.action.substringAfter("package:", "").takeIf { it.contains(".") } ?: "")
-                        if (launch != null) startActivity(launch)
-                        else Toast.makeText(this@OperatorActivity, "Target app की पहचान journal में सुरक्षित नहीं है। संबंधित app स्वयं खोलकर जाँचें।", Toast.LENGTH_LONG).show()
-                    }
+                    .setPositiveButton("ठीक है", null)
                     .setNegativeButton("बंद करें", null)
                     .show()
             }
