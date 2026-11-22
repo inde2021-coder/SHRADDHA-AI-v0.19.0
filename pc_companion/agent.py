@@ -525,7 +525,7 @@ class PcCompanionApp:
                 aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|remote_action|{action_id}".encode("utf-8")
                 plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
                 payload = json.loads(plain.decode("utf-8"))
-                action = validate_remote_action(payload.get("action"))
+                action = validate_remote_action_envelope(payload, action_kind)
                 if not action or action.get("kind") != action_kind:
                     raise ValueError("Action payload or action-kind binding is invalid.")
             except Exception as exc:
