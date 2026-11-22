@@ -34,7 +34,7 @@ class LiveEyesCameraService : Service() {
     private val requestInFlight = AtomicBoolean(false)
     @Volatile private var previousObservation = ""
     @Volatile private var stopped = false
-    private var lastAnnouncedAt = 0L
+    private var lastContextSentAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -121,7 +121,7 @@ class LiveEyesCameraService : Service() {
                             val now = android.os.SystemClock.elapsedRealtime()
                             if (changed && now - lastAnnouncedAt >= 12_000L) {
                                 lastAnnouncedAt = now
-                                VoiceSessionManager.announceVisualObservation(applicationContext, observation)
+                                VoiceSessionManager.updateLiveVisualContext(observation)
                             }
                         }.onFailure { error ->
                             updateNotification("दृश्य विश्लेषण उपलब्ध नहीं: " + (error.message ?: "नेटवर्क त्रुटि").take(90))
