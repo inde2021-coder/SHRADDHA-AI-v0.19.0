@@ -295,4 +295,3 @@ private fun MiniFeature(emoji: String, label: String, modifier: Modifier = Modif
         Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 5.dp))
     }
 }
-
