@@ -148,7 +148,7 @@ class MainBrain(
             BackgroundTaskQueue.enqueueFromMainBrain(context.applicationContext, goal, provider, language)
 
         /** Background workers call back through Main Brain rather than selecting providers themselves. */
-        fun executeBackgroundCouncil(
+        suspend fun executeBackgroundCouncil(
             context: Context,
             goal: String,
             language: String,
@@ -156,7 +156,15 @@ class MainBrain(
             shouldContinue: () -> Boolean,
             onProgress: (String, Int, Int) -> Unit
         ): Result<CouncilExecutionReport> =
-            AgentCouncil.executeWithConfiguredProvider(context.applicationContext, goal, language, provider, shouldContinue, onProgress)
+            AgentCouncil.executeParallelWithConfiguredProviders(
+                context = context.applicationContext,
+                goal = goal,
+                language = language,
+                preferredProviders = provider.split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() },
+                specialistCount = 3,
+                shouldContinue = shouldContinue,
+                onProgress = onProgress
+            )
 
         /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
         suspend fun forgeWebsite(
