@@ -145,7 +145,7 @@ class DeviceTransferActivity : Activity() {
         val target = peer.text.toString().trim(); val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
         persistTransferState()
-        val chunks = ((sourceSize + 49151) / 49152).toInt()
+        val chunks = ((sourceSize + 49151) / 48000).toInt()
         if (!DeviceLinkManager.startFileTransfer(target, requestId, transferId, sourceName, sourceSize, chunks, sourceHash)) { status.text = "Could not start transfer. Check relay and receiver permission."; return }
         status.text = "Transfer started. Waiting for receiver to accept and select destination…"
     }
@@ -154,9 +154,9 @@ class DeviceTransferActivity : Activity() {
         val uri = sourceUri ?: throw IllegalStateException("Source file is no longer selected")
         val input = contentResolver.openInputStream(uri) ?: throw IllegalStateException("Cannot reopen source file")
         input.use {
-            var skip = index.toLong() * 49152L
+            var skip = index.toLong() * 48000L
             while (skip > 0) { val n = it.skip(skip); if (n <= 0) throw IllegalStateException("Could not seek source file"); skip -= n }
-            val buffer = ByteArray(49152); var count = 0
+            val buffer = ByteArray(48000); var count = 0
             while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
             val bytes = buffer.copyOf(count)
             require(bytes.isNotEmpty())
@@ -169,7 +169,7 @@ class DeviceTransferActivity : Activity() {
         cancelled.set(false)
         sendThread = thread(name = "shraddha-file-send") {
             try {
-                val all = if (indexes.isEmpty()) (0 until ((sourceSize + 49151) / 49152).toInt()).toList() else indexes
+                val all = if (indexes.isEmpty()) (0 until ((sourceSize + 49151) / 48000).toInt()).toList() else indexes
                 for ((position, index) in all.withIndex()) {
                     while (paused.get() && !cancelled.get()) Thread.sleep(200)
                     if (cancelled.get()) break
@@ -194,7 +194,7 @@ class DeviceTransferActivity : Activity() {
                 incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
                 incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..(20_000_000L) || incomingCount !in 1..407 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
+                if (incomingSize !in 1L..(20_000_000L) || incomingCount !in 1..417 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
@@ -231,9 +231,9 @@ class DeviceTransferActivity : Activity() {
             require(msg.optString("transferId") == transferId && incomingOut != null)
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = if (index == incomingCount - 1) (incomingSize - index * 49152L).toInt() else 49152
+            val expected = if (index == incomingCount - 1) (incomingSize - index * 48000L).toInt() else 48000
             require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * 49152L); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
+            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * 48000L); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
             progress.progress = (incomingChunks * 100 / incomingCount)
             status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
