@@ -394,8 +394,7 @@ object ActionExecutor {
                                     var detail = "Workflow did not complete."
                                     val ok = `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
                                         context.applicationContext, profile, workflowName, values,
-                                        confirmed, args.optBoolean("resume", false),
-                                        withinMainBrainTask = true
+                                        confirmed, args.optBoolean("resume", false)
                                     ) { event -> detail = "${event.state}: ${event.message}" }
                                     ok to detail
                                 }
