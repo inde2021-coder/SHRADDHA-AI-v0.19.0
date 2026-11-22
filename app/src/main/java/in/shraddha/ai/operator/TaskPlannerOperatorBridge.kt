@@ -4,6 +4,7 @@ import `in`.shraddha.ai.future.Risk
 import `in`.shraddha.ai.future.SelfReviewEngine
 import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 import `in`.shraddha.ai.future.WorkflowStatus
+import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 
 /**
  * Connects dependency-ordered plans to the real accessibility Operator.
@@ -34,13 +35,24 @@ class TaskPlannerOperatorBridge(
         require(planned.isNotEmpty() && planned.size <= 100)
         require(planned.map { it.id }.distinct().size == planned.size)
         actions.clear()
-        planned.forEach { action ->
+        val normalized = planned.map { action ->
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
-            actions[action.id] = action
+            val safety = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value)
+            require(safety.risk != OperatorSafetyPolicy.Risk.BLOCK) {
+                "Operator plan contains an action blocked by safety policy: ${safety.reason}"
+            }
+            val needsApproval = action.requiresApproval ||
+                action.risk == Risk.SENSITIVE || action.risk == Risk.IRREVERSIBLE ||
+                safety.risk == OperatorSafetyPolicy.Risk.CONFIRM
+            action.copy(
+                risk = if (needsApproval) Risk.SENSITIVE else action.risk,
+                requiresApproval = needsApproval
+            )
         }
+        normalized.forEach { actions[it.id] = it }
         verified.clear()
-        val session = hub.createPlan(workflowId, title, planned.map {
+        val session = hub.createPlan(workflowId, title, normalized.map {
             ShraddhaIntegrationHub.Action(it.id, it.title, it.dependsOn, it.priority,
                 it.estimatedMinutes, it.risk, it.requiresApproval)
         })
