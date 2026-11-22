@@ -27,6 +27,34 @@ class MainBrain(
         val dependsOn: Set<String> = emptySet()
     )
 
+    companion object {
+        /** Shared voice/text planning entry point; the resulting plan is still non-executable. */
+        fun createCouncilPlan(
+            goal: String,
+            workflowId: String,
+            title: String = goal.trim().take(120)
+        ): Pair<CouncilPlan, ShraddhaIntegrationHub.Session> {
+            val council = AgentCouncil.plan(goal)
+            val actions = council.roles.mapIndexed { index, role ->
+                ShraddhaIntegrationHub.Action(
+                    id = role.name.lowercase().replace(Regex("[^a-z0-9_-]"), "_"),
+                    title = role.responsibility,
+                    dependsOn = if (index == 0) emptySet() else setOf(
+                        council.roles[index - 1].name.lowercase().replace(Regex("[^a-z0-9_-]"), "_")
+                    ),
+                    priority = if (role.name == "Verifier" || role.name == "Critic") 1 else 2,
+                    estimatedMinutes = 10
+                )
+            }
+            val session = ShraddhaIntegrationHub().createPlan(
+                workflowId = workflowId,
+                title = title.ifBlank { "Shraddha AI Council plan" },
+                actions = actions
+            )
+            return council to session
+        }
+    }
+
     private val scheduler = SharedTaskScheduler(1)
     init { require(maxParallelWorkflows == 1) { "Android UI Operator currently supports one active workflow at a time" } }
 
