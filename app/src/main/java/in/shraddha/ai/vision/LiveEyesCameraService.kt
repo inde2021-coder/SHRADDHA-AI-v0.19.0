@@ -33,12 +33,15 @@ class LiveEyesCameraService : Service() {
     private var lastAnalysisAt = 0L
     private val requestInFlight = AtomicBoolean(false)
     @Volatile private var previousObservation = ""
+    @Volatile private var stopped = false
+    private var lastAnnouncedAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopSelf()
             return START_NOT_STICKY
         }
+        stopped = false
         startForeground(NOTIFICATION_ID, notification("Shraddha AI Eyes चालू हैं"))
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             stopSelf()
@@ -65,14 +68,10 @@ class LiveEyesCameraService : Service() {
         val stopIntent = Intent(this, LiveEyesCameraService::class.java).setAction(ACTION_STOP)
         val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
         val stopPendingIntent = PendingIntent.getService(this, 74, stopIntent, pendingFlags)
-        return if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId)
+        return Notification.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Shraddha AI Eyes")
             .setContentText(message).setOngoing(true)
             .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build()
-        else @Suppress("DEPRECATION") (Notification.Builder(this)
-            .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Shraddha AI Eyes")
-            .setContentText(message).setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build())
     }
 
     private fun updateNotification(message: String) {
@@ -88,8 +87,10 @@ class LiveEyesCameraService : Service() {
                 manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
             } ?: manager.cameraIdList.firstOrNull() ?: run { stopSelf(); return }
             val map = manager.getCameraCharacteristics(cameraId).get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            val size = map?.getOutputSizes(ImageFormat.JPEG)?.filter { it.width <= 640 && it.height <= 480 }
-                ?.maxByOrNull { it.width * it.height } ?: android.util.Size(640, 480)
+            val jpegSizes = map?.getOutputSizes(ImageFormat.JPEG).orEmpty()
+            val size = jpegSizes.filter { it.width <= 640 && it.height <= 480 }
+                .maxByOrNull { it.width * it.height } ?: jpegSizes.minByOrNull { it.width * it.height }
+                ?: run { stopSelf(); return }
             reader = ImageReader.newInstance(size.width, size.height, ImageFormat.JPEG, 2)
             reader?.setOnImageAvailableListener({ source ->
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
@@ -112,11 +113,16 @@ class LiveEyesCameraService : Service() {
                     }
                     DeviceLinkManager.analyzeScreen(baseUrl, token, "gemini", prompt, jpeg, "general") { result ->
                         jpeg.fill(0)
-                        result.onSuccess { raw ->
+                        if (!stopped) result.onSuccess { raw ->
                             val observation = raw.take(1200)
+                            val changed = previousObservation.isBlank() || previousObservation != observation
                             previousObservation = observation
                             updateNotification("दृश्य समझ लिया: " + observation.take(110))
-                            VoiceSessionManager.announceVisualObservation(applicationContext, observation)
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (changed && now - lastAnnouncedAt >= 12_000L) {
+                                lastAnnouncedAt = now
+                                VoiceSessionManager.announceVisualObservation(applicationContext, observation)
+                            }
                         }.onFailure { error ->
                             updateNotification("दृश्य विश्लेषण उपलब्ध नहीं: " + (error.message ?: "नेटवर्क त्रुटि").take(90))
                         }
@@ -162,6 +168,7 @@ class LiveEyesCameraService : Service() {
     }
 
     override fun onDestroy() {
+        stopped = true
         closeCamera()
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         super.onDestroy()
