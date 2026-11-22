@@ -8,10 +8,15 @@ if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb)"; fi
 # The readiness probe writes the exact emulator serial it verified.
 # Prefer that value over ANDROID_SERIAL, which may be inherited stale from the runner.
 SERIAL_FILE="${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial"
-if [[ -s "$SERIAL_FILE" ]]; then
-  SERIAL="$(tr -d '\r\n' < "$SERIAL_FILE")"
-else
-  SERIAL="${ANDROID_SERIAL:-}"
+if [[ ! -s "$SERIAL_FILE" ]]; then
+  echo "ERROR: readiness probe did not publish a verified emulator serial."
+  "$ADB" devices -l || true
+  exit 1
+fi
+SERIAL="$(tr -d '\r\n' < "$SERIAL_FILE")"
+if [[ ! "$SERIAL" =~ ^emulator-[0-9]+$ ]]; then
+  echo "ERROR: readiness probe returned an invalid emulator serial: '$SERIAL'."
+  exit 1
 fi
 if [[ -z "$SERIAL" ]] || ! "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; then
   echo "ERROR: the emulator that passed readiness is no longer connected."
