@@ -110,7 +110,7 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
-    // Runtime only; actual model files are user-supplied after license and tensor-contract review.
+    // Runtime only; selected models are downloaded on demand and SHA-256 verified.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
