@@ -181,6 +181,10 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             FeatureInfo("🧠", "Memory & Personality", "यादें और व्यवहार", NeonPurple) { navController.navigate("personality") }
         )
 
+        FeatureRow(
+            FeatureInfo("🤖", "Multi-agent Team", "काम बाँटें और verify करें", NeonBlue) { navController.navigate("agent_council") },
+            FeatureInfo("🔑", "AI Provider Keys", "अपनी API keys जोड़ें", NeonMint) { navController.navigate("api_keys") }
+        )
         SectionHeading("PERSONALIZE", "अपना AI अनुभव चुनें")
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
