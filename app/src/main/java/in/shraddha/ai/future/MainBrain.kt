@@ -344,6 +344,7 @@ class MainBrain(
             val session = bridge.approveCurrentStep(accepted)
             if (!accepted) {
                 scheduler.cancel(id)
+                actionJournal?.clear(id)
                 bridges.remove(id)
                 activeWorkflowId = null
                 audit("main_brain_queue", "cancelled_by_user", "workflow=$id")
@@ -403,7 +404,13 @@ class MainBrain(
         val completedIndex = request.actions.indexOfFirst { it.id == entry.stepId }
         if (completedIndex < 0) return null
         val remaining = request.actions.drop(completedIndex + 1)
-        if (remaining.isEmpty()) return null
+        if (remaining.isEmpty()) {
+            val completed = scheduler.completeInterrupted(workflowId, verified = true)
+            journal.clear(workflowId)
+            audit("operator_recovery", "workflow_completed_from_journal",
+                "workflow=" + workflowId + "; last_step=" + entry.stepId)
+            return completed
+        }
         val remainingIds = remaining.map { it.id }.toSet()
         val safeRemaining = remaining.map { action ->
             action.copy(dependsOn = action.dependsOn.intersect(remainingIds))
@@ -499,6 +506,7 @@ class MainBrain(
         when (status) {
             WorkflowStatus.COMPLETED -> {
                 scheduler.complete(id)
+                actionJournal?.clear(id)
                 bridges.remove(id)
                 activeWorkflowId = null
                 audit("main_brain_queue", "completed", "workflow=$id")
