@@ -97,7 +97,7 @@ The companion binds no inference HTTP port and exposes no unauthenticated local 
 - OCR output is redacted before it is returned to the paired device: credential-labelled lines, nearby value lines, and long numeric identifiers are hidden. This is a defensive filter, not a guarantee that every secret can be detected; avoid OCR on sensitive screens.
 - Optional file browsing uses only the folder explicitly selected with `--file-root`. Listing, reading, and text search each require local PC confirmation.
 - File search is restricted to text/code formats, skips hidden files and symlinks, and enforces depth, file-count, file-size, result-count, and total-read limits.
-- Android can request a bounded text/code file create or update inside that root. The PC owner must confirm each write locally; updates require an explicit overwrite flag and create a timestamped backup under the hidden `.shraddha-backups` folder before atomic replacement. Only selected text/code extensions and files up to 256 KB are supported. No file execution, delete, move, or arbitrary shell command is provided.
+- The local GGUF Code Assistant can optionally read one selected approved text/code file as context after a separate PC confirmation; it returns a proposal only and never writes the file itself.\n- Android can request a bounded text/code file create or update inside that root. The PC owner must confirm each write locally; updates require an explicit overwrite flag and create a timestamped backup under the hidden `.shraddha-backups` folder before atomic replacement. Only selected text/code extensions and files up to 256 KB are supported. No file execution, delete, move, or arbitrary shell command is provided.
 
 
 ## Bidirectional Android control and screen viewing
