@@ -174,7 +174,7 @@ class SharedTaskScheduler(
             propagatedFailure = false
             entries.values.toList().forEach { item ->
                 if (item.state == State.PENDING && item.task.dependsOn.any { dependency ->
-                        entries[dependency]?.state in setOf(State.FAILED, State.CANCELLED)
+                        entries[dependency]?.state == State.FAILED || entries[dependency]?.state == State.CANCELLED
                     }) {
                     entries[item.task.id] = item.copy(
                         state = State.FAILED,
