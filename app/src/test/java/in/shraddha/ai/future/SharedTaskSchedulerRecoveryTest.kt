@@ -46,4 +46,36 @@ class SharedTaskSchedulerRecoveryTest {
         assertEquals(SharedTaskScheduler.State.FAILED, restored.get(task.id)?.state)
         assertNull(restored.claimSpecific(task.id))
     }
+    @Test fun interruptedOperatorTaskCanCompleteOnlyWithVerifiedEvidence() {
+        val task = SharedTaskScheduler.Task(
+            id = "operator_recovery_1",
+            title = "Operator workflow",
+            payload = """{"kind":"operator_workflow"}"""
+        )
+        val original = SharedTaskScheduler(1)
+        original.submitAll(listOf(task))
+        original.claimSpecific(task.id)
+
+        val restored = SharedTaskScheduler(1)
+        restored.restore(original.snapshot())
+        val completed = restored.completeInterrupted(task.id, verified = true)
+
+        assertEquals(SharedTaskScheduler.State.SUCCEEDED, completed.state)
+        assertNull(completed.error)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun interruptedOperatorTaskCannotCompleteWithoutProof() {
+        val task = SharedTaskScheduler.Task(
+            id = "operator_recovery_2",
+            title = "Operator workflow"
+        )
+        val original = SharedTaskScheduler(1)
+        original.submitAll(listOf(task))
+        original.claimSpecific(task.id)
+        val restored = SharedTaskScheduler(1)
+        restored.restore(original.snapshot())
+        restored.completeInterrupted(task.id, verified = false)
+    }
+
 }
