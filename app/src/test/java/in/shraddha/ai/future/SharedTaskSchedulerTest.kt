@@ -89,6 +89,16 @@ class SharedTaskSchedulerTest {
         assertEquals("bg_1", scheduler.claimSpecific("bg_1")?.task?.id)
     }
 
+    @Test fun pendingForegroundTasksAreFailedClosedWithoutExecution() {
+        val scheduler = SharedTaskScheduler()
+        scheduler.submitAll(listOf(SharedTaskScheduler.Task("voice", "Voice tool")))
+        assertEquals(
+            SharedTaskScheduler.State.FAILED,
+            scheduler.failPending("voice", "Process stopped before adapter claim").state
+        )
+        assertNull(scheduler.claimSpecific("voice"))
+    }
+
     @Test fun onlyExplicitlyRetrySafeBackgroundTasksCanBeRequeuedAfterCrash() {
         val source = SharedTaskScheduler()
         source.submitAll(listOf(
