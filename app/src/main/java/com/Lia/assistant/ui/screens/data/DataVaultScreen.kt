@@ -1,7 +1,6 @@
 package com.Lia.assistant.ui.screens.data
 
 import android.net.Uri
-import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +68,7 @@ fun DataVaultScreen(navController: NavController) {
         pendingExport = null
         if (uri == null || envelope == null) {
             status = "Backup export cancelled. No file was written."
+            isBusy = false
         } else {
             scope.launch {
                 isBusy = true
