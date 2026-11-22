@@ -8,7 +8,6 @@ import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.learning.AppProfileStore
-import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.WorkflowCheckpointStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
