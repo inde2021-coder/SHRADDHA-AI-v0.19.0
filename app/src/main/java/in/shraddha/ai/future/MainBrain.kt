@@ -114,6 +114,44 @@ class MainBrain(
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeWithConfiguredProvider(context.applicationContext, goal, language, provider, shouldContinue, onProgress)
 
+        /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
+        suspend fun forgeWebsite(
+            context: Context,
+            prompt: String,
+            isEdit: Boolean,
+            initialHtml: String?
+        ): Boolean {
+            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val taskId = "forge_" + UUID.randomUUID().toString().replace("-", "")
+            val payload = JSONObject().put("kind", "website_forge")
+                .put("edit", isEdit).put("prompt", prompt.take(6000)).toString()
+            runCatching {
+                scheduler.submitAll(listOf(SharedTaskScheduler.Task(
+                    id = taskId,
+                    title = "Website Forge: ${prompt.take(100)}",
+                    priority = 3,
+                    payload = payload
+                )))
+            }.getOrElse { return false }
+            if (scheduler.claimSpecific(taskId) == null) {
+                runCatching { scheduler.cancel(taskId) }
+                return false
+            }
+            return try {
+                com.Lia.assistant.forge.WebsiteForgeClient.forgeWebsite(
+                    context.applicationContext, prompt, isEdit, initialHtml
+                )
+                scheduler.complete(taskId)
+                true
+            } catch (cancelled: CancellationException) {
+                runCatching { scheduler.cancel(taskId) }
+                throw cancelled
+            } catch (error: Exception) {
+                runCatching { scheduler.fail(taskId, error.message ?: "Website Forge failed") }
+                false
+            }
+        }
+
         /** Consent-gated form extraction is serialized through the shared Main Brain scheduler. */
         fun extractForm(
             context: Context,
