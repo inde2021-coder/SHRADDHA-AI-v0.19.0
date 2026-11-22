@@ -35,7 +35,8 @@ object BackgroundTaskQueue {
         }
         val workId = UUID.randomUUID()
         val schedulerTaskId = "bg_" + workId.toString().replace("-", "")
-        MainBrainSchedulerRuntime.get(context.applicationContext).submitAll(listOf(
+        val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+        scheduler.submitAll(listOf(
             SharedTaskScheduler.Task(
                 id = schedulerTaskId,
                 title = cleanGoal.take(160),
@@ -56,21 +57,24 @@ object BackgroundTaskQueue {
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .addTag(TAG)
             .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
-            "shraddha-agent-${request.id}", ExistingWorkPolicy.KEEP, request
-        )
+        try {
+            WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+                "shraddha-agent-${request.id}", ExistingWorkPolicy.KEEP, request
+            )
+        } catch (error: Exception) {
+            runCatching { scheduler.cancel(schedulerTaskId) }
+            throw error
+        }
         return workId
     }
 
     fun cancel(context: Context, id: UUID) {
         WorkManager.getInstance(context.applicationContext).cancelWorkById(id)
         val taskId = "bg_" + id.toString().replace("-", "")
-        if (!taskId.isNullOrBlank()) {
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
-            val state = scheduler.get(taskId)?.state
-            if (state == SharedTaskScheduler.State.PENDING || state == SharedTaskScheduler.State.RUNNING) {
-                scheduler.cancel(taskId)
-            }
+        val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+        val state = scheduler.get(taskId)?.state
+        if (state == SharedTaskScheduler.State.PENDING || state == SharedTaskScheduler.State.RUNNING) {
+            scheduler.cancel(taskId)
         }
     }
 }
