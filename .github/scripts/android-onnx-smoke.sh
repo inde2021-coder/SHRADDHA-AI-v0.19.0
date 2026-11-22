@@ -70,7 +70,7 @@ echo "Installing app and instrumentation APKs with direct ADB install..."
 echo "Running the full Android instrumentation suite..."
 instrumentation_output="$( "$ADB" -s "$SERIAL" shell am instrument -w -r in.shraddha.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tr -d "\r" )"
 printf "%s\n" "$instrumentation_output"
-if ! grep -Eq "INSTRUMENTATION_CODE: 0" <<< "$instrumentation_output" ||
+if ! grep -Eq "INSTRUMENTATION_CODE: -1" <<< "$instrumentation_output" ||
    ! grep -Eq "OK \([0-9]+ tests?\)" <<< "$instrumentation_output"; then
   echo "ERROR: Android instrumentation did not report a clean successful test run."
   exit 1
