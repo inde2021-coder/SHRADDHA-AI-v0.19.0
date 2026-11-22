@@ -85,7 +85,7 @@ class PcCompanionApp:
         self.frame_photo = None
         self._pending_pairing_auth = False
         self.pending_pc_send = None
-        self.pc_incoming = {}
+        self.pc_incoming = self._load_pc_incoming()
         self.remote_target_var = tk.StringVar()
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
@@ -605,6 +605,56 @@ class PcCompanionApp:
         except Exception as exc:
             self.status_var.set(f"Could not verify Android action result: {str(exc)[:120]}")
 
+    def _pc_transfer_state_path(self):
+        return CONFIG_PATH.parent / "incoming-transfers.json"
+
+    def _load_pc_incoming(self):
+        try:
+            raw = json.loads(self._pc_transfer_state_path().read_text(encoding="utf-8"))
+            restored = {}
+            if not isinstance(raw, dict):
+                return restored
+            for transfer_id, item in raw.items():
+                if (not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or
+                        not isinstance(item, dict) or
+                        not isinstance(item.get("path"), str) or len(item["path"]) > 1024 or
+                        not isinstance(item.get("peer"), str) or
+                        not re.fullmatch(r"[a-f0-9]{64}", str(item.get("sha256", "")))):
+                    continue
+                part = Path(item["path"] + ".shraddha-part")
+                size = int(item.get("size", 0))
+                chunks = int(item.get("chunks", 0))
+                if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 20_000_000:
+                    continue
+                if chunks != (size + 47999) // 48000:
+                    continue
+                received = {int(i) for i in item.get("received", []) if isinstance(i, int) and 0 <= i < chunks}
+                restored[transfer_id] = {
+                    "peer": item["peer"], "path": item["path"], "size": size,
+                    "chunks": chunks, "sha256": item["sha256"], "received": received
+                }
+            return restored
+        except Exception:
+            return {}
+
+    def _persist_pc_incoming(self):
+        try:
+            path = self._pc_transfer_state_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                transfer_id: {
+                    "peer": item["peer"], "path": item["path"], "size": item["size"],
+                    "chunks": item["chunks"], "sha256": item["sha256"],
+                    "received": sorted(item["received"])
+                }
+                for transfer_id, item in self.pc_incoming.items()
+            }
+            temp = path.with_suffix(".tmp")
+            temp.write_text(json.dumps(payload), encoding="utf-8")
+            temp.replace(path)
+        except Exception as exc:
+            self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
+
     def choose_file_for_phone(self):
         peer_id = __import__("tkinter.simpledialog", fromlist=["askstring"]).askstring(
             "Send to paired phone", "Enter the paired Android device ID:", parent=self.root)
@@ -748,6 +798,7 @@ class PcCompanionApp:
         }
         with open(destination + ".shraddha-part", "wb") as output:
             output.truncate(size)
+        self._persist_pc_incoming()
         self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                          "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
         self.status_var.set(f"Receiving {Path(destination).name} from paired Android device…")
@@ -778,6 +829,7 @@ class PcCompanionApp:
                     output.seek(index * 48000)
                     output.write(data)
                 transfer["received"].add(index)
+                self._persist_pc_incoming()
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": True})
             if len(transfer["received"]) == transfer["chunks"]:
@@ -789,6 +841,7 @@ class PcCompanionApp:
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.pc_incoming.pop(transfer_id, None)
+                self._persist_pc_incoming()
                 self.status_var.set("Incoming file saved and SHA-256 verified.")
         except Exception as exc:
             self.status_var.set(f"Incoming file rejected: {str(exc)[:140]}")
@@ -796,6 +849,7 @@ class PcCompanionApp:
                              "transferId": transfer_id, "reason": "integrity_or_protocol_error"})
             Path(transfer["path"] + ".shraddha-part").unlink(missing_ok=True)
             self.pc_incoming.pop(transfer_id, None)
+            self._persist_pc_incoming()
 
     def _handle_file_resume(self, msg):
         transfer_id = str(msg.get("transferId", ""))
@@ -823,6 +877,7 @@ class PcCompanionApp:
         incoming = self.pc_incoming.pop(transfer_id, None)
         if incoming:
             Path(incoming["path"] + ".shraddha-part").unlink(missing_ok=True)
+            self._persist_pc_incoming()
         self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
 
     def _send_e2e_key_offer(self, peer_id):
