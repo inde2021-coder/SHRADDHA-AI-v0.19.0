@@ -5,7 +5,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import `in`.shraddha.ai.brain.PersistentChatMemory
-import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.Personality
