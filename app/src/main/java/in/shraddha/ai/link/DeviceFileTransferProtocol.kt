@@ -11,9 +11,9 @@ internal object DeviceFileTransferProtocol {
         return ((sizeBytes + CHUNK_BYTES - 1) / CHUNK_BYTES).toInt()
     }
 
-    fun expectedChunkBytes(sizeBytes: Long, chunkCount: Int, index: Int): Int? {
+    fun expectedChunkBytes(sizeBytes: Long, declaredChunkCount: Int, index: Int): Int? {
         val expectedCount = chunkCount(sizeBytes) ?: return null
-        if (chunkCount != expectedCount || index !in 0 until chunkCount) return null
+        if (declaredChunkCount != expectedCount || index !in 0 until declaredChunkCount) return null
         val remaining = sizeBytes - index.toLong() * CHUNK_BYTES
         if (remaining <= 0L) return null
         return minOf(CHUNK_BYTES.toLong(), remaining).toInt()
