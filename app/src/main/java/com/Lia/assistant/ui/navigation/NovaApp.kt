@@ -32,6 +32,7 @@ import com.Lia.assistant.ui.screens.privacy.PrivacyScreen
 import com.Lia.assistant.ui.screens.profile.ProfileScreen
 import com.Lia.assistant.ui.screens.quickactions.QuickActionsScreen
 import com.Lia.assistant.ui.screens.settings.SettingsScreen
+import com.Lia.assistant.ui.screens.settings.ApiKeysScreen
 import com.Lia.assistant.ui.screens.voice.VoiceScreen
 import com.Lia.assistant.ui.screens.vision.VisualLensScreen
 import com.Lia.assistant.ui.theme.LocalBottomBarInset
@@ -88,6 +89,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("chat") { ChatScreen(navController, appState) }
                     composable("history") { HistoryScreen(navController, appState) }
                     composable("settings") { SettingsScreen(navController, appState) }
+                    composable("api_keys") { ApiKeysScreen(navController) }
                     composable("voice") { VoiceScreen(navController, appState) }
                     composable("visual_lens") { VisualLensScreen(navController) }
                     composable("quick_actions") { QuickActionsScreen(navController) }
