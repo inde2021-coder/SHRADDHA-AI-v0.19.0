@@ -1093,7 +1093,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     android.app.AlertDialog.Builder(this@MainActivity)
                         .setTitle("Windows file write approval")
-                        .setMessage("Path: $relative\\nCharacters: ${content.length}\\nOverwrite existing: ${pcOverwrite.isChecked}\\n\\nWindows PC पर भी दूसरी confirmation आएगी। Existing file होने पर पहले backup बनाया जाएगा।")
+                        .setMessage("Path: $relative\nCharacters: ${content.length}\nOverwrite existing: ${pcOverwrite.isChecked}\n\nWindows PC पर भी दूसरी confirmation आएगी। Existing file होने पर पहले backup बनाया जाएगा।")
                         .setNegativeButton("Cancel", null)
                         .setPositiveButton("Send for PC approval") { _, _ ->
                             sendRemote(JSONObject().put("kind", "file_write").put("path", relative)
