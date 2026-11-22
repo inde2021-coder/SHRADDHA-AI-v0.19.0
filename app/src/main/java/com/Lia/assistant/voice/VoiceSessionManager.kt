@@ -402,7 +402,7 @@ object VoiceSessionManager {
         val clean = text.trim().take(1200)
         if (clean.isBlank() || !_isActive.value) return
         val epoch = sessionEpoch.get()
-        val assistantName = PersonalityRepository.getAssistantName(context)
+        val assistantName = _statusText.value.substringBefore(" is ").ifBlank { "Shraddha AI" }
         speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
     }
 
