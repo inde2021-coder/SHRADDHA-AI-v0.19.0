@@ -106,7 +106,7 @@ fun PrivacyScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Device pairing & file transfer", color = colors.accent, fontSize = 16.sp)
                 Text(
-                    "Paired-device visual frames and file chunks use ECDH-derived AES-GCM encryption after fingerprint verification. Remote actions require target-side approval. File transfers verify chunk indexes, byte lengths and SHA-256 before saving; the current Android transfer limit is 100 MiB. Malware scanning and physical multi-device interruption testing are not yet verified. Disconnecting this phone does not erase the other device's stored files.",
+                    "Paired-device visual frames, clipboard text, quick-share attachments and large-file chunks use ECDH-derived AES-GCM encryption after fingerprint verification. The relay enforces category permissions and one-time grants but cannot inspect encrypted attachment contents. Remote actions require target-side approval. File transfers verify chunk indexes, byte lengths and SHA-256 before saving; the current Android transfer limit is 100 MiB. Malware scanning and physical multi-device interruption testing are not yet verified. Disconnecting this phone does not erase the other device's stored files.",
                     color = colors.textPrimary,
                     fontSize = 13.sp,
                     lineHeight = 20.sp
