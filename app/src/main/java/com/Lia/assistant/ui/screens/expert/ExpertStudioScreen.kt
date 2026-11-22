@@ -59,6 +59,37 @@ private val EXPERT_DOMAINS = listOf(
 )
 private val EXPERT_MODES = listOf("learn", "solve", "design", "diagnose", "exam", "create")
 
+private fun apiProviderKey(label: String): String = when (label.uppercase()) {
+    "CLAUDE" -> "anthropic"
+    else -> label.lowercase()
+}
+
+private fun studioWorkspaceKey(domain: String): String = when (domain) {
+    "medical" -> "medical_education"
+    "civil" -> "civil_building"
+    "general" -> "research"
+    else -> domain
+}
+
+private fun studioTaskKey(mode: String): String = when (mode) {
+    "learn" -> "teach"
+    "exam" -> "quiz"
+    else -> mode
+}
+
+private fun formatExpertResponse(raw: String): String {
+    val json = runCatching { org.json.JSONObject(raw) }.getOrNull() ?: return raw
+    val answer = json.optString("answer")
+    if (answer.isNotBlank()) return answer
+    val results = json.optJSONArray("results") ?: return raw
+    return (0 until results.length()).mapNotNull { index ->
+        val item = results.optJSONObject(index) ?: return@mapNotNull null
+        val providerName = item.optString("provider").uppercase()
+        val content = item.optString("answer").ifBlank { item.optString("error", "No result returned.") }
+        "### $providerName\\n$content"
+    }.joinToString("\\n\\n").ifBlank { raw }
+}
+
 @Composable
 fun ExpertStudioScreen(navController: NavController) {
     val context = LocalContext.current
@@ -113,9 +144,10 @@ fun ExpertStudioScreen(navController: NavController) {
         status = "Sending a real request to the configured Expert API…"
         val config = VoiceGatewaySettings.get(context)
         DeviceLinkManager.expertAssist(
-            config.baseUrl, config.gatewayToken, provider.lowercase(), domain, mode, question.trim()
+            config.baseUrl, config.gatewayToken, apiProviderKey(provider), domain, mode, question.trim()
         ) { result ->
-            result.onSuccess { answer ->
+            result.onSuccess { rawAnswer ->
+                val answer = formatExpertResponse(rawAnswer)
                 mainHandler.post {
                     response = answer
                     status = "Expert response received from the configured backend."
@@ -146,15 +178,16 @@ fun ExpertStudioScreen(navController: NavController) {
         status = "Running a real Studio Work request…"
         val config = VoiceGatewaySettings.get(context)
         DeviceLinkManager.studioWork(
-            config.baseUrl, config.gatewayToken, provider.lowercase(), domain, mode, question.trim()
+            config.baseUrl, config.gatewayToken, apiProviderKey(provider), studioWorkspaceKey(domain), studioTaskKey(mode), question.trim()
         ) { result ->
-            result.onSuccess { answer ->
+            result.onSuccess { rawAnswer ->
+                val answer = formatExpertResponse(rawAnswer)
                 mainHandler.post {
                     response = answer
                     status = "Studio output received from the configured backend."
                     isBusy = false
                 }
-                saveResult(question.trim().take(80).ifBlank { "Studio result" }, answer, domain, mode, provider)
+                saveResult(question.trim().take(80).ifBlank { "Studio result" }, answer, studioWorkspaceKey(domain), studioTaskKey(mode), provider)
             }.onFailure { error ->
                 mainHandler.post {
                     status = error.message ?: "Studio API request failed."
@@ -179,9 +212,10 @@ fun ExpertStudioScreen(navController: NavController) {
         status = "Comparing selected providers through the configured backend…"
         val config = VoiceGatewaySettings.get(context)
         DeviceLinkManager.compareProviders(
-            config.baseUrl, config.gatewayToken, compareSelection.sorted().map { it.lowercase() }, question.trim()
+            config.baseUrl, config.gatewayToken, compareSelection.sorted().map(::apiProviderKey), question.trim()
         ) { result ->
-            result.onSuccess { answer ->
+            result.onSuccess { rawAnswer ->
+                val answer = formatExpertResponse(rawAnswer)
                 mainHandler.post {
                     response = answer
                     status = "Provider comparison received."
