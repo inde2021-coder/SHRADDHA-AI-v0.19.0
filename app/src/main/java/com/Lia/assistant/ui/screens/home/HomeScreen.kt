@@ -197,6 +197,10 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             FeatureInfo("🗂️", "Project Lab", "Projects और milestones ट्रैक करें", NeonBlue) { navController.navigate("project_lab") },
             FeatureInfo("⚙️", "Task Automation", "काम और workflows", NeonMint) { navController.navigate("quick_actions") }
         )
+        FeatureRow(
+            FeatureInfo("🔐", "Data Vault", "Encrypted backup और restore", NeonBlue) { navController.navigate("data_vault") },
+            FeatureInfo("🛡️", "Privacy Center", "Permissions और data controls", NeonMint) { navController.navigate("privacy") }
+        )
         SectionHeading("PERSONALIZE", "अपना AI अनुभव चुनें")
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
