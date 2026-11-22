@@ -319,6 +319,85 @@ test('disabling a data-sharing category clears pending and active grants and not
   });
 });
 
+
+
+test('small shared files require a one-time grant and end-to-end encrypted envelope', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Encrypted Share Sender' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Encrypted Share Receiver', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace('http:', 'ws:');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner);
+  const memberSocket = connect(member);
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const waitType = (socket, type) => nextWsMessage(socket, data => {
+      try { return JSON.parse(data.toString()).type === type; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { media: true } }));
+    const requestPromise = waitType(memberSocket, 'data_share_request');
+    ownerSocket.send(JSON.stringify({ type: 'data_share_request', targetDeviceId: member.deviceId, category: 'media', itemLabel: 'Photo attachment' }));
+    const [requestMessage] = await requestPromise;
+    const requestId = JSON.parse(requestMessage.toString()).requestId;
+    const approvalPromise = waitType(ownerSocket, 'data_share_result');
+    memberSocket.send(JSON.stringify({ type: 'data_share_response', requesterDeviceId: owner.deviceId, category: 'media', requestId, approved: true, minutes: 5 }));
+    const [approval] = await approvalPromise;
+    assert.equal(JSON.parse(approval.toString()).approved, true);
+
+    let plaintextForwarded = false;
+    const onPlaintext = data => {
+      try { if (JSON.parse(data.toString()).type === 'data_share_payload') plaintextForwarded = true; } catch {}
+    };
+    memberSocket.on('message', onPlaintext);
+    ownerSocket.send(JSON.stringify({
+      type: 'data_share_payload', targetDeviceId: member.deviceId, category: 'media', requestId,
+      fileName: 'photo.jpg', mimeType: 'image/jpeg', contentType: 'file', sizeBytes: 4,
+      sha256: 'a'.repeat(64), payload: '/////w=='
+    }));
+    await new Promise(resolve => setTimeout(resolve, 120));
+    memberSocket.off('message', onPlaintext);
+    assert.equal(plaintextForwarded, false, 'plaintext attachments must never reach the target');
+
+    const encryptedPromise = waitType(memberSocket, 'e2e_message');
+    ownerSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: member.deviceId, messageKind: 'data_share_payload',
+      category: 'media', requestId, nonce: 'A'.repeat(16),
+      ciphertext: Buffer.from('opaque encrypted payload').toString('base64')
+    }));
+    const [encryptedMessage] = await encryptedPromise;
+    const forwarded = JSON.parse(encryptedMessage.toString());
+    assert.equal(forwarded.messageKind, 'data_share_payload');
+    assert.equal(forwarded.category, 'media');
+    assert.equal(forwarded.requestId, requestId);
+
+    let replayForwarded = false;
+    const onReplay = data => {
+      try { if (JSON.parse(data.toString()).type === 'e2e_message') replayForwarded = true; } catch {}
+    };
+    memberSocket.on('message', onReplay);
+    ownerSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: member.deviceId, messageKind: 'data_share_payload',
+      category: 'media', requestId, nonce: 'B'.repeat(16),
+      ciphertext: Buffer.from('replayed encrypted payload').toString('base64')
+    }));
+    await new Promise(resolve => setTimeout(resolve, 120));
+    memberSocket.off('message', onReplay);
+    assert.equal(replayForwarded, false, 'the one-time share grant must be consumed after one payload');
+  } finally {
+    const closes = [ownerSocket, memberSocket].map(socket => socket.readyState === WebSocket.CLOSED ? Promise.resolve() : new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
+
 test('target device can revoke active remote-control grants immediately', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
