@@ -910,7 +910,7 @@ wss.on('connection', (ws, ctx) => {
       const messageKind = String(msg.messageKind || '');
       const nonce = String(msg.nonce || '');
       const ciphertext = String(msg.ciphertext || '');
-      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload'].includes(messageKind) ||
+      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload','data_share_payload'].includes(messageKind) ||
           !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 22 || ciphertext.length > 3_400_000 ||
           !/^[A-Za-z0-9+/]+=*$/.test(ciphertext)) return;
       if (messageKind === 'remote_action') {
@@ -937,9 +937,17 @@ wss.on('connection', (ws, ctx) => {
         const grant = target.grants?.get(deviceId + ':' + category);
         if (target.sharePermissions?.[category] !== true || !matchesOneTimeShareGrant(grant, String(msg.requestId || ''))) return;
         target.grants.delete(deviceId + ':' + category);
+      } else if (messageKind === 'data_share_payload') {
+        const category = String(msg.category || '');
+        const requestId = String(msg.requestId || '');
+        const grant = target.grants?.get(deviceId + ':' + category);
+        if (!isAllowedShareCategory(category) || target.sharePermissions?.[category] !== true ||
+            !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId)) return;
+        target.grants.delete(deviceId + ':' + category);
       }
       send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind, actionId: String(msg.actionId || '').slice(0,64),
         actionKind: String(msg.actionKind || '').slice(0,32), transferId: String(msg.transferId || '').slice(0,64),
+        category: String(msg.category || '').slice(0,32),
         index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, requestId: String(msg.requestId || '').slice(0,64), nonce, ciphertext }));
     } else if (msg.type === 'control_revoke') {
       const requestedId = String(msg.requesterDeviceId || '');
@@ -1090,25 +1098,7 @@ wss.on('connection', (ws, ctx) => {
       else device.grants.delete(pendingKey);
       send(requesterId, JSON.stringify({ type: 'data_share_result', targetDeviceId: deviceId, category, requestId, approved, expiresInMinutes: approved ? minutes : 0 }));
     } else if (msg.type === 'data_share_payload') {
-      const targetId = String(msg.targetDeviceId || '');
-      const target = session.devices.get(targetId);
-      const category = String(msg.category || '');
-      const grantKey = `${deviceId}:${category}`;
-      const grant = target?.grants?.get(grantKey);
-      const requestId = String(msg.requestId || '').slice(0, 64);
-      const payload = typeof msg.payload === 'string' ? msg.payload : '';
-      const sizeBytes = Number(msg.sizeBytes);
-      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
-      const contentType = typeof msg.contentType === 'string' ? msg.contentType : 'file';
-      if (!target || target.sharePermissions?.[category] !== true ||
-          !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
-          payload.length > 900_000 || !payload || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 650_000 ||
-          !/^[a-f0-9]{64}$/.test(digest) || !isAllowedSharedPayloadType(category, contentType, sizeBytes)) return;
-      if (!validateSharedFileEnvelope(payload, sizeBytes, digest)) return;
-      target.grants.delete(grantKey);
-      send(targetId, JSON.stringify({ type: 'data_share_payload', fromDeviceId: deviceId, category,
-        fileName: String(msg.fileName || '').slice(0,120), mimeType: String(msg.mimeType || 'application/octet-stream').slice(0,100),
-        requestId, sizeBytes, sha256: digest, contentType, payload }));
+      return; // Plaintext data-share payloads are disabled; use authenticated e2e_message envelopes.
     } else if (msg.type === 'file_transfer_start') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
