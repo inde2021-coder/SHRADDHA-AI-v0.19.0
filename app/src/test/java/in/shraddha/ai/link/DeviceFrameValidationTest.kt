@@ -55,4 +55,43 @@ class DeviceFrameValidationTest {
         assertFalse(DeviceFrameValidation.decodeFromRelay(byteArrayOf(0, 0x81.toByte())) != null)
     }
 
+
+    @Test fun endToEndVisualFrameCanBeEncryptedRelayedAndAuthenticated() {
+        val senderCrypto = DeviceE2ECrypto.create()
+        val receiverCrypto = DeviceE2ECrypto.create()
+        val senderKey = senderCrypto.derivePeerKey(receiverCrypto.publicKeyBase64(), "sender", "receiver").first
+        val receiverKey = receiverCrypto.derivePeerKey(senderCrypto.publicKeyBase64(), "receiver", "sender").first
+        assertArrayEquals(senderKey, receiverKey)
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
+        val sequence = 7L
+        val aad = "session|sender|receiver|visual_frame|1|7".toByteArray(Charsets.UTF_8)
+        val sealed = DeviceE2ECrypto.encrypt(senderKey, jpeg, aad)
+        val senderPacket = DeviceFrameValidation.encodeForRelay(
+            1, "receiver", sequence,
+            java.util.Base64.getDecoder().decode(sealed.nonce),
+            java.util.Base64.getDecoder().decode(sealed.ciphertext)
+        )
+        val targetLength = senderPacket[1].toInt() and 0xff
+        val opaquePayload = senderPacket.copyOfRange(2 + targetLength, senderPacket.size)
+        val source = "sender".toByteArray(Charsets.UTF_8)
+        val relayed = byteArrayOf(source.size.toByte()) + source + byteArrayOf(senderPacket[0]) + opaquePayload
+        val frame = DeviceFrameValidation.decodeFromRelay(relayed)!!
+        val decoded = DeviceE2ECrypto.decrypt(
+            receiverKey,
+            java.util.Base64.getEncoder().withoutPadding().encodeToString(frame.nonce),
+            java.util.Base64.getEncoder().withoutPadding().encodeToString(frame.ciphertext),
+            "session|sender|receiver|visual_frame|1|7".toByteArray(Charsets.UTF_8)
+        )
+        assertArrayEquals(jpeg, decoded)
+        assertThrows(javax.crypto.AEADBadTagException::class.java) {
+            DeviceE2ECrypto.decrypt(
+                receiverKey,
+                java.util.Base64.getEncoder().withoutPadding().encodeToString(frame.nonce),
+                java.util.Base64.getEncoder().withoutPadding().encodeToString(frame.ciphertext),
+                "session|attacker|receiver|visual_frame|1|7".toByteArray(Charsets.UTF_8)
+            )
+        }
+        senderKey.fill(0); receiverKey.fill(0)
+    }
+
 }
