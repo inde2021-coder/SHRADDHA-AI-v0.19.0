@@ -9,7 +9,10 @@ class InterruptedStepRecoveryTest {
             InterruptedStepRecovery.Decision.VERIFIED_COMPLETE,
             InterruptedStepRecovery.assess(
                 expectedText = "Message sent",
-                visibleText = listOf("Inbox", "Message sent successfully")
+                visibleText = listOf("Inbox", "Message sent successfully"),
+                beforeScreenFingerprint = "before123",
+                currentScreenFingerprint = "after456",
+                expectedTextAbsentBefore = true
             )
         )
     }
@@ -19,7 +22,10 @@ class InterruptedStepRecoveryTest {
             InterruptedStepRecovery.Decision.AMBIGUOUS,
             InterruptedStepRecovery.assess(
                 expectedText = "Message sent",
-                visibleText = listOf("Compose", "Send")
+                visibleText = listOf("Compose", "Send"),
+                beforeScreenFingerprint = "before123",
+                currentScreenFingerprint = "after456",
+                expectedTextAbsentBefore = true
             )
         )
     }
@@ -27,14 +33,40 @@ class InterruptedStepRecoveryTest {
     @Test fun emptyPostconditionIsAlwaysAmbiguous() {
         assertEquals(
             InterruptedStepRecovery.Decision.AMBIGUOUS,
-            InterruptedStepRecovery.assess("", listOf("Some screen changed"))
+            InterruptedStepRecovery.assess("", listOf("Some screen changed"), "before123", "after456", true)
         )
     }
 
     @Test fun matchingIsCaseInsensitive() {
         assertEquals(
             InterruptedStepRecovery.Decision.VERIFIED_COMPLETE,
-            InterruptedStepRecovery.assess("Order Confirmed", listOf("order confirmed"))
+            InterruptedStepRecovery.assess("Order Confirmed", listOf("order confirmed"), "before123", "after456", true)
         )
     }
+    @Test fun unchangedScreenCannotProveAnInterruptedActionCompleted() {
+        assertEquals(
+            InterruptedStepRecovery.Decision.AMBIGUOUS,
+            InterruptedStepRecovery.assess(
+                "Saved",
+                listOf("Saved"),
+                "sameFingerprint",
+                "sameFingerprint",
+                true
+            )
+        )
+    }
+
+    @Test fun postconditionAlreadyVisibleBeforeActionIsNotProof() {
+        assertEquals(
+            InterruptedStepRecovery.Decision.AMBIGUOUS,
+            InterruptedStepRecovery.assess(
+                "Saved",
+                listOf("Saved"),
+                "before123",
+                "after456",
+                false
+            )
+        )
+    }
+
 }
