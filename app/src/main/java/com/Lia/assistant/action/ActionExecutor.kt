@@ -37,10 +37,21 @@ object ActionExecutor {
                     result.put("status", "error")
                     result.put("message", "Website prompt must contain 1-8000 characters.")
                 } else {
-                    withContext(Dispatchers.Main.immediate) { ForgeController.start(context, prompt) }
-                    result.put("status", "success")
-                    result.put("action", "forge_started")
-                    result.put("message", "Website Forge opened. Review its generated plan before publishing or deploying.")
+                    val start = withContext(Dispatchers.Main.immediate) { ForgeController.start(context, prompt) }
+                    if (start is com.Lia.assistant.forge.ForgeStartResult.Started) {
+                        result.put("status", "success")
+                        result.put("action", "forge_started")
+                    } else {
+                        result.put("status", "error")
+                        result.put("action", when (start) {
+                            is com.Lia.assistant.forge.ForgeStartResult.MissingKey -> "provider_key_missing"
+                            is com.Lia.assistant.forge.ForgeStartResult.Offline -> "offline"
+                            is com.Lia.assistant.forge.ForgeStartResult.Busy -> "forge_busy"
+                            is com.Lia.assistant.forge.ForgeStartResult.NothingToEdit -> "nothing_to_edit"
+                            else -> "forge_start_failed"
+                        })
+                    }
+                    result.put("message", start.message)
                 }
             }
             "open_app" -> {
