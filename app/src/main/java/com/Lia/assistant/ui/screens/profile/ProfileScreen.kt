@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import in.shraddha.ai.R
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessKeySection
 import com.Lia.assistant.ui.components.NovaButton
@@ -82,7 +83,7 @@ fun ProfileScreen(
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = appState.assistantAvatarUri ?: in.shraddha.ai.R.drawable.shraddha_ai_avatar,
+                model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_avatar,
                 contentDescription = "Shraddha AI avatar",
                 modifier = Modifier.fillMaxSize().clip(CircleShape)
             )
