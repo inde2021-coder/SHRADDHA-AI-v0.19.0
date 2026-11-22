@@ -119,6 +119,31 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Build optimized arm64 release APK and verify packaged assets
+        timeout-minutes: 50
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --console=plain --max-workers=2 :app:assembleRelease -PshraddhaAbi=arm64-v8a --stacktrace
+          apk="$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          apk_bytes="$(stat -c%s "$apk")"
+          apk_mib="$(awk -v bytes="$apk_bytes" 'BEGIN {printf "%.2f", bytes / 1048576}')"
+          echo "Optimized arm64 release APK: $(basename "$apk") (${apk_mib} MiB, ${apk_bytes} bytes)"
+          if unzip -Z1 "$apk" | grep -F 'assets/biometric-models/' | grep -F '.onnx'; then
+            echo "ERROR: biometric ONNX models must not be bundled in the optimized release APK."
+            exit 1
+          fi
+          abis="$(unzip -Z1 "$apk" | awk -F/ '$1 == "lib" {print $2}' | sort -u | paste -sd ' ' -)"
+          test "$abis" = "arm64-v8a"
+      - name: Upload optimized arm64 release APK
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-arm64-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Explicitly install Android Emulator and API 30 x86_64 system image
         shell: bash
