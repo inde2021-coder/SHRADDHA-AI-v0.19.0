@@ -798,8 +798,19 @@ class PcCompanionApp:
             self.pc_incoming.pop(transfer_id, None)
 
     def _handle_file_resume(self, msg):
+        transfer_id = str(msg.get("transferId", ""))
+        incoming = self.pc_incoming.get(transfer_id)
+        if incoming:
+            peer_id = str(msg.get("fromDeviceId", incoming["peer"]))
+            if peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
+                return
+            missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
+            self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "missingIndexes": missing})
+            self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
+            return
         pending = self.pending_pc_send
-        if not pending or msg.get("transferId") != pending["transferId"]:
+        if not pending or transfer_id != pending["transferId"]:
             return
         missing = msg.get("missingIndexes", [])
         if isinstance(missing, list):
