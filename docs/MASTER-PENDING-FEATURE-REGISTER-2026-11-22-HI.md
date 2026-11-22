@@ -158,3 +158,6 @@ Visual Lens UI now uses the shared dark-teal/cyan glass components, the configur
 ### Historical project-scope correction
 
 The user's request to replace the phone's existing OS with Shraddha OS is a separate OS/ROM deliverable. Do not misrepresent this Android app branch or its APK as an operating-system replacement. It needs a device-specific ROM project and explicit recovery/backup safeguards.
+
+
+The repository also contains the user's LIA visual reference at `reference/lia-app-recording/LIA-APP-REFERENCE.mov`. The current GitHub text-file connector cannot decode that binary video, so this pass does not claim to have watched or reproduced its exact frame sequence. Preserve the file and use its actual visual details when a video-capable inspection path is available.
