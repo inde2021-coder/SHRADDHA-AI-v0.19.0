@@ -25,7 +25,7 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - This protocol is source-integrated but still requires Android↔Windows physical-device verification, replay/tamper tests and reconnect tests before production use. WSS alone is not end-to-end privacy.
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
 - PyAutoGUI's top-left fail-safe is enabled.
-- The companion does not capture microphone audio, read files, or silently send messages.
+- File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
 
 ## Build from source
 

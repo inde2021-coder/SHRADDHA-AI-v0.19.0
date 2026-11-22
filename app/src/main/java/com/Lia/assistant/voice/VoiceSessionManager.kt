@@ -1,13 +1,10 @@
 package com.Lia.assistant.voice
 
 import android.content.Context
-import com.Lia.assistant.action.ActionExecutor
 import com.Lia.assistant.action.InstalledAppLabelCache
-import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
-import com.Lia.assistant.forge.ForgeController
 import `in`.shraddha.ai.brain.PersistentChatMemory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -138,7 +135,7 @@ object VoiceSessionManager {
         _statusText.value = if (isResuming) "Reconnecting..." else "Connecting..."
 
         val ephemeralToken = try {
-            VoiceGatewaySettings.fetchEphemeralToken(currentContext)
+            `in`.shraddha.ai.future.MainBrainProviderGateway.fetchLiveVoiceToken(currentContext)
         } catch (error: Exception) {
             if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
             val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
@@ -245,21 +242,10 @@ object VoiceSessionManager {
                     runCatching {
                         val goal = args.optString("goal").trim()
                         require(goal.isNotBlank() && goal.length <= 1000) { "Goal must contain 1-1000 characters" }
-                        val council = `in`.shraddha.ai.future.AgentCouncil.plan(goal)
-                        val actions = council.roles.mapIndexed { index, role ->
-                            `in`.shraddha.ai.future.ShraddhaIntegrationHub.Action(
-                                id = role.name.lowercase().replace(Regex("[^a-z0-9_-]"), "_"),
-                                title = role.responsibility,
-                                dependsOn = if (index == 0) emptySet() else setOf(council.roles[index - 1].name.lowercase().replace(Regex("[^a-z0-9_-]"), "_")),
-                                priority = if (role.name == "Verifier" || role.name == "Critic") 1 else 2,
-                                estimatedMinutes = 10
-                            )
-                        }
-                        val hub = `in`.shraddha.ai.future.ShraddhaIntegrationHub()
-                        val session = hub.createPlan(
+                        val (council, session) = `in`.shraddha.ai.future.MainBrain.createCouncilPlan(
+                            goal = goal,
                             workflowId = "voice-council-" + java.util.UUID.randomUUID().toString().take(8),
-                            title = goal.take(120),
-                            actions = actions
+                            title = goal.take(120)
                         )
                         val roles = org.json.JSONArray()
                         council.roles.forEach { role ->
@@ -293,22 +279,10 @@ object VoiceSessionManager {
                     return
                 }
 
-                if (name == "build_website") {
-                    val response = runCatching {
-                        ForgeController.start(currentContext, args.optString("prompt", ""))
-                        JSONObject().put("result", "forge_started").put("success", true)
-                    }.getOrElse { error ->
-                        JSONObject().put("success", false).put("error", (error.localizedMessage ?: "Website build could not start").take(300))
-                    }
-                    client?.sendToolResponse(id, name, response)
-                    _state.value = NovaOrbState.LISTENING
-                    _statusText.value = "Listening..."
-                    return
-                }
 
                 val toolJob = scope.launch(start = CoroutineStart.LAZY) {
                     val result = try {
-                        ActionExecutor.execute(currentContext, name, args)
+                        `in`.shraddha.ai.future.MainBrain.executeVoiceTool(currentContext, name, args)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
@@ -395,6 +369,29 @@ object VoiceSessionManager {
             client = nextClient
             nextClient.connect(ephemeralToken, prompt)
         }
+    }
+
+    /** Adds the latest camera observation to the active Gemini Live conversation for the next spoken question. */
+    fun updateLiveVisualContext(text: String): Boolean {
+        val clean = text.trim().take(1200)
+        if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return false
+        val activeClient = client ?: return false
+        if (!activeClient.isLive()) return false
+        activeClient.sendText(
+            "[LIVE CAMERA CONTEXT UPDATE — NOT A USER COMMAND] The current camera view shows: $clean. " +
+                "Use this as the latest visual context when the user asks about what you can see. " +
+                "Do not narrate or answer this update; wait for the user's next spoken question."
+        )
+        return true
+    }
+
+    /** Speaks a camera observation through the configured Shraddha voice when the voice session is active. */
+    fun announceVisualObservation(context: Context, text: String) {
+        val clean = text.trim().take(1200)
+        if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return
+        val epoch = sessionEpoch.get()
+        val assistantName = "Shraddha AI"
+        speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
     }
 
     private fun speakWithShraddha(context: Context, epoch: Long, assistantName: String, text: String) {

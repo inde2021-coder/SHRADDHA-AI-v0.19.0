@@ -15,3 +15,7 @@ local.properties
 **/build/
 *.keystore
 *.jks
+
+# Biometric ONNX models are downloaded on demand and must never be bundled from a local cache.
+app/src/main/assets/biometric-models/*.onnx
+app/src/main/assets/biometric-models/*.part

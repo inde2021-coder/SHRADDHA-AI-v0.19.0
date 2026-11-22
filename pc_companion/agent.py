@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
 
 import keyring
 import mss
@@ -27,7 +27,7 @@ import websocket
 from PIL import Image, ImageTk
 
 from actions import execute_action
-from protocol import valid_pairing_ids, validate_remote_action
+from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
 from e2e_crypto import DeviceE2ECrypto
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
@@ -76,6 +76,8 @@ class PcCompanionApp:
         self.screen_event = threading.Event()
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
+        self.phone_control_peer = None
+        self.phone_control_grant_until = 0.0
         self.device_token = None
         self.e2e_crypto = DeviceE2ECrypto()
         self.peer_keys = {}
@@ -84,6 +86,11 @@ class PcCompanionApp:
         self.frame_label = None
         self.frame_photo = None
         self._pending_pairing_auth = False
+        self.pending_pc_send = None
+        self.pc_incoming = self._load_pc_incoming()
+        self.remote_target_var = tk.StringVar()
+        self.remote_action_var = tk.StringVar(value="home")
+        self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
 
         self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
@@ -118,11 +125,23 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Connect Saved PC", command=self.connect_saved).pack(side="left", padx=6)
         ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
         ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
         ttk.Checkbutton(frame, text="Share this PC screen with paired devices",
                         variable=self.screen_var, command=self._publish_permissions).pack(anchor="w", pady=4)
+        ttk.Separator(frame).pack(fill="x", pady=8)
+        ttk.Label(frame, text="CONTROL PAIRED ANDROID (phone approval required)").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
+        ttk.Label(frame, text="Android device ID").pack(anchor="w")
+        ttk.Combobox(frame, textvariable=self.remote_action_var,
+                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe"),
+                     state="readonly").pack(fill="x", pady=3)
+        ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
+        ttk.Label(frame, text="Action value: app name / text / scroll amount").pack(anchor="w")
+        ttk.Button(frame, text="Request Phone Control (5 min)", command=self.request_phone_control).pack(anchor="w", pady=3)
+        ttk.Button(frame, text="Send approved action to Android", command=self.send_remote_action_to_phone).pack(anchor="w", pady=3)
         ttk.Label(frame, textvariable=self.status_var, foreground="#146c43", wraplength=510).pack(anchor="w", pady=(10, 4))
         ttk.Label(frame, text="Safety: every control request opens a local approval dialog. F12 or Disconnect stops access. Screen sharing is off by default.",
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
@@ -471,11 +490,29 @@ class PcCompanionApp:
                 self.status_var.set("Peer fingerprint confirmed; waiting for local confirmation.")
             else:
                 self.status_var.set("E2E fingerprint mismatch. Do not trust this peer.")
+        elif kind == "data_share_request":
+            self._handle_data_share_request(msg)
+        elif kind == "data_share_result":
+            self._handle_data_share_result(msg)
+        elif kind == "file_transfer_start":
+            self._handle_incoming_file_start(msg)
+        elif kind == "file_transfer_ack":
+            self._handle_file_ack(msg)
+        elif kind == "file_transfer_resume":
+            self._handle_file_resume(msg)
+        elif kind == "file_transfer_cancel":
+            self._handle_file_cancel(msg)
         elif kind == "e2e_message":
             peer_id = str(msg.get("fromDeviceId", ""))
             message_kind = str(msg.get("messageKind", ""))
             action_id = str(msg.get("actionId", ""))
             action_kind = str(msg.get("actionKind", ""))
+            if message_kind == "file_transfer_chunk":
+                self._handle_incoming_file_chunk(msg, peer_id)
+                return
+            if message_kind == "remote_action_result":
+                self._handle_phone_remote_action_result(msg, peer_id, action_id, action_kind)
+                return
             if message_kind != "remote_action" or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):
                 self.status_var.set("Ignored unsupported encrypted peer message.")
                 return
@@ -491,7 +528,7 @@ class PcCompanionApp:
                 aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|remote_action|{action_id}".encode("utf-8")
                 plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
                 payload = json.loads(plain.decode("utf-8"))
-                action = validate_remote_action(payload.get("action"))
+                action = validate_remote_action_envelope(payload, action_kind)
                 if not action or action.get("kind") != action_kind:
                     raise ValueError("Action payload or action-kind binding is invalid.")
             except Exception as exc:
@@ -506,6 +543,17 @@ class PcCompanionApp:
             self._execute(action, peer_id, action_id)
         elif kind == "remote_action":
             self.status_var.set("Blocked plaintext remote action. E2E encryption is mandatory.")
+        elif kind == "control_result":
+            target_id = str(msg.get("targetDeviceId", ""))
+            if target_id != self.phone_control_peer:
+                return
+            if msg.get("approved") is True:
+                minutes = max(1, min(5, int(msg.get("expiresInMinutes", 5))))
+                self.phone_control_grant_until = time.time() + minutes * 60
+                self.status_var.set(f"Android approved control for {minutes} minutes. Each action still needs phone approval.")
+            else:
+                self.phone_control_grant_until = 0
+                self.status_var.set(f"Android denied control request: {str(msg.get('reason', 'Denied'))[:140]}")
         elif kind == "control_request":
             requester = str(msg.get("requesterName", "Paired device"))[:80]
             requester_id = str(msg.get("fromDeviceId", ""))[:80]
@@ -523,6 +571,343 @@ class PcCompanionApp:
             self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
+
+    def request_phone_control(self):
+        peer_id = self.remote_target_var.get().strip()
+        if not peer_id or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("Select an Android device with a mutually verified fingerprint first.")
+            return
+        self.phone_control_peer = peer_id
+        self.phone_control_grant_until = 0
+        if self._send_json({"type": "control_request", "targetDeviceId": peer_id, "minutes": 5}):
+            self.status_var.set("Phone control request sent. Unlock Android and approve the request there.")
+        else:
+            self.status_var.set("Could not request phone control: relay is disconnected.")
+
+    def send_remote_action_to_phone(self):
+        peer_id = self.remote_target_var.get().strip()
+        if peer_id != self.phone_control_peer or time.time() >= self.phone_control_grant_until:
+            self.status_var.set("First request Phone Control and approve the five-minute session on Android.")
+            return
+        kind = self.remote_action_var.get()
+        value = self.remote_value_var.get().strip()
+        if not peer_id or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("Select a paired Android device with a mutually verified fingerprint first.")
+            return
+        action = {"kind": kind}
+        if kind == "open_app":
+            action["appName"] = value
+        elif kind == "type":
+            action["text"] = value
+        elif kind == "scroll":
+            try:
+                action["amount"] = int(value)
+            except ValueError:
+                self.status_var.set("Scroll amount must be an integer from -20 to 20.")
+                return
+        elif kind == "tap":
+            action.update(x=0.5, y=0.5)
+        elif kind == "swipe":
+            action.update(x1=0.5, y1=0.75, x2=0.5, y2=0.25)
+        if kind in ("open_app", "type") and not value:
+            self.status_var.set("Enter the app name or text for this action.")
+            return
+        import secrets
+        action_id = secrets.token_urlsafe(18).replace("-", "_")
+        sent = self._send_e2e_message(peer_id, "remote_action", action, action_id, kind)
+        self.status_var.set("Encrypted action sent. Android will show its own consent and per-action approval." if sent
+                            else "Could not send action. Check connection and peer verification.")
+
+    def _handle_phone_remote_action_result(self, msg, peer_id, action_id, action_kind):
+        if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):
+            return
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            key = bytes(state["key"]) if state and state["local_confirmed"] and state["remote_confirmed"] else None
+        if key is None:
+            return
+        try:
+            aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|remote_action_result|{action_id}".encode("utf-8")
+            plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+            result = json.loads(plain.decode("utf-8"))
+            self.status_var.set(f"Android {action_kind}: {str(result.get('result', 'No result'))[:220]}")
+        except Exception as exc:
+            self.status_var.set(f"Could not verify Android action result: {str(exc)[:120]}")
+
+    def _pc_transfer_state_path(self):
+        return CONFIG_PATH.parent / "incoming-transfers.json"
+
+    def _load_pc_incoming(self):
+        try:
+            raw = json.loads(self._pc_transfer_state_path().read_text(encoding="utf-8"))
+            restored = {}
+            if not isinstance(raw, dict):
+                return restored
+            for transfer_id, item in raw.items():
+                if (not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or
+                        not isinstance(item, dict) or
+                        not isinstance(item.get("path"), str) or len(item["path"]) > 1024 or
+                        not isinstance(item.get("peer"), str) or
+                        not re.fullmatch(r"[a-f0-9]{64}", str(item.get("sha256", "")))):
+                    continue
+                part = Path(item["path"] + ".shraddha-part")
+                size = int(item.get("size", 0))
+                chunks = int(item.get("chunks", 0))
+                if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 20_000_000:
+                    continue
+                if chunks != (size + 47999) // 48000:
+                    continue
+                received = {int(i) for i in item.get("received", []) if isinstance(i, int) and 0 <= i < chunks}
+                restored[transfer_id] = {
+                    "peer": item["peer"], "path": item["path"], "size": size,
+                    "chunks": chunks, "sha256": item["sha256"], "received": received
+                }
+            return restored
+        except Exception:
+            return {}
+
+    def _persist_pc_incoming(self):
+        try:
+            path = self._pc_transfer_state_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                transfer_id: {
+                    "peer": item["peer"], "path": item["path"], "size": item["size"],
+                    "chunks": item["chunks"], "sha256": item["sha256"],
+                    "received": sorted(item["received"])
+                }
+                for transfer_id, item in self.pc_incoming.items()
+            }
+            temp = path.with_suffix(".tmp")
+            temp.write_text(json.dumps(payload), encoding="utf-8")
+            temp.replace(path)
+        except Exception as exc:
+            self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
+
+    def choose_file_for_phone(self):
+        peer_id = __import__("tkinter.simpledialog", fromlist=["askstring"]).askstring(
+            "Send to paired phone", "Enter the paired Android device ID:", parent=self.root)
+        if not peer_id:
+            return
+        path = filedialog.askopenfilename(title="Choose a file to send to Android")
+        if not path:
+            return
+        try:
+            file_path = Path(path)
+            size = file_path.stat().st_size
+            if size < 1 or size > 20_000_000:
+                raise ValueError("Relay currently permits files up to 20 MB per transfer.")
+            import hashlib, secrets
+            digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
+            request_id = secrets.token_urlsafe(18).replace("-", "_")
+            transfer_id = secrets.token_urlsafe(18).replace("-", "_")
+            self.pending_pc_send = {
+                "peer": peer_id.strip(), "path": str(file_path), "name": file_path.name[:120],
+                "size": size, "sha256": digest, "requestId": request_id, "transferId": transfer_id
+            }
+            sent = self._send_json({
+                "type": "data_share_request", "targetDeviceId": peer_id.strip(),
+                "category": "documents", "requestId": request_id,
+                "itemLabel": file_path.name[:120]
+            })
+            if not sent:
+                self.pending_pc_send = None
+                raise RuntimeError("Relay is not connected.")
+            self.status_var.set("File selected. Waiting for the Android user to approve Documents access.")
+        except Exception as exc:
+            self.status_var.set(f"Could not prepare file: {str(exc)[:160]}")
+
+    def _handle_data_share_request(self, msg):
+        peer_id = str(msg.get("fromDeviceId", ""))[:80]
+        request_id = str(msg.get("requestId", ""))
+        category = str(msg.get("category", ""))
+        if not peer_id or category != "documents" or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", request_id):
+            return
+        approved = messagebox.askyesno(
+            "Shraddha AI • Incoming file permission",
+            f"Paired device {peer_id} requests Documents sharing.\n\nApprove only if you initiated this transfer."
+        )
+        self._send_json({
+            "type": "data_share_response", "requesterDeviceId": peer_id,
+            "category": category, "requestId": request_id,
+            "approved": bool(approved), "minutes": 5
+        })
+
+    def _handle_data_share_result(self, msg):
+        pending = self.pending_pc_send
+        if not pending or msg.get("requestId") != pending["requestId"]:
+            return
+        if not msg.get("approved"):
+            self.pending_pc_send = None
+            self.status_var.set("Android user denied file transfer.")
+            return
+        chunks = (pending["size"] + 49151) // 48000
+        sent = self._send_json({
+            "type": "file_transfer_start", "targetDeviceId": pending["peer"],
+            "requestId": pending["requestId"], "transferId": pending["transferId"],
+            "fileName": pending["name"], "sizeBytes": pending["size"],
+            "chunkCount": chunks, "sha256": pending["sha256"]
+        })
+        self.status_var.set("Transfer manifest sent; waiting for Android user to accept and choose a save location." if sent
+                            else "Could not send transfer manifest.")
+
+    def _handle_file_ack(self, msg):
+        pending = self.pending_pc_send
+        if not pending or msg.get("transferId") not in (None, "", pending["transferId"]):
+            return
+        index = int(msg.get("index", -2))
+        if index == -1 and msg.get("ok") and not msg.get("complete"):
+            self._send_pc_file_chunks(list(range((pending["size"] + 49151) // 48000)))
+        elif msg.get("complete") and msg.get("ok"):
+            self.pending_pc_send = None
+            self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
+        elif index >= 0:
+            self.status_var.set(f"Android acknowledged file chunk {index + 1}.")
+
+    def _send_pc_file_chunks(self, indexes):
+        pending = self.pending_pc_send
+        if not pending or not self.is_e2e_trusted(pending["peer"]):
+            self.status_var.set("File send blocked: verify the Android peer fingerprint on both devices first.")
+            return
+        try:
+            with Path(pending["path"]).open("rb") as source:
+                for index in indexes:
+                    source.seek(index * 48000)
+                    data = source.read(48000)
+                    if not data:
+                        raise ValueError(f"Missing file bytes for chunk {index}")
+                    self._send_encrypted_file_chunk(pending["peer"], pending["transferId"], index, data)
+            self.status_var.set(f"Sent {len(indexes)} file chunks. Waiting for receiver SHA-256 verification.")
+        except Exception as exc:
+            self.status_var.set(f"File transfer paused: {str(exc)[:160]}")
+
+    def _send_encrypted_file_chunk(self, peer_id, transfer_id, index, data):
+        with self.e2e_lock:
+            state = self.peer_keys.get(peer_id)
+            if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                raise ValueError("Peer is not mutually verified")
+            key = bytes(state["key"])
+        source_id = str(self.config.get("deviceId", ""))
+        session_id = str(self.config.get("sessionId", ""))
+        aad = f"{session_id}|{source_id}|{peer_id}|file_transfer_chunk|{transfer_id}:{index}".encode("utf-8")
+        payload = json.dumps({"payload": base64.b64encode(data).decode("ascii")}, separators=(",", ":")).encode("utf-8")
+        nonce, ciphertext = DeviceE2ECrypto.encrypt(key, payload, aad)
+        if not self._send_json({
+            "type": "e2e_message", "targetDeviceId": peer_id,
+            "messageKind": "file_transfer_chunk", "transferId": transfer_id,
+            "index": index, "nonce": nonce, "ciphertext": ciphertext
+        }):
+            raise RuntimeError(f"Relay send failed at chunk {index}")
+
+    def _handle_incoming_file_start(self, msg):
+        peer_id = str(msg.get("fromDeviceId", ""))
+        transfer_id = str(msg.get("transferId", ""))
+        size = int(msg.get("sizeBytes", 0))
+        chunks = int(msg.get("chunkCount", 0))
+        digest = str(msg.get("sha256", ""))
+        if not self.is_e2e_trusted(peer_id):
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "peer_not_verified"})
+            return
+        if (not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or size < 1 or size > 20_000_000
+                or chunks != (size + 49151) // 48000 or not re.fullmatch(r"[a-f0-9]{64}", digest)):
+            self.status_var.set("Rejected invalid incoming file manifest.")
+            return
+        destination = filedialog.asksaveasfilename(
+            title="Choose where to save incoming file",
+            initialfile=Path(str(msg.get("fileName", "received-file"))).name
+        )
+        if not destination:
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "user_cancelled"})
+            return
+        self.pc_incoming[transfer_id] = {
+            "peer": peer_id, "path": destination, "size": size, "chunks": chunks,
+            "sha256": digest, "received": set()
+        }
+        with open(destination + ".shraddha-part", "wb") as output:
+            output.truncate(size)
+        self._persist_pc_incoming()
+        self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                         "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
+        self.status_var.set(f"Receiving {Path(destination).name} from paired Android device…")
+
+    def _handle_incoming_file_chunk(self, msg, peer_id):
+        transfer_id = str(msg.get("transferId", ""))
+        transfer = self.pc_incoming.get(transfer_id)
+        if not transfer or transfer["peer"] != peer_id or not self.is_e2e_trusted(peer_id):
+            return
+        index = int(msg.get("index", -1))
+        if not 0 <= index < transfer["chunks"]:
+            return
+        try:
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                key = bytes(state["key"]) if state else None
+            if key is None:
+                return
+            aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|file_transfer_chunk|{transfer_id}:{index}".encode("utf-8")
+            plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+            payload = json.loads(plain.decode("utf-8"))
+            data = base64.b64decode(payload["payload"], validate=True)
+            expected = transfer["size"] - index * 48000 if index == transfer["chunks"] - 1 else 48000
+            if len(data) != expected:
+                raise ValueError("Chunk length mismatch")
+            if index not in transfer["received"]:
+                with open(transfer["path"] + ".shraddha-part", "r+b") as output:
+                    output.seek(index * 48000)
+                    output.write(data)
+                transfer["received"].add(index)
+                self._persist_pc_incoming()
+            self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "index": index, "complete": False, "ok": True})
+            if len(transfer["received"]) == transfer["chunks"]:
+                import hashlib
+                digest = hashlib.sha256(Path(transfer["path"] + ".shraddha-part").read_bytes()).hexdigest()
+                if digest != transfer["sha256"]:
+                    raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
+                os.replace(transfer["path"] + ".shraddha-part", transfer["path"])
+                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+                self.pc_incoming.pop(transfer_id, None)
+                self._persist_pc_incoming()
+                self.status_var.set("Incoming file saved and SHA-256 verified.")
+        except Exception as exc:
+            self.status_var.set(f"Incoming file rejected: {str(exc)[:140]}")
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "integrity_or_protocol_error"})
+            Path(transfer["path"] + ".shraddha-part").unlink(missing_ok=True)
+            self.pc_incoming.pop(transfer_id, None)
+            self._persist_pc_incoming()
+
+    def _handle_file_resume(self, msg):
+        transfer_id = str(msg.get("transferId", ""))
+        incoming = self.pc_incoming.get(transfer_id)
+        if incoming:
+            peer_id = str(msg.get("fromDeviceId", incoming["peer"]))
+            if peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
+                return
+            missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
+            self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "missingIndexes": missing})
+            self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
+            return
+        pending = self.pending_pc_send
+        if not pending or transfer_id != pending["transferId"]:
+            return
+        missing = msg.get("missingIndexes", [])
+        if isinstance(missing, list):
+            self._send_pc_file_chunks([i for i in missing if isinstance(i, int) and 0 <= i < (pending["size"] + 49151) // 48000])
+
+    def _handle_file_cancel(self, msg):
+        transfer_id = str(msg.get("transferId", ""))
+        if self.pending_pc_send and self.pending_pc_send.get("transferId") == transfer_id:
+            self.pending_pc_send = None
+        incoming = self.pc_incoming.pop(transfer_id, None)
+        if incoming:
+            Path(incoming["path"] + ".shraddha-part").unlink(missing_ok=True)
+            self._persist_pc_incoming()
+        self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
 
     def _send_e2e_key_offer(self, peer_id):
         if not peer_id or peer_id == self.config.get("deviceId"):
@@ -568,7 +953,7 @@ class PcCompanionApp:
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
-                                              {"ok": bool(ok), "reason": "" if ok else str(message)[:240]},
+                                              {"ok": bool(ok), "result": str(message)[:240]},
                                               action_id, action.get("kind", ""))
                 if not sent:
                     self.status_var.set("Action finished, but encrypted result could not be delivered.")
@@ -579,7 +964,7 @@ class PcCompanionApp:
             self.status_var.set(message)
             if peer_id and action_id:
                 self._send_e2e_message(peer_id, "remote_action_result",
-                                       {"ok": False, "reason": message}, action_id, action.get("kind", ""))
+                                       {"ok": False, "result": message[:240]}, action_id, action.get("kind", ""))
 
     def _open_start_menu_shortcut(self, app_name):
         roots = [

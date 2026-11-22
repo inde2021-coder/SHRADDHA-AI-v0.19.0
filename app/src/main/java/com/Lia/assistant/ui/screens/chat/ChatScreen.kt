@@ -47,7 +47,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.forge.ForgeIntent
@@ -64,8 +63,6 @@ import `in`.shraddha.ai.brain.PersistentChatMemory
 import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
-import com.Lia.assistant.voice.GeminiTextClient
-import com.Lia.assistant.voice.MultiProviderChatClient
 import com.Lia.assistant.voice.NovaOrbState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -163,11 +160,9 @@ fun ChatScreen(
                     relevantMemory.joinToString("\n")
             } else ""
             val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
-            val result = if (appState.aiProvider == "GEMINI") {
-                GeminiTextClient.reply(ApiKeyStore.getKey(context), boundedInstruction, historySnapshot)
-            } else {
-                MultiProviderChatClient.reply(context, appState.aiProvider, boundedInstruction, historySnapshot)
-            }
+            val result = `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
+                context, appState.aiProvider, boundedInstruction, historySnapshot
+            )
 
             if (result is ChatReplyResult.Success) {
                 PersistentChatMemory.record(context, "Assistant", result.text)
@@ -212,6 +207,14 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    // Receive text entered on the home screen's "Ask me anything" field.
+    LaunchedEffect(Unit) {
+        val pendingPrompt = navController.previousBackStackEntry
+            ?.savedStateHandle
+            ?.remove<String>("home_prompt")
+        if (!pendingPrompt.isNullOrBlank()) sendMessage(pendingPrompt)
     }
 
     Column(

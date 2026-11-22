@@ -10,6 +10,9 @@ if [[ -z "$ADB" || ! -x "$ADB" ]]; then
 fi
 
 SERIAL="${ANDROID_SERIAL:-}"
+if [[ ! "$SERIAL" =~ ^emulator-[0-9]+$ ]]; then SERIAL=""; fi
+SERIAL_FILE="${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial"
+rm -f "$SERIAL_FILE"
 echo "Waiting for an online Android emulator; no shell probes will run until ADB reports a device."
 "$ADB" start-server
 

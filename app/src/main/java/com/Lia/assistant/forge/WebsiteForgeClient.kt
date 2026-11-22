@@ -10,17 +10,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.Lia.assistant.MainActivity
 import `in`.shraddha.ai.R
-import com.Lia.assistant.data.ApiKeyStore
-import com.Lia.assistant.voice.GeminiTextClient
+import `in`.shraddha.ai.future.MainBrainProviderGateway
 import kotlinx.coroutines.delay
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
 
 object WebsiteForgeClient {
 
@@ -33,18 +25,6 @@ object WebsiteForgeClient {
         isEdit: Boolean,
         initialHtml: String?
     ) {
-        val apiKey = ApiKeyStore.getKey(context)
-        if (apiKey.isEmpty()) {
-            ForgeController.updateState {
-                it.copy(
-                    phase = ForgePhase.FAILED,
-                    error = "Missing Gemini API Key. Please add it in Settings."
-                )
-            }
-            return
-        }
-
-        val resolvedModel = GeminiTextClient.resolveModel(apiKey)
         val systemPrompt = if (isEdit && initialHtml != null) {
             ForgeSystemPrompt.forEdit(initialHtml, prompt)
         } else {
@@ -60,8 +40,6 @@ object WebsiteForgeClient {
             try {
                 val ok = executeStream(
                     context = context,
-                    apiKey = apiKey,
-                    model = resolvedModel,
                     systemPrompt = currentPromptToSend
                 )
 
@@ -84,107 +62,59 @@ object WebsiteForgeClient {
                 }
             }
         }
+        if (!success && ForgeController.state.value.phase != ForgePhase.FAILED) {
+            ForgeController.updateState {
+                it.copy(
+                    phase = ForgePhase.FAILED,
+                    error = "Website Forge could not complete after its retry. Please try again."
+                )
+            }
+        }
     }
 
     private suspend fun executeStream(
         context: Context,
-        apiKey: String,
-        model: String,
         systemPrompt: String
     ): Boolean {
-        val modelEndpoint = if (model.startsWith("models/")) model else "models/$model"
-        val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:streamGenerateContent?alt=sse"
-
-        val root = JSONObject()
-
-        val contents = JSONArray()
-        val contentObj = JSONObject()
-        contentObj.put("role", "user")
-        val parts = JSONArray()
-        parts.put(JSONObject().apply { put("text", systemPrompt) })
-        contentObj.put("parts", parts)
-        contents.put(contentObj)
-        root.put("contents", contents)
-
-        val genConfig = JSONObject()
-        if (model.contains("2.5")) {
-            val thinkingConfig = JSONObject().apply { put("thinkingBudget", 0) }
-            genConfig.put("thinkingConfig", thinkingConfig)
-        }
-        root.put("generationConfig", genConfig)
-
-        val mediaType = "application/json; charset=utf-8".toMediaType()
-        val requestBody = root.toString().toRequestBody(mediaType)
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("x-goog-api-key", apiKey)
-            .post(requestBody)
-            .build()
-
         val startTime = System.currentTimeMillis()
         var lastStateEmission = 0L
         val accumulatedText = StringBuilder()
         var finalFinishReason: String? = null
 
-        val response = GeminiTextClient.internalHttpClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val code = response.code
-            if (code == 503) return false // trigger retry
+        val stream = MainBrainProviderGateway.streamGemini(context, systemPrompt) { chunk ->
+            accumulatedText.append(chunk)
+            ForgeController.appendChunk(chunk)
+            val now = System.currentTimeMillis()
+            if (now - lastStateEmission > 120) {
+                lastStateEmission = now
+                val currentText = accumulatedText.toString()
+                val currentStage = ForgeStageDetector.detect(currentText)
+                val sections = ForgeStageDetector.extractSectionNames(currentText)
+                val elapsed = ((now - startTime) / 1000).toInt()
+                val tokensPerSec = if (elapsed > 0) (currentText.length / 4f) / elapsed else 0f
+                ForgeController.updateState {
+                    it.copy(
+                        stage = currentStage,
+                        progress = currentStage.progressWeight,
+                        metrics = ForgeMetrics(
+                            chars = currentText.length,
+                            sections = sections.size,
+                            elapsedSec = elapsed,
+                            tokensPerSec = tokensPerSec
+                        ),
+                        sections = sections
+                    )
+                }
+            }
+        }
+        if (stream.httpCode == 503) return false
+        if (stream.httpCode !in 200..299) {
             ForgeController.updateState {
-                it.copy(
-                    phase = ForgePhase.FAILED,
-                    error = "Gemini service returned HTTP $code"
-                )
+                it.copy(phase = ForgePhase.FAILED, error = "Gemini service returned HTTP ${stream.httpCode}")
             }
             return true
         }
-
-        val inputStream = response.body?.byteStream() ?: return false
-        val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8))
-
-        var line: String? = reader.readLine()
-        while (line != null) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("data:")) {
-                val dataContent = trimmed.substring(5).trim()
-                val chunk = SseParser.extractText(dataContent)
-                val finishReason = SseParser.extractFinishReason(dataContent)
-                if (finishReason != null) {
-                    finalFinishReason = finishReason
-                }
-
-                if (!chunk.isNullOrEmpty()) {
-                    accumulatedText.append(chunk)
-                    ForgeController.appendChunk(chunk)
-
-                    val now = System.currentTimeMillis()
-                    if (now - lastStateEmission > 120) {
-                        lastStateEmission = now
-                        val currentText = accumulatedText.toString()
-                        val currentStage = ForgeStageDetector.detect(currentText)
-                        val sections = ForgeStageDetector.extractSectionNames(currentText)
-                        val elapsed = ((now - startTime) / 1000).toInt()
-                        val tokensPerSec = if (elapsed > 0) (currentText.length / 4f) / elapsed else 0f
-
-                        ForgeController.updateState {
-                            it.copy(
-                                stage = currentStage,
-                                progress = currentStage.progressWeight,
-                                metrics = ForgeMetrics(
-                                    chars = currentText.length,
-                                    sections = sections.size,
-                                    elapsedSec = elapsed,
-                                    tokensPerSec = tokensPerSec
-                                ),
-                                sections = sections
-                            )
-                        }
-                    }
-                }
-            }
-            line = reader.readLine()
-        }
+        finalFinishReason = stream.finishReason
 
         var fullHtml = ForgeHtml.stripFences(accumulatedText.toString())
 

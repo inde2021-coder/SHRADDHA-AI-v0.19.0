@@ -55,6 +55,38 @@ class TaskPlannerOperatorBridgeTest {
         assertTrue(failed.audit.any { it.event == "ACTION_FAILED" })
     }
 
+    @Test fun destructiveIntentIsAutomaticallyGatedEvenWhenPlannerMarksItReadOnly() {
+        val executed = mutableListOf<String>()
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { step, confirmed ->
+            executed += "${step.target}:$confirmed"
+            true
+        })
+        val planned = bridge.createPlan("bridge-auto-risk", "Send safely", listOf(
+            PlannedOperatorAction(
+                "send", "Send message",
+                OperatorStep(OperatorActionType.CLICK_TEXT, target = "Send"),
+                risk = Risk.READ_ONLY,
+                requiresApproval = false
+            )
+        ))
+        assertEquals(WorkflowStatus.WAITING_FOR_APPROVAL, bridge.start().workflow.status)
+        assertTrue(executed.isEmpty())
+        val completed = bridge.approveCurrentStep(true)
+        assertEquals(listOf("Send:true"), executed)
+        assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun secretEntryIsRejectedBySafetyPolicyBeforeExecution() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Blocked action must never execute"); false })
+        bridge.createPlan("bridge-block-secret", "Never type OTP", listOf(
+            PlannedOperatorAction(
+                "otp", "Enter OTP",
+                OperatorStep(OperatorActionType.TYPE_TEXT, target = "OTP", value = "123456")
+            )
+        ))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun duplicateActionIdsAreRejectedBeforePlanning() {
         val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> true })
@@ -63,4 +95,35 @@ class TaskPlannerOperatorBridgeTest {
             PlannedOperatorAction("same", "Second", OperatorStep(OperatorActionType.HOME))
         ))
     }
+    @Test fun actionIsNeverDispatchedWhenWriteAheadJournalCannotCommit() {
+        var executions = 0
+        val bridge = TaskPlannerOperatorBridge(
+            executeVerified = { _, _ -> executions++; true },
+            beforeExecute = { _, _ -> false }
+        )
+        bridge.createPlan("journal-gate", "Journal gate", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK))
+        ))
+        val failed = bridge.start()
+        assertEquals(0, executions)
+        assertEquals(WorkflowStatus.FAILED, failed.workflow.status)
+        assertTrue(failed.workflow.message.contains("journal", ignoreCase = true))
+    }
+
+    @Test fun workflowStopsWhenVerifiedResultCannotBePersisted() {
+        var executions = 0
+        val bridge = TaskPlannerOperatorBridge(
+            executeVerified = { _, _ -> executions++; true },
+            beforeExecute = { _, _ -> true },
+            afterExecute = { _, _, verified -> verified && false }
+        )
+        bridge.createPlan("journal-commit", "Journal commit", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK))
+        ))
+        val failed = bridge.start()
+        assertEquals(1, executions)
+        assertEquals(WorkflowStatus.FAILED, failed.workflow.status)
+        assertTrue(failed.workflow.message.contains("journal", ignoreCase = true))
+    }
+
 }

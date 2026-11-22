@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from pc_companion.protocol import valid_pairing_ids, validate_remote_action
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
 
 
 class ProtocolTests(unittest.TestCase):
@@ -47,6 +47,15 @@ class ProtocolTests(unittest.TestCase):
     def test_scroll_is_bounded(self):
         self.assertEqual(validate_remote_action({"kind": "scroll", "amount": -5}), {"kind": "scroll", "amount": -5})
         self.assertIsNone(validate_remote_action({"kind": "scroll", "amount": 1000}))
+
+    def test_android_direct_action_payload_is_accepted(self):
+        action = {"kind": "tap", "x": 0.5, "y": 0.5}
+        self.assertEqual(validate_remote_action_envelope(action, "tap"), action)
+        self.assertEqual(validate_remote_action_envelope({"action": action}, "tap"), action)
+
+    def test_remote_action_kind_binding_is_enforced(self):
+        self.assertIsNone(validate_remote_action_envelope({"kind": "home"}, "tap"))
+        self.assertIsNone(validate_remote_action_envelope({"kind": "exec"}, "exec"))
 
     def test_unknown_action_is_rejected(self):
         self.assertIsNone(validate_remote_action({"kind": "exec", "command": "calc.exe"}))

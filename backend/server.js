@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
@@ -918,7 +918,7 @@ wss.on('connection', (ws, ctx) => {
         const actionId = String(msg.actionId || '');
         const actionKind = String(msg.actionKind || '');
         if (grantExpiry < Date.now() || !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
-            !['tap','swipe','type','click_text','open_app','home','back','scroll','ocr','file_list','file_read','file_search','offline_chat'].includes(actionKind)) return;
+            !ALLOWED_REMOTE_ACTION_KINDS.has(actionKind)) return;
         target.pendingRemoteActions ||= new Map();
         if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
         target.pendingRemoteActions.set(actionId, { requesterId: deviceId, actionKind, expiresAt: Date.now() + 60_000 });

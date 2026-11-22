@@ -133,6 +133,18 @@ class GeminiLiveClient(private val listener: Listener) {
         ws.send(root.toString())
     }
 
+    /** Injects fresh camera context into the current voice conversation without sending a camera frame. */
+    fun sendText(text: String) {
+        val ws = webSocket ?: return
+        val clean = text.trim().take(3000)
+        if (!isConnected.get() || clean.isBlank()) return
+        val part = JSONObject().put("text", clean)
+        val parts = JSONArray().put(part)
+        val turn = JSONObject().put("role", "user").put("parts", parts)
+        val clientContent = JSONObject().put("turns", JSONArray().put(turn)).put("turnComplete", true)
+        ws.send(JSONObject().put("clientContent", clientContent).toString())
+    }
+
     fun sendToolResponse(id: String, name: String, resultJson: JSONObject) {
         val ws = webSocket ?: return
         if (!isConnected.get()) return

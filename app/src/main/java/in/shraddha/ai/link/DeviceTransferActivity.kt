@@ -50,7 +50,7 @@ class DeviceTransferActivity : Activity() {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(22,22,22,22); setBackgroundColor(0xFF080E1B.toInt()) }
         root.addView(TextView(this).apply { text = "DEVICE UNIVERSE • FILE TRANSFER"; textSize = 19f; setTextColor(Color.WHITE); setTypeface(null, android.graphics.Typeface.BOLD) })
-        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
+        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 20 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
         peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()); setText(intent.getStringExtra("peer").orEmpty()) }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
@@ -61,10 +61,16 @@ class DeviceTransferActivity : Activity() {
         status = TextView(this).apply { text = "Select a paired device ID. Receiver must enable Documents sharing and approve the incoming file."; setTextColor(0xFFE4EAF6.toInt()); setPadding(0,14,0,14) }; root.addView(status)
         root.addView(button("CLOSE") { finish() })
         setContentView(ScrollView(this).apply { addView(root) })
+        restoreTransferState()
         DeviceLinkManager.onFileTransferMessage = { msg -> runOnUiThread { handleMessage(msg) } }
     }
 
     override fun onDestroy() {
+        cancelled.set(true)
+        paused.set(false)
+        runCatching { incomingOut?.fd?.sync() }
+        runCatching { incomingOut?.close() }
+        incomingOut = null
         if (DeviceLinkManager.onFileTransferMessage != null) DeviceLinkManager.onFileTransferMessage = null
         super.onDestroy()
     }
@@ -89,7 +95,7 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256"); var total = 0L
         contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(64 * 1024)
-            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 100L * 1024 * 1024) { "Maximum file size is 100 MB" }; digest.update(buffer, 0, n) }
+            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 20_000_000L) { "Maximum file size is 20 MB" }; digest.update(buffer, 0, n) }
         } ?: throw IllegalStateException("Cannot open selected file")
         require(total > 0) { "Empty files are not supported" }
         return total to digest.digest().joinToString("") { "%02x".format(it) }
@@ -100,7 +106,8 @@ class DeviceTransferActivity : Activity() {
         if (resultCode != RESULT_OK || data?.data == null) return
         val uri = data.data!!
         if (requestCode == 701) {
-            sourceUri = uri; sourceName = queryName(uri)
+            runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            sourceUri = uri; sourceName = queryName(uri); persistTransferState()
             status.text = "Calculating SHA-256 for $sourceName…"
             thread {
                 try {
@@ -114,7 +121,9 @@ class DeviceTransferActivity : Activity() {
                 } catch (e: Exception) { runOnUiThread { status.text = "File error: ${e.message}" } }
             }
         } else if (requestCode == 702) {
+            runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             pendingSaveUri = uri
+            persistTransferState()
             if (incomingVerified) saveIncoming(uri)
             else {
                 DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)
@@ -127,6 +136,7 @@ class DeviceTransferActivity : Activity() {
         val target = peer.text.toString().trim()
         if (target.isBlank() || sourceUri == null) { status.text = "Select target device and file first."; return }
         requestId = UUID.randomUUID().toString().replace("-", "")
+        persistTransferState()
         if (DeviceLinkManager.requestDataShare(target, "documents", requestId, sourceName)) status.text = "One-time Documents permission requested. Waiting for receiver approval…"
         else status.text = "Relay not connected; permission request could not be sent."
     }
@@ -134,7 +144,8 @@ class DeviceTransferActivity : Activity() {
     private fun beginSend() {
         val target = peer.text.toString().trim(); val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
-        val chunks = ((sourceSize + 49151) / 49152).toInt()
+        persistTransferState()
+        val chunks = ((sourceSize + 49151) / 48000).toInt()
         if (!DeviceLinkManager.startFileTransfer(target, requestId, transferId, sourceName, sourceSize, chunks, sourceHash)) { status.text = "Could not start transfer. Check relay and receiver permission."; return }
         status.text = "Transfer started. Waiting for receiver to accept and select destination…"
     }
@@ -143,9 +154,9 @@ class DeviceTransferActivity : Activity() {
         val uri = sourceUri ?: throw IllegalStateException("Source file is no longer selected")
         val input = contentResolver.openInputStream(uri) ?: throw IllegalStateException("Cannot reopen source file")
         input.use {
-            var skip = index.toLong() * 49152L
+            var skip = index.toLong() * 48000L
             while (skip > 0) { val n = it.skip(skip); if (n <= 0) throw IllegalStateException("Could not seek source file"); skip -= n }
-            val buffer = ByteArray(49152); var count = 0
+            val buffer = ByteArray(48000); var count = 0
             while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
             val bytes = buffer.copyOf(count)
             require(bytes.isNotEmpty())
@@ -158,7 +169,7 @@ class DeviceTransferActivity : Activity() {
         cancelled.set(false)
         sendThread = thread(name = "shraddha-file-send") {
             try {
-                val all = if (indexes.isEmpty()) (0 until ((sourceSize + 49151) / 49152).toInt()).toList() else indexes
+                val all = if (indexes.isEmpty()) (0 until ((sourceSize + 49151) / 48000).toInt()).toList() else indexes
                 for ((position, index) in all.withIndex()) {
                     while (paused.get() && !cancelled.get()) Thread.sleep(200)
                     if (cancelled.get()) break
@@ -175,19 +186,23 @@ class DeviceTransferActivity : Activity() {
         when (msg.optString("type")) {
             "connected" -> if (sourcePeer.isNotBlank() && transferId.isNotBlank()) resumeTransfer()
             "data_share_result" -> if (msg.optString("requestId") == requestId) {
-                if (msg.optBoolean("approved")) beginSend() else status.text = "Receiver denied Documents access."
+                if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
                 sourcePeer = msg.optString("fromDeviceId"); transferId = msg.optString("transferId")
                 incomingName = msg.optString("fileName"); incomingSize = msg.optLong("sizeBytes")
                 incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
-                if (incomingSize !in 1L..(100L * 1024 * 1024) || incomingCount !in 1..2200 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
+                incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
+                persistTransferState()
+                if (incomingSize !in 1L..(20_000_000L) || incomingCount !in 1..417 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
-                    .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected") }
+                    .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
                     .setPositiveButton("Choose save location") { _, _ ->
-                        incomingFile = File(cacheDir, "recv_$transferId.part")
+                        val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
+                        incomingFile = File(inbox, "recv_$transferId.part")
                         incomingOut = RandomAccessFile(incomingFile, "rw").apply { setLength(incomingSize) }
+                        persistTransferState()
                         incomingChunks = 0
                         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, incomingName), 702)
                     }.show()
@@ -199,14 +214,14 @@ class DeviceTransferActivity : Activity() {
                     status.text = "Receiver selected a destination. Sending file chunks…"
                     startSending(emptyList())
                 } else if (index >= 0) { lastAck = maxOf(lastAck, index); status.text = "Receiver acknowledged chunk ${index + 1}." }
-                if (msg.optBoolean("complete")) status.text = "Receiver verified and saved file successfully."
+                if (msg.optBoolean("complete")) { status.text = "Receiver verified and saved file successfully."; clearTransferState() }
             }
             "file_transfer_resume" -> {
                 val array = msg.optJSONArray("missingIndexes") ?: return
                 val indexes = (0 until array.length()).map { array.optInt(it, -1) }.filter { it >= 0 }
                 if (indexes.isNotEmpty()) startSending(indexes) else status.text = "Receiver reports no missing chunks."
             }
-            "file_transfer_cancel" -> status.text = "Transfer cancelled: ${msg.optString("reason")}"
+            "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
         }
     }
 
@@ -216,9 +231,9 @@ class DeviceTransferActivity : Activity() {
             require(msg.optString("transferId") == transferId && incomingOut != null)
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = if (index == incomingCount - 1) (incomingSize - index * 49152L).toInt() else 49152
+            val expected = if (index == incomingCount - 1) (incomingSize - index * 48000L).toInt() else 48000
             require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * 49152L); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++ }
+            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * 48000L); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
             progress.progress = (incomingChunks * 100 / incomingCount)
             status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
@@ -228,12 +243,14 @@ class DeviceTransferActivity : Activity() {
 
     private fun saveIncoming(destination: Uri) {
         val file = incomingFile ?: return
+        val savedName = incomingName
         try {
             contentResolver.openOutputStream(destination, "w")?.use { output -> file.inputStream().use { it.copyTo(output) } }
                 ?: throw IllegalStateException("Could not open selected destination")
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)
             file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
-            status.text = "Saved $incomingName • SHA-256 verified • transfer complete."
+            clearTransferState()
+            status.text = "Saved $savedName • SHA-256 verified • transfer complete."
         } catch (e: Exception) { status.text = "Save failed: ${e.message}" }
     }
 
@@ -243,8 +260,9 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); return }
+        if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); clearTransferState(); return }
         incomingVerified = true
+        persistTransferState()
         status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
         pendingSaveUri?.let { saveIncoming(it) }
     }
@@ -259,11 +277,99 @@ class DeviceTransferActivity : Activity() {
         } else status.text = "Reconnect to relay first, then retry."
     }
 
+    /** Persists only transfer metadata and chunk indexes; file bytes stay in app-private storage. */
+    private fun persistTransferState() {
+        if (!::peer.isInitialized) return
+        val prefs = getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE)
+        prefs.edit()
+            .putString("peer", peer.text.toString().trim())
+            .putString("sourceUri", sourceUri?.toString().orEmpty())
+            .putString("sourceName", sourceName)
+            .putLong("sourceSize", sourceSize)
+            .putString("sourceHash", sourceHash)
+            .putString("transferId", transferId)
+            .putString("requestId", requestId)
+            .putString("sourcePeer", sourcePeer)
+            .putString("incomingFile", incomingFile?.absolutePath.orEmpty())
+            .putInt("incomingCount", incomingCount)
+            .putLong("incomingSize", incomingSize)
+            .putString("incomingHash", incomingHash)
+            .putString("incomingName", incomingName)
+            .putString("receivedIndexes", android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP))
+            .putBoolean("incomingVerified", incomingVerified)
+            .putString("pendingSaveUri", pendingSaveUri?.toString().orEmpty())
+            .apply()
+    }
+
+    private fun restoreTransferState() {
+        val prefs = getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE)
+        transferId = prefs.getString("transferId", "").orEmpty()
+        if (transferId.isBlank()) return
+        peer.setText(prefs.getString("peer", "").orEmpty())
+        sourceUri = prefs.getString("sourceUri", "").orEmpty().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+        sourceName = prefs.getString("sourceName", "").orEmpty()
+        sourceSize = prefs.getLong("sourceSize", 0L)
+        sourceHash = prefs.getString("sourceHash", "").orEmpty()
+        requestId = prefs.getString("requestId", "").orEmpty()
+        sourcePeer = prefs.getString("sourcePeer", "").orEmpty()
+        incomingCount = prefs.getInt("incomingCount", 0)
+        incomingSize = prefs.getLong("incomingSize", 0L)
+        incomingHash = prefs.getString("incomingHash", "").orEmpty()
+        incomingName = prefs.getString("incomingName", "").orEmpty()
+        incomingVerified = prefs.getBoolean("incomingVerified", false)
+        pendingSaveUri = prefs.getString("pendingSaveUri", "").orEmpty().takeIf { it.isNotBlank() }?.let(Uri::parse)
+        val encodedIndexes = prefs.getString("receivedIndexes", "").orEmpty()
+        if (encodedIndexes.isNotBlank()) {
+            runCatching { java.util.BitSet.valueOf(android.util.Base64.decode(encodedIndexes, android.util.Base64.DEFAULT)) }
+                .onSuccess { receivedChunkIndexes.clear(); receivedChunkIndexes.or(it) }
+        }
+        incomingChunks = receivedChunkIndexes.cardinality()
+        val savedFile = prefs.getString("incomingFile", "").orEmpty()
+        if (savedFile.isNotBlank()) {
+            val file = File(savedFile)
+            val inbox = File(filesDir, "shraddha-transfers").canonicalFile
+            if (file.exists() && file.canonicalPath.startsWith(inbox.path + File.separator)) {
+                incomingFile = file
+                incomingOut = runCatching { RandomAccessFile(file, "rw") }.getOrNull()
+            }
+        }
+        status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
+        if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
+            verifyIncoming()
+        }
+        if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
+            runCatching { saveIncoming(pendingSaveUri!!) }
+                .onFailure { status.text = "Verified file restored. Re-select the save destination to finish." }
+        }
+    }
+
+    private fun clearTransferState() {
+        sourceUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+        pendingSaveUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+        getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE).edit().clear().apply()
+        receivedChunkIndexes.clear()
+        incomingChunks = 0
+        incomingVerified = false
+        pendingSaveUri = null
+        sourceUri = null
+        sourceName = ""
+        sourceSize = 0L
+        sourceHash = ""
+        transferId = ""
+        requestId = ""
+        sourcePeer = ""
+        incomingName = ""
+        incomingSize = 0L
+        incomingCount = 0
+        incomingHash = ""
+    }
+
     private fun cancelTransfer() {
         cancelled.set(true); paused.set(false)
         val target = if (sourcePeer.isNotBlank()) sourcePeer else peer.text.toString().trim()
         if (transferId.isNotBlank() && target.isNotBlank()) DeviceLinkManager.cancelFileTransfer(target, transferId)
         incomingOut?.close(); incomingOut = null; incomingFile?.delete(); incomingFile = null
+        clearTransferState()
         status.text = "Transfer cancelled by user."
     }
 }

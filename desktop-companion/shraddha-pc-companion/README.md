@@ -96,7 +96,8 @@ The companion binds no inference HTTP port and exposes no unauthenticated local 
 - Active-window OCR requires `--allow-ocr` and a separate local PC confirmation for each request.
 - OCR output is redacted before it is returned to the paired device: credential-labelled lines, nearby value lines, and long numeric identifiers are hidden. This is a defensive filter, not a guarantee that every secret can be detected; avoid OCR on sensitive screens.
 - Optional file browsing uses only the folder explicitly selected with `--file-root`. Listing, reading, and text search each require local PC confirmation.
-- File search is restricted to text/code formats, skips hidden files and symlinks, and enforces depth, file-count, file-size, result-count, and total-read limits. It does not modify or delete files.
+- File search is restricted to text/code formats, skips hidden files and symlinks, and enforces depth, file-count, file-size, result-count, and total-read limits.
+- The local GGUF Code Assistant can optionally read one selected approved text/code file as context after a separate PC confirmation; it returns a proposal only and never writes the file itself.\n- Android can request a bounded text/code file create or update inside that root. The PC owner must confirm each write locally; updates require an explicit overwrite flag and create a timestamped backup under the hidden `.shraddha-backups` folder before atomic replacement. Only selected text/code extensions and files up to 256 KB are supported. No file execution, delete, move, or arbitrary shell command is provided.
 
 
 ## Bidirectional Android control and screen viewing
@@ -138,7 +139,7 @@ To share the active Windows app window back to Android, use --share-screen; the 
 
 ## File transfer, clipboard, voice commands and recovery
 
-File transfer protocol supports 48 KiB chunks, files up to 100 MiB, a SHA-256 manifest, per-chunk acknowledgements and transfer cancellation. A device must first request and receive the receiver's one-time Documents share approval. The Android relay API exposes start/chunk/ack/cancel calls; a complete Android file-picker UI, disk-backed receive/resume queue and end-to-end device tests are still required before calling the whole feature finished.
+File transfer supports 48 KiB chunks, files up to 100 MiB, a SHA-256 manifest, per-chunk acknowledgements, pause/resume and cancellation. A device must first request and receive the receiver's one-time Documents share approval. Android now provides a SAF file picker, app-private disk-backed receive staging, persisted source/destination URI grants, chunk-index checkpoints, resume after activity/process recreation and final SHA-256 verification. The relay keeps transfer metadata only in memory for up to 30 minutes, so a relay restart or expired transfer still requires a new transfer. Physical Android↔Windows reconnect, interruption and 100 MiB throughput tests remain required before production sign-off.
 
 Windows clipboard sync is a one-shot operation and requires the receiver to approve the Clipboard share request. Install `pyperclip` on Windows:
 

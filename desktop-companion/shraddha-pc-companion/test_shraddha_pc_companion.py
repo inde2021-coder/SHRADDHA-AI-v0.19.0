@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -81,6 +81,40 @@ class PcCompanionPolicyTests(unittest.TestCase):
             self.assertEqual(manifest['chunks'], 2)
             self.assertEqual(len(read_file_chunk(str(path), 0)), 48 * 1024)
             with self.assertRaises(ValueError): read_file_chunk(str(path), 2)
+
+    def test_file_write_is_atomic_requires_overwrite_and_keeps_backup(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / "project"
+            folder.mkdir()
+            created = write_safe_text_file(root, "project/notes.md", "first version")
+            self.assertEqual(created["status"], "file_written")
+            self.assertEqual((folder / "notes.md").read_text(encoding="utf-8"), "first version")
+            with self.assertRaises(FileExistsError):
+                write_safe_text_file(root, "project/notes.md", "replacement", overwrite=False)
+            updated = write_safe_text_file(root, "project/notes.md", "replacement", overwrite=True)
+            self.assertEqual((folder / "notes.md").read_text(encoding="utf-8"), "replacement")
+            backup = Path(root) / updated["backup"]
+            self.assertTrue(backup.is_file())
+            self.assertEqual(backup.read_text(encoding="utf-8"), "first version")
+
+    def test_file_write_rejects_unsafe_paths_and_file_types(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(ValueError):
+                write_safe_text_file(root, "../outside.py", "bad")
+            with self.assertRaises(ValueError):
+                write_safe_text_file(root, "payload.exe", "not executable")
+            with self.assertRaises(ValueError):
+                write_safe_text_file(root, "large.txt", "x" * 256_001)
+
+    def test_file_write_action_requires_root_bounded_content_and_boolean_overwrite(self):
+        action = {"kind": "file_write", "path": "notes.md", "content": "hello", "overwrite": False}
+        self.assertFalse(validate_action(action, file_root=""))
+        self.assertTrue(validate_action(action, file_root="C:/Approved"))
+        self.assertFalse(validate_action({**action, "overwrite": "yes"}, file_root="C:/Approved"))
+        self.assertFalse(validate_action({**action, "content": "x" * 256_001}, file_root="C:/Approved"))
 
     def test_clipboard_sensitive_text_is_blocked(self):
         self.assertEqual(sanitize_clipboard_text('hello'), 'hello')
@@ -220,6 +254,12 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertTrue(validate_action({"kind": "offline_chat", "prompt": "Hello"}, offline_model=object()))
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": ""}, offline_model=object()))
         self.assertFalse(validate_action({"kind": "offline_chat", "prompt": "x" * 4001}, offline_model=object()))
+
+    def test_code_assistant_can_load_only_an_approved_project_file(self):
+        action = {"kind": "code_assistant", "prompt": "Review this file", "path": "src/main.py"}
+        self.assertFalse(validate_action(action, offline_model=object(), file_root=""))
+        self.assertTrue(validate_action(action, offline_model=object(), file_root="C:/Approved"))
+        self.assertFalse(validate_action({**action, "path": "x" * 501}, offline_model=object(), file_root="C:/Approved"))
 
     def test_ocr_redacts_credentials_adjacent_values_and_long_numbers(self):
         raw = chr(10).join(["Account number", "123456789012", "Public heading", "OTP: 123456", "654321", "Visible note"])

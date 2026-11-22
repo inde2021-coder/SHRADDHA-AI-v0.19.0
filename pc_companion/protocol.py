@@ -59,3 +59,14 @@ def validate_remote_action(action):
             return None
         clean["amount"] = amount
     return clean
+
+
+def validate_remote_action_envelope(payload, action_kind):
+    """Accept the Android protocol's direct action object or legacy wrapped envelope."""
+    if not isinstance(payload, dict):
+        return None
+    candidate = payload.get("action", payload)
+    action = validate_remote_action(candidate)
+    if not action or action.get("kind") != action_kind:
+        return None
+    return action

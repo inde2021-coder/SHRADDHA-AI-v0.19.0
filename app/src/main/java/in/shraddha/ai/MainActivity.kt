@@ -881,7 +881,13 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Data sharing request")
                 .setMessage("दूसरा paired device '$category' category का डेटा माँग रहा है। क्या आप 5 मिनट के लिए अनुमति देते हैं?")
                 .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondDataShare(from, category, requestId, false) }
-                .setPositiveButton("Allow once") { _, _ -> DeviceLinkManager.respondDataShare(from, category, requestId, true, 5) }
+                .setPositiveButton("Allow once") { _, _ ->
+                    DeviceLinkManager.respondDataShare(from, category, requestId, true, 5)
+                    if (category == "documents") {
+                        startActivity(Intent(this@MainActivity, `in`.shraddha.ai.link.DeviceTransferActivity::class.java)
+                            .putExtra("peer", from))
+                    }
+                }
                 .setOnCancelListener { DeviceLinkManager.respondDataShare(from, category, requestId, false) }
                 .setCancelable(true).show()
         }
@@ -900,9 +906,19 @@ class MainActivity : AppCompatActivity() {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("Remote control permission")
                 .setMessage("$requester इस फोन को अधिकतम 5 मिनट तक नियंत्रित करना चाहता है। केवल भरोसेमंद व्यक्ति को अनुमति दें।")
-                .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondRemoteControl(from, false) }
-                .setPositiveButton("Allow for 5 minutes") { _, _ -> DeviceLinkManager.respondRemoteControl(from, true, 5) }
-                .setOnCancelListener { DeviceLinkManager.respondRemoteControl(from, false) }
+                .setNegativeButton("Deny") { _, _ ->
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putLong("remote_control_grant_until", 0L).apply()
+                    DeviceLinkManager.respondRemoteControl(from, false)
+                }
+                .setPositiveButton("Allow for 5 minutes") { _, _ ->
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                        .putLong("remote_control_grant_until", System.currentTimeMillis() + 5 * 60_000L).apply()
+                    DeviceLinkManager.respondRemoteControl(from, true, 5)
+                }
+                .setOnCancelListener {
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putLong("remote_control_grant_until", 0L).apply()
+                    DeviceLinkManager.respondRemoteControl(from, false)
+                }
                 .show()
         }
     }
@@ -952,7 +968,10 @@ class MainActivity : AppCompatActivity() {
                 isChecked = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, checked ->
-                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putBoolean("remote_control_consent", checked).apply()
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                        .putBoolean("remote_control_consent", checked)
+                        .putLong("remote_control_grant_until", if (checked) getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getLong("remote_control_grant_until", 0L) else 0L)
+                        .apply()
                     if (DeviceLinkManager.sessionId != null) publishDataPermissions()
                 }
             }
@@ -1075,6 +1094,32 @@ class MainActivity : AppCompatActivity() {
                 if (relative.isBlank()) status.text = "पहले approved folder के अंदर relative file path लिखें।"
                 else sendRemote(JSONObject().put("kind", "file_read").put("path", relative))
             })
+            val pcWritePath = edit("Windows file path to create/update", "उदाहरण: project/README.md")
+            val pcWriteContent = edit("New Windows file content", "AI द्वारा तैयार किया गया text/code यहाँ रखें").apply {
+                minLines = 4; maxLines = 10; isSingleLine = false
+            }
+            val pcOverwrite = android.widget.Switch(this@MainActivity).apply {
+                text = "Allow updating an existing file (Windows backup will be created)"
+                setTextColor(0xFFE4E9F5.toInt())
+                isChecked = false
+            }
+            addView(pcWritePath); addView(pcWriteContent); addView(pcOverwrite)
+            addView(actionButton("CREATE / UPDATE WINDOWS TEXT OR CODE FILE", "Approved --file-root के भीतर ही • हर write पर PC owner की अलग confirmation • overwrite से पहले backup") {
+                val relative = pcWritePath.text.toString().trim()
+                val content = pcWriteContent.text.toString()
+                if (relative.isBlank() || content.length > 256_000) {
+                    status.text = "File path जरूरी है और content 256 KB से छोटा होना चाहिए।"
+                } else {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Windows file write approval")
+                        .setMessage("Path: $relative\nCharacters: ${content.length}\nOverwrite existing: ${pcOverwrite.isChecked}\n\nWindows PC पर भी दूसरी confirmation आएगी। Existing file होने पर पहले backup बनाया जाएगा।")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Send for PC approval") { _, _ ->
+                            sendRemote(JSONObject().put("kind", "file_write").put("path", relative)
+                                .put("content", content).put("overwrite", pcOverwrite.isChecked))
+                        }.show()
+                }
+            })
             val pcSearchQuery = edit("Search text inside approved Windows folder", "उदाहरण: invoice number या project title")
             addView(pcSearchQuery)
             addView(actionButton("SEARCH APPROVED WINDOWS FILES", "केवल सीमित text/code files; snippets से संभावित credentials भी redact होंगे") {
@@ -1091,6 +1136,17 @@ class MainActivity : AppCompatActivity() {
                 val prompt = offlinePrompt.text.toString().trim()
                 if (prompt.isBlank() || prompt.length > 4000) status.text = "Offline prompt 1-4000 characters का होना चाहिए।"
                 else sendRemote(JSONObject().put("kind", "offline_chat").put("prompt", prompt))
+            })
+            addView(actionButton("WINDOWS CODE ASSISTANT", "Optional approved-folder path की file पढ़कर local GGUF model से code समझें/debug करें; बदलाव के लिए अलग file-write approval चाहिए") {
+                val prompt = offlinePrompt.text.toString().trim()
+                if (prompt.isBlank() || prompt.length > 4000) {
+                    status.text = "Code prompt 1-4000 characters का होना चाहिए।"
+                } else {
+                    val action = JSONObject().put("kind", "code_assistant").put("prompt", prompt)
+                    val relative = pcRelativePath.text.toString().trim()
+                    if (relative.isNotBlank()) action.put("path", relative)
+                    sendRemote(action)
+                }
             })
             addView(actionButton("OPEN APP ON WINDOWS PC", "Allowlisted apps only • PC confirmation required") {
                 val name = remoteAppName.text.toString().trim()
@@ -2665,6 +2721,7 @@ class MainActivity : AppCompatActivity() {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val prefs = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
                 val allowed = prefs.getBoolean("remote_control_consent", false)
+                val sessionGranted = prefs.getLong("remote_control_grant_until", 0L) > System.currentTimeMillis()
                 val kind = action.optString("kind", "unknown").take(32)
                 val description = when (kind) {
                     "tap" -> "Tap at (${action.optDouble("x").toInt()}, ${action.optDouble("y").toInt()})"
@@ -2677,8 +2734,10 @@ class MainActivity : AppCompatActivity() {
                     "scroll" -> "Scroll current screen"
                     else -> "Unsupported action: $kind"
                 }
-                if (!allowed) {
-                    DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "DENIED: This phone's remote-control permission is OFF.")
+                if (!allowed || !sessionGranted) {
+                    DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind,
+                        if (!allowed) "DENIED: This phone's remote-control permission is OFF."
+                        else "DENIED: No active 5-minute remote-control session. Request permission first.")
                     return@post
                 }
                 android.app.AlertDialog.Builder(this@MainActivity)

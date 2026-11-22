@@ -200,6 +200,37 @@ object LiaToolCatalog {
             )
         )
 
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "download_file",
+                description = "Downloads a user-requested file from a public HTTPS URL using Android Download Manager. Rejects non-HTTPS, local/private hosts and unsafe file names. Returns queued status only; do not claim completion until Android Download Manager reports it.",
+                params = mapOf("url" to "Public HTTPS URL", "file_name" to "Safe destination file name in Downloads"),
+                required = listOf("url", "file_name")
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "daily_briefing",
+                description = "Schedules or disables the user-opted-in daily research briefing. ENABLE requires user-selected topics and local 24-hour time HH:MM. DISABLE stops future briefings. The first briefing is scheduled near the selected local time, then repeats about every 24 hours; Android battery/network policies may delay delivery. No messages or external actions are sent.",
+                params = mapOf(
+                    "action" to "ENABLE to schedule/update, DISABLE to stop",
+                    "topics" to "User-selected research topics, required for ENABLE, maximum 1000 characters",
+                    "time" to "Local 24-hour time HH:MM, defaults to 08:00"
+                ),
+                required = listOf("action")
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "manage_files",
+                description = "Opens Shraddha AI secure Android file manager for user-authorized file operations. Search/open/copy/move/rename/delete/share/import/export are performed only after the user selects the exact file and destination. Delete, move and rename require a visible confirmation. Share opens Android Sharesheet; the user chooses the destination app. Never claim an upload or send completed until the app reports it.",
+                params = mapOf("operation" to "One of: manage, find, open, copy, move, rename, delete, share, import, export"),
+                required = listOf("operation")
+            )
+        )
+
         return array
     }
 }

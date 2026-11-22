@@ -7,21 +7,39 @@ import java.io.File
 import kotlin.math.PI
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BiometricModelSmokeTest {
-    @Test fun packagedModelsLoadAndRunOnDeviceWithoutNetworkInference() {
+    @Test fun selectedModelsDownloadVerifyAndRunOnDevice() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        BiometricModelInstaller.ensureInstalled(context)
+        val modelSpecs = BiometricModelInstaller.supportedModels().associateBy { it.kind }
+        assertEquals(setOf("face", "speaker", "anti_spoof"), modelSpecs.keys)
+        assertEquals(
+            "c59760b0a30dd905e3757cbb9ddf5dde22f9a099dc3e74de77c263cbb202e67c",
+            modelSpecs.getValue("speaker").sha256
+        )
+        assertTrue(modelSpecs.getValue("speaker").url.contains("/dd6e443/"))
+        assertEquals(38_696_353L, modelSpecs.getValue("face").expectedBytes)
+        assertEquals(
+            "d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b",
+            modelSpecs.getValue("anti_spoof").sha256
+        )
+        val bundled = context.assets.list("biometric-models").orEmpty()
+        assertFalse("Large ONNX models must not be bundled in the APK", bundled.any { it.endsWith(".onnx") })
 
         val directory = File(context.filesDir, "biometric-models")
+        directory.deleteRecursively() // Keep the on-demand assertion deterministic across repeated test runs.
         val faceFile = File(directory, "sface.onnx")
         val speakerFile = File(directory, "ecapa-any-length.onnx")
-        assertTrue("SFace asset was not installed", faceFile.isFile && faceFile.length() > 1_000_000L)
-        assertTrue("ECAPA asset was not installed", speakerFile.isFile && speakerFile.length() > 1_000_000L)
+        BiometricModelInstaller.ensureInstalled(context, "face")
+        assertTrue("SFace model was not downloaded and verified", faceFile.isFile && faceFile.length() > 1_000_000L)
+        assertFalse("Speaker model should remain on-demand until selected", speakerFile.exists())
+        BiometricModelInstaller.ensureInstalled(context, "speaker")
+        assertTrue("ECAPA model was not downloaded and verified", speakerFile.isFile && speakerFile.length() > 1_000_000L)
 
         val engine = LocalBiometricModelEngine()
         val syntheticRgb = ByteArray(112 * 112 * 3) { index ->

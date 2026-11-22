@@ -3,12 +3,12 @@ package com.Lia.assistant.action
 import android.content.Context
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
+import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.data.VoiceGatewaySettings
 import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import `in`.shraddha.ai.operator.learning.AppProfileStore
-import `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner
 import `in`.shraddha.ai.operator.learning.WorkflowCheckpointStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,7 +19,7 @@ import org.json.JSONObject
 
 object ActionExecutor {
 
-    suspend fun execute(context: Context, toolName: String, args: JSONObject): JSONObject {
+    suspend fun execute(context: Context, toolName: String, args: JSONObject, withinMainBrainTask: Boolean = false): JSONObject {
         val result = JSONObject()
 
         // Licensing check
@@ -31,6 +31,93 @@ object ActionExecutor {
         }
 
         when (toolName) {
+            "download_file" -> {
+                val download = `in`.shraddha.ai.future.DownloadUrlPolicy.validate(args.optString("url"), args.optString("file_name"))
+                if (download == null) {
+                    result.put("status", "error").put("action", "download_url_rejected")
+                    result.put("message", "सिर्फ सार्वजनिक HTTPS URL और मान्य file name से download किया जा सकता है।")
+                } else {
+                    val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+                    val request = android.app.DownloadManager.Request(android.net.Uri.parse(download.httpsUrl))
+                        .setTitle(download.fileName).setDescription("Shraddha AI file download")
+                        .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, download.fileName)
+                    val downloadId = manager.enqueue(request)
+                    result.put("status", "queued").put("action", "download_queued").put("download_id", downloadId)
+                    result.put("file_name", download.fileName).put("message", "Download Android Download Manager में queue हो गया है। पूरा होने की सूचना Android देगा; अभी download complete होने का दावा नहीं है।")
+                }
+            }
+            "daily_briefing" -> {
+                val action = args.optString("action", "ENABLE").uppercase()
+                if (action == "DISABLE" || action == "STOP") {
+                    val stopped = `in`.shraddha.ai.future.DailyBriefingScheduler.cancel(context)
+                    result.put("status", if (stopped.isSuccess) "success" else "error")
+                    result.put("action", "daily_briefing_disabled")
+                    result.put("message", if (stopped.isSuccess) "Daily Briefing बंद कर दी गई है।" else (stopped.exceptionOrNull()?.message ?: "Briefing बंद नहीं हुई।"))
+                } else if (action == "ENABLE" || action == "START" || action == "UPDATE") {
+                    val time = args.optString("time", "08:00").trim()
+                    val match = Regex("^(?:([01]?[0-9]|2[0-3])):([0-5][0-9])$").matchEntire(time)
+                    if (match == null) {
+                        result.put("status", "error"); result.put("message", "समय HH:MM (24-hour) format में दें, जैसे 08:00।")
+                    } else {
+                        val hour = match.groupValues[1].toInt()
+                        val minute = match.groupValues[2].toInt()
+                        val scheduled = `in`.shraddha.ai.future.DailyBriefingScheduler.schedule(context, args.optString("topics"), hour, minute)
+                        result.put("status", if (scheduled.isSuccess) "success" else "error")
+                        result.put("action", if (scheduled.isSuccess) "daily_briefing_scheduled" else "daily_briefing_schedule_failed")
+                        scheduled.getOrNull()?.let {
+                            result.put("topics", it.topics).put("local_time", "%02d:%02d".format(it.hour, it.minute))
+                                .put("first_run_in_minutes", it.initialDelayMillis / 60000L)
+                        }
+                        result.put("message", scheduled.exceptionOrNull()?.message ?: "Daily Briefing schedule हो गई। अगली briefing आपके चुने हुए स्थानीय समय पर, फिर लगभग हर 24 घंटे में आएगी।")
+                    }
+                } else {
+                    result.put("status", "error"); result.put("message", "action ENABLE या DISABLE होना चाहिए।")
+                }
+            }
+            "manage_files" -> {
+                val operation = args.optString("operation", "manage").uppercase()
+                val allowed = setOf("MANAGE", "FIND", "OPEN", "COPY", "MOVE", "RENAME", "DELETE", "SHARE", "IMPORT", "EXPORT")
+                if (operation !in allowed) {
+                    result.put("status", "error")
+                    result.put("message", "Unsupported file operation.")
+                } else {
+                    withContext(Dispatchers.Main.immediate) {
+                        val intent = android.content.Intent(context, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)
+                            .putExtra("requested_operation", operation)
+                        if (context !is android.app.Activity) intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                    result.put("status", "needs_user_action")
+                    result.put("action", "file_manager_opened")
+                    result.put("operation", operation.lowercase())
+                    result.put("message", "फ़ाइल प्रबंधक खुल गया है। फ़ाइल चुनें; Delete/Move/Rename से पहले पुष्टि होगी। Share/Export में Android Sharesheet खुलेगा।")
+                }
+            }
+
+            "build_website" -> {
+                val prompt = args.optString("prompt", "").trim()
+                if (prompt.isBlank() || prompt.length > 8000) {
+                    result.put("status", "error")
+                    result.put("message", "Website prompt must contain 1-8000 characters.")
+                } else {
+                    val start = withContext(Dispatchers.Main.immediate) { ForgeController.start(context, prompt) }
+                    if (start is com.Lia.assistant.forge.ForgeStartResult.Started) {
+                        result.put("status", "success")
+                        result.put("action", "forge_started")
+                    } else {
+                        result.put("status", "error")
+                        result.put("action", when (start) {
+                            is com.Lia.assistant.forge.ForgeStartResult.MissingKey -> "provider_key_missing"
+                            is com.Lia.assistant.forge.ForgeStartResult.Offline -> "offline"
+                            is com.Lia.assistant.forge.ForgeStartResult.Busy -> "forge_busy"
+                            is com.Lia.assistant.forge.ForgeStartResult.NothingToEdit -> "nothing_to_edit"
+                            else -> "forge_start_failed"
+                        })
+                    }
+                    result.put("message", start.message)
+                }
+            }
             "open_app" -> {
                 val appName = args.optString("app_name", "").trim()
                 if (appName.isEmpty()) {
@@ -393,9 +480,11 @@ object ActionExecutor {
                             } else {
                                 val runResult = withContext(Dispatchers.IO) {
                                     var detail = "Workflow did not complete."
-                                    val ok = AdaptiveWorkflowRunner(context.applicationContext) { event ->
-                                        detail = "${event.state}: ${event.message}"
-                                    }.run(profile, workflowName, values, confirmed, args.optBoolean("resume", false))
+                                    val ok = `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
+                                        context.applicationContext, profile, workflowName, values,
+                                        confirmed, args.optBoolean("resume", false),
+                                        withinMainBrainTask = withinMainBrainTask
+                                    ) { event -> detail = "${event.state}: ${event.message}" }
                                     ok to detail
                                 }
                                 val waitingForApproval = runResult.second.startsWith("WAITING_CONFIRMATION:")

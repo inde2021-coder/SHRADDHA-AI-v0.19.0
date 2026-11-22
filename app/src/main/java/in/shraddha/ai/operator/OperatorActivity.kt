@@ -40,19 +40,21 @@ class OperatorActivity : Activity() {
         root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
         root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
         root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
+        root.addView(action("फोन restart के बाद Interrupted Action जाँचें") { reviewInterruptedOperatorActions() })
+        root.addView(action("Voice Action Journal / Restart Recovery जाँचें") { reviewInterruptedVoiceAction() })
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
         root.addView(action("फॉर्म इमेज → AI Autofill Review") { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
         root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
-        root.addView(action("ऐप खोलें") { runOperator { it.execute(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) } })
-        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperator { it.execute(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString())) } })
-        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperator { it.execute(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString())) } })
+        root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) })
+        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString(), requiresConfirmation = true)) })
+        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperatorStep(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString(), requiresConfirmation = true)) })
         root.addView(action("Back / Home / Scroll") {
             val choices = arrayOf("Back", "Home", "Scroll forward")
             android.app.AlertDialog.Builder(this).setTitle("कार्रवाई चुनें").setItems(choices) { _, which ->
                 val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
-                runOperator { it.execute(OperatorStep(type)) }
+                runOperatorStep(OperatorStep(type))
             }.show()
         })
         log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE0E6F5.toInt()); setPadding(14, 18, 14, 18) }
@@ -65,6 +67,133 @@ class OperatorActivity : Activity() {
 
 
 
+
+    /** Shows restart-recovery evidence and asks before scheduling any remaining steps. */
+    private fun reviewInterruptedOperatorActions() {
+        Thread {
+            val engine = OperatorEngine(
+                emit = { event -> runOnUiThread {
+                    log.text = "${event.state}: ${event.message}\n" + log.text.take(4500)
+                } },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+            )
+            val brain = `in`.shraddha.ai.future.MainBrain(
+                executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
+                context = this@OperatorActivity
+            )
+            val reviews = runCatching { brain.reviewInterruptedWorkflows() }.getOrDefault(emptyList())
+            runOnUiThread {
+                if (reviews.isEmpty()) {
+                    log.text = "कोई ऐसा interrupted Operator action नहीं मिला जिसके लिए journal उपलब्ध हो।\n" + log.text.take(4500)
+                    return@runOnUiThread
+                }
+                val labels = reviews.map { review ->
+                    val status = if (review.recovery in setOf(
+                            `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE,
+                            `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+                        )) "परिणाम सत्यापित" else "मानवीय जाँच आवश्यक"
+                    "${review.title} • ${review.action} • ${review.packageName} • ${status}"
+                }.toTypedArray()
+                android.app.AlertDialog.Builder(this@OperatorActivity)
+                    .setTitle("Interrupted Operator actions")
+                    .setItems(labels) { _, which ->
+                        val selected = reviews[which]
+                        val machineVerified = selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE ||
+                            selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+                        android.app.AlertDialog.Builder(this@OperatorActivity)
+                            .setTitle(if (machineVerified) "अगले चरण जारी करें?" else "पहले action स्वयं जाँचें")
+                            .setMessage(
+                                if (machineVerified)
+                                    "पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।"
+                                else
+                                    "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
+                            )
+                            .setNegativeButton("रद्द करें", null)
+                            .setNeutralButton(if (machineVerified) null else "ऐप खोलकर स्क्रीन verify करें") { _, _ ->
+                                if (!machineVerified) {
+                                    val launchIntent = packageManager.getLaunchIntentForPackage(selected.packageName)
+                                    if (launchIntent == null) {
+                                        Toast.makeText(this@OperatorActivity, "Target app नहीं खुल सका। आप उसे manually खोलकर जाँच सकते हैं।", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        log.text = "Target app खोला जा रहा है। स्क्रीन जाँच पूरी होने के बाद Shraddha AI में लौटकर Interrupted Action फिर खोलें।"
+                                        startActivity(launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                                        Thread {
+                                            repeat(16) {
+                                                val visible = runCatching {
+                                                    `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService.captureVisibleScreen()
+                                                }.getOrNull()
+                                                if (visible?.packageName == selected.packageName) {
+                                                    brain.reviewInterruptedWorkflows()
+                                                    return@Thread
+                                                }
+                                                Thread.sleep(500)
+                                            }
+                                        }.start()
+                                    }
+                                }
+                            }
+                            .setPositiveButton(if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
+                                Thread {
+                                    val queued = brain.resumeInterruptedWorkflow(
+                                        selected.workflowId,
+                                        manuallyVerified = !machineVerified
+                                    )
+                                    val alreadyCompleted = queued?.state == `in`.shraddha.ai.future.SharedTaskScheduler.State.SUCCEEDED
+                                    val result = if (queued != null && !alreadyCompleted) brain.startNextWorkflow() else null
+                                    runOnUiThread {
+                                        when {
+                                            alreadyCompleted -> log.text = "Journal ने workflow के सभी चरण पूरे सत्यापित किए। कोई action दोबारा नहीं चलाया गया।\\n" + log.text.take(4500)
+                                            result != null -> showMainBrainResult(brain, result)
+                                            else -> log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\\n" + log.text.take(4500)
+                                        }
+                                    }
+                                }.start()
+                            }.show()
+                    }
+                    .setNegativeButton("बंद करें", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    /** Shows the latest voice-tool action journal after restart; never replays an interrupted tool. */
+    private fun reviewInterruptedVoiceAction() {
+        Thread {
+            val entry = runCatching {
+                VoiceToolActionJournal(this@OperatorActivity).latest()
+            }.getOrNull()
+            runOnUiThread {
+                if (entry == null) {
+                    android.app.AlertDialog.Builder(this@OperatorActivity)
+                        .setTitle("Voice Action Journal")
+                        .setMessage("कोई सुरक्षित Voice Action रिकॉर्ड उपलब्ध नहीं है।")
+                        .setPositiveButton("ठीक है", null).show()
+                    return@runOnUiThread
+                }
+                val interrupted = entry.state == "EXECUTING"
+                val details = "Tool: ${entry.tool}\nस्थिति: ${entry.state}\nResult: ${entry.resultStatus.ifBlank { "अभी उपलब्ध नहीं" }}\nAction: ${entry.action.ifBlank { "अभी सत्यापित नहीं" }}\nसमय: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.updatedAt))}"
+                android.app.AlertDialog.Builder(this@OperatorActivity)
+                    .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
+                    .setMessage(details + if (interrupted) "\n\nफोन बंद/restart होने के समय action चल रहा था। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
+                    .setPositiveButton(if (interrupted) "मैंने target app जाँच लिया" else "ठीक है") { _, _ ->
+                        if (interrupted) {
+                            val verified = runCatching {
+                                VoiceToolActionJournal(this@OperatorActivity)
+                                    .markManuallyVerified(entry.taskId)
+                            }.getOrDefault(false)
+                            Toast.makeText(
+                                this@OperatorActivity,
+                                if (verified) "Voice action को manually verified mark किया। कोई action दोबारा नहीं चलाया गया।" else "Verification save नहीं हुई।",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                    .setNegativeButton("बंद करें", null)
+                    .show()
+            }
+        }.start()
+    }
 
     /** Accepts a validated Council proposal only after a human reviews the complete action list. */
     private fun handleCouncilOperatorPlan(source: android.content.Intent?) {
@@ -121,14 +250,24 @@ class OperatorActivity : Activity() {
                 } },
                 audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
             )
-            val bridge = TaskPlannerOperatorBridge(
+            val brain = `in`.shraddha.ai.future.MainBrain(
                 executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("council_${event}", outcome, detail) }
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("council_${event}", outcome, detail) },
+                context = this@OperatorActivity
             )
             val workflowId = "council-" + java.util.UUID.randomUUID().toString().take(8)
-            bridge.createPlan(workflowId, goal.take(120).ifBlank { "AI Council Operator plan" }, planned)
-            val session = bridge.start()
-            runOnUiThread { showPlannedSession(bridge, session) }
+            val queued = brain.enqueueOperatorWorkflow(
+                `in`.shraddha.ai.future.MainBrain.WorkflowRequest(
+                    id = workflowId,
+                    title = goal.take(120).ifBlank { "AI Council Operator plan" },
+                    actions = planned
+                )
+            )
+            val result = brain.startNextWorkflow()
+            runOnUiThread {
+                log.text = "Main Brain queue: ${queued.state} • priority ${queued.task.priority}\\n" + log.text
+                showMainBrainResult(brain, result)
+            }
         }.start()
     }
 
@@ -165,15 +304,53 @@ class OperatorActivity : Activity() {
                 } },
                 audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
             )
-            val bridge = TaskPlannerOperatorBridge(
+            val brain = `in`.shraddha.ai.future.MainBrain(
                 executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
+                context = this@OperatorActivity
             )
             val id = "operator-" + java.util.UUID.randomUUID().toString().take(8)
-            bridge.createPlan(id, "Manual Operator Task", planned)
-            val session = bridge.start()
-            runOnUiThread { showPlannedSession(bridge, session) }
+            brain.enqueueOperatorWorkflow(
+                `in`.shraddha.ai.future.MainBrain.WorkflowRequest(id, "Manual Operator Task", planned)
+            )
+            val result = brain.startNextWorkflow()
+            runOnUiThread { showMainBrainResult(brain, result) }
         }.start()
+    }
+
+    private fun showMainBrainResult(
+        brain: `in`.shraddha.ai.future.MainBrain,
+        result: `in`.shraddha.ai.future.MainBrainExecutionResult
+    ) {
+        when (result) {
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.Started ->
+                showMainBrainSession(brain, result.workflowId, result.session)
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.ApprovalUpdated ->
+                showMainBrainSession(brain, result.workflowId, result.session)
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.NoReadyWorkflow ->
+                log.text = "Main Brain: अभी कोई dependency-ready workflow नहीं है।\\n" + log.text.take(4500)
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.Failed ->
+                log.text = "Main Brain FAILED: ${result.reason}\\n" + log.text.take(4500)
+        }
+    }
+
+    private fun showMainBrainSession(
+        brain: `in`.shraddha.ai.future.MainBrain,
+        workflowId: String,
+        session: ShraddhaIntegrationHub.Session
+    ) {
+        val step = session.workflow.steps.getOrNull(session.workflow.currentStep)
+        log.text = "Main Brain • ${session.workflow.status}\\n${session.workflow.message}\\n" + log.text.take(4500)
+        if (session.workflow.status == WorkflowStatus.WAITING_FOR_APPROVAL && step != null) {
+            android.app.AlertDialog.Builder(this).setTitle("इस Planner चरण की अनुमति")
+                .setMessage("कार्य: ${step.title}\\n\\nयह अनुमति केवल इसी चरण के लिए है। मना करने पर workflow रुक जाएगा।")
+                .setNegativeButton("मना करें") { _, _ ->
+                    Thread { val result = brain.approveCurrentStep(false); runOnUiThread { showMainBrainResult(brain, result) } }.start()
+                }
+                .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ ->
+                    Thread { val result = brain.approveCurrentStep(true); runOnUiThread { showMainBrainResult(brain, result) } }.start()
+                }.show()
+        }
     }
 
     private fun showPlannedSession(bridge: TaskPlannerOperatorBridge, session: ShraddhaIntegrationHub.Session) {
@@ -255,8 +432,8 @@ class OperatorActivity : Activity() {
     }
 
     private fun runLearned(profile: AppTrainingProfile, name: String, values: Map<String, String>, resume: Boolean = false) {
-        lateinit var runner: AdaptiveWorkflowRunner
-        runner = AdaptiveWorkflowRunner(this) { event -> runOnUiThread {
+        lateinit var emit: (`in`.shraddha.ai.operator.OperatorEvent) -> Unit
+        emit = { event -> runOnUiThread {
             val snapshot = event.snapshot?.let { "\nऐप: ${it.packageName} • UI: ${it.elements.size} तत्व" }.orEmpty()
             log.text = "${event.state}: ${event.message}$snapshot\n\n" + log.text.take(4000)
             if (event.state == OperatorTaskState.WAITING_CONFIRMATION) {
@@ -265,13 +442,22 @@ class OperatorActivity : Activity() {
                     .setMessage("${event.message}\n\nयह अनुमति केवल इसी एक चरण के लिए होगी। अगले जोखिम वाले चरण पर फिर पूछा जाएगा।")
                     .setNegativeButton("नहीं", null)
                     .setPositiveButton("हाँ, केवल यह चरण") { _, _ ->
-                        Thread { runner.run(profile, name, values, confirmed = true, resume = true) }.start()
+                        Thread {
+                            `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
+                                this@OperatorActivity, profile, name, values,
+                                confirmed = true, resume = true, onEvent = emit
+                            )
+                        }.start()
                     }.show()
             }
         } }
-        Thread { runner.run(profile, name, values, confirmed = false, resume = resume) }.start()
+        Thread {
+            `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
+                this, profile, name, values,
+                confirmed = false, resume = resume, onEvent = emit
+            )
+        }.start()
     }
-
     private fun field(hintText: String) = EditText(this).apply {
         hint = hintText; setHintTextColor(0xFF8290AA.toInt()); setTextColor(Color.WHITE); textSize = 14f
         setSingleLine(true); setPadding(14, 10, 14, 10)
@@ -281,6 +467,39 @@ class OperatorActivity : Activity() {
     private fun action(label: String, click: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
         setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
+    }
+    /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */
+    private fun runOperatorStep(step: OperatorStep) {
+        val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY
+        val engine = OperatorEngine(
+            emit = { event -> runOnUiThread {
+                val detail = event.snapshot?.let { "\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
+                log.text = "${event.state}: ${event.message}$detail\n\n" + log.text.take(5000)
+            } },
+            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+        )
+        val brain = `in`.shraddha.ai.future.MainBrain(
+            executeVerified = { action, confirmed -> engine.execute(action, confirmed) },
+            audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("manual_$event", outcome, detail) },
+            context = this
+        )
+        Thread {
+            try {
+                val id = "manual-" + java.util.UUID.randomUUID().toString().replace("-", "").take(20)
+                brain.enqueueOperatorWorkflow(`in`.shraddha.ai.future.MainBrain.WorkflowRequest(
+                    id = id,
+                    title = "Manual ${step.action.name}",
+                    actions = listOf(PlannedOperatorAction(
+                        id = "step_1", title = step.action.name, step = step,
+                        risk = risk, requiresApproval = risk == Risk.SENSITIVE || step.requiresConfirmation
+                    ))
+                ))
+                val result = brain.startNextWorkflow()
+                runOnUiThread { showMainBrainResult(brain, result) }
+            } catch (error: Exception) {
+                runOnUiThread { log.text = "Main Brain FAILED: ${error.localizedMessage ?: "Action could not be queued"}\n" + log.text.take(4500) }
+            }
+        }.start()
     }
     private fun runOperator(work: (OperatorEngine) -> Unit) {
         Thread {

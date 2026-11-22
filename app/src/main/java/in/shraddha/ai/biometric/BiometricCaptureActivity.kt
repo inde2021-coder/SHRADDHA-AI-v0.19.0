@@ -130,11 +130,11 @@ class BiometricCaptureActivity : AppCompatActivity() {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
-        message = TextView(this).apply { text = "Installing and verifying bundled biometric models…"; setTextColor(android.graphics.Color.WHITE) }
+        message = TextView(this).apply { text = "Downloading and verifying the selected biometric model…"; setTextColor(android.graphics.Color.WHITE) }
         setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
         modelLoadThread = Thread({
             try {
-                BiometricModelInstaller.ensureInstalled(applicationContext)
+                BiometricModelInstaller.ensureInstalled(applicationContext, kind)
                 val modelDirectory = File(filesDir, "biometric-models")
                 val model = File(modelDirectory, if (kind == "face") "sface.onnx" else "ecapa-any-length.onnx")
                 check(model.isFile) { "Verified biometric model is not available in private storage." }

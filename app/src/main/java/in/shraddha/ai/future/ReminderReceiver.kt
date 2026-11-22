@@ -9,6 +9,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import java.util.Calendar
 
 class ReminderReceiver : BroadcastReceiver() {
@@ -106,6 +112,20 @@ class DailyBriefingReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
         manager.notify(81008, notification)
+        val researchEnabled = prefs.getBoolean(DailyBriefingResearchWorker.KEY_ENABLED, false)
+        val topics = prefs.getString(DailyBriefingResearchWorker.KEY_SAVED_TOPICS, "").orEmpty().trim()
+        if (researchEnabled && topics.isNotBlank()) {
+            val request = OneTimeWorkRequestBuilder<DailyBriefingResearchWorker>()
+                .setInputData(workDataOf(DailyBriefingResearchWorker.KEY_TOPICS to topics))
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .addTag(DailyBriefingResearchWorker.UNIQUE_WORK)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                DailyBriefingResearchWorker.UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request
+            )
+        } else {
+            WorkManager.getInstance(context).cancelUniqueWork(DailyBriefingResearchWorker.UNIQUE_WORK)
+        }
         scheduleNext(context)
     }
 

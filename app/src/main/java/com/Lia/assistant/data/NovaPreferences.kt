@@ -23,6 +23,7 @@ object NovaPreferences {
         const val VOICE_VOLUME = "voice_volume"
         const val ASSISTANT_NAME = "assistant_name"
         const val AI_PROVIDER = "ai_provider"
+        const val ASSISTANT_AVATAR_URI = "assistant_avatar_uri"
     }
 
     private fun getPrefs(context: Context): SharedPreferences {

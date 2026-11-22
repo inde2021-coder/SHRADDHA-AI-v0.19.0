@@ -56,8 +56,50 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty() || steps.size > 100) return fail("वर्कफ़्लो खाली है या निर्धारित सीमा से बड़ा है।")
         val fingerprint = checkpoints.fingerprint(steps)
-        val saved = checkpoints.get(profile.packageName, workflowName)
-        val startIndex = if (resume) {
+        var saved = checkpoints.get(profile.packageName, workflowName)
+        var reconciledStartIndex: Int? = null
+        if (resume && saved?.state == "EXECUTING") {
+            // A process may die after the UI side effect but before the verified checkpoint
+            // is committed. Resume only when a persisted, non-secret postcondition is visible.
+            // Otherwise stop and require a human to inspect the app; never blindly replay.
+            if (saved.workflowHash != fingerprint || saved.totalSteps != steps.size ||
+                saved.nextStep !in steps.indices) {
+                return fail("Interrupted action का checkpoint पुराने workflow से मेल नहीं खाता। कोई action दोबारा नहीं चलाया गया।")
+            }
+            val current = ShraddhaAccessibilityService.captureVisibleScreen()
+                ?: return fail("Interrupted action की स्थिति जाँचने के लिए Accessibility सेवा उपलब्ध नहीं है।")
+            if (current.packageName != profile.packageName &&
+                current.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) {
+                return fail("Interrupted action के बाद अलग ऐप खुला है। सुरक्षा के लिए automatic resume रोक दिया गया।")
+            }
+            val visible = current.elements.flatMap { listOf(it.text, it.description) }.filter { it.isNotBlank() }
+            when (InterruptedStepRecovery.assess(
+                expectedText = saved.expectedText,
+                visibleText = visible,
+                beforeScreenFingerprint = saved.beforeScreenFingerprint,
+                currentScreenFingerprint = recoveryFingerprint(current),
+                expectedTextAbsentBefore = saved.expectedTextAbsentBefore
+            )) {
+                InterruptedStepRecovery.Decision.VERIFIED_COMPLETE -> {
+                    val next = saved.nextStep + 1
+                    val recoveredStep = steps[saved.nextStep]
+                    if (!checkpoints.save(saved.copy(nextStep = next, state = "READY", expectedText = ""))) {
+                        return fail("Recovered action सत्यापित हुआ, लेकिन सुरक्षित checkpoint save नहीं हुआ। आगे कोई action नहीं चलेगा।")
+                    }
+                    saved = checkpoints.get(profile.packageName, workflowName)
+                    reconciledStartIndex = next
+                    audit.append("operator_step", "recovered_verified", "${profile.packageName}:${recoveredStep.action}")
+                    emit(OperatorEvent(OperatorTaskState.VERIFYING,
+                        "फोन restart के बाद पिछला चरण स्क्रीन के प्रमाण से पूरा सत्यापित हुआ; अगला चरण सुरक्षित रूप से शुरू होगा।", current))
+                }
+                InterruptedStepRecovery.Decision.AMBIGUOUS -> {
+                    return fail("फोन बंद होने के समय वाला चरण निश्चित रूप से सत्यापित नहीं हो सका। कोई action दोबारा नहीं चलाया गया। ऐप में स्थिति जाँचें; फिर workflow को स्पष्ट रूप से resume/restart करें।")
+                }
+            }
+        }
+        val startIndex = if (reconciledStartIndex != null) {
+            reconciledStartIndex!!
+        } else if (resume) {
             val valid = resumableCheckpoint(profile, workflowName)
                 ?: return fail("सुरक्षित resume checkpoint नहीं मिला। वर्कफ़्लो को शुरू से चलाएँ।")
             if (valid.state == "WAITING_CONFIRMATION" && !confirmed) {
@@ -104,7 +146,24 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val before = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("स्क्रीन पढ़ने के लिए Accessibility सेवा चालू करें।")
             if (before.packageName != profile.packageName && before.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) return fail("खुला हुआ ऐप ${before.packageName} है, जबकि प्रशिक्षित ऐप ${profile.packageName} है।")
             // Mark in-flight before the side effect. A process death here is intentionally not auto-resumable.
-            checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "EXECUTING"))
+            val inFlightSaved = checkpoints.save(WorkflowCheckpoint(
+                packageName = profile.packageName,
+                workflowName = workflowName,
+                workflowHash = stepsHash,
+                nextStep = index,
+                totalSteps = steps.size,
+                state = "EXECUTING",
+                // Checkpoints are encrypted at rest. Store only the postcondition, never
+                // the text/value entered into a field.
+                expectedText = step.expectedText.take(300),
+                beforeScreenFingerprint = recoveryFingerprint(before),
+                expectedTextAbsentBefore = step.expectedText.isNotBlank() &&
+                    before.elements.none { element ->
+                        element.text.contains(step.expectedText, true) ||
+                            element.description.contains(step.expectedText, true)
+                    }
+            ))
+            if (!inFlightSaved) return fail("इस चरण का encrypted recovery checkpoint save नहीं हुआ; सुरक्षा के लिए action execute नहीं किया गया।")
             audit.append("operator_step", "started", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.EXECUTING, "${index + 1}/${steps.size}: ${step.action}", before))
             val anchor = profile.anchors.firstOrNull { it.role.equals(step.targetRole, true) && (step.targetLabel.isBlank() || it.label.equals(step.targetLabel, true)) }
@@ -140,7 +199,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
             }
             val next = index + 1
-            checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, next, steps.size, "READY"))
+            if (!checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, next, steps.size, "READY"))) {
+                return fail("चरण UI पर सत्यापित हुआ, लेकिन अगला सुरक्षित checkpoint save नहीं हुआ। Workflow रोक दिया गया है।")
+            }
             audit.append("operator_step", "verified", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.VERIFYING, "चरण ${index + 1} पूरा; स्क्रीन दोबारा पढ़ी गई।", after))
         }
@@ -151,5 +212,18 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         emit(OperatorEvent(OperatorTaskState.COMPLETED, "सीखे गए वर्कफ़्लो के सभी चरण पूरे और सत्यापित हुए।", ShraddhaAccessibilityService.captureVisibleScreen()))
         return true
     }
+    private fun recoveryFingerprint(snapshot: ScreenSnapshot): String {
+        val canonical = buildString {
+            append(snapshot.packageName).append('|').append(snapshot.activityName)
+            snapshot.elements.forEach { element ->
+                append('|').append(element.id).append(':').append(element.text).append(':')
+                    .append(element.description).append(':').append(element.bounds.flattenToString())
+            }
+        }
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    }
+
     private fun fail(message: String): Boolean { emit(OperatorEvent(OperatorTaskState.FAILED, message)); return false }
 }

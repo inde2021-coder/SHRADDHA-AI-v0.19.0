@@ -31,7 +31,7 @@ class NovaAppState(context: Context) {
         private set
 
     var orbStyle by mutableStateOf(
-        NovaPreferences.getString(context, NovaPreferences.Keys.ORB_STYLE, "NOVA")
+        NovaPreferences.getString(context, NovaPreferences.Keys.ORB_STYLE, "SATURN")
     )
         private set
 
@@ -54,6 +54,17 @@ class NovaAppState(context: Context) {
         )
     )
         private set
+
+    var assistantAvatarUri by mutableStateOf(
+        NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_AVATAR_URI, "")
+            .takeIf { it.isNotBlank() }
+    )
+        private set
+
+    fun applyAssistantAvatar(context: Context, uri: android.net.Uri?) {
+        assistantAvatarUri = uri?.toString()
+        NovaPreferences.putString(context, NovaPreferences.Keys.ASSISTANT_AVATAR_URI, uri?.toString().orEmpty())
+    }
 
     var userName by mutableStateOf(
         NovaPreferences.getString(

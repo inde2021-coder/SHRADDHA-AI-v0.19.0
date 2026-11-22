@@ -20,7 +20,7 @@ concurrency:
 jobs:
   android:
     name: Android unit tests, APK build and emulator smoke test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -45,12 +45,10 @@ jobs:
 
       - name: Boot Android emulator, install APK and verify launch
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 30
           emulator-boot-timeout: 1200
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
           # Avoid the action's post-boot settings-service calls; they caused Broken pipe (32) on TCG.

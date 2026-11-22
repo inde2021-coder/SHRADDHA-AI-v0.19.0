@@ -13,6 +13,9 @@ data class WorkflowCheckpoint(
     val nextStep: Int,
     val totalSteps: Int,
     val state: String,
+    val expectedText: String = "",
+    val beforeScreenFingerprint: String = "",
+    val expectedTextAbsentBefore: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -34,9 +37,16 @@ class WorkflowCheckpointStore(context: Context) {
             ?.let { raw -> runCatching {
                 val o = JSONObject(raw)
                 WorkflowCheckpoint(
-                    o.getString("packageName"), o.getString("workflowName"),
-                    o.getString("workflowHash"), o.getInt("nextStep"),
-                    o.getInt("totalSteps"), o.getString("state"), o.optLong("updatedAt")
+                    packageName = o.getString("packageName"),
+                    workflowName = o.getString("workflowName"),
+                    workflowHash = o.getString("workflowHash"),
+                    nextStep = o.getInt("nextStep"),
+                    totalSteps = o.getInt("totalSteps"),
+                    state = o.getString("state"),
+                    expectedText = o.optString("expectedText"),
+                    beforeScreenFingerprint = o.optString("beforeScreenFingerprint"),
+                    expectedTextAbsentBefore = o.optBoolean("expectedTextAbsentBefore", false),
+                    updatedAt = o.optLong("updatedAt")
                 )
             }.getOrNull() }
 
@@ -50,6 +60,9 @@ class WorkflowCheckpointStore(context: Context) {
             .put("nextStep", checkpoint.nextStep)
             .put("totalSteps", checkpoint.totalSteps)
             .put("state", checkpoint.state)
+            .put("expectedText", checkpoint.expectedText.take(300))
+            .put("beforeScreenFingerprint", checkpoint.beforeScreenFingerprint.take(128))
+            .put("expectedTextAbsentBefore", checkpoint.expectedTextAbsentBefore)
             .put("updatedAt", checkpoint.updatedAt)
         return encrypted.put(key(checkpoint.packageName, checkpoint.workflowName), json.toString()).isSuccess
     }
@@ -62,5 +75,21 @@ class WorkflowCheckpointStore(context: Context) {
         val digest = MessageDigest.getInstance("SHA-256").digest(raw)
             .take(16).joinToString("") { "%02x".format(it) }
         return "workflow_checkpoint_$digest"
+    }
+}
+
+
+/** Deterministic, side-effect-free decision for reconciling a process-death checkpoint. */
+internal object InterruptedStepRecovery {
+    enum class Decision { VERIFIED_COMPLETE, AMBIGUOUS }
+
+    fun assess(expectedText: String, visibleText: Collection<String>, beforeScreenFingerprint: String, currentScreenFingerprint: String, expectedTextAbsentBefore: Boolean): Decision {
+        val expected = expectedText.trim()
+        if (expected.isBlank() || beforeScreenFingerprint.isBlank() ||
+            beforeScreenFingerprint == currentScreenFingerprint || !expectedTextAbsentBefore) return Decision.AMBIGUOUS
+        val matched = visibleText.any { visible ->
+            visible.contains(expected, ignoreCase = true)
+        }
+        return if (matched) Decision.VERIFIED_COMPLETE else Decision.AMBIGUOUS
     }
 }

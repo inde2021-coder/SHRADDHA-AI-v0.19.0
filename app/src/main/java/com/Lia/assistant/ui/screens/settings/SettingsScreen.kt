@@ -155,48 +155,10 @@ fun SettingsScreen(
             }
         }
 
-        // Section 1: AI & Voice Intelligence
-        NovaSectionHeader(title = "AI & Voice Intelligence")
-        NovaGlassCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            elevation = 4.dp
-        ) {
+        // LIA-inspired settings categories, mapped to Shraddha's existing working controls.
+        NovaSectionHeader(title = "Personality")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
-                NovaSettingsRow(
-                    title = "Secure Voice Backend",
-                    subtitle = if (gatewayConfigured) "HTTPS backend configured • token encrypted" else "Required for secure Live Voice",
-                    icon = Icons.Default.Security,
-                    onClick = {
-                        val current = VoiceGatewaySettings.get(context)
-                        gatewayUrlInput = current.baseUrl
-                        gatewayTokenInput = current.gatewayToken
-                        gatewaySaveError = null
-                        showGatewayDialog = true
-                    }
-                )
-                NovaSettingsRow(
-                    title = "Encrypted Voice Memory",
-                    subtitle = if (voiceMemoryEnabled) "Recent turns saved encrypted on this phone" else "Off • voice history stays in this session only",
-                    icon = Icons.Default.Security,
-                    switch = voiceMemoryEnabled,
-                    onCheckedChange = {
-                        voiceMemoryEnabled = it
-                        ConversationMemory.setPersistenceEnabled(context, it)
-                    }
-                )
-                NovaSettingsRow(
-                    title = "On-device OCR Screen Reading",
-                    subtitle = if (screenOcrEnabled) "Hindi + English • local processing • no screenshot upload" else "Off • optional Android 11+ screenshot OCR",
-                    icon = Icons.Default.Visibility,
-                    switch = screenOcrEnabled,
-                    onCheckedChange = {
-                        screenOcrEnabled = it
-                        context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE)
-                            .edit().putBoolean("on_device_screen_ocr", it).apply()
-                    }
-                )
                 NovaSettingsRow(
                     title = "Assistant Name",
                     subtitle = appState.assistantName,
@@ -213,12 +175,17 @@ fun SettingsScreen(
                     value = appState.personality.icon,
                     onClick = { navController.navigate("personality") }
                 )
+            }
+        }
+
+        NovaSectionHeader(title = "Voice & Language")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
                 NovaSettingsRow(
                     title = "Spoken Language",
                     subtitle = appState.language.displayName,
                     icon = Icons.Default.Language,
                     onClick = {
-                        // Cycle languages
                         val nextLang = when (appState.language) {
                             LanguagePreference.AUTO -> LanguagePreference.HINDI
                             LanguagePreference.HINDI -> LanguagePreference.HINGLISH
@@ -230,28 +197,62 @@ fun SettingsScreen(
                 )
                 NovaSettingsRow(
                     title = "Shraddha Voice Engine",
-                    subtitle = "Non-Google custom voice • requires SHRADDHA_TTS_URL on backend",
+                    subtitle = "Custom Hindi-English voice • backend setup required",
                     icon = Icons.Default.RecordVoiceOver,
                     onClick = {
                         android.widget.Toast.makeText(
                             context,
-                            "Deploy a licensed Hindi-English Shraddha voice model and configure SHRADDHA_TTS_URL on your HTTPS backend.",
+                            "Configure a licensed Hindi-English voice model at SHRADDHA_TTS_URL on your secure backend.",
                             android.widget.Toast.LENGTH_LONG
                         ).show()
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Live Voice Backend",
+                    subtitle = if (gatewayConfigured) "Secure HTTPS backend configured" else "Set up secure live voice access",
+                    icon = Icons.Default.Security,
+                    onClick = {
+                        val current = VoiceGatewaySettings.get(context)
+                        gatewayUrlInput = current.baseUrl
+                        gatewayTokenInput = current.gatewayToken
+                        gatewaySaveError = null
+                        showGatewayDialog = true
                     }
                 )
             }
         }
 
-        // Section 2: Look & Visuals
-        NovaSectionHeader(title = "Look & Visuals")
-        NovaGlassCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            elevation = 6.dp
-        ) {
+        NovaSectionHeader(title = "Chats & Memory")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
+                NovaSettingsRow(
+                    title = "Encrypted Conversation Memory",
+                    subtitle = if (voiceMemoryEnabled) "Recent voice turns are saved encrypted on this phone" else "Off • voice turns stay in this session",
+                    icon = Icons.Default.Speed,
+                    switch = voiceMemoryEnabled,
+                    onCheckedChange = {
+                        voiceMemoryEnabled = it
+                        ConversationMemory.setPersistenceEnabled(context, it)
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Chat History",
+                    subtitle = "Review saved conversations",
+                    icon = Icons.Default.VolumeUp,
+                    onClick = { navController.navigate("history") }
+                )
+            }
+        }
+
+        NovaSectionHeader(title = "Look & Feel")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
+                NovaSettingsRow(
+                    title = "Assistant Picture & Profile",
+                    subtitle = "Change the Shraddha avatar and profile details",
+                    icon = Icons.Default.Person,
+                    onClick = { navController.navigate("profile") }
+                )
                 NovaSettingsRow(
                     title = "3D Orb Style",
                     subtitle = appState.orbStyle,
@@ -281,23 +282,76 @@ fun SettingsScreen(
             }
         }
 
-        // Section 3: Device & System
-        NovaSectionHeader(title = "System & Permissions")
-        NovaGlassCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            elevation = 8.dp
-        ) {
+        NovaSectionHeader(title = "Connections")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
-                    title = "Permissions",
-                    subtitle = "Microphone, Contacts, Calls",
+                    title = "AI Provider",
+                    subtitle = "Tap to switch between supported providers",
+                    icon = Icons.Default.Key,
+                    value = appState.aiProvider,
+                    onClick = {
+                        val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+                        val currentIndex = providers.indexOf(appState.aiProvider).let { if (it < 0) 0 else it }
+                        val nextProvider = providers[(currentIndex + 1) % providers.size]
+                        appState.applyAiProvider(context, nextProvider)
+                        android.widget.Toast.makeText(context, "AI provider: $nextProvider", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Device Permissions",
+                    subtitle = "Microphone, Contacts, Camera and Calls",
                     icon = Icons.Default.Security,
                     onClick = { navController.navigate("permissions") }
                 )
-                // Flavor-specific Accessibility Row (active in direct, stub in play)
                 AccessibilitySettingsRow()
+            }
+        }
+
+        NovaSectionHeader(title = "Privacy & Security")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
+                NovaSettingsRow(
+                    title = "On-device Screen Reading",
+                    subtitle = if (screenOcrEnabled) "Hindi + English • processed on this phone" else "Off • optional screen text recognition",
+                    icon = Icons.Default.Visibility,
+                    switch = screenOcrEnabled,
+                    onCheckedChange = {
+                        screenOcrEnabled = it
+                        context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("on_device_screen_ocr", it).apply()
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Privacy Center",
+                    subtitle = "Review privacy information and controls",
+                    icon = Icons.Default.Security,
+                    onClick = { navController.navigate("privacy") }
+                )
+            }
+        }
+
+        NovaSectionHeader(title = "Broadcast & Voice Rooms")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
+                NovaSettingsRow(
+                    title = "Open Live Voice",
+                    subtitle = "Start a voice session • mute or end it anytime",
+                    icon = Icons.Default.VolumeUp,
+                    onClick = { navController.navigate("voice") }
+                )
+            }
+        }
+
+        NovaSectionHeader(title = "About & Support")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
+                NovaSettingsRow(
+                    title = "About Shraddha AI",
+                    subtitle = "Version, developer contact and copyright",
+                    icon = Icons.Default.Key,
+                    onClick = { navController.navigate("about") }
+                )
             }
         }
     }

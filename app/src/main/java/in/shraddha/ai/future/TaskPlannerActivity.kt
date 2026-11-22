@@ -27,6 +27,8 @@ class TaskPlannerActivity : AppCompatActivity() {
     private lateinit var list: LinearLayout
     private lateinit var summary: TextView
     private lateinit var briefingToggle: android.widget.Switch
+    private lateinit var researchToggle: android.widget.Switch
+    private lateinit var researchTopics: EditText
     private val prefs by lazy { getSharedPreferences("shraddha_task_planner", MODE_PRIVATE) }
     private val tasks = mutableListOf<Task>()
 
@@ -61,12 +63,53 @@ class TaskPlannerActivity : AppCompatActivity() {
                     scheduleDailyBriefing()
                     toast("Daily briefing scheduled around 8:00 AM")
                 } else {
+                    if (::researchToggle.isInitialized && researchToggle.isChecked) researchToggle.isChecked = false
                     cancelDailyBriefing()
                     toast("Daily briefing disabled")
                 }
             }
         }
         root.addView(briefingToggle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        researchTopics = EditText(this).apply {
+            hint = "Daily web research topics • comma separated (e.g. AI, business, agriculture)"
+            setTextColor(Color.WHITE); setHintTextColor(0xFF91A0BA.toInt())
+            setText(prefs.getString("daily_research_topics", "").orEmpty())
+            minLines = 2; maxLines = 3
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setBackgroundColor(0xFF172238.toInt())
+        }
+        root.addView(researchTopics, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        researchToggle = android.widget.Switch(this).apply {
+            text = "Daily source-linked web research • Perplexity"
+            setTextColor(0xFFE4E9F5.toInt())
+            isChecked = prefs.getBoolean(DailyBriefingResearchWorker.KEY_ENABLED, false)
+            setOnCheckedChangeListener { _, enabled ->
+                val topics = researchTopics.text.toString().trim().take(1000)
+                if (enabled && topics.isBlank()) {
+                    isChecked = false
+                    toast("पहले research topics लिखें।")
+                    return@setOnCheckedChangeListener
+                }
+                prefs.edit()
+                    .putString(DailyBriefingResearchWorker.KEY_SAVED_TOPICS, topics)
+                    .putBoolean(DailyBriefingResearchWorker.KEY_ENABLED, enabled)
+                    .apply()
+                if (enabled) {
+                    if (!briefingToggle.isChecked) briefingToggle.isChecked = true
+                    toast("Daily source-linked research enabled • Perplexity key required")
+                } else {
+                    androidx.work.WorkManager.getInstance(applicationContext)
+                        .cancelUniqueWork(DailyBriefingResearchWorker.UNIQUE_WORK)
+                    toast("Daily web research disabled")
+                }
+            }
+        }
+        root.addView(researchToggle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        root.addView(TextView(this).apply {
+            text = "Privacy: केवल आपके लिखे topics Perplexity को web research के लिए भेजे जाएँगे। यह feature default में OFF है; tasks, contacts या notifications का content नहीं भेजा जाता।"
+            textSize = 11f; setTextColor(0xFF9EABC2.toInt())
+            setPadding(dp(4), 0, dp(4), dp(10))
+        })
         root.addView(TextView(this).apply {
             text = "YOUR TASKS"; textSize = 11f; letterSpacing = .12f
             setTextColor(Color.rgb(159, 139, 255)); setPadding(dp(2), dp(8), 0, dp(8))
@@ -78,6 +121,17 @@ class TaskPlannerActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         setContentView(root)
         render()
+    }
+
+    override fun onPause() {
+        if (::researchTopics.isInitialized) {
+            val topics = researchTopics.text.toString().trim().take(1000)
+            prefs.edit().putString("daily_research_topics", topics).apply()
+            if (::researchToggle.isInitialized && researchToggle.isChecked && topics.isBlank()) {
+                researchToggle.isChecked = false
+            }
+        }
+        super.onPause()
     }
 
     private fun createTask() {
