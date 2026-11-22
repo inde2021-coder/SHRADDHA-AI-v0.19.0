@@ -154,6 +154,24 @@ jobs:
 
       # Run the x86_64 guest on the Ubuntu KVM runner with adequate RAM/CPU.
       # Keep SwiftShader for headless Linux; wait-for-android-emulator.sh verifies the actual ADB serial.
+      - name: Explicitly install Android Emulator and API 35 x86_64 system image
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager -print -quit)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install \
+            "platform-tools" \
+            "emulator" \
+            "platforms;android-35" \
+            "system-images;android-35;default;x86_64"
+          "$ANDROID_HOME/emulator/emulator" -version
+          "$ANDROID_HOME/platform-tools/adb" version
+
       - name: Run biometric ONNX smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
