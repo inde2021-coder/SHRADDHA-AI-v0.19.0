@@ -52,13 +52,31 @@ trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 "$ADB" -s "$SERIAL" shell df -h /data
 "$ADB" devices -l
 
-./gradlew :app:connectedDebugAndroidTest --no-daemon --console=plain --stacktrace
+# Build instrumentation APKs without invoking UTP/ddmlib device installation.
+# The runner has intermittently misreported API 30 as API 1 during split-APK install.
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --console=plain --stacktrace
 
-report_dir="app/build/outputs/androidTest-results/connected"
-if [[ ! -d "$report_dir" ]] || ! find "$report_dir" -type f -name '*.xml' -print -quit | grep -q .; then
-  echo "ERROR: connectedDebugAndroidTest produced no XML instrumentation result files."
+api_level="$( "$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d "\r" )"
+echo "Verified Android API level: $api_level"
+if ! [[ "$api_level" =~ ^[0-9]+$ ]] || (( api_level < 26 )); then
+  echo "ERROR: emulator API level is invalid or below app minSdk 26: $api_level"
   exit 1
 fi
+
+echo "Installing app and instrumentation APKs with direct ADB install..."
+"$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk
+"$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+echo "Running the full Android instrumentation suite..."
+instrumentation_output="$( "$ADB" -s "$SERIAL" shell am instrument -w -r in.shraddha.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tr -d "\r" )"
+printf "%s\n" "$instrumentation_output"
+if ! grep -Eq "INSTRUMENTATION_CODE: 0" <<< "$instrumentation_output" ||
+   ! grep -Eq "OK \([0-9]+ tests?\)" <<< "$instrumentation_output"; then
+  echo "ERROR: Android instrumentation did not report a clean successful test run."
+  exit 1
+fi
+
+echo "Android instrumentation suite passed."
 
 echo "Installing and launching the production debug APK..."
 "$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk
