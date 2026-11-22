@@ -400,7 +400,7 @@ object VoiceSessionManager {
     /** Speaks a camera observation through the configured Shraddha voice when the voice session is active. */
     fun announceVisualObservation(context: Context, text: String) {
         val clean = text.trim().take(1200)
-        if (clean.isBlank() || !_isActive.value) return
+        if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return
         val epoch = sessionEpoch.get()
         val assistantName = "Shraddha AI"
         speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
