@@ -436,7 +436,7 @@ object DeviceLinkManager {
         if (!actionId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return false
         return sendEncryptedPeerMessage(targetDeviceId, "remote_action_result", JSONObject().put("result", result.take(14000)), actionId, -1, actionKind.take(32))
     }
-    private fun sendEncryptedPeerMessage(targetDeviceId: String, kind: String, payload: JSONObject, correlationId: String, index: Int = -1, actionKind: String = ""): Boolean {
+    private fun sendEncryptedPeerMessage(targetDeviceId: String, kind: String, payload: JSONObject, correlationId: String, index: Int = -1, actionKind: String = "", category: String? = null): Boolean {
         val state = peerKeys[targetDeviceId] ?: return false
         if (!state.localConfirmed || !state.remoteConfirmed || sessionId.isNullOrBlank() || deviceId.isNullOrBlank()) {
             onStatus?.invoke("Encrypted send blocked: verify the peer fingerprint on both devices first.")
