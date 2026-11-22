@@ -25,8 +25,8 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 | 12 | Live Translation | Translation request validation/envelope added; provider text capability exists. | Streaming speech/camera translation, subtitle overlay, offline language packs and quality tests. |
 | 13 | Visual Troubleshooting | Safety-first network, battery and electrical troubleshooting playbooks added. | Camera-guided step validation, device-specific trusted manuals and escalation UI. |
 | 14 | 3D Environment Mapping | Validated 3D landmark/coordinate data model added. | Camera/ARCore or depth sensor capture, SLAM, persistence, renderer and device calibration. |
-| 15 | Cross-Device Clipboard | Paired relay transport is integrated for manually triggered text sharing. Clipboard is an explicitly approved share category; exact one-time request grants, category opt-in, local expiry checks, SHA-256 integrity checks and a second receiver confirmation before copying are enforced. 20,000-character cap. | End-to-end encryption/key agreement, key rotation and replay-resistant packet IDs remain incomplete; relay can see payload text. |
-| 16 | Universal File Transfer | One-time peer-approved small-file relay binds the grant to the exact request ID, validates canonical Base64, exact byte length and SHA-256 at relay and receiver; receiver commits only verified files atomically. 650 KB cap. A bounded per-chunk envelope validator (48 KB chunks, transfer ID/index/count, SHA-256) and unit test are now added as groundwork. | Chunk relay/reassembly, resumable persistence, progress/cancel UI, end-to-end encryption, quotas and malware scanning remain incomplete; chunk validation alone is not a working chunk transport. |
+| 15 | Cross-Device Clipboard | Clipboard payloads use the mutually fingerprint-confirmed ECDH/AES-GCM peer-message path, one-time request grants, category opt-in, expiry checks and SHA-256 integrity checks; receiver confirmation is required before copying. 20,000-character cap. | Durable device keys, key rotation, replay-resistant request IDs and physical multi-device tests remain. |
+| 16 | Universal File Transfer | SAF-based sender/receiver workflow supports files up to 20 MB, one-time receiver approval, 48 KB encrypted E2E chunks, SHA-256 verification, receiver-selected save destination, pause/resume, missing-chunk requests and cancellation. | Increase tested size only after device validation; durable relay-side transfer state, robust process-death resume, quotas, malware scanning and interruption/device-matrix tests remain. |
 | 17 | App Workflow Automation | Accessibility Operator, app learning profiles, adaptive workflow runner and checkpoints exist. | Voice-created training, robust OCR fallback for canvas controls, broader app recovery and device matrix. |
 | 18 | Remote Desktop Workspace | Paired-device control and consent-gated screen streaming exist. | Full remote desktop session UX, keyboard/mouse parity, multi-monitor, file transfer and security review. |
 | 19 | Smart Notification Manager | Opt-in Android NotificationListenerService captures metadata only (no title/body), stores a bounded 100-event history encrypted at rest with Android Keystore AES-GCM, exposes access/consent controls and clear-history action, and applies quiet-hour policy. If encryption/decryption fails, new history is not written in plaintext. | Rich per-app rule editor, encrypted history, retention/deletion UX and Android version/device matrix. |
@@ -160,3 +160,16 @@ The pending-features branch now includes a dependency-aware parallel council exe
 - The original sequential API remains available for compatibility.
 
 **Not yet verified:** this change has not been built or tested, by instruction. UI for selecting specialist count, provider spend/time budgets, durable per-stage evidence, and process-death recovery of in-flight provider calls remain to be completed. The current UI selects providers but uses a fixed three-specialist configuration. A provider call already in flight cannot be forcibly interrupted by the current synchronous gateway client.
+
+
+## Encrypted visual relay correction — 22 November 2026
+
+A source review found that Android's `ScreenShareService` and `RemoteCameraService` called `DeviceLinkManager.sendFrame` with raw JPEG bytes while the backend relay had already been hardened to accept only the encrypted `0x81/0x82` frame envelope. The old Android sender/receiver therefore did not match the current relay protocol.
+
+The pending branch now adds:
+- a strict visual frame envelope codec matching the relay's source-ID/type/sequence/nonce/ciphertext format;
+- AES-256-GCM encryption using the mutually fingerprint-confirmed peer key and AAD bound to session, sender, receiver, frame type and sequence;
+- receiver authentication, JPEG validation and per-peer/frame-type replay rejection;
+- a unit-test case for ECDH key agreement, relay envelope reconstruction, successful decryption and AAD tamper rejection.
+
+This is a source-level protocol correction only. It has not been built, unit-tested or exercised between physical devices yet. Camera/screen streaming must remain labelled unverified until the consolidated test and real-device pass.
