@@ -297,7 +297,7 @@ object VoiceSessionManager {
 
                 val toolJob = scope.launch(start = CoroutineStart.LAZY) {
                     val result = try {
-                        ActionExecutor.execute(currentContext, name, args)
+                        `in`.shraddha.ai.future.MainBrain.executeVoiceTool(currentContext, name, args)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
