@@ -251,7 +251,7 @@ fun DataVaultScreen(navController: NavController) {
 
     if (showRestoreConfirmation && pendingImport != null) {
         AlertDialog(
-            onDismissRequest = { showRestoreConfirmation = false; pendingImport = null },
+            onDismissRequest = { showRestoreConfirmation = false; pendingImport = null; passphrase = ""; confirmation = "" },
             title = { Text("Restore this backup?") },
             text = {
                 Text("This can replace assistant preferences, tasks, knowledge graph, active project, digital-twin settings and conversation memory. API keys, gateway tokens, biometrics and device-pairing secrets are not restored. Continue only if you trust the file. This operation cannot be automatically rolled back.")
@@ -278,7 +278,7 @@ fun DataVaultScreen(navController: NavController) {
                 }) { Text("Restore and Replace") }
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreConfirmation = false; pendingImport = null }) { Text("Cancel") }
+                TextButton(onClick = { showRestoreConfirmation = false; pendingImport = null; passphrase = ""; confirmation = "" }) { Text("Cancel") }
             }
         )
     }
