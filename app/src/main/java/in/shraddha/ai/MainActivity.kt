@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import com.Lia.assistant.voice.VoiceSessionManager
 import com.Lia.assistant.voice.NovaOrbState
+import com.Lia.assistant.ui.fx.NovaOrbStyle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import `in`.shraddha.ai.vision.LiveVisualTranslationSession as LiveVisualTranslationSession
@@ -170,6 +171,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         activeOrb?.setReducedMotion(NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false))
+        activeOrb?.setOrbStyle(NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name)))
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -286,7 +288,11 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        val homeOrb = ShraddhaOrbView(this, assistantDisplayName, NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false)).apply {
+        val homeOrb = ShraddhaOrbView(
+            this, assistantDisplayName,
+            NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false),
+            NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name))
+        ).apply {
             setVoiceState(VoiceSessionManager.state.value)
             setAmplitude(VoiceSessionManager.amplitude.value)
             setMuted(VoiceSessionManager.muted.value)
@@ -3331,7 +3337,7 @@ object VoiceCommandParser {
 
 
 /** Animated 3D energy core. Motion and accessibility state follow the real voice session. */
-private class ShraddhaOrbView(context: android.content.Context, private val assistantName: String, private var reducedMotion: Boolean) : View(context) {
+private class ShraddhaOrbView(context: android.content.Context, private val assistantName: String, private var reducedMotion: Boolean, private var orbStyle: NovaOrbStyle) : View(context) {
     private var voiceState: NovaOrbState = NovaOrbState.IDLE
     private var microphoneAmplitude: Float = 0f
     private var microphoneMuted: Boolean = false
@@ -3350,6 +3356,11 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
     fun setMuted(muted: Boolean) {
         microphoneMuted = muted
         updateDescription()
+        invalidate()
+    }
+
+    fun setOrbStyle(style: NovaOrbStyle) {
+        orbStyle = style
         invalidate()
     }
 
@@ -3401,7 +3412,8 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
         val cy = height / 2f
         val base = minOf(width, height) * .285f
         if (base <= 0f) return
-        val wave = if (reducedMotion) 0f else (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
+        val motionPhase = if (reducedMotion) 0f else phase
+        val wave = (kotlin.math.sin(motionPhase * Math.PI * 2.0).toFloat() + 1f) * .5f
         val statePulse = if (microphoneMuted && voiceState == NovaOrbState.LISTENING) .012f else when (voiceState) {
             NovaOrbState.LISTENING -> .045f + microphoneAmplitude * .11f
             NovaOrbState.SPEAKING -> .065f + microphoneAmplitude * .10f
@@ -3419,13 +3431,18 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
             NovaOrbState.ERROR -> .22f
             NovaOrbState.IDLE -> .55f
         }
-        val rotation = if (reducedMotion) 0f else phase * 360f * spinRate
+        val rotation = motionPhase * 360f * spinRate
 
         // Soft atmospheric halo behind the core.
         paint.style = Paint.Style.FILL
         paint.shader = RadialGradient(
             cx, cy, base * 2.05f,
-            intArrayOf(0x4430DDE5, 0x22225F7C, 0x0030DDE5),
+            when (orbStyle) {
+                NovaOrbStyle.ARCHER -> intArrayOf(0x44FFD36A, 0x224C3A1C, 0x00FFD36A)
+                NovaOrbStyle.GLASS -> intArrayOf(0x448CE8E7, 0x223B8B9A, 0x008CE8E7)
+                NovaOrbStyle.MINIMAL -> intArrayOf(0x2230DDE5, 0x11225F7C, 0x0030DDE5)
+                else -> intArrayOf(0x4430DDE5, 0x22225F7C, 0x0030DDE5)
+            },
             floatArrayOf(0f, .52f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -3433,10 +3450,22 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
         paint.shader = null
 
         // Three tilted orbital rings create a layered, dimensional silhouette.
-        val ringColors = if (voiceState == NovaOrbState.ERROR)
+        val ringColors = if (voiceState == NovaOrbState.ERROR) {
             intArrayOf(0xFFFF7C82.toInt(), 0xCCFF9A86.toInt(), 0xAAE46B78.toInt())
-        else intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8872B9D9.toInt())
-        for (i in 0..2) {
+        } else when (orbStyle) {
+            NovaOrbStyle.ARCHER -> intArrayOf(0xFFFFD36A.toInt(), 0xCCF2A94A.toInt(), 0x99E7C06D.toInt())
+            NovaOrbStyle.AURORA -> intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8866C2A0.toInt())
+            NovaOrbStyle.PLASMA -> intArrayOf(0xAA68E7EA.toInt(), 0x9972B9D9.toInt(), 0x8852A9D4.toInt())
+            NovaOrbStyle.GLASS -> intArrayOf(0xAAE6FFFF.toInt(), 0x9978C9D8.toInt(), 0x8868A9C2.toInt())
+            NovaOrbStyle.MINIMAL -> intArrayOf(0x8868E7EA.toInt(), 0x0071D7C9.toInt(), 0x0072B9D9.toInt())
+            else -> intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8872B9D9.toInt())
+        }
+        val ringCount = when (orbStyle) {
+            NovaOrbStyle.MINIMAL -> 1
+            NovaOrbStyle.GLASS -> 2
+            else -> 3
+        }
+        for (i in 0 until ringCount) {
             canvas.save()
             canvas.rotate(rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f, cx, cy)
             canvas.scale(1f, if (i == 1) .34f else .48f, cx, cy)
@@ -3456,9 +3485,15 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
 
         // Core depth: dark outer shell, luminous radial volume, then specular highlights.
         paint.style = Paint.Style.FILL
+        val coreColors = when (orbStyle) {
+            NovaOrbStyle.ARCHER -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFE9B0.toInt(), 0xFFFFC45C.toInt(), 0xFF9B5C24.toInt(), 0xFF081C2B.toInt())
+            NovaOrbStyle.GLASS -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFE6FFFF.toInt(), 0xFF9DE4EA.toInt(), 0xFF347F95.toInt(), 0xFF081C2B.toInt())
+            NovaOrbStyle.MINIMAL -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFC9FFF8.toInt(), 0xFF68E7EA.toInt(), 0xFF237D91.toInt(), 0xFF081C2B.toInt())
+            else -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFC9FFF8.toInt(), 0xFF4FD9D0.toInt(), 0xFF237D91.toInt(), 0xFF081C2B.toInt())
+        }
         paint.shader = RadialGradient(
             cx - base * .30f, cy - base * .36f, base * 1.48f,
-            intArrayOf(0xFFFFFFFF.toInt(), 0xFFC9FFF8.toInt(), 0xFF4FD9D0.toInt(), 0xFF237D91.toInt(), 0xFF081C2B.toInt()),
+            coreColors,
             floatArrayOf(0f, .16f, .42f, .76f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -3471,8 +3506,9 @@ private class ShraddhaOrbView(context: android.content.Context, private val assi
         canvas.drawCircle(cx + base * .34f, cy + base * .28f, base * .24f, paint)
 
         // Small orbiting energy points add motion without implying a live camera feed.
-        for (i in 0 until 12) {
-            val angle = phase * Math.PI * 2.0 + i * (Math.PI * 2.0 / 12.0)
+        val energyPoints = if (orbStyle == NovaOrbStyle.MINIMAL) 0 else if (orbStyle == NovaOrbStyle.GLASS) 6 else 12
+        for (i in 0 until energyPoints) {
+            val angle = motionPhase * Math.PI * 2.0 + i * (Math.PI * 2.0 / energyPoints)
             val orbit = base * (1.58f + .08f * kotlin.math.sin(angle * 2.0).toFloat())
             val x = cx + kotlin.math.cos(angle).toFloat() * orbit
             val y = cy + kotlin.math.sin(angle).toFloat() * orbit * .72f
