@@ -161,3 +161,8 @@ The user's request to replace the phone's existing OS with Shraddha OS is a sepa
 
 
 The repository also contains the user's LIA visual reference at `reference/lia-app-recording/LIA-APP-REFERENCE.mov`. The current GitHub text-file connector cannot decode that binary video, so this pass does not claim to have watched or reproduced its exact frame sequence. Preserve the file and use its actual visual details when a video-capable inspection path is available.
+
+
+### Assistant rename boundary
+
+The pending branch updates the configured name in the main UI, About/Profile/Quick Actions/Visual Lens/phone-agent copy, voice agent prompts, overlay, keyboard, Firebase notifications and screen/camera foreground notifications. Android's app-drawer/launcher label remains a package-level static label; arbitrary per-user dynamic launcher labels require a user-pinned dynamic shortcut and cannot be silently rewritten by the app. Do not claim the launcher label itself is dynamically renamed.
