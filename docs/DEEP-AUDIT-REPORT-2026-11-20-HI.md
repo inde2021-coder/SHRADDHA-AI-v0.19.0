@@ -135,3 +135,14 @@ This addendum checks the current pending-features branch, not the older audited 
 | P1-12 device revocation was incomplete | Relay policy includes owner-only device revocation and clears grants/pending actions. | Persistent credential revocation across process/server restart and physical multi-device tests remain. |
 
 The current pending branch also adds a parallel Android multi-agent execution path and exposes it in Advanced AI Lab through WorkManager. That new path is **not yet built or tested**. This addendum is a source inspection only; it does not change any item to runtime-validated.
+
+
+### Additional Android visual transport source correction — 22 November
+
+The current source re-check found a protocol mismatch that was not covered by the earlier report: the backend relay required encrypted visual-frame envelopes, but Android's screen/camera sender still emitted raw JPEG frames and its receiver treated relayed ciphertext as JPEG. The pending branch now aligns both ends:
+- Android sends only a mutually trusted peer's screen/camera frames, encrypted with AES-256-GCM.
+- Authenticated data binds the session, sender, receiver, frame type and monotonically increasing sequence.
+- The relay can forward the opaque ciphertext without seeing image contents.
+- The receiver validates the envelope, authenticates/decrypts, rejects invalid JPEG and rejects replayed sequence numbers.
+
+Unit-test source was added for the relay envelope and ECDH/AES-GCM round-trip including AAD tampering. **No test was run for this pending change.** Real-device camera/screen tests remain mandatory.
