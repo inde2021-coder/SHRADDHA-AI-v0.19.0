@@ -349,7 +349,7 @@ fun SettingsScreen(
                 NovaSettingsRow(
                     title = "About Shraddha AI",
                     subtitle = "Version, developer contact and copyright",
-                    icon = Icons.Default.Info,
+                    icon = Icons.Default.Key,
                     onClick = { navController.navigate("about") }
                 )
             }
