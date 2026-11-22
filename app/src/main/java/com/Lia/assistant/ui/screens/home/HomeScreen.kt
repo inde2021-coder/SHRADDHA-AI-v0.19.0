@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import in.shraddha.ai.R
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.fx.LiaOrb3D
@@ -77,7 +78,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 .background(Brush.linearGradient(listOf(Cyan, Violet)))
                 .border(1.dp, Color(0xAA8BEAFF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                 AsyncImage(
-                    model = appState.assistantAvatarUri ?: in.shraddha.ai.R.drawable.shraddha_ai_avatar,
+                    model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_avatar,
                     contentDescription = "Shraddha AI avatar",
                     modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
                 )
