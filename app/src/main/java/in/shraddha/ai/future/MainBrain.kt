@@ -6,6 +6,7 @@ import `in`.shraddha.ai.operator.OperatorStep
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 import android.content.Context
 import org.json.JSONObject
+import org.json.JSONArray
 import java.util.UUID
 import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 
@@ -20,7 +21,8 @@ import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 class MainBrain(
     maxParallelWorkflows: Int = 1,
     private val executeVerified: (OperatorStep, confirmed: Boolean) -> Boolean,
-    private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> }
+    private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> },
+    context: Context? = null
 ) {
     data class WorkflowRequest(
         val id: String,
@@ -90,8 +92,17 @@ class MainBrain(
                 .run(profile, workflowName, values, confirmed, resume)
     }
 
-    private val scheduler = SharedTaskScheduler(1)
-    init { require(maxParallelWorkflows == 1) { "Android UI Operator currently supports one active workflow at a time" } }
+    private val durableStore = context?.applicationContext?.let(::MainBrainSchedulerStore)
+    private val scheduler = SharedTaskScheduler(1) { snapshots -> durableStore?.save(snapshots) }
+    init {
+        require(maxParallelWorkflows == 1) { "Android UI Operator currently supports one active workflow at a time" }
+        durableStore?.load()?.let { saved ->
+            scheduler.restore(saved)
+            saved.filter { it.state == SharedTaskScheduler.State.PENDING }.forEach { snapshot ->
+                decodeRequest(snapshot.task.payload)?.let { requests[it.id] = it }
+            }
+        }
+    }
 
     private val requests = linkedMapOf<String, WorkflowRequest>()
     private val bridges = linkedMapOf<String, TaskPlannerOperatorBridge>()
@@ -115,7 +126,8 @@ class MainBrain(
                 id = request.id,
                 title = request.title,
                 dependsOn = request.dependsOn,
-                priority = request.priority
+                priority = request.priority,
+                payload = encodeRequest(request)
             )
         )).single()
         requests[request.id] = request
@@ -191,6 +203,65 @@ class MainBrain(
         onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> =
         AgentCouncil.execute(goal, language, provider, executor, onProgress, shouldContinue)
+
+    private fun encodeRequest(request: WorkflowRequest): String {
+        val dependencies = JSONArray().apply { request.dependsOn.sorted().forEach(::put) }
+        val actions = JSONArray().apply {
+            request.actions.forEach { action ->
+                put(JSONObject()
+                    .put("id", action.id)
+                    .put("title", action.title)
+                    .put("priority", action.priority)
+                    .put("estimatedMinutes", action.estimatedMinutes)
+                    .put("risk", action.risk.name)
+                    .put("requiresApproval", action.requiresApproval)
+                    .put("dependsOn", JSONArray().apply { action.dependsOn.sorted().forEach(::put) })
+                    .put("step", JSONObject()
+                        .put("action", action.step.action.name)
+                        .put("target", action.step.target)
+                        .put("value", action.step.value)
+                        .put("expectedVisibleText", action.step.expectedVisibleText)
+                        .put("requiresConfirmation", action.step.requiresConfirmation)))
+            }
+        }
+        return JSONObject().put("id", request.id).put("title", request.title)
+            .put("priority", request.priority).put("dependsOn", dependencies)
+            .put("actions", actions).toString()
+    }
+
+    private fun decodeRequest(payload: String): WorkflowRequest? = runCatching {
+        val json = JSONObject(payload)
+        val dependencies = json.getJSONArray("dependsOn")
+        val actions = json.getJSONArray("actions")
+        val decoded = (0 until actions.length()).map { index ->
+            val item = actions.getJSONObject(index)
+            val step = item.getJSONObject("step")
+            val actionDependencies = item.getJSONArray("dependsOn")
+            PlannedOperatorAction(
+                id = item.getString("id"),
+                title = item.getString("title"),
+                step = `in`.shraddha.ai.operator.OperatorStep(
+                    action = `in`.shraddha.ai.operator.OperatorActionType.valueOf(step.getString("action")),
+                    target = step.optString("target"),
+                    value = step.optString("value"),
+                    expectedVisibleText = step.optString("expectedVisibleText"),
+                    requiresConfirmation = step.optBoolean("requiresConfirmation")
+                ),
+                dependsOn = (0 until actionDependencies.length()).map { actionDependencies.getString(it) }.toSet(),
+                priority = item.optInt("priority", 3),
+                estimatedMinutes = item.optInt("estimatedMinutes", 1),
+                risk = Risk.valueOf(item.optString("risk", Risk.READ_ONLY.name)),
+                requiresApproval = item.optBoolean("requiresApproval")
+            )
+        }
+        WorkflowRequest(
+            id = json.getString("id"),
+            title = json.getString("title"),
+            actions = decoded,
+            priority = json.optInt("priority", 3),
+            dependsOn = (0 until dependencies.length()).map { dependencies.getString(it) }.toSet()
+        )
+    }.getOrNull()
 
     private fun settleIfTerminal(id: String, status: WorkflowStatus) {
         when (status) {
