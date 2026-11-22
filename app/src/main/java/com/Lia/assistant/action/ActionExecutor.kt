@@ -3,6 +3,7 @@ package com.Lia.assistant.action
 import android.content.Context
 import com.Lia.assistant.agent.NovaAccessibilityService
 import com.Lia.assistant.license.AccessKeyManager
+import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.data.VoiceGatewaySettings
 import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
@@ -29,7 +30,7 @@ object ActionExecutor {
             return result
         }
 
-        when (toolName) {
+        when (toolName) {\n            "build_website" -> {\n                val prompt = args.optString("prompt", "").trim()\n                if (prompt.isBlank() || prompt.length > 8000) {\n                    result.put("status", "error")\n                    result.put("message", "Website prompt must contain 1-8000 characters.")\n                } else {\n                    withContext(Dispatchers.Main.immediate) { ForgeController.start(context, prompt) }\n                    result.put("status", "success")\n                    result.put("action", "forge_started")\n                    result.put("message", "Website Forge opened. Review its generated plan before publishing or deploying.")\n                }\n            }
             "open_app" -> {
                 val appName = args.optString("app_name", "").trim()
                 if (appName.isEmpty()) {
