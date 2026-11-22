@@ -140,7 +140,7 @@ class FileAccessActivity : Activity() {
             .setNegativeButton("रद्द", null)
             .setPositiveButton("नाम बदलें") { _, _ ->
                 val newName = input.text.toString().trim()
-                if (newName.isBlank() || newName.contains("/") || newName.contains(String(charArrayOf(92)))) {
+                if (newName.isBlank() || newName.contains("/") || newName.contains('\\')) {
                     status.text = "मान्य फ़ाइल नाम दें।"
                 } else {
                     val renamed = runCatching { androidx.documentfile.provider.DocumentFile.fromSingleUri(this, uri)?.renameTo(newName) == true }.getOrDefault(false)
