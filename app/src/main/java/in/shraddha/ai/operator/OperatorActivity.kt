@@ -88,35 +88,40 @@ class OperatorActivity : Activity() {
                     return@runOnUiThread
                 }
                 val labels = reviews.map { review ->
-                    val status = if (review.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE)
-                        "परिणाम सत्यापित" else "मानवीय जाँच आवश्यक"
-                    "${review.title} • ${review.action} • ${review.stepId} • ${status}"
+                    val status = if (review.recovery in setOf(
+                            `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE,
+                            `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+                        )) "परिणाम सत्यापित" else "मानवीय जाँच आवश्यक"
+                    "${review.title} • ${review.action} • ${review.packageName} • ${status}"
                 }.toTypedArray()
                 android.app.AlertDialog.Builder(this@OperatorActivity)
                     .setTitle("Interrupted Operator actions")
                     .setItems(labels) { _, which ->
                         val selected = reviews[which]
-                        if (selected.recovery != `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE) {
-                            android.app.AlertDialog.Builder(this@OperatorActivity)
-                                .setTitle("Automatic resume रोका गया")
-                                .setMessage("इस action का परिणाम स्क्रीन से निश्चित रूप से सत्यापित नहीं हुआ। इसे दोबारा नहीं चलाया जाएगा। पहले संबंधित ऐप में स्थिति जाँचें।")
-                                .setPositiveButton("ठीक है", null).show()
-                        } else {
-                            android.app.AlertDialog.Builder(this@OperatorActivity)
-                                .setTitle("अगले चरण जारी करें?")
-                                .setMessage("पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।")
-                                .setNegativeButton("अभी नहीं", null)
-                                .setPositiveButton("जारी करें") { _, _ ->
-                                    Thread {
-                                        val queued = brain.resumeInterruptedWorkflow(selected.workflowId)
-                                        val result = if (queued != null) brain.startNextWorkflow() else null
-                                        runOnUiThread {
-                                            if (result != null) showMainBrainResult(brain, result)
-                                            else log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\n" + log.text.take(4500)
-                                        }
-                                    }.start()
-                                }.show()
-                        }
+                        val machineVerified = selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE ||
+                            selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+                        android.app.AlertDialog.Builder(this@OperatorActivity)
+                            .setTitle(if (machineVerified) "अगले चरण जारी करें?" else "पहले action स्वयं जाँचें")
+                            .setMessage(
+                                if (machineVerified)
+                                    "पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।"
+                                else
+                                    "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
+                            )
+                            .setNegativeButton("रद्द करें", null)
+                            .setPositiveButton(if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
+                                Thread {
+                                    val queued = brain.resumeInterruptedWorkflow(
+                                        selected.workflowId,
+                                        manuallyVerified = !machineVerified
+                                    )
+                                    val result = if (queued != null) brain.startNextWorkflow() else null
+                                    runOnUiThread {
+                                        if (result != null) showMainBrainResult(brain, result)
+                                        else log.text = "Recovery resume नहीं हुआ। कोई नया action execute नहीं किया गया।\n" + log.text.take(4500)
+                                    }
+                                }.start()
+                            }.show()
                     }
                     .setNegativeButton("बंद करें", null)
                     .show()
