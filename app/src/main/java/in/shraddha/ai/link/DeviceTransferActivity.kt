@@ -66,6 +66,11 @@ class DeviceTransferActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cancelled.set(true)
+        paused.set(false)
+        runCatching { incomingOut?.fd?.sync() }
+        runCatching { incomingOut?.close() }
+        incomingOut = null
         if (DeviceLinkManager.onFileTransferMessage != null) DeviceLinkManager.onFileTransferMessage = null
         super.onDestroy()
     }
@@ -335,6 +340,8 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun clearTransferState() {
+        sourceUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+        pendingSaveUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
         getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE).edit().clear().apply()
         receivedChunkIndexes.clear()
         incomingChunks = 0
