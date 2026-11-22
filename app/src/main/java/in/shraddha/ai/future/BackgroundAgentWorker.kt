@@ -23,6 +23,12 @@ class BackgroundAgentWorker(
         val schedulerTaskId = inputData.getString(BackgroundTaskQueue.KEY_SCHEDULER_TASK_ID)
             ?: return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Main Brain scheduler task ID is missing."))
         val scheduler = MainBrainSchedulerRuntime.get(applicationContext)
+        // WorkManager may restart this worker after process death. Council work performs
+        // provider reasoning only, so it is safe to retry; device/voice actions are not.
+        scheduler.requeueInterrupted(schedulerTaskId) { task ->
+            runCatching { org.json.JSONObject(task.payload).optString("kind") == "background_council" }
+                .getOrDefault(false)
+        }
         val claimed = scheduler.claimSpecific(schedulerTaskId)
         if (claimed == null) {
             val current = scheduler.get(schedulerTaskId)
