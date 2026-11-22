@@ -143,3 +143,6 @@ The user explicitly accepted the complete redesign on 18 November 2026 with thes
 ### Transfer capacity update — 22 November
 
 The Android chunked file-transfer cap is now aligned with the relay's 100 MiB manifest limit (48 KiB chunks, 2,134 maximum chunks). The earlier Android-only 20 MB cap has been raised in the protocol helper, sender, receiver and boundary test. This is source-only; 100 MiB throughput, storage pressure, process-death resume, and low-storage behavior must be validated on physical devices before calling the larger limit production-ready.
+
+
+The local background council now has a 1–5 specialist-count control, persists that choice into WorkManager, and exposes task cancellation. Per-provider cost/time budgets and durable per-stage evidence are still pending. Source changes and regression tests are not yet verified.
