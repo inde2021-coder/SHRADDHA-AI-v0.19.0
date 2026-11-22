@@ -92,7 +92,7 @@ class MainBrain(
                     .put("task_id", submitted.task.id)
             }
             return try {
-                val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args)
+                val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args, withinMainBrainTask = true)
                 scheduler.complete(taskId)
                 result
             } catch (cancelled: CancellationException) {
