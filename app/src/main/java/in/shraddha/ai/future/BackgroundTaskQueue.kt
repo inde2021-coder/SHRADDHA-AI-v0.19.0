@@ -12,6 +12,7 @@ import java.util.UUID
 /** Persistent, network-aware queue for user-requested multi-agent work. */
 object BackgroundTaskQueue {
     const val TAG = "shraddha-background-agent"
+    const val KEY_MAIN_BRAIN_TASK = "main_brain_task"
     const val KEY_GOAL = "goal"
     const val KEY_PROVIDER = "provider"
     const val KEY_LANGUAGE = "language"
@@ -21,7 +22,10 @@ object BackgroundTaskQueue {
     const val KEY_FINAL_REPORT = "final_report"
     const val KEY_ERROR = "error"
 
-    fun enqueue(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID {
+    fun enqueue(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID =
+        MainBrain.enqueueBackgroundCouncil(context, goal, provider, language)
+
+    internal fun enqueueFromMainBrain(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID {
         val cleanGoal = goal.trim()
         require(cleanGoal.isNotBlank() && cleanGoal.length <= 2000) { "Task must contain 1-2000 characters" }
         require(provider.uppercase() in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
@@ -31,7 +35,8 @@ object BackgroundTaskQueue {
             .setInputData(workDataOf(
                 KEY_GOAL to cleanGoal,
                 KEY_PROVIDER to provider.uppercase(),
-                KEY_LANGUAGE to language.take(20)
+                KEY_LANGUAGE to language.take(20),
+                KEY_MAIN_BRAIN_TASK to true
             ))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .addTag(TAG)
