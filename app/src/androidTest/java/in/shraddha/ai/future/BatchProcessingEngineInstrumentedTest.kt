@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicReference\nimport java.io.ByteArrayInputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipOutputStream
 
 @RunWith(AndroidJUnit4::class)
 class BatchProcessingEngineInstrumentedTest {
@@ -35,6 +35,22 @@ class BatchProcessingEngineInstrumentedTest {
         assertTrue(resumed.resumed)
         assertEquals(1000, resumed.succeeded)
         engine.clearCheckpoint("instrumented_1000")
+    }
+
+    @Test fun readsRealXlsxSharedStringsAndInlineStrings() {
+        val archive = java.io.ByteArrayOutputStream()
+        ZipOutputStream(archive).use { zip ->
+            zip.putNextEntry(ZipEntry("xl/sharedStrings.xml"))
+            zip.write("""<?xml version="1.0" encoding="UTF-8"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>id</t></si><si><t>name</t></si><si><t>42</t></si></sst>""".toByteArray())
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("xl/worksheets/sheet1.xml"))
+            zip.write("""<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row><row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="inlineStr"><is><t>Radhe Krishna</t></is></c></row></sheetData></worksheet>""".toByteArray())
+            zip.closeEntry()
+        }
+        val rows = BatchXlsxSource.read(ByteArrayInputStream(archive.toByteArray()))
+        assertEquals(1, rows.size)
+        assertEquals("42", rows.single().values.getString("id"))
+        assertEquals("Radhe Krishna", rows.single().values.getString("name"))
     }
 
     @Test fun duplicateRowsAreReportedAndFailedRowsCanBeRetried() {
