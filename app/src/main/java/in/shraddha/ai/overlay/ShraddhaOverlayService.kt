@@ -26,6 +26,10 @@ class ShraddhaOverlayService : Service() {
     private var orb: View? = null
     private var panel: LinearLayout? = null
     private var orbPulse: ValueAnimator? = null
+    private fun assistantName(): String =
+        com.Lia.assistant.data.NovaPreferences.getString(this, com.Lia.assistant.data.NovaPreferences.Keys.ASSISTANT_NAME, com.Lia.assistant.data.AssistantBrand.NAME)
+            .trim().ifBlank { com.Lia.assistant.data.AssistantBrand.NAME }
+
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun overlayType() = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
@@ -33,7 +37,7 @@ class ShraddhaOverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         orb = FloatingOrbView(this).apply {
-            contentDescription = "${com.Lia.assistant.data.NovaPreferences.getString(this@ShraddhaOverlayService, com.Lia.assistant.data.NovaPreferences.Keys.ASSISTANT_NAME, com.Lia.assistant.data.AssistantBrand.NAME)} floating 3D orb. Tap to open quick actions; long press to close."
+            contentDescription = "${assistantName()} floating 3D orb. Tap to open quick actions; long press to close."
             setOnClickListener { togglePanel() }
             setOnLongClickListener { stopSelf(); true }
         }
@@ -55,10 +59,10 @@ class ShraddhaOverlayService : Service() {
         val menu = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(14, 14, 14, 14); elevation = 18f
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.rgb(17, 24, 39)); cornerRadius = 28f; setStroke(2, Color.rgb(92, 75, 151))
+                setColor(Color.rgb(17, 24, 39)); cornerRadius = 28f; setStroke(2, Color.rgb(58, 180, 185))
             }
         }
-        menu.addView(TextView(this).apply { text = "✦  SHRADDHA QUICK ACTIONS"; setTextColor(Color.rgb(199, 183, 255)); textSize = 13f; setPadding(6, 4, 6, 12) })
+        menu.addView(TextView(this).apply { text = "✦  ${assistantName().uppercase()} QUICK ACTIONS"; setTextColor(Color.rgb(140, 232, 231)); textSize = 13f; setPadding(6, 4, 6, 12) })
         menu.addView(action("Insert नमस्ते", "Focused text field updated") { ShraddhaAccessibilityService.fillFocusedField("नमस्ते") })
         menu.addView(action("Scroll down", "Scroll requested") { ShraddhaAccessibilityService.scrollForward() })
         menu.addView(action("Back", "Back requested") { ShraddhaAccessibilityService.goBack() })
@@ -71,7 +75,7 @@ class ShraddhaOverlayService : Service() {
     }
 
     private fun action(label: String, success: String, action: () -> Boolean) = Button(this).apply {
-        text = label; isAllCaps = false; setTextColor(Color.WHITE); setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(42, 54, 82)))
+        text = label; isAllCaps = false; setTextColor(Color.WHITE); setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(20, 80, 92)))
         setOnClickListener { val ok = action(); if (success.isNotEmpty()) Toast.makeText(this@ShraddhaOverlayService, if (ok) success else "App Control चालू करें और सही field चुनें।", Toast.LENGTH_SHORT).show() }
     }
 
