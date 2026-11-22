@@ -41,6 +41,7 @@ class OperatorActivity : Activity() {
         root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
         root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
         root.addView(action("फोन restart के बाद Interrupted Action जाँचें") { reviewInterruptedOperatorActions() })
+        root.addView(action("Voice Action Journal / Restart Recovery जाँचें") { reviewInterruptedVoiceAction() })
         root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
         root.addView(action("फॉर्म इमेज → AI Autofill Review") { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) })
         root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
@@ -149,6 +150,36 @@ class OperatorActivity : Activity() {
                                     }
                                 }.start()
                             }.show()
+                    }
+                    .setNegativeButton("बंद करें", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    /** Shows the latest voice-tool action journal after restart; never replays an interrupted tool. */
+    private fun reviewInterruptedVoiceAction() {
+        Thread {
+            val entry = runCatching {
+                VoiceToolActionJournal(this@OperatorActivity).latest()
+            }.getOrNull()
+            runOnUiThread {
+                if (entry == null) {
+                    android.app.AlertDialog.Builder(this@OperatorActivity)
+                        .setTitle("Voice Action Journal")
+                        .setMessage("कोई सुरक्षित Voice Action रिकॉर्ड उपलब्ध नहीं है।")
+                        .setPositiveButton("ठीक है", null).show()
+                    return@runOnUiThread
+                }
+                val interrupted = entry.state == "EXECUTING"
+                val details = "Tool: ${entry.tool}\nस्थिति: ${entry.state}\nResult: ${entry.resultStatus.ifBlank { "अभी उपलब्ध नहीं" }}\nAction: ${entry.action.ifBlank { "अभी सत्यापित नहीं" }}\nसमय: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.updatedAt))}"
+                android.app.AlertDialog.Builder(this@OperatorActivity)
+                    .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
+                    .setMessage(details + if (interrupted) "\n\nफोन बंद/restart होने के समय action चल रहा था। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
+                    .setPositiveButton("Target app खोलें") { _, _ ->
+                        val launch = packageManager.getLaunchIntentForPackage(entry.action.substringAfter("package:", "").takeIf { it.contains(".") } ?: "")
+                        if (launch != null) startActivity(launch)
+                        else Toast.makeText(this@OperatorActivity, "Target app की पहचान journal में सुरक्षित नहीं है। संबंधित app स्वयं खोलकर जाँचें।", Toast.LENGTH_LONG).show()
                     }
                     .setNegativeButton("बंद करें", null)
                     .show()
