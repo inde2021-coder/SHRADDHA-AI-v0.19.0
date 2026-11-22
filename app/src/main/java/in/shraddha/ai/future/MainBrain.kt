@@ -27,7 +27,9 @@ class MainBrain(
         val dependsOn: Set<String> = emptySet()
     )
 
-    private val scheduler = SharedTaskScheduler(maxParallelWorkflows)
+    private val scheduler = SharedTaskScheduler(1)
+    init { require(maxParallelWorkflows == 1) { "Android UI Operator currently supports one active workflow at a time" } }
+
     private val requests = linkedMapOf<String, WorkflowRequest>()
     private val bridges = linkedMapOf<String, TaskPlannerOperatorBridge>()
     private var activeWorkflowId: String? = null
