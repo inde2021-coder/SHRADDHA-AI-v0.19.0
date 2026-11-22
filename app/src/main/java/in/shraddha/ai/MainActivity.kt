@@ -2554,7 +2554,7 @@ class MainActivity : AppCompatActivity() {
             cardElevation = dp(8).toFloat()
             maxCardElevation = dp(10).toFloat()
             strokeWidth = dp(1)
-            strokeColor = 0xFF465A80.toInt()
+            strokeColor = 0xFF2D6671.toInt()
             setCardBackgroundColor(0xFF0A1120.toInt())
             useCompatPadding = true
             preventCornerOverlap = true
@@ -2565,17 +2565,17 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(16), dp(16), dp(16), dp(12))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1B2942.toInt(), 0xFF111C30.toInt(), 0xFF0D1728.toInt())
+                intArrayOf(0xFF173540.toInt(), 0xFF102B37.toInt(), 0xFF0C202D.toInt())
             ).apply {
                 cornerRadius = dp(18).toFloat()
-                setStroke(dp(1), 0xFF35496B.toInt())
+                setStroke(dp(1), 0xFF2D6874.toInt())
             }
         }
         card.addView(body)
         body.addView(TextView(this).apply {
             text = title; textSize = 14f; letterSpacing = .06f
-            setTextColor(0xFFD2C4FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
-            setShadowLayer(dp(5).toFloat(), 0f, 1f, 0x554C62A8)
+            setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+            setShadowLayer(dp(5).toFloat(), 0f, 1f, 0x5534D6D0)
         })
         body.addView(TextView(this).apply {
             text = subtitle; textSize = 12f; setTextColor(0xFFAAB8D0.toInt())
@@ -3191,10 +3191,10 @@ class MainActivity : AppCompatActivity() {
         setPadding(dp(14), dp(13), dp(14), dp(13))
         background = android.graphics.drawable.GradientDrawable(
             android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF080F1D.toInt(), 0xFF121E31.toInt())
+            intArrayOf(0xFF07151F.toInt(), 0xFF102A35.toInt())
         ).apply {
             cornerRadius = dp(14).toFloat()
-            setStroke(dp(1), 0xFF354B70.toInt())
+            setStroke(dp(1), 0xFF2D6874.toInt())
         }
         elevation = dp(1).toFloat()
         minimumHeight = dp(50)
@@ -3207,10 +3207,10 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(15), dp(11), dp(14), dp(11))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF493B80.toInt(), 0xFF26385C.toInt())
+                intArrayOf(0xFF14505C.toInt(), 0xFF173D59.toInt())
             ).apply {
                 cornerRadius = dp(17).toFloat()
-                setStroke(dp(1), 0xFF7464B8.toInt())
+                setStroke(dp(1), 0xFF4CBFC8.toInt())
             }
             foreground = android.util.TypedValue().let { value ->
                 context.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
@@ -3233,14 +3233,14 @@ class MainActivity : AppCompatActivity() {
         textColumn.addView(TextView(this).apply {
             text = hint
             textSize = 10.5f
-            setTextColor(0xFFD0D5EA.toInt())
+            setTextColor(0xFFB7E5E8.toInt())
             setPadding(0, dp(3), 0, 0)
         })
         button.addView(textColumn, LinearLayout.LayoutParams(0, -2, 1f))
         button.addView(TextView(this).apply {
             text = "↗"
             textSize = 18f
-            setTextColor(0xFFE0D8FF.toInt())
+            setTextColor(0xFFD2FCFF.toInt())
             gravity = android.view.Gravity.CENTER
         }, LinearLayout.LayoutParams(dp(24), -1))
         button.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
@@ -3302,7 +3302,7 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         paint.style = Paint.Style.FILL
         paint.shader = RadialGradient(
             cx, cy, base * 2.05f,
-            intArrayOf(0x443D7BFF, 0x222B4DCE, 0x003D7BFF),
+            intArrayOf(0x4430DDE5, 0x22225F7C, 0x0030DDE5),
             floatArrayOf(0f, .52f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -3310,7 +3310,7 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         paint.shader = null
 
         // Three tilted orbital rings create a layered, dimensional silhouette.
-        val ringColors = intArrayOf(0xAA74E6FF.toInt(), 0x997D76FF.toInt(), 0x8878B7FF.toInt())
+        val ringColors = intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8872B9D9.toInt())
         for (i in 0..2) {
             canvas.save()
             canvas.rotate(rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f, cx, cy)
@@ -3324,7 +3324,7 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
             val orbit = base * (1.28f + i * .12f)
             val dx = cx + kotlin.math.cos(dotAngle).toFloat() * orbit
             val dy = cy + kotlin.math.sin(dotAngle).toFloat() * orbit
-            paint.color = if (i == 0) 0xFFE8FCFF.toInt() else 0xFFD8C8FF.toInt()
+            paint.color = if (i == 0) 0xFFE8FCFF.toInt() else 0xFFD4FFFF.toInt()
             canvas.drawCircle(dx, dy, base * .055f, paint)
             canvas.restore()
         }
@@ -3333,7 +3333,7 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         paint.style = Paint.Style.FILL
         paint.shader = RadialGradient(
             cx - base * .30f, cy - base * .36f, base * 1.48f,
-            intArrayOf(0xFFFFFFFF.toInt(), 0xFFDAD4FF.toInt(), 0xFF8F79FF.toInt(), 0xFF414DB5.toInt(), 0xFF111A3B.toInt()),
+            intArrayOf(0xFFFFFFFF.toInt(), 0xFFC9FFF8.toInt(), 0xFF4FD9D0.toInt(), 0xFF237D91.toInt(), 0xFF081C2B.toInt()),
             floatArrayOf(0f, .16f, .42f, .76f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -3351,7 +3351,7 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
             val orbit = base * (1.58f + .08f * kotlin.math.sin(angle * 2.0).toFloat())
             val x = cx + kotlin.math.cos(angle).toFloat() * orbit
             val y = cy + kotlin.math.sin(angle).toFloat() * orbit * .72f
-            paint.color = if (i % 3 == 0) 0xFFD9FBFF.toInt() else 0x997F9DFF.toInt()
+            paint.color = if (i % 3 == 0) 0xFFD9FBFF.toInt() else 0x9981DDE3.toInt()
             canvas.drawCircle(x, y, base * (if (i % 3 == 0) .026f else .014f), paint)
         }
     }
