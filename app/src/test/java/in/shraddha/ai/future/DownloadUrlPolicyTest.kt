@@ -17,12 +17,14 @@ class DownloadUrlPolicyTest {
         assertNull(DownloadUrlPolicy.validate("https://localhost/file", "file.txt"))
         assertNull(DownloadUrlPolicy.validate("https://192.168.1.5/file", "file.txt"))
         assertNull(DownloadUrlPolicy.validate("https://10.0.0.2/file", "file.txt"))
+        assertNull(DownloadUrlPolicy.validate("https://[::1]/file", "file.txt"))
         assertNull(DownloadUrlPolicy.validate("https://printer.local/file", "file.txt"))
     }
 
     @Test fun rejectsEmbeddedCredentialsAndUnsafeNames() {
         assertNull(DownloadUrlPolicy.validate("https://user:pass@example.com/file", "file.txt"))
         assertNull(DownloadUrlPolicy.validate("https://example.com/file", "../file.txt"))
+        assertNull(DownloadUrlPolicy.validate("https://example.com/file", "folder" + 92.toChar() + "file.txt"))
     }
 
     @Test fun sanitizesUnsafeFilenameCharacters() {
