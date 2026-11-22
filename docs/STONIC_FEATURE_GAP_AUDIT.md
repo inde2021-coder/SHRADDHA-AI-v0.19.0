@@ -54,7 +54,7 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 
 ### P0 — Full project-aware coding agent
 - Existing code-assistant and Website Forge pieces are not a verified end-to-end code agent.
-- Add project workspace selection, file tree/context, bounded file edits, diff preview, tests/build execution in a sandbox, logs, rollback and deploy preview.
+- Add project workspace selection, file tree/context, bounded file edits with diff preview, tests/build execution in a sandbox, logs, rollback and deploy preview.
 - Never execute arbitrary shell commands from an untrusted model response. Require local approval for install, execute, overwrite, delete and deploy.
 
 ### P1 — True multi-provider orchestration
@@ -73,9 +73,9 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 - Do not load arbitrary downloaded code into the app process.
 
 ### P2 — Advanced PC file operations
-- Advanced Windows companion deliberately supports safe read-only file browsing, not arbitrary editing/deletion/execution.
-- Add transactional file edits with diff preview, backup/rollback and local confirmation. Add process/app diagnostics with a strict allowlist and visible action timeline.
-- Keep arbitrary shell execution disabled.
+- Advanced Windows companion now supports bounded text/code file creation and update inside the explicitly approved root. Every write requires Android-side confirmation and a separate PC-local confirmation; overwrites create a backup and use atomic replacement. Path traversal, symlinks, unsupported extensions and files over 256 KB are rejected.
+- Remaining: diff preview before write, backup restore/rollback UI, move/delete only with strict confirmation, and process/app diagnostics with a strict allowlist and visible action timeline.
+- Arbitrary shell execution remains disabled.
 
 ### P2 — Unified awareness and personality
 - Apply the editable assistant name, voice, personality and language profile consistently across Android voice/chat, notifications and Windows companion.
