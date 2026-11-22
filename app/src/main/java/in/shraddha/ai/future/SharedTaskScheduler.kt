@@ -30,7 +30,6 @@ class SharedTaskScheduler(
 
     private val entries = linkedMapOf<String, Snapshot>()
     private var sequence = 0L
-    private var restoring = false
 
     init {
         require(maxParallel in 1..64) { "maxParallel must be between 1 and 64" }
@@ -136,7 +135,7 @@ class SharedTaskScheduler(
     }
 
     private fun notifyChanged() {
-        if (!restoring) onChanged?.invoke(entries.values.sortedBy { it.submittedOrder })
+        onChanged?.invoke(entries.values.sortedBy { it.submittedOrder })
     }
 
     private fun transition(taskId: String, next: State, error: String?): Snapshot {
