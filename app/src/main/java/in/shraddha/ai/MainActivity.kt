@@ -881,7 +881,13 @@ class MainActivity : AppCompatActivity() {
                 .setTitle("Data sharing request")
                 .setMessage("दूसरा paired device '$category' category का डेटा माँग रहा है। क्या आप 5 मिनट के लिए अनुमति देते हैं?")
                 .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondDataShare(from, category, requestId, false) }
-                .setPositiveButton("Allow once") { _, _ -> DeviceLinkManager.respondDataShare(from, category, requestId, true, 5) }
+                .setPositiveButton("Allow once") { _, _ ->
+                    DeviceLinkManager.respondDataShare(from, category, requestId, true, 5)
+                    if (category == "documents") {
+                        startActivity(Intent(this@MainActivity, \`in\`.shraddha.ai.link.DeviceTransferActivity::class.java)
+                            .putExtra("peer", from))
+                    }
+                }
                 .setOnCancelListener { DeviceLinkManager.respondDataShare(from, category, requestId, false) }
                 .setCancelable(true).show()
         }
