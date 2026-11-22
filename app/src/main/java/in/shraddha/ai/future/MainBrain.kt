@@ -73,7 +73,7 @@ class MainBrain(
             }
             val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
             val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
-            val payload = JSONObject().put("tool", toolName).put("args", args).toString()
+            val payload = JSONObject().put("kind", "voice_tool").put("tool", toolName).put("args", args).toString()
             val submitted = runCatching {
                 scheduler.submitAll(listOf(SharedTaskScheduler.Task(
                     id = taskId,
