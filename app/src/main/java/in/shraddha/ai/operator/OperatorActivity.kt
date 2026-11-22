@@ -109,6 +109,29 @@ class OperatorActivity : Activity() {
                                     "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
                             )
                             .setNegativeButton("रद्द करें", null)
+                            .setNeutralButton(if (machineVerified) null else "ऐप खोलकर स्क्रीन verify करें") { _, _ ->
+                                if (!machineVerified) {
+                                    val launchIntent = packageManager.getLaunchIntentForPackage(selected.packageName)
+                                    if (launchIntent == null) {
+                                        Toast.makeText(this@OperatorActivity, "Target app नहीं खुल सका। आप उसे manually खोलकर जाँच सकते हैं।", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        log.text = "Target app खोला जा रहा है। स्क्रीन जाँच पूरी होने के बाद Shraddha AI में लौटकर Interrupted Action फिर खोलें।"
+                                        startActivity(launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                                        Thread {
+                                            repeat(16) {
+                                                val visible = runCatching {
+                                                    `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService.captureVisibleScreen()
+                                                }.getOrNull()
+                                                if (visible?.packageName == selected.packageName) {
+                                                    brain.reviewInterruptedWorkflows()
+                                                    return@Thread
+                                                }
+                                                Thread.sleep(500)
+                                            }
+                                        }.start()
+                                    }
+                                }
+                            }
                             .setPositiveButton(if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
                                 Thread {
                                     val queued = brain.resumeInterruptedWorkflow(
