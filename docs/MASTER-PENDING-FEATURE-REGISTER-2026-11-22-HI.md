@@ -1,7 +1,7 @@
 # Shraddha AI — Master Pending Feature Register
 
-**Date:** 22 November 2026  
-**Branch:** `feature/complete-pending-shraddha-features`  
+**Date:** 22 November 2026
+**Branch:** `feature/complete-pending-shraddha-features`
 **Rule:** A screen, button, API route, source file or unit test alone does not make a feature complete. Completion requires integration, persistence, permissions, failure handling, security review and relevant device/provider verification.
 
 This register consolidates the user's earlier feature requests and the current source audit. It is a living work list, not a release claim. Status labels are deliberately conservative.
