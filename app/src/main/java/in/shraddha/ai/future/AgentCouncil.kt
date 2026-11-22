@@ -7,6 +7,7 @@ import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
 import com.Lia.assistant.voice.MultiProviderChatClient
+import kotlinx.coroutines.CancellationException
 
 /** Transparent multi-role orchestration. Every role is a real provider call, not a simulated agent. */
 data class CouncilRole(val name: String, val responsibility: String, val output: String)
@@ -49,7 +50,8 @@ object AgentCouncil {
         language: String = "AUTO",
         provider: String,
         executor: (role: CouncilRole, system: String, prompt: String) -> String,
-        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
+        shouldContinue: () -> Boolean = { true }
     ): Result<CouncilExecutionReport> = runCatching {
         val plan = plan(goal)
         val outputs = mutableListOf<CouncilStageResult>()
@@ -61,6 +63,7 @@ object AgentCouncil {
             Be concise, structured, and explicitly label assumptions, unknowns and evidence.
         """.trimIndent()
         plan.roles.forEachIndexed { index, role ->
+            if (!shouldContinue()) throw CancellationException("Multi-agent task cancelled between stages")
             onProgress(role.name, index + 1, plan.roles.size)
             val previous = outputs.joinToString("\n\n") { "### ${it.role}\n${it.output.take(5000)}" }
             val prompt = buildString {
@@ -91,10 +94,11 @@ object AgentCouncil {
         context: Context,
         goal: String,
         language: String = "AUTO",
-        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
+        shouldContinue: () -> Boolean = { true }
     ): Result<CouncilExecutionReport> {
         val provider = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
-        return executeWithProvider(context, goal, language, provider, onProgress)
+        return executeWithProvider(context, goal, language, provider, onProgress, shouldContinue)
     }
 
     fun executeWithProvider(
@@ -102,7 +106,8 @@ object AgentCouncil {
         goal: String,
         language: String = "AUTO",
         providerName: String,
-        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
+        onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
+        shouldContinue: () -> Boolean = { true }
     ): Result<CouncilExecutionReport> {
         val provider = providerName.uppercase()
         return execute(goal, language, provider, { _, system, prompt ->
@@ -116,6 +121,6 @@ object AgentCouncil {
                 is ChatReplyResult.Success -> response.text
                 is ChatReplyResult.Error -> error("$provider provider error: ${response.message}")
             }
-        }, onProgress)
+        }, onProgress, shouldContinue)
     }
 }
