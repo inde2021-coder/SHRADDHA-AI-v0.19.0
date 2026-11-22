@@ -77,7 +77,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 InterruptedStepRecovery.Decision.VERIFIED_COMPLETE -> {
                     val next = saved.nextStep + 1
                     val recoveredStep = steps[saved.nextStep]
-                    checkpoints.save(saved.copy(nextStep = next, state = "READY", expectedText = ""))
+                    if (!checkpoints.save(saved.copy(nextStep = next, state = "READY", expectedText = ""))) {
+                        return fail("Recovered action सत्यापित हुआ, लेकिन सुरक्षित checkpoint save नहीं हुआ। आगे कोई action नहीं चलेगा।")
+                    }
                     saved = checkpoints.get(profile.packageName, workflowName)
                     reconciledStartIndex = next
                     audit.append("operator_step", "recovered_verified", "${profile.packageName}:${recoveredStep.action}")
@@ -138,7 +140,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val before = ShraddhaAccessibilityService.captureVisibleScreen() ?: return fail("स्क्रीन पढ़ने के लिए Accessibility सेवा चालू करें।")
             if (before.packageName != profile.packageName && before.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) return fail("खुला हुआ ऐप ${before.packageName} है, जबकि प्रशिक्षित ऐप ${profile.packageName} है।")
             // Mark in-flight before the side effect. A process death here is intentionally not auto-resumable.
-            checkpoints.save(WorkflowCheckpoint(
+            val inFlightSaved = checkpoints.save(WorkflowCheckpoint(
                 packageName = profile.packageName,
                 workflowName = workflowName,
                 workflowHash = stepsHash,
@@ -148,6 +150,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 // Never persist the entered value: only a user-authored, non-secret postcondition.
                 expectedText = step.expectedText.take(300)
             ))
+            if (!inFlightSaved) return fail("इस चरण का encrypted recovery checkpoint save नहीं हुआ; सुरक्षा के लिए action execute नहीं किया गया।")
             audit.append("operator_step", "started", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.EXECUTING, "${index + 1}/${steps.size}: ${step.action}", before))
             val anchor = profile.anchors.firstOrNull { it.role.equals(step.targetRole, true) && (step.targetLabel.isBlank() || it.label.equals(step.targetLabel, true)) }
@@ -183,7 +186,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
             }
             val next = index + 1
-            checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, next, steps.size, "READY"))
+            if (!checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, next, steps.size, "READY"))) {
+                return fail("चरण UI पर सत्यापित हुआ, लेकिन अगला सुरक्षित checkpoint save नहीं हुआ। Workflow रोक दिया गया है।")
+            }
             audit.append("operator_step", "verified", "${profile.packageName}:${step.action}")
             emit(OperatorEvent(OperatorTaskState.VERIFYING, "चरण ${index + 1} पूरा; स्क्रीन दोबारा पढ़ी गई।", after))
         }
