@@ -11,6 +11,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference\nimport java.io.ByteArrayInputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipOutputStream
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 @RunWith(AndroidJUnit4::class)
 class BatchProcessingEngineInstrumentedTest {
@@ -52,6 +57,24 @@ class BatchProcessingEngineInstrumentedTest {
         assertEquals(1, rows.size)
         assertEquals("42", rows.single().values.getString("id"))
         assertEquals("Radhe Krishna", rows.single().values.getString("name"))
+    }
+
+    @Test fun paginatesHttpsJsonApiAndStopsAtShortPage() {
+        val requestedPages = mutableListOf<Int>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            val page = request.url.queryParameter("page")!!.toInt()
+            requestedPages += page
+            val body = if (page == 1) """{"data":[{"id":"a","name":"A"},{"id":"b","name":"B"}]}"""
+                else """{"data":[{"id":"c","name":"C"}]}"""
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(body.toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        val rows = BatchApiSource(client).read(BatchApiSource.Config(
+            url = "https://example.test/records", pageSize = 2, maxPages = 5
+        ))
+        assertEquals(listOf(1, 2), requestedPages)
+        assertEquals(listOf("a", "b", "c"), rows.map { it.id })
     }
 
     @Test fun readsSqliteRecordsWithBoundedReadOnlyAdapter() {
