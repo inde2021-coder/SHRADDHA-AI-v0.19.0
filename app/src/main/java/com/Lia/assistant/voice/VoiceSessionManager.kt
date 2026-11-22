@@ -390,13 +390,19 @@ object VoiceSessionManager {
         val clean = text.trim().take(1200)
         if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return
         val epoch = sessionEpoch.get()
-        val assistantName = "Shraddha AI"
-        speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
+        scope.launch {
+            val assistantName = runCatching {
+                PersonalityRepository.getAssistantName(context.applicationContext)
+            }.getOrDefault("Shraddha AI")
+            if (sessionEpoch.get() == epoch && _isActive.value && _state.value == NovaOrbState.LISTENING) {
+                speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
+            }
+        }
     }
 
     private fun speakWithShraddha(context: Context, epoch: Long, assistantName: String, text: String) {
         _state.value = NovaOrbState.THINKING
-        _statusText.value = "Preparing Shraddha's own voice..."
+        _statusText.value = "Preparing $assistantName's voice..."
         ShraddhaSpeechClient.synthesize(context, text, _detectedLanguage.value) { result ->
             if (sessionEpoch.get() != epoch || !_isActive.value) return@synthesize
             result.onSuccess { pcm ->
@@ -420,7 +426,7 @@ object VoiceSessionManager {
             }.onFailure { error ->
                 _lastError.value = error.localizedMessage ?: "Shraddha custom voice engine unavailable"
                 _state.value = NovaOrbState.ERROR
-                _statusText.value = "Shraddha voice engine setup required — no Google voice fallback"
+                _statusText.value = "$assistantName voice engine setup required — no Google voice fallback"
             }
         }
     }
