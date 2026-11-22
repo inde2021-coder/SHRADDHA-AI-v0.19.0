@@ -116,7 +116,30 @@ class LocalBiometricModelEngine : Closeable {
             require(waveformShape.size == 2 && (waveformShape[0] == 1L || waveformShape[0] == -1L)) {
                 "Speaker waveform input must be [1|dynamic,samples]"
             }
-            require(embeddingShape.lastOrNull() == 192L) { "Speaker model must output a 192-value embedding" }
+            // Exporters may encode the same vector as [192], [1,192], or another rank.
+            // Validate the actual runtime tensor rather than assuming metadata rank.
+            require(embeddingShape.isNotEmpty()) { "Speaker model output embedding has an empty shape" }
+            val probeBuffer = nativeFloatBuffer(FloatArray(16_000))
+            try {
+                val probe = OnnxTensor.createTensor(environment, probeBuffer, longArrayOf(1, 16_000))
+                probe.use { audio ->
+                    val result = candidate.run(mapOf("waveform" to audio))
+                    result.use {
+                        val output = result.get("embedding").orElseThrow {
+                            IllegalArgumentException("Speaker model output embedding is missing")
+                        }
+                        val values = flatten(output.value)
+                        try {
+                            require(values.size == 192) {
+                                "Speaker model must produce 192 embedding values; " +
+                                    "metadata shape=${embeddingShape.contentToString()}, " +
+                                    "runtime shape=${(output.info as? TensorInfo)?.shape?.contentToString()}, " +
+                                    "runtime values=${values.size}"
+                            }
+                        } finally { values.fill(0f) }
+                    }
+                }
+            } finally { zero(probeBuffer) }
             speakerSession?.close()
             speakerSession = candidate
             speakerModelLoadMs = (System.nanoTime() - started) / 1_000_000L
