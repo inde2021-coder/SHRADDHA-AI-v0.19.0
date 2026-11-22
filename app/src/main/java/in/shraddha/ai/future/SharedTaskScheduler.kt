@@ -7,7 +7,10 @@ package `in`.shraddha.ai.future
  * succeeds. The caller owns durable persistence and must restore a validated snapshot after
  * process death; this class deliberately does not pretend to provide persistence.
  */
-class SharedTaskScheduler(private val maxParallel: Int = 1) {
+class SharedTaskScheduler(
+    private val maxParallel: Int = 1,
+    private val onChanged: ((List<Snapshot>) -> Unit)? = null
+) {
     enum class State { PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED }
 
     data class Task(
@@ -27,6 +30,7 @@ class SharedTaskScheduler(private val maxParallel: Int = 1) {
 
     private val entries = linkedMapOf<String, Snapshot>()
     private var sequence = 0L
+    private var restoring = false
 
     init {
         require(maxParallel in 1..64) { "maxParallel must be between 1 and 64" }
@@ -58,6 +62,7 @@ class SharedTaskScheduler(private val maxParallel: Int = 1) {
         val created = tasks.map { task ->
             Snapshot(task, State.PENDING, ++sequence).also { entries[task.id] = it }
         }
+        notifyChanged()
         return created
     }
 
@@ -76,9 +81,11 @@ class SharedTaskScheduler(private val maxParallel: Int = 1) {
             .sortedWith(compareBy<Snapshot> { it.task.priority }.thenBy { it.submittedOrder })
             .take(slots)
 
-        return ready.map { item ->
+        val claimed = ready.map { item ->
             item.copy(state = State.RUNNING).also { entries[item.task.id] = it }
         }
+        if (claimed.isNotEmpty()) notifyChanged()
+        return claimed
     }
 
     @Synchronized
@@ -95,7 +102,7 @@ class SharedTaskScheduler(private val maxParallel: Int = 1) {
     fun cancel(taskId: String): Snapshot {
         val current = requireTask(taskId)
         require(current.state == State.PENDING || current.state == State.RUNNING) { "Only pending or running tasks can be cancelled" }
-        return current.copy(state = State.CANCELLED).also { entries[taskId] = it }
+        return current.copy(state = State.CANCELLED).also { entries[taskId] = it; notifyChanged() }
     }
 
     @Synchronized
@@ -108,10 +115,34 @@ class SharedTaskScheduler(private val maxParallel: Int = 1) {
     fun availableSlots(): Int =
         (maxParallel - entries.values.count { it.state == State.RUNNING }).coerceAtLeast(0)
 
+    /** Restores a validated durable snapshot. RUNNING items are made FAILED, never replayed. */
+    @Synchronized
+    fun restore(saved: List<Snapshot>) {
+        require(saved.size <= MAX_BATCH) { "Persisted scheduler snapshot exceeds the batch limit" }
+        require(saved.map { it.task.id }.distinct().size == saved.size) { "Persisted scheduler has duplicate task IDs" }
+        val validator = SharedTaskScheduler(maxParallel)
+        validator.submitAll(saved.sortedBy { it.submittedOrder }.map { it.task })
+        entries.clear()
+        sequence = 0L
+        saved.sortedBy { it.submittedOrder }.forEach { item ->
+            val safe = if (item.state == State.RUNNING) item.copy(
+                state = State.FAILED,
+                error = "Process stopped during execution; action was not replayed. Review and enqueue again."
+            ) else item
+            entries[safe.task.id] = safe
+            sequence = maxOf(sequence, safe.submittedOrder)
+        }
+        notifyChanged()
+    }
+
+    private fun notifyChanged() {
+        if (!restoring) onChanged?.invoke(entries.values.sortedBy { it.submittedOrder })
+    }
+
     private fun transition(taskId: String, next: State, error: String?): Snapshot {
         val current = requireTask(taskId)
         require(current.state == State.RUNNING) { "Only a running task can finish" }
-        return current.copy(state = next, error = error).also { entries[taskId] = it }
+        return current.copy(state = next, error = error).also { entries[taskId] = it; notifyChanged() }
     }
 
     private fun requireTask(taskId: String): Snapshot =
