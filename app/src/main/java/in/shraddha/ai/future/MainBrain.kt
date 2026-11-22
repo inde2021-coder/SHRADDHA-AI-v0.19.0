@@ -92,6 +92,9 @@ class MainBrain(
                 .run(profile, workflowName, values, confirmed, resume)
     }
 
+    private val requests = linkedMapOf<String, WorkflowRequest>()
+    private val bridges = linkedMapOf<String, TaskPlannerOperatorBridge>()
+    private var activeWorkflowId: String? = null
     private val durableStore = context?.applicationContext?.let(::MainBrainSchedulerStore)
     private val scheduler = SharedTaskScheduler(1) { snapshots -> durableStore?.save(snapshots) }
     init {
@@ -103,10 +106,6 @@ class MainBrain(
             }
         }
     }
-
-    private val requests = linkedMapOf<String, WorkflowRequest>()
-    private val bridges = linkedMapOf<String, TaskPlannerOperatorBridge>()
-    private var activeWorkflowId: String? = null
 
     /** Voice and text adapters use this same typed command boundary. */
     @Synchronized
