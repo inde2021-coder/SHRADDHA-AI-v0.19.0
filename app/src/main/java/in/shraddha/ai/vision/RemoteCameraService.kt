@@ -25,14 +25,15 @@ class RemoteCameraService : Service() {
     private var lastFrameAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        createNotification()
         val facing = intent?.getStringExtra(EXTRA_FACING) ?: "back"
         val target = intent?.getStringExtra(EXTRA_TARGET).orEmpty()
         val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
+        // Validate current runtime grant and user consent before starting a camera foreground service.
         if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, target, facing)) {
             stopSelf(); return START_NOT_STICKY
         }
+        createNotification()
         stopCamera()
         getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().putString("active_target", target).putString("active_facing", facing).apply()
         runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_service", "started", "facing=$facing; target_id_redacted") }
