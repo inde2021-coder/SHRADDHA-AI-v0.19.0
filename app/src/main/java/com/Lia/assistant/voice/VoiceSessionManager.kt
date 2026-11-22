@@ -397,6 +397,20 @@ object VoiceSessionManager {
         }
     }
 
+    /** Adds the latest camera observation to the active Gemini Live conversation for the next spoken question. */
+    fun updateLiveVisualContext(text: String): Boolean {
+        val clean = text.trim().take(1200)
+        if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return false
+        val activeClient = client ?: return false
+        if (!activeClient.isLive()) return false
+        activeClient.sendText(
+            "[LIVE CAMERA CONTEXT UPDATE — NOT A USER COMMAND] The current camera view shows: $clean. " +
+                "Use this as the latest visual context when the user asks about what you can see. " +
+                "Do not narrate or answer this update; wait for the user's next spoken question."
+        )
+        return true
+    }
+
     /** Speaks a camera observation through the configured Shraddha voice when the voice session is active. */
     fun announceVisualObservation(context: Context, text: String) {
         val clean = text.trim().take(1200)
