@@ -1383,6 +1383,11 @@ async def run_once(args) -> None:
                         category = str(message.get("category", ""))
                         if category not in {"media", "files", "documents"}:
                             raise ValueError("Unsupported shared-file category")
+                        if str(message.get("contentType", "")) != "file":
+                            raise ValueError("Unsupported shared attachment content type")
+                        mime_type = str(message.get("mimeType", ""))
+                        if not mime_type or len(mime_type) > 100 or any(ord(ch) < 32 for ch in mime_type):
+                            raise ValueError("Invalid shared attachment MIME type")
                         size = int(message.get("sizeBytes", -1))
                         if size < 1 or size > 650_000:
                             raise ValueError("Shared attachment exceeds the 650 KB quick-share limit")
