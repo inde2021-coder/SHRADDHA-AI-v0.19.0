@@ -11,7 +11,7 @@ class DeviceFileTransferProtocolTest {
         assertEquals(2, DeviceFileTransferProtocol.chunkCount(48L * 1024L + 1L))
         assertEquals(2, DeviceFileTransferProtocol.chunkCount(96_000L))
         assertEquals(3, DeviceFileTransferProtocol.chunkCount(100_000L))
-        assertEquals(407, DeviceFileTransferProtocol.chunkCount(20_000_000L))
+        assertEquals(2_134, DeviceFileTransferProtocol.chunkCount(DeviceFileTransferProtocol.MAX_FILE_BYTES))
     }
 
     @Test fun exactChunkBoundariesNeverCreateAnEmptyTrailingChunk() {
@@ -33,6 +33,6 @@ class DeviceFileTransferProtocolTest {
 
     @Test fun fileSizeOutsideSupportedRangeIsRejected() {
         assertNull(DeviceFileTransferProtocol.chunkCount(0L))
-        assertNull(DeviceFileTransferProtocol.chunkCount(DeviceFileTransferProtocol.MAX_FILE_BYTES + 1))
+        assertNull(DeviceFileTransferProtocol.chunkCount(DeviceFileTransferProtocol.MAX_FILE_BYTES + 1L))
     }
 }
