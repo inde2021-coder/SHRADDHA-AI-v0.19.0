@@ -95,7 +95,7 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256"); var total = 0L
         contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(64 * 1024)
-            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 20L * 1024 * 1024) { "Maximum file size is 20 MB" }; digest.update(buffer, 0, n) }
+            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 20_000_000L) { "Maximum file size is 20 MB" }; digest.update(buffer, 0, n) }
         } ?: throw IllegalStateException("Cannot open selected file")
         require(total > 0) { "Empty files are not supported" }
         return total to digest.digest().joinToString("") { "%02x".format(it) }
@@ -194,7 +194,7 @@ class DeviceTransferActivity : Activity() {
                 incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
                 incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..(20L * 1024 * 1024) || incomingCount !in 1..417 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
+                if (incomingSize !in 1L..(20_000_000L) || incomingCount !in 1..407 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
