@@ -13,6 +13,7 @@ data class WorkflowCheckpoint(
     val nextStep: Int,
     val totalSteps: Int,
     val state: String,
+    val expectedText: String = "",
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -36,7 +37,7 @@ class WorkflowCheckpointStore(context: Context) {
                 WorkflowCheckpoint(
                     o.getString("packageName"), o.getString("workflowName"),
                     o.getString("workflowHash"), o.getInt("nextStep"),
-                    o.getInt("totalSteps"), o.getString("state"), o.optLong("updatedAt")
+                    o.getInt("totalSteps"), o.getString("state"), o.optString("expectedText"), o.optLong("updatedAt")
                 )
             }.getOrNull() }
 
@@ -50,6 +51,7 @@ class WorkflowCheckpointStore(context: Context) {
             .put("nextStep", checkpoint.nextStep)
             .put("totalSteps", checkpoint.totalSteps)
             .put("state", checkpoint.state)
+            .put("expectedText", checkpoint.expectedText.take(300))
             .put("updatedAt", checkpoint.updatedAt)
         return encrypted.put(key(checkpoint.packageName, checkpoint.workflowName), json.toString()).isSuccess
     }
@@ -62,5 +64,20 @@ class WorkflowCheckpointStore(context: Context) {
         val digest = MessageDigest.getInstance("SHA-256").digest(raw)
             .take(16).joinToString("") { "%02x".format(it) }
         return "workflow_checkpoint_$digest"
+    }
+}
+
+
+/** Deterministic, side-effect-free decision for reconciling a process-death checkpoint. */
+internal object InterruptedStepRecovery {
+    enum class Decision { VERIFIED_COMPLETE, AMBIGUOUS }
+
+    fun assess(expectedText: String, visibleText: Collection<String>): Decision {
+        val expected = expectedText.trim()
+        if (expected.isBlank()) return Decision.AMBIGUOUS
+        val matched = visibleText.any { visible ->
+            visible.contains(expected, ignoreCase = true)
+        }
+        return if (matched) Decision.VERIFIED_COMPLETE else Decision.AMBIGUOUS
     }
 }
