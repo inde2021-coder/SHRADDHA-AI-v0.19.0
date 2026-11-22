@@ -16,6 +16,8 @@ import android.os.HandlerThread
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import `in`.shraddha.ai.link.DeviceLinkManager
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 
 /** Explicit, user-started camera sharing. Android camera privacy indicator and ongoing notification remain visible. */
 class RemoteCameraService : Service() {
@@ -42,14 +44,15 @@ class RemoteCameraService : Service() {
     }
 
     private fun createNotification() {
+        val assistantName = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
         val channelId = "shraddha_camera_share"
         if (Build.VERSION.SDK_INT >= 26) {
-            val channel = NotificationChannel(channelId, "Shraddha remote camera", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, "$assistantName remote camera", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Shraddha AI camera sharing is active")
-            .setContentText("Your camera is being shared with paired devices. Stop it in Shraddha AI.")
+            .setContentTitle("$assistantName camera sharing is active")
+            .setContentText("Your camera is being shared with paired devices. Stop it in $assistantName.")
             .setSmallIcon(android.R.drawable.ic_menu_camera).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(42, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         else startForeground(42, notification)
