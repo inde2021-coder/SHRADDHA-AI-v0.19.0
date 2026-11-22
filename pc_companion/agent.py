@@ -76,6 +76,8 @@ class PcCompanionApp:
         self.screen_event = threading.Event()
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
+        self.phone_control_peer = None
+        self.phone_control_grant_until = 0.0
         self.device_token = None
         self.e2e_crypto = DeviceE2ECrypto()
         self.peer_keys = {}
@@ -138,7 +140,8 @@ class PcCompanionApp:
                      state="readonly").pack(fill="x", pady=3)
         ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
         ttk.Label(frame, text="Action value: app name / text / scroll amount").pack(anchor="w")
-        ttk.Button(frame, text="Send approved action to Android", command=self.send_remote_action_to_phone).pack(anchor="w", pady=5)
+        ttk.Button(frame, text="Request Phone Control (5 min)", command=self.request_phone_control).pack(anchor="w", pady=3)
+        ttk.Button(frame, text="Send approved action to Android", command=self.send_remote_action_to_phone).pack(anchor="w", pady=3)
         ttk.Label(frame, textvariable=self.status_var, foreground="#146c43", wraplength=510).pack(anchor="w", pady=(10, 4))
         ttk.Label(frame, text="Safety: every control request opens a local approval dialog. F12 or Disconnect stops access. Screen sharing is off by default.",
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
@@ -540,6 +543,17 @@ class PcCompanionApp:
             self._execute(action, peer_id, action_id)
         elif kind == "remote_action":
             self.status_var.set("Blocked plaintext remote action. E2E encryption is mandatory.")
+        elif kind == "control_result":
+            target_id = str(msg.get("targetDeviceId", ""))
+            if target_id != self.phone_control_peer:
+                return
+            if msg.get("approved") is True:
+                minutes = max(1, min(5, int(msg.get("expiresInMinutes", 5))))
+                self.phone_control_grant_until = time.time() + minutes * 60
+                self.status_var.set(f"Android approved control for {minutes} minutes. Each action still needs phone approval.")
+            else:
+                self.phone_control_grant_until = 0
+                self.status_var.set(f"Android denied control request: {str(msg.get('reason', 'Denied'))[:140]}")
         elif kind == "control_request":
             requester = str(msg.get("requesterName", "Paired device"))[:80]
             requester_id = str(msg.get("fromDeviceId", ""))[:80]
@@ -558,8 +572,23 @@ class PcCompanionApp:
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
 
+    def request_phone_control(self):
+        peer_id = self.remote_target_var.get().strip()
+        if not peer_id or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("Select an Android device with a mutually verified fingerprint first.")
+            return
+        self.phone_control_peer = peer_id
+        self.phone_control_grant_until = 0
+        if self._send_json({"type": "control_request", "targetDeviceId": peer_id, "minutes": 5}):
+            self.status_var.set("Phone control request sent. Unlock Android and approve the request there.")
+        else:
+            self.status_var.set("Could not request phone control: relay is disconnected.")
+
     def send_remote_action_to_phone(self):
         peer_id = self.remote_target_var.get().strip()
+        if peer_id != self.phone_control_peer or time.time() >= self.phone_control_grant_until:
+            self.status_var.set("First request Phone Control and approve the five-minute session on Android.")
+            return
         kind = self.remote_action_var.get()
         value = self.remote_value_var.get().strip()
         if not peer_id or not self.is_e2e_trusted(peer_id):
