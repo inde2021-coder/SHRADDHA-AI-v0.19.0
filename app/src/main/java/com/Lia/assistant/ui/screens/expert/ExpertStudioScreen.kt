@@ -86,8 +86,8 @@ private fun formatExpertResponse(raw: String): String {
         val item = results.optJSONObject(index) ?: return@mapNotNull null
         val providerName = item.optString("provider").uppercase()
         val content = item.optString("answer").ifBlank { item.optString("error", "No result returned.") }
-        "### $providerName\\n$content"
-    }.joinToString("\\n\\n").ifBlank { raw }
+        "### $providerName\n$content"
+    }.joinToString("\n\n").ifBlank { raw }
 }
 
 @Composable
