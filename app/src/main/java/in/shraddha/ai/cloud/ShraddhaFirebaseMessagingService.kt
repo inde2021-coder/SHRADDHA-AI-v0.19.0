@@ -9,6 +9,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import com.google.firebase.messaging.RemoteMessage
 import `in`.shraddha.ai.MainActivity
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
@@ -34,11 +36,11 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
             store.get("firebase_push_consent").getOrNull() != "true") return
         val type = message.data["type"].orEmpty()
         val safeMessage = when (type) {
-            "device_paired" -> "A device was paired with your Shraddha account."
+            "device_paired" -> "A device was paired with your $assistantName account."
             "task_handoff" -> "A task handoff is waiting for your review."
             "security_alert" -> "A security event needs your attention."
             "backup_ready" -> "Your encrypted recovery backup has an update."
-            else -> "You have a new Shraddha AI update."
+            else -> "You have a new $assistantName update."
         }
         showNotification(safeMessage)
     }
@@ -50,7 +52,7 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
             manager.getNotificationChannel(channelId) == null
         ) {
             manager.createNotificationChannel(
-                NotificationChannel(channelId, "Shraddha AI updates", NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel(channelId, "$assistantName updates", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -62,7 +64,7 @@ class ShraddhaFirebaseMessagingService : FirebaseMessagingService() {
         )
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Shraddha AI")
+            .setContentTitle(assistantName)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setContentIntent(pending)
