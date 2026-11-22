@@ -932,6 +932,8 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
     if kind in {"offline_chat", "code_assistant"}:
         prompt = action["prompt"].strip()
         if kind == "code_assistant" and action.get("path"):
+            if not await asyncio.to_thread(confirm, f"Read approved project file {action['path']!r} into the local offline code assistant?"):
+                return "code_context_read_rejected_by_pc_user"
             try:
                 file_context = await asyncio.to_thread(read_safe_text_file, file_root, action["path"])
             except Exception as exc:
