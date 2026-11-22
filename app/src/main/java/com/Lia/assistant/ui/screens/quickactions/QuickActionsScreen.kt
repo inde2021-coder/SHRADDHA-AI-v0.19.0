@@ -76,6 +76,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         QuickTile("Call someone", "Start a voice call", Icons.Default.Call) {
             navController.navigate("voice")
         },
+        QuickTile("SIM Call Agent", "Configure incoming no-answer call handling", Icons.Default.Call) {
+            navController.navigate("phone_call_agent")
+        },
         QuickTile("Send a message", "WhatsApp or SMS by voice", Icons.AutoMirrored.Filled.Message) {
             navController.navigate("voice")
         },
