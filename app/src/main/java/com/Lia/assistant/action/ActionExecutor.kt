@@ -31,6 +31,26 @@ object ActionExecutor {
         }
 
         when (toolName) {
+            "manage_files" -> {
+                val operation = args.optString("operation", "manage").uppercase()
+                val allowed = setOf("MANAGE", "FIND", "OPEN", "COPY", "MOVE", "RENAME", "DELETE", "SHARE", "IMPORT", "EXPORT")
+                if (operation !in allowed) {
+                    result.put("status", "error")
+                    result.put("message", "Unsupported file operation.")
+                } else {
+                    withContext(Dispatchers.Main.immediate) {
+                        val intent = android.content.Intent(context, in.shraddha.ai.operator.files.FileAccessActivity::class.java)
+                            .putExtra("requested_operation", operation)
+                        if (context !is android.app.Activity) intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                    result.put("status", "needs_user_action")
+                    result.put("action", "file_manager_opened")
+                    result.put("operation", operation.lowercase())
+                    result.put("message", "फ़ाइल प्रबंधक खुल गया है। फ़ाइल चुनें; Delete/Move/Rename से पहले पुष्टि होगी। Share/Export में Android Sharesheet खुलेगा।")
+                }
+            }
+
             "build_website" -> {
                 val prompt = args.optString("prompt", "").trim()
                 if (prompt.isBlank() || prompt.length > 8000) {
