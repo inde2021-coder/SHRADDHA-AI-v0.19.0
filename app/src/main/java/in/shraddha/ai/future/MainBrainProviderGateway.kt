@@ -53,7 +53,7 @@ object MainBrainProviderGateway {
     ): StreamingTextResult {
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
         require(apiKey.isNotBlank()) { "GEMINI API key is missing." }
-        val model = GeminiTextClient.resolveModel(apiKey)
+        val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(apiKey) }
         val modelEndpoint = if (model.startsWith("models/")) model else "models/$model"
         val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:streamGenerateContent?alt=sse"
         val parts = JSONArray().put(JSONObject().put("text", systemPrompt.take(32_000)))
