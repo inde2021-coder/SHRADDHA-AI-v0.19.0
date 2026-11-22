@@ -75,6 +75,19 @@ class MainBrain(
             onProgress: (String, Int, Int) -> Unit
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeWithConfiguredProvider(context.applicationContext, goal, language, provider, shouldContinue, onProgress)
+
+        /** Learned app automations are invoked only through this Main Brain execution boundary. */
+        fun runLearnedWorkflow(
+            context: Context,
+            profile: `in`.shraddha.ai.operator.learning.AppTrainingProfile,
+            workflowName: String,
+            values: Map<String, String>,
+            confirmed: Boolean,
+            resume: Boolean,
+            onEvent: (`in`.shraddha.ai.operator.OperatorEvent) -> Unit
+        ): Boolean =
+            `in`.shraddha.ai.operator.learning.AdaptiveWorkflowRunner(context.applicationContext, onEvent)
+                .run(profile, workflowName, values, confirmed, resume)
     }
 
     private val scheduler = SharedTaskScheduler(1)
