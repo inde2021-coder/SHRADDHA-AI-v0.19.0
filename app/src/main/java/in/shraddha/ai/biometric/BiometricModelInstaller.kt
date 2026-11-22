@@ -24,12 +24,11 @@ object BiometricModelInstaller {
         val maxBytes: Long = DEFAULT_MAX_BYTES
     )
 
-    companion object {
-        const val DEFAULT_MAX_BYTES = 100L * 1024L * 1024L
-        private const val MODEL_DIRECTORY = "biometric-models"
+    const val DEFAULT_MAX_BYTES = 100L * 1024L * 1024L
+    private const val MODEL_DIRECTORY = "biometric-models"
 
-        // Pins are aligned with docs/BIOMETRIC-MODEL-CATALOG.md and the inference contracts.
-        private val models = listOf(
+    // Pins are aligned with docs/BIOMETRIC-MODEL-CATALOG.md and the inference contracts.
+    private val models = listOf(
             ModelSpec(
                 "face", "sface.onnx",
                 "https://huggingface.co/opencv/face_recognition_sface/resolve/89e1f6f/face_recognition_sface_2021dec.onnx",
@@ -49,8 +48,7 @@ object BiometricModelInstaller {
             )
         )
 
-        fun supportedModels(): List<ModelSpec> = models.toList()
-    }
+    fun supportedModels(): List<ModelSpec> = models.toList()
 
     @Volatile private var verifiedFiles: Map<String, Pair<Long, Long>> = emptyMap()
     @Volatile private var failure: String? = null
