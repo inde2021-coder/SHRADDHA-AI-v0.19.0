@@ -16,3 +16,6 @@
 The shared `MainActivity.section()` surface now uses a three-layer navy gradient, brighter edge stroke, increased elevation and restrained title glow. Because the helper is shared, this updates the common card surface across the programmatic workspaces rather than styling only the Home screen. Existing action buttons already use a raised gradient treatment and inputs retain inset styling.
 
 This is a foundation pass, not the completed requested redesign. Each workspace still needs its own information hierarchy, purpose-built controls, responsive layout, empty/loading/error states, motion behavior tied to real state, and accessibility review. The custom orb's decorative motion must never be presented as proof that the microphone or camera is active.
+
+
+The shared input factory now also uses a dark inset gradient, a visible cool-blue edge, minimum touch height and restrained elevation. Together with the raised gradient action buttons and layered workspace panels, this establishes consistent depth across the programmatic screens. Individual screen composition and full motion/accessibility treatment remain open work.
