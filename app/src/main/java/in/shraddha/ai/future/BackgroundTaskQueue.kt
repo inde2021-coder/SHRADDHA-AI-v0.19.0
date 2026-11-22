@@ -49,9 +49,6 @@ object BackgroundTaskQueue {
         val request = OneTimeWorkRequestBuilder<BackgroundAgentWorker>()
             .setId(workId)
             .setInputData(workDataOf(
-                KEY_GOAL to cleanGoal,
-                KEY_PROVIDER to provider.uppercase(),
-                KEY_LANGUAGE to language.take(20),
                 KEY_MAIN_BRAIN_TASK to true,
                 KEY_SCHEDULER_TASK_ID to schedulerTaskId
             ))
