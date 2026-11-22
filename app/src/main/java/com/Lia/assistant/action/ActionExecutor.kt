@@ -393,9 +393,10 @@ object ActionExecutor {
                             } else {
                                 val runResult = withContext(Dispatchers.IO) {
                                     var detail = "Workflow did not complete."
-                                    val ok = AdaptiveWorkflowRunner(context.applicationContext) { event ->
-                                        detail = "${event.state}: ${event.message}"
-                                    }.run(profile, workflowName, values, confirmed, args.optBoolean("resume", false))
+                                    val ok = `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
+                                        context.applicationContext, profile, workflowName, values,
+                                        confirmed, args.optBoolean("resume", false)
+                                    ) { event -> detail = "${event.state}: ${event.message}" }
                                     ok to detail
                                 }
                                 val waitingForApproval = runResult.second.startsWith("WAITING_CONFIRMATION:")
