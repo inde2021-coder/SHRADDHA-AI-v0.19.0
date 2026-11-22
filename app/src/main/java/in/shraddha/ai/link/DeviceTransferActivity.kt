@@ -50,7 +50,7 @@ class DeviceTransferActivity : Activity() {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(22,22,22,22); setBackgroundColor(0xFF080E1B.toInt()) }
         root.addView(TextView(this).apply { text = "DEVICE UNIVERSE • FILE TRANSFER"; textSize = 19f; setTextColor(Color.WHITE); setTypeface(null, android.graphics.Typeface.BOLD) })
-        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
+        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 20 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
         peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()); setText(intent.getStringExtra("peer").orEmpty()) }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
@@ -95,7 +95,7 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256"); var total = 0L
         contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(64 * 1024)
-            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 100L * 1024 * 1024) { "Maximum file size is 100 MB" }; digest.update(buffer, 0, n) }
+            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 20L * 1024 * 1024) { "Maximum file size is 20 MB" }; digest.update(buffer, 0, n) }
         } ?: throw IllegalStateException("Cannot open selected file")
         require(total > 0) { "Empty files are not supported" }
         return total to digest.digest().joinToString("") { "%02x".format(it) }
@@ -194,7 +194,7 @@ class DeviceTransferActivity : Activity() {
                 incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
                 incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..(100L * 1024 * 1024) || incomingCount !in 1..2200 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
+                if (incomingSize !in 1L..(20L * 1024 * 1024) || incomingCount !in 1..417 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
