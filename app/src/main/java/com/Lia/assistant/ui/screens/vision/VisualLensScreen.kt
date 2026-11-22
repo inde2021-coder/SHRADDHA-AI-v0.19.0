@@ -69,13 +69,16 @@ fun VisualLensScreen(navController: NavController) {
         if (!granted) answer = "कैमरा अनुमति नहीं मिली। Visual Lens चलाने के लिए Settings में अनुमति दें।"
     }
 
-    DisposableEffect(controller, lifecycleOwner) {
-        controller.bindToLifecycle(lifecycleOwner)
-        onDispose { running = false; controller.unbind() }
+    DisposableEffect(controller) {
+        onDispose { controller.unbind() }
     }
 
     LaunchedEffect(running, cameraGranted) {
-        if (!running || !cameraGranted) return@LaunchedEffect
+        if (!running || !cameraGranted) {
+            controller.unbind()
+            return@LaunchedEffect
+        }
+        controller.bindToLifecycle(lifecycleOwner)
         val config = VoiceGatewaySettings.get(context)
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) {
             answer = "पहले Settings में सुरक्षित HTTPS AI backend URL और gateway token सेट करें।"
