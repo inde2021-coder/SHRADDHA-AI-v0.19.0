@@ -76,6 +76,29 @@ class SharedTaskSchedulerTest {
         assertTrue(scheduler.snapshot().isEmpty())
     }
 
+    @Test fun taskSpecificClaimCannotStealAnotherAdaptersTask() {
+        val scheduler = SharedTaskScheduler(maxParallel = 1)
+        scheduler.submitAll(listOf(
+            SharedTaskScheduler.Task("operator_1", "Operator"),
+            SharedTaskScheduler.Task("bg_1", "Background")
+        ))
+        assertNull(scheduler.claimSpecific("missing"))
+        assertEquals("bg_1", scheduler.claimSpecific("bg_1")?.task?.id)
+        assertNull(scheduler.claimSpecific("operator_1"))
+        scheduler.complete("bg_1")
+        assertEquals("operator_1", scheduler.claimReadyMatching { it.task.id.startsWith("operator_") }.single().task.id)
+    }
+
+    @Test fun schedulerChangeCallbackReceivesDurableTransitions() {
+        val updates = mutableListOf<List<SharedTaskScheduler.Snapshot>>()
+        val scheduler = SharedTaskScheduler(onChanged = { updates += it })
+        scheduler.submitAll(listOf(SharedTaskScheduler.Task("persisted", "Persist me")))
+        scheduler.claimReady()
+        scheduler.complete("persisted")
+        assertEquals(3, updates.size)
+        assertEquals(SharedTaskScheduler.State.SUCCEEDED, updates.last().single().state)
+    }
+
     @Test fun restoreResumesOnlyUnclaimedPendingWorkAndNeverReplaysRunningWork() {
         val source = SharedTaskScheduler()
         source.submitAll(listOf(
