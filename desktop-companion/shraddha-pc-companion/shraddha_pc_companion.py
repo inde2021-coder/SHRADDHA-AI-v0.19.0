@@ -223,7 +223,7 @@ def safe_relative_path(root: str, relative: str):
     from pathlib import Path
     base = Path(root).expanduser().resolve()
     raw = Path(relative or ".")
-    if raw.is_absolute() or any(part == ".." for part in raw.parts):
+    if raw.is_absolute() or any(part == ".." for part in raw.parts) or ".shraddha-backups" in raw.parts:
         raise ValueError("Only relative paths inside the approved file root are allowed")
     candidate = base
     for part in raw.parts:
@@ -280,6 +280,8 @@ def write_safe_text_file(root: str, relative: str, content: str, overwrite: bool
         raise FileExistsError("File already exists; explicit overwrite approval is required")
     if candidate.exists() and not candidate.is_file():
         raise ValueError("Only regular files can be replaced")
+    if candidate.exists() and candidate.stat().st_size > 256_000:
+        raise ValueError("Existing file exceeds the 256 KB safe-edit limit")
 
     backup_relative = ""
     if candidate.exists():
