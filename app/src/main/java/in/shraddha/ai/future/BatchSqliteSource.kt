@@ -16,7 +16,10 @@ object BatchSqliteSource {
         require(limit in 1..BatchProcessingEngine.MAX_RECORDS)
         requireIdentifier(table)
         columns?.forEach(::requireIdentifier)
-        require(whereClause == null || whereClause.length <= 1000) { "Filter is too long" }
+        require(whereClause == null || (whereClause.length <= 1000 &&
+            whereClause.matches(Regex("[A-Za-z0-9_ ?<>=!().]+")))) {
+            "Filter must use a bounded SQL expression with ? placeholders and selectionArgs"
+        }
         val projection = columns?.toTypedArray()
         val records = mutableListOf<BatchProcessingEngine.Record>()
         database.query(table, projection, whereClause, whereArgs, null, null, null, limit.toString()).use { cursor ->
