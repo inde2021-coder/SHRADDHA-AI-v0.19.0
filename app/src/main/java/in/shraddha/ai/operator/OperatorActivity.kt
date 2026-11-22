@@ -121,14 +121,23 @@ class OperatorActivity : Activity() {
                 } },
                 audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
             )
-            val bridge = TaskPlannerOperatorBridge(
+            val brain = `in`.shraddha.ai.future.MainBrain(
                 executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
                 audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append("council_${event}", outcome, detail) }
             )
             val workflowId = "council-" + java.util.UUID.randomUUID().toString().take(8)
-            bridge.createPlan(workflowId, goal.take(120).ifBlank { "AI Council Operator plan" }, planned)
-            val session = bridge.start()
-            runOnUiThread { showPlannedSession(bridge, session) }
+            val queued = brain.enqueueOperatorWorkflow(
+                `in`.shraddha.ai.future.MainBrain.WorkflowRequest(
+                    id = workflowId,
+                    title = goal.take(120).ifBlank { "AI Council Operator plan" },
+                    actions = planned
+                )
+            )
+            val result = brain.startNextWorkflow()
+            runOnUiThread {
+                log.text = "Main Brain queue: ${queued.state} • priority ${queued.task.priority}\\n" + log.text
+                showMainBrainResult(brain, result)
+            }
         }.start()
     }
 
@@ -165,15 +174,52 @@ class OperatorActivity : Activity() {
                 } },
                 audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
             )
-            val bridge = TaskPlannerOperatorBridge(
+            val brain = `in`.shraddha.ai.future.MainBrain(
                 executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
                 audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
             )
             val id = "operator-" + java.util.UUID.randomUUID().toString().take(8)
-            bridge.createPlan(id, "Manual Operator Task", planned)
-            val session = bridge.start()
-            runOnUiThread { showPlannedSession(bridge, session) }
+            brain.enqueueOperatorWorkflow(
+                `in`.shraddha.ai.future.MainBrain.WorkflowRequest(id, "Manual Operator Task", planned)
+            )
+            val result = brain.startNextWorkflow()
+            runOnUiThread { showMainBrainResult(brain, result) }
         }.start()
+    }
+
+    private fun showMainBrainResult(
+        brain: `in`.shraddha.ai.future.MainBrain,
+        result: `in`.shraddha.ai.future.MainBrainExecutionResult
+    ) {
+        when (result) {
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.Started ->
+                showMainBrainSession(brain, result.workflowId, result.session)
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.ApprovalUpdated ->
+                showMainBrainSession(brain, result.workflowId, result.session)
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.NoReadyWorkflow ->
+                log.text = "Main Brain: अभी कोई dependency-ready workflow नहीं है।\\n" + log.text.take(4500)
+            is `in`.shraddha.ai.future.MainBrainExecutionResult.Failed ->
+                log.text = "Main Brain FAILED: ${result.reason}\\n" + log.text.take(4500)
+        }
+    }
+
+    private fun showMainBrainSession(
+        brain: `in`.shraddha.ai.future.MainBrain,
+        workflowId: String,
+        session: ShraddhaIntegrationHub.Session
+    ) {
+        val step = session.workflow.steps.getOrNull(session.workflow.currentStep)
+        log.text = "Main Brain • ${session.workflow.status}\\n${session.workflow.message}\\n" + log.text.take(4500)
+        if (session.workflow.status == WorkflowStatus.WAITING_FOR_APPROVAL && step != null) {
+            android.app.AlertDialog.Builder(this).setTitle("इस Planner चरण की अनुमति")
+                .setMessage("कार्य: ${step.title}\\n\\nयह अनुमति केवल इसी चरण के लिए है। मना करने पर workflow रुक जाएगा।")
+                .setNegativeButton("मना करें") { _, _ ->
+                    Thread { val result = brain.approveCurrentStep(false); runOnUiThread { showMainBrainResult(brain, result) } }.start()
+                }
+                .setPositiveButton("हाँ, यह चरण चलाएँ") { _, _ ->
+                    Thread { val result = brain.approveCurrentStep(true); runOnUiThread { showMainBrainResult(brain, result) } }.start()
+                }.show()
+        }
     }
 
     private fun showPlannedSession(bridge: TaskPlannerOperatorBridge, session: ShraddhaIntegrationHub.Session) {
