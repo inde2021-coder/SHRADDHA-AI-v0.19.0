@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validateTransferChunk } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validateTransferChunk, MAX_TRANSFER_CHUNK_BYTES, MAX_TRANSFER_BYTES, MAX_TRANSFER_CHUNKS } from './relay-file-validation.js';
 
 test('accepts a bounded base64 file with the correct SHA-256', () => {
   const bytes = Buffer.from('Shraddha secure file transfer');
@@ -57,4 +57,18 @@ test('transfer chunk envelope verifies index, bounds, canonical base64 and SHA-2
   assert.equal(validateTransferChunk(payload, 'bad', 0, 1, bytes.length, digest), false);
   assert.equal(validateTransferChunk(payload, 'transfer_123456', 0, 1, bytes.length, '0'.repeat(64)), false);
   assert.equal(validateTransferChunk(payload, 'transfer_123456', 0, 0, bytes.length, digest), false);
+});
+
+
+test('transfer protocol uses 48 KiB chunks and supports the full 100 MiB file cap', () => {
+  assert.equal(MAX_TRANSFER_CHUNK_BYTES, 48 * 1024);
+  assert.equal(MAX_TRANSFER_BYTES, 100 * 1024 * 1024);
+  assert.equal(MAX_TRANSFER_CHUNKS, 2134);
+  const bytes = Buffer.alloc(MAX_TRANSFER_CHUNK_BYTES, 7);
+  const payload = bytes.toString('base64');
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(validateTransferChunk(payload, 'transfer_123456', 0, MAX_TRANSFER_CHUNKS, bytes.length, digest), true);
+  const tooLarge = Buffer.alloc(MAX_TRANSFER_CHUNK_BYTES + 1, 7);
+  assert.equal(validateTransferChunk(tooLarge.toString('base64'), 'transfer_123456', 0, MAX_TRANSFER_CHUNKS, tooLarge.length,
+    createHash('sha256').update(tooLarge).digest('hex')), false);
 });
