@@ -40,10 +40,12 @@ class LiveEyesCameraService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            publishState(STATE_OFF)
             stopSelf()
             return START_NOT_STICKY
         }
         stopped = false
+        publishState(STATE_STARTING)
         val assistantName = assistantName()
         startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -155,6 +157,7 @@ class LiveEyesCameraService : Service() {
                             override fun onConfigured(session: CameraCaptureSession) {
                                 if (camera !== device) { session.close(); return }
                                 runCatching { session.setRepeatingRequest(request, null, handler) }
+                                    .onSuccess { publishState(STATE_ACTIVE) }
                                     .onFailure { stopSelf() }
                             }
                             override fun onConfigureFailed(session: CameraCaptureSession) { stopSelf() }
@@ -177,6 +180,7 @@ class LiveEyesCameraService : Service() {
 
     override fun onDestroy() {
         stopped = true
+        publishState(STATE_OFF)
         closeCamera()
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         super.onDestroy()
@@ -184,7 +188,27 @@ class LiveEyesCameraService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun publishState(state: String) {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(PREF_STATE, state)
+            .putInt(PREF_PID, android.os.Process.myPid())
+            .apply()
+    }
+
     companion object {
+        private const val PREFS_NAME = "shraddha_live_eyes_state"
+        private const val PREF_STATE = "state"
+        private const val PREF_PID = "pid"
+        const val STATE_OFF = "OFF"
+        const val STATE_STARTING = "STARTING"
+        const val STATE_ACTIVE = "ACTIVE"
+
+        fun getState(context: Context): String {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (prefs.getInt(PREF_PID, -1) != android.os.Process.myPid()) return STATE_OFF
+            return prefs.getString(PREF_STATE, STATE_OFF) ?: STATE_OFF
+        }
+
         const val ACTION_START = "in.shraddha.ai.action.LIVE_EYES_START"
         const val ACTION_STOP = "in.shraddha.ai.action.LIVE_EYES_STOP"
         private const val NOTIFICATION_ID = 73
