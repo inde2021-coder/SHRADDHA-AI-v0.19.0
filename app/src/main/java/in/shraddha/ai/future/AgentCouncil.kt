@@ -117,7 +117,8 @@ object AgentCouncil {
         shouldContinue: () -> Boolean = { true },
         assistantName: String = AssistantBrand.FULL_NAME,
         onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
-        budget: CouncilExecutionBudget = CouncilExecutionBudget()
+        budget: CouncilExecutionBudget = CouncilExecutionBudget(),
+        onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> }
     ): Result<CouncilExecutionReport> {
         require(specialistCount in 1..5) { "Run between one and five specialist agents" }
         val plan = plan(goal)
@@ -179,6 +180,7 @@ object AgentCouncil {
             if (providerCalls > budget.maxCallsPerProvider) {
                 throw IllegalStateException(provider + " provider-call budget exceeded before " + role.name)
             }
+            onProviderCall(provider, providerCalls, currentCall, elapsedMs())
             onProgress(role.name, progressIndex.incrementAndGet(), total)
             val remainingMs = budget.maxDurationMs - elapsedMs()
             if (remainingMs <= 0L) throw IllegalStateException("Council time budget exceeded before " + role.name)
@@ -238,7 +240,8 @@ object AgentCouncil {
         shouldContinue: () -> Boolean = { true },
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
         onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
-        budget: CouncilExecutionBudget = CouncilExecutionBudget()
+        budget: CouncilExecutionBudget = CouncilExecutionBudget(),
+        onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> }
     ): Result<CouncilExecutionReport> {
         val configured = MainBrainProviderGateway.configuredProviders(context)
         val selected = preferredProviders.map { it.uppercase() }.distinct().filter { it in configured }
@@ -246,7 +249,7 @@ object AgentCouncil {
         val assistantName = getAssistantName(context)
         return executeParallel(goal, language, selected, specialistCount, { _, provider, system, prompt ->
             withContext(Dispatchers.IO) { MainBrainProviderGateway.complete(context, provider, system, prompt) }
-        }, onProgress, shouldContinue, assistantName, onStageCompleted, budget)
+        }, onProgress, shouldContinue, assistantName, onStageCompleted, budget, onProviderCall)
     }
 
     /** Runs the pipeline through the user's currently selected, configured AI provider. */
