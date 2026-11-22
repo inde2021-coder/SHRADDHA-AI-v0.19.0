@@ -19,6 +19,7 @@ import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.screens.about.AboutScreen
+import com.Lia.assistant.ui.screens.agents.AgentCouncilScreen
 import com.Lia.assistant.ui.screens.chat.ChatScreen
 import com.Lia.assistant.ui.screens.debug.DebugScreen
 import com.Lia.assistant.ui.screens.forge.ForgeScreen
@@ -101,6 +102,12 @@ fun NovaApp(appState: NovaAppState) {
                     composable("about") { AboutScreen(navController) }
                     composable("debug") { DebugScreen(navController) }
                     composable("forge") { ForgeScreen(navController) }
+                    composable("agent_council") {
+                        AgentCouncilScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenApiKeys = { navController.navigate("api_keys") }
+                        )
+                    }
 
                     // Flavor-specific routes (e.g. accessibility disclosure in direct)
                     registerAccessibilityDisclosureRoute(navController)
