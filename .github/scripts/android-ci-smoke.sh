@@ -1,10 +1,38 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Readiness probe discovers the real emulator serial and writes it only after
+# ADB, Android boot, user storage and core system services are ready.
 bash .github/scripts/wait-for-android-emulator.sh
-ADB="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/platform-tools/adb"
-if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb)"; fi
-SERIAL="${ANDROID_SERIAL:-emulator-5554}"
+
+SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+ADB="$SDK_ROOT/platform-tools/adb"
+if [[ ! -x "$ADB" ]]; then ADB="$(command -v adb || true)"; fi
+if [[ -z "$ADB" || ! -x "$ADB" ]]; then
+  echo "ERROR: Android Debug Bridge executable was not found."
+  exit 2
+fi
+
+SERIAL_FILE="${RUNNER_TEMP:-/tmp}/shraddha-emulator-serial"
+if [[ ! -s "$SERIAL_FILE" ]]; then
+  echo "ERROR: readiness probe did not publish a verified emulator serial."
+  "$ADB" devices -l || true
+  exit 1
+fi
+SERIAL="$(tr -d '\r\n' < "$SERIAL_FILE")"
+if [[ ! "$SERIAL" =~ ^emulator-[0-9]+$ ]]; then
+  echo "ERROR: readiness probe returned an invalid emulator serial: '$SERIAL'."
+  exit 1
+fi
+if [[ "$("$ADB" -s "$SERIAL" get-state 2>/dev/null || true)" != device ]]; then
+  echo "ERROR: verified emulator '$SERIAL' disconnected before APK installation."
+  "$ADB" devices -l || true
+  exit 1
+fi
+
+# Pin all tools to the exact device discovered by the readiness probe.
+export ANDROID_SERIAL="$SERIAL"
+echo "Using verified Android emulator: $ANDROID_SERIAL"
 
 dump_diagnostics() {
   echo "===== ADB devices ====="
@@ -16,8 +44,12 @@ trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 
 install_ok=false
 for attempt in 1 2 3 4 5; do
-  echo "APK install attempt $attempt/5"
-  "$ADB" -s "$SERIAL" wait-for-device
+  echo "APK install attempt $attempt/5 on $SERIAL"
+  if [[ "$("$ADB" -s "$SERIAL" get-state 2>/dev/null || true)" != device ]]; then
+    echo "ERROR: emulator '$SERIAL' disconnected during install."
+    "$ADB" devices -l || true
+    exit 1
+  fi
   if timeout 180 "$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk; then
     install_ok=true
     break
