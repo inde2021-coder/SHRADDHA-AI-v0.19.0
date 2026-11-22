@@ -30,9 +30,10 @@ object BackgroundTaskQueue {
     internal fun enqueueFromMainBrain(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID {
         val cleanGoal = goal.trim()
         require(cleanGoal.isNotBlank() && cleanGoal.length <= 2000) { "Task must contain 1-2000 characters" }
-        require(provider.uppercase() in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
-            "Unsupported AI provider"
-        }
+        val providers = provider.split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() }.distinct()
+        require(providers.isNotEmpty() && providers.size <= 5 && providers.all {
+            it in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+        }) { "Choose between one and five supported AI providers (comma-separated)" }
         val workId = UUID.randomUUID()
         val schedulerTaskId = "bg_" + workId.toString().replace("-", "")
         val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
@@ -43,7 +44,7 @@ object BackgroundTaskQueue {
                 priority = 5,
                 payload = JSONObject().put("kind", "background_council")
                     .put(KEY_GOAL, cleanGoal)
-                    .put(KEY_PROVIDER, provider.uppercase())
+                    .put(KEY_PROVIDER, providers.joinToString(","))
                     .put(KEY_LANGUAGE, language.take(20)).toString()
             )
         ))
