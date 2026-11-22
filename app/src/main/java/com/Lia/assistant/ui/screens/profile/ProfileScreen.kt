@@ -83,7 +83,7 @@ fun ProfileScreen(
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_avatar,
+                model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_hero,
                 contentDescription = "Shraddha AI avatar",
                 modifier = Modifier.fillMaxSize().clip(CircleShape)
             )
