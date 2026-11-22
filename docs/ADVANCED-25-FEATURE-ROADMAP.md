@@ -173,3 +173,8 @@ The pending branch now adds:
 - a unit-test case for ECDH key agreement, relay envelope reconstruction, successful decryption and AAD tamper rejection.
 
 This is a source-level protocol correction only. It has not been built, unit-tested or exercised between physical devices yet. Camera/screen streaming must remain labelled unverified until the consolidated test and real-device pass.
+
+
+### File-transfer chunk-size defect found and corrected — 22 November
+
+A source-only cross-layer review found that the Android sender used 48,000-byte chunks and an incorrect ceiling formula, while the relay requires exactly 48 KiB (49,152-byte) chunks. Exact 48,000-byte multiples could therefore produce an empty trailing chunk, and the relay could reject the sender's manifest. The pending branch now centralizes the Android transfer limit/chunk size in `DeviceFileTransferProtocol` and uses the relay's 48 KiB contract in manifest calculation, sender offsets, chunk reads, receiver offsets and final-chunk validation. Boundary regression tests were added for exact multiples, final chunks and the 20 MB cap. These tests have not been run.
