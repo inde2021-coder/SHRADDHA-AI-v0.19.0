@@ -30,7 +30,19 @@ object ActionExecutor {
             return result
         }
 
-        when (toolName) {\n            "build_website" -> {\n                val prompt = args.optString("prompt", "").trim()\n                if (prompt.isBlank() || prompt.length > 8000) {\n                    result.put("status", "error")\n                    result.put("message", "Website prompt must contain 1-8000 characters.")\n                } else {\n                    withContext(Dispatchers.Main.immediate) { ForgeController.start(context, prompt) }\n                    result.put("status", "success")\n                    result.put("action", "forge_started")\n                    result.put("message", "Website Forge opened. Review its generated plan before publishing or deploying.")\n                }\n            }
+        when (toolName) {
+            "build_website" -> {
+                val prompt = args.optString("prompt", "").trim()
+                if (prompt.isBlank() || prompt.length > 8000) {
+                    result.put("status", "error")
+                    result.put("message", "Website prompt must contain 1-8000 characters.")
+                } else {
+                    withContext(Dispatchers.Main.immediate) { ForgeController.start(context, prompt) }
+                    result.put("status", "success")
+                    result.put("action", "forge_started")
+                    result.put("message", "Website Forge opened. Review its generated plan before publishing or deploying.")
+                }
+            }
             "open_app" -> {
                 val appName = args.optString("app_name", "").trim()
                 if (appName.isEmpty()) {
