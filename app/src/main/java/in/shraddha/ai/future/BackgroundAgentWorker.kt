@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 /** WorkManager adapter for the shared Main Brain scheduler and provider council. */
 class BackgroundAgentWorker(
@@ -13,12 +14,6 @@ class BackgroundAgentWorker(
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
-        val goal = inputData.getString(BackgroundTaskQueue.KEY_GOAL).orEmpty()
-        val provider = inputData.getString(BackgroundTaskQueue.KEY_PROVIDER).orEmpty()
-        val language = inputData.getString(BackgroundTaskQueue.KEY_LANGUAGE) ?: "AUTO"
-        if (goal.isBlank() || provider.isBlank()) {
-            return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Background task input is incomplete."))
-        }
         if (isStopped) return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Task cancelled before it started."))
         val schedulerTaskId = inputData.getString(BackgroundTaskQueue.KEY_SCHEDULER_TASK_ID)
             ?: return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Main Brain scheduler task ID is missing."))
@@ -36,6 +31,15 @@ class BackgroundAgentWorker(
                 current?.state == SharedTaskScheduler.State.RUNNING) Result.retry()
             else Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to
                 (current?.error ?: "Task is not claimable in the shared Main Brain scheduler.")))
+        }
+
+        val payload = runCatching { JSONObject(claimed.task.payload) }.getOrNull()
+        val goal = payload?.optString(BackgroundTaskQueue.KEY_GOAL).orEmpty()
+        val provider = payload?.optString(BackgroundTaskQueue.KEY_PROVIDER).orEmpty()
+        val language = payload?.optString(BackgroundTaskQueue.KEY_LANGUAGE) ?: "AUTO"
+        if (goal.isBlank() || provider.isBlank()) {
+            scheduler.fail(schedulerTaskId, "Encrypted background task payload is incomplete.")
+            return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Encrypted background task payload is incomplete."))
         }
 
         val result = withContext(Dispatchers.IO) {
