@@ -54,7 +54,7 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 
 ### P0 — Full project-aware coding agent
 - Existing code-assistant and Website Forge pieces are not a verified end-to-end code agent.
-- Add project workspace selection, file tree/context, bounded file edits with diff preview, tests/build execution in a sandbox, logs, rollback and deploy preview.
+- The Windows companion now loads one explicitly approved text/code file into its local GGUF Code Assistant after PC confirmation, returns a proposal, and can separately create/update an approved-root text/code file with Android + PC approval and backup-before-overwrite.\n- Remaining: multi-file project context, diff preview, tests/build execution in a sandbox, build logs, backup restore/rollback UI and deploy preview.
 - Never execute arbitrary shell commands from an untrusted model response. Require local approval for install, execute, overwrite, delete and deploy.
 
 ### P1 — True multi-provider orchestration
