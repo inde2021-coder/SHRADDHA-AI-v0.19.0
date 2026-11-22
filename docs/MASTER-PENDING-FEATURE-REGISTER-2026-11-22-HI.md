@@ -99,7 +99,11 @@ This register consolidates the user's earlier feature requests and the current s
 | Licensing/Pro entitlement | Historical local activation code requires review. | Server-side signed entitlement validation; never claim paid entitlement from a local non-empty key. |
 | Biometric recognition | ONNX inference and consent vault source exist. | Licensed/provenance-checked model distribution, calibration, FAR/FRR/EER studies and certified PAD evidence. Basic active challenge is not certified anti-spoofing. |
 
-## H. Real-world acceptance blockers
+## H. Separate Shraddha OS request
+
+The user also explicitly asked to replace the phone's existing operating system with **Shraddha OS**. This is not an Android app feature and cannot be delivered by installing the current Shraddha AI APK. It requires a device-specific Android Open Source Project/compatible ROM build, exact target device codename and vendor blobs, bootloader unlock and recovery/fastboot path, kernel/device trees, verified boot/signing strategy, data backup and a recoverable rollback image. No destructive flash, wipe or OS replacement should be attempted without the exact device target and explicit confirmation. Current branch is the Shraddha AI app/companion codebase, not a complete bootable Shraddha OS image.
+
+## I. Real-world acceptance blockers
 
 The following cannot be completed by source changes alone and must remain clearly labelled until supplied and verified:
 - Android phones and supported OS/OEM matrix for microphone, camera, Accessibility, notifications, SMS, WhatsApp and calls.
@@ -149,3 +153,8 @@ The local background council now has a 1–5 specialist-count control, persists 
 
 
 Visual Lens UI now uses the shared dark-teal/cyan glass components, the configured assistant name, and a process-aware service state (OFF/STARTING/ACTIVE) rather than a screen-local running flag. Service status is polled while the screen is open and refreshed on resume. This source change is not yet built or device-verified.
+
+
+### Historical project-scope correction
+
+The user's request to replace the phone's existing OS with Shraddha OS is a separate OS/ROM deliverable. Do not misrepresent this Android app branch or its APK as an operating-system replacement. It needs a device-specific ROM project and explicit recovery/backup safeguards.
