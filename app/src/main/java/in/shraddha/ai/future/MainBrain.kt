@@ -15,8 +15,8 @@ import `in`.shraddha.ai.future.ShraddhaIntegrationHub
  * LLM prose is never converted implicitly into device actions: device work must be supplied
  * as typed Operator steps and is executed only through the verified Operator bridge.
  *
- * This queue is process-local. WorkManager remains the durable background queue; this class
- * must not be described as crash-resumable until a persistent scheduler store is integrated.
+ * Pending typed requests are stored with Android Keystore AES-GCM encryption and restored after
+ * process restart. A workflow already marked RUNNING is failed closed and never blindly replayed.
  */
 class MainBrain(
     maxParallelWorkflows: Int = 1,
