@@ -25,7 +25,9 @@ data class PlannedOperatorAction(
 class TaskPlannerOperatorBridge(
     private val hub: ShraddhaIntegrationHub = ShraddhaIntegrationHub(),
     private val executeVerified: (OperatorStep, confirmed: Boolean) -> Boolean,
-    private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> }
+    private val audit: (event: String, outcome: String, detail: String) -> Unit = { _, _, _ -> },
+    private val beforeExecute: (workflowId: String, action: PlannedOperatorAction) -> Boolean = { _, _ -> true },
+    private val afterExecute: (workflowId: String, action: PlannedOperatorAction, verified: Boolean) -> Boolean = { _, _, _ -> true }
 ) {
     private val actions = linkedMapOf<String, PlannedOperatorAction>()
     private val verified = mutableSetOf<String>()
@@ -96,10 +98,16 @@ class TaskPlannerOperatorBridge(
                 return hub.failCurrentStep("Sensitive action reached execution without step-specific approval")
             }
             audit("operator_dispatch", "requested", "workflow=${session.workflow.id}; step=${action.id}")
+            val journalReady = runCatching { beforeExecute(session.workflow.id, action) }.getOrElse { false }
+            if (!journalReady) {
+                audit("operator_dispatch", "journal_failed", "workflow=${session.workflow.id}; step=${action.id}")
+                return hub.failCurrentStep("Secure action journal could not be committed; action was not executed")
+            }
             val executed = runCatching { executeVerified(action.step, approvalGranted) }.getOrElse { false }
-            if (!executed) {
+            val journalCommitted = runCatching { afterExecute(session.workflow.id, action, executed) }.getOrElse { false }
+            if (!executed || !journalCommitted) {
                 audit("operator_dispatch", "failed", "workflow=${session.workflow.id}; step=${action.id}")
-                return hub.failCurrentStep("Operator action failed or its screen result could not be verified")
+                return hub.failCurrentStep(if (!executed) "Operator action failed or its screen result could not be verified" else "Action was verified but durable journal update failed; workflow stopped")
             }
             verified.add(action.id)
             session = hub.markActionDispatched()
