@@ -3183,8 +3183,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun validRelay(url: String) = url.startsWith("https://") && !url.contains("your-domain")
     private fun edit(label: String, hint: String) = EditText(this).apply {
-        this.hint = "$label  •  $hint"; setHintTextColor(0xFF8291AA.toInt()); setTextColor(-1); textSize = 14f
-        setSingleLine(true); setPadding(dp(14), dp(13), dp(14), dp(13)); background = rounded(0xFF0B1220.toInt(), 14)
+        this.hint = "$label  •  $hint"
+        setHintTextColor(0xFF8291AA.toInt())
+        setTextColor(-1)
+        textSize = 14f
+        setSingleLine(true)
+        setPadding(dp(14), dp(13), dp(14), dp(13))
+        background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF080F1D.toInt(), 0xFF121E31.toInt())
+        ).apply {
+            cornerRadius = dp(14).toFloat()
+            setStroke(dp(1), 0xFF354B70.toInt())
+        }
+        elevation = dp(1).toFloat()
+        minimumHeight = dp(50)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }
     private fun actionButton(label: String, hint: String, action: () -> Unit): LinearLayout {
