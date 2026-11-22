@@ -171,9 +171,11 @@ object DeviceLinkManager {
                     onStatus?.invoke("Visual frame blocked: peer fingerprint is not mutually verified.")
                     return
                 }
+                val localSession = sessionId ?: return
+                val localDevice = deviceId ?: return
                 val sequenceKey = envelope.sourceDeviceId + ":" + envelope.frameType
                 val jpeg = try {
-                    val aad = "$sessionId|${envelope.sourceDeviceId}|$deviceId|visual_frame|${envelope.frameType}|${envelope.sequence}"
+                    val aad = "$localSession|${envelope.sourceDeviceId}|$localDevice|visual_frame|${envelope.frameType}|${envelope.sequence}"
                         .toByteArray(Charsets.UTF_8)
                     synchronized(receivedVisualFrameLock) {
                         if (envelope.sequence <= (receivedVisualFrameSequence[sequenceKey] ?: 0L)) return
