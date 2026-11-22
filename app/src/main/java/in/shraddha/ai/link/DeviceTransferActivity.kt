@@ -17,7 +17,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-/** SAF-based, consent-gated 100 MB file transfer workspace. */
+/** SAF-based, consent-gated 100 MiB file transfer workspace. */
 class DeviceTransferActivity : Activity() {
     private lateinit var peer: EditText
     private lateinit var progress: ProgressBar
@@ -50,7 +50,7 @@ class DeviceTransferActivity : Activity() {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(22,22,22,22); setBackgroundColor(0xFF080E1B.toInt()) }
         root.addView(TextView(this).apply { text = "DEVICE UNIVERSE • FILE TRANSFER"; textSize = 19f; setTextColor(Color.WHITE); setTypeface(null, android.graphics.Typeface.BOLD) })
-        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
+        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MiB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
         peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()); setText(intent.getStringExtra("peer").orEmpty()) }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
@@ -95,7 +95,7 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256"); var total = 0L
         contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(64 * 1024)
-            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= DeviceFileTransferProtocol.MAX_FILE_BYTES) { "Maximum file size is 20 MB" }; digest.update(buffer, 0, n) }
+            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= DeviceFileTransferProtocol.MAX_FILE_BYTES) { "Maximum file size is 100 MiB" }; digest.update(buffer, 0, n) }
         } ?: throw IllegalStateException("Cannot open selected file")
         require(total > 0) { "Empty files are not supported" }
         return total to digest.digest().joinToString("") { "%02x".format(it) }
