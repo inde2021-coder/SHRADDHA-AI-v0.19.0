@@ -176,6 +176,43 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         return clickVisibleText(fileName)
     }
 
+    /**
+     * Fill only one explicitly identified visible field. A blank or ambiguous target
+     * is refused; this prevents dictation from landing in an unrelated form field.
+     */
+    private fun fillEditableField(target: String, value: String): Boolean {
+        val wanted = target.trim()
+        if (wanted.isBlank() || value.length > 4000) return false
+        val root = rootInActiveWindow ?: return false
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        val candidates = mutableListOf<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < 500) {
+            val node = queue.removeFirst()
+            visited++
+            if (node.isVisibleToUser && node.isEditable && !isSensitiveNode(node)) {
+                val labels = listOf(
+                    node.viewIdResourceName.orEmpty(),
+                    node.hintText?.toString().orEmpty(),
+                    node.text?.toString().orEmpty(),
+                    node.contentDescription?.toString().orEmpty()
+                )
+                if (labels.any { it.isNotBlank() && it.trim().equals(wanted, ignoreCase = true) }) {
+                    candidates += node
+                }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let(queue::addLast)
+        }
+        if (candidates.size != 1) return false
+        return candidates.single().performAction(
+            AccessibilityNodeInfo.ACTION_SET_TEXT,
+            Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+            }
+        )
+    }
+
     private fun fillByResourceId(resourceId: String, value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
@@ -238,6 +275,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         }
         fun clickVisibleText(label: String): Boolean = active?.clickVisibleText(label) ?: false
         fun clickByResourceId(resourceId: String): Boolean = active?.clickByResourceId(resourceId) ?: false
+        fun fillEditableField(target: String, value: String): Boolean = active?.fillEditableField(target, value) ?: false
         fun fillByResourceId(resourceId: String, value: String): Boolean = active?.fillByResourceId(resourceId, value) ?: false
         fun selectFileInPicker(fileName: String): Boolean = active?.selectFileInPicker(fileName) ?: false
         fun remoteTap(x: Float, y: Float): Boolean = active?.performRemoteTap(x, y) ?: false
