@@ -49,6 +49,23 @@ class AgentCouncilExecutionTest {
         assertEquals(listOf("Planner", "Researcher"), calls)
     }
 
+    @Test fun cancellationStopsBeforeTheNextRole() {
+        var keepRunning = true
+        val calls = mutableListOf<String>()
+        val result = AgentCouncil.execute(
+            goal = "Long running work",
+            provider = "OPENAI",
+            executor = { role, _, _ ->
+                calls += role.name
+                keepRunning = false
+                "Partial planner output"
+            },
+            shouldContinue = { keepRunning }
+        )
+        assertTrue(result.isFailure)
+        assertEquals(listOf("Planner"), calls)
+    }
+
     @Test fun rejectsBlankGoalsAndBoundsTheStoredGoal() {
         assertTrue(AgentCouncil.execute(
             goal = " ",
