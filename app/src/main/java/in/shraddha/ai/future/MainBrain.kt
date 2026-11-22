@@ -165,7 +165,8 @@ class MainBrain(
             shouldContinue: () -> Boolean,
             onProgress: (String, Int, Int) -> Unit,
             onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> },
-            budget: CouncilExecutionBudget = CouncilExecutionBudget()
+            budget: CouncilExecutionBudget = CouncilExecutionBudget(),
+            onProviderCall: (String, Int, Int, Long) -> Unit = { _, _, _, _ -> }
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeParallelWithConfiguredProviders(
                 context = context.applicationContext,
@@ -176,7 +177,8 @@ class MainBrain(
                 shouldContinue = shouldContinue,
                 onProgress = onProgress,
                 onStageCompleted = onStageCompleted,
-                budget = budget
+                budget = budget,
+                onProviderCall = onProviderCall
             )
 
         /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
