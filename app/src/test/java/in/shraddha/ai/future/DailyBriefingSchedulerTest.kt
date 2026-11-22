@@ -15,7 +15,7 @@ class DailyBriefingSchedulerTest {
 
     @Test fun schedulesForTomorrowWhenTargetTimeHasPassed() {
         val now = ZonedDateTime.of(2026, 11, 22, 8, 1, 0, 0, zone)
-        assertEquals(23L * 60L * 1000L, DailyBriefingScheduler.initialDelayMillis(now, 8, 24))
+        assertEquals((23L * 60L + 59L) * 60L * 1000L, DailyBriefingScheduler.initialDelayMillis(now, 8, 0))
     }
 
     @Test fun schedulesAtNextDayWhenTargetEqualsCurrentMinute() {
