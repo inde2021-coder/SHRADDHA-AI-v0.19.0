@@ -28,6 +28,9 @@ concurrency:
 jobs:
   build:
     name: Compile, unit tests and debug APK
+    # Hosted runners may not expose KVM. Explicitly permit QEMU TCG when the action disables hardware acceleration.
+    env:
+      ANDROID_I_WANT_MY_TCG: "yes"
     if: ${{ (github.event_name != 'pull_request' || github.base_ref != 'main') && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -187,7 +190,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 1800
           cores: 4
           ram-size: 4096M
           disk-size: 4096M
