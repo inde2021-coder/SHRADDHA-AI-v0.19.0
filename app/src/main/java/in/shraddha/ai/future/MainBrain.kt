@@ -141,8 +141,13 @@ class MainBrain(
                 com.Lia.assistant.forge.WebsiteForgeClient.forgeWebsite(
                     context.applicationContext, prompt, isEdit, initialHtml
                 )
-                scheduler.complete(taskId)
-                true
+                if (com.Lia.assistant.forge.ForgeController.state.value.phase == com.Lia.assistant.forge.ForgePhase.FAILED) {
+                    scheduler.fail(taskId, "Website Forge reported a failed build")
+                    false
+                } else {
+                    scheduler.complete(taskId)
+                    true
+                }
             } catch (cancelled: CancellationException) {
                 runCatching { scheduler.cancel(taskId) }
                 throw cancelled
