@@ -1,13 +1,6 @@
 package `in`.shraddha.ai.future
 
 import android.content.Context
-import com.Lia.assistant.data.ApiKeyStore
-import com.Lia.assistant.data.NovaPreferences
-import com.Lia.assistant.data.ProviderKeyStore
-import com.Lia.assistant.voice.ChatReplyResult
-import com.Lia.assistant.voice.ChatTurn
-import com.Lia.assistant.voice.GeminiTextClient
-import com.Lia.assistant.voice.MultiProviderChatClient
 import kotlinx.coroutines.CancellationException
 
 /** Transparent multi-role orchestration. Every role is a real provider call, not a simulated agent. */
@@ -109,14 +102,7 @@ object AgentCouncil {
         shouldContinue: () -> Boolean = { true },
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> {
-        val preferred = (preferredProvider ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")).uppercase()
-        val candidates = (listOf(preferred) + listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")).distinct()
-        val configured = candidates.filter { provider ->
-            runCatching {
-                if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
-                else ProviderKeyStore.has(context, provider)
-            }.getOrDefault(false)
-        }.take(5)
+        val configured = MainBrainProviderGateway.configuredProviders(context, preferredProvider)
         if (configured.isEmpty()) return Result.failure(IllegalStateException("No AI provider API key is configured. Add at least one provider key in Settings."))
         return executeWithProviderSet(context, goal, language, configured, shouldContinue, onProgress)
     }
@@ -133,16 +119,7 @@ object AgentCouncil {
         val providerLabel = assignments.values.distinct().joinToString(" → ")
         return execute(goal, language, providerLabel, { role, system, prompt ->
             val provider = assignments.getValue(role.name)
-            val turns = listOf(ChatTurn(true, prompt))
-            val response = if (provider == "GEMINI") {
-                GeminiTextClient.reply(ApiKeyStore.getKey(context), system, turns)
-            } else {
-                MultiProviderChatClient.reply(context, provider, system, turns)
-            }
-            when (response) {
-                is ChatReplyResult.Success -> response.text
-                is ChatReplyResult.Error -> error("$provider provider error: ${response.message}")
-            }
+            MainBrainProviderGateway.complete(context, provider, system, prompt)
         }, onProgress, shouldContinue)
     }
 
@@ -156,16 +133,7 @@ object AgentCouncil {
     ): Result<CouncilExecutionReport> {
         val provider = providerName.uppercase()
         return execute(goal, language, provider, { _, system, prompt ->
-            val turns = listOf(ChatTurn(true, prompt))
-            val response = if (provider == "GEMINI") {
-                GeminiTextClient.reply(ApiKeyStore.getKey(context), system, turns)
-            } else {
-                MultiProviderChatClient.reply(context, provider, system, turns)
-            }
-            when (response) {
-                is ChatReplyResult.Success -> response.text
-                is ChatReplyResult.Error -> error("$provider provider error: ${response.message}")
-            }
+            MainBrainProviderGateway.complete(context, provider, system, prompt)
         }, onProgress, shouldContinue)
     }
 }
