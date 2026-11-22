@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,7 @@ fun ProjectLabScreen(navController: NavController) {
     var plans by remember { mutableStateOf(emptyList<ProjectPlan>()) }
     var status by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<ProjectPlan?>(null) }
 
     LaunchedEffect(Unit) {
         plans = withContext(Dispatchers.IO) {
@@ -157,13 +159,9 @@ fun ProjectLabScreen(navController: NavController) {
                             Text(plan.title, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             Text("${ProjectWorkspace.progress(plan)}% complete • ${plan.milestones.size} milestones", color = colors.textSecondary, fontSize = 10.sp)
                         }
-                        TextButton(onClick = {
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { ProjectPlanStore(context).delete(plan.id) }
-                                result.onSuccess { plans = it; status = "Project deleted." }
-                                    .onFailure { status = it.message ?: "Could not delete project." }
-                            }
-                        }) { Text("Delete", color = Color(0xFFFF9A9A)) }
+                        TextButton(onClick = { pendingDelete = plan }) {
+                            Text("Delete", color = Color(0xFFFF9A9A))
+                        }
                     }
                     plan.milestones.forEach { milestone ->
                         Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
@@ -199,5 +197,26 @@ fun ProjectLabScreen(navController: NavController) {
             }
         }
         Spacer(Modifier.height(20.dp))
+    }
+
+    pendingDelete?.let { plan ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete project plan?") },
+            text = { Text("This permanently deletes ‘${plan.title}’ and its saved milestones from this device.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { ProjectPlanStore(context).delete(plan.id) }
+                        result.onSuccess { plans = it; status = "Project deleted." }
+                            .onFailure { status = it.message ?: "Could not delete project." }
+                        pendingDelete = null
+                    }
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 }
