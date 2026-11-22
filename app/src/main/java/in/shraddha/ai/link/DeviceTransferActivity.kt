@@ -243,13 +243,14 @@ class DeviceTransferActivity : Activity() {
 
     private fun saveIncoming(destination: Uri) {
         val file = incomingFile ?: return
+        val savedName = incomingName
         try {
             contentResolver.openOutputStream(destination, "w")?.use { output -> file.inputStream().use { it.copyTo(output) } }
                 ?: throw IllegalStateException("Could not open selected destination")
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)
             file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
             clearTransferState()
-            status.text = "Saved $incomingName • SHA-256 verified • transfer complete."
+            status.text = "Saved $savedName • SHA-256 verified • transfer complete."
         } catch (e: Exception) { status.text = "Save failed: ${e.message}" }
     }
 
