@@ -19,7 +19,7 @@ import org.json.JSONObject
 
 object ActionExecutor {
 
-    suspend fun execute(context: Context, toolName: String, args: JSONObject): JSONObject {
+    suspend fun execute(context: Context, toolName: String, args: JSONObject, withinMainBrainTask: Boolean = false): JSONObject {
         val result = JSONObject()
 
         // Licensing check
@@ -419,7 +419,7 @@ object ActionExecutor {
                                     val ok = `in`.shraddha.ai.future.MainBrain.runLearnedWorkflow(
                                         context.applicationContext, profile, workflowName, values,
                                         confirmed, args.optBoolean("resume", false),
-                                        withinMainBrainTask = true
+                                        withinMainBrainTask = withinMainBrainTask
                                     ) { event -> detail = "${event.state}: ${event.message}" }
                                     ok to detail
                                 }
