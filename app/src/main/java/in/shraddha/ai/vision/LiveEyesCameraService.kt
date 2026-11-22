@@ -84,6 +84,16 @@ class LiveEyesCameraService : Service() {
         NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME)
             .trim().ifBlank { AssistantBrand.NAME }
 
+    private fun visionProvider(): String {
+        val selected = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
+            .trim().uppercase()
+        return if (selected in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
+            selected.lowercase()
+        } else {
+            "gemini"
+        }
+    }
+
     private fun updateNotification(message: String) {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(message))
     }
@@ -121,7 +131,7 @@ class LiveEyesCameraService : Service() {
                         if (context.isNotBlank()) append("Previous observation: ").append(context).append(". ")
                         append("Give a concise natural Hindi response, 1-3 sentences. Current user request: बताओ अभी सामने क्या दिख रहा है और क्या बदला है?")
                     }
-                    DeviceLinkManager.analyzeScreen(baseUrl, token, "gemini", prompt, jpeg, "general") { result ->
+                    DeviceLinkManager.analyzeScreen(baseUrl, token, visionProvider(), prompt, jpeg, "general") { result ->
                         jpeg.fill(0)
                         if (!stopped) result.onSuccess { raw ->
                             val observation = raw.take(1200)
