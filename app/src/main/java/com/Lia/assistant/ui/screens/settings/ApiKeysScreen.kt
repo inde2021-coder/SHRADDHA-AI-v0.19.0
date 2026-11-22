@@ -209,7 +209,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                 }
                                 testStatus[provider.id] = result.fold(
                                     onSuccess = { reply ->
-                                        if (reply.contains("OK", ignoreCase = true)) "Connection successful: provider returned a response."
+                                        if (reply.isNotBlank()) "Connection successful: provider returned a response."
                                         else "Provider responded, but the test reply was unexpected."
                                     },
                                     onFailure = { error -> "Connection failed: ${error.message ?: "Unknown provider error"}" }
