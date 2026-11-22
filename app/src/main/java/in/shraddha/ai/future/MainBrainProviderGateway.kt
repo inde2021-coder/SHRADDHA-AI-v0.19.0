@@ -8,6 +8,7 @@ import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
 import com.Lia.assistant.voice.MultiProviderChatClient
+import com.Lia.assistant.data.VoiceGatewaySettings
 
 /**
  * The sole provider dispatch boundary for Main Brain orchestrated work.
@@ -29,6 +30,10 @@ object MainBrainProviderGateway {
             }.getOrDefault(false)
         }.take(5)
     }
+
+    /** Secure realtime Gemini Live session token; raw provider credentials never enter the UI. */
+    suspend fun fetchLiveVoiceToken(context: Context): String =
+        VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
 
     fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
         val provider = providerName.uppercase()
