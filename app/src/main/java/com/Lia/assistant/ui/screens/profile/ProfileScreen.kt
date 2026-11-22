@@ -35,6 +35,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import `in`.shraddha.ai.R
 import com.Lia.assistant.data.NovaAppState
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.components.AccessKeySection
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -51,6 +52,7 @@ fun ProfileScreen(
 ) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
+    val assistantName = appState.assistantName.ifBlank { AssistantBrand.FULL_NAME }
     var nameInput by remember { mutableStateOf(appState.userName) }
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -72,7 +74,7 @@ fun ProfileScreen(
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
             }
-            Text("Shraddha Profile", style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.textPrimary)
+            Text("$assistantName Profile", style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.textPrimary)
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -84,13 +86,13 @@ fun ProfileScreen(
         ) {
             AsyncImage(
                 model = appState.assistantAvatarUri ?: R.drawable.shraddha_ai_hero,
-                contentDescription = "Shraddha AI avatar",
+                contentDescription = "$assistantName avatar",
                 modifier = Modifier.fillMaxSize().clip(CircleShape)
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "SHRADDHA AI AVATAR",
+            "${assistantName.uppercase()} AVATAR",
             color = colors.accent,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -99,7 +101,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(8.dp))
         NovaButton(text = "Change Image", onClick = { avatarPicker.launch(arrayOf("image/*")) })
         NovaButton(
-            text = "Use Default Shraddha Image",
+            text = "Use Default $assistantName Image",
             onClick = { appState.applyAssistantAvatar(context, null) },
             type = NovaButtonType.TEXT
         )
