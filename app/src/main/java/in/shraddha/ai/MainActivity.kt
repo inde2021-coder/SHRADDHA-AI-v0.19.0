@@ -906,9 +906,19 @@ class MainActivity : AppCompatActivity() {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("Remote control permission")
                 .setMessage("$requester इस फोन को अधिकतम 5 मिनट तक नियंत्रित करना चाहता है। केवल भरोसेमंद व्यक्ति को अनुमति दें।")
-                .setNegativeButton("Deny") { _, _ -> DeviceLinkManager.respondRemoteControl(from, false) }
-                .setPositiveButton("Allow for 5 minutes") { _, _ -> DeviceLinkManager.respondRemoteControl(from, true, 5) }
-                .setOnCancelListener { DeviceLinkManager.respondRemoteControl(from, false) }
+                .setNegativeButton("Deny") { _, _ ->
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putLong("remote_control_grant_until", 0L).apply()
+                    DeviceLinkManager.respondRemoteControl(from, false)
+                }
+                .setPositiveButton("Allow for 5 minutes") { _, _ ->
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                        .putLong("remote_control_grant_until", System.currentTimeMillis() + 5 * 60_000L).apply()
+                    DeviceLinkManager.respondRemoteControl(from, true, 5)
+                }
+                .setOnCancelListener {
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putLong("remote_control_grant_until", 0L).apply()
+                    DeviceLinkManager.respondRemoteControl(from, false)
+                }
                 .show()
         }
     }
@@ -958,7 +968,10 @@ class MainActivity : AppCompatActivity() {
                 isChecked = getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getBoolean("remote_control_consent", false)
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, checked ->
-                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit().putBoolean("remote_control_consent", checked).apply()
+                    getSharedPreferences("shraddha_device_link", MODE_PRIVATE).edit()
+                        .putBoolean("remote_control_consent", checked)
+                        .putLong("remote_control_grant_until", if (checked) getSharedPreferences("shraddha_device_link", MODE_PRIVATE).getLong("remote_control_grant_until", 0L) else 0L)
+                        .apply()
                     if (DeviceLinkManager.sessionId != null) publishDataPermissions()
                 }
             }
@@ -2708,6 +2721,7 @@ class MainActivity : AppCompatActivity() {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val prefs = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
                 val allowed = prefs.getBoolean("remote_control_consent", false)
+                val sessionGranted = prefs.getLong("remote_control_grant_until", 0L) > System.currentTimeMillis()
                 val kind = action.optString("kind", "unknown").take(32)
                 val description = when (kind) {
                     "tap" -> "Tap at (${action.optDouble("x").toInt()}, ${action.optDouble("y").toInt()})"
@@ -2720,8 +2734,10 @@ class MainActivity : AppCompatActivity() {
                     "scroll" -> "Scroll current screen"
                     else -> "Unsupported action: $kind"
                 }
-                if (!allowed) {
-                    DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "DENIED: This phone's remote-control permission is OFF.")
+                if (!allowed || !sessionGranted) {
+                    DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind,
+                        if (!allowed) "DENIED: This phone's remote-control permission is OFF."
+                        else "DENIED: No active 5-minute remote-control session. Request permission first.")
                     return@post
                 }
                 android.app.AlertDialog.Builder(this@MainActivity)
