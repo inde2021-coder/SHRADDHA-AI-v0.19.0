@@ -1411,6 +1411,12 @@ class MainActivity : AppCompatActivity() {
             val councilGoal = edit("Council task / goal", "उदाहरण: एक सुरक्षित Android app architecture तैयार करो").apply { minLines = 3; isSingleLine = false }
             val councilOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background = rounded(0xFF0C1525.toInt(),14) }
             addView(endpoint); addView(tokenField); addView(providersField); addView(specialistCountField); addView(councilGoal); addView(councilOutput)
+            getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).getString("active_work_id", null)?.let { saved ->
+                runCatching { java.util.UUID.fromString(saved) }.getOrNull()?.let { savedId ->
+                    activeCouncilWorkId = savedId
+                    observeCouncilWork(savedId, councilOutput)
+                }
+            }
             addView(actionButton("RUN LIVE 5-ROLE AI COUNCIL", "Uses configured provider APIs • network and API charges may apply") {
                 val base = endpoint.text.toString().trim().trimEnd('/')
                 val goalText = councilGoal.text.toString().trim()
@@ -1519,37 +1525,7 @@ class MainActivity : AppCompatActivity() {
                     getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().putString("active_work_id", workId.toString()).apply()
                     councilOutput.text = "Parallel AI team queue में भेजी गई। Work ID: " + workId +
                         "\nPlanner + Researcher parallel चलेंगे, फिर " + specialistCount + " Specialists, Critic और Verifier।"
-                    androidx.work.WorkManager.getInstance(this@MainActivity)
-                        .getWorkInfoByIdLiveData(workId)
-                        .observe(this@MainActivity) { info ->
-                            if (info == null) return@observe
-                            val message = when (info.state) {
-                                androidx.work.WorkInfo.State.ENQUEUED -> "Queued — network मिलने पर शुरू होगा."
-                                androidx.work.WorkInfo.State.RUNNING -> {
-                                    val role = info.progress.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_ROLE).orEmpty()
-                                    val index = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_INDEX, 0)
-                                    val total = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_TOTAL, 7)
-                                    "Working: " + role + " (" + index + "/" + total + ")"
-                                }
-                                androidx.work.WorkInfo.State.SUCCEEDED -> "Completed. Verifier report:\n" +
-                                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
-                                androidx.work.WorkInfo.State.FAILED -> "Failed: " +
-                                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
-                                androidx.work.WorkInfo.State.CANCELLED -> "Cancelled by WorkManager."
-                                else -> "Waiting for background worker."
-                            }
-                            councilOutput.text = "Parallel council • " + message
-                            if ((info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
-                                info.state == androidx.work.WorkInfo.State.FAILED ||
-                                info.state == androidx.work.WorkInfo.State.CANCELLED) &&
-                                activeCouncilWorkId == workId) {
-                                activeCouncilWorkId = null
-                                val prefs = getSharedPreferences("shraddha_agent_work", MODE_PRIVATE)
-                                if (prefs.getString("active_work_id", null) == workId.toString()) {
-                                    prefs.edit().remove("active_work_id").apply()
-                                }
-                            }
-                        }
+                    observeCouncilWork(workId, councilOutput)
                 } catch (error: Exception) {
                     councilOutput.text = "Parallel council queue failed: " + (error.localizedMessage ?: "Unknown error")
                 }
@@ -2609,6 +2585,35 @@ class MainActivity : AppCompatActivity() {
             })
         }
     }
+    private fun observeCouncilWork(workId: java.util.UUID, output: TextView) {
+        androidx.work.WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId).observe(this) { info ->
+            if (info == null) return@observe
+            val message = when (info.state) {
+                androidx.work.WorkInfo.State.ENQUEUED -> "Queued — network मिलने पर शुरू होगा."
+                androidx.work.WorkInfo.State.RUNNING -> {
+                    val role = info.progress.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_ROLE).orEmpty()
+                    val index = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_INDEX, 0)
+                    val total = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_TOTAL, 7)
+                    "Working: " + role + " (" + index + "/" + total + ")"
+                }
+                androidx.work.WorkInfo.State.SUCCEEDED -> "Completed. Verifier report:\\n" +
+                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
+                androidx.work.WorkInfo.State.FAILED -> "Failed: " +
+                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
+                androidx.work.WorkInfo.State.CANCELLED -> "Cancelled by WorkManager."
+                else -> "Waiting for background worker."
+            }
+            output.text = "Parallel council • " + message
+            if ((info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
+                info.state == androidx.work.WorkInfo.State.FAILED ||
+                info.state == androidx.work.WorkInfo.State.CANCELLED) && activeCouncilWorkId == workId) {
+                activeCouncilWorkId = null
+                val prefs = getSharedPreferences("shraddha_agent_work", MODE_PRIVATE)
+                if (prefs.getString("active_work_id", null) == workId.toString()) prefs.edit().remove("active_work_id").apply()
+            }
+        }
+    }
+
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
         val card = MaterialCardView(this).apply {
             radius = dp(22).toFloat()
