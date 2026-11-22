@@ -25,7 +25,7 @@ class MainBrainSchedulerStore(context: Context) {
     fun save(snapshots: List<SharedTaskScheduler.Snapshot>) {
         val array = JSONArray()
         snapshots.forEach { item ->
-            val dependencies = JSONArray().apply { item.task.dependsOn.sorted().forEach(::put) }
+            val dependencies = JSONArray().apply { item.task.dependsOn.sorted().forEach { put(it) } }
             array.put(JSONObject()
                 .put("id", item.task.id)
                 .put("title", item.task.title)
