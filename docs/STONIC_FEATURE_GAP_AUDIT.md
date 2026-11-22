@@ -37,11 +37,11 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 - Limits task payload and WorkManager output to stay within its Data size constraints.
 - Limitation: provider calls already in flight cannot be interrupted by the current synchronous provider clients; process death may restart the task from the beginning rather than resume at an individual role checkpoint.
 
-### 3. Live Eyes compile fix
+### 3. Opt-in personalized daily research\n- Added a separate OFF-by-default daily web research switch and topic field in Task Planner.\n- Only the user-entered topics are sent to the configured Perplexity provider; task titles, contacts and notification content are not included.\n- WorkManager runs the research after the local 8:00 AM task briefing when network is available and posts a source-linked notification.\n- Turning off the daily briefing also disables/cancels daily web research. A local Perplexity key is required.\n\n### 4. Live Eyes compile fix
 - Added the missing announcement-throttle state required by the existing headless camera service so the Kotlin source can compile.
 - The feature still requires physical Android validation for camera start/stop, privacy indicator, OEM background behaviour, network failures, battery and voice handoff.
 
-### 4. Windows companion verification pipeline
+### 5. Windows companion verification pipeline
 - Updated Windows CI to run tests and package both the legacy companion and the advanced `desktop-companion/shraddha-pc-companion` implementation on this working branch.
 
 ## Remaining Stonic gaps — continue implementation
