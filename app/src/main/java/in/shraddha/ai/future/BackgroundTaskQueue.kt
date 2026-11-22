@@ -33,7 +33,8 @@ object BackgroundTaskQueue {
         require(provider.uppercase() in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
             "Unsupported AI provider"
         }
-        val schedulerTaskId = "bg_" + UUID.randomUUID().toString().replace("-", "")
+        val workId = UUID.randomUUID()
+        val schedulerTaskId = "bg_" + workId.toString().replace("-", "")
         MainBrainSchedulerRuntime.get(context.applicationContext).submitAll(listOf(
             SharedTaskScheduler.Task(
                 id = schedulerTaskId,
@@ -44,6 +45,7 @@ object BackgroundTaskQueue {
             )
         ))
         val request = OneTimeWorkRequestBuilder<BackgroundAgentWorker>()
+            .setId(workId)
             .setInputData(workDataOf(
                 KEY_GOAL to cleanGoal,
                 KEY_PROVIDER to provider.uppercase(),
@@ -57,13 +59,12 @@ object BackgroundTaskQueue {
         WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
             "shraddha-agent-${request.id}", ExistingWorkPolicy.KEEP, request
         )
-        return request.id
+        return workId
     }
 
     fun cancel(context: Context, id: UUID) {
         WorkManager.getInstance(context.applicationContext).cancelWorkById(id)
-        val taskId = WorkManager.getInstance(context.applicationContext).getWorkInfoById(id).get()
-            ?.inputData?.getString(KEY_SCHEDULER_TASK_ID)
+        val taskId = "bg_" + id.toString().replace("-", "")
         if (!taskId.isNullOrBlank()) {
             val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
             val state = scheduler.get(taskId)?.state
