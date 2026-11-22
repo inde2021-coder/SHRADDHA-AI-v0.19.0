@@ -196,7 +196,7 @@ fun SettingsScreen(
                     }
                 )
                 NovaSettingsRow(
-                    title = "Shraddha Voice Engine",
+                    title = "${appState.assistantName} Voice Engine",
                     subtitle = "Custom Hindi-English voice • backend setup required",
                     icon = Icons.Default.RecordVoiceOver,
                     onClick = {
@@ -249,7 +249,7 @@ fun SettingsScreen(
             Column {
                 NovaSettingsRow(
                     title = "Assistant Picture & Profile",
-                    subtitle = "Change the Shraddha avatar and profile details",
+                    subtitle = "Change the ${appState.assistantName} avatar and profile details",
                     icon = Icons.Default.Person,
                     onClick = { navController.navigate("profile") }
                 )
@@ -353,7 +353,7 @@ fun SettingsScreen(
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
-                    title = "About Shraddha AI",
+                    title = "About ${appState.assistantName}",
                     subtitle = "Version, developer contact and copyright",
                     icon = Icons.Default.Key,
                     onClick = { navController.navigate("about") }
