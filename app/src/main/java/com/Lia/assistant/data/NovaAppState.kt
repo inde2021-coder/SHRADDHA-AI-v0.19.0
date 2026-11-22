@@ -31,7 +31,7 @@ class NovaAppState(context: Context) {
         private set
 
     var orbStyle by mutableStateOf(
-        NovaPreferences.getString(context, NovaPreferences.Keys.ORB_STYLE, "NOVA")
+        NovaPreferences.getString(context, NovaPreferences.Keys.ORB_STYLE, "SATURN")
     )
         private set
 
