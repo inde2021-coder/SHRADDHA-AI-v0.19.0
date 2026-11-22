@@ -101,7 +101,7 @@ class DeviceTransferActivity : Activity() {
         if (resultCode != RESULT_OK || data?.data == null) return
         val uri = data.data!!
         if (requestCode == 701) {
-            runCatching { data.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             sourceUri = uri; sourceName = queryName(uri); persistTransferState()
             status.text = "Calculating SHA-256 for $sourceName…"
             thread {
@@ -116,7 +116,7 @@ class DeviceTransferActivity : Activity() {
                 } catch (e: Exception) { runOnUiThread { status.text = "File error: ${e.message}" } }
             }
         } else if (requestCode == 702) {
-            runCatching { data.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             pendingSaveUri = uri
             persistTransferState()
             if (incomingVerified) saveIncoming(uri)
@@ -256,6 +256,7 @@ class DeviceTransferActivity : Activity() {
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
         if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); clearTransferState(); return }
         incomingVerified = true
+        persistTransferState()
         status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
         pendingSaveUri?.let { saveIncoming(it) }
     }
@@ -299,7 +300,7 @@ class DeviceTransferActivity : Activity() {
         transferId = prefs.getString("transferId", "").orEmpty()
         if (transferId.isBlank()) return
         peer.setText(prefs.getString("peer", "").orEmpty())
-        sourceUri = prefs.getString("sourceUri", "").orEmpty().takeIf { it.isNotBlank() }?.let(Uri::parse)
+        sourceUri = prefs.getString("sourceUri", "").orEmpty().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
         sourceName = prefs.getString("sourceName", "").orEmpty()
         sourceSize = prefs.getLong("sourceSize", 0L)
         sourceHash = prefs.getString("sourceHash", "").orEmpty()
