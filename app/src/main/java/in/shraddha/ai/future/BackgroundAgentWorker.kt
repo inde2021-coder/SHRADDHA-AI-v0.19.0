@@ -63,8 +63,16 @@ class BackgroundAgentWorker(
                 Result.success(workDataOf(BackgroundTaskQueue.KEY_FINAL_REPORT to report.finalAnswer.take(1800)))
             },
             onFailure = { error ->
-                scheduler.fail(schedulerTaskId, (error.message ?: "Multi-agent execution failed").take(500))
-                Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to (error.message ?: "Multi-agent execution failed").take(1000)))
+                val message = (error.message ?: "Multi-agent execution failed").take(1000)
+                val retryable = error is java.io.IOException ||
+                    Regex("(?i)(\\b429\\b|\\b5[0-9]{2}\\b|timeout|timed out|temporarily unavailable)").containsMatchIn(message)
+                if (retryable && runAttemptCount < 2) {
+                    // The next WorkManager attempt requeues this interrupted reasoning task.
+                    Result.retry()
+                } else {
+                    scheduler.fail(schedulerTaskId, message.take(500))
+                    Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message))
+                }
             }
         )
     }
