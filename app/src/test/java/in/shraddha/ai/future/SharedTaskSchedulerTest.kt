@@ -83,10 +83,10 @@ class SharedTaskSchedulerTest {
             SharedTaskScheduler.Task("bg_1", "Background")
         ))
         assertNull(scheduler.claimSpecific("missing"))
-        assertEquals("bg_1", scheduler.claimSpecific("bg_1")?.task?.id)
-        assertNull(scheduler.claimSpecific("operator_1"))
-        scheduler.complete("bg_1")
+        assertNull(scheduler.claimSpecific("bg_1"))
         assertEquals("operator_1", scheduler.claimReadyMatching { it.task.id.startsWith("operator_") }.single().task.id)
+        scheduler.complete("operator_1")
+        assertEquals("bg_1", scheduler.claimSpecific("bg_1")?.task?.id)
     }
 
     @Test fun schedulerChangeCallbackReceivesDurableTransitions() {
