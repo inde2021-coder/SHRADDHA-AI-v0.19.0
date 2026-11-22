@@ -144,8 +144,16 @@ class MainBrain(
         }
 
         /** WorkManager remains the durable execution engine; all app enqueue requests enter here. */
-        fun enqueueBackgroundCouncil(context: Context, goal: String, provider: String, language: String = "AUTO", specialistCount: Int = 3): UUID =
-            BackgroundTaskQueue.enqueueFromMainBrain(context.applicationContext, goal, provider, language, specialistCount)
+        fun enqueueBackgroundCouncil(
+            context: Context,
+            goal: String,
+            provider: String,
+            language: String = "AUTO",
+            specialistCount: Int = 3,
+            budget: CouncilExecutionBudget = CouncilExecutionBudget()
+        ): UUID = BackgroundTaskQueue.enqueueFromMainBrain(
+            context.applicationContext, goal, provider, language, specialistCount, budget
+        )
 
         /** Background workers call back through Main Brain rather than selecting providers themselves. */
         suspend fun executeBackgroundCouncil(
@@ -156,7 +164,8 @@ class MainBrain(
             specialistCount: Int = 3,
             shouldContinue: () -> Boolean,
             onProgress: (String, Int, Int) -> Unit,
-            onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> }
+            onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> },
+            budget: CouncilExecutionBudget = CouncilExecutionBudget()
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeParallelWithConfiguredProviders(
                 context = context.applicationContext,
@@ -166,7 +175,8 @@ class MainBrain(
                 specialistCount = specialistCount,
                 shouldContinue = shouldContinue,
                 onProgress = onProgress,
-                onStageCompleted = onStageCompleted
+                onStageCompleted = onStageCompleted,
+                budget = budget
             )
 
         /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
