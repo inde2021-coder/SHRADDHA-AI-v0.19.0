@@ -25,3 +25,6 @@ The user's accepted design direction is dark teal + cyan Premium Glass, not a pu
 
 
 The native Home/Assistant 3D energy core now observes the real voice session state and microphone amplitude. Listening, thinking, speaking, connecting, idle and error states have different pulse/rotation behavior; mute suppresses the listening pulse, and accessibility text reports the real state rather than implying the microphone is active. The visual animation remains decorative when idle and does not imply camera activity.
+
+
+The native energy core now respects the saved Reduced Motion preference: its continuous animator stops and the visual state remains static while accessibility state labels remain truthful. The preference is refreshed when the activity resumes.
