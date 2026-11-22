@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -90,6 +91,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         },
         QuickTile("Ask anything", "Start a text conversation", Icons.Default.Language) {
             navController.navigate("chat")
+        },
+        QuickTile("Multi-agent workspace", "Delegate work to Planner, Researcher and specialists", Icons.Default.Groups) {
+            navController.navigate("agent_council")
         },
         QuickTile("Screen & phone control", "Read, tap, type and swipe", Icons.Default.PhoneAndroid) {
             context.startActivity(android.content.Intent(context, OperatorActivity::class.java))
