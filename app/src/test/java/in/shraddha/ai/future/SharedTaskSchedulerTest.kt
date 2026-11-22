@@ -89,6 +89,24 @@ class SharedTaskSchedulerTest {
         assertEquals("bg_1", scheduler.claimSpecific("bg_1")?.task?.id)
     }
 
+    @Test fun onlyExplicitlyRetrySafeBackgroundTasksCanBeRequeuedAfterCrash() {
+        val source = SharedTaskScheduler()
+        source.submitAll(listOf(
+            SharedTaskScheduler.Task("background", "Provider-only council", payload = """{"kind":"background_council"}"""),
+            SharedTaskScheduler.Task("device", "Device action", payload = """{"kind":"voice_tool"}""")
+        ))
+        source.claimReady()
+        val restored = SharedTaskScheduler()
+        restored.restore(source.snapshot())
+
+        assertEquals(SharedTaskScheduler.State.FAILED, restored.get("background")?.state)
+        assertEquals(SharedTaskScheduler.State.FAILED, restored.get("device")?.state)
+        assertEquals(SharedTaskScheduler.State.PENDING, restored.requeueInterrupted("background") {
+            it.payload.contains("background_council")
+        }?.state)
+        assertNull(restored.requeueInterrupted("device") { true })
+    }
+
     @Test fun schedulerChangeCallbackReceivesDurableTransitions() {
         val updates = mutableListOf<List<SharedTaskScheduler.Snapshot>>()
         val scheduler = SharedTaskScheduler(onChanged = { updates += it })
