@@ -40,7 +40,7 @@ export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes
 
 export const ALLOWED_REMOTE_ACTION_KINDS = new Set([
   'tap','swipe','scroll','back','home','type','click_text','open_app','ocr',
-  'file_list','file_read','file_search','offline_chat','code_assistant',
+  'file_list','file_read','file_search','file_write','offline_chat','code_assistant',
   'media_control','system_control','screenshot','clipboard_transform','web_search'
 ]);
 
