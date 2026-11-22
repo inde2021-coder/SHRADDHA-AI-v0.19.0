@@ -2596,7 +2596,7 @@ class MainActivity : AppCompatActivity() {
                     val total = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_TOTAL, 7)
                     "Working: " + role + " (" + index + "/" + total + ")"
                 }
-                androidx.work.WorkInfo.State.SUCCEEDED -> "Completed. Verifier report:\\n" +
+                androidx.work.WorkInfo.State.SUCCEEDED -> "Completed. Verifier report:\n" +
                     info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
                 androidx.work.WorkInfo.State.FAILED -> "Failed: " +
                     info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
