@@ -22,3 +22,6 @@ The shared input factory now also uses a dark inset gradient, a visible cool-blu
 
 
 The user's accepted design direction is dark teal + cyan Premium Glass, not a purple/violet-first theme. Shared cards, inset inputs, raised actions and the Home energy orb now follow the teal/cyan palette while preserving the existing screens and functionality.
+
+
+The native Home/Assistant 3D energy core now observes the real voice session state and microphone amplitude. Listening, thinking, speaking, connecting, idle and error states have different pulse/rotation behavior; mute suppresses the listening pulse, and accessibility text reports the real state rather than implying the microphone is active. The visual animation remains decorative when idle and does not imply camera activity.
