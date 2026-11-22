@@ -86,6 +86,7 @@ object DeviceLinkManager {
                                 "remote_action", "remote_action_result" -> actionId
                                 "file_transfer_chunk" -> "$transferId:$index"
                                 "clipboard_payload" -> msg.optString("requestId")
+                                "data_share_payload" -> msg.optString("requestId") + "|" + msg.optString("category")
                                 else -> ""
                             }
                             val aad = "$sessionId|$peerId|$deviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
@@ -109,6 +110,11 @@ object DeviceLinkManager {
                                 "clipboard_payload" -> {
                                     payload.put("type", "data_share_payload").put("fromDeviceId", peerId)
                                         .put("category", "clipboard").put("requestId", msg.optString("requestId"))
+                                    onPeerMessage?.invoke(payload)
+                                }
+                                "data_share_payload" -> {
+                                    payload.put("type", "data_share_payload").put("fromDeviceId", peerId)
+                                        .put("category", msg.optString("category")).put("requestId", msg.optString("requestId"))
                                     onPeerMessage?.invoke(payload)
                                 }
                                 else -> onStatus?.invoke("Unsupported encrypted peer message blocked.")
@@ -374,7 +380,7 @@ object DeviceLinkManager {
             .put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload)
         if (category == "clipboard" && contentType == "clipboard_text")
             return sendEncryptedPeerMessage(targetDeviceId, "clipboard_payload", payload, requestId)
-        return socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("requestId", requestId).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload).toString()) == true
+        return sendEncryptedPeerMessage(targetDeviceId, "data_share_payload", payload, requestId, category = category)
     }
     fun sendClipboardText(targetDeviceId: String, requestId: String, text: String): Boolean {
         if (text.isBlank() || text.length > 20000) return false
@@ -436,13 +442,18 @@ object DeviceLinkManager {
             onStatus?.invoke("Encrypted send blocked: verify the peer fingerprint on both devices first.")
             return false
         }
-        val correlation = if (kind == "file_transfer_chunk") "$correlationId:$index" else correlationId
+        val correlation = when (kind) {
+            "file_transfer_chunk" -> "$correlationId:$index"
+            "data_share_payload" -> correlationId + "|" + category.orEmpty()
+            else -> correlationId
+        }
         val aad = "$sessionId|$deviceId|$targetDeviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
         val sealed = DeviceE2ECrypto.encrypt(state.key, payload.toString().toByteArray(Charsets.UTF_8), aad)
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
         if (kind == "clipboard_payload") message.put("requestId", correlationId)
+        if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
         return socket?.send(message.toString()) == true
     }
