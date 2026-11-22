@@ -41,7 +41,8 @@ object BackgroundTaskQueue {
                 id = schedulerTaskId,
                 title = cleanGoal.take(160),
                 priority = 5,
-                payload = JSONObject().put(KEY_PROVIDER, provider.uppercase())
+                payload = JSONObject().put("kind", "background_council")
+                    .put(KEY_PROVIDER, provider.uppercase())
                     .put(KEY_LANGUAGE, language.take(20)).toString()
             )
         ))
