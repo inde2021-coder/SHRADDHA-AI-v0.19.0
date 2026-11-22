@@ -129,7 +129,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                     .clip(RoundedCornerShape(13.dp)).background(Color(0xB9081730))
                     .border(1.dp, Color(0x6676DFFF), RoundedCornerShape(13.dp)).padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Text("SHRADDHA CORE", color = NeonBlue, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                Text("${assistantName.uppercase()} CORE", color = NeonBlue, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                 Text("Voice • Vision • Memory", color = Color.White, fontSize = 10.sp)
             }
         }
