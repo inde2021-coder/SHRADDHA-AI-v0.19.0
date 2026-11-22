@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -34,7 +35,8 @@ enum class NovaOrbStyle(val displayName: String) {
     GLASS("Glass Sphere"),
     ENERGY("Energy Pulse"),
     MINIMAL("Minimal"),
-    ARCHER("Golden Archer");
+    ARCHER("Golden Archer"),
+    SATURN("Saturn");
 
     companion object {
         fun fromString(name: String): NovaOrbStyle {
@@ -145,7 +147,9 @@ fun NovaOrb(
         }
 
         // 4. ARCHER Style golden spiral particles
-        if (style == NovaOrbStyle.ARCHER) {
+        if (style == NovaOrbStyle.SATURN) {
+            drawSaturnSphere(center, currentRadius, rotationProgress, amplitude, colors)
+        } else if (style == NovaOrbStyle.ARCHER) {
             drawArcherSphere(center, currentRadius, rotationProgress, amplitude, colors)
         } else {
             // Radial gradient core
@@ -238,6 +242,69 @@ private fun DrawScope.drawArcherSphere(
             color = if (z > 0) colors.accent.copy(alpha = depthAlpha) else colors.lotus.copy(alpha = depthAlpha),
             radius = particleRadius,
             center = Offset(px, py)
+        )
+    }
+}
+
+
+private fun DrawScope.drawSaturnSphere(
+    center: Offset,
+    radius: Float,
+    rotation: Float,
+    amplitude: Float,
+    colors: com.Lia.assistant.ui.theme.NovaColorScheme
+) {
+    val ringWidth = (radius * 0.075f).coerceAtLeast(2.2f)
+    val ringSize = Size(radius * 2.18f, radius * 0.78f)
+    val ringTop = Offset(center.x - ringSize.width / 2f, center.y - ringSize.height / 2f)
+    rotate(degrees = -19f + rotation * 0.08f, pivot = center) {
+        drawOval(
+            color = Color(0xFFE7D7AA).copy(alpha = 0.78f),
+            topLeft = ringTop,
+            size = ringSize,
+            style = Stroke(width = ringWidth)
+        )
+        drawArc(
+            color = Color(0xFFFFF0C6).copy(alpha = 0.85f),
+            startAngle = 190f,
+            sweepAngle = 155f,
+            useCenter = false,
+            topLeft = ringTop,
+            size = ringSize,
+            style = Stroke(width = ringWidth * 0.48f)
+        )
+    }
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(Color(0xFFF4E4BD), Color(0xFFAD8C55), Color(0xFF5E4A32), Color(0xFF211D20)),
+            center = center - Offset(radius * 0.22f, radius * 0.24f),
+            radius = radius * 0.88f
+        ),
+        radius = radius * (0.64f + amplitude.coerceIn(0f, 1f) * 0.025f),
+        center = center
+    )
+    for (i in 0..3) {
+        val y = center.y - radius * 0.35f + i * radius * 0.20f
+        drawArc(
+            color = Color(0xFF5C4937).copy(alpha = 0.23f),
+            startAngle = 195f,
+            sweepAngle = 150f,
+            useCenter = false,
+            topLeft = Offset(center.x - radius * 0.57f, y - radius * 0.075f),
+            size = Size(radius * 1.14f, radius * 0.15f),
+            style = Stroke(width = radius * 0.035f)
+        )
+    }
+    rotate(degrees = -19f + rotation * 0.08f, pivot = center) {
+        drawArc(
+            color = Color(0xFFFFE7A8).copy(alpha = 0.94f),
+            startAngle = 8f,
+            sweepAngle = 164f,
+            useCenter = false,
+            topLeft = ringTop,
+            size = ringSize,
+            style = Stroke(width = ringWidth * 0.72f)
         )
     }
 }
