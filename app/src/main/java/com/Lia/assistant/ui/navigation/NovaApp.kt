@@ -24,6 +24,7 @@ import com.Lia.assistant.ui.screens.chat.ChatScreen
 import com.Lia.assistant.ui.screens.debug.DebugScreen
 import com.Lia.assistant.ui.screens.devices.DeviceCenterScreen
 import com.Lia.assistant.ui.screens.expert.ExpertStudioScreen
+import com.Lia.assistant.ui.screens.projects.ProjectLabScreen
 import com.Lia.assistant.ui.screens.forge.ForgeScreen
 import com.Lia.assistant.ui.screens.history.HistoryScreen
 import com.Lia.assistant.ui.screens.home.HomeScreen
@@ -114,6 +115,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("phone_call_agent") { PhoneCallAgentScreen(navController) }
                     composable("device_center") { DeviceCenterScreen(navController) }
                     composable("expert_studio") { ExpertStudioScreen(navController) }
+                    composable("project_lab") { ProjectLabScreen(navController) }
 
                     // Flavor-specific routes (e.g. accessibility disclosure in direct)
                     registerAccessibilityDisclosureRoute(navController)
