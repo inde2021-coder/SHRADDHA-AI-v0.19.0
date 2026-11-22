@@ -78,6 +78,8 @@ fun DeviceCenterScreen(navController: NavController) {
     var peers by remember { mutableStateOf(emptyList<LinkedPeer>()) }
     var selectedPeerId by remember { mutableStateOf("") }
     var pendingFingerprint by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var pendingRevoke by remember { mutableStateOf<LinkedPeer?>(null) }
+    var showClearPairing by remember { mutableStateOf(false) }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -331,9 +333,7 @@ fun DeviceCenterScreen(navController: NavController) {
                 )
                 NovaButton(
                     text = "Revoke This Device",
-                    onClick = {
-                        status = if (DeviceLinkManager.revokePairedDevice(peer.id)) "Device revocation requested." else "Could not send device revocation request."
-                    },
+                    onClick = { pendingRevoke = peer },
                     modifier = Modifier.fillMaxWidth(),
                     type = NovaButtonType.TEXT,
                     enabled = connected && peer.id != DeviceLinkManager.deviceId
@@ -356,13 +356,7 @@ fun DeviceCenterScreen(navController: NavController) {
             )
             NovaButton(
                 text = "Clear This Phone’s Saved Pairing",
-                onClick = {
-                    DeviceLinkManager.disconnect(context, clearSavedCredentials = true)
-                    connected = false
-                    peers = emptyList()
-                    pairingCode = ""
-                    status = "Disconnected and this phone’s saved credentials were cleared. Other paired devices still need separate revocation."
-                },
+                onClick = { showClearPairing = true },
                 modifier = Modifier.fillMaxWidth(),
                 type = NovaButtonType.TEXT
             )
@@ -391,6 +385,40 @@ fun DeviceCenterScreen(navController: NavController) {
             dismissButton = {
                 TextButton(onClick = { pendingFingerprint = null }) { Text("Not now") }
             }
+        )
+    }
+
+    pendingRevoke?.let { peer ->
+        AlertDialog(
+            onDismissRequest = { pendingRevoke = null },
+            title = { Text("Revoke paired device?") },
+            text = { Text("This revokes ‘${peer.name}’ from the relay session. The device will need to pair again to reconnect.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    status = if (DeviceLinkManager.revokePairedDevice(peer.id)) "Device revocation requested." else "Could not send device revocation request."
+                    pendingRevoke = null
+                }) { Text("Revoke device") }
+            },
+            dismissButton = { TextButton(onClick = { pendingRevoke = null }) { Text("Cancel") } }
+        )
+    }
+
+    if (showClearPairing) {
+        AlertDialog(
+            onDismissRequest = { showClearPairing = false },
+            title = { Text("Clear this phone’s saved pairing?") },
+            text = { Text("This disconnects this phone and clears its local encrypted credentials. It does not revoke other paired devices from the relay session.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    DeviceLinkManager.disconnect(context, clearSavedCredentials = true)
+                    connected = false
+                    peers = emptyList()
+                    pairingCode = ""
+                    status = "Disconnected and this phone’s saved credentials were cleared."
+                    showClearPairing = false
+                }) { Text("Clear local pairing") }
+            },
+            dismissButton = { TextButton(onClick = { showClearPairing = false }) { Text("Cancel") } }
         )
     }
 }
