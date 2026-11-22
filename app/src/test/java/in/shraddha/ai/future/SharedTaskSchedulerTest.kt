@@ -93,7 +93,7 @@ class SharedTaskSchedulerTest {
         val source = SharedTaskScheduler()
         source.submitAll(listOf(
             SharedTaskScheduler.Task("background", "Provider-only council", payload = """{"kind":"background_council"}"""),
-            SharedTaskScheduler.Task("device", "Device action", payload = """{"kind":"voice_tool"}""")
+            SharedTaskScheduler.Task("device", "Device action", dependsOn = setOf("background"), payload = """{"kind":"voice_tool"}""")
         ))
         source.claimReady()
         val restored = SharedTaskScheduler()
