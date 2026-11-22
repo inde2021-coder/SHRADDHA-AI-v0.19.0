@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.fx.LiaOrb3D
@@ -72,8 +73,14 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(Brush.linearGradient(listOf(Cyan, Violet))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.SmartToy, null, tint = Color(0xFF07111D), modifier = Modifier.size(25.dp))
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
+                .background(Brush.linearGradient(listOf(Cyan, Violet)))
+                .border(1.dp, Color(0xAA8BEAFF), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                AsyncImage(
+                    model = appState.assistantAvatarUri ?: com.Lia.assistant.R.drawable.shraddha_ai_avatar,
+                    contentDescription = "Shraddha AI avatar",
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                )
             }
             Column(Modifier.padding(start = 11.dp)) {
                 Text(assistantName, color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
