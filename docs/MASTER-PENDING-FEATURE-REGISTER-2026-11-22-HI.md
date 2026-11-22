@@ -1,0 +1,121 @@
+# Shraddha AI — Master Pending Feature Register
+
+**Date:** 22 November 2026  
+**Branch:** `feature/complete-pending-shraddha-features`  
+**Rule:** A screen, button, API route, source file or unit test alone does not make a feature complete. Completion requires integration, persistence, permissions, failure handling, security review and relevant device/provider verification.
+
+This register consolidates the user's earlier feature requests and the current source audit. It is a living work list, not a release claim. Status labels are deliberately conservative.
+
+## Status meanings
+
+- **Source present** — relevant code exists; integration or runtime validation may remain.
+- **Partial** — only a foundation or a subset of the requested behavior exists.
+- **Blocked externally** — requires a provider account, API key, licensed model, companion installation, hardware or user permission.
+- **Not implemented** — no complete production path has been verified.
+- **Do not claim complete** — safety, legal, licensing or physical-device evidence is missing.
+
+## A. Product identity, voice and design
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| Renameable assistant identity; new name replaces “Shraddha AI” in UI and voice | Assistant name preference and dynamic voice prompt/status use exist. | Audit every screen, notification, accessibility label, TTS string, desktop companion and exported document for hardcoded product-name leakage. |
+| Continuous microphone after explicit activation; one mic control; no repeated connect/disconnect sounds | Voice session manager, foreground service and reconnect backoff exist. | Verify audio focus, mute, app background/foreground, process death, permission revocation, OEM battery restrictions and explicit stop on physical devices. |
+| Hindi and English conversations | Language detection/preference and Hindi/English voice challenge paths exist. | End-to-end Hindi/English quality and provider fallback evaluation. |
+| Custom Shraddha voice | TTS client/gateway configuration exists. | Licensed voice weights, deployed HTTPS TTS service, secrets and quality/latency verification. No model or voice license may be fabricated. |
+| Full cinematic Premium 3D / layered glass design | Home has a custom animated orb and the app has dark rounded panels. | Redesign all workspaces consistently: Voice, Visual Lens, Device Command Center, Expert Studio, Memory/Identity, Project Lab, Cloud/Data, Privacy/Permissions, Settings and Future Intelligence. Add functional listening/thinking/speaking states, motion preferences and accessibility. |
+| Orb styles, energy rings, particles, listening/response pulse and touch response | 3D-style orb and orbit points are present. | Connect animation states to actual session state; provide Classic/Energy/Neon themes and reduced-motion behavior; do not imply fake online/work status. |
+| Developer/About details and version/copyright | App identity/version information exists in source. | Verify About page consistently displays developer Shrad Patel, inde2021@gmail.com, copyright notice and actual build version. |
+
+## B. AI intelligence, agents and autonomous work
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| Multi-agent council | Sequential council and provider routing existed. Pending branch adds parallel Planner/Researcher, 1–5 Specialists, Critic and Verifier, and a WorkManager UI entry point. | Build/test later; add budgets, per-stage durable evidence, cancellation, retry policy and provider usage accounting. |
+| Autonomous project manager | Task planner, workflow lifecycle and project tracker exist. | Persisted dependency-aware execution, real task adapters, resumable steps, progress, checkpoints, rollback and explicit approvals. |
+| Self-review / verification engine | Acceptance-check scoring and reporting exist. | Make verification mandatory for every generated artifact and workflow; block completion on failed required checks. |
+| Deep research with citations | Backend/provider research paths exist. | Real source retrieval, URL validation, evidence provenance, citation checks and no unsupported “researched” claims. |
+| Personal knowledge brain / graph | Encrypted local graph and memory repository exist. | Unified ingestion from user-approved sources, source provenance, embeddings/RAG, cross-device sync, conflict handling and deletion propagation. |
+| Predictive assistant / digital twin | Opt-in repeated-event suggestions and editable memory primitives exist. | Persistent signal source, feedback loop, schedule/quiet hours, explainability and strict no-covert-monitoring controls. |
+| Meeting intelligence | Transcript marker extraction exists. | Consent-based audio/transcription, diarization, correction UI, calendar and export integration. |
+| Voice-created workflows | Existing app training and workflow router exist. | Voice authoring, safe review, app-specific recovery and reusable workflow editing. |
+| Background task runner | WorkManager queue and scheduler exist. | Ensure durable progress/evidence, retry/backoff, interruption handling and recovery after provider timeout/process death. |
+
+## C. Phone, app and screen control
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| Open/control apps by voice | Accessibility Operator and app launch/action tools exist. | Expand supported actions, app-specific workflows, OCR fallback, canvas/WebView limitations and Android-version/device matrix. |
+| Read current screen | Accessibility snapshot and opt-in OCR exist. | Permission-denied/revoked flows, sensitive-field filtering, protected-screen handling and user-visible session indicator. |
+| WhatsApp/SMS hands-free | Message composer and explicit send approval paths exist. | Official supported APIs/intent flows, robust recipient resolution, exact preview and user-tap send; chat history/search is not claimed. |
+| Calls by voice | Dialer/call controls and phone-agent source exist. | Verify real SIM call flows, contact disambiguation, call audio routing and emergency handling on device. |
+| Notifications | Metadata-only encrypted listener/history and quiet hours exist. | Rich per-app rules, action support, retention controls and Android OEM/version testing. |
+| Clipboard control | Consent-gated relay and integrity checks exist. | True E2E encryption/key agreement, key rotation, replay protection and multi-device tests. |
+| File transfer | One-shot transfer plus chunk validation groundwork exists. | Complete chunk relay/reassembly, durable resume, progress, cancellation, destination picker, malware scanning and E2E security. |
+
+## D. Visual Lens and spatial intelligence
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| Camera Visual Lens Q&A | Camera service, visual request path and provider analysis exist. | Full live camera-frame-to-AI pipeline, grounding, camera permission lifecycle, physical-device latency and privacy tests. |
+| Camera live translation/subtitles | Translation request validation and provider text path exist. | Streaming speech/camera translation, subtitle overlay, offline language packs and quality testing. |
+| Object intelligence/tracking | Vision request path exists. | Continuous frame pipeline, object grounding/tracking and on-device fallback. |
+| 3D environment mapping | Validated landmark model exists. | ARCore/depth capture, SLAM, persistence, renderer and calibration. |
+| Visual memory | Encrypted memory primitives exist. | Image indexing/storage lifecycle, consent, expiry, search and deletion propagation. |
+| Visual troubleshooting | Safety-first troubleshooting playbooks exist. | Camera-guided step verification, trusted device manuals and escalation UX. |
+
+## E. PC, device fabric and external hardware
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| Windows PC control from phone | Advanced Windows companion source and Android device relay source exist separately. | Verify one authoritative Shraddha-branded companion, real pairing, action protocol, permission parity, verified result acknowledgements and real phone/PC tests. |
+| PC screen awareness/OCR | Advanced companion has active-window OCR source. | Verify real target apps, secure screen sharing, multi-monitor and failure behavior. |
+| PC file operations | Approved-root list/read/search and bounded single-file update exist. | Multi-file context, diff preview, build/test sandbox, logs, rollback, move/delete approval and diagnostics. |
+| Phone-to-phone control | Relay pairing, E2E message envelopes, target approval and result observation exist. | Expiry/revocation race tests, key persistence/rotation, reconnect and device-matrix validation. |
+| Remote desktop | Screen sharing and remote actions exist. | Complete session UX, keyboard/mouse parity, multi-monitor, clipboard/file integration and independent security review. |
+| Smart home | No complete production connector verified. | Matter, MQTT or Home Assistant adapters, device allowlists, confirmation and manual override. |
+| Phone-to-PC transfer | Small-file and chunk-validation groundwork exists. | Complete resumable encrypted transport and end-to-end interruption tests. |
+
+## F. Expert Studio, Creator and engineering
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| Expert Studio across engineering, agriculture, finance, GIS, legal and medical research | Expert project library, templates and assist routes exist. | Domain-specific verified data sources, calculation engines, provenance and professional review boundaries. |
+| Electrical/electronics | Templates and general assistant paths only. | Real schematic/PCB tools, simulation, parts/libraries, ERC/DRC and export. |
+| Mechanical/CAD/civil architecture | Project planning and design prompts exist. | Real CAD geometry, constraints, simulation, IFC/DWG/STL export and validation. |
+| App/game/website creator | Website Forge and coding/project tools exist. | Sandboxed build/test runner, logs, reproducible outputs, app packaging, preview and safe deploy workflow. |
+| Video/3D/image creator | Some provider and design workflows exist. | Real licensed generation/rendering pipelines, project files, timeline editing and export. |
+| Document intelligence | OCR, PDF/document utilities and project features exist. | Reliable import/export, tables, batch processing, multilingual layout and validation. |
+
+## G. Security, privacy, cloud and recovery
+
+| Request | Current source observation | Remaining work |
+|---|---|---|
+| User-owned API keys for multiple providers | Gemini key uses Android Keystore AES-GCM; provider-specific stores exist. | Audit every provider store, migration, backup exclusion, logs and key-loss behavior. |
+| Firebase cloud memory | Firestore vault and encrypted local repository exist. | Real project configuration, auth, rules/emulator and live round-trip tests; reconcile conflict/deletion semantics. |
+| Encrypted backup/restore | Password-protected backup and v3 preference backup exist. | Restore drills across app versions/devices, corrupted backup handling and recovery UX. Secrets/biometrics remain excluded intentionally. |
+| Device pairing/revocation | Relay owner revocation and encrypted peer message support exist. | Durable revocation, key rotation, reconnect and server restart tests. |
+| Signed plugins | No complete isolated signed plugin framework verified. | Signed manifests, capability scopes, sandbox, audit, version pinning and revocation. |
+| Privacy/security dashboard | Consent and permission controls exist across modules. | Unified permission inventory, session visibility, audit history, emergency stop/revoke and data export/delete. |
+| Licensing/Pro entitlement | Historical local activation code requires review. | Server-side signed entitlement validation; never claim paid entitlement from a local non-empty key. |
+| Biometric recognition | ONNX inference and consent vault source exist. | Licensed/provenance-checked model distribution, calibration, FAR/FRR/EER studies and certified PAD evidence. Basic active challenge is not certified anti-spoofing. |
+
+## H. Real-world acceptance blockers
+
+The following cannot be completed by source changes alone and must remain clearly labelled until supplied and verified:
+- Android phones and supported OS/OEM matrix for microphone, camera, Accessibility, notifications, SMS, WhatsApp and calls.
+- A real Windows PC with the companion installed and paired.
+- Firebase project, configured rules, account and storage access.
+- Valid provider API keys, quotas, endpoints and user-selected consent.
+- Licensed custom voice and wake-word model/service.
+- Licensed biometric model provenance and independent presentation-attack evaluation.
+- Edesy DID, Jio forwarding setup and a real two-way call test.
+- Production signing keystore and release credentials.
+
+## Work policy for this branch
+
+1. All implementation stays on `feature/complete-pending-shraddha-features`; do not write to `main`.
+2. Do not run tests during the feature-completion pass, per user instruction.
+3. Source review and static reasoning are allowed, but must not be described as test results.
+4. Do not fabricate providers, API keys, model weights, licences, test results or external account setup.
+5. After implementation work is complete, run one consolidated verification pass; fix every failure before reporting release readiness.
+6. Keep every external/device-dependent feature marked as requiring setup or real-world validation until it has actually passed.
