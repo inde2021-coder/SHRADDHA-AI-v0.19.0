@@ -364,6 +364,7 @@ class MainBrain(
         val title: String,
         val stepId: String,
         val action: String,
+        val packageName: String,
         val recovery: OperatorActionJournal.Recovery
     )
 
@@ -380,19 +381,23 @@ class MainBrain(
                 audit("operator_recovery", recovery.name.lowercase(),
                     "workflow=" + snapshot.task.id + "; step=" + entry.stepId + "; action=" + entry.action)
                 InterruptedWorkflowReview(snapshot.task.id, snapshot.task.title,
-                    entry.stepId, entry.action, recovery)
+                    entry.stepId, entry.action, entry.packageName, recovery)
             }
     }
 
     /** Enqueue only the steps after a journal-verified interrupted action; never replays it. */
     @Synchronized
-    fun resumeInterruptedWorkflow(workflowId: String): SharedTaskScheduler.Snapshot? {
+    fun resumeInterruptedWorkflow(workflowId: String, manuallyVerified: Boolean = false): SharedTaskScheduler.Snapshot? {
         val journal = actionJournal ?: return null
         val original = scheduler.get(workflowId) ?: return null
         if (original.state != SharedTaskScheduler.State.FAILED ||
             original.error?.startsWith("Process stopped during execution; action was not replayed.") != true) return null
+        if (manuallyVerified && !journal.markManuallyVerified(workflowId)) return null
         val recovery = journal.reconcileInterrupted(workflowId)
-        if (recovery != OperatorActionJournal.Recovery.VERIFIED_COMPLETE) return null
+        if (recovery !in setOf(
+                OperatorActionJournal.Recovery.VERIFIED_COMPLETE,
+                OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+            )) return null
         val entry = journal.get(workflowId) ?: return null
         val request = decodeRequest(original.task.payload) ?: return null
         val completedIndex = request.actions.indexOfFirst { it.id == entry.stepId }
