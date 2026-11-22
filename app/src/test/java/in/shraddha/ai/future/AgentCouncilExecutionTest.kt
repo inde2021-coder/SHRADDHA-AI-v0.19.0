@@ -128,6 +128,46 @@ class AgentCouncilExecutionTest {
         assertTrue(calls.indexOf("Verifier") > calls.indexOf("Critic"))
     }
 
+    @Test fun executeParallelEnforcesCallBudgetsAndPersistsEveryCompletedStageCallback() = runBlocking {
+        val evidence = Collections.synchronizedList(mutableListOf<String>())
+        val result = AgentCouncil.executeParallel(
+            goal = "Build a verifiable provider workflow",
+            providerNames = listOf("GEMINI", "OPENAI"),
+            specialistCount = 1,
+            executor = { role, provider, _, _ ->
+                "$provider output for ${role.name} " + "x".repeat(1400)
+            },
+            onStageCompleted = { role, provider, output ->
+                evidence.add("$role:$provider:${output.length}")
+            },
+            budget = CouncilExecutionBudget(
+                maxProviderCalls = 5,
+                maxCallsPerProvider = 3,
+                maxDurationMs = 30_000,
+                maxOutputCharactersPerStage = 1_000
+            )
+        ).getOrThrow()
+
+        assertEquals(5, evidence.size)
+        assertEquals(5, result.providerUsage.sumOf { it.calls })
+        assertTrue(result.providerUsage.all { it.calls <= 3 })
+        assertTrue(result.stages.all { it.output.length <= 1_000 })
+        assertTrue(result.elapsedMs in 0..30_000)
+    }
+
+    @Test fun executeParallelRejectsBudgetsThatCannotCoverRequiredStages() = runBlocking {
+        val result = runCatching {
+            AgentCouncil.executeParallel(
+                goal = "Do not partially execute a task with an impossible budget",
+                providerNames = listOf("GEMINI"),
+                specialistCount = 1,
+                executor = { _, _, _, _ -> "unused" },
+                budget = CouncilExecutionBudget(maxProviderCalls = 4)
+            )
+        }
+        assertTrue(result.isFailure)
+    }
+
     @Test fun executeParallelRejectsInvalidSpecialistCountAndProviderList() = runBlocking {
         val invalidCount = runCatching {
             AgentCouncil.executeParallel("Goal", providerNames = listOf("GEMINI"), specialistCount = 0, executor = { _, _, _, _ -> "ok" })
