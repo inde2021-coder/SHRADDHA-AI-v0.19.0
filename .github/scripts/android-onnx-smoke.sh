@@ -49,7 +49,9 @@ trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 "$ADB" -s "$SERIAL" shell wm dismiss-keyguard || true
 "$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk
 "$ADB" -s "$SERIAL" shell getprop sys.user.0.ce_available
-"$ADB" -s "$SERIAL" shell df -h /data
+# Disk usage is diagnostic only; SELinux may deny access to protected emulator mounts.
+# Never fail instrumentation solely because the shell user cannot read /data metadata.
+"$ADB" -s "$SERIAL" shell df -h /data || true
 "$ADB" devices -l
 
 # Build instrumentation APKs without invoking UTP/ddmlib device installation.
