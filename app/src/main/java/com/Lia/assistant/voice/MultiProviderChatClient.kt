@@ -31,7 +31,7 @@ object MultiProviderChatClient {
     )
 
     private fun config(provider: String): Config? = when (provider.uppercase()) {
-        "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-4.1-mini")
+        "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-5.5")
         // Groq retired llama-3.3-70b-versatile for developer-tier traffic in August 2026.
         "GROQ" -> Config("https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
         "PERPLEXITY" -> Config("https://api.perplexity.ai/v1/agent", "", perplexityAgent = true)
@@ -73,8 +73,10 @@ object MultiProviderChatClient {
                 boundedHistory.forEach { turn ->
                     messages.put(JSONObject().put("role", if (turn.isUser) "user" else "assistant").put("content", turn.text))
                 }
+                // OpenAI's current Chat Completions contract uses
+                // max_completion_tokens; max_tokens is deprecated for newer models.
                 JSONObject().put("model", cfg.model).put("messages", messages)
-                    .put("temperature", 0.7).put("max_tokens", 2048)
+                    .put("max_completion_tokens", 2048)
             }
         }
 
