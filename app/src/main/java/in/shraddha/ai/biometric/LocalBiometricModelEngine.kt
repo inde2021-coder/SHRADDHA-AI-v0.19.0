@@ -11,7 +11,7 @@ import java.nio.FloatBuffer
 
 /**
  * On-device ONNX inference for the checksum-verified downloaded models:
- * OpenCV SFace (data -> fc1) and ECAPA-TDNN (wav/lens -> emb).
+ * OpenCV SFace (data -> fc1) and ECAPA-TDNN (waveform -> embedding).
  *
  * The engine never uploads biometric samples or embeddings. Review model licensing
  * and provenance before redistribution or deployment.
@@ -105,15 +105,17 @@ class LocalBiometricModelEngine : Closeable {
         val started = System.nanoTime()
         val candidate = createSession(modelPath)
         try {
-            require(candidate.inputNames.containsAll(setOf("wav", "lens"))) {
-                "Speaker model must expose 'wav' and 'lens' inputs"
+            require(candidate.inputNames.contains("waveform")) {
+                "Speaker model must expose input 'waveform'"
             }
-            require(candidate.outputNames.contains("emb")) { "Speaker model must expose output 'emb'" }
-            val wavShape = (candidate.inputInfo["wav"]?.info as? TensorInfo)?.shape ?: error("Speaker model input 'wav' must be a tensor")
-            val lensShape = (candidate.inputInfo["lens"]?.info as? TensorInfo)?.shape ?: error("Speaker model input 'lens' must be a tensor")
-            val embeddingShape = (candidate.outputInfo["emb"]?.info as? TensorInfo)?.shape ?: error("Speaker model output 'emb' must be a tensor")
-            require(wavShape.size == 2 && (wavShape[0] == 1L || wavShape[0] == -1L)) { "Speaker wav input must be [1|dynamic,samples]" }
-            require(lensShape.size == 1 && (lensShape[0] == 1L || lensShape[0] == -1L)) { "Speaker lens input must be [1|dynamic]" }
+            require(candidate.outputNames.contains("embedding")) { "Speaker model must expose output 'embedding'" }
+            val waveformShape = (candidate.inputInfo["waveform"]?.info as? TensorInfo)?.shape
+                ?: error("Speaker model input 'waveform' must be a tensor")
+            val embeddingShape = (candidate.outputInfo["embedding"]?.info as? TensorInfo)?.shape
+                ?: error("Speaker model output 'embedding' must be a tensor")
+            require(waveformShape.size == 2 && (waveformShape[0] == 1L || waveformShape[0] == -1L)) {
+                "Speaker waveform input must be [1|dynamic,samples]"
+            }
             require(embeddingShape.lastOrNull() == 192L) { "Speaker model must output a 192-value embedding" }
             speakerSession?.close()
             speakerSession = candidate
@@ -175,30 +177,27 @@ class LocalBiometricModelEngine : Closeable {
         require(monoPcm16k.all { it.isFinite() && it in -1.05f..1.05f }) { "Audio must be normalized 16 kHz PCM" }
         val session = speakerSession ?: error("Speaker model is not loaded")
         val started = System.nanoTime()
-        val wavBuffer = nativeFloatBuffer(monoPcm16k)
-        val lensValues = floatArrayOf(1f)
-        val lensBuffer = nativeFloatBuffer(lensValues)
+        val waveformBuffer = nativeFloatBuffer(monoPcm16k)
         try {
-            val wav = OnnxTensor.createTensor(environment, wavBuffer, longArrayOf(1, monoPcm16k.size.toLong()))
-            wav.use { w ->
-                val lens = OnnxTensor.createTensor(environment, lensBuffer, longArrayOf(1))
-                lens.use { l ->
-                    val result = session.run(mapOf("wav" to w, "lens" to l))
-                    result.use {
-                        val output = result.get("emb").orElseThrow { IllegalStateException("Speaker model output emb missing") }
-                        val rawEmbedding = flatten(output.value)
-                        try {
-                            return BiometricMath.unitNormalize(rawEmbedding)
-                        } finally {
-                            rawEmbedding.fill(0f)
-                        }
+            val waveform = OnnxTensor.createTensor(
+                environment, waveformBuffer, longArrayOf(1, monoPcm16k.size.toLong())
+            )
+            waveform.use { audio ->
+                val result = session.run(mapOf("waveform" to audio))
+                result.use {
+                    val output = result.get("embedding").orElseThrow {
+                        IllegalStateException("Speaker model output embedding missing")
+                    }
+                    val rawEmbedding = flatten(output.value)
+                    try {
+                        return BiometricMath.unitNormalize(rawEmbedding)
+                    } finally {
+                        rawEmbedding.fill(0f)
                     }
                 }
             }
         } finally {
-            zero(wavBuffer)
-            zero(lensBuffer)
-            lensValues.fill(0f)
+            zero(waveformBuffer)
             lastSpeakerInferenceMs = (System.nanoTime() - started) / 1_000_000L
         }
     }
