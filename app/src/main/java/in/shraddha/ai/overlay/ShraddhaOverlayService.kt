@@ -33,7 +33,7 @@ class ShraddhaOverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         orb = FloatingOrbView(this).apply {
-            contentDescription = "Shraddha AI floating 3D orb. Tap to open quick actions; long press to close."
+            contentDescription = "${com.Lia.assistant.data.NovaPreferences.getString(this@ShraddhaOverlayService, com.Lia.assistant.data.NovaPreferences.Keys.ASSISTANT_NAME, com.Lia.assistant.data.AssistantBrand.NAME)} floating 3D orb. Tap to open quick actions; long press to close."
             setOnClickListener { togglePanel() }
             setOnLongClickListener { stopSelf(); true }
         }
