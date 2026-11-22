@@ -46,9 +46,21 @@ class BatchApiSource(
             config.headers.forEach { (key, value) -> builder.header(key, value) }
             client.newCall(builder.build()).execute().use { response ->
                 if (!response.isSuccessful) throw IllegalStateException("API returned HTTP ${response.code}")
-                val body = response.body?.string().orEmpty()
-                require(body.length <= 8 * 1024 * 1024) { "API response exceeds 8 MB" }
-                val root = JSONObject(body)
+                val responseBody = response.body ?: throw IllegalArgumentException("API response body is empty")
+                require(responseBody.contentLength() <= 8L * 1024 * 1024 || responseBody.contentLength() < 0) { "API response exceeds 8 MB" }
+                val bytes = java.io.ByteArrayOutputStream()
+                responseBody.byteStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 8 * 1024 * 1024) { "API response exceeds 8 MB" }
+                        bytes.write(buffer, 0, count)
+                    }
+                }
+                val root = JSONObject(String(bytes.toByteArray(), Charsets.UTF_8))
                 val array = root.optJSONArray(config.dataField) ?: throw IllegalArgumentException("API response field '${config.dataField}' is not an array")
                 require(array.length() <= config.pageSize) { "API returned more rows than requested page size" }
                 for (i in 0 until array.length()) {
