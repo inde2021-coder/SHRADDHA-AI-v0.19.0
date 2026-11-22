@@ -1075,6 +1075,32 @@ class MainActivity : AppCompatActivity() {
                 if (relative.isBlank()) status.text = "पहले approved folder के अंदर relative file path लिखें।"
                 else sendRemote(JSONObject().put("kind", "file_read").put("path", relative))
             })
+            val pcWritePath = edit("Windows file path to create/update", "उदाहरण: project/README.md")
+            val pcWriteContent = edit("New Windows file content", "AI द्वारा तैयार किया गया text/code यहाँ रखें").apply {
+                minLines = 4; maxLines = 10; isSingleLine = false
+            }
+            val pcOverwrite = android.widget.Switch(this@MainActivity).apply {
+                text = "Allow updating an existing file (Windows backup will be created)"
+                setTextColor(0xFFE4E9F5.toInt())
+                isChecked = false
+            }
+            addView(pcWritePath); addView(pcWriteContent); addView(pcOverwrite)
+            addView(actionButton("CREATE / UPDATE WINDOWS TEXT OR CODE FILE", "Approved --file-root के भीतर ही • हर write पर PC owner की अलग confirmation • overwrite से पहले backup") {
+                val relative = pcWritePath.text.toString().trim()
+                val content = pcWriteContent.text.toString()
+                if (relative.isBlank() || content.length > 256_000) {
+                    status.text = "File path जरूरी है और content 256 KB से छोटा होना चाहिए।"
+                } else {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Windows file write approval")
+                        .setMessage("Path: $relative\\nCharacters: ${content.length}\\nOverwrite existing: ${pcOverwrite.isChecked}\\n\\nWindows PC पर भी दूसरी confirmation आएगी। Existing file होने पर पहले backup बनाया जाएगा।")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Send for PC approval") { _, _ ->
+                            sendRemote(JSONObject().put("kind", "file_write").put("path", relative)
+                                .put("content", content).put("overwrite", pcOverwrite.isChecked))
+                        }.show()
+                }
+            })
             val pcSearchQuery = edit("Search text inside approved Windows folder", "उदाहरण: invoice number या project title")
             addView(pcSearchQuery)
             addView(actionButton("SEARCH APPROVED WINDOWS FILES", "केवल सीमित text/code files; snippets से संभावित credentials भी redact होंगे") {
@@ -1091,6 +1117,11 @@ class MainActivity : AppCompatActivity() {
                 val prompt = offlinePrompt.text.toString().trim()
                 if (prompt.isBlank() || prompt.length > 4000) status.text = "Offline prompt 1-4000 characters का होना चाहिए।"
                 else sendRemote(JSONObject().put("kind", "offline_chat").put("prompt", prompt))
+            })
+            addView(actionButton("WINDOWS CODE ASSISTANT", "Configured local GGUF model से code समझें, debug करें और patch draft करें; कोई file अपने-आप नहीं बदलेगी") {
+                val prompt = offlinePrompt.text.toString().trim()
+                if (prompt.isBlank() || prompt.length > 4000) status.text = "Code prompt 1-4000 characters का होना चाहिए।"
+                else sendRemote(JSONObject().put("kind", "code_assistant").put("prompt", prompt))
             })
             addView(actionButton("OPEN APP ON WINDOWS PC", "Allowlisted apps only • PC confirmation required") {
                 val name = remoteAppName.text.toString().trim()
