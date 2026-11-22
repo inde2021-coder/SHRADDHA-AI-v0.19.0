@@ -146,3 +146,8 @@ The current source re-check found a protocol mismatch that was not covered by th
 - The receiver validates the envelope, authenticates/decrypts, rejects invalid JPEG and rejects replayed sequence numbers.
 
 Unit-test source was added for the relay envelope and ECDH/AES-GCM round-trip including AAD tampering. **No test was run for this pending change.** Real-device camera/screen tests remain mandatory.
+
+
+### File-transfer manifest/chunk alignment correction — 22 November
+
+A further source audit found Android used 48,000-byte chunk reads and a mismatched chunk-count formula while the relay validates 48 KiB (49,152-byte) chunks. Exact boundaries could produce a bogus extra chunk and a relay manifest rejection. The pending branch now centralizes Android transfer chunk sizing at 48 KiB and applies it consistently to manifest calculation, sender seeking/reads, receiver expected lengths and receiver file offsets. The app's current cap remains 20 MB. Boundary regression tests were authored but not executed; do not mark file transfer runtime-validated until the consolidated tests and phone-to-phone interruption tests pass.
