@@ -125,7 +125,7 @@ fun AboutScreen(
             Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .clickable { copyDeveloperEmail(context) }.padding(vertical = 7.dp),
+                    .clickable { copyDeveloperEmail(context, assistantName) }.padding(vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -209,8 +209,8 @@ private fun rememberAppDetails(context: Context): ShraddhaAppDetails {
     }
 }
 
-private fun copyDeveloperEmail(context: Context) {
+private fun copyDeveloperEmail(context: Context, assistantName: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("Shraddha AI developer email", DEVELOPER_EMAIL))
+    clipboard.setPrimaryClip(ClipData.newPlainText("$assistantName developer email", DEVELOPER_EMAIL))
     Toast.makeText(context, "Developer email copied", Toast.LENGTH_SHORT).show()
 }
