@@ -299,14 +299,21 @@ fun ExpertStudioScreen(navController: NavController) {
                     type = NovaButtonType.SECONDARY
                 )
             }
-            Text("COMPARE PROVIDERS", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text("COMPARE PROVIDERS (UP TO 3)", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             EXPERT_PROVIDERS.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEach { item ->
                         FilterChip(
                             selected = item in compareSelection,
                             onClick = {
-                                compareSelection = if (item in compareSelection) compareSelection - item else compareSelection + item
+                                compareSelection = when {
+                                    item in compareSelection -> compareSelection - item
+                                    compareSelection.size < 3 -> compareSelection + item
+                                    else -> {
+                                        status = "Provider comparison supports at most three providers per request."
+                                        compareSelection
+                                    }
+                                }
                             },
                             label = { Text(item, fontSize = 9.sp) }
                         )
