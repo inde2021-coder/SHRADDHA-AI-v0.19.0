@@ -20,6 +20,13 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import com.Lia.assistant.voice.VoiceSessionManager
+import com.Lia.assistant.voice.NovaOrbState
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import `in`.shraddha.ai.vision.LiveVisualTranslationSession as LiveVisualTranslationSession
@@ -68,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bottomNav: LinearLayout
     private lateinit var pageScroll: ScrollView
     private var currentPage: String = "home"
+    private var activeOrb: ShraddhaOrbView? = null
     private lateinit var relayUrl: EditText
     private lateinit var deviceName: EditText
     private lateinit var pairingCode: EditText
@@ -140,6 +148,13 @@ class MainActivity : AppCompatActivity() {
         shell.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         shell.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(shell)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { VoiceSessionManager.state.collect { activeOrb?.setVoiceState(it) } }
+                launch { VoiceSessionManager.amplitude.collect { activeOrb?.setAmplitude(it) } }
+                launch { VoiceSessionManager.muted.collect { activeOrb?.setMuted(it) } }
+            }
+        }
         status = TextView(this).apply {
             text = "Ready • $assistantDisplayName तैयार है। अपनी जरूरत का एक workspace खोलें।"
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -265,7 +280,12 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        heroTop.addView(ShraddhaOrbView(this, assistantDisplayName), LinearLayout.LayoutParams(dp(138), dp(138)))
+        activeOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
+            setVoiceState(VoiceSessionManager.state.value)
+            setAmplitude(VoiceSessionManager.amplitude.value)
+            setMuted(VoiceSessionManager.muted.value)
+        }
+        heroTop.addView(activeOrb, LinearLayout.LayoutParams(dp(138), dp(138)))
         heroBody.addView(heroTop)
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Live voice engine") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
@@ -385,7 +405,12 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER
                 setPadding(dp(8), dp(2), dp(8), dp(14))
             }
-            assistantHero.addView(ShraddhaOrbView(this, assistantDisplayName), LinearLayout.LayoutParams(dp(188), dp(188)))
+            activeOrb = ShraddhaOrbView(this, assistantDisplayName).apply {
+                setVoiceState(VoiceSessionManager.state.value)
+                setAmplitude(VoiceSessionManager.amplitude.value)
+                setMuted(VoiceSessionManager.muted.value)
+            }
+            assistantHero.addView(activeOrb, LinearLayout.LayoutParams(dp(188), dp(188)))
             assistantHero.addView(TextView(this).apply {
                 text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
@@ -3264,8 +3289,41 @@ object VoiceCommandParser {
 }
 
 
-/** Animated 3D-style energy orb. Its animation is decorative; microphone state is reported separately. */
-private class ShraddhaOrbView(context: android.content.Context, assistantName: String) : View(context) {
+/** Animated 3D energy core. Motion and accessibility state follow the real voice session. */
+private class ShraddhaOrbView(context: android.content.Context, private val assistantName: String) : View(context) {
+    private var voiceState: NovaOrbState = NovaOrbState.IDLE
+    private var microphoneAmplitude: Float = 0f
+    private var microphoneMuted: Boolean = false
+
+    fun setVoiceState(state: NovaOrbState) {
+        voiceState = state
+        updateDescription()
+        invalidate()
+    }
+
+    fun setAmplitude(value: Float) {
+        microphoneAmplitude = value.coerceIn(0f, 1f)
+        invalidate()
+    }
+
+    fun setMuted(muted: Boolean) {
+        microphoneMuted = muted
+        updateDescription()
+        invalidate()
+    }
+
+    private fun updateDescription() {
+        val label = when {
+            microphoneMuted -> "microphone muted"
+            voiceState == NovaOrbState.LISTENING -> "microphone listening"
+            voiceState == NovaOrbState.SPEAKING -> "assistant speaking"
+            voiceState == NovaOrbState.THINKING -> "assistant thinking"
+            voiceState == NovaOrbState.CONNECTING -> "connecting; microphone capture has not started"
+            voiceState == NovaOrbState.ERROR -> "voice error; microphone is not active"
+            else -> "idle; microphone is not active"
+        }
+        contentDescription = "$assistantName energy core. Current state: $label."
+    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -3279,7 +3337,7 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        contentDescription = "$assistantName animated energy orb. Microphone state is shown by the voice controls."
+        updateDescription()
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
@@ -3295,8 +3353,24 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         val base = minOf(width, height) * .285f
         if (base <= 0f) return
         val wave = (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
-        val pulse = 1f + .035f * wave
-        val rotation = phase * 360f
+        val statePulse = when (voiceState) {
+            NovaOrbState.LISTENING -> .045f + microphoneAmplitude * .11f
+            NovaOrbState.SPEAKING -> .065f + microphoneAmplitude * .10f
+            NovaOrbState.THINKING -> .045f
+            NovaOrbState.CONNECTING -> .018f
+            NovaOrbState.ERROR -> .006f
+            NovaOrbState.IDLE -> .012f
+        }
+        val pulse = 1f + statePulse * wave
+        val spinRate = when (voiceState) {
+            NovaOrbState.LISTENING -> 1.2f
+            NovaOrbState.THINKING -> .68f
+            NovaOrbState.SPEAKING -> 1.55f
+            NovaOrbState.CONNECTING -> .82f
+            NovaOrbState.ERROR -> .22f
+            NovaOrbState.IDLE -> .55f
+        }
+        val rotation = phase * 360f * spinRate
 
         // Soft atmospheric halo behind the core.
         paint.style = Paint.Style.FILL
@@ -3310,7 +3384,9 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         paint.shader = null
 
         // Three tilted orbital rings create a layered, dimensional silhouette.
-        val ringColors = intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8872B9D9.toInt())
+        val ringColors = if (voiceState == NovaOrbState.ERROR)
+            intArrayOf(0xFFFF7C82.toInt(), 0xCCFF9A86.toInt(), 0xAAE46B78.toInt())
+        else intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8872B9D9.toInt())
         for (i in 0..2) {
             canvas.save()
             canvas.rotate(rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f, cx, cy)
