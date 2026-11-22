@@ -2550,16 +2550,39 @@ class MainActivity : AppCompatActivity() {
     }
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
         val card = MaterialCardView(this).apply {
-            radius = dp(22).toFloat(); cardElevation = dp(3).toFloat()
-            strokeWidth = dp(1); strokeColor = 0xFF26344D.toInt()
-            setCardBackgroundColor(0xFF111827.toInt())
+            radius = dp(22).toFloat()
+            cardElevation = dp(8).toFloat()
+            maxCardElevation = dp(10).toFloat()
+            strokeWidth = dp(1)
+            strokeColor = 0xFF465A80.toInt()
+            setCardBackgroundColor(0xFF0A1120.toInt())
+            useCompatPadding = true
+            preventCornerOverlap = true
+            translationZ = dp(1).toFloat()
         }
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(12)) }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(12))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF1B2942.toInt(), 0xFF111C30.toInt(), 0xFF0D1728.toInt())
+            ).apply {
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), 0xFF35496B.toInt())
+            }
+        }
         card.addView(body)
-        body.addView(TextView(this).apply { text = title; textSize = 14f; letterSpacing = .06f; setTextColor(0xFFBDA8FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD) })
-        body.addView(TextView(this).apply { text = subtitle; textSize = 12f; setTextColor(0xFF93A2BA.toInt()); setPadding(0, dp(5), 0, dp(14)) })
+        body.addView(TextView(this).apply {
+            text = title; textSize = 14f; letterSpacing = .06f
+            setTextColor(0xFFD2C4FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+            setShadowLayer(dp(5).toFloat(), 0f, 1f, 0x554C62A8)
+        })
+        body.addView(TextView(this).apply {
+            text = subtitle; textSize = 12f; setTextColor(0xFFAAB8D0.toInt())
+            setPadding(0, dp(5), 0, dp(14))
+        })
         body.content()
-        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
         return body
     }
 
