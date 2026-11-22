@@ -50,13 +50,13 @@ This register consolidates the user's earlier feature requests and the current s
 | Calls by voice | Dialer/call controls and phone-agent source exist. | Verify real SIM call flows, contact disambiguation, call audio routing and emergency handling on device. |
 | Notifications | Metadata-only encrypted listener/history and quiet hours exist. | Rich per-app rules, action support, retention controls and Android OEM/version testing. |
 | Clipboard control | Consent-gated relay and integrity checks exist. | True E2E encryption/key agreement, key rotation, replay protection and multi-device tests. |
-| File transfer | One-shot transfer plus chunk validation groundwork exists. | Complete chunk relay/reassembly, durable resume, progress, cancellation, destination picker, malware scanning and E2E security. |
+| File transfer | SAF-based 20 MB sender/receiver, 48 KB encrypted chunks, SHA-256, receiver approval, save-location picker, pause/resume and cancellation exist in source. | Real-device interruption/process-death resume, relay quotas, malware scanning and device-matrix tests remain. |
 
 ## D. Visual Lens and spatial intelligence
 
 | Request | Current source observation | Remaining work |
 |---|---|---|
-| Camera Visual Lens Q&A | Camera service, visual request path and provider analysis exist. | Full live camera-frame-to-AI pipeline, grounding, camera permission lifecycle, physical-device latency and privacy tests. |
+| Camera Visual Lens Q&A | Camera/screen capture services exist. Pending branch now encrypts visual frames with mutually verified ECDH/AES-GCM keys, session/device/frame/sequence-bound AAD and replay checks; source-level protocol tests were added. | Full live camera-frame-to-AI pipeline, grounding, camera permission lifecycle, physical-device latency and privacy tests. |
 | Camera live translation/subtitles | Translation request validation and provider text path exist. | Streaming speech/camera translation, subtitle overlay, offline language packs and quality testing. |
 | Object intelligence/tracking | Vision request path exists. | Continuous frame pipeline, object grounding/tracking and on-device fallback. |
 | 3D environment mapping | Validated landmark model exists. | ARCore/depth capture, SLAM, persistence, renderer and calibration. |
@@ -119,3 +119,12 @@ The following cannot be completed by source changes alone and must remain clearl
 4. Do not fabricate providers, API keys, model weights, licences, test results or external account setup.
 5. After implementation work is complete, run one consolidated verification pass; fix every failure before reporting release readiness.
 6. Keep every external/device-dependent feature marked as requiring setup or real-world validation until it has actually passed.
+
+
+## 22 November source work added on this branch
+
+- Parallel multi-agent execution (Planner/Researcher concurrent; 3 Specialists concurrent; Critic and Verifier gates) was added and wired to WorkManager plus an Advanced AI Lab action with progress/result observation.
+- Shared workspace panels received a layered glass-gradient/elevation pass; this is not the complete screen-by-screen redesign.
+- Remaining pairing/timeline UI copy now reads the configured assistant name in those locations; a full hardcoded-name audit is still pending.
+- Screen/camera frame relay was corrected to use mutually verified E2E encryption, session-bound AAD and replay checks. Tests were authored but deliberately not run yet.
+- No tests or builds have been run for these pending-branch commits, following the user's instruction to finish the implementation pass first.
