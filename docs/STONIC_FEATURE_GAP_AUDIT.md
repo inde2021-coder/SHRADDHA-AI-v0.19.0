@@ -15,14 +15,14 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 | Mobile web work surface | `WorkAgentActivity` | Embedded browser, page inspection, reviewed click/fill, downloads and App Operator hand-off; not unrestricted browser automation |
 | Reminders / planning | `TaskPlannerActivity`, `ReminderReceiver`, `AutonomousTaskPlanner` | Local reminders and DAG planning exist; they were not a durable AI job runner before this branch's new queue |
 | File transfer | `SecureFileTransfer`, advanced Windows companion transfer protocol | Chunk manifest/relay support exists, but complete Android file-picker UI, disk-backed receive/resume queue and end-to-end device verification remain incomplete |
-| Provider routing | `GeminiTextClient`, `MultiProviderChatClient` | Supports configured providers; credentials must be added by the user |
+| Multi-provider AI council | `backend/server.js` `/api/agents/council`, `/api/agents/council/operator-plan`, `MainActivity` | Real independent 5-role council across 2–5 server-configured providers with synthesis and optional reviewed Operator proposal; requires HTTPS backend, gateway token and at least two server API keys |\n| Provider routing | `GeminiTextClient`, `MultiProviderChatClient`, `provider-routing.js` | Supports configured providers; credentials must be added by the user |
 | Creator / engineering | `CreatorStudioEngine`, `EngineeringWorkbench`, Website Forge | Some outputs are plans/templates; rendered video, production CAD and complete build/deploy automation are not shipped |
 
 ## Implemented in this branch from the gap audit
 
-### 1. Real provider-backed multi-role team
-- Replaced the plan-only `AgentCouncil` with real sequential Planner → Researcher → Specialist → Critic → Verifier provider calls.
-- Routes the five roles round-robin across 1–5 locally configured providers (Gemini, OpenAI, Groq, Claude and Perplexity).
+### 1. Background-capable provider-backed multi-role team
+- Added a local real sequential Planner → Researcher → Specialist → Critic → Verifier pipeline alongside the already-existing backend independent multi-provider council.
+- Routes the five local roles round-robin across 1–5 locally configured providers (Gemini, OpenAI, Groq, Claude and Perplexity); the backend council separately already supports 2–5 server-configured providers.
 - Exposes progress in the Mobile Work Agent.
 - Stops at the first failed/empty stage; does not label partial output complete.
 - Supports cancellation between stages.
@@ -95,7 +95,7 @@ Audit basis: current `optimization/apk-size-without-feature-loss` branch source,
 1. Finish and test the new multi-agent pipeline and persistent background queue.
 2. Finish cross-device file transfer and shared workspace.
 3. Build project-aware coding agent with sandboxed execution and verification.
-4. Implement true multi-provider orchestration and source-aware briefing.
+4. Improve agent evidence/checkpoint continuity and source-aware briefing.
 5. Add signed skills framework and unified privacy/personality controls.
 6. Run Android unit tests/build, emulator smoke, backend tests, both Windows companion suites/packages, then physical Android↔Windows testing. Merge into `main` only after required CI checks and device tests pass.
 
