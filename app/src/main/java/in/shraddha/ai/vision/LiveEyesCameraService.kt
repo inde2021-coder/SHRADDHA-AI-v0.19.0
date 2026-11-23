@@ -133,6 +133,21 @@ class LiveEyesCameraService : Service() {
                         jpeg.fill(0); requestInFlight.set(false); return@setOnImageAvailableListener
                     }
                     lastAnalysisAt = now
+                    // Run local OCR + streaming object tracking alongside cloud scene analysis.
+                    // Only concise derived observations are forwarded; raw frames are never stored here.
+                    LiveFrameIntelligence.analyzeJpeg(jpeg) { localResult ->
+                        if (!stopped) localResult.onSuccess { local ->
+                            val localContext = local.toContext()
+                            if (localContext.isNotBlank()) {
+                                VoiceSessionManager.updateLiveVisualContext(localContext)
+                                val subtitlePreview = local.subtitles.replace('\n', ' ').take(90)
+                                updateNotification(
+                                    if (subtitlePreview.isNotBlank()) "Live text: $subtitlePreview"
+                                    else "Objects: " + local.objects.take(4).joinToString().take(80)
+                                )
+                            }
+                        }
+                    }
                     val context = previousObservation.takeLast(900)
                     val prompt = buildString {
                         append("You are " + assistantName() + "'s live visual eyes. Describe only what is clearly visible in this current camera view. ")
