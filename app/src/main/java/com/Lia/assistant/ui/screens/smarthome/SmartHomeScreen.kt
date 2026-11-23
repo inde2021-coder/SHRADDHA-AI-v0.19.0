@@ -144,8 +144,12 @@ fun SmartHomeScreen(navController: NavController) {
                     .onFailure { status = it.localizedMessage ?: "MQTT settings invalid." }
             }, modifier = Modifier.fillMaxWidth(), enabled = mqttPassword.length >= 8)
             NovaButton(text = "CONNECT & SUBSCRIBE", onClick = {
-                mqtt.connect { status = it }.onFailure { status = it.localizedMessage ?: "MQTT connection failed." }
-                mqtt.subscribeStateTopics { status = it }.onFailure { status = it.localizedMessage ?: "MQTT subscription failed." }
+                mqtt.connect { message ->
+                    status = message
+                    if (message.contains("connected", ignoreCase = true) || message.contains("established", ignoreCase = true)) {
+                        mqtt.subscribeStateTopics { status = it }.onFailure { status = it.localizedMessage ?: "MQTT subscription failed." }
+                    }
+                }.onFailure { status = it.localizedMessage ?: "MQTT connection failed." }
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
             OutlinedTextField(value = mqttDevice, onValueChange = { mqttDevice = it.take(48) }, modifier = Modifier.fillMaxWidth(), label = { Text("Device ID") }, singleLine = true)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
