@@ -73,3 +73,17 @@ export function validateMediaAttachment(body, platform) {
   const fileName = typeof body.fileName === 'string' ? body.fileName.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100) : '';
   return { kind, mimeType, bytes, fileName: fileName || (kind === 'video' ? 'upload.mp4' : 'upload.jpg') };
 }
+
+export function validateScheduleIntent(body, now = Date.now()) {
+  const intent = validatePublishIntent(body);
+  if (body.mediaBase64 !== undefined) throw new Error('Scheduled media uploads are not enabled; schedule text-only posts.');
+  const idempotencyKey = String(body.idempotencyKey || '');
+  if (!/^[A-Za-z0-9_-]{16,80}$/.test(idempotencyKey)) throw new Error('idempotencyKey must contain 16-80 safe characters');
+  const scheduledAt = String(body.scheduledAt || '');
+  if (!/(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(scheduledAt)) throw new Error('scheduledAt must be an ISO-8601 timestamp with timezone');
+  const scheduledAtMs = Date.parse(scheduledAt);
+  if (!Number.isFinite(scheduledAtMs) || scheduledAtMs < now + 60_000 || scheduledAtMs > now + 90 * 24 * 60 * 60_000) {
+    throw new Error('Schedule time must be at least 1 minute and no more than 90 days in the future');
+  }
+  return { ...intent, idempotencyKey, scheduledAt: new Date(scheduledAtMs).toISOString(), scheduledAtMs };
+}
