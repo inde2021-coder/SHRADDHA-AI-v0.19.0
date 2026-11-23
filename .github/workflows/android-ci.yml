@@ -7,6 +7,9 @@ env:
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/complete-pending-shraddha-features
 
 permissions:
   contents: read
