@@ -253,3 +253,5 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 
 
 - Provider discovery no longer converts encrypted API-key read/Keystore failures into a silent "provider not configured" result. Missing keys remain unconfigured; vault read failures now propagate to the caller so the user can be shown a recovery error instead of silently losing a provider from the routing list. Source-only; error UX and regression behavior still need verification.
+
+- The council entry points now convert provider-vault read failures into an explicit failed pipeline result, rather than allowing the newly surfaced Keystore exception to escape before the worker can persist failure status. This preserves the distinction between "no provider key configured" and "encrypted credentials could not be read". Source-only; worker/UI error propagation remains unverified.
