@@ -30,7 +30,7 @@ const apiAttempts = new Map();
 const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/social/schedule','/api/social/schedule/cancel','/api/social/schedule/dispatch','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/social/schedule','/api/social/schedule/cancel','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 
