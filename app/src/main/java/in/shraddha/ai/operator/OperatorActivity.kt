@@ -187,7 +187,7 @@ class OperatorActivity : Activity() {
                 val details = "Tool: ${entry.tool}\nस्थिति: ${entry.state}\nResult: ${entry.resultStatus.ifBlank { "अभी उपलब्ध नहीं" }}\nAction: ${entry.action.ifBlank { "अभी सत्यापित नहीं" }}\nसमय: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.updatedAt))}"
                 android.app.AlertDialog.Builder(this@OperatorActivity)
                     .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
-                    .setMessage(details + if (interrupted) "\n\nफोन बंद/restart होने के समय action चल रहा था। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
+                    .setMessage(details + if (interrupted) "\n\nपिछले action का परिणाम सुरक्षित रूप से confirm नहीं हुआ। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
                     .setPositiveButton(if (interrupted) "मैंने target app जाँच लिया" else "ठीक है") { _, _ ->
                         if (interrupted) {
                             val verified = runCatching {
