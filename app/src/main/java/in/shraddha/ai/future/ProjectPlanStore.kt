@@ -12,8 +12,10 @@ class ProjectPlanStore(context: Context) {
     @Synchronized
     fun loadAll(): Result<List<ProjectPlan>> = runCatching {
         val ids = readIndex()
-        ids.mapNotNull { id ->
-            store.get(key(id)).getOrThrow().takeIf { it.isNotBlank() }?.let(::decode)
+        ids.map { id ->
+            val raw = store.get(key(id)).getOrThrow()
+            require(raw.isNotBlank()) { "Project index references missing encrypted data for $id; refusing to hide or overwrite the damaged project." }
+            decode(raw)
         }.sortedByDescending { it.createdAt }
     }
 
@@ -30,8 +32,10 @@ class ProjectPlanStore(context: Context) {
         )
         val evictedKeys = (previousIds - retained.toSet()).map(::key).toSet()
         store.putAllAndRemove(values, evictedKeys).getOrThrow()
-        retained.mapNotNull { id ->
-            store.get(key(id)).getOrThrow().takeIf { it.isNotBlank() }?.let(::decode)
+        retained.map { id ->
+            val raw = store.get(key(id)).getOrThrow()
+            require(raw.isNotBlank()) { "Saved project data is missing for $id; refusing to report a partial save." }
+            decode(raw)
         }.sortedByDescending { it.createdAt }
     }
 
@@ -44,8 +48,10 @@ class ProjectPlanStore(context: Context) {
             mapOf(INDEX_KEY to JSONArray(ids).toString()),
             setOf(key(id))
         ).getOrThrow()
-        ids.mapNotNull { item ->
-            store.get(key(item)).getOrThrow().takeIf { it.isNotBlank() }?.let(::decode)
+        ids.map { item ->
+            val raw = store.get(key(item)).getOrThrow()
+            require(raw.isNotBlank()) { "Project index references missing encrypted data for $item." }
+            decode(raw)
         }.sortedByDescending { it.createdAt }
     }
 
@@ -92,8 +98,10 @@ class ProjectPlanStore(context: Context) {
         if (raw.isBlank()) return emptyList()
         val array = JSONArray(raw)
         require(array.length() <= MAX_PLANS) { "Project index exceeds the item limit." }
-        return (0 until array.length()).map { array.getString(it) }
-            .filter { ID_PATTERN.matches(it) }.distinct()
+        val ids = (0 until array.length()).map { array.getString(it) }
+        require(ids.all { ID_PATTERN.matches(it) }) { "Project index contains an invalid project ID; refusing to silently discard entries." }
+        require(ids.distinct().size == ids.size) { "Project index contains duplicate IDs; refusing to merge ambiguous project records." }
+        ids
     }
 
     private fun validate(plan: ProjectPlan) {
