@@ -99,3 +99,14 @@ class DeviceE2ECrypto:
         if len(plaintext) > MAX_PLAINTEXT_BYTES:
             raise ValueError("Decrypted frame exceeds the size limit")
         return plaintext
+
+
+def visual_frame_aad(session_id, source_device_id, target_device_id, frame_type, sequence):
+    """Canonical AAD for Android-compatible encrypted screen/camera frames."""
+    if (not isinstance(session_id, str) or not 1 <= len(session_id) <= 128 or
+            not isinstance(source_device_id, str) or not 1 <= len(source_device_id) <= 64 or
+            not isinstance(target_device_id, str) or not 1 <= len(target_device_id) <= 64 or
+            source_device_id == target_device_id or frame_type not in (1, 2) or
+            not isinstance(sequence, int) or isinstance(sequence, bool) or sequence <= 0):
+        raise ValueError("Invalid visual-frame AAD fields")
+    return f"{session_id}|{source_device_id}|{target_device_id}|visual_frame|{frame_type}|{sequence}".encode("utf-8")
