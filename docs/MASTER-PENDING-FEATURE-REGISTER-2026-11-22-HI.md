@@ -482,7 +482,7 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Restoring a workflow that was RUNNING or VERIFYING after process restart converts it to FAILED with a review-required message and an audit event. No action is automatically replayed because the prior action may already have reached the target app.
 - Workflow plans are bounded to 256 actions and persisted recovery records are schema-checked. Encrypted-store read/write errors propagate instead of silently returning an empty workflow.
 - Added Android instrumentation coverage for encrypted persistence and fail-closed process-restart recovery. Tests have not been run during the feature-completion pass.
-- Platform adapters are not yet wired to instantiate this hub with application context across all voice/operator entry points; adapter integration and recovery UI remain required before claiming the autonomous project manager complete.
+- Voice-created council plans now pass the Android application context into the encrypted hub, and the Multi-Agent Workspace displays the last voice-planned workflow with restart-review status. Operator workflow adapters, verified resume/rollback semantics and full recovery integration remain required before claiming the autonomous project manager complete.
 
 
 ## 23 November 2026 — Personal Knowledge Brain source-grounded retrieval (source-only; verification pending)
