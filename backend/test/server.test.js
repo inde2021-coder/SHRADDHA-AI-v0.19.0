@@ -916,6 +916,60 @@ test('screen frames are blocked until the sending device explicitly enables scre
 });
 
 
+test('receiver resume manifest is forwarded after relay transfer state is lost', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'File Sender' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'File Receiver', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace('http:', 'ws:');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const sender = connect(owner), receiver = connect(member);
+  try {
+    await Promise.all([once(sender, 'open'), once(receiver, 'open')]);
+    const forwardedPromise = nextWsMessage(sender, data => {
+      try {
+        const message = JSON.parse(data.toString());
+        return message.type === 'file_transfer_resume' && message.transferId === 'transfer_12345678';
+      } catch { return false; }
+    });
+    receiver.send(JSON.stringify({
+      type: 'file_transfer_resume', targetDeviceId: owner.deviceId,
+      transferId: 'transfer_12345678', chunkCount: 4, missingIndexes: [1, 3]
+    }));
+    const [forwarded] = await forwardedPromise;
+    const body = JSON.parse(forwarded.toString());
+    assert.equal(body.fromDeviceId, member.deviceId);
+    assert.deepEqual(body.missingIndexes, [1, 3]);
+    assert.equal(body.chunkCount, 4);
+
+    let invalidForwarded = false;
+    const listener = data => {
+      try {
+        if (JSON.parse(data.toString()).transferId === 'transfer_invalid1') invalidForwarded = true;
+      } catch {}
+    };
+    sender.on('message', listener);
+    receiver.send(JSON.stringify({
+      type: 'file_transfer_resume', targetDeviceId: owner.deviceId,
+      transferId: 'transfer_invalid1', chunkCount: 4, missingIndexes: [1, 1]
+    }));
+    await new Promise(resolve => setTimeout(resolve, 150));
+    sender.off('message', listener);
+    assert.equal(invalidForwarded, false, 'duplicate resume indexes must be rejected');
+  } finally {
+    const closes = [sender, receiver].map(socket => socket.readyState === WebSocket.CLOSED ? Promise.resolve() : new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
+
 test('remote action schema rejects malformed and out-of-range commands', () => {
   assert.equal(validRemoteAction({ kind: 'tap', x: -1, y: 50 }), false);
   assert.equal(validRemoteAction({ kind: 'tap', x: 50, y: 50 }), true);
