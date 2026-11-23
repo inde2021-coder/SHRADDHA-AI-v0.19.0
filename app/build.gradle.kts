@@ -110,6 +110,8 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraXVersion")
     // ARCore world tracking and optional depth mapping (supported devices only).
     implementation("com.google.ar:core:1.49.0")
+    // TLS MQTT client for explicitly configured local smart-home brokers.
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
