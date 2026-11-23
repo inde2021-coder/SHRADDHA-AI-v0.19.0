@@ -100,7 +100,7 @@ fun AgentCouncilScreen(
         }
         workId = runCatching { savedId.takeIf { it.isNotBlank() }?.let(UUID::fromString) }.getOrNull()
         val savedVoicePlan = withContext(Dispatchers.IO) {
-            runCatching { ShraddhaIntegrationHub(context.applicationContext).current() }
+            runCatching { ShraddhaIntegrationHub(context = context.applicationContext).current() }
         }
         voicePlanSession = savedVoicePlan.getOrNull()
         voicePlanLoadError = savedVoicePlan.exceptionOrNull()?.localizedMessage.orEmpty()
@@ -181,7 +181,7 @@ fun AgentCouncilScreen(
                 NovaButton("Refresh saved workflow", onClick = {
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
-                            runCatching { ShraddhaIntegrationHub(context.applicationContext).current() }
+                            runCatching { ShraddhaIntegrationHub(context = context.applicationContext).current() }
                         }
                         voicePlanSession = result.getOrNull()
                         voicePlanLoadError = result.exceptionOrNull()?.localizedMessage.orEmpty()
