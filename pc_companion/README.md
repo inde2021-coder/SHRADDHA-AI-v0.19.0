@@ -26,7 +26,7 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
 - The PC user can choose the virtual desktop (all displays) or an individual monitor for screen sharing and normalized mouse coordinates. The selected monitor is stored locally; changing it affects the next capture/action.
 - Android keyboard shortcuts use a strict allowlist (Enter, Escape, Tab, Ctrl+C/F/Z/S/A/V/X, Alt+Tab/Left/Right and Shift+Tab). Arbitrary key names and shell commands are rejected.
-- Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; encrypted receipts carry explicit success/failure state.
+- Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; the Windows companion persists the bounded receipt ledger so restarting the app does not immediately reopen replay of accepted actions. If receipt persistence fails, the remote action is rejected. Encrypted receipts carry explicit success/failure state.
 - PyAutoGUI's top-left fail-safe is enabled.
 - File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
 
