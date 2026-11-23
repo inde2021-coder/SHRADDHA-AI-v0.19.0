@@ -16,6 +16,11 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice entry points now enforce RECORD_AUDIO permission inside `VoiceSessionManager.start()` as well as in the foreground-service boundary, so future/direct callers cannot bypass the runtime permission check.
+- Live Eyes now checks CAMERA permission before calling `startForeground()` for its camera service. This avoids Android 14+ foreground-service startup failures when camera permission has been revoked and records OFF without briefly starting camera capture.
+- Capability system prompt now uses the configured assistant name and explicitly distinguishes supported tool behavior from unsupported WhatsApp controls, draft-vs-publish, Website Forge preview-vs-deployment and local planning-vs-external-agent execution. Added a regression test for those honesty constraints.
+
+
 - Windows PC Companion now rejects replayed E2E remote-action IDs per peer within a live connection using a bounded replay cache; added regression-test source for duplicate IDs, peer scoping, malformed IDs and cache bounds. Physical PC/phone integration remains untested.
 
 
