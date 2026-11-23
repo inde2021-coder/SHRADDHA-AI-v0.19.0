@@ -1,33 +1,30 @@
-# Security and Data Hub
+# Security and Data Hub design (v0.5.0)
 
-## Device identity and stored credentials
+## Device sharing and file transfer
 
-- Android pairing credentials are encrypted with AES-GCM. The encryption key is non-exportable and held by Android Keystore; SharedPreferences stores only the IV and ciphertext.
-- The Windows companion stores its pairing token through Windows Credential Manager.
-- Pairing codes are single-use and expire. The relay authenticates WebSocket connections with device-scoped bearer credentials.
-- The relay's live session/device registry is currently in process memory. A relay restart clears active sessions; devices must reconnect or pair again. Run one always-on relay instance until a durable shared session registry is deployed.
+- Category permissions are opt-in and stored locally per device.
+- A device publishes only its own category policy.
+- Sharing follows request → receiving-device approval → short-lived one-time category grant → bounded transfer.
+- Android file transfer uses the Storage Access Framework (SAF); the sender chooses a source and the receiver chooses a save destination.
+- File transfers support files from 1 byte through 100 MiB using 48 KiB chunks (maximum 2,134 chunks).
+- Each chunk is sent inside the mutually fingerprint-verified E2E AES-GCM peer-message channel. The relay forwards ciphertext; it does not receive the file bytes in plaintext.
+- The receiver validates exact chunk lengths, persists its received-chunk bitmap, and verifies the complete file with SHA-256 before allowing the final save/complete acknowledgement.
+- Resume requests are based on the receiver's persisted missing-chunk indexes rather than depending solely on the relay's in-memory ACK bitmap. The sender checks the requesting paired-device ID, transfer ID, chunk count, uniqueness and bounds of every requested index before retransmitting.
+- Incoming partial file bytes are stored in the app-private `files/shraddha-transfers` directory. The selected final destination is written through SAF.
+- The relay keeps a short-lived in-memory transfer manifest to validate live chunk routing and acknowledgements. Relay process restart may require re-establishing the approved transfer before retransmission; durable server-side transfer sessions are not yet implemented.
+- File names, sizes, SHA-256 manifest, transfer IDs, and resume/ACK control metadata are currently visible to the trusted relay. Only file chunk payloads are E2E encrypted.
+- Partial files are stored in app-private storage but are not yet encrypted at rest with an Android Keystore key. Device-level file-at-rest encryption remains a hardening item.
+- The current Android transfer activity is not proof of a complete Windows PC native file-transfer UI. Android-to-Android protocol and Windows cross-device acceptance need separate validation before claiming full Android↔PC transfer support.
 
-## End-to-end encrypted device traffic
+## Visual sharing
 
-- Android and PC use ephemeral P-256 ECDH identities and session-bound HKDF-SHA256 key derivation (protocol v2).
-- Both devices must compare and confirm the same short fingerprint through a separate trusted channel. A mismatch or unconfirmed peer blocks encrypted actions, transfers and visual frames.
-- AES-256-GCM protects remote-action envelopes, approved data payloads, file chunks and screen/camera frames. The relay validates envelope metadata, permissions, bounds and rate limits, then forwards ciphertext; it does not decrypt these protected payloads.
-- Screen/camera binary frames use the authenticated visual-frame v2 envelope: source/target identity, frame type, monotonic sequence, nonce and ciphertext. Plain JPEG frames are rejected by the relay and desktop companion. Replay and malformed-frame checks are applied at the receiving endpoint.
-- Some routing metadata (device IDs, message kinds, action kinds, transfer IDs, file names/sizes and timing) remains visible to the relay; E2E encryption does not hide metadata.
+- Camera sharing is user-started, permission-gated, routed only to the selected paired device, and accompanied by Android privacy indicators and an ongoing foreground notification. Rear/front selection is available.
+- Screen sharing requires the Android MediaProjection system consent flow.
+- Screen and camera frames use authenticated E2E encryption and peer fingerprint confirmation.
 
-## Consent and remote control
+## Security limitations and production gates
 
-- Screen and camera sharing are separate opt-in permissions. Android screen capture also requires the operating-system MediaProjection consent flow; camera use requires Android camera permission and a visible user-started session.
-- Remote control requires target-device opt-in, a live time-limited grant and explicit approval of the initial request.
-- The relay rechecks the current target permission, grant expiry, peer identity and current control mode for each encrypted remote action and action result.
-- Switching to owner-only (master) mode immediately revokes non-owner grants, pending control requests and pending actions. A target can also revoke access or disconnect.
-- Each received control action still requires local per-action approval on the target companion. Sensitive screens and actions blocked by Android, Windows, app policy or OS security remain unavailable.
-- Data sharing follows request → recipient approval → short-lived one-time category grant → encrypted payload. Plaintext data-share payloads are rejected.
-
-## Operational and assurance limits
-
-- The relay session registry is not yet durable or multi-instance. Production deployment must use one continuously running WebSocket-capable relay until a shared registry/pub-sub design is implemented.
-- Physical Android↔Windows tests are still required for the exact target Android versions, OEM battery policies, screen/camera consent flows, reconnects and real network conditions.
-- A formal independent penetration test and security review have not been performed. Passing CI is not a substitute for that assessment.
-- Android cannot capture or control every protected surface: banking/OTP/password screens, DRM, apps that block Accessibility, secure system dialogs and OEM-restricted surfaces may be unavailable.
-- This design is consent-based remote assistance, not hidden surveillance or a permission bypass.
+- Pairing/session registry and live transfer grants are in-memory; relay restart clears these sessions.
+- Pairing credentials are stored using the Android device credential store, but server-side durable multi-instance session state is not implemented.
+- No formal penetration test or independent security audit has been performed.
+- Real Android↔Windows pairing, fingerprint confirmation, interrupted large-file transfer, relay restart, destination write and hash-mismatch rejection must be exercised on physical devices.
