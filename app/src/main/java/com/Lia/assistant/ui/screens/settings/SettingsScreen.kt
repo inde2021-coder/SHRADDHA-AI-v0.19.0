@@ -82,6 +82,7 @@ fun SettingsScreen(
     var gatewaySaveError by remember { mutableStateOf(savedGateway.readError) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
+    var voiceMemoryError by remember { mutableStateOf(ConversationMemory.persistenceError()) }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
@@ -230,11 +231,21 @@ fun SettingsScreen(
                     subtitle = if (voiceMemoryEnabled) "Recent voice turns are saved encrypted on this phone" else "Off • voice turns stay in this session",
                     icon = Icons.Default.Speed,
                     switch = voiceMemoryEnabled,
-                    onCheckedChange = {
-                        voiceMemoryEnabled = it
-                        ConversationMemory.setPersistenceEnabled(context, it)
+                    onCheckedChange = { enabled ->
+                        ConversationMemory.setPersistenceEnabled(context, enabled)
+                            .onSuccess {
+                                voiceMemoryEnabled = enabled
+                                voiceMemoryError = null
+                            }
+                            .onFailure { error ->
+                                voiceMemoryEnabled = ConversationMemory.isPersistenceEnabled(context)
+                                voiceMemoryError = error.localizedMessage ?: "Could not update encrypted conversation memory."
+                            }
                     }
                 )
+                voiceMemoryError?.let { error ->
+                    Text(error, color = colors.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                }
                 NovaSettingsRow(
                     title = "Chat History",
                     subtitle = "Review saved conversations",
