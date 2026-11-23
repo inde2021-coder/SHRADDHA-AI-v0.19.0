@@ -58,6 +58,12 @@ class CouncilEvidenceStore(context: Context) {
         updatedAt: Long = System.currentTimeMillis()
     ): Result<Unit> = runCatching {
         require(attempt in 0..99) { "Council attempt is out of range." }
+        require(finalAnswer == null || finalAnswer.length <= MAX_FINAL_ANSWER_CHARS) {
+            "Council final answer exceeds the evidence limit."
+        }
+        require(providerUsage == null || providerUsage.length <= MAX_PROVIDER_USAGE_CHARS) {
+            "Council provider usage exceeds the evidence limit."
+        }
         val allowed = setOf("QUEUED", "RUNNING", "RETRY_PENDING", "COMPLETED", "FAILED", "CANCELLED")
         require(status in allowed) { "Unsupported council task status." }
         val statusKey = prefix(taskId) + "status"
@@ -77,8 +83,8 @@ class CouncilEvidenceStore(context: Context) {
         val answer = finalAnswer ?: previous?.optString("finalAnswer")?.takeIf { it.isNotBlank() }
         val usage = providerUsage ?: previous?.optString("providerUsage")?.takeIf { it.isNotBlank() }
         val duration = elapsedMs ?: previous?.optLong("elapsedMs")?.takeIf { it > 0L }
-        if (answer != null) record.put("finalAnswer", answer.take(9_000))
-        if (usage != null) record.put("providerUsage", usage.take(1_000))
+        if (answer != null) record.put("finalAnswer", answer)
+        if (usage != null) record.put("providerUsage", usage)
         if (duration != null) record.put("elapsedMs", duration.coerceAtLeast(0L))
         store.put(statusKey, record.toString()).getOrThrow()
     }
@@ -91,4 +97,10 @@ class CouncilEvidenceStore(context: Context) {
     }
 
     fun removeTask(taskId: String): Boolean = store.removeAllWithPrefix(prefix(taskId))
+
+    private companion object {
+        const val MAX_FINAL_ANSWER_CHARS = 9_000
+        // Enough for all nine bounded provider responses plus JSON metadata.
+        const val MAX_PROVIDER_USAGE_CHARS = 6_000
+    }
 }
