@@ -55,7 +55,7 @@ export async function publishSocialPost(body, intent, env = process.env) {
     const pageId = env.FACEBOOK_PAGE_ID || '';
     const accessToken = env.FACEBOOK_PAGE_ACCESS_TOKEN || '';
     const version = env.META_GRAPH_API_VERSION || 'v24.0';
-    if (!/^[0-9]{5,40}$/.test(pageId) || accessToken.length < 20 || accessToken.length > 8192 || !/^v[0-9]{1,2}\\.[0-9]$/.test(version)) {
+    if (!/^[0-9]{5,40}$/.test(pageId) || accessToken.length < 20 || accessToken.length > 8192 || !/^v[0-9]{1,2}\.[0-9]$/.test(version)) {
       fail(503, 'Facebook Page ID, Page access token and Meta Graph API version are not configured correctly');
     }
     let upstream;
@@ -75,7 +75,7 @@ export async function publishSocialPost(body, intent, env = process.env) {
     const accountId = env.INSTAGRAM_ACCOUNT_ID || '';
     const accessToken = env.INSTAGRAM_ACCESS_TOKEN || '';
     const version = env.META_GRAPH_API_VERSION || 'v24.0';
-    if (!/^[0-9]{5,40}$/.test(accountId) || accessToken.length < 20 || accessToken.length > 8192 || !/^v[0-9]{1,2}\\.[0-9]$/.test(version)) {
+    if (!/^[0-9]{5,40}$/.test(accountId) || accessToken.length < 20 || accessToken.length > 8192 || !/^v[0-9]{1,2}\.[0-9]$/.test(version)) {
       fail(503, 'Instagram professional account ID, access token and Meta Graph API version are not configured correctly');
     }
     const isVideo = intent.mediaKind === 'reel' || intent.mediaKind === 'story_video';
