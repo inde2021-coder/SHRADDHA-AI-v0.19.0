@@ -49,6 +49,7 @@ import `in`.shraddha.ai.future.SecureBackupCodec
 import `in`.shraddha.ai.future.UserBackupManager
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import `in`.shraddha.ai.brain.UnifiedMemoryRepository
+import `in`.shraddha.ai.brain.LocalKnowledgeDocumentStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -78,6 +79,38 @@ fun DataVaultScreen(navController: NavController) {
     var cloudPassword by remember { mutableStateOf("") }
     var showMemoryDeleteConfirmation by remember { mutableStateOf(false) }
     var showClearLocalMemoryConfirmation by remember { mutableStateOf(false) }
+    var knowledgeDocuments by remember { mutableStateOf(emptyList<LocalKnowledgeDocumentStore.Document>()) }
+    var knowledgeQuery by remember { mutableStateOf("") }
+    var knowledgeResults by remember { mutableStateOf(emptyList<LocalKnowledgeDocumentStore.SearchHit>()) }
+    var knowledgeCloudConsent by remember { mutableStateOf(false) }
+    var knowledgeCloudEmail by remember { mutableStateOf("") }
+    var knowledgeCloudPassword by remember { mutableStateOf("") }
+
+    val knowledgePdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) {
+            status = "Knowledge PDF import cancelled."
+        } else {
+            scope.launch {
+                isBusy = true
+                val result = withContext(Dispatchers.IO) {
+                    val label = uri.lastPathSegment?.substringAfterLast('/')?.take(120)?.ifBlank { "Imported PDF" } ?: "Imported PDF"
+                    LocalKnowledgeDocumentStore(context.applicationContext).importPdf(
+                        context = context.applicationContext,
+                        consent = true,
+                        id = java.util.UUID.randomUUID().toString().replace("-", ""),
+                        title = label.removeSuffix(".pdf").take(160).ifBlank { "Imported PDF" },
+                        sourceLabel = label,
+                        pdfUri = uri
+                    )
+                }
+                status = result.fold({ "PDF OCR import complete. Text is stored in encrypted local Knowledge Brain." },
+                    { "PDF import failed: ${it.message}" })
+                isBusy = false
+                if (result.isSuccess) knowledgeDocuments =
+                    LocalKnowledgeDocumentStore(context.applicationContext).listDocuments().getOrDefault(emptyList())
+            }
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val envelope = pendingExport
@@ -221,6 +254,94 @@ fun DataVaultScreen(navController: NavController) {
                 type = NovaButtonType.TEXT,
                 enabled = !isBusy && selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))
             )
+        }
+
+        NovaGlassCard {
+            Text("PERSONAL KNOWLEDGE BRAIN", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text("Import PDFs with Hindi/English OCR, search encrypted source-grounded notes, and optionally sync encrypted records across devices.", color = colors.textSecondary, fontSize = 11.sp)
+            NovaButton(text = "Import PDF with OCR", onClick = { knowledgePdfLauncher.launch(arrayOf("application/pdf")) },
+                modifier = Modifier.fillMaxWidth(), enabled = !isBusy)
+            NovaButton(text = "Refresh knowledge documents", onClick = {
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { LocalKnowledgeDocumentStore(context.applicationContext).listDocuments() }
+                    result.onSuccess { knowledgeDocuments = it; status = "Loaded ${it.size} knowledge document(s)." }
+                        .onFailure { status = "Could not load documents: ${it.message}" }
+                }
+            }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+            NovaTextField(value = knowledgeQuery, onValueChange = { knowledgeQuery = it.take(300) },
+                modifier = Modifier.fillMaxWidth(), placeholder = "Search in Hindi or English")
+            NovaButton(text = "Search Knowledge", onClick = {
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { LocalKnowledgeDocumentStore(context.applicationContext).search(knowledgeQuery) }
+                    result.onSuccess { knowledgeResults = it; status = "Found ${it.size} cited sections." }
+                        .onFailure { status = "Search failed: ${it.message}" }
+                }
+            }, modifier = Modifier.fillMaxWidth(), enabled = knowledgeQuery.isNotBlank() && !isBusy, type = NovaButtonType.SECONDARY)
+            knowledgeResults.forEach { hit ->
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(hit.title, color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(hit.excerpt, color = colors.textSecondary, fontSize = 10.sp)
+                    Text(hit.citation, color = colors.accent, fontSize = 9.sp)
+                }
+            }
+            Text("Documents: ${knowledgeDocuments.size}", color = colors.textSecondary, fontSize = 10.sp)
+            knowledgeDocuments.forEach { document ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(document.title, color = colors.textPrimary, fontSize = 11.sp)
+                        Text(document.sourceLabel, color = colors.textTertiary, fontSize = 9.sp)
+                    }
+                    NovaButton(text = "Delete", onClick = {
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                LocalKnowledgeDocumentStore(context.applicationContext).delete(document.id)
+                            }
+                            status = result.fold({ "Knowledge document deleted." }, { "Delete failed: ${it.message}" })
+                            knowledgeDocuments = LocalKnowledgeDocumentStore(context.applicationContext).listDocuments().getOrDefault(emptyList())
+                            knowledgeResults = emptyList()
+                        }
+                    }, type = NovaButtonType.TEXT)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = knowledgeCloudConsent, onCheckedChange = {
+                    knowledgeCloudConsent = it
+                    if (!it) knowledgeCloudPassword = ""
+                })
+                Text("I explicitly approve encrypted Firebase knowledge sync", color = colors.textSecondary, fontSize = 10.sp)
+            }
+            if (knowledgeCloudConsent) {
+                NovaTextField(value = knowledgeCloudEmail, onValueChange = { knowledgeCloudEmail = it.take(254) },
+                    modifier = Modifier.fillMaxWidth(), placeholder = "Firebase account email")
+                NovaTextField(value = knowledgeCloudPassword, onValueChange = { knowledgeCloudPassword = it.take(128) },
+                    modifier = Modifier.fillMaxWidth(), placeholder = "Firebase password", secret = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(text = "Sync", onClick = {
+                        scope.launch {
+                            isBusy = true
+                            val result = withContext(Dispatchers.IO) {
+                                LocalKnowledgeDocumentStore(context.applicationContext).syncToCloud(true, knowledgeCloudEmail, knowledgeCloudPassword)
+                            }
+                            knowledgeCloudPassword = ""
+                            status = result.fold({ "Encrypted sync complete: $it document(s)." }, { "Cloud sync failed: ${it.message}" })
+                            isBusy = false
+                        }
+                    }, modifier = Modifier.weight(1f), enabled = !isBusy && knowledgeCloudEmail.isNotBlank() && knowledgeCloudPassword.length >= 8)
+                    NovaButton(text = "Restore", onClick = {
+                        scope.launch {
+                            isBusy = true
+                            val result = withContext(Dispatchers.IO) {
+                                LocalKnowledgeDocumentStore(context.applicationContext).restoreFromCloud(true, knowledgeCloudEmail, knowledgeCloudPassword)
+                            }
+                            knowledgeCloudPassword = ""
+                            status = result.fold({ "Cloud restore complete: $it document(s)." }, { "Cloud restore failed: ${it.message}" })
+                            if (result.isSuccess) knowledgeDocuments = LocalKnowledgeDocumentStore(context.applicationContext).listDocuments().getOrDefault(emptyList())
+                            isBusy = false
+                        }
+                    }, modifier = Modifier.weight(1f), enabled = !isBusy && knowledgeCloudEmail.isNotBlank() && knowledgeCloudPassword.length >= 8,
+                        type = NovaButtonType.SECONDARY)
+                }
+            }
         }
 
         NovaGlassCard(cornerRadius = 22.dp, elevation = 6.dp) {
