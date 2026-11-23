@@ -57,3 +57,19 @@ test('media publishing accepts only bounded image/video attachments for supporte
   assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: bytes }, 'bluesky'));
   assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: 'not-base64' }, 'telegram'));
 });
+
+test('Instagram requires a safe public HTTPS media URL and a supported media type', () => {
+  const intent = validatePublishIntent({ platform: 'instagram', text: 'caption', preview: 'caption', confirmed: true, mediaKind: 'reel', mediaUrl: 'https://cdn.example.com/video.mp4?signature=abc' });
+  assert.equal(intent.mediaKind, 'reel');
+  assert.match(intent.mediaUrl, /^https:\/\//);
+  assert.throws(() => validateInstagramMediaUrl('http://cdn.example.com/image.jpg'), /public HTTPS/);
+  assert.throws(() => validateInstagramMediaUrl('https://localhost/image.jpg'), /public HTTPS/);
+  assert.throws(() => validateInstagramMediaUrl('https://127.0.0.1/image.jpg'), /public HTTPS/);
+  assert.throws(() => validateInstagramMediaUrl('https://user:pass@cdn.example.com/image.jpg'), /public HTTPS/);
+  assert.throws(() => validatePublishIntent({ platform: 'instagram', text: 'caption', preview: 'caption', confirmed: true, mediaKind: 'video', mediaUrl: 'https://cdn.example.com/video.mp4' }), /media type/);
+});
+
+test('Facebook text posts are valid while Instagram media cannot be scheduled', () => {
+  assert.equal(validatePublishIntent({ platform: 'facebook', text: 'Page post', preview: 'Page post', confirmed: true }).platform, 'facebook');
+  assert.throws(() => validateScheduleIntent({ platform: 'instagram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z', mediaKind: 'image', mediaUrl: 'https://cdn.example.com/p.jpg' }, Date.parse('2026-11-23T06:00:00Z')), /text-only/);
+});
