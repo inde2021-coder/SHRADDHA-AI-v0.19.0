@@ -538,7 +538,7 @@ class PcCompanionApp:
             nonce_b64 = base64.b64encode(nonce).decode("ascii").rstrip("=")
             ciphertext_b64 = base64.b64encode(ciphertext).decode("ascii").rstrip("=")
             jpeg = DeviceE2ECrypto.decrypt(key, nonce_b64, ciphertext_b64, aad)
-            if len(jpeg) < 4 or jpeg[:2] != b"\\xff\\xd8" or jpeg[-2:] != b"\\xff\\xd9":
+            if len(jpeg) < 4 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\xff\xd9":
                 return
             with self.e2e_lock:
                 current = self.peer_keys.get(source_id)
