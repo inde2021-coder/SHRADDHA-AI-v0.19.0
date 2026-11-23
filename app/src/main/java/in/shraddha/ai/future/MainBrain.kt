@@ -165,6 +165,7 @@ class MainBrain(
             shouldContinue: () -> Boolean,
             onProgress: (String, Int, Int) -> Unit,
             onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> },
+            resumeStages: Map<String, CouncilSavedStage> = emptyMap(),
             budget: CouncilExecutionBudget = CouncilExecutionBudget(),
             onProviderCall: (String, Int, Int, Long) -> Unit = { _, _, _, _ -> }
         ): Result<CouncilExecutionReport> =
@@ -177,6 +178,7 @@ class MainBrain(
                 shouldContinue = shouldContinue,
                 onProgress = onProgress,
                 onStageCompleted = onStageCompleted,
+                resumeStages = resumeStages,
                 budget = budget,
                 onProviderCall = onProviderCall
             )
