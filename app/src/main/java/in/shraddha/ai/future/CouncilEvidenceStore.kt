@@ -61,9 +61,12 @@ class CouncilEvidenceStore(context: Context) {
         val allowed = setOf("QUEUED", "RUNNING", "RETRY_PENDING", "COMPLETED", "FAILED", "CANCELLED")
         require(status in allowed) { "Unsupported council task status." }
         val statusKey = prefix(taskId) + "status"
-        val previous = store.get(statusKey).getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+        // Do not turn an encrypted-store/Keystore read failure into an empty status:
+        // doing so could overwrite previously persisted token usage or a final answer.
+        val previousRaw = store.get(statusKey).getOrThrow()
+        val previous = previousRaw
+            .takeIf { it.isNotBlank() }
+            ?.let { JSONObject(it) }
         val record = JSONObject()
             .put("schemaVersion", 1)
             .put("taskId", taskToken(taskId))
