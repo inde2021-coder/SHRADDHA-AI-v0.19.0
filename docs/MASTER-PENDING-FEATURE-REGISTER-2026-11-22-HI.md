@@ -213,4 +213,5 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Voice Gateway encrypted configuration save and clear now use the same durable-commit check. A failed disk write is surfaced as an error rather than being silently treated as success.
 - Android Keystore AES-GCM encryption and existing encrypted storage formats are unchanged; no plaintext credential storage was added.
 - No tests/builds were run, in accordance with the current feature-completion instruction.
-- Provider-specific OpenAI/Groq/Claude/Perplexity key removal now checks the encrypted-store commit result; the UI can no longer report a successful removal when the persisted record could not be deleted. Verify these paths in the consolidated test/build pass, including key migration, save/remove, app restart and Keystore-loss behavior.
+- Provider-specific OpenAI/Groq/Claude/Perplexity key removal now checks the encrypted-store commit result; the UI can no longer report a successful removal when the persisted record could not be deleted.
+- Main Brain provider fallback now follows an explicit stable order (preferred provider first, then Gemini/OpenAI/Groq/Claude/Perplexity) rather than relying on Set iteration order. Verify these paths in the consolidated test/build pass, including key migration, save/remove, app restart and Keystore-loss behavior.
