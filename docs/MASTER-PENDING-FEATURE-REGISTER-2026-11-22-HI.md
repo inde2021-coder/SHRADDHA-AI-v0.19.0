@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Device Link's inbound E2E receiver now wipes decrypted plaintext and AAD byte arrays before dispatching the parsed message to feature callbacks; decrypted JSON is the only retained representation.
+
+
 - Device Link's E2E message sender now wipes serialized plaintext JSON and additional-authenticated-data buffers immediately after encryption, including exceptional paths.
 
 
