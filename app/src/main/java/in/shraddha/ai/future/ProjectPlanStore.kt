@@ -20,14 +20,16 @@ class ProjectPlanStore(context: Context) {
     @Synchronized
     fun save(plan: ProjectPlan): Result<List<ProjectPlan>> = runCatching {
         validate(plan)
-        val ids = readIndex().filterNot { it == plan.id }.toMutableList()
+        val previousIds = readIndex()
+        val ids = previousIds.filterNot { it == plan.id }.toMutableList()
         ids.add(0, plan.id)
         val retained = ids.take(MAX_PLANS)
         val values = linkedMapOf(
             key(plan.id) to encode(plan),
             INDEX_KEY to JSONArray(retained).toString()
         )
-        store.putAll(values).getOrThrow()
+        val evictedKeys = (previousIds - retained.toSet()).map(::key).toSet()
+        store.putAllAndRemove(values, evictedKeys).getOrThrow()
         retained.mapNotNull { id ->
             store.get(key(id)).getOrThrow().takeIf { it.isNotBlank() }?.let(::decode)
         }.sortedByDescending { it.createdAt }
@@ -37,8 +39,11 @@ class ProjectPlanStore(context: Context) {
     fun delete(id: String): Result<List<ProjectPlan>> = runCatching {
         require(ID_PATTERN.matches(id)) { "Invalid project ID." }
         val ids = readIndex().filterNot { it == id }
-        store.remove(key(id))
-        store.put(INDEX_KEY, JSONArray(ids).toString()).getOrThrow()
+        // Delete the encrypted record and update its index in one durable transaction.
+        store.putAllAndRemove(
+            mapOf(INDEX_KEY to JSONArray(ids).toString()),
+            setOf(key(id))
+        ).getOrThrow()
         ids.mapNotNull { item ->
             store.get(key(item)).getOrThrow().takeIf { it.isNotBlank() }?.let(::decode)
         }.sortedByDescending { it.createdAt }
