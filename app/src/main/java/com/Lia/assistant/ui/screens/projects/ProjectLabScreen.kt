@@ -346,6 +346,32 @@ fun ProjectLabScreen(navController: NavController) {
                             if (milestone.note.isNotBlank()) {
                                 Text(milestone.note, color = colors.textTertiary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
+                            if (workflow?.state == ProjectWorkflowState.RUNNING && workflow.currentMilestoneId == milestone.id) {
+                                NovaButton(
+                                    text = "Confirm checkpoint • ${milestone.title.take(24)}",
+                                    onClick = {
+                                        scope.launch {
+                                            isSaving = true
+                                            val result = withContext(Dispatchers.IO) {
+                                                runCatching {
+                                                    val updatedPlan = ProjectWorkspace.update(plan, milestone.id, MilestoneState.DONE, "Checkpoint confirmed by user at ${System.currentTimeMillis()}.")
+                                                    val snapshot = workflowStore.checkpoint(plan, milestone.id, "User confirmed milestone completion: ${milestone.title}")
+                                                    ProjectPlanStore(context).save(updatedPlan).getOrThrow()
+                                                    updatedPlan to snapshot
+                                                }
+                                            }
+                                            result.onSuccess { (updatedPlan, snapshot) ->
+                                                plans = ProjectPlanStore(context).loadAll().getOrElse { plans }
+                                                workflowSnapshots = workflowSnapshots + (plan.id to snapshot)
+                                                status = snapshot.message
+                                            }.onFailure { status = it.message ?: "Checkpoint could not be saved." }
+                                            isSaving = false
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !isSaving
+                                )
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 listOf(
                                     MilestoneState.TODO to "TODO",
