@@ -106,6 +106,11 @@ object ConversationMemory {
                 persistenceError = null
             }
         }
+    }.onFailure { error ->
+        synchronized(lock) {
+            persistenceEnabled = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(ENABLED, false)
+            persistenceError = error.localizedMessage ?: "Could not update encrypted conversation memory."
+        }
     }
 
     fun clearSaved(context: Context) {
