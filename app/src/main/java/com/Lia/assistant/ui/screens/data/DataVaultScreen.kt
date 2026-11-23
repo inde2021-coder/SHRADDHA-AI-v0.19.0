@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +88,31 @@ fun DataVaultScreen(navController: NavController) {
     var knowledgeCloudConsent by remember { mutableStateOf(false) }
     var knowledgeCloudEmail by remember { mutableStateOf("") }
     var knowledgeCloudPassword by remember { mutableStateOf("") }
+
+    LaunchedEffect(context) {
+        isBusy = true
+        val loaded = withContext(Dispatchers.IO) {
+            val memories = runCatching {
+                EncryptedFeatureStore(context.applicationContext).getAllWithPrefixes(setOf("memory_")).getOrThrow()
+            }
+            val documents = runCatching {
+                LocalKnowledgeDocumentStore(context.applicationContext).listDocuments().getOrThrow()
+            }
+            memories to documents
+        }
+        loaded.first.onSuccess { values ->
+            memoryRecords = values.keys.map { it.removePrefix("memory_") }.sorted()
+        }
+        loaded.second.onSuccess { knowledgeDocuments = it }
+        status = buildString {
+            append("Memory: ").append(memoryRecords.size).append(" records • Knowledge: ")
+            append(knowledgeDocuments.size).append(" documents")
+            loaded.first.exceptionOrNull()?.let { append(" • Memory load error: ").append(it.message) }
+            loaded.second.exceptionOrNull()?.let { append(" • Knowledge load error: ").append(it.message) }
+        }
+        isBusy = false
+    }
+
 
     val knowledgePdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) {
