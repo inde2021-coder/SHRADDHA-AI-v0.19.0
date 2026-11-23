@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
-import { resolveProviderOrder, configuredProviderMap, supportedProviders } from './provider-routing.js';
+import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
 import { requestProviderJson } from './provider-http.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent } from './social-publishing.js';
@@ -520,7 +520,27 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const configured = configuredProviderMap(process.env);
       const autoOrder = resolveProviderOrder({ requested: 'auto', env: process.env });
-      return json(res, 200, { providers: configured, configuredCount: Object.values(configured).filter(Boolean).length, autoRouting: { available: autoOrder.length > 0, order: autoOrder, fallbackEnabled: true }, keysRemainServerSide: true });
+      const models = {
+        gemini: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+        openai: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+        anthropic: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+        groq: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+        perplexity: process.env.PERPLEXITY_MODEL || 'sonar'
+      };
+      const capabilities = {
+        gemini: ['text', 'vision'],
+        openai: ['text', 'vision'],
+        anthropic: ['text', 'vision'],
+        groq: ['text'],
+        perplexity: ['text', 'web-search']
+      };
+      return json(res, 200, {
+        providers: configured,
+        configuredCount: Object.values(configured).filter(Boolean).length,
+        catalog: Object.keys(configured).map(name => ({ name, configured: configured[name], model: models[name], capabilities: capabilities[name] })),
+        autoRouting: { available: autoOrder.length > 0, order: autoOrder, fallbackEnabled: true, retriesTransientErrors: true },
+        keysRemainServerSide: true
+      });
     }
     if (req.method === 'POST' && req.url === '/api/ai/summarize') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
