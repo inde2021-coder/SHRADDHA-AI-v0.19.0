@@ -101,7 +101,7 @@ class ProjectPlanStore(context: Context) {
         val ids = (0 until array.length()).map { array.getString(it) }
         require(ids.all { ID_PATTERN.matches(it) }) { "Project index contains an invalid project ID; refusing to silently discard entries." }
         require(ids.distinct().size == ids.size) { "Project index contains duplicate IDs; refusing to merge ambiguous project records." }
-        ids
+        return ids
     }
 
     private fun validate(plan: ProjectPlan) {
