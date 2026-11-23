@@ -114,7 +114,7 @@ fun SocialPublishingScreen(navController: NavController) {
         NovaGlassCard {
             Text("SCHEDULE (TEXT ONLY)", color = colors.accent)
             OutlinedTextField(value = scheduledAt, onValueChange = { scheduledAt = it.take(48) }, label = { Text("ISO-8601 date/time with timezone") }, modifier = Modifier.fillMaxWidth())
-            Text("Example: 2026-11-23T18:30:00+05:30. Scheduling needs Firebase sign-in and backend Firebase Admin credentials. Posts are not retried automatically after an ambiguous provider response.", color = colors.textSecondary)
+            Text("Use ISO-8601 with a timezone, for example a local timestamp ending in +05:30 or UTC ending in Z. Scheduling needs Firebase sign-in and backend Firebase Admin credentials. Posts are not retried automatically after an ambiguous provider response.", color = colors.textSecondary)
         }
         NovaGlassCard {
             Text(status, color = colors.textSecondary)
