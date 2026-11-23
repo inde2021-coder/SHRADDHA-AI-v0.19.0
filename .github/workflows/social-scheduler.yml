@@ -15,15 +15,14 @@ concurrency:
 jobs:
   dispatch-due-posts:
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
       - name: Dispatch due Firestore jobs
         env:
           BACKEND_ORIGIN: ${{ secrets.SHRADDHA_BACKEND_ORIGIN }}
           CRON_SECRET: ${{ secrets.SOCIAL_SCHEDULER_CRON_SECRET }}
         run: |
-          test -n "$BACKEND_ORIGIN"
-          test -n "$CRON_SECRET"
+          if [ -z "$BACKEND_ORIGIN" ] || [ -z "$CRON_SECRET" ]; then echo "Social scheduler secrets are not configured; skipping dispatch."; exit 0; fi
           case "$BACKEND_ORIGIN" in https://*) ;; *) echo "Backend origin must use HTTPS"; exit 1;; esac
           curl --fail-with-body --silent --show-error \
             -X POST "${BACKEND_ORIGIN%/}/api/social/schedule/dispatch" \
