@@ -10,8 +10,8 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data, decrypt_e2e_message
         android_private, android_public = create_e2e_identity()
         windows_private, windows_public = create_e2e_identity()
-        android_key, android_fp = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
-        windows_key, windows_fp = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
+        android_key, android_fp = derive_e2e_peer_key(android_private, windows_public, "session-1", "android-1", "windows-1")
+        windows_key, windows_fp = derive_e2e_peer_key(windows_private, android_public, "session-1", "windows-1", "android-1")
         self.assertEqual(android_key, windows_key)
         self.assertEqual(android_fp, windows_fp)
         self.assertRegex(android_fp, r"^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$")
@@ -45,8 +45,8 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data, decrypt_e2e_message
         android_private, android_public = create_e2e_identity()
         windows_private, windows_public = create_e2e_identity()
-        android_key, _ = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
-        windows_key, _ = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
+        android_key, _ = derive_e2e_peer_key(android_private, windows_public, "session-1", "android-1", "windows-1")
+        windows_key, _ = derive_e2e_peer_key(windows_private, android_public, "session-1", "windows-1", "android-1")
         request_id = "shareRequest123456"
         category = "media"
         payload = {"fileName": "photo.jpg", "mimeType": "image/jpeg", "contentType": "file",
@@ -72,8 +72,8 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from e2e_crypto import DeviceE2ECrypto
         alice = DeviceE2ECrypto()
         bob = DeviceE2ECrypto()
-        alice_key, alice_fingerprint = alice.derive_peer_key(bob.public_key_base64, "android-device", "windows-device")
-        bob_key, bob_fingerprint = bob.derive_peer_key(alice.public_key_base64, "windows-device", "android-device")
+        alice_key, alice_fingerprint = alice.derive_peer_key(bob.public_key_base64, "session-1", "android-device", "windows-device")
+        bob_key, bob_fingerprint = bob.derive_peer_key(alice.public_key_base64, "session-1", "windows-device", "android-device")
         self.assertEqual(alice_key, bob_key)
         self.assertEqual(alice_fingerprint, bob_fingerprint)
         sealed = DeviceE2ECrypto.encrypt(alice_key, b"approved remote command", b"android-device|windows-device|remote_action")
@@ -86,7 +86,7 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from e2e_crypto import DeviceE2ECrypto
         alice = DeviceE2ECrypto()
         with self.assertRaises(ValueError):
-            alice.derive_peer_key("%%%invalid%%%", "a", "b")
+            alice.derive_peer_key("%%%invalid%%%", "session-1", "a", "b")
         with self.assertRaises(ValueError):
             DeviceE2ECrypto.encrypt(b"x" * 31, b"hello", b"aad")
 
