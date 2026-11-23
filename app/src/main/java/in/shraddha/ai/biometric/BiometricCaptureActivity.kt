@@ -25,6 +25,10 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import android.os.Build
+import android.view.WindowManager
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
@@ -63,8 +67,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
         const val EXTRA_RESULT = "result_text"
         private const val CAMERA_PERMISSION = 701
         private const val AUDIO_PERMISSION = 702
+        private const val STATE_DEVICE_AUTHENTICATED = "device_auth_completed"
     }
     private lateinit var message: TextView
+    @Volatile private var deviceAuthenticationCompleted = false
     private lateinit var action: Button
     private lateinit var cameraExecutor: ExecutorService
     @Volatile private var modelLoadThread: Thread? = null
@@ -130,8 +136,66 @@ class BiometricCaptureActivity : AppCompatActivity() {
             finishWith("Consent, person profile or calibrated threshold missing; capture blocked.")
             return
         }
-        message = TextView(this).apply { text = "Downloading and verifying the selected biometric model…"; setTextColor(android.graphics.Color.WHITE) }
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        message = TextView(this).apply { text = "Verifying this device owner before opening biometric profiles…"; setTextColor(android.graphics.Color.WHITE) }
         setContentView(LinearLayout(this).apply { setPadding(24, 32, 24, 32); setBackgroundColor(Color.rgb(7, 11, 20)); addView(message) })
+        if (savedInstanceState?.getBoolean(STATE_DEVICE_AUTHENTICATED, false) == true) {
+            deviceAuthenticationCompleted = true
+            loadBiometricModel(kind, mode, id, name, threshold)
+        } else {
+            authenticateDeviceOwner {
+                deviceAuthenticationCompleted = true
+                loadBiometricModel(kind, mode, id, name, threshold)
+            }
+        }
+    }
+
+    private fun authenticateDeviceOwner(onAuthenticated: () -> Unit) {
+        val authenticators = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        }
+        val manager = BiometricManager.from(this)
+        when (manager.canAuthenticate(authenticators)) {
+            BiometricManager.BIOMETRIC_SUCCESS -> Unit
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
+                return finishWith("Set up a strong fingerprint/face biometric or device screen lock before using biometric profiles.")
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
+                return finishWith("This device has no supported biometric hardware; biometric profile access is blocked.")
+            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
+                return finishWith("Device biometric hardware is temporarily unavailable; try again later.")
+            else -> return finishWith("Device-owner verification is unavailable; biometric profile access is blocked.")
+        }
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Verify device owner")
+            .setSubtitle("Protecting encrypted face and voice profiles")
+            .setDescription("Shraddha AI does not open biometric profiles until this device confirms you.")
+            .setAllowedAuthenticators(authenticators)
+            .apply {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) setNegativeButtonText("Cancel")
+            }
+            .build()
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    super.onAuthenticationSucceeded(result)
+                    if (!isFinishing && !isDestroyed) onAuthenticated()
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    super.onAuthenticationError(errorCode, errString)
+                    if (!isFinishing && !isDestroyed) finishWith("Device verification cancelled or failed: $errString")
+                }
+                override fun onAuthenticationFailed() {
+                    super.onAuthenticationFailed()
+                    if (!isFinishing && !isDestroyed) message.text = "Verification did not match. Try again."
+                }
+            })
+        prompt.authenticate(promptInfo)
+    }
+
+    private fun loadBiometricModel(kind: String, mode: String, id: String, name: String, threshold: Float) {
+        message.text = "Downloading and verifying the selected biometric model…"
         modelLoadThread = Thread({
             try {
                 BiometricModelInstaller.ensureInstalled(applicationContext, kind)
@@ -142,6 +206,11 @@ class BiometricCaptureActivity : AppCompatActivity() {
                 runOnUiThread { if (!isFinishing) { if (kind == "speaker") buildSpeakerScreen(mode, id, name, threshold) else buildFaceScreen(mode, id, name, threshold) } }
             } catch (error: Exception) { finishWith("Biometric model installation/loading failed: ${error.message}") }
         }, "BiometricModelLoad").apply { start() }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_DEVICE_AUTHENTICATED, deviceAuthenticationCompleted)
+        super.onSaveInstanceState(outState)
     }
 
     private fun baseLayout(title: String, detail: String): LinearLayout {
