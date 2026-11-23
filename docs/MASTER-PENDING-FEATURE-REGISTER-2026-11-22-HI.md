@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- EncryptedFeatureStore batch writes now wipe each intermediate AES-GCM ciphertext buffer in `finally` blocks, including failures during Base64 encoding or editor updates.
+
+
 - Gemini API-key storage now distinguishes a genuinely absent encrypted record (eligible for one-time legacy plaintext migration) from a partial ciphertext/IV record; incomplete encrypted records raise a recovery error and are never treated as an empty key or overwritten automatically.
 
 
