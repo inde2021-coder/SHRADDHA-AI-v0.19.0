@@ -136,6 +136,9 @@ class FirebaseCloudVault(private val context: Context) {
                 .collection("users").document(user.uid).collection("vault").document(key)
                 .get().await()
             val firestorePayload = firestoreDocument.getString("payload")
+            if (firestoreDocument.exists()) {
+                require(!firestorePayload.isNullOrBlank()) { "The Firestore backup record exists but has no payload; restore was stopped to avoid treating damaged data as an empty backup." }
+            }
             val realtimePayload = if (!firestoreDocument.exists() && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
                 FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
                     .reference.child("users").child(user.uid).child("vault").child(key).get().await()
