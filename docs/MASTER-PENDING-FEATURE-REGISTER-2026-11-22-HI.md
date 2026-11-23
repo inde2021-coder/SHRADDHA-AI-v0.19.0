@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- MainBrainSchedulerRuntime now latches a process-local persistence fault after any failed durable snapshot write and refuses subsequent task execution in that process until restart/recovery. This prevents later callers from continuing to use a scheduler whose in-memory state may no longer match its encrypted durable snapshot.
+
+
 - Background WorkManager and Main Brain foreground task claim paths now catch durable scheduler persistence failures and return safe error results before running the side effect; an in-memory state transition is not treated as a successful durable claim.
 
 
