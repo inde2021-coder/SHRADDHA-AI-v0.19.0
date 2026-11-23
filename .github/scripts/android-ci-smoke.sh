@@ -42,6 +42,15 @@ dump_diagnostics() {
 }
 trap 'status=$?; if (( status != 0 )); then dump_diagnostics; fi' EXIT
 
+APK_PATH="app/build/outputs/apk/debug/app-universal-debug.apk"
+if [[ ! -f "$APK_PATH" ]]; then APK_PATH="app/build/outputs/apk/debug/app-debug.apk"; fi
+if [[ ! -f "$APK_PATH" ]]; then
+  echo "ERROR: universal debug APK was not generated."
+  find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print || true
+  exit 1
+fi
+
+echo "Installing universal debug APK: $APK_PATH"
 install_ok=false
 for attempt in 1 2 3 4 5; do
   echo "APK install attempt $attempt/5 on $SERIAL"
@@ -50,7 +59,7 @@ for attempt in 1 2 3 4 5; do
     "$ADB" devices -l || true
     exit 1
   fi
-  if timeout 180 "$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk; then
+  if timeout 180 "$ADB" -s "$SERIAL" install --no-streaming -r "$APK_PATH"; then
     install_ok=true
     break
   fi
