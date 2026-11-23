@@ -63,7 +63,8 @@ class OperatorActivity : Activity() {
             }.show()
         })
         log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE6F5F7.toInt()); setPadding(14, 18, 14, 18) }
-        root.addView(log, LinearLayout.LayoutParams(-1, 240))
+        val logHeight = (240 * resources.displayMetrics.density).toInt()
+        root.addView(log, LinearLayout.LayoutParams(-1, logHeight))
         root.addView(action("← वापस") { finish() })
         val pageScroll = ScrollView(this).apply {
             isFillViewport = true
