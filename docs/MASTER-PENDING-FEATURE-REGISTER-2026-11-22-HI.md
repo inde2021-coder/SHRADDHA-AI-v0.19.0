@@ -367,3 +367,10 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 
 - Firebase cloud restore no longer swallows Firestore/Realtime Database permission or network failures and reports them as "backup not found". Firestore remains authoritative: RTDB fallback is attempted only when the Firestore document is genuinely absent. An existing Firestore record with a missing/blank payload is reported as malformed instead of silently returning an empty backup. Live Firebase auth/rules/network behavior remains unverified until credentials and a configured project are available.
 - Background council final/retry handling now catches evidence-store exceptions and best-effort transitions the claimed scheduler task to FAILED, preventing a persistence exception from leaving the shared scheduler permanently RUNNING. No failure-injection test or Android build has been run.
+
+
+## 23 November 2026 — Additional source audit repairs (not yet tested)
+
+- Live Visual Translation now wipes its copied camera frame and releases its single-flight gate on both synchronous gateway exceptions and asynchronous callback completion, including when a UI/audit callback throws. Previously, an exception before callback registration or inside the callback could leave the translation gate permanently in-flight and retain a copied frame.
+- Project Lab plan saves now atomically write the new plan/index while removing encrypted records evicted by the 20-plan retention cap. Plan deletion now atomically updates the index and removes the encrypted plan in the same EncryptedFeatureStore transaction; previously the delete result was ignored and failed removal could leave an orphaned record.
+- These are source-level fixes only. Unit tests, Android build, emulator, Firebase and physical camera/translation tests remain unrun.
