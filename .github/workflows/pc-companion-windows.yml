@@ -1,4 +1,4 @@
-name: Windows PC Companion
+name: Shraddha Windows Desktop Companion
 
 env:
   GIT_CONFIG_COUNT: "1"
@@ -9,30 +9,9 @@ on:
   push:
     branches: [work/step-01-source-audit-fixes, optimization/apk-size-without-feature-loss]
     paths:
-      - "pc_companion/**"
       - "desktop-companion/shraddha-pc-companion/**"
       - ".github/workflows/pc-companion-windows.yml"
 jobs:
-  build-windows-companion:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: python -m pip install -r pc_companion/requirements.txt
-      - name: Run protocol and action tests
-        run: python -m unittest discover -s pc_companion/tests -v
-      - name: Build Windows executable
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --collect-all keyring --collect-all cryptography pc_companion/agent.py
-      - uses: actions/upload-artifact@v6
-        with:
-          name: ShraddhaAI-PC-Companion-Windows
-          path: dist/ShraddhaAI-PC-Companion.exe
-          if-no-files-found: error
-          retention-days: 14
-
   advanced-desktop-companion:
     name: Advanced Windows companion tests and package
     runs-on: windows-latest
