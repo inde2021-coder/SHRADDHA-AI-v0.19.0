@@ -72,6 +72,8 @@ jobs:
               - 'scripts/create_reference_storyboard.py'
             voice:
               - 'voice-engine/**'
+            validation:
+              - '.github/workflows/android-ci.yml'
 
   android:
     needs: changes
