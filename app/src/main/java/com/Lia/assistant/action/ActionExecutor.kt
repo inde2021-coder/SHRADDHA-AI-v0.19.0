@@ -30,7 +30,74 @@ object ActionExecutor {
             return result
         }
 
+
         when (toolName) {
+            "control_phone" -> {
+                val action = args.optString("action").trim().lowercase()
+                val percent = args.optInt("percent", -1)
+                val hardware = `in`.shraddha.ai.mobile.MobileHardwareController
+                when (action) {
+                    "status" -> {
+                        val data = runCatching { hardware.status(context.applicationContext) }.getOrElse {
+                            return result.put("status", "error").put("message", it.localizedMessage ?: "Phone status unavailable.")
+                        }
+                        result.put("status", "success").put("action", "phone_status")
+                            .put("device", JSONObject(data))
+                            .put("message", "यह इस Android फोन की उपलब्ध hardware जानकारी है।")
+                    }
+                    "set_volume", "set_brightness" -> {
+                        if (percent !in 0..100) return result.put("status", "error").put("message", "percent 0 से 100 के बीच integer होना चाहिए।")
+                        val message = runCatching {
+                            if (action == "set_volume") hardware.setMediaVolume(context.applicationContext, percent)
+                            else hardware.setBrightness(context.applicationContext, percent)
+                        }.getOrElse { return result.put("status", "error").put("message", it.localizedMessage ?: "Phone control failed.") }
+                        result.put("status", "success").put("action", action).put("percent", percent).put("message", message)
+                    }
+                    "flashlight_on", "flashlight_off" -> {
+                        val enabled = action == "flashlight_on"
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            val launch = android.content.Intent(context, `in`.shraddha.ai.mobile.MobileCommandCenterActivity::class.java)
+                                .putExtra("mobile_control_command", if (enabled) "flashlight on" else "flashlight off")
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(launch)
+                            result.put("status", "needs_user_action").put("action", "camera_permission_required")
+                                .put("message", "Mobile Command Center खोला गया है। Camera permission स्वीकार करने के बाद flashlight command फिर चलेगी।")
+                        } else {
+                            val message = runCatching { hardware.setTorch(context.applicationContext, enabled) }
+                                .getOrElse { return result.put("status", "error").put("message", it.localizedMessage ?: "Flashlight control failed.") }
+                            result.put("status", "success").put("action", action).put("message", message)
+                        }
+                    }
+                    "volume_up", "volume_down" -> {
+                        val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                        audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC,
+                            if (action == "volume_up") android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER,
+                            android.media.AudioManager.FLAG_SHOW_UI)
+                        result.put("status", "success").put("action", action).put("message", if (action == "volume_up") "Phone volume बढ़ाया।" else "Phone volume कम किया।")
+                    }
+                    "media_play_pause", "media_next", "media_previous" -> {
+                        val key = when (action) {
+                            "media_next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                            "media_previous" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                            else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                        }
+                        val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, key))
+                        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, key))
+                        result.put("status", "success").put("action", action).put("message", "Active Android media session को command भेजा गया।")
+                    }
+                    "open_settings" -> {
+                        val setting = args.optString("setting").trim().lowercase()
+                        val allowed = setOf("wifi", "bluetooth", "internet", "display", "sound", "battery", "location", "nfc", "accessibility", "notifications", "apps", "date", "language", "security", "dnd", "rotation", "storage")
+                        if (setting !in allowed) return result.put("status", "error").put("message", "Unsupported Android settings key.")
+                        context.startActivity(hardware.settingsIntent(setting).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        result.put("status", "needs_user_action").put("action", "android_settings_opened")
+                            .put("setting", setting).put("message", "Android का official $setting settings panel खोला गया है; protected changes वहीं confirm करें।")
+                    }
+                    else -> result.put("status", "error").put("message", "Unsupported control_phone action.")
+                }
+            }
+
             "download_file" -> {
                 val download = `in`.shraddha.ai.future.DownloadUrlPolicy.validate(args.optString("url"), args.optString("file_name"))
                 if (download == null) {
