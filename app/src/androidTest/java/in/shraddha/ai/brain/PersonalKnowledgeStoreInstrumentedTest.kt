@@ -12,7 +12,6 @@ class PersonalKnowledgeStoreInstrumentedTest {
     @Test fun timelineSkillsAndRoutinesSurviveStoreRecreationAndRemainEncrypted() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = PersonalKnowledgeStore(context)
-        val raw = EncryptedFeatureStore(context)
         val suffix = System.currentTimeMillis().toString()
         val eventId = "timeline_$suffix"
         val skillId = "skill_$suffix"
@@ -36,8 +35,9 @@ class PersonalKnowledgeStoreInstrumentedTest {
             assertEquals("Prepare briefing", reopened.proposeRoutine(routineId, "07:00").getOrThrow()?.summary)
             assertNull(reopened.proposeRoutine(routineId, "08:00").getOrThrow())
 
-            val encrypted = raw.getAllWithPrefixes(setOf("personal_timeline_", "personal_skills_", "personal_routines_"))
-                .getOrThrow().values
+            val encrypted = context.getSharedPreferences("shraddha_feature_store", Context.MODE_PRIVATE)
+                .all.filterKeys { it.startsWith("personal_timeline_") || it.startsWith("personal_skills_") || it.startsWith("personal_routines_") }
+                .values.mapNotNull { it as? String }
             assertTrue(encrypted.isNotEmpty())
             assertFalse(encrypted.any { it.contains(privateTitle) || it.contains("approved output") })
             assertTrue(reopened.deleteTimelineEvent(eventId).getOrThrow())
