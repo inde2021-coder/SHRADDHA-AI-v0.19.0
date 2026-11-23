@@ -19,48 +19,7 @@ service cloud.firestore {
       // Any authenticated owner may delete only their own bounded vault record.
       // The client deletes the RTDB mirror first, then this authoritative Firestore record.
       allow delete: if signedInAs(userId)
-        && entryId.matches('^[A-Za-z0-9_-]{1,64}
-    }
-
-    match /users/{userId}/storage_backups/{backupId} {
-      allow get, list: if signedInAs(userId);
-      allow create, update: if signedInAs(userId)
-        && backupId.matches('^backup_[0-9]{10,}_[a-f0-9]{8}$')
-        && request.resource.data.keys().hasOnly(['storagePath', 'format', 'updatedAt', 'sizeBytes'])
-        && request.resource.data.keys().hasAll(['storagePath', 'format', 'updatedAt', 'sizeBytes'])
-        && request.resource.data.storagePath == 'users/' + userId + '/backups/' + backupId + '.enc'
-        && request.resource.data.format == 'AES-256-GCM/PBKDF2-SHA256-v1'
-        && request.resource.data.updatedAt is int
-        && request.resource.data.sizeBytes is int
-        && request.resource.data.sizeBytes > 0
-        && request.resource.data.sizeBytes <= 2097152;
-      allow delete: if signedInAs(userId)
-        && backupId.matches('^backup_[0-9]{10,}_[a-f0-9]{8}$');
-    }
-
-    match /users/{userId}/devices/{deviceId} {
-      allow get, list: if signedInAs(userId);
-      allow create, update: if signedInAs(userId)
-        && deviceId.matches('^[a-f0-9]{64}$')
-        && request.resource.data.keys().hasOnly(['fcmToken', 'updatedAt', 'platform', 'deviceName'])
-        && request.resource.data.keys().hasAll(['fcmToken', 'updatedAt', 'platform', 'deviceName'])
-        && request.resource.data.fcmToken is string
-        && request.resource.data.fcmToken.size() >= 20
-        && request.resource.data.fcmToken.size() <= 4096
-        && request.resource.data.updatedAt is int
-        && request.resource.data.platform == 'android'
-        && request.resource.data.deviceName is string
-        && request.resource.data.deviceName.size() <= 80;
-      allow delete: if signedInAs(userId)
-        && deviceId.matches('^[a-f0-9]{64}$');
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-);
+        && entryId.matches('^[A-Za-z0-9_-]{1,64}$');
     }
 
     match /users/{userId}/storage_backups/{backupId} {
