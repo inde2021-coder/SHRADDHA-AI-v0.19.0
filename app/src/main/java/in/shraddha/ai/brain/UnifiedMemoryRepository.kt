@@ -28,6 +28,7 @@ class UnifiedMemoryRepository(context: Context) {
     data class LoadResult(val value: String?, val source: String)
     data class ConflictPreview(val key: String, val localValue: String?, val cloudValue: String?, val differs: Boolean)
     data class MemoryRecord(val key: String, val value: String)
+    data class ClearResult(val localDeleted: Boolean, val cloudDeletedCount: Int, val message: String)
 
     fun save(
         key: String,
@@ -136,6 +137,23 @@ class UnifiedMemoryRepository(context: Context) {
             cloud.signInAndSave(email, password, key, localValue).getOrThrow()
             SaveResult(true, true, "Local copy uploaded to the authenticated cloud vault.")
         }
+    }
+
+    /** Clears the local memory family; cloud copies are deleted only after explicit consent. */
+    fun clearAll(
+        cloudConsent: Boolean = false,
+        email: String? = null,
+        password: String? = null
+    ): Result<ClearResult> = runCatching {
+        val cloudCount = if (cloudConsent) {
+            MemorySyncPolicy.requireCloudConsent(cloudConsent)
+            val account = email?.trim().orEmpty()
+            val secret = password.orEmpty()
+            require(account.isNotBlank() && secret.length >= 8) { "Firebase credentials are required for cloud deletion." }
+            cloud.signInAndDeleteAll(account, secret).getOrThrow()
+        } else 0
+        clearLocal().getOrThrow()
+        ClearResult(true, cloudCount, if (cloudConsent) "Deleted local memory and $cloudCount Firebase vault record(s)." else "Deleted local memory only; Firebase cloud copies were left unchanged.")
     }
 
     fun clearLocal(): Result<Unit> = runCatching {
