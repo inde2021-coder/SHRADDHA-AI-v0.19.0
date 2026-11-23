@@ -89,7 +89,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
             apiKeyProviders.forEach { provider ->
                 val result = runCatching { readProviderKey(context, provider.id) }
                 put(provider.id, result.getOrDefault(false))
-                result.exceptionOrNull()?.let { error ->
+                result.exceptionOrNull()?.let {
                     keyReadWarnings[provider.id] = "Saved key could not be decrypted. Re-enter the key if this device's Keystore was reset."
                 }
             }
