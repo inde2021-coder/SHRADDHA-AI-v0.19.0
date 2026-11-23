@@ -28,7 +28,6 @@ The router balances call counts while honoring role preferences. It uses only co
 - Release builds enable R8 minification and resource shrinking.
 - CI builds an Android App Bundle (`.aab`) as well as a debug APK. Google Play can generate device-specific split APKs from the bundle.
 - Large model weights remain downloaded on demand and are SHA-256 checked; they are not packaged as assets.
-- The `shraddhaAbi` Gradle property remains available for device-specific native builds.
 - The current Android source is still one application module. This change does **not** pretend that AR/vision, Expert Studio or Smart Home have already been extracted into dynamic feature modules. Those screens currently have direct navigation references and their dependency graph must be moved with them before Play Feature Delivery can safely unload them. The next extraction candidates are Vision/AR (ARCore + ML Kit), Expert Studio, and Smart Home (MQTT). Keep base voice, settings, chat and local memory in the base module.
 
 ## Data and action flow
