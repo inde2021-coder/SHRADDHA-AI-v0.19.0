@@ -135,7 +135,7 @@ class ShraddhaIntegrationHub(
     private fun requireSession(): Session = active ?: error("Create a task plan before starting a workflow")
 
     private fun store(session: Session): Session {
-        persistence?.put(persistenceKey, encode(session)).getOrThrow()
+        persistence?.let { it.put(persistenceKey, encode(session)).getOrThrow() }
         active = session
         return session
     }
