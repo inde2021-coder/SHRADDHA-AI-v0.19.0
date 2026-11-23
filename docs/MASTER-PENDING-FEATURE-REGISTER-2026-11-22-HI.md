@@ -250,3 +250,6 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Both `LiaOrb3D` and `NovaOrb` now default to `AssistantBrand.NAME`, so fallback semantics use the configured Shraddha identity instead of a separate legacy literal.
 - The Windows companion still contains fixed product-brand text in its standalone window titles, local prompt strings and README. Synchronizing a user-defined Android display name into that separately installed companion requires an explicit, authenticated name-setting protocol; this remains open rather than being hidden by a static rename.
 - No tests, APK build or device/PC pairing test has been run.
+
+
+- Provider discovery no longer converts encrypted API-key read/Keystore failures into a silent "provider not configured" result. Missing keys remain unconfigured; vault read failures now propagate to the caller so the user can be shown a recovery error instead of silently losing a provider from the routing list. Source-only; error UX and regression behavior still need verification.
