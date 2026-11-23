@@ -1,5 +1,8 @@
 package `in`.shraddha.ai.future
 
+import android.content.Context
+import java.util.UUID
+import `in`.shraddha.ai.brain.PersonalKnowledgeStore
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -196,27 +199,59 @@ object SmartNotificationPolicy {
 }
 
 /** User-controlled life timeline. Events are added only through explicit calls. */
-class LifeTimeline {
+class LifeTimeline(context: Context? = null) {
     data class Event(val id:String,val title:String,val category:String,val timestamp:Long,val note:String="")
     private val events=linkedMapOf<String,Event>()
-    fun add(event:Event) { require(event.id.isNotBlank() && event.title.isNotBlank() && event.category.isNotBlank()); events[event.id]=event.copy(title=event.title.take(120),category=event.category.take(40),note=event.note.take(1000)) }
-    fun search(query:String):List<Event> = events.values.filter { it.title.contains(query,true)||it.note.contains(query,true)||it.category.contains(query,true) }.sortedByDescending { it.timestamp }
-    fun between(from:Long,to:Long):List<Event> { require(from<=to); return events.values.filter { it.timestamp in from..to }.sortedBy { it.timestamp } }
-    fun delete(id:String) { events.remove(id) }
+    private val persistent = context?.let(::PersonalKnowledgeStore)
+
+    @Synchronized fun add(event:Event) {
+        require(event.id.matches(Regex("[A-Za-z0-9_-]{1,64}")) && event.title.isNotBlank() && event.category.isNotBlank())
+        val safe=event.copy(title=event.title.trim().take(120),category=event.category.trim().take(40),note=event.note.take(1000))
+        persistent?.addTimelineEvent(PersonalKnowledgeStore.TimelineEvent(safe.id,safe.title,safe.category,safe.timestamp,safe.note))?.getOrThrow()
+        events[event.id]=safe
+    }
+    @Synchronized fun search(query:String):List<Event> {
+        val saved=persistent?.searchTimeline(query)?.getOrThrow()?.map { Event(it.id,it.title,it.category,it.timestamp,it.note) }
+        return (saved ?: events.values.filter { it.title.contains(query,true)||it.note.contains(query,true)||it.category.contains(query,true) }.sortedByDescending { it.timestamp })
+    }
+    @Synchronized fun between(from:Long,to:Long):List<Event> {
+        require(from<=to)
+        val saved=persistent?.searchTimeline("",from,to)?.getOrThrow()?.map { Event(it.id,it.title,it.category,it.timestamp,it.note) }
+        return saved ?: events.values.filter { it.timestamp in from..to }.sortedBy { it.timestamp }
+    }
+    @Synchronized fun delete(id:String) {
+        persistent?.deleteTimelineEvent(id)?.getOrThrow()
+        events.remove(id)
+    }
 }
 
 /** Personal skill learning is opt-in and records explicit user-approved examples only. */
-class PersonalSkillLearning {
+class PersonalSkillLearning(context: Context? = null) {
     data class Example(val skill:String,val input:String,val approvedOutput:String,val approvedAt:Long)
     private val examples=mutableListOf<Example>()
-    fun add(consent:Boolean,skill:String,input:String,approvedOutput:String,now:Long=System.currentTimeMillis()) {
+    private val persistent = context?.let(::PersonalKnowledgeStore)
+
+    @Synchronized fun add(consent:Boolean,skill:String,input:String,approvedOutput:String,now:Long=System.currentTimeMillis()) {
         require(consent) { "Explicit learning consent required" }
         require(skill.isNotBlank() && input.isNotBlank() && approvedOutput.isNotBlank())
-        require(examples.size<5000)
-        examples.add(Example(skill.trim().take(60),input.take(2000),approvedOutput.take(4000),now))
+        val safe=Example(skill.trim().take(60),input.take(2000),approvedOutput.take(4000),now)
+        if(persistent!=null) {
+            persistent.addApprovedSkillExample(true,PersonalKnowledgeStore.SkillExample(
+                UUID.randomUUID().toString().replace("-",""),safe.skill,safe.input,safe.approvedOutput,safe.approvedAt
+            )).getOrThrow()
+        } else {
+            require(examples.size<5000)
+            examples.add(safe)
+        }
     }
-    fun examplesFor(skill:String):List<Example> = examples.filter { it.skill.equals(skill,true) }.sortedByDescending { it.approvedAt }
-    fun forget(skill:String) { examples.removeAll { it.skill.equals(skill,true) } }
+    @Synchronized fun examplesFor(skill:String):List<Example> {
+        val saved=persistent?.skillExamples(skill)?.getOrThrow()?.map { Example(it.skill,it.input,it.approvedOutput,it.approvedAt) }
+        return saved ?: examples.filter { it.skill.equals(skill,true) }.sortedByDescending { it.approvedAt }
+    }
+    @Synchronized fun forget(skill:String) {
+        if(persistent!=null) persistent.forgetSkill(skill).getOrThrow()
+        else examples.removeAll { it.skill.equals(skill,true) }
+    }
 }
 
 /** Routine rules are proposals; sensitive actions always require a fresh user approval. */
