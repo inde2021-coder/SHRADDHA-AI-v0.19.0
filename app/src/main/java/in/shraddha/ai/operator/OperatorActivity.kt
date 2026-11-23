@@ -16,6 +16,8 @@ import `in`.shraddha.ai.future.Risk
 import `in`.shraddha.ai.future.LocalAuditTrail
 import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 import `in`.shraddha.ai.future.WorkflowStatus
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -27,8 +29,11 @@ class OperatorActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.rgb(9, 13, 25)) }
-        root.addView(TextView(this).apply { text = "SHRADDHA • LIVE APP OPERATOR"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 8, 0, 18) })
+        root.addView(TextView(this).apply { text = "$assistantName • LIVE APP OPERATOR"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 8, 0, 18) })
         root.addView(TextView(this).apply { text = "वास्तविक स्क्रीन निरीक्षण • कार्रवाई • परिणाम सत्यापन"; textSize = 12f; setTextColor(0xFFB9A9FF.toInt()); gravity = Gravity.CENTER; setPadding(0, 0, 0, 18) })
         appName = field("ऐप का नाम (जैसे Chrome)")
         target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
