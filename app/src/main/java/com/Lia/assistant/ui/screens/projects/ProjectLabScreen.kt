@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.FilterChip
@@ -61,6 +62,7 @@ fun ProjectLabScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var milestoneText by remember { mutableStateOf("") }
+    var sequentialDependencies by remember { mutableStateOf(true) }
     var plans by remember { mutableStateOf(emptyList<ProjectPlan>()) }
     var status by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
@@ -176,6 +178,17 @@ fun ProjectLabScreen(navController: NavController) {
                 placeholder = "Research requirements\nCreate design\nBuild first version\nReview and publish",
                 singleLine = false
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = sequentialDependencies,
+                    onCheckedChange = { sequentialDependencies = it },
+                    enabled = !isSaving
+                )
+                Column(Modifier.weight(1f)) {
+                    Text("Require milestones in order", color = colors.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Each step unlocks after the previous step is marked DONE.", color = colors.textSecondary, fontSize = 9.sp)
+                }
+            }
             NovaButton(
                 text = if (isSaving) "Saving…" else "Create Project Plan",
                 onClick = {
@@ -183,7 +196,7 @@ fun ProjectLabScreen(navController: NavController) {
                     if (title.isBlank()) status = "Project title is required."
                     else if (milestones.isEmpty() || milestones.size > 30) status = "Add between 1 and 30 unique milestones."
                     else {
-                        val created = runCatching { ProjectWorkspace.create(title, milestones) }
+                        val created = runCatching { ProjectWorkspace.create(title, milestones, sequentialDependencies) }
                         created.onSuccess {
                             persist(it)
                             title = ""
