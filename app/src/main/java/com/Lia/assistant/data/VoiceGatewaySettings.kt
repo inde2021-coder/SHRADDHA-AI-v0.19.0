@@ -84,7 +84,9 @@ object VoiceGatewaySettings {
     }
 
     fun clear(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()) {
+            "Could not clear the stored Voice Gateway settings."
+        }
     }
 
     /** Requests a one-use, short-lived Gemini Live token. Must be called off the main thread. */
