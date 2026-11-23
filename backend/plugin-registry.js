@@ -1,8 +1,8 @@
 import { createPublicKey, verify as verifySignature } from 'node:crypto';
 
-const CAPABILITIES = new Set(['create_note', 'show_notification']);
-const ACTIONS = new Set(['create_note', 'show_notification']);
-const FORBIDDEN_FIELDS = new Set(['script', 'javascript', 'html', 'entrypoint', 'url', 'permissions', 'nativecode', 'dex', 'jar']);
+const CAPABILITIES = new Set(['create_note', 'show_notification', 'copy_text', 'open_https_url']);
+const ACTIONS = new Set(['create_note', 'show_notification', 'copy_text', 'open_https_url']);
+const FORBIDDEN_FIELDS = new Set(['script', 'javascript', 'html', 'entrypoint', 'permissions', 'nativecode', 'dex', 'jar']);
 const ID = /^[a-z][a-z0-9._-]{2,63}$/;
 
 function assertJson(value, depth = 0) {
@@ -58,6 +58,15 @@ export function validatePluginManifest(manifest) {
     if (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key))) throw new Error('Plugin action contains an unsupported field');
     if (action.type === 'create_note' && (typeof action.title !== 'string' || action.title.length > 120 || typeof action.body !== 'string' || action.body.length > 4000)) throw new Error('Plugin note action is invalid');
     if (action.type === 'show_notification' && (typeof action.title !== 'string' || action.title.length > 80 || typeof action.body !== 'string' || action.body.length > 240)) throw new Error('Plugin notification action is invalid');
+    if (action.type === 'copy_text' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || !action.title.trim() || action.title.length > 80 || typeof action.body !== 'string' || !action.body || action.body.length > 4000)) throw new Error('Plugin clipboard action is invalid');
+    if (action.type === 'open_https_url') {
+      if (Object.keys(action).some(key => !['type', 'title', 'url'].includes(key)) || typeof action.title !== 'string' || !action.title.trim() || action.title.length > 80 || typeof action.url !== 'string' || action.url.length > 2048) throw new Error('Plugin URL action is invalid');
+      let url;
+      try { url = new URL(action.url); } catch { throw new Error('Plugin URL action is invalid'); }
+      const host = url.hostname.toLowerCase();
+      const ipv4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
+      if (url.protocol !== 'https:' || url.username || url.password || url.hash || host === 'localhost' || host.endsWith('.local') || !host.includes('.') || ipv4 || host.startsWith('[')) throw new Error('Plugin URL must be a public HTTPS address');
+    }
   }
   if (typeof manifest.keyId !== 'string' || !ID.test(manifest.keyId)) throw new Error('Plugin signing key id is invalid');
   if (typeof manifest.signature !== 'string' || !/^[A-Za-z0-9_-]{80,200}$/.test(manifest.signature)) throw new Error('Plugin signature is invalid');
