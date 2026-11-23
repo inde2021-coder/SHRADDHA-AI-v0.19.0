@@ -471,6 +471,10 @@ object DeviceLinkManager {
             done(Result.failure(IllegalArgumentException("A prompt and image are required.")))
             return
         }
+        if (jpeg.size > 2_500_000) {
+            done(Result.failure(IllegalArgumentException("Image is too large for a secure paired-device request (2.5 MB maximum).")))
+            return
+        }
         val body = JSONObject().put("provider", normalizedProvider).put("prompt", prompt.take(4000)).put("mode", mode)
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
         val builder = Request.Builder().url("$safeBaseUrl/api/vision")
