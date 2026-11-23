@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Task Planner cards and summary panels now use layered teal glass surfaces, cyan section accents and raised cyan controls; its reminder scheduling and opt-in daily research behavior are unchanged.
+
+
 - Device Transfer native workspace now uses the dark-teal glass canvas, inset paired-device ID field, cyan progress indicator and raised cyan transfer controls; SHA-256/receiver-approval behavior is unchanged.
 
 
