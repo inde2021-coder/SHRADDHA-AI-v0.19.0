@@ -33,32 +33,60 @@ class BackgroundAgentWorker(
         )
         // A WorkManager retry is another billable attempt. Restore previously reported
         // provider usage before starting so final evidence never silently drops earlier spend.
-        val previousUsageRaw = evidence.readTask(schedulerTaskId).getOrThrow()
-            .lastOrNull { it.has("status") && !it.has("output") }
-            ?.optString("providerUsage").orEmpty()
+        val previousUsageRaw = try {
+            evidence.readTask(schedulerTaskId).getOrThrow()
+                .lastOrNull { it.has("status") && !it.has("output") }
+                ?.optString("providerUsage").orEmpty()
+        } catch (error: Exception) {
+            return Result.failure(workDataOf(
+                BackgroundTaskQueue.KEY_ERROR to
+                    "Encrypted provider usage evidence could not be read; refusing to overwrite it."
+            ))
+        }
         val usageCounts = linkedMapOf<String, Int>()
-        runCatching {
-            val previousUsage = JSONObject(previousUsageRaw)
-            val calls = previousUsage.optString("calls")
-            calls.split(",").filter { it.isNotBlank() }.forEach { entry ->
-                val pair = entry.split(":", limit = 2)
-                if (pair.size == 2) {
+        try {
+            if (previousUsageRaw.isNotBlank() && previousUsageRaw.trimStart().startsWith("{")) {
+                val previousUsage = JSONObject(previousUsageRaw)
+                val calls = previousUsage.optString("calls")
+                calls.split(",").filter { it.isNotBlank() }.forEach { entry ->
+                    val pair = entry.split(":", limit = 2)
+                    require(pair.size == 2) { "Stored provider call evidence is malformed." }
                     val count = pair[1].toIntOrNull()
-                    if (count != null && count >= 0) usageCounts[pair[0]] = count
+                        ?: error("Stored provider call count is malformed.")
+                    require(count >= 0) { "Stored provider call count is negative." }
+                    usageCounts[pair[0]] = count
+                }
+                val tokens = previousUsage.optJSONArray("tokens") ?: JSONArray()
+                repeat(tokens.length()) { index ->
+                    val item = tokens.getJSONObject(index)
+                    val inputTokens = item.getLong("inputTokens")
+                    val outputTokens = item.getLong("outputTokens")
+                    require(inputTokens >= 0L && outputTokens >= 0L)
+                    tokenUsageRecords.add(
+                        com.Lia.assistant.voice.ProviderTokenUsage(
+                            provider = item.getString("provider"),
+                            model = item.getString("model"),
+                            inputTokens = inputTokens,
+                            outputTokens = outputTokens
+                        )
+                    )
+                }
+            } else if (previousUsageRaw.isNotBlank()) {
+                // Compatibility with the earlier "PROVIDER:count" status format.
+                previousUsageRaw.split(",").filter { it.isNotBlank() }.forEach { entry ->
+                    val pair = entry.split(":", limit = 2)
+                    require(pair.size == 2) { "Legacy provider call evidence is malformed." }
+                    val count = pair[1].toIntOrNull()
+                        ?: error("Legacy provider call count is malformed.")
+                    require(count >= 0)
+                    usageCounts[pair[0]] = count
                 }
             }
-            val tokens = previousUsage.optJSONArray("tokens") ?: JSONArray()
-            repeat(tokens.length()) { index ->
-                val item = tokens.getJSONObject(index)
-                tokenUsageRecords.add(
-                    com.Lia.assistant.voice.ProviderTokenUsage(
-                        provider = item.getString("provider"),
-                        model = item.getString("model"),
-                        inputTokens = item.getLong("inputTokens"),
-                        outputTokens = item.getLong("outputTokens")
-                    )
-                )
-            }
+        } catch (error: Exception) {
+            return Result.failure(workDataOf(
+                BackgroundTaskQueue.KEY_ERROR to
+                    "Stored provider usage evidence is malformed; refusing to overwrite it."
+            ))
         }
 
         // WorkManager may restart this provider-reasoning task after process death.
