@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice action write-ahead journal now propagates encrypted-store read/parse errors internally; starting a new call/message/download action is denied when the prior journal cannot be read, and finish/manual-verify operations fail closed. This prevents a storage/Keystore error from overwriting an unresolved in-flight action.
+
+
 - Device pairing credentials now decrypt only with the existing Android Keystore key. Missing/invalid keys or ciphertext return a visible recovery error without clearing stored ciphertext; explicit pairing clear persists preference deletion before deleting the now-unused Keystore alias. Restore UI reports the recovery issue rather than silently claiming no pairing exists.
 
 
