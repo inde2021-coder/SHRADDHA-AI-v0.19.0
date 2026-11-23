@@ -209,6 +209,10 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             lower in listOf("wifi settings", "वाईफाई सेटिंग खोलो") -> openMobileSetting("wifi")
             lower in listOf("bluetooth settings", "ब्लूटूथ सेटिंग खोलो") -> openMobileSetting("bluetooth")
             lower in listOf("internet settings", "इंटरनेट सेटिंग खोलो") -> openMobileSetting("internet")
+            lower in listOf("location settings", "लोकेशन सेटिंग खोलो") -> openMobileSetting("location")
+            lower in listOf("battery settings", "बैटरी सेटिंग खोलो") -> openMobileSetting("battery")
+            lower in listOf("display settings", "डिस्प्ले सेटिंग खोलो", "auto rotate settings", "ऑटो रोटेट सेटिंग खोलो") -> openMobileSetting("display")
+            lower in listOf("do not disturb settings", "dnd settings", "डू नॉट डिस्टर्ब सेटिंग खोलो") -> openMobileSetting("dnd")
             lower in listOf("आवाज बढ़ाओ", "volume up", "volume बढ़ाओ", "आवाज तेज करो") -> {
                 (getSystemService(Context.AUDIO_SERVICE) as AudioManager).adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                 status.text = "Volume बढ़ाया।"
@@ -296,8 +300,8 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     }
 
     private fun showSystemControls() {
-        val labels = arrayOf("Display / Brightness", "Sound", "Battery saver", "Location", "Accessibility", "Notification access", "Apps", "Storage", "Date & time", "Language", "Security")
-        val keys = arrayOf("display", "sound", "battery", "location", "accessibility", "notifications", "apps", "storage", "date", "language", "security")
+        val labels = arrayOf("Display / Auto-rotate / Screen timeout", "Sound", "Battery saver", "Location", "Do Not Disturb", "Accessibility", "Notification access", "Apps", "Storage", "Date & time", "Language", "Security")
+        val keys = arrayOf("display", "sound", "battery", "location", "dnd", "accessibility", "notifications", "apps", "storage", "date", "language", "security")
         android.app.AlertDialog.Builder(this).setTitle("Phone system controls")
             .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
     }
