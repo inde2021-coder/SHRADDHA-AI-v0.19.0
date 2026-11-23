@@ -82,9 +82,12 @@ object VoiceGatewaySettings {
 
     fun get(context: Context): Config {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val encrypted = prefs.getString(PAYLOAD, null) ?: return Config("", "")
+        val encrypted = prefs.getString(PAYLOAD, null)
         val iv = prefs.getString(IV, null)
-            ?: return Config("", "", "Encrypted Voice Gateway settings are incomplete. Re-enter the backend URL and token.")
+        if (encrypted == null && iv == null) return Config("", "")
+        if (encrypted == null || iv == null) {
+            return Config("", "", "Encrypted Voice Gateway settings are incomplete. Re-enter the backend URL and token; existing data was preserved.")
+        }
         return runCatching {
             val json = JSONObject(decrypt(encrypted, iv))
             Config(json.optString("baseUrl"), json.optString("gatewayToken"))
