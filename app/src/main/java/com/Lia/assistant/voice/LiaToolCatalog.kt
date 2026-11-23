@@ -3,7 +3,7 @@ package com.Lia.assistant.voice
 import org.json.JSONArray
 
 object LiaToolCatalog {
-    fun declarations(): JSONArray {
+    fun declarations(assistantName: String = com.Lia.assistant.data.AssistantBrand.FULL_NAME): JSONArray {
         val array = JSONArray()
 
         // Base tools
@@ -53,7 +53,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "plan_multi_agent_task",
-                description = "Uses Shraddha AI's local multi-role council to plan a goal, order Planner/Researcher/Specialist/Critic/Verifier tasks by dependencies, and save the proposed plan in encrypted local memory. This is planning only: it does not contact external agents or execute actions.",
+                description = "Uses $assistantName's local multi-role council to plan a goal, order Planner/Researcher/Specialist/Critic/Verifier tasks by dependencies, and save the proposed plan in encrypted local memory. This is planning only: it does not contact external agents or execute actions.",
                 params = mapOf("goal" to "The user's goal to break into a multi-role plan, maximum 1000 characters"),
                 required = listOf("goal")
             )
@@ -225,7 +225,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "manage_files",
-                description = "Opens Shraddha AI secure Android file manager for user-authorized file operations. Search/open/copy/move/rename/delete/share/import/export are performed only after the user selects the exact file and destination. Delete, move and rename require a visible confirmation. Share opens Android Sharesheet; the user chooses the destination app. Never claim an upload or send completed until the app reports it.",
+                description = "Opens $assistantName secure Android file manager for user-authorized file operations. Search/open/copy/move/rename/delete/share/import/export are performed only after the user selects the exact file and destination. Delete, move and rename require a visible confirmation. Share opens Android Sharesheet; the user chooses the destination app. Never claim an upload or send completed until the app reports it.",
                 params = mapOf("operation" to "One of: manage, find, open, copy, move, rename, delete, share, import, export"),
                 required = listOf("operation")
             )
