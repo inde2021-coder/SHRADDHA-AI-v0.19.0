@@ -70,10 +70,15 @@ import com.Lia.assistant.ui.components.NovaSettingsRow
 import com.Lia.assistant.ui.components.NovaTextField
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.SerifFontFamily
-import com.Lia.assistant.ui.theme.nightSky
+import com.Lia.assistant.ui.theme.LiaReferenceTheme
 
 @Composable
-fun SettingsScreen(
+fun SettingsScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
+    LiaReferenceTheme { SettingsScreenContent(navController, appState, modifier) }
+}
+
+@Composable
+private fun SettingsScreenContent(
     navController: NavController,
     appState: NovaAppState,
     modifier: Modifier = Modifier
@@ -119,7 +124,7 @@ fun SettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .nightSky()
+            .background(colors.background)
             .verticalScroll(rememberScrollState())
             .padding(bottom = 100.dp)
     ) {
