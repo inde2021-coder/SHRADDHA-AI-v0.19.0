@@ -24,7 +24,7 @@ const apiAttempts = new Map();
 const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/form/extract']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/messages/send','/api/form/extract']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
@@ -275,6 +275,38 @@ const server = http.createServer(async (req, res) => {
         }
       }
       return json(res, 200, { ok: true, revoked: targetId });
+    }
+    if (req.method === 'POST' && req.url === '/api/messages/send') {
+      const body = await readBody(req, 16 * 1024);
+      const channel = String(body.channel || '').toLowerCase();
+      const to = String(body.to || '').trim();
+      const text = String(body.text || '');
+      const requestId = String(body.requestId || '');
+      if (!['sms', 'whatsapp'].includes(channel)) return json(res, 400, { error: 'channel must be sms or whatsapp' });
+      if (!/^\\+[1-9]\\d{7,14}$/.test(to)) return json(res, 400, { error: 'Recipient must be a verified E.164 number' });
+      if (!text.trim() || text.length > 4000 || /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(text)) return json(res, 400, { error: 'Message must contain 1-4000 safe characters' });
+      if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestId)) return json(res, 400, { error: 'A unique requestId is required' });
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return json(res, 503, { error: 'Twilio credentials are not configured on the server' });
+      const from = channel === 'whatsapp' ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
+      if (!from || from.length > 40) return json(res, 503, { error: channel === 'whatsapp' ? 'TWILIO_WHATSAPP_FROM is not configured' : 'TWILIO_SMS_FROM is not configured' });
+      const destination = channel === 'whatsapp' ? `whatsapp:${to}` : to;
+      const source = channel === 'whatsapp' ? (from.startsWith('whatsapp:') ? from : `whatsapp:${from}`) : from;
+      const form = new URLSearchParams({ To: destination, From: source, Body: text });
+      let upstream;
+      try {
+        upstream = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(process.env.TWILIO_ACCOUNT_SID)}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64'),
+            'content-type': 'application/x-www-form-urlencoded'
+          },
+          body: form,
+          signal: AbortSignal.timeout(20000)
+        });
+      } catch { return json(res, 502, { error: 'Messaging provider could not be reached; check provider status before retrying.' }); }
+      const response = await upstream.json().catch(() => ({}));
+      if (!upstream.ok || !response.sid) return json(res, 502, { error: String(response.message || 'Messaging provider rejected the message').slice(0, 240) });
+      return json(res, 200, { ok: true, channel, provider: 'twilio', messageId: response.sid, providerStatus: response.status || 'accepted', recipient: to });
     }
     if (req.method === 'POST' && req.url === '/api/social/publish') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
