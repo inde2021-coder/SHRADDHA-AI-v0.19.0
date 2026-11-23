@@ -30,8 +30,8 @@ class FileAccessActivity : Activity() {
         root.addView(TextView(this).apply { text = "AI केवल आपके द्वारा चुने गए फ़ोल्डर/Android media permission में फ़ाइलें खोजेगा।"; setTextColor(0xFF73DDE7.toInt()); setPadding(0,8,0,14) })
         root.addView(button("Media फ़ाइल permission माँगें") { requestMediaPermissions() })
         root.addView(button("फ़ोल्डर की अनुमति दें (एक बार)") { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 41) })
-        filename = EditText(this).apply { hint = "उदाहरण: Rahul.jpg या invoice.pdf"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt()) }; root.addView(filename)
-        folder = EditText(this).apply { hint = "वैकल्पिक फ़ोल्डर संकेत: Download"; setTextColor(Color.WHITE); setHintTextColor(0xFF8894AE.toInt()) }; root.addView(folder)
+        filename = field("उदाहरण: Rahul.jpg या invoice.pdf"); root.addView(filename)
+        folder = field("वैकल्पिक फ़ोल्डर संकेत: Download"); root.addView(folder)
         root.addView(button("फ़ाइल खोजें") { search() })
         root.addView(button("फ़ाइल चुनें (Open / Copy / Move)") { chooseSourceFile() })
         root.addView(button("चुनी हुई फ़ाइल खोलें") { openSelected() })
@@ -208,6 +208,15 @@ class FileAccessActivity : Activity() {
                     status.text = "फ़ाइल चुनी गई: ${item.displayName}"
                 }.show()
         }
+    }
+
+    private fun field(hintText: String) = EditText(this).apply {
+        hint = hintText; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+        setPadding(16, 12, 16, 12)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
