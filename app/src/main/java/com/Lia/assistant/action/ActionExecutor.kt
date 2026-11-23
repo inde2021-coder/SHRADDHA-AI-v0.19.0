@@ -324,7 +324,12 @@ object ActionExecutor {
                 val messageText = args.optString("message", "").trim()
                 val targetApp = args.optString("app", "sms").lowercase().trim()
 
-                if (contactName.isEmpty() || messageText.isEmpty()) {
+                if (targetApp !in setOf("sms", "whatsapp")) {
+                    result.put("status", "error").put("action", "unsupported_message_channel")
+                    result.put("message", "Only SMS and WhatsApp are supported.")
+                    return result
+                }
+                if (contactName.isEmpty() || messageText.isEmpty() || messageText.length > 4000) {
                     result.put("status", "error")
                     result.put("message", "Recipient and message body are required")
                     return result
@@ -354,6 +359,12 @@ object ActionExecutor {
                             return result
                         }
                     }
+                }
+
+                if (!MessageApprovalPolicy.isValidE164(phoneNumber)) {
+                    result.put("status", "error").put("action", "invalid_recipient_number")
+                    result.put("message", "Contact number must include country code in E.164 format, for example +919876543210.")
+                    return result
                 }
 
                 val userConfirmed = args.optString("user_confirmed", "").equals("yes", true)
@@ -763,6 +774,9 @@ object ActionExecutor {
                             result.put("status", "error")
                             result.put("action", "recipient_not_found")
                             result.put("message", "Provide a full phone number or grant Contacts permission.")
+                        } else if (!MessageApprovalPolicy.isValidE164(number) || message.length > 4000) {
+                            result.put("status", "error").put("action", "invalid_message_request")
+                                .put("message", "Recipient must be E.164 and message must be at most 4000 characters.")
                         } else {
                             val requestId = args.optString("request_id").ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
                             val approved = MessageApprovalPolicy.isApproved(
