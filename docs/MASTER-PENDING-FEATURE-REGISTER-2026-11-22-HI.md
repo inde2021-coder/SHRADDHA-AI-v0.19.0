@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Gemini API-key reads now require the existing Android Keystore key instead of creating a replacement when ciphertext is already present. This closes the same key-loss overwrite edge case for the Gemini key vault.
+
+
 - Voice Gateway decryption now requires the original Android Keystore key; a missing key no longer triggers silent key regeneration over still-present ciphertext. Saving new settings can create a key, while reading existing encrypted settings fails closed and preserves the saved bytes.
 
 
