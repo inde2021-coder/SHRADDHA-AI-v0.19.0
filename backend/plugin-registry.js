@@ -55,7 +55,8 @@ export function validatePluginManifest(manifest) {
   if (!Array.isArray(manifest.actions) || manifest.actions.length > 20) throw new Error('Plugin actions are invalid');
   for (const action of manifest.actions) {
     if (!action || typeof action !== 'object' || Array.isArray(action) || !ACTIONS.has(action.type)) throw new Error('Plugin action is not allowed');
-    if (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key))) throw new Error('Plugin action contains an unsupported field');
+    const allowedActionFields = action.type === 'open_https_url' ? ['type', 'title', 'url'] : ['type', 'title', 'body'];
+    if (Object.keys(action).some(key => !allowedActionFields.includes(key))) throw new Error('Plugin action contains an unsupported field');
     if (action.type === 'create_note' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || action.title.length > 120 || typeof action.body !== 'string' || action.body.length > 4000)) throw new Error('Plugin note action is invalid');
     if (action.type === 'show_notification' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || action.title.length > 80 || typeof action.body !== 'string' || action.body.length > 240)) throw new Error('Plugin notification action is invalid');
     if (action.type === 'copy_text' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || !action.title.trim() || action.title.length > 80 || typeof action.body !== 'string' || !action.body || action.body.length > 4000)) throw new Error('Plugin clipboard action is invalid');
