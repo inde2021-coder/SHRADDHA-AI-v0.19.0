@@ -148,11 +148,13 @@ fun SmartHomeScreen(navController: NavController) {
             NovaButton(text = "CONNECT & SUBSCRIBE", onClick = {
                 mqttSubscribed = false
                 mqtt.connect { message ->
-                    reportStatus(message)
-                    if (message.contains("disconnected", ignoreCase = true)) mqttSubscribed = false
-                    if (!mqttSubscribed && (message.contains("connected", ignoreCase = true) || message.contains("established", ignoreCase = true))) {
-                        mqttSubscribed = true
-                        mqtt.subscribeStateTopics { reportStatus(it) }.onFailure { reportStatus(it.localizedMessage ?: "MQTT subscription failed.") }
+                    scope.launch {
+                        status = message
+                        if (message.contains("disconnected", ignoreCase = true)) mqttSubscribed = false
+                        if (!mqttSubscribed && (message.contains("connected", ignoreCase = true) || message.contains("established", ignoreCase = true))) {
+                            mqttSubscribed = true
+                            mqtt.subscribeStateTopics { reportStatus(it) }.onFailure { reportStatus(it.localizedMessage ?: "MQTT subscription failed.") }
+                        }
                     }
                 }.onFailure { reportStatus(it.localizedMessage ?: "MQTT connection failed.") }
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
