@@ -12,7 +12,6 @@ class ProjectPlanStoreInstrumentedTest {
     @Test fun projectPlansAndMilestonesPersistEncryptedAndCanBeDeleted() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = ProjectPlanStore(context)
-        val rawStore = EncryptedFeatureStore(context)
         val title = "Private Project Lab test ${System.currentTimeMillis()}"
         val plan = ProjectWorkspace.create(title, listOf("Research", "Build", "Review"))
         try {
@@ -31,9 +30,14 @@ class ProjectPlanStoreInstrumentedTest {
             assertEquals(33, ProjectWorkspace.progress(loaded))
             assertEquals(MilestoneState.DONE, loaded.milestones.first().state)
 
-            val rawValues = rawStore.getAllWithPrefixes(setOf("project_plan_")).getOrThrow().values
-            assertTrue(rawValues.isNotEmpty())
-            assertFalse(rawValues.any { it.contains(title) })
+            // The encrypted-store API returns decrypted values; inspect the persisted
+            // SharedPreferences payload directly to verify encryption at rest.
+            val encryptedValues = context.getSharedPreferences(
+                "shraddha_feature_store", Context.MODE_PRIVATE
+            ).all.filterKeys { it.startsWith("project_plan_") }.values.mapNotNull { it as? String }
+            assertTrue(encryptedValues.isNotEmpty())
+            assertFalse(encryptedValues.any { it.contains(title) })
+            assertTrue(encryptedValues.all { it.contains(".") })
 
             assertTrue(store.delete(plan.id).getOrThrow().none { it.id == plan.id })
         } finally {
