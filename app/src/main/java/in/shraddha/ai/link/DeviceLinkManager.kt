@@ -610,7 +610,7 @@ object DeviceLinkManager {
             .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
-        if (!DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
+        if (jpeg.size !in 1..2_500_000 || !DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
         val target = targetDeviceId?.trim().orEmpty()
         if (target.isBlank()) return false
         val state = peerKeys[target]
