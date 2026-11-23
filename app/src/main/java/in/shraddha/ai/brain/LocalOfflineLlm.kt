@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Debug
 import android.os.StatFs
+import com.Lia.assistant.data.AssistantBrand
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -85,7 +86,7 @@ object LocalOfflineLlm {
                     created.initialize()
                     val chat = created.createConversation(ConversationConfig(
                         systemInstruction = Contents.of(
-                            "You are Shraddha AI, a helpful bilingual Hindi and English assistant. " +
+                            "You are ${AssistantBrand.NAME}, a helpful bilingual Hindi and English assistant. " +
                             "You run fully offline on this device. Be accurate, concise, admit uncertainty, " +
                             "and never claim to have performed an action."
                         )
