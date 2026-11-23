@@ -94,6 +94,9 @@ class MainBrainSchedulerStore(context: Context) {
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        require(!prefs.contains(KEY_SNAPSHOT)) {
+            "Main Brain scheduler encryption key is missing; refusing to replace it while encrypted tasks exist."
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
             KeyGenParameterSpec.Builder(
