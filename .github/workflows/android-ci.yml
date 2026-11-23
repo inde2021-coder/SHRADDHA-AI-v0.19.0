@@ -6,8 +6,10 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
-  # Full automatic integration checks run in android-build and master-integration-merge.
-  # Keep this workflow manual-only to avoid duplicate emulator runs.
+  # Run the Android unit-test, APK-build and emulator smoke-test suite on the active Shraddha feature branch.
+  push:
+    branches:
+      - feature/complete-pending-shraddha-features
   workflow_dispatch:
 
 permissions:
