@@ -328,6 +328,8 @@ const server = http.createServer(async (req, res) => {
       let intent;
       try { intent = validatePublishIntent(body); }
       catch (error) { return json(res, 400, { error: error.message }); }
+      if (body.mediaBase64 !== undefined && !['telegram', 'mastodon'].includes(intent.platform)) return json(res, 400, { error: 'Media publishing is not enabled for this platform; no post was sent.' });
+      if (body.mediaBase64 !== undefined && intent.platform === 'telegram' && intent.text.length > 1024) return json(res, 400, { error: 'Telegram media captions are limited to 1024 characters.' });
       if (body.mediaBase64 !== undefined && intent.platform === 'telegram') {
         let media;
         try { media = validateMediaAttachment(body, intent.platform); }
