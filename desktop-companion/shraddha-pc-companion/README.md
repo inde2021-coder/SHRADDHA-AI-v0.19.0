@@ -8,6 +8,30 @@
 - Deployed Shraddha relay with HTTPS/WSS
 - Android Shraddha AI app में Device Universe से बनाया गया single-use QR / छह-अंकों का pairing code
 
+
+## Feature-wise installation (modular PC build)
+
+PC companion के core और optional features अलग dependency packs में हैं। सामान्य pairing/secure relay के लिए OCR, screen capture, clipboard, desktop automation या offline LLM packages install करने की जरूरत नहीं है। Optional libraries feature इस्तेमाल होने पर ही import होती हैं।
+
+Core secure pairing/relay:
+
+```powershell
+py -m pip install -r requirements.txt
+```
+
+केवल जरूरत के अनुसार अतिरिक्त pack install करें:
+
+| PC feature | Install command |
+|---|---|
+| Mouse/keyboard/app control | `py -m pip install -r requirements-control.txt` |
+| Active-window screenshot, OCR और screen share | `py -m pip install -r requirements-vision.txt` |
+| Clipboard transfer | `py -m pip install -r requirements-clipboard.txt` |
+| Offline voice commands | `py -m pip install -r requirements-voice.txt` |
+| QR pairing camera | `py -m pip install -r requirements-qr.txt` |
+| Local GGUF model inference (बड़ा optional runtime) | `py -m pip install -r requirements-offline.txt` |
+
+सभी PC features चाहिए हों तभी `requirements-all.txt` install करें। GGUF model weights इसमें शामिल नहीं हैं; वे PC पर अलग से चुने जाते हैं। Missing optional package होने पर संबंधित feature unavailable रहेगा; core pairing को crash नहीं करना चाहिए।
+
 ## Install & run
 PowerShell में:
 
