@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-import windows_hardware
+from pc_companion import windows_hardware
 
 
 class HardwareValidationTests(unittest.TestCase):
