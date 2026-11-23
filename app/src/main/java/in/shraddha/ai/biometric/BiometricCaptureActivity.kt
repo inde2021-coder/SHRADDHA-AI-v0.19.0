@@ -536,6 +536,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun recordSpeaker() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            finishWith("Microphone permission is required for the speaker sample.")
+            return
+        }
         message.text = "Phrase verified locally. अब अलग 5-second voice sample में वही phrase दोहराएँ; यह handoff/replay-proof नहीं है…"
         captureThread = Thread({
             var recorder: AudioRecord? = null
