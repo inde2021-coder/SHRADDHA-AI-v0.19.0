@@ -105,7 +105,14 @@ class AppTrainingActivity : Activity() {
         }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
-    private fun spinner(items: List<String>) = Spinner(this).apply { adapter = ArrayAdapter(this@AppTrainingActivity, android.R.layout.simple_spinner_dropdown_item, items); layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 } }
+    private fun spinner(items: List<String>) = Spinner(this).apply {
+        adapter = ArrayAdapter(this@AppTrainingActivity, android.R.layout.simple_spinner_dropdown_item, items)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = 16f; setStroke(1, 0xFF2D8490.toInt())
+        }
+        setPadding(14, 8, 14, 8)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+    }
     private fun button(label: String, click: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
         background = android.graphics.drawable.GradientDrawable().apply {
