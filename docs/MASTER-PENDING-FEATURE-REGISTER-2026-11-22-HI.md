@@ -255,3 +255,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Provider discovery no longer converts encrypted API-key read/Keystore failures into a silent "provider not configured" result. Missing keys remain unconfigured; vault read failures now propagate to the caller so the user can be shown a recovery error instead of silently losing a provider from the routing list. Source-only; error UX and regression behavior still need verification.
 
 - The council entry points now convert provider-vault read failures into an explicit failed pipeline result, rather than allowing the newly surfaced Keystore exception to escape before the worker can persist failure status. This preserves the distinction between "no provider key configured" and "encrypted credentials could not be read". Source-only; worker/UI error propagation remains unverified.
+
+## 23 November 2026 — Voice Gateway encrypted-state recovery (source-only, not tested)
+
+- Voice Gateway settings previously converted every decryption/Keystore failure into an empty configuration. This incorrectly looked like the user had never configured the backend and hid the actual recovery problem.
+- The settings reader now returns an explicit recovery error while preserving the encrypted ciphertext. A missing IV for an existing encrypted payload is also reported as incomplete encrypted state.
+- The speech client and Gemini Live token path now stop with that explicit error rather than attempting a request with silently blank credentials.
+- Settings opens the gateway dialog with the recovery warning visible. Clearing the encrypted settings is now guarded so a failed durable clear is reported instead of crashing or closing the dialog as if it succeeded.
+- No tests/build/emulator/live gateway calls were run. Verify normal save/read/restart, corrupted ciphertext, missing Keystore key, partial preferences, explicit clear and speech-client error propagation in the single consolidated verification pass.
