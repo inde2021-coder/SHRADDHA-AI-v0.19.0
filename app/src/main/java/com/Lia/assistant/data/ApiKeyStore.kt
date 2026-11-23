@@ -79,7 +79,9 @@ object ApiKeyStore {
         val prefs = getPrefs(context)
         val trimmed = key.trim()
         if (trimmed.isEmpty()) {
-            prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).apply()
+            check(prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).commit()) {
+                "Could not remove the stored GEMINI API key."
+            }
             return
         }
 
