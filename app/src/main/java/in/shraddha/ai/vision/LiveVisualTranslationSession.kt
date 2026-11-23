@@ -37,11 +37,10 @@ class LiveVisualTranslationSession(
         val requestGeneration = generation.get()
         val frame = jpeg.copyOf()
         val prompt = "Read all legible text in this live camera frame. Return a concise translation from $sourceLanguage to $targetLanguage. Preserve names, numbers, dates and units exactly. If no text is visible, say 'No readable text'. Mark uncertain words as [unclear]. Do not infer missing content."
-        audit("frame_requested", "bytes=${frame.size}; frame_content_not_logged")
-
-        // The gateway may fail before registering its callback, and UI callbacks may throw.
+        // The gateway or audit/UI callbacks may fail before completion; all paths must clean up.
         // Both paths must release the copied frame and the single-flight gate.
         try {
+            audit("frame_requested", "bytes=${frame.size}; frame_content_not_logged")
             DeviceLinkManager.analyzeScreen(baseUrl, gatewayToken, provider, prompt, frame, "document") { result ->
                 try {
                     result.onSuccess { translated ->
