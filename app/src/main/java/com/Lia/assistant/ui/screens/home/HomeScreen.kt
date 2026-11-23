@@ -63,186 +63,56 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
     Column(
         modifier = modifier.fillMaxSize().nightSky().verticalScroll(rememberScrollState())
-            .padding(horizontal = 15.dp).padding(bottom = 112.dp),
+            .padding(horizontal = 18.dp).padding(bottom = 108.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier.size(43.dp).clip(RoundedCornerShape(15.dp))
-                    .background(Brush.linearGradient(listOf(NeonBlue, NeonPurple))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.SmartToy, null, tint = Color(0xFF07111D), modifier = Modifier.size(25.dp))
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(NeonBlue, NeonPurple))), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.SmartToy, null, tint = Color(0xFF171027), modifier = Modifier.size(24.dp))
             }
             Column(Modifier.padding(start = 10.dp)) {
                 Text(assistantName, color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("YOUR SMART AI ASSISTANT", color = NeonBlue, fontSize = 8.sp, letterSpacing = 1.45.sp, fontWeight = FontWeight.Bold)
+                Text("PERSONAL AI COMPANION", color = NeonBlue, fontSize = 8.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
             GlassIcon(Icons.Default.Settings, "Settings") { navController.navigate("settings") }
             Spacer(Modifier.width(8.dp))
             GlassIcon(Icons.Default.Person, "Profile") { navController.navigate("profile") }
         }
-
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                .background(Brush.horizontalGradient(listOf(Color(0xFF2C1C55), Color(0xFF311B4B))))
-                .border(1.dp, Color(0x6674DFFF), RoundedCornerShape(18.dp)).padding(13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("नमस्ते! मैं $assistantName हूँ", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text("आपके आदेश की प्रतीक्षा में हूँ", color = Color(0xFFBBD8F5), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-            }
-            Box(Modifier.clip(CircleShape).background(Color(0x223FE7C5)).padding(horizontal = 10.dp, vertical = 7.dp)) {
-                Text("● AI READY", color = NeonMint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
         Box(
-            Modifier.fillMaxWidth().height(270.dp).clip(RoundedCornerShape(26.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF071B39), Color(0xFF10112D), Color(0xFF07101F))))
-                .border(1.dp, Color(0xAA35BFFF), RoundedCornerShape(26.dp)),
+            Modifier.fillMaxWidth().height(360.dp).clip(RoundedCornerShape(30.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF251444), Color(0xFF100D20), Color(0xFF080A14))))
+                .border(1.dp, Color(0x557D52D8), RoundedCornerShape(30.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(R.drawable.shraddha_ai_avatar),
-                contentDescription = "$assistantName holographic avatar",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 15.dp, bottom = 12.dp)
-                    .size(94.dp).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(Color(0xFF42DFFF), Color(0xFF2544C8), Color(0xCC32106C))))
-                    .border(2.dp, Color(0xFF8CEBFF), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                LiaOrb3D(state = orbState, size = 88.dp, amplitude = amplitude, assistantName = assistantName)
+            Image(painter = painterResource(R.drawable.shraddha_ai_avatar), contentDescription = "$assistantName avatar", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.align(Alignment.TopCenter).padding(top = 15.dp).clip(CircleShape).background(Color(0xAA130D23)).border(1.dp, Color(0x668F62E8), CircleShape).padding(horizontal = 13.dp, vertical = 7.dp)) {
+                Text("$assistantName • AI ONLINE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
-            Column(
-                Modifier.align(Alignment.TopStart).padding(14.dp)
-                    .clip(RoundedCornerShape(13.dp)).background(Color(0xB9081730))
-                    .border(1.dp, Color(0x6676DFFF), RoundedCornerShape(13.dp)).padding(horizontal = 10.dp, vertical = 8.dp)
-            ) {
-                Text("${assistantName.uppercase()} CORE", color = NeonBlue, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                Text("Voice • Vision • Memory", color = Color.White, fontSize = 10.sp)
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).size(104.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFB78BFF), Color(0xFF6B39C8), Color(0xCC210F46)))).border(2.dp, Color(0xCCDCBCFF), CircleShape), contentAlignment = Alignment.Center) {
+                LiaOrb3D(state = orbState, size = 98.dp, amplitude = amplitude, assistantName = assistantName)
             }
         }
-
-        Spacer(Modifier.height(10.dp))
-        Row(
-            Modifier.clip(CircleShape).background(Color(0xCC122943))
-                .border(1.dp, Color(0x6676DFFF), CircleShape).padding(horizontal = 13.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.clip(CircleShape).background(Color(0xCC1A1430)).border(1.dp, Color(0x557D52D8), CircleShape).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Icon(Icons.Default.GraphicEq, null, tint = NeonMint, modifier = Modifier.size(14.dp))
-            Text(
-                when (orbState.name) {
-                    "LISTENING" -> "MIC ACTIVE • LISTENING"
-                    "THINKING" -> "THINKING"
-                    "SPEAKING" -> "SPEAKING"
-                    else -> "READY WHEN YOU ARE"
-                },
-                color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            HomeActionButton("🎙", "बोलकर बताएं", Modifier.weight(1f)) { navController.navigate("voice") }
-            HomeActionButton("✉", "AI से चैट", Modifier.weight(1f)) { navController.navigate("chat") }
-        }
-
-        SectionHeading("AI FEATURES", "आपके सभी टूल एक जगह")
-        FeatureRow(
-            FeatureInfo("🎙", "Voice Control", "बोलकर आदेश दें", NeonBlue) { navController.navigate("voice") },
-            FeatureInfo("📞", "Calls by Voice", "कॉन्टैक्ट को कॉल", NeonMint) { navController.navigate("voice") }
-        )
-        FeatureRow(
-            FeatureInfo("💬", "WhatsApp & SMS", "मैसेज बोलकर भेजें", NeonPurple) { navController.navigate("voice") },
-            FeatureInfo("📷", "Visual Lens", "कैमरा से पूछें", Color(0xFFFFB84D)) { navController.navigate("quick_actions") }
-        )
-        FeatureRow(
-            FeatureInfo("🖥", "Read Screen / PC", "स्क्रीन और PC कंट्रोल", NeonBlue) { navController.navigate("quick_actions") },
-            FeatureInfo("📁", "File Manager", "फाइल खोजें व खोलें", NeonMint) { navController.navigate("quick_actions") }
-        )
-        FeatureRow(
-            FeatureInfo("🌐", "Web Search", "ताज़ा जानकारी", Color(0xFFFFB84D)) { navController.navigate("chat") },
-            FeatureInfo("⌨", "Code Assistant", "कोड में मदद", NeonPurple) { navController.navigate("forge") }
-        )
-        FeatureRow(
-            FeatureInfo("⚙", "Task Automation", "काम ऑटोमेट करें", NeonMint) { navController.navigate("quick_actions") },
-            FeatureInfo("🧠", "Memory & Personality", "यादें और व्यवहार", NeonPurple) { navController.navigate("personality") }
-        )
-
-        FeatureRow(
-            FeatureInfo("🤖", "Multi-agent Team", "काम बाँटें और verify करें", NeonBlue) { navController.navigate("agent_council") },
-            FeatureInfo("🔑", "AI Provider Keys", "अपनी API keys जोड़ें", NeonMint) { navController.navigate("api_keys") }
-        )
-        FeatureRow(
-            FeatureInfo("🖥️", "Device Center", "Windows PC और paired devices", NeonBlue) { navController.navigate("device_center") },
-            FeatureInfo("📞", "SIM Call Agent", "Incoming call assistant", NeonMint) { navController.navigate("phone_call_agent") }
-        )
-        FeatureRow(
-            FeatureInfo("🧠", "Expert Studio", "Engineering, farming और research", NeonBlue) { navController.navigate("expert_studio") },
-            FeatureInfo("👁️", "Visual Lens", "Camera से सवाल पूछें", NeonMint) { navController.navigate("visual_lens") }
-        )
-        FeatureRow(
-            FeatureInfo("🗂️", "Project Lab", "Projects और milestones ट्रैक करें", NeonBlue) { navController.navigate("project_lab") },
-            FeatureInfo("⚙️", "Task Automation", "काम और workflows", NeonMint) { navController.navigate("quick_actions") }
-        )
-        FeatureRow(
-            FeatureInfo("🔐", "Data Vault", "Encrypted backup और restore", NeonBlue) { navController.navigate("data_vault") },
-            FeatureInfo("🛡️", "Privacy Center", "Permissions और data controls", NeonMint) { navController.navigate("privacy") }
-        )
-        SectionHeading("PERSONALIZE", "अपना AI अनुभव चुनें")
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                .background(GlassPanel).border(1.dp, Color(0x5576CFFF), RoundedCornerShape(20.dp))
-                .clickable { navController.navigate("orb_style") }.padding(13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("🎨", fontSize = 25.sp)
-            Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text("AI Styles & Themes", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text("Classic  •  Energy  •  Neon  •  Aura", color = Color(0xFFB8C8E3), fontSize = 10.sp)
-            }
-            Text("›", color = NeonBlue, fontSize = 27.sp)
-        }
-        Spacer(Modifier.height(9.dp))
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                .background(GlassPanel).border(1.dp, Color(0x5576CFFF), RoundedCornerShape(20.dp))
-                .clickable { navController.navigate("profile") }.padding(13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("👤", fontSize = 25.sp)
-            Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text("Agent Name", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text(assistantName, color = NeonBlue, fontSize = 11.sp)
-            }
-            Text("✎", color = NeonBlue, fontSize = 20.sp)
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniFeature("🧠", "Memory", Modifier.weight(1f)) { navController.navigate("personality") }
-            MiniFeature("🤖", "Multiple AI", Modifier.weight(1f)) { navController.navigate("settings") }
-            MiniFeature("📱", "Phone ↔ PC", Modifier.weight(1f)) { navController.navigate("quick_actions") }
-        }
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniFeature("💾", "Offline AI", Modifier.weight(1f)) { navController.navigate("offline_model") }
-            MiniFeature("🏠", "Smart Home", Modifier.weight(1f)) { navController.navigate("smart_home") }
-            MiniFeature("🛠️", "Expert Studio", Modifier.weight(1f)) { navController.navigate("expert_studio") }
+            Text(when (orbState.name) { "LISTENING" -> "LISTENING"; "THINKING" -> "THINKING"; "SPEAKING" -> "SPEAKING"; else -> "READY WHEN YOU ARE" }, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
         }
         Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            HomeActionButton("🎙", "Talk to AI", Modifier.weight(1f)) { navController.navigate("voice") }
+            HomeActionButton("✦", "Quick actions", Modifier.weight(1f)) { navController.navigate("quick_actions") }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xCC17152B)).border(1.dp, Color(0x447D52D8), RoundedCornerShape(18.dp)).clickable { navController.navigate("chat") }.padding(horizontal = 15.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Ask me anything…", color = Color(0xFFB8A9D4), fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text("➤", color = NeonPurple, fontSize = 19.sp)
+        }
+        SectionHeading("YOUR SPACE", "Everything you need, one tap away")
+        FeatureRow(FeatureInfo("💬", "AI Chat", "Ask anything", NeonPurple) { navController.navigate("chat") }, FeatureInfo("👁️", "Visual Lens", "Camera intelligence", NeonMint) { navController.navigate("visual_lens") })
+        FeatureRow(FeatureInfo("🖥️", "PC Companion", "Connect Windows", NeonBlue) { navController.navigate("device_center") }, FeatureInfo("🧠", "Multi-agent Team", "Delegate and verify", NeonPurple) { navController.navigate("agent_council") })
+        FeatureRow(FeatureInfo("🛠️", "Expert Studio", "Engineering tools", NeonMint) { navController.navigate("expert_studio") }, FeatureInfo("🔐", "Memory Vault", "Private knowledge", NeonBlue) { navController.navigate("data_vault") })
+        Spacer(Modifier.height(10.dp))
     }
 }
 
