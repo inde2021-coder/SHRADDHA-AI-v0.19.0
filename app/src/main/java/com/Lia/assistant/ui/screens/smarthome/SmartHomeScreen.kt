@@ -52,6 +52,7 @@ fun SmartHomeScreen(navController: NavController) {
     var mqttDevice by remember { mutableStateOf("living_room_light") }
     var mqttCommand by remember { mutableStateOf("ON") }
     var mqttConfirm by remember { mutableStateOf(false) }
+    var mqttSubscribed by remember { mutableStateOf(false) }
     DisposableEffect(mqtt) { onDispose { mqtt.disconnect() } }
     var baseUrl by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
@@ -145,12 +146,15 @@ fun SmartHomeScreen(navController: NavController) {
                     .onFailure { status = it.localizedMessage ?: "MQTT settings invalid." }
             }, modifier = Modifier.fillMaxWidth(), enabled = mqttPassword.length >= 8)
             NovaButton(text = "CONNECT & SUBSCRIBE", onClick = {
+                mqttSubscribed = false
                 mqtt.connect { message ->
                     reportStatus(message)
-                    if (message.contains("connected", ignoreCase = true) || message.contains("established", ignoreCase = true)) {
-                        mqtt.subscribeStateTopics { reportStatus(it) }.onFailure { status = it.localizedMessage ?: "MQTT subscription failed." }
+                    if (message.contains("disconnected", ignoreCase = true)) mqttSubscribed = false
+                    if (!mqttSubscribed && (message.contains("connected", ignoreCase = true) || message.contains("established", ignoreCase = true))) {
+                        mqttSubscribed = true
+                        mqtt.subscribeStateTopics { reportStatus(it) }.onFailure { reportStatus(it.localizedMessage ?: "MQTT subscription failed.") }
                     }
-                }.onFailure { status = it.localizedMessage ?: "MQTT connection failed." }
+                }.onFailure { reportStatus(it.localizedMessage ?: "MQTT connection failed.") }
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
             OutlinedTextField(value = mqttDevice, onValueChange = { mqttDevice = it.take(48) }, modifier = Modifier.fillMaxWidth(), label = { Text("Device ID") }, singleLine = true)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
