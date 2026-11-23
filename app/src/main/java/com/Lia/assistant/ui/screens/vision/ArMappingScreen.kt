@@ -69,7 +69,7 @@ fun ArMappingScreen(navController: NavController) {
     }
 
     LaunchedEffect(context) {
-        status = runCatching { ArWorldMappingEngine(context).availability() }.getOrElse { "ARCore unavailable: ${it.message}" }
+        status = runCatching { ArCoreApk.getInstance().checkAvailability(context).toString() }.getOrElse { "ARCore unavailable: ${it.message}" }
     }
 
     fun startMapping() {
@@ -105,9 +105,11 @@ fun ArMappingScreen(navController: NavController) {
         status = "Mapping stopped."
     }
 
-    DisposableEffect(running, surface) {
-        if (running) surface?.onResume()
-        onDispose { if (!running) surface?.onPause() }
+    DisposableEffect(engine) {
+        onDispose {
+            surface?.onPause()
+            engine?.close()
+        }
     }
 
     Column(
