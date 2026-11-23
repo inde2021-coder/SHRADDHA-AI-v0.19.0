@@ -39,7 +39,7 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
     return snapshot.docs.map(doc => {
       const row = doc.data();
       return {
-        id: doc.id, platform: row.platform, text: row.text, mediaKind: row.mediaKind || null, mediaUrl: row.mediaUrl || null, mediaUrl: row.mediaUrl || null,
+        id: doc.id, platform: row.platform, text: row.text, mediaKind: row.mediaKind || null, mediaUrl: row.mediaUrl || null,
         scheduledAt: row.scheduledAt, status: row.status,
         result: row.status === 'published' ? row.result : null,
         lastError: row.status === 'failed' ? row.lastError : null
