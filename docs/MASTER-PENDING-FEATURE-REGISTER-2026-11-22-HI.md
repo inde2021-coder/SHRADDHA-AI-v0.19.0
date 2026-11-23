@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice screen's single mic control now distinguishes CONNECTING and ERROR from an actually ready microphone session; it no longer labels the microphone ON while the secure token/WebSocket connection is still being established or has failed.
+
+
 - Voice foreground notification no longer claims the microphone is already in use during token acquisition/connection setup; it reports a running voice session and retains the explicit stop action.
 
 
