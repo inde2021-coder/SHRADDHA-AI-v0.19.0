@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Form Autofill and private Notes/OCR native screens now use the configured assistant name, teal glass fields/cards, cyan action controls and consistent dark canvas. Notes/OCR editor now has a density-aware fixed viewport inside its ScrollView (previous zero-height weighted child could collapse).
+
+
 - File Access and App Training native activities now use the configured assistant name, dark-teal backgrounds, inset glass fields/spinners and raised cyan controls instead of the old purple/default Android widgets.
 
 
