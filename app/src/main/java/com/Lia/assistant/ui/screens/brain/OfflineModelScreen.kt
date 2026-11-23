@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ fun OfflineModelScreen(navController: NavController) {
     var working by remember { mutableStateOf(false) }
     var showRemove by remember { mutableStateOf(false) }
 
+    DisposableEffect(Unit) { onDispose { LocalOfflineLlm.close() } }
+
     fun importModel(uri: Uri) {
         working = true
         status = "Copying model into private app storage…"
@@ -88,8 +91,15 @@ fun OfflineModelScreen(navController: NavController) {
                         }
                     } ?: error("Android could not open the selected model file.")
                     require(temporary.length() >= MIN_MODEL_BYTES) { "Model file is too small to be a valid LiteRT-LM model." }
-                    if (target.exists()) require(target.delete()) { "Could not replace the previous model file." }
-                    require(temporary.renameTo(target)) { "Could not finalize the imported model file." }
+                    val backup = File(folder, "previous.litertlm.bak")
+                    if (backup.exists()) backup.delete()
+                    val hadPrevious = target.exists()
+                    if (hadPrevious) require(target.renameTo(backup)) { "Could not preserve the previous model before replacing it." }
+                    if (!temporary.renameTo(target)) {
+                        if (hadPrevious) backup.renameTo(target)
+                        error("Could not finalize the imported model file; previous model was restored where possible.")
+                    }
+                    backup.delete()
                     target.absolutePath
                 }
             }
