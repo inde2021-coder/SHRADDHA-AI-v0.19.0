@@ -978,7 +978,7 @@ wss.on('connection', (ws, ctx) => {
       const messageKind = String(msg.messageKind || '');
       const nonce = String(msg.nonce || '');
       const ciphertext = String(msg.ciphertext || '');
-      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload','data_share_payload'].includes(messageKind) ||
+      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload','data_share_payload','task_handoff','task_handoff_response'].includes(messageKind) ||
           !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 22 || ciphertext.length > 3_400_000 ||
           !/^[A-Za-z0-9+/]+=*$/.test(ciphertext)) return;
       if (messageKind === 'remote_action') {
