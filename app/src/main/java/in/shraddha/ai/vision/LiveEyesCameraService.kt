@@ -44,6 +44,12 @@ class LiveEyesCameraService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // A null, stale or unknown service intent must never turn on the camera.
+        if (intent?.action != ACTION_START) {
+            publishState(STATE_OFF)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         stopped = false
         publishState(STATE_STARTING)
         val assistantName = assistantName()
@@ -53,8 +59,8 @@ class LiveEyesCameraService : Service() {
             return START_NOT_STICKY
         }
         val config = VoiceGatewaySettings.get(this)
-        if (!config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
-            updateNotification("पहले Settings में सुरक्षित AI backend जोड़ें")
+        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
+            updateNotification((config.readError ?: "पहले Settings में सुरक्षित AI backend जोड़ें").take(120))
             stopSelf()
             return START_NOT_STICKY
         }
