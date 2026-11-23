@@ -41,20 +41,13 @@ class DeviceE2ECryptoTests(unittest.TestCase):
 
     def test_e2e_peer_keys_are_bound_to_the_relay_session(self):
         from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key
-        alice_private, _ = create_e2e_identity()
+        alice_private, alice_public = create_e2e_identity()
         bob_private, bob_public = create_e2e_identity()
         alice_key, alice_fingerprint = derive_e2e_peer_key(
             alice_private, bob_public, "session-one-123456", "alice-device", "bob-device"
         )
         bob_key, bob_fingerprint = derive_e2e_peer_key(
-            bob_private,
-            __import__("base64").b64encode(
-                bob_private.public_key().public_bytes(
-                    __import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.DER,
-                    __import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.SubjectPublicKeyInfo,
-                )
-            ).decode("ascii"),
-            "session-one-123456", "bob-device", "alice-device"
+            bob_private, alice_public, "session-one-123456", "bob-device", "alice-device"
         )
         other_session_key, other_fingerprint = derive_e2e_peer_key(
             alice_private, bob_public, "session-two-123456", "alice-device", "bob-device"
