@@ -60,6 +60,10 @@ fun VisualLensScreen(navController: NavController) {
 
     fun startEyes() {
         val config = VoiceGatewaySettings.get(context)
+        if (config.readError != null) {
+            status = "Saved AI backend settings could not be read: " + config.readError
+            return
+        }
         if (!config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
             status = "पहले Settings में सुरक्षित HTTPS AI backend URL और gateway token सेट करें।"
             return
