@@ -42,6 +42,11 @@ object DeviceLinkManager {
     private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
+
+    data class PairedDeviceSnapshot(val id: String, val name: String, val online: Boolean, val platform: String)
+    private val pairedDeviceSnapshots = ConcurrentHashMap<String, PairedDeviceSnapshot>()
+    fun pairedDevices(): List<PairedDeviceSnapshot> = pairedDeviceSnapshots.values.sortedBy { it.name.lowercase() }
+
     private val nextVisualFrameSequence = ConcurrentHashMap<String, AtomicLong>()
     private val receivedVisualFrameSequence = mutableMapOf<String, Long>()
     private val receivedVisualFrameLock = Any()
@@ -226,9 +231,17 @@ object DeviceLinkManager {
 
                         "connected" -> {
                             val peers = msg.optJSONArray("devices")
+                            pairedDeviceSnapshots.clear()
                             for (i in 0 until (peers?.length() ?: 0)) {
-                                val peerId = peers?.optJSONObject(i)?.optString("id").orEmpty()
-                                if (peerId.isNotBlank() && peerId != deviceId) sendE2EKeyOffer(peerId)
+                                val peer = peers?.optJSONObject(i) ?: continue
+                                val peerId = peer.optString("id").trim()
+                                if (peerId.isNotBlank() && peerId != deviceId) {
+                                    pairedDeviceSnapshots[peerId] = PairedDeviceSnapshot(
+                                        peerId, peer.optString("name", "Paired device").take(80),
+                                        peer.optBoolean("online", true), peer.optString("platform", peer.optString("os", "unknown")).take(40)
+                                    )
+                                    sendE2EKeyOffer(peerId)
+                                }
                             }
                             onStatus?.invoke("Connected • " + (peers?.length() ?: 0) + " paired device(s)")
                             onPeerMessage?.invoke(msg)
@@ -236,6 +249,7 @@ object DeviceLinkManager {
                         "device_revoked" -> {
                             val revokedId = msg.optString("deviceId")
                             peerKeys.remove(revokedId)?.key?.fill(0)
+                            pairedDeviceSnapshots.remove(revokedId)
                             clearVisualFrameState(revokedId)
                             if (revokedId.isNotBlank() && revokedId == deviceId) {
                                 appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
@@ -247,6 +261,13 @@ object DeviceLinkManager {
                         }
                         "peer_status" -> {
                             val peerId = msg.optString("deviceId")
+                            if (peerId.isNotBlank() && peerId != deviceId) {
+                                val previous = pairedDeviceSnapshots[peerId]
+                                pairedDeviceSnapshots[peerId] = PairedDeviceSnapshot(
+                                    peerId, msg.optString("name", previous?.name ?: "Paired device").take(80),
+                                    msg.optBoolean("online"), msg.optString("platform", previous?.platform ?: "unknown").take(40)
+                                )
+                            }
                             if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) {
                                 sendE2EKeyOffer(peerId)
                             }
@@ -668,6 +689,7 @@ object DeviceLinkManager {
         reconnectAttempts = 0
         peerKeys.values.forEach { it.key.fill(0) }
         peerKeys.clear()
+        pairedDeviceSnapshots.clear()
         nextVisualFrameSequence.clear()
         synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
         if (clearSavedCredentials) appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
