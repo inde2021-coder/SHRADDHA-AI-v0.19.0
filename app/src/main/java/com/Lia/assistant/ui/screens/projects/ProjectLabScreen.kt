@@ -3,6 +3,7 @@ package com.Lia.assistant.ui.screens.projects
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material3.AlertDialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +52,7 @@ import `in`.shraddha.ai.future.ProjectWorkspace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 @Composable
 fun ProjectLabScreen(navController: NavController) {
@@ -61,6 +65,50 @@ fun ProjectLabScreen(navController: NavController) {
     var status by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<ProjectPlan?>(null) }
+    var pendingExportJson by remember { mutableStateOf<String?>(null) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val json = pendingExportJson
+        pendingExportJson = null
+        if (uri != null && json != null) {
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(json) }
+                            ?: error("Could not open the selected backup destination.")
+                    }
+                }
+                status = result.fold({ "Project backup exported successfully." }, { "Backup export failed: ${it.message}" })
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                isSaving = true
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: error("Could not open the selected backup.")
+                        val raw = input.use { readBoundedText(it, 1_000_000) }
+                        ProjectPlanStore(context).importJson(raw).getOrThrow()
+                    }
+                }
+                result.onSuccess {
+                    plans = it
+                    status = "Backup restored. Existing projects were preserved."
+                }.onFailure {
+                    status = "Backup import failed: ${it.message ?: "invalid backup"}"
+                }
+                isSaving = false
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val result = withContext(Dispatchers.IO) {
@@ -148,6 +196,33 @@ fun ProjectLabScreen(navController: NavController) {
             )
         }
 
+        NovaGlassCard(cornerRadius = 18.dp, elevation = 3.dp) {
+            Text("Project backup", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("Export a portable JSON copy or restore one. Restore rejects duplicate IDs and never overwrites existing plans.", color = colors.textSecondary, fontSize = 10.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NovaButton(
+                    text = "Export backup",
+                    onClick = {
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { ProjectPlanStore(context).exportJson() }
+                            result.onSuccess {
+                                pendingExportJson = it
+                                exportLauncher.launch("shraddha-projects-backup.json")
+                            }.onFailure { status = "Backup export failed: ${it.message}" }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isSaving && plans.isNotEmpty()
+                )
+                NovaButton(
+                    text = "Restore backup",
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/json", "text/plain")) },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isSaving
+                )
+            }
+        }
+
         if (status.isNotBlank()) {
             NovaGlassCard {
                 Text(status, color = colors.textSecondary, fontSize = 11.sp)
@@ -226,4 +301,19 @@ fun ProjectLabScreen(navController: NavController) {
             }
         )
     }
+}
+
+/** Reads an untrusted backup with a strict byte cap before parsing it. */
+private fun readBoundedText(input: java.io.InputStream, maxBytes: Int): String {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(8 * 1024)
+    var total = 0
+    while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        total += count
+        require(total <= maxBytes) { "Backup file exceeds the 1 MB limit." }
+        output.write(buffer, 0, count)
+    }
+    return output.toString(Charsets.UTF_8.name())
 }
