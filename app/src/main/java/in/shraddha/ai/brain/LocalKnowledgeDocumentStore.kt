@@ -287,7 +287,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
             .digest(id.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        return "knowledge_$digest"
+        return "k_" + digest.take(62)
     }
 
     private fun storeContext(): Context = contextRef.applicationContext
