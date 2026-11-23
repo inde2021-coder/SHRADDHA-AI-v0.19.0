@@ -235,8 +235,12 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             MiniFeature("🧠", "Memory", Modifier.weight(1f)) { navController.navigate("personality") }
             MiniFeature("🤖", "Multiple AI", Modifier.weight(1f)) { navController.navigate("settings") }
             MiniFeature("📱", "Phone ↔ PC", Modifier.weight(1f)) { navController.navigate("quick_actions") }
+        }
+        Spacer(Modifier.height(7.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MiniFeature("💾", "Offline AI", Modifier.weight(1f)) { navController.navigate("offline_model") }
             MiniFeature("🏠", "Smart Home", Modifier.weight(1f)) { navController.navigate("smart_home") }
+            MiniFeature("🛠️", "Expert Studio", Modifier.weight(1f)) { navController.navigate("expert_studio") }
         }
         Spacer(Modifier.height(14.dp))
     }
