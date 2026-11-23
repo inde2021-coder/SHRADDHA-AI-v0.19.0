@@ -76,3 +76,25 @@ export function verifyPluginManifest(manifest, trustedKeys) {
   if (!verifySignature(null, canonicalPluginPayload(manifest), publicKey, signature)) throw new Error('Plugin signature verification failed');
   return { ...plugin, verified: true, keyId: manifest.keyId, execution: 'declarative-allowlisted-only' };
 }
+
+/** Authorizes one exact signed action for local execution after a separate user confirmation. */
+export function authorizePluginAction(manifest, trustedKeys, actionIndex, confirmed) {
+  const plugin = verifyPluginManifest(manifest, trustedKeys);
+  if (confirmed !== true) throw new Error('Explicit user confirmation is required before plugin action execution');
+  if (!Number.isSafeInteger(actionIndex) || actionIndex < 0 || actionIndex >= manifest.actions.length) {
+    throw new Error('Plugin action index is invalid');
+  }
+  const action = manifest.actions[actionIndex];
+  return {
+    ok: true,
+    verified: true,
+    pluginId: plugin.id,
+    pluginName: plugin.name,
+    version: plugin.version,
+    actionIndex,
+    action: { ...action },
+    execution: 'client-local-allowlisted',
+    codeExecution: false,
+    requiresLocalExecution: true
+  };
+}
