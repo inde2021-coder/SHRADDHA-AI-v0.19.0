@@ -20,6 +20,14 @@ class ShraddhaIntegrationHub(
     private val persistenceKey = "integration_hub_active_v1"
     private var active: Session? = persistence?.let { loadPersisted(it) }
 
+    init {
+        // Persist the restart-recovery failure and audit event immediately so a second process
+        // restart does not repeatedly reconstruct the same event from an old RUNNING snapshot.
+        active?.takeIf { it.audit.lastOrNull()?.event == "PROCESS_RESTARTED_REQUIRES_REVIEW" }?.let {
+            persistence?.let { store -> store.put(persistenceKey, encode(it)).getOrThrow() }
+        }
+    }
+
     data class Action(
         val id: String,
         val title: String,
