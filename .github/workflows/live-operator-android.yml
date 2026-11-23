@@ -7,6 +7,7 @@ on:
     paths:
       - "app/src/main/java/in/shraddha/ai/operator/**"
       - "app/src/main/java/in/shraddha/ai/phone/**"
+      - "app/src/main/java/com/Lia/assistant/ui/screens/home/HomeScreen.kt"
       - "app/src/main/java/com/Lia/assistant/ui/screens/phone/**"
       - "app/src/main/java/com/Lia/assistant/ui/fx/NovaOrb.kt"
       - ".github/workflows/live-operator-android.yml"
@@ -15,6 +16,9 @@ on:
       - feature/shraddha-home-screen-polish
     paths:
       - "app/src/main/java/in/shraddha/ai/operator/**"
+      - "app/src/main/java/in/shraddha/ai/phone/**"
+      - "app/src/main/java/com/Lia/assistant/ui/screens/home/HomeScreen.kt"
+      - "app/src/main/java/com/Lia/assistant/ui/screens/phone/**"
       - "app/src/test/java/in/shraddha/ai/operator/**"
       - ".github/workflows/live-operator-android.yml"
   workflow_dispatch:
@@ -46,7 +50,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v6
         with:
-          name: live-app-operator-debug-apk
+          name: shraddha-integrated-control-center-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 10

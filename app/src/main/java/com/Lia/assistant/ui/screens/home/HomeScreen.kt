@@ -1,5 +1,6 @@
 package com.Lia.assistant.ui.screens.home
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,14 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -34,11 +33,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.fx.LiaOrb3D
@@ -47,12 +47,15 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
+import `in`.shraddha.ai.operator.OperatorActivity
+import `in`.shraddha.ai.phone.PhoneAgentActivity
 
 private val Accent = Color(0xFFB58BFF)
 private val Mint = Color(0xFF78E4D6)
 
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val colors = LocalNovaColors.current
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
@@ -105,11 +108,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         Box(
             Modifier.fillMaxWidth().height(avatarHeight)
                 .clip(RoundedCornerShape(28.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF21143D), Color(0xFF111426), Color(0xFF080A14))
-                    )
-                )
+                .background(Brush.verticalGradient(listOf(Color(0xFF21143D), Color(0xFF111426), Color(0xFF080A14))))
                 .border(1.dp, Color(0x557D52D8), RoundedCornerShape(28.dp)),
             contentAlignment = Alignment.Center
         ) {
@@ -137,36 +136,19 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         }
 
         Spacer(Modifier.height(8.dp))
-        Text(
-            dailyOrbTheme.style.displayName,
-            color = Accent,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.2.sp
-        )
-        Spacer(Modifier.height(14.dp))
+        Text(dailyOrbTheme.style.displayName, color = Accent, fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp)
+        Spacer(Modifier.height(16.dp))
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            PrimaryAction(
-                title = "Talk",
-                icon = "🎙",
-                modifier = Modifier.weight(1f)
-            ) { navController.navigate("voice") }
-            SecondaryAction(
-                title = "Visual Lens",
-                icon = "◉",
-                modifier = Modifier.weight(1f)
-            ) { navController.navigate("visual_lens") }
-        }
-        Spacer(Modifier.height(10.dp))
-        SecondaryAction(
-            title = "Connect PC",
-            icon = "⌘",
-            modifier = Modifier.fillMaxWidth()
-        ) { navController.navigate("device_center") }
+        // Integrated controls live inside the main Shraddha AI home design.
+        ControlCenter(
+            onPhoneAgent = { context.startActivity(Intent(context, PhoneAgentActivity::class.java)) },
+            onLiveOperator = { context.startActivity(Intent(context, OperatorActivity::class.java)) },
+            onVisualLens = { navController.navigate("visual_lens") },
+            onConnectPc = { navController.navigate("device_center") },
+            onAiCallGateway = { navController.navigate("phone_call_agent") },
+            onQuickActions = { navController.navigate("quick_actions") }
+        )
 
         Spacer(Modifier.height(14.dp))
         Row(
@@ -178,38 +160,75 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Message Shraddha…", color = Color(0xFFB8A9D4), fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text("Message $assistantName…", color = Color(0xFFB8A9D4), fontSize = 13.sp, modifier = Modifier.weight(1f))
             Icon(Icons.Default.GraphicEq, contentDescription = "Open chat", tint = Mint, modifier = Modifier.size(20.dp))
         }
     }
 }
 
 @Composable
-private fun PrimaryAction(title: String, icon: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Row(
-        modifier.height(54.dp).clip(RoundedCornerShape(17.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF6337B2), Color(0xFF8B48B7))))
-            .border(1.dp, Color(0x887DEBFF), RoundedCornerShape(17.dp))
-            .clickable(onClick = onClick).padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+private fun ControlCenter(
+    onPhoneAgent: () -> Unit,
+    onLiveOperator: () -> Unit,
+    onVisualLens: () -> Unit,
+    onConnectPc: () -> Unit,
+    onAiCallGateway: () -> Unit,
+    onQuickActions: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(25.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xDD1B2340), Color(0xE6091425))))
+            .border(1.dp, Color(0x667D72C8), RoundedCornerShape(25.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp)
     ) {
-        Text(icon, fontSize = 18.sp)
-        Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("SHRADDHA CONTROL CENTER", color = Color.White, fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold, letterSpacing = 1.05.sp)
+                Text("सभी मुख्य सिस्टम एक ही स्क्रीन से", color = Color(0xFFB7C6E8), fontSize = 10.sp)
+            }
+            Text("● LIVE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ControlTile("Phone Agent", "कॉल और कॉन्टैक्ट", "☎", Modifier.weight(1f), onPhoneAgent)
+            ControlTile("Live Operator", "ऐप कंट्रोल", "⌘", Modifier.weight(1f), onLiveOperator)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ControlTile("Visual Lens", "कैमरा AI", "◉", Modifier.weight(1f), onVisualLens)
+            ControlTile("Connect PC", "PC लिंक", "▣", Modifier.weight(1f), onConnectPc)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ControlTile("AI Call Gateway", "क्लाउड कॉल", "◌", Modifier.weight(1f), onAiCallGateway)
+            ControlTile("Quick Actions", "शॉर्टकट और टूल", "✦", Modifier.weight(1f), onQuickActions)
+        }
     }
 }
 
 @Composable
-private fun SecondaryAction(title: String, icon: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Row(
-        modifier.height(54.dp).clip(RoundedCornerShape(17.dp))
-            .background(Color(0xCC19243B))
-            .border(1.dp, Color(0x667D52D8), RoundedCornerShape(17.dp))
-            .clickable(onClick = onClick).padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+private fun ControlTile(
+    title: String,
+    subtitle: String,
+    symbol: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier.height(82.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF28385B), Color(0xFF17263E))))
+            .border(1.dp, Color(0x665F8CB2), RoundedCornerShape(17.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.Center
     ) {
-        Text(icon, fontSize = 17.sp)
-        Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(symbol, color = Mint, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 7.dp))
+        }
+        Text(subtitle, color = Color(0xFFB5C6DC), fontSize = 9.sp,
+            modifier = Modifier.padding(top = 5.dp))
     }
 }
