@@ -170,6 +170,7 @@ object DeviceLinkManager {
                                 "file_transfer_chunk" -> "$transferId:$index"
                                 "clipboard_payload" -> msg.optString("requestId")
                                 "data_share_payload" -> msg.optString("requestId") + "|" + msg.optString("category")
+                                "task_handoff", "task_handoff_response" -> msg.optString("requestId")
                                 else -> ""
                             }
                             val aad = "$sessionId|$peerId|$deviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
@@ -206,6 +207,17 @@ object DeviceLinkManager {
                                 "data_share_payload" -> {
                                     payload.put("type", "data_share_payload").put("fromDeviceId", peerId)
                                         .put("category", msg.optString("category")).put("requestId", msg.optString("requestId"))
+                                    onPeerMessage?.invoke(payload)
+                                }
+                                "task_handoff" -> {
+                                    payload.put("type", "task_handoff").put("fromDeviceId", peerId)
+                                        .put("fromDeviceName", msg.optString("fromDeviceName"))
+                                    onPeerMessage?.invoke(payload)
+                                }
+                                "task_handoff_response" -> {
+                                    payload.put("type", "task_handoff_response").put("fromDeviceId", peerId)
+                                        .put("fromDeviceName", msg.optString("fromDeviceName"))
+                                        .put("taskId", msg.optString("requestId"))
                                     onPeerMessage?.invoke(payload)
                                 }
                                 else -> onStatus?.invoke("Unsupported encrypted peer message blocked.")
@@ -620,7 +632,7 @@ object DeviceLinkManager {
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
-        if (kind == "clipboard_payload") message.put("requestId", correlationId)
+        if (kind == "clipboard_payload" || kind == "task_handoff" || kind == "task_handoff_response") message.put("requestId", correlationId)
         if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
         return socket?.send(message.toString()) == true
@@ -639,18 +651,23 @@ object DeviceLinkManager {
         if (relativePath.isBlank()) false else sendAction(targetDeviceId,
             JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
 
-    fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
+    @Deprecated("Plaintext peer chat is disabled; use a mutually verified E2E peer channel.")
+    fun sendChat(message: String): Boolean = false
     fun sendTaskHandoff(targetDeviceId: String, title: String, description: String, steps: List<String>): Boolean {
         if (targetDeviceId.isBlank() || title.isBlank() || description.isBlank()) return false
+        val taskId = java.util.UUID.randomUUID().toString().replace("-", "")
         val cleanSteps = JSONArray()
         steps.take(12).forEach { cleanSteps.put(it.take(300)) }
-        val task = JSONObject().put("title", title.trim().take(120))
+        val task = JSONObject().put("id", taskId).put("title", title.trim().take(120))
             .put("description", description.trim().take(3000)).put("steps", cleanSteps)
-        return socket?.send(JSONObject().put("type", "task_handoff").put("targetDeviceId", targetDeviceId).put("task", task).toString()) == true
+        val payload = JSONObject().put("task", task).put("expiresAt", System.currentTimeMillis() + 15 * 60_000L)
+        return sendEncryptedPeerMessage(targetDeviceId, "task_handoff", payload, taskId)
     }
-    fun respondTaskHandoff(fromDeviceId: String, taskId: String, accepted: Boolean, note: String = ""): Boolean =
-        socket?.send(JSONObject().put("type", "task_handoff_response").put("targetDeviceId", fromDeviceId)
-            .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
+    fun respondTaskHandoff(fromDeviceId: String, taskId: String, accepted: Boolean, note: String = ""): Boolean {
+        if (!taskId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return false
+        return sendEncryptedPeerMessage(fromDeviceId, "task_handoff_response",
+            JSONObject().put("accepted", accepted).put("note", note.take(300)), taskId)
+    }
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
         if (jpeg.size !in 1..2_500_000 || !DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
