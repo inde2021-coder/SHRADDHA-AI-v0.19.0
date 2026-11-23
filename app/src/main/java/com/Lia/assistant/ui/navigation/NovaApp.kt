@@ -43,6 +43,7 @@ import com.Lia.assistant.ui.screens.voice.VoiceScreen
 import com.Lia.assistant.ui.screens.vision.VisualLensScreen
 import com.Lia.assistant.ui.screens.vision.ArMappingScreen
 import com.Lia.assistant.ui.screens.brain.OfflineModelScreen
+import com.Lia.assistant.ui.screens.smarthome.SmartHomeScreen
 import com.Lia.assistant.ui.theme.LocalBottomBarInset
 import com.Lia.assistant.ui.theme.nightSky
 
@@ -102,6 +103,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("visual_lens") { VisualLensScreen(navController) }
                     composable("ar_mapping") { ArMappingScreen(navController) }
                     composable("offline_model") { OfflineModelScreen(navController) }
+                    composable("smart_home") { SmartHomeScreen(navController) }
                     composable("quick_actions") { QuickActionsScreen(navController) }
                     composable("profile") { ProfileScreen(navController, appState) }
                     composable("personality") { PersonalityScreen(navController, appState) }
