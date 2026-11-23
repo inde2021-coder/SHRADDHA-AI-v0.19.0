@@ -107,6 +107,17 @@ test('SMS and WhatsApp relay requires exact preview, E.164 recipient and a uniqu
   const duplicate = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
   assert.equal(duplicate.status, 409);
   assert.equal((await duplicate.json()).duplicate, true);
+
+  const conflictingId = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, text: 'different message', preview: 'different message' }) });
+  assert.equal(conflictingId.status, 409);
+  assert.match((await conflictingId.json()).error, /different message/);
+
+  const sms = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, channel: 'sms', requestId: 'message_request_123458' }) });
+  assert.equal(sms.status, 503);
+
+  const previewMismatch = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, requestId: 'message_request_123459', preview: 'edited preview' }) });
+  assert.equal(previewMismatch.status, 400);
+  assert.match((await previewMismatch.json()).error, /exact recipient and message preview/);
 });
 
 test('Edesy call bridge readiness is private and reports missing external provisioning honestly', async () => {
