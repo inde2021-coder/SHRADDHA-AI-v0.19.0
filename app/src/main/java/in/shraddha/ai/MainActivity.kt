@@ -1694,28 +1694,34 @@ class MainActivity : AppCompatActivity() {
             val timelineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
             addView(TextView(this@MainActivity).apply { text = "21 • LIFE TIMELINE + 22 • CONTEXT RECALL"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(timelineTitle); addView(timelineCategory); addView(timelineNote); addView(timelineQuery); addView(timelineOutput)
-            fun loadTimeline(): org.json.JSONArray = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_timeline").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
-            addView(actionButton("SAVE TIMELINE EVENT", "Explicit user-entered event • encrypted with Android Keystore") {
+            val timeline = `in`.shraddha.ai.future.LifeTimeline(this@MainActivity)
+            val personalStore = `in`.shraddha.ai.brain.PersonalKnowledgeStore(this@MainActivity)
+            addView(actionButton("SAVE TIMELINE EVENT", "Explicit user-entered event • encrypted local persistence") {
                 runCatching {
                     require(timelineTitle.text.isNotBlank() && timelineCategory.text.isNotBlank())
-                    val array = loadTimeline()
-                    array.put(JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("title", timelineTitle.text.toString().take(120)).put("category", timelineCategory.text.toString().take(40)).put("note", timelineNote.text.toString().take(1000)).put("time", System.currentTimeMillis()))
-                    require(array.length() <= 500)
-                    encryptedStore.put("advanced25_timeline", array.toString()).getOrThrow()
-                    timelineOutput.text = "Encrypted timeline event saved. Total: ${array.length()}"
+                    timeline.add(`in`.shraddha.ai.future.LifeTimeline.Event(
+                        java.util.UUID.randomUUID().toString().replace("-", ""),
+                        timelineTitle.text.toString(), timelineCategory.text.toString(),
+                        System.currentTimeMillis(), timelineNote.text.toString()
+                    ))
+                    timelineOutput.text = "Timeline event saved in encrypted local memory."
                 }.onFailure { timelineOutput.text = "Save failed: ${it.message}" }
             })
-            addView(actionButton("SEARCH CONTEXT TIMELINE", "Search only your saved timeline events") {
-                val query = timelineQuery.text.toString().trim()
-                val array = loadTimeline()
-                val hits = (0 until array.length()).mapNotNull { array.optJSONObject(it) }.filter { it.optString("title").contains(query, true) || it.optString("note").contains(query, true) || it.optString("category").contains(query, true) }.sortedByDescending { it.optLong("time") }
-                timelineOutput.text = if (hits.isEmpty()) "No matching saved events." else hits.joinToString("\\n\\n") { "${it.optString("title")} • ${it.optString("category")}\\n${it.optString("note")}" }
+            addView(actionButton("SEARCH CONTEXT TIMELINE", "Search saved events from the encrypted personal timeline") {
+                runCatching { timeline.search(timelineQuery.text.toString().trim()) }
+                    .onSuccess { hits ->
+                        timelineOutput.text = if (hits.isEmpty()) "No matching saved events." else
+                            hits.joinToString("\\n\\n") { "${it.title} • ${it.category}\\n${it.note}" }
+                    }.onFailure { timelineOutput.text = "Search failed: ${it.message}" }
             })
             addView(actionButton("DELETE ALL TIMELINE EVENTS", "Permanent local deletion • requires confirmation") {
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete timeline?").setMessage("सभी locally saved timeline events हटेंगे। यह undo नहीं होगा।").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
-                    val removed = encryptedStore.remove("advanced25_timeline")
-                    timelineOutput.text = if (removed) "Timeline events deleted." else "Could not delete timeline."
-                }.show()
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete timeline?")
+                    .setMessage("सभी locally saved timeline events हटेंगे। यह undo नहीं होगा।")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                        runCatching { personalStore.clearTimeline().getOrThrow() }
+                            .onSuccess { timelineOutput.text = "Deleted ${it} timeline event(s)." }
+                            .onFailure { timelineOutput.text = "Could not delete timeline: ${it.message}" }
+                    }.show()
             })
 
             val skillName = edit("Personal skill name", "उदाहरण: My Hindi writing style")
@@ -1725,22 +1731,22 @@ class MainActivity : AppCompatActivity() {
             val skillStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
             addView(TextView(this@MainActivity).apply { text = "23 • PERSONAL SKILL LEARNING"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(skillName); addView(skillInput); addView(skillOutputText); addView(skillConsent); addView(skillStatus)
-            addView(actionButton("SAVE APPROVED SKILL EXAMPLE", "Explicit consent • encrypted local storage • user can delete") {
+            addView(actionButton("SAVE APPROVED SKILL EXAMPLE", "Explicit consent • Android Keystore encrypted persistence") {
                 runCatching {
                     require(skillConsent.isChecked) { "पहले learning consent checkbox चुनें।" }
-                    val learning = `in`.shraddha.ai.future.PersonalSkillLearning()
+                    val learning = `in`.shraddha.ai.future.PersonalSkillLearning(this@MainActivity)
                     learning.add(true, skillName.text.toString(), skillInput.text.toString(), skillOutputText.text.toString())
-                    val array = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_skills").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
-                    array.put(JSONObject().put("skill", skillName.text.toString().take(60)).put("input", skillInput.text.toString().take(2000)).put("approvedOutput", skillOutputText.text.toString().take(4000)).put("approvedAt", System.currentTimeMillis()))
-                    require(array.length() <= 200)
-                    encryptedStore.put("advanced25_skills", array.toString()).getOrThrow()
-                    skillStatus.text = "Approved example encrypted and saved. Examples: ${array.length()}"
+                    skillStatus.text = "Approved example saved in encrypted memory. This skill has ${learning.examplesFor(skillName.text.toString()).size} example(s)."
                 }.onFailure { skillStatus.text = "Not saved: ${it.message}" }
             })
-            addView(actionButton("FORGET ALL LEARNED SKILL EXAMPLES", "Permanent deletion of this feature's encrypted examples") {
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Forget learned examples?").setMessage("All saved personal skill examples will be deleted.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
-                    skillStatus.text = if (encryptedStore.remove("advanced25_skills")) "All saved skill examples deleted." else "Could not delete examples."
-                }.show()
+            addView(actionButton("FORGET ALL LEARNED SKILL EXAMPLES", "Permanent deletion of all approved skill examples") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Forget learned examples?")
+                    .setMessage("All saved personal skill examples will be deleted.").setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        runCatching { personalStore.clearSkillExamples().getOrThrow() }
+                            .onSuccess { skillStatus.text = "Deleted ${it} saved skill example(s)." }
+                            .onFailure { skillStatus.text = "Could not delete examples: ${it.message}" }
+                    }.show()
             })
 
             val routineTrigger = edit("Routine trigger phrase", "When I say: prepare morning briefing")
@@ -1749,13 +1755,19 @@ class MainActivity : AppCompatActivity() {
             val routineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
             addView(TextView(this@MainActivity).apply { text = "24 • SMART ROUTINE AUTOMATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(routineTrigger); addView(routineAction); addView(routineConsent); addView(routineOutput)
-            addView(actionButton("SAVE APPROVAL-GATED ROUTINE", "Routine proposal only; no background action is executed") {
+            addView(actionButton("SAVE APPROVAL-GATED ROUTINE", "Encrypted persistent proposal only; no background action is executed") {
                 runCatching {
                     require(routineConsent.isChecked && routineTrigger.text.isNotBlank() && routineAction.text.isNotBlank())
-                    val routine = `in`.shraddha.ai.future.SmartRoutineEngine.Routine("routine-${System.currentTimeMillis()}", routineTrigger.text.toString(), routineTrigger.text.toString(), routineAction.text.toString(), true, true)
-                    val proposal = `in`.shraddha.ai.future.SmartRoutineEngine.propose(routine, routineTrigger.text.toString()) ?: error("Routine did not match its trigger")
-                    encryptedStore.put("advanced25_routine_latest", JSONObject().put("id", proposal.routineId).put("summary", proposal.summary).put("requiresApproval", proposal.requiresApproval).toString()).getOrThrow()
-                    routineOutput.text = "Routine saved. Trigger: ${routine.trigger}\\nAction proposal: ${proposal.summary}\\nFresh user approval required: YES"
+                    val id = "routine-" + java.util.UUID.randomUUID().toString().replace("-", "")
+                    val registry = `in`.shraddha.ai.future.PersistentRoutineRegistry(this@MainActivity)
+                    val routine = `in`.shraddha.ai.future.SmartRoutineEngine.Routine(
+                        id, routineTrigger.text.toString(), routineTrigger.text.toString(),
+                        routineAction.text.toString(), true, true
+                    )
+                    registry.save(routine).getOrThrow()
+                    val proposal = registry.propose(id, routineTrigger.text.toString()).getOrThrow()
+                        ?: error("Routine did not match its trigger")
+                    routineOutput.text = "Routine saved securely. Trigger: ${routine.trigger}\\nAction proposal: ${proposal.summary}\\nFresh user approval required: YES"
                 }.onFailure { routineOutput.text = "Routine not saved: ${it.message}" }
             })
 
