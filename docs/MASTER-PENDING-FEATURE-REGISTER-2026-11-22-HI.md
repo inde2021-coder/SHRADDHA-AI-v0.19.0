@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Android CI no longer runs on every feature-branch push; the complete unit-test/build/emulator smoke workflow is now `workflow_dispatch` only, so source-audit commits do not trigger repeated test runs. The owner can start one consolidated verification when implementation review is complete.
+
+
 - Operator recovery now includes both process-interrupted and runtime-FAILED workflows whenever the encrypted action journal is EXECUTING/FAILED; the user can inspect the target app and explicitly attest completion before only the remaining steps are queued. Failed steps are never auto-replayed.
 
 
