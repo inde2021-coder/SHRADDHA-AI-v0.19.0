@@ -137,14 +137,28 @@ class FirebaseCloudVault(private val context: Context) {
                 .get().await()
             val firestorePayload = firestoreDocument.getString("payload")
             if (firestoreDocument.exists()) {
-                require(!firestorePayload.isNullOrBlank()) { "The Firestore backup record exists but has no payload; restore was stopped to avoid treating damaged data as an empty backup." }
+                require(firestoreDocument.getString("format") == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                    "The Firestore backup format is missing or unsupported; restore was stopped."
+                }
+                require(!firestorePayload.isNullOrBlank()) {
+                    "The Firestore backup record exists but has no payload; restore was stopped to protect backup integrity."
+                }
             }
-            val realtimePayload = if (!firestoreDocument.exists() && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+            val realtimeSnapshot = if (!firestoreDocument.exists() && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
                 FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
                     .reference.child("users").child(user.uid).child("vault").child(key).get().await()
-                    .child("payload").getValue(String::class.java)
             } else null
+            if (realtimeSnapshot?.exists() == true) {
+                require(realtimeSnapshot.child("format").getValue(String::class.java) == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                    "The Realtime Database backup format is missing or unsupported; restore was stopped."
+                }
+                require(!realtimeSnapshot.child("payload").getValue(String::class.java).isNullOrBlank()) {
+                    "The Realtime Database backup exists but has no payload; restore was stopped to protect backup integrity."
+                }
+            }
+            val realtimePayload = realtimeSnapshot?.child("payload")?.getValue(String::class.java)
             val payload = firestorePayload ?: realtimePayload ?: return@runBlocking null
+            require(payload.length <= 190_000) { "Encrypted backup exceeds the supported restore size." }
             decrypt(payload, password)
         }
     }
@@ -312,12 +326,18 @@ class FirebaseCloudVault(private val context: Context) {
             if (!metadata.exists()) return@runBlocking null
             val storagePath = metadata.getString("storagePath") ?: error("Storage path is missing")
             require(storagePath == "users/${user.uid}/backups/${revisionId}.enc")
+            require(metadata.getString("format") == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                "Storage backup record format is missing or unsupported."
+            }
             val size = metadata.getLong("sizeBytes") ?: error("Storage backup size is missing")
             require(size in 1..(2L * 1024 * 1024)) { "Storage backup size is invalid" }
             val storageRef = FirebaseStorage.getInstance(app).reference.child(storagePath)
             val objectMetadata = storageRef.metadata.await()
             require(objectMetadata.contentType == "application/octet-stream")
             require(objectMetadata.getCustomMetadata("format") == "AES-256-GCM/PBKDF2-SHA256-v1")
+            require(objectMetadata.getCustomMetadata("updatedAt") == metadata.getLong("updatedAt")?.toString()) {
+                "Storage object timestamp does not match Firestore metadata."
+            }
             require(objectMetadata.sizeBytes == size) { "Storage object metadata does not match Firestore metadata" }
             val bytes = storageRef.getBytes(2L * 1024 * 1024).await()
             try {
