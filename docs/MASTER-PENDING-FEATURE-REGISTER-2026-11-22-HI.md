@@ -377,3 +377,6 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Live Visual Translation now wipes its copied camera frame and releases its single-flight gate on both synchronous gateway exceptions and asynchronous callback completion, including when a UI/audit callback throws. Previously, an exception before callback registration or inside the callback could leave the translation gate permanently in-flight and retain a copied frame.
 - Project Lab plan saves now atomically write the new plan/index while removing encrypted records evicted by the 20-plan retention cap. Plan deletion now atomically updates the index and removes the encrypted plan in the same EncryptedFeatureStore transaction; previously the delete result was ignored and failed removal could leave an orphaned record.
 - These are source-level fixes only. Unit tests, Android build, emulator, Firebase and physical camera/translation tests remain unrun.
+
+
+- Project Lab validation now rejects duplicate, missing, self-referential and cyclic milestone dependencies. Unknown persisted milestone states now fail as malformed/newer data instead of silently resetting progress to TODO. No tests/build have been run.
