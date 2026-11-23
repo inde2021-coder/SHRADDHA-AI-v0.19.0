@@ -156,10 +156,10 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
                     Column(horizontalAlignment = Alignment.Start) {
                         Box(
                             Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                                .background(colors.surfaceRaised),
+                                .background(Color(0xFF30204F)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(tile.icon, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
+                            Icon(tile.icon, contentDescription = null, tint = Color(0xFFC5A6FF), modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(tile.title, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2)
