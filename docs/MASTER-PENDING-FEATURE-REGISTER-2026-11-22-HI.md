@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Legacy hardcoded-purple Accessibility and Access Key components were moved onto the shared teal/cyan layered-glass theme, including the blocked/error state color and common elevation/rim treatment.
+
+
 - The user-configured assistant name now propagates into Gemini Live function declarations/tool descriptions (including council planning and secure file manager) rather than retaining hardcoded Shraddha AI branding in the model-facing tool catalog.
 
 
