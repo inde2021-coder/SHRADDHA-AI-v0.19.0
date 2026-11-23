@@ -1,6 +1,6 @@
 import unittest
 
-from command_parser import parse_android_command
+from pc_companion.command_parser import parse_android_command
 
 
 class AndroidCommandParserTests(unittest.TestCase):

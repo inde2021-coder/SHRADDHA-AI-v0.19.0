@@ -9,6 +9,8 @@ on:
       - "app/src/main/java/in/shraddha/ai/phone/**"
       - "app/src/main/java/com/Lia/assistant/ui/screens/home/HomeScreen.kt"
       - "app/src/main/java/com/Lia/assistant/ui/screens/devices/DeviceCenterScreen.kt"
+      - "app/src/main/java/com/Lia/assistant/ui/screens/devices/PcCommandInterpreter.kt"
+      - "app/src/test/java/com/Lia/assistant/ui/screens/devices/**"
       - "app/src/main/java/com/Lia/assistant/ui/screens/phone/**"
       - "app/src/main/java/com/Lia/assistant/ui/fx/NovaOrb.kt"
       - ".github/workflows/live-operator-android.yml"
