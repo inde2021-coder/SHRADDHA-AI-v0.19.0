@@ -6,7 +6,7 @@ This release process creates a **release-signed APK and Android App Bundle (AAB)
 
 Create the upload/release key on a trusted machine. Keep the resulting JKS file and passwords in a secure offline backup. **Never commit the keystore, passwords, or private key to Git.** Loss of the key can block future updates (unless the app is enrolled in Play App Signing and the relevant upload-key reset process is used).
 
-Use JDK `keytool`:
+Use JDK 21 is used to match the validated Android CI toolchain. JDK `keytool`:
 
 ```bash
 keytool -genkeypair -v \
