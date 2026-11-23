@@ -472,7 +472,7 @@ def decode_encrypted_screen_frame(packet: bytes, peer_keys: dict, session_id: st
         raise ValueError("Replayed visual frame rejected")
     aad = f"{session_id}|{source_id}|{local_device_id}|visual_frame|{frame_type}|{sequence}".encode("utf-8")
     jpeg = AESGCM(bytes(state["key"])).decrypt(nonce, ciphertext, aad)
-    if len(jpeg) < 4 or len(jpeg) > 2_500_000 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\\xff\\xd9":
+    if len(jpeg) < 4 or len(jpeg) > 2_500_000 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\xff\xd9":
         raise ValueError("Decrypted visual frame is not a bounded JPEG")
     seen_sequences[sequence_key] = sequence
     return source_id, frame_type, jpeg
@@ -504,7 +504,7 @@ def encode_encrypted_screen_frame(jpeg: bytes, target_device_id: str, peer_keys:
     import secrets
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     target = target_device_id.encode("utf-8")
-    if (not jpeg or len(jpeg) > 2_500_000 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\\xff\\xd9" or
+    if (not jpeg or len(jpeg) > 2_500_000 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\xff\xd9" or
             not 1 <= len(target) <= 64 or not 1 <= len(session_id) <= 128 or
             not 1 <= len(sender_device_id) <= 64 or sender_device_id == target_device_id or
             not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1 or
