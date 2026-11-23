@@ -25,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +74,9 @@ fun VoiceScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasKey = VoiceGatewaySettings.isConfigured(context)
+                hasRecordAudioPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -103,14 +105,6 @@ fun VoiceScreen(
     ) { isGranted ->
         hasRecordAudioPermission = isGranted
         if (isGranted) {
-            VoiceForegroundService.start(context)
-        }
-    }
-
-    LaunchedEffect(hasRecordAudioPermission, hasKey) {
-        if (!hasRecordAudioPermission) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        } else if (hasKey && !VoiceSessionManager.isActive.value) {
             VoiceForegroundService.start(context)
         }
     }
