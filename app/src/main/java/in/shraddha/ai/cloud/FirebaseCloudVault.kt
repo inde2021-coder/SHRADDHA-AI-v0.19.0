@@ -143,7 +143,7 @@ class FirebaseCloudVault(private val context: Context) {
             } else null
             val realtimeRecord = realtimeRef?.get()?.await()
             val existed = firestoreRecord.exists() || realtimeRecord?.exists() == true
-            if (realtimeRecord?.exists() == true) realtimeRef.removeValue().await()
+            if (realtimeRecord?.exists() == true) realtimeRef?.removeValue()?.await()
             if (firestoreRecord.exists()) firestoreRef.delete().await()
             existed
         }
