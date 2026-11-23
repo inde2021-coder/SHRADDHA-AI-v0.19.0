@@ -2,6 +2,7 @@ import { createPublicKey, verify as verifySignature } from 'node:crypto';
 
 const CAPABILITIES = new Set(['read_profile', 'read_memory', 'create_note', 'show_notification']);
 const ACTIONS = new Set(['create_note', 'show_notification']);
+const FORBIDDEN_FIELDS = new Set(['script', 'javascript', 'html', 'entrypoint', 'url', 'permissions', 'nativecode', 'dex', 'jar']);
 const ID = /^[a-z][a-z0-9._-]{2,63}$/;
 
 function assertJson(value, depth = 0) {
@@ -18,6 +19,7 @@ function assertJson(value, depth = 0) {
     if (keys.length > 100) throw new Error('Plugin manifest object is too large');
     for (const key of keys) {
       if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new Error('Unsafe object key in plugin manifest');
+      if (FORBIDDEN_FIELDS.has(key.toLowerCase())) throw new Error('Executable or remote plugin content is not permitted');
       assertJson(value[key], depth + 1);
     }
     return;
@@ -56,8 +58,6 @@ export function validatePluginManifest(manifest) {
   }
   if (typeof manifest.keyId !== 'string' || !ID.test(manifest.keyId)) throw new Error('Plugin signing key id is invalid');
   if (typeof manifest.signature !== 'string' || !/^[A-Za-z0-9_-]{80,200}$/.test(manifest.signature)) throw new Error('Plugin signature is invalid');
-  // Executable code, remote URLs, arbitrary intents and dynamic imports are deliberately forbidden.
-  if (Object.keys(manifest).some(key => ['script', 'javascript', 'html', 'entrypoint', 'url', 'permissions'].includes(key))) throw new Error('Executable or remote plugin content is not permitted');
   return { id: manifest.id, name: manifest.name.trim(), version: manifest.version, capabilities: [...manifest.capabilities], actions: manifest.actions };
 }
 
