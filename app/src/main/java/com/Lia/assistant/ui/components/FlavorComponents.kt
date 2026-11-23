@@ -114,17 +114,18 @@ fun AccessKeySection(modifier: Modifier = Modifier) {
         elevation = 3.dp
     ) {
         Column {
-        Text(
-            text = "License & Access Key",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFFEEE9FF)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Plan: ${info.plan} (${info.statusText})",
-            fontSize = 13.sp,
-            color = Color(0xFFA7A0CC)
-        )
+            Text(
+                text = "License & Access Key",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textPrimary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Plan: ${info.plan} (${info.statusText})",
+                fontSize = 13.sp,
+                color = colors.textSecondary
+            )
+        }
     }
 }
