@@ -18,8 +18,11 @@ object ProviderKeyStore {
         val clean = value.trim()
         require(clean.length <= 512) { "API key is too long." }
         val store = EncryptedFeatureStore(context.applicationContext)
-        if (clean.isEmpty()) store.remove(key(provider))
-        else store.put(key(provider), clean).getOrThrow()
+        if (clean.isEmpty()) {
+            check(store.remove(key(provider))) { "Could not remove the encrypted $provider API key." }
+        } else {
+            store.put(key(provider), clean).getOrThrow()
+        }
     }
 
     fun has(context: Context, provider: String): Boolean = get(context, provider).isNotEmpty()
