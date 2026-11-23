@@ -55,7 +55,7 @@ class MainBrainSchedulerStore(context: Context) {
     fun load(): List<SharedTaskScheduler.Snapshot> {
         val encoded = prefs.getString(KEY_SNAPSHOT, null) ?: return emptyList()
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        try {
+        return try {
             val clear = decrypt(bytes)
             try {
                 val array = JSONArray(String(clear, StandardCharsets.UTF_8))
@@ -93,7 +93,7 @@ class MainBrainSchedulerStore(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val iv = cipher.iv
         val encrypted = cipher.doFinal(clear)
-        try {
+        return try {
             byteArrayOf(iv.size.toByte()) + iv + encrypted
         } finally {
             iv.fill(0)
@@ -107,7 +107,7 @@ class MainBrainSchedulerStore(context: Context) {
         require(ivSize in 12..16 && payload.size > 1 + ivSize) { "Stored scheduler IV is invalid" }
         val iv = payload.copyOfRange(1, 1 + ivSize)
         val encrypted = payload.copyOfRange(1 + ivSize, payload.size)
-        try {
+        return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
             val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
