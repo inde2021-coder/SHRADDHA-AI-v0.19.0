@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Gemini API-key storage now distinguishes a genuinely absent encrypted record (eligible for one-time legacy plaintext migration) from a partial ciphertext/IV record; incomplete encrypted records raise a recovery error and are never treated as an empty key or overwritten automatically.
+
+
 - Firebase password-protected cloud backup encryption/decryption now wipes UTF-8 plaintext, salt, IV, decoded ciphertext and intermediate AES-GCM buffers in `finally` blocks; PBKDF2 password-char/spec cleanup remains in place.
 
 
