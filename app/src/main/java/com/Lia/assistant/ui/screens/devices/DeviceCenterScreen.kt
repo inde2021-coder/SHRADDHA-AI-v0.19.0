@@ -381,7 +381,7 @@ fun DeviceCenterScreen(navController: NavController) {
                     enabled = connected && peer.online && peerTrusted)
                 NovaTextField(value = textToType, onValueChange = { textToType = it.take(500) },
                     modifier = Modifier.fillMaxWidth(), placeholder = "Text to type into the focused PC field")
-                Text("Text typing के लिए Windows Companion को --allow-typing के साथ चलाना होगा। हर paste की PC पर अलग पुष्टि होगी।",
+                Text("Text भेजने पर Windows PC पर अलग पुष्टि आएगी। Password/OTP जैसी संवेदनशील सामग्री सुरक्षा जाँच से रोकी जाती है।",
                     color = colors.textSecondary, fontSize = 10.sp)
                 NovaButton(text = "Type on PC",
                     onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "type").put("text", textToType))) "Text request भेजा गया; PC approval की प्रतीक्षा है।" else "Text request नहीं भेजा गया।" },
