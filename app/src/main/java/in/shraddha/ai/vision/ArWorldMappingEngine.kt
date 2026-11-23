@@ -10,7 +10,9 @@ import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import org.json.JSONArray
 import org.json.JSONObject
+import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import java.nio.ShortBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -199,10 +201,12 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
     fun cameraTextureCoordinates(): FloatArray? {
         val frame = latestFrame ?: return null
         val ndc = floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
-        val texture = FloatArray(8)
+        val input: FloatBuffer = ByteBuffer.allocateDirect(ndc.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(ndc); position(0) }
+        val output: FloatBuffer = ByteBuffer.allocateDirect(ndc.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
         return runCatching {
-            frame.transformCoordinates2d(Coordinates2d.OPENGL_NORMALIZED_DEVICE_COORDINATES, ndc, Coordinates2d.TEXTURE_NORMALIZED, texture)
-            texture
+            frame.transformCoordinates2d(Coordinates2d.OPENGL_NORMALIZED_DEVICE_COORDINATES, input, Coordinates2d.TEXTURE_NORMALIZED, output)
+            output.position(0)
+            FloatArray(8).also { output.get(it) }
         }.getOrNull()
     }
 
