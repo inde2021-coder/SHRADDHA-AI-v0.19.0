@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.voice.ConversationMemory
+import `in`.shraddha.ai.operator.VoiceToolActionJournal
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
@@ -83,6 +84,11 @@ fun SettingsScreen(
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
     var voiceMemoryError by remember { mutableStateOf(ConversationMemory.persistenceError()) }
+    val voiceActionJournal = remember { VoiceToolActionJournal(context) }
+    val initialVoiceAction = remember { voiceActionJournal.latestResult() }
+    var voiceActionEntry by remember { mutableStateOf(initialVoiceAction.getOrNull()) }
+    var voiceActionError by remember { mutableStateOf(initialVoiceAction.exceptionOrNull()?.localizedMessage) }
+    var showVoiceActionConfirm by remember { mutableStateOf(false) }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
@@ -252,6 +258,39 @@ fun SettingsScreen(
                     icon = Icons.Default.VolumeUp,
                     onClick = { navController.navigate("history") }
                 )
+            }
+        }
+
+        if (voiceActionError != null || voiceActionEntry?.state in setOf("EXECUTING", "FAILED")) {
+            NovaSectionHeader(title = "Voice Action Recovery")
+            NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Column {
+                    Text(
+                        text = voiceActionError ?: "A previous voice action may not have a confirmed result.",
+                        color = if (voiceActionError != null) colors.error else colors.textPrimary,
+                        fontSize = 13.sp
+                    )
+                    voiceActionEntry?.takeIf { it.state in setOf("EXECUTING", "FAILED") }?.let { entry ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tool: ${entry.tool} • State: ${entry.state}",
+                            color = colors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "Check the target app yourself before confirming. This does not repeat or execute the action.",
+                            color = colors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        NovaButton(
+                            text = "I checked the app — mark verified",
+                            onClick = { showVoiceActionConfirm = true },
+                            type = NovaButtonType.SECONDARY,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
 
@@ -445,6 +484,30 @@ fun SettingsScreen(
     }
 
     // Assistant Name Dialog
+    if (showVoiceActionConfirm) {
+        AlertDialog(
+            onDismissRequest = { showVoiceActionConfirm = false },
+            title = { Text("Confirm voice action recovery") },
+            text = { Text("Have you personally checked the target app and confirmed whether the previous action completed? This only records your confirmation; it will not run the action again.") },
+            confirmButton = {
+                NovaButton(text = "Yes, I checked", onClick = {
+                    showVoiceActionConfirm = false
+                    val entry = voiceActionEntry
+                    if (entry != null && voiceActionJournal.markManuallyVerified(entry.taskId)) {
+                        val refreshed = voiceActionJournal.latestResult()
+                        voiceActionEntry = refreshed.getOrNull()
+                        voiceActionError = refreshed.exceptionOrNull()?.localizedMessage
+                    } else {
+                        voiceActionError = "Could not save manual verification. The previous action remains unresolved."
+                    }
+                })
+            },
+            dismissButton = {
+                NovaButton(text = "Cancel", onClick = { showVoiceActionConfirm = false }, type = NovaButtonType.TEXT)
+            }
+        )
+    }
+
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
