@@ -448,8 +448,7 @@ class MainBrain(
     fun reviewInterruptedWorkflows(): List<InterruptedWorkflowReview> {
         val journal = actionJournal ?: return emptyList()
         return scheduler.snapshot()
-            .filter { it.state == SharedTaskScheduler.State.FAILED &&
-                it.error?.startsWith("Process stopped during execution; action was not replayed.") == true }
+            .filter { it.state == SharedTaskScheduler.State.FAILED }
             .mapNotNull { snapshot ->
                 val entry = journal.getResult(snapshot.task.id).getOrElse { error ->
                     audit("operator_recovery", "journal_unreadable",
@@ -460,6 +459,7 @@ class MainBrain(
                         OperatorActionJournal.Recovery.REVIEW_REQUIRED
                     )
                 } ?: return@mapNotNull null
+                if (entry.state !in setOf("EXECUTING", "FAILED")) return@mapNotNull null
                 val recovery = journal.reconcileInterrupted(snapshot.task.id)
                 audit("operator_recovery", recovery.name.lowercase(),
                     "workflow=" + snapshot.task.id + "; step=" + entry.stepId + "; action=" + entry.action)
@@ -473,8 +473,7 @@ class MainBrain(
     fun resumeInterruptedWorkflow(workflowId: String, manuallyVerified: Boolean = false): SharedTaskScheduler.Snapshot? {
         val journal = actionJournal ?: return null
         val original = scheduler.get(workflowId) ?: return null
-        if (original.state != SharedTaskScheduler.State.FAILED ||
-            original.error?.startsWith("Process stopped during execution; action was not replayed.") != true) return null
+        if (original.state != SharedTaskScheduler.State.FAILED) return null
         if (manuallyVerified && !journal.markManuallyVerified(workflowId)) return null
         val recovery = journal.reconcileInterrupted(workflowId)
         if (recovery !in setOf(
