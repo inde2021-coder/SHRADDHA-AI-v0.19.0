@@ -242,3 +242,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Retryable failures now transition the scheduler claim into the explicit interrupted/retry-safe FAILED marker. The next worker invocation requeues only the typed `background_council` task to PENDING before claiming it. Device-action task types are not eligible for this retry path.
 - Added a scheduler regression test covering RUNNING → retry-safe FAILED → PENDING → re-claim.
 - This is source/test coverage only. The test, Android build, WorkManager process-death behavior and provider timeout/429/5xx retry behavior have not been executed yet.
+
+
+## 23 November 2026 — Assistant-name fallback audit (source-only, not tested)
+
+- The reusable 3D orb components contained a stale hardcoded default name ("Lia"). Callsites that did not explicitly pass a name could therefore show the old name after the user renamed the assistant.
+- Both `LiaOrb3D` and `NovaOrb` now default to `AssistantBrand.NAME`, so fallback semantics use the configured Shraddha identity instead of a separate legacy literal.
+- The Windows companion still contains fixed product-brand text in its standalone window titles, local prompt strings and README. Synchronizing a user-defined Android display name into that separately installed companion requires an explicit, authenticated name-setting protocol; this remains open rather than being hidden by a static rename.
+- No tests, APK build or device/PC pairing test has been run.
