@@ -50,14 +50,18 @@ class LiveEyesCameraService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Android 14+ can reject a camera foreground-service start when CAMERA
+        // permission is absent. Check before startForeground so revocation fails closed
+        // without crashing the process or briefly advertising an active camera session.
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            publishState(STATE_OFF)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         stopped = false
         publishState(STATE_STARTING)
         val assistantName = assistantName()
         startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
         val config = VoiceGatewaySettings.get(this)
         if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
             updateNotification((config.readError ?: "पहले Settings में सुरक्षित AI backend जोड़ें").take(120))
