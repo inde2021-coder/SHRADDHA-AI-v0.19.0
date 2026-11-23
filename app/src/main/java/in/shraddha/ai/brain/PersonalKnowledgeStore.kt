@@ -75,6 +75,13 @@ class PersonalKnowledgeStore(context: Context) {
     }
 
     @Synchronized
+    fun clearTimeline(): Result<Int> = runCatching {
+        val count = readEvents().size
+        store.put(EVENTS_KEY, "[]").getOrThrow()
+        count
+    }
+
+    @Synchronized
     fun addApprovedSkillExample(
         consent: Boolean,
         example: SkillExample
@@ -105,6 +112,13 @@ class PersonalKnowledgeStore(context: Context) {
         val removed = all.size - remaining.size
         store.put(SKILLS_KEY, encodeSkills(remaining)).getOrThrow()
         removed
+    }
+
+    @Synchronized
+    fun clearSkillExamples(): Result<Int> = runCatching {
+        val count = readSkills().size
+        store.put(SKILLS_KEY, "[]").getOrThrow()
+        count
     }
 
     @Synchronized
