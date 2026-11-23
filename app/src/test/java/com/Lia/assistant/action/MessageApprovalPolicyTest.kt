@@ -19,4 +19,13 @@ class MessageApprovalPolicyTest {
         assertFalse(MessageApprovalPolicy.isApproved("", "Hello", true, "", "Hello"))
         assertFalse(MessageApprovalPolicy.isApproved("+919876543210", "", true, "+919876543210", ""))
     }
+    @Test fun validatesInternationalE164Numbers() {
+        assertTrue(MessageApprovalPolicy.isValidE164("+919876543210"))
+        assertTrue(MessageApprovalPolicy.isValidE164("+12025550123"))
+        assertFalse(MessageApprovalPolicy.isValidE164("9876543210"))
+        assertFalse(MessageApprovalPolicy.isValidE164("+01234567890"))
+        assertFalse(MessageApprovalPolicy.isValidE164("+123"))
+        assertFalse(MessageApprovalPolicy.isValidE164("+919876543210x"))
+    }
+
 }
