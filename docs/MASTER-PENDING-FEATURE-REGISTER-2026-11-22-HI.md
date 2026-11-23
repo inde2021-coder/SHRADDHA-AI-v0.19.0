@@ -212,4 +212,5 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Gemini API key save and removal now use synchronous SharedPreferences commits and fail explicitly if the encrypted value cannot be durably persisted. This prevents the settings UI from reporting a successful save/remove while the write is still only queued asynchronously.
 - Voice Gateway encrypted configuration save and clear now use the same durable-commit check. A failed disk write is surfaced as an error rather than being silently treated as success.
 - Android Keystore AES-GCM encryption and existing encrypted storage formats are unchanged; no plaintext credential storage was added.
-- No tests/builds were run, in accordance with the current feature-completion instruction. Verify these paths in the consolidated test/build pass, including key migration, save/remove, app restart and Keystore-loss behavior.
+- No tests/builds were run, in accordance with the current feature-completion instruction.
+- Provider-specific OpenAI/Groq/Claude/Perplexity key removal now checks the encrypted-store commit result; the UI can no longer report a successful removal when the persisted record could not be deleted. Verify these paths in the consolidated test/build pass, including key migration, save/remove, app restart and Keystore-loss behavior.
