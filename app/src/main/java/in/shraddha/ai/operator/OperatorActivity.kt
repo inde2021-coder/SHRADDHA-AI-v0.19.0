@@ -111,17 +111,23 @@ class OperatorActivity : Activity() {
                         val selected = reviews[which]
                         val machineVerified = selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE ||
                             selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+                        val journalUnreadable = selected.action == "journal_unreadable"
                         android.app.AlertDialog.Builder(this@OperatorActivity)
-                            .setTitle(if (machineVerified) "अगले चरण जारी करें?" else "पहले action स्वयं जाँचें")
+                            .setTitle(when {
+                                journalUnreadable -> "Secure journal unavailable"
+                                machineVerified -> "अगले चरण जारी करें?"
+                                else -> "पहले action स्वयं जाँचें"
+                            })
                             .setMessage(
-                                if (machineVerified)
-                                    "पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।"
-                                else
-                                    "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
+                                when {
+                                    journalUnreadable -> "Encrypted action journal नहीं पढ़ी जा सकी। पुराना action सुरक्षित रूप से verify नहीं हो सकता। कोई workflow resume या action replay नहीं होगा। App data reset करने से पहले recovery पर सहायता लें।"
+                                    machineVerified -> "पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।"
+                                    else -> "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
+                                }
                             )
                             .setNegativeButton("रद्द करें", null)
-                            .setNeutralButton(if (machineVerified) null else "ऐप खोलकर स्क्रीन verify करें") { _, _ ->
-                                if (!machineVerified) {
+                            .setNeutralButton(if (machineVerified || journalUnreadable) null else "ऐप खोलकर स्क्रीन verify करें") { _, _ ->
+                                if (!machineVerified && !journalUnreadable) {
                                     val launchIntent = packageManager.getLaunchIntentForPackage(selected.packageName)
                                     if (launchIntent == null) {
                                         Toast.makeText(this@OperatorActivity, "Target app नहीं खुल सका। आप उसे manually खोलकर जाँच सकते हैं।", Toast.LENGTH_LONG).show()
@@ -143,8 +149,10 @@ class OperatorActivity : Activity() {
                                     }
                                 }
                             }
-                            .setPositiveButton(if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
-                                Thread {
+                            .setPositiveButton(if (journalUnreadable) "ठीक है" else if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
+                                if (journalUnreadable) {
+                                    log.text = "Secure journal unreadable है। कोई action execute या resume नहीं किया गया।\n" + log.text.take(4500)
+                                } else Thread {
                                     val queued = brain.resumeInterruptedWorkflow(
                                         selected.workflowId,
                                         manuallyVerified = !machineVerified
