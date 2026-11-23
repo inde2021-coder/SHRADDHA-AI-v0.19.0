@@ -499,3 +499,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Clipboard paste (`Ctrl+V`) is accepted only when the PC owner's separate typing permission is enabled. The companion still asks the local PC user to approve each remote action; Android sends the action over the mutually verified E2E peer channel.
 - Added Python policy tests and Device Center buttons for the allowlisted shortcuts. Python tests and Android compilation have not been run after this change.
 - This is not full remote desktop parity: continuous keyboard injection, arbitrary key combinations, multi-monitor selection, pointer-lock and full session UX remain incomplete.
+
+
+## 23 November 2026 — Owner-scoped cloud memory deletion (source-only; verification pending)
+
+- Added `FirebaseCloudVault.signInAndDelete` for a specific bounded vault key. It authenticates the owner, reads both mirrors, removes the RTDB mirror first, then deletes the authoritative Firestore record; errors are surfaced rather than treated as success.
+- Added `UnifiedMemoryRepository.delete`. Local-only deletion remains local when cloud consent is OFF. With explicit cloud consent and account credentials, remote mirror deletion must succeed before the local encrypted copy is removed.
+- Firestore rules now permit deletion of any valid bounded vault key by its authenticated owner only; other users and invalid keys remain denied. Added rules-test source for owner-only deletion. Tests have not been run.
+- The Data Vault screen does not yet expose this per-record cloud deletion workflow, and cross-device conflict resolution/export UI remains incomplete.
