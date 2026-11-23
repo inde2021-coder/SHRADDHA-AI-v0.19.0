@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: android-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   android:
@@ -53,6 +53,21 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:bundleRelease --no-daemon --stacktrace
           ls -lh app/build/outputs/apk/debug/*.apk app/build/outputs/bundle/release/*.aab
+
+      - name: Enable KVM acceleration when available
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              echo "KVM acceleration enabled for Android emulator."
+            else
+              echo "KVM device exists but is not accessible; emulator will use TCG fallback."
+            fi
+          else
+            echo "KVM is not exposed by this runner; emulator will use TCG fallback."
+          fi
 
       - name: Boot Android emulator, install APK and verify launch
         uses: reactivecircus/android-emulator-runner@v2
