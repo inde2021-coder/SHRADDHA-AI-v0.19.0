@@ -238,6 +238,9 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
     fun pause() { runCatching { session?.pause() } }
 
     @Synchronized
+    fun resume() { if (!closed.get()) runCatching { session?.resume() } }
+
+    @Synchronized
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         planeAnchors.values.forEach { runCatching { it.detach() } }
