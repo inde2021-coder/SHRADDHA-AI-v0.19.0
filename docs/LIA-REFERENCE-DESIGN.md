@@ -25,4 +25,7 @@ Preserve Shraddha AI's existing dark 3D identity and animated orb rather than co
 ## Existing source observations
 - `HomeScreen.kt` already has the dark assistant avatar, animated `LiaOrb3D`, live voice state, two-column feature rows and quick voice/chat actions.
 - `QuickActionsScreen.kt` already uses a two-column grid of action cards.
-- The next design work should refine spacing, icon consistency, section grouping and the dedicated listening screen; do not replace the current orb with a static screenshot or hard-code the reference video into the app.
+- This branch now simplifies HomeScreen around the assistant avatar, live animated orb/status, Talk to AI, Quick actions and Ask me anything composer; secondary features remain accessible from Quick actions.
+- This branch adds a dedicated light lavender reference palette and applies it to QuickActionsScreen and SettingsScreen while preserving the dark 3D assistant home.
+- Quick action cards retain a two-column responsive grid, white glass surfaces, purple icon tiles and short labels. Settings retains grouped categories and the existing dedicated language/speech-speed controls.
+- The storyboard artifact was built from the exact main-branch recording by FFmpeg; the visual audit used 12 time-uniform frames. It is a layout reference, not a pixel-perfect reproduction.
