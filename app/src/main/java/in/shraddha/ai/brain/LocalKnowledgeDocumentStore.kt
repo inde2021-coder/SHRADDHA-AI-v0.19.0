@@ -1,13 +1,22 @@
 package `in`.shraddha.ai.brain
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
+import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.Normalizer
 
 /**
- * Local, encrypted, source-grounded text retrieval. Content is supplied by an explicit user
- * import; this class does not crawl URLs, create embeddings or claim semantic/vector search.
+ * Local encrypted, source-grounded hybrid RAG. It combines BM25 with deterministic
+ * multilingual hashed n-gram vectors (offline semantic approximation; not a neural embedding model).
+ * Imports are explicit and citations remain attached to every retrieved chunk.
  */
 class LocalKnowledgeDocumentStore(context: Context) {
     data class Document(
@@ -72,14 +81,84 @@ class LocalKnowledgeDocumentStore(context: Context) {
             .getOrThrow()
     }
 
+    /**
+     * OCR-imports a user-selected PDF through Android's document provider. Pages are rendered
+     * one at a time and processed with Latin + Devanagari ML Kit recognizers to bound memory.
+     * Requires a readable content URI and explicit consent.
+     */
+    suspend fun importPdf(
+        context: Context,
+        consent: Boolean,
+        id: String,
+        title: String,
+        sourceLabel: String,
+        pdfUri: Uri
+    ): Result<Unit> = runCatching {
+        require(consent) { "Explicit user approval is required before importing a PDF." }
+        require("content".equals(pdfUri.scheme, ignoreCase = true)) { "Choose a PDF from Android Files." }
+        val resolver = context.applicationContext.contentResolver
+        val mime = resolver.getType(pdfUri)
+        require(mime == null || mime.equals("application/pdf", true)) { "Selected file is not a PDF." }
+        val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
+        val extracted = StringBuilder()
+        try {
+            val descriptor = resolver.openFileDescriptor(pdfUri, "r")
+                ?: error("Android could not open the selected PDF.")
+            descriptor.use { pfd ->
+                PdfRenderer(pfd).use { renderer ->
+                    require(renderer.pageCount in 1..MAX_PDF_PAGES) {
+                        "PDF must contain 1-$MAX_PDF_PAGES pages."
+                    }
+                    for (pageNumber in 0 until renderer.pageCount) {
+                        renderer.openPage(pageNumber).use { page ->
+                            val scale = minOf(2.0, 1800.0 / maxOf(page.width, page.height))
+                            val bitmap = Bitmap.createBitmap(
+                                (page.width * scale).toInt().coerceAtLeast(1),
+                                (page.height * scale).toInt().coerceAtLeast(1),
+                                Bitmap.Config.ARGB_8888
+                            )
+                            try {
+                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                val image = InputImage.fromBitmap(bitmap, 0)
+                                val latinText = latin.process(image).await().text
+                                val devanagariText = devanagari.process(image).await().text
+                                val pageText = listOf(latinText, devanagariText)
+                                    .filter { it.isNotBlank() }.distinct().joinToString("\n")
+                                if (pageText.isNotBlank()) extracted.append("\n[Page ")
+                                    .append(pageNumber + 1).append("]\n").append(pageText)
+                                require(extracted.length <= MAX_DOCUMENT_CHARS) {
+                                    "OCR text exceeds the $MAX_DOCUMENT_CHARS character import limit."
+                                }
+                            } finally {
+                                bitmap.recycle()
+                            }
+                        }
+                    }
+                }
+            }
+        } finally {
+            latin.close()
+            devanagari.close()
+        }
+        importText(
+            consent = true,
+            id = id,
+            title = title,
+            sourceLabel = sourceLabel,
+            sourceUri = pdfUri.toString(),
+            content = extracted.toString()
+        ).getOrThrow()
+    }
+
     @Synchronized
     fun search(query: String, limit: Int = 8): Result<List<SearchHit>> = runCatching {
         require(query.isNotBlank() && query.length <= 300)
         require(limit in 1..20)
         val terms = tokens(query).distinct()
         require(terms.isNotEmpty()) { "Search query has no searchable terms." }
-        // Build a small in-memory corpus and rank with BM25. This is lexical retrieval,
-        // not a claim of embedding/vector semantics; source citations remain attached to every hit.
+        // Build a small in-memory corpus and rank with BM25 plus local hashed n-gram
+        // vector cosine. This is deterministic/offline, not a neural embedding model.
         data class IndexedChunk(
             val id: String,
             val title: String,
@@ -112,6 +191,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         }
         val averageLength = corpus.sumOf { it.words.size }.toDouble() / corpus.size
         val normalizedQuery = normalizeForMatch(query)
+        val queryVector = vectorize(query)
         corpus.mapNotNull { item ->
             if (item.words.isEmpty()) return@mapNotNull null
             val matched = terms.count { it in item.frequencies }
@@ -130,7 +210,8 @@ class LocalKnowledgeDocumentStore(context: Context) {
                 normalizeForMatch(item.chunk.text).contains(normalizedQuery)) 2.0 else 0.0
             val titleTerms = tokens(item.title).toSet()
             val titleBoost = terms.count { it in titleTerms } * 0.35
-            val score = bm25 + coverage + phraseBoost + titleBoost
+            val semanticApproximation = cosine(queryVector, vectorize(item.chunk.text))
+            val score = bm25 + coverage + phraseBoost + titleBoost + semanticApproximation * 2.0
             SearchHit(
                 item.id, item.title, item.source, item.uri,
                 item.chunk.index, item.chunkCount, item.chunk.text.take(1_200), score,
@@ -219,7 +300,37 @@ class LocalKnowledgeDocumentStore(context: Context) {
     private fun isAllowedSourceUri(uri: String): Boolean =
         uri.startsWith("https://", true) || uri.startsWith("content://", true)
 
+    /**
+     * Feature-hashed word + character n-gram vector. It adds word-form and multilingual
+     * token overlap signals without network access or downloaded model weights.
+     */
+    private fun vectorize(value: String): DoubleArray {
+        val vector = DoubleArray(VECTOR_SIZE)
+        val words = tokens(normalizeForMatch(value))
+        words.forEach { word ->
+            addFeature(vector, "w:$word", 1.0)
+            if (word.length >= 3) {
+                for (i in 0..word.length - 3) addFeature(vector, "c:${word.substring(i, i + 3)}", 0.35)
+            }
+        }
+        val norm = kotlin.math.sqrt(vector.sumOf { it * it }).coerceAtLeast(1e-12)
+        for (i in vector.indices) vector[i] /= norm
+        return vector
+    }
+
+    private fun addFeature(vector: DoubleArray, feature: String, weight: Double) {
+        val hash = feature.hashCode()
+        val index = (hash and Int.MAX_VALUE) % VECTOR_SIZE
+        val sign = if (((hash ushr 1) and 1) == 0) 1.0 else -1.0
+        vector[index] += sign * weight
+    }
+
+    private fun cosine(left: DoubleArray, right: DoubleArray): Double =
+        left.indices.sumOf { left[it] * right[it] }.coerceIn(-1.0, 1.0)
+
     companion object {
+        private const val VECTOR_SIZE = 384
+        private const val MAX_PDF_PAGES = 40
         private const val INDEX_KEY = "knowledge_docs_index_v1"
         private const val DOC_PREFIX = "knowledge_doc_"
         private const val MAX_DOCUMENTS = 50
