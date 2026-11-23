@@ -29,7 +29,7 @@ object VoiceGatewaySettings {
         .callTimeout(25, TimeUnit.SECONDS)
         .build()
 
-    private fun key(): SecretKey {
+    private fun keyForEncryption(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(ALIAS, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
@@ -42,14 +42,17 @@ object VoiceGatewaySettings {
 
     private fun encrypt(value: String): Pair<String, String> {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key())
+        cipher.init(Cipher.ENCRYPT_MODE, keyForEncryption())
         val bytes = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
         return Base64.encodeToString(bytes, Base64.NO_WRAP) to Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
     }
 
     private fun decrypt(cipherText: String, ivText: String): String {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val existingKey = keyStore.getKey(ALIAS, null) as? SecretKey
+            ?: error("Voice Gateway encryption key is missing; refusing to replace it while encrypted settings still exist.")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(ivText, Base64.NO_WRAP)))
+        cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, Base64.decode(ivText, Base64.NO_WRAP)))
         return String(cipher.doFinal(Base64.decode(cipherText, Base64.NO_WRAP)), Charsets.UTF_8)
     }
 
