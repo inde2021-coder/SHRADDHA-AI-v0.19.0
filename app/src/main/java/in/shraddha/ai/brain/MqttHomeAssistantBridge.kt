@@ -2,6 +2,7 @@ package `in`.shraddha.ai.brain
 
 import android.content.Context
 import org.eclipse.paho.client.mqttv3.IMqttActionListener
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.IMqttToken
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
@@ -53,7 +54,7 @@ class MqttHomeAssistantBridge(context: Context) {
             override fun messageArrived(topic: String, message: MqttMessage) {
                 onStatus("MQTT update received on ${topic.take(100)} (${message.payload.size} bytes).")
             }
-            override fun deliveryComplete(token: IMqttToken?) { onStatus("MQTT command delivery acknowledged by broker.") }
+            override fun deliveryComplete(token: IMqttDeliveryToken?) { onStatus("MQTT command delivery acknowledged by broker.") }
         })
         clientRef.set(client)
         val options = MqttConnectOptions().apply {
