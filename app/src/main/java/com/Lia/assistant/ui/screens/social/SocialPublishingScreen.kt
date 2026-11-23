@@ -139,6 +139,7 @@ fun SocialPublishingScreen(navController: NavController) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${post.optString("platform").uppercase()} • ${post.optString("status").uppercase()}", color = colors.accent)
                         Text(post.optString("scheduledAt"), color = colors.textSecondary)
+                        if (post.optString("mediaKind").isNotBlank()) Text("Media: ${post.optString("mediaKind")} • ${post.optString("mediaUrl")}", color = colors.textSecondary)
                         Text(post.optString("text"), color = colors.textPrimary)
                         if (post.optString("status") == "pending") {
                             NovaButton(text = "CANCEL SCHEDULED POST", onClick = { cancelPost(post.optString("id")) }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
@@ -147,7 +148,7 @@ fun SocialPublishingScreen(navController: NavController) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank(), modifier = Modifier.weight(1f))
+                NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank() && (platform != "instagram" || mediaUrl.startsWith("https://") && mediaKind in setOf("image", "reel", "story_image", "story_video")), modifier = Modifier.weight(1f))
                 NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && (platform != "instagram" || mediaUrl.startsWith("https://") && mediaKind in setOf("image", "reel", "story_image", "story_video")), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
             }
         }
