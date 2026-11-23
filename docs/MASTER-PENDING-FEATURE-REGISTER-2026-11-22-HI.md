@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Background WorkManager and Main Brain foreground task claim paths now catch durable scheduler persistence failures and return safe error results before running the side effect; an in-memory state transition is not treated as a successful durable claim.
+
+
 - Main Brain scheduler snapshots now wipe plaintext JSON, decoded ciphertext, IV and intermediate AES-GCM buffers on save/load/decrypt paths, while retaining the encrypted snapshot if Keystore authentication fails.
 
 
