@@ -23,7 +23,7 @@ function documentId(recordId) {
 /** Persist only AES-256-GCM ciphertext. The Firestore document ID does not reveal the call SID. */
 export async function persistEncryptedCallRecord(collection, record, key, now = Date.now()) {
   if (!collection || typeof collection.doc !== 'function') throw new Error('Durable call-history collection is unavailable.');
-  if (!record || typeof record.id !== 'string' || !record.id || record.id.length > 120) throw new Error('Call-history record is invalid.');
+  if (!record || typeof record.id !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(record.id)) throw new Error('Call-history record is invalid.');
   const storageId = documentId(record.id);
   const safeRecord = { ...record, originalId: record.id, id: storageId };
   const envelope = encryptCallHistoryRecord(safeRecord, key);
