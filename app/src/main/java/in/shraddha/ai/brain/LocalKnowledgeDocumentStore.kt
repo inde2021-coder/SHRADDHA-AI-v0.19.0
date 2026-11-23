@@ -78,33 +78,64 @@ class LocalKnowledgeDocumentStore(context: Context) {
         require(limit in 1..20)
         val terms = tokens(query).distinct()
         require(terms.isNotEmpty()) { "Search query has no searchable terms." }
-        readIndex().flatMap { id ->
+        // Build a small in-memory corpus and rank with BM25. This is lexical retrieval,
+        // not a claim of embedding/vector semantics; source citations remain attached to every hit.
+        data class IndexedChunk(
+            val id: String,
+            val title: String,
+            val source: String,
+            val uri: String?,
+            val chunk: Chunk,
+            val chunkCount: Int,
+            val words: List<String>,
+            val frequencies: Map<String, Int>
+        )
+        val corpus = readIndex().flatMap { id ->
             val raw = store.get(DOC_PREFIX + id).getOrThrow()
             require(raw.isNotBlank()) { "Knowledge index references a missing document; repair is required." }
             val doc = JSONObject(raw)
             require(doc.getInt("schemaVersion") == 1 && doc.getString("id") == id) {
                 "Knowledge document is malformed or belongs to another schema."
             }
-            val chunks = chunk(doc.getString("content"))
-            chunks.mapNotNull { chunk ->
-                val text = chunk.text
-                val words = tokens(text)
-                if (words.isEmpty()) return@mapNotNull null
-                val frequencies = words.groupingBy { it }.eachCount()
-                val matched = terms.count { it in frequencies }
-                if (matched == 0) return@mapNotNull null
-                val tf = terms.sumOf { term -> (frequencies[term] ?: 0).coerceAtMost(5).toDouble() }
-                val coverage = matched.toDouble() / terms.size
-                val score = coverage * (1.0 + tf / terms.size)
-                val chunkIndex = chunk.index
-                val title = doc.getString("title")
-                val source = doc.getString("sourceLabel")
-                SearchHit(
-                    id, title, source, doc.optString("sourceUri").takeIf { it.isNotBlank() },
-                    chunkIndex, chunks.size, text.take(1_200), score,
-                    "[$title — $source, section ${chunkIndex + 1}/${chunks.size}]"
-                )
+            val title = doc.getString("title")
+            val sections = chunk(doc.getString("content"))
+            sections.map { section ->
+                val words = tokens(section.text)
+                IndexedChunk(id, title, doc.getString("sourceLabel"),
+                    doc.optString("sourceUri").takeIf { it.isNotBlank() },
+                    section, sections.size, words, words.groupingBy { it }.eachCount())
             }
+        }
+        if (corpus.isEmpty()) return@runCatching emptyList()
+        val documentFrequency = terms.associateWith { term ->
+            corpus.count { term in it.frequencies }
+        }
+        val averageLength = corpus.sumOf { it.words.size }.toDouble() / corpus.size
+        val normalizedQuery = normalizeForMatch(query)
+        corpus.mapNotNull { item ->
+            if (item.words.isEmpty()) return@mapNotNull null
+            val matched = terms.count { it in item.frequencies }
+            if (matched == 0) return@mapNotNull null
+            val lengthNorm = 1.2 * (1.0 - 0.75 + 0.75 * item.words.size / averageLength.coerceAtLeast(1.0))
+            val bm25 = terms.sumOf { term ->
+                val frequency = item.frequencies[term] ?: 0
+                if (frequency == 0) 0.0 else {
+                    val df = documentFrequency[term] ?: 0
+                    val idf = kotlin.math.ln(1.0 + (corpus.size - df + 0.5) / (df + 0.5))
+                    idf * (frequency * 2.2) / (frequency + lengthNorm)
+                }
+            }
+            val coverage = matched.toDouble() / terms.size
+            val phraseBoost = if (normalizedQuery.length >= 3 &&
+                normalizeForMatch(item.chunk.text).contains(normalizedQuery)) 2.0 else 0.0
+            val titleTerms = tokens(item.title).toSet()
+            val titleBoost = terms.count { it in titleTerms } * 0.35
+            val score = bm25 + coverage + phraseBoost + titleBoost
+            SearchHit(
+                item.id, item.title, item.source, item.uri,
+                item.chunk.index, item.chunkCount, item.chunk.text.take(1_200), score,
+                "[${item.title} — ${item.source}, section ${item.chunk.index + 1}/${item.chunkCount}]"
+            )
         }.sortedWith(compareByDescending<SearchHit> { it.score }.thenBy { it.title }.thenBy { it.chunkIndex })
             .take(limit)
     }
@@ -171,6 +202,13 @@ class LocalKnowledgeDocumentStore(context: Context) {
         require(result.size in 1..MAX_CHUNKS_PER_DOCUMENT) { "Imported text creates too many search sections." }
         return result
     }
+
+    private fun normalizeForMatch(value: String): String =
+        Normalizer.normalize(value, Normalizer.Form.NFKC)
+            .lowercase(java.util.Locale.ROOT)
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+            .trim()
+            .replace(Regex("\\s+"), " ")
 
     private fun tokens(value: String): List<String> = Normalizer.normalize(value, Normalizer.Form.NFKC)
         .lowercase(java.util.Locale.ROOT)
