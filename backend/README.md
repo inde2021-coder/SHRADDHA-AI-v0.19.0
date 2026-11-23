@@ -61,3 +61,15 @@ The Android Cloud workspace supports manual, consent-gated encrypted recovery bu
 Before using it, configure the Firebase Android app values in `local.properties` and deploy the repository's `firestore.rules` to the Firebase project. The rules scope all reads and writes to the authenticated user's own vault documents. Listing is owner-only for the recovery history picker; deletion is restricted to older recovery revision documents so automatic retention can prune them. The bundle is encrypted on the device using AES-256-GCM with a PBKDF2-HMAC-SHA256 key derived from the account password; Firestore stores ciphertext. Up to 10 encrypted recovery revisions are retained; the app can list and restore an older snapshot. Restore requires the same account password and explicit consent, then shows the selected collections before local replacement.
 
 This is manual backup/restore, not continuous background sync. Firebase configuration, email/password authentication, Firestore rules, and a successful second-device restore must be verified in the user's own Firebase project.
+
+
+## Provider-integrated SMS and WhatsApp
+
+The authenticated `POST /api/messages/send` route can submit SMS or WhatsApp messages through Twilio. Configure these environment variables in the backend hosting dashboard (never in Android or source control):
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_SMS_FROM` (E.164 SMS-enabled sender)
+- `TWILIO_WHATSAPP_FROM` (Twilio WhatsApp sender, normally `whatsapp:+...`)
+
+The Android app uses the existing HTTPS Voice Gateway URL and gateway token. The route accepts only E.164 recipients, an explicit channel, message text and a request ID. App-side recipient/message confirmation remains mandatory. A provider acceptance response is not proof of handset delivery. WhatsApp templates, opt-in, approved sender setup, country rules and Twilio account approval remain subject to Twilio requirements. If the provider route is configured but rejects a request, the app does not silently fall back to local sending (to avoid duplicate messages).
