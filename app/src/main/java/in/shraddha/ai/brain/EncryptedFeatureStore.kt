@@ -20,6 +20,9 @@ class EncryptedFeatureStore(context: Context) {
     }
     private fun key(): SecretKey {
         existingKey()?.let { return it }
+        require(prefs.all.isEmpty()) {
+            "Encrypted feature-store key is missing; refusing to create a replacement while encrypted records exist."
+        }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
             init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
