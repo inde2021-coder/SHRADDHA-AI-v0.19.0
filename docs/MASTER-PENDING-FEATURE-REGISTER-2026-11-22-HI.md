@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Firebase deploy-source drift corrected: `firebase/firestore.rules` and `firebase/storage.rules` now match the stricter owner-scoped root rules. Storage is limited to encrypted backup objects (no generic user file uploads); Firestore deletion is restricted to the app's explicit backup keys. Emulator test source now covers restricted vault deletion and denial of non-backup Storage uploads. These tests have not been run.
+
+
 - Gemini API-key reads now require the existing Android Keystore key instead of creating a replacement when ciphertext is already present. This closes the same key-loss overwrite edge case for the Gemini key vault.
 
 
@@ -47,7 +50,7 @@ This register consolidates the user's earlier feature requests and the current s
 
 | Request | Current source observation | Remaining work |
 |---|---|---|
-| Multi-agent council | Parallel Planner/Researcher, 1–5 Specialists, Critic and Verifier are routed through Main Brain and WorkManager. 23 Nov source pass adds the Multi-Agent Workspace route from Home/Quick Actions. | Source now includes provider-call/time limits, per-provider call caps, encrypted per-stage evidence, cancellation/retry status and provider usage accounting. Exact monetary spend estimation and checkpoint-level resume remain; no final build/device verification yet. |
+| Multi-agent council | Parallel Planner/Researcher, 1–5 Specialists, Critic and Verifier are routed through Main Brain and WorkManager. 23 Nov source pass adds the Multi-Agent Workspace route from Home/Quick Actions. | Source now includes provider-call/time limits, per-provider call caps, encrypted per-stage evidence, cancellation/retry status and provider usage accounting. Exact monetary spend estimation and runtime verification remain; provider-matched checkpoint resume is now implemented in source but not yet executed in tests. |
 | Autonomous project manager | Task planner, workflow lifecycle and project tracker exist. | Persisted dependency-aware execution, real task adapters, resumable steps, progress, checkpoints, rollback and explicit approvals. |
 | Self-review / verification engine | Acceptance-check scoring and reporting exist. | Make verification mandatory for every generated artifact and workflow; block completion on failed required checks. |
 | Deep research with citations | Backend/provider research paths exist. | Real source retrieval, URL validation, evidence provenance, citation checks and no unsupported “researched” claims. |
@@ -55,7 +58,7 @@ This register consolidates the user's earlier feature requests and the current s
 | Predictive assistant / digital twin | Opt-in repeated-event suggestions and editable memory primitives exist. | Persistent signal source, feedback loop, schedule/quiet hours, explainability and strict no-covert-monitoring controls. |
 | Meeting intelligence | Transcript marker extraction exists. | Consent-based audio/transcription, diarization, correction UI, calendar and export integration. |
 | Voice-created workflows | Existing app training and workflow router exist. | Voice authoring, safe review, app-specific recovery and reusable workflow editing. |
-| Background task runner | WorkManager queue and scheduler exist. 23 Nov source pass adds encrypted per-stage evidence, attempt history, cancellation status, retry-pending status, per-provider call counts and elapsed time. | Checkpoint-level resume (skip already completed stages safely), process-death/provider-timeout recovery verification and task-history UX remain. |
+| Background task runner | WorkManager queue and scheduler exist. 23 Nov source pass adds encrypted per-stage evidence, attempt history, cancellation status, retry-pending status, per-provider call counts and elapsed time. | Process-death/provider-timeout recovery verification, task-history UX and exact monetary spend estimation remain. |
 
 ## C. Phone, app and screen control
 
