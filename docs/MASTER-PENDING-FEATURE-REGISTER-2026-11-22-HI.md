@@ -483,3 +483,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Workflow plans are bounded to 256 actions and persisted recovery records are schema-checked. Encrypted-store read/write errors propagate instead of silently returning an empty workflow.
 - Added Android instrumentation coverage for encrypted persistence and fail-closed process-restart recovery. Tests have not been run during the feature-completion pass.
 - Platform adapters are not yet wired to instantiate this hub with application context across all voice/operator entry points; adapter integration and recovery UI remain required before claiming the autonomous project manager complete.
+
+
+## 23 November 2026 — Personal Knowledge Brain source-grounded retrieval (source-only; verification pending)
+
+- Added `LocalKnowledgeDocumentStore`: explicit-consent text import, encrypted-at-rest document storage, bounded chunking, local lexical retrieval, source/section citations, listing and deletion.
+- Added a MainActivity workspace for pasting user-approved source text, searching retrieved sections and reviewing citations. The UI clearly says this is local lexical retrieval and does not crawl URLs.
+- Added instrumentation tests for persistence across store recreation, source citation, encrypted-at-rest storage, consent enforcement and rejection of insecure HTTP source URIs. Tests have not been run.
+- This is not an embedding/vector database, automatic PDF/OCR ingestion, external-source crawler, semantic reranker or cross-device sync. Those remain separate implementation tasks; no semantic RAG capability is claimed.
