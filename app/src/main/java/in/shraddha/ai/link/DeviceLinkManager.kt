@@ -186,7 +186,7 @@ object DeviceLinkManager {
                                 "remote_action_result" -> {
                                     onRemoteActionResult?.invoke(peerId, msg.optString("actionKind"), payload.optString("result"))
                                     onPeerMessage?.invoke(JSONObject().put("type", "remote_action_result").put("fromDeviceId", peerId)
-                                        .put("actionId", actionId).put("actionKind", msg.optString("actionKind")).put("result", payload.optString("result")))
+                                        .put("actionId", actionId).put("actionKind", msg.optString("actionKind")).put("ok", payload.optBoolean("ok")).put("result", payload.optString("result")))
                                 }
                                 "file_transfer_chunk" -> {
                                     payload.put("type", "file_transfer_chunk").put("fromDeviceId", peerId)
