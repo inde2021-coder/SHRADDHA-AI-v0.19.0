@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Device pairing credentials now decrypt only with the existing Android Keystore key. Missing/invalid keys or ciphertext return a visible recovery error without clearing stored ciphertext; explicit pairing clear persists preference deletion before deleting the now-unused Keystore alias. Restore UI reports the recovery issue rather than silently claiming no pairing exists.
+
+
 - Screen sharing now validates a paired-device ID before starting MediaProjection foreground service, caps outgoing JPEG frame size, and zeroes both the transmitted frame copy and reusable in-memory compression buffer after dispatch. The Android media-projection consent dialog remains mandatory; no physical-device test has been run.
 
 
