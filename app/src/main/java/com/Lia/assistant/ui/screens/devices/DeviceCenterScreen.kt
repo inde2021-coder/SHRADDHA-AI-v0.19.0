@@ -85,6 +85,7 @@ fun DeviceCenterScreen(navController: NavController) {
     var textToType by remember { mutableStateOf("") }
     var volumePercent by remember { mutableStateOf(50f) }
     var brightnessPercent by remember { mutableStateOf(70f) }
+    var showMoreControls by remember { mutableStateOf(false) }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -311,6 +312,22 @@ fun DeviceCenterScreen(navController: NavController) {
                     enabled = connected && peer.online && peerTrusted,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(text = "Home / Desktop", onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "home"))) "Home command भेजा गया।" else "Home command नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY, enabled = connected && peer.online && peerTrusted)
+                    NovaButton(text = "Back", onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "back"))) "Back command भेजा गया।" else "Back command नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY, enabled = connected && peer.online && peerTrusted)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(text = "Scroll ↑", onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "scroll").put("amount", 5))) "Scroll up भेजा गया।" else "Scroll up नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY, enabled = connected && peer.online && peerTrusted)
+                    NovaButton(text = "Scroll ↓", onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "scroll").put("amount", -5))) "Scroll down भेजा गया।" else "Scroll down नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY, enabled = connected && peer.online && peerTrusted)
+                }
+                NovaButton(text = if (showMoreControls) "Hide Advanced Controls" else "More PC Controls",
+                    onClick = { showMoreControls = !showMoreControls }, modifier = Modifier.fillMaxWidth(),
+                    type = NovaButtonType.PRIMARY, enabled = connected && peer.online && peerTrusted)
+                if (showMoreControls) {
                 Text("WINDOWS PC KEYBOARD", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text("Each shortcut is end-to-end encrypted and still requires local approval on the PC companion. Use only with a paired Windows PC.", color = colors.textSecondary, fontSize = 10.sp)
                 listOf(
@@ -393,6 +410,7 @@ fun DeviceCenterScreen(navController: NavController) {
                     onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "type").put("text", textToType))) "Text request भेजा गया; PC approval की प्रतीक्षा है।" else "Text request नहीं भेजा गया।" },
                     modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY,
                     enabled = connected && peer.online && peerTrusted && textToType.isNotBlank())
+                }
                 NovaButton(
                     text = "Open Encrypted File Transfer",
                     onClick = {
