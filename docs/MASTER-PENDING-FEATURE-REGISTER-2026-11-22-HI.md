@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Operator console's Voice Action Journal / Restart Recovery view now reports encrypted-journal read failures distinctly (instead of claiming no record exists) and allows manual attestation for both EXECUTING and FAILED entries after the user checks the target app.
+
+
 - Settings now provides an explicit, confirmation-gated recovery panel for unresolved voice actions (EXECUTING/FAILED). The user must inspect the target app and attest manually; this only records MANUALLY_VERIFIED and never replays the call/message/action. Encrypted journal read errors are shown separately.
 
 
