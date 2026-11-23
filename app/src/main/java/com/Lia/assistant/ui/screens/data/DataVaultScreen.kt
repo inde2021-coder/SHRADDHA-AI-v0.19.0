@@ -77,6 +77,7 @@ fun DataVaultScreen(navController: NavController) {
     var cloudEmail by remember { mutableStateOf("") }
     var cloudPassword by remember { mutableStateOf("") }
     var showMemoryDeleteConfirmation by remember { mutableStateOf(false) }
+    var showClearLocalMemoryConfirmation by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val envelope = pendingExport
@@ -206,6 +207,13 @@ fun DataVaultScreen(navController: NavController) {
                 NovaTextField(value = cloudEmail, onValueChange = { cloudEmail = it.take(254) }, modifier = Modifier.fillMaxWidth(), placeholder = "Firebase account email")
                 NovaTextField(value = cloudPassword, onValueChange = { cloudPassword = it.take(128) }, modifier = Modifier.fillMaxWidth(), placeholder = "Firebase password", secret = true)
             }
+            NovaButton(
+                text = "Delete ALL local memory records",
+                onClick = { showClearLocalMemoryConfirmation = true },
+                modifier = Modifier.fillMaxWidth(),
+                type = NovaButtonType.TEXT,
+                enabled = !isBusy && memoryRecords.isNotEmpty()
+            )
             NovaButton(
                 text = "Delete selected memory record",
                 onClick = { if (selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))) showMemoryDeleteConfirmation = true else status = "Select a valid memory record key first." },
@@ -355,6 +363,39 @@ fun DataVaultScreen(navController: NavController) {
                 }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { showMemoryDeleteConfirmation = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showClearLocalMemoryConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearLocalMemoryConfirmation = false },
+            title = { Text("Permanently clear all local memories?") },
+            text = {
+                Text("This permanently deletes every encrypted memory_ record stored on this device. Firebase cloud copies are not changed. Export a backup first if you may need these records later.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearLocalMemoryConfirmation = false
+                    scope.launch {
+                        isBusy = true
+                        val result = withContext(Dispatchers.IO) {
+                            UnifiedMemoryRepository(context.applicationContext).clearLocal()
+                        }
+                        status = result.fold(
+                            onSuccess = {
+                                memoryRecords = emptyList()
+                                selectedMemoryKey = ""
+                                "All local encrypted memory records were deleted. Firebase cloud copies were not changed."
+                            },
+                            onFailure = { "Could not clear local memories: ${it.message}" }
+                        )
+                        isBusy = false
+                    }
+                }) { Text("Delete all local memories") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearLocalMemoryConfirmation = false }) { Text("Cancel") }
+            }
         )
     }
 
