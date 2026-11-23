@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Settings refreshes the voice action journal on screen resume, so a manual verification completed in the Operator console is reflected without requiring an app restart.
+
+
 - Operator console's header now uses the configured assistant name rather than a fixed SHRADDHA product label.
 
 
