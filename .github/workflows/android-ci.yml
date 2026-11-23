@@ -23,6 +23,8 @@ jobs:
     name: Android unit tests, APK build and emulator smoke test
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      ANDROID_I_WANT_MY_TCG: "yes"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -53,7 +55,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           # Avoid the action's post-boot settings-service calls; they caused Broken pipe (32) on TCG.
-          disable-animations: false
+          disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
           pre-emulator-launch-script: adb start-server
           script: |
