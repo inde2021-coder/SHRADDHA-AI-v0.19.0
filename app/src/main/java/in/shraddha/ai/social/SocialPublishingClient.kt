@@ -18,10 +18,11 @@ object SocialPublishingClient {
     private val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS).build()
 
-    suspend fun publish(context: Context, platform: String, text: String): JSONObject =
+    suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null): JSONObject =
         withContext(Dispatchers.IO) {
-            request(context, "/api/social/publish", JSONObject()
-                .put("platform", platform).put("text", text).put("preview", text).put("confirmed", true))
+            val body = JSONObject().put("platform", platform).put("text", text).put("preview", text).put("confirmed", true)
+            if (platform == "instagram") body.put("mediaKind", mediaKind).put("mediaUrl", mediaUrl)
+            request(context, "/api/social/publish", body)
         }
 
     suspend fun schedule(
