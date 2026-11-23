@@ -26,8 +26,10 @@ class DeviceE2ECrypto:
     def public_key_base64(self):
         return base64.b64encode(self._public_der).decode("ascii")
 
-    def derive_peer_key(self, peer_public_key_base64, local_device_id, peer_device_id):
-        if not local_device_id or not peer_device_id or local_device_id == peer_device_id:
+    def derive_peer_key(self, peer_public_key_base64, session_id, local_device_id, peer_device_id):
+        if not isinstance(session_id, str) or not 1 <= len(session_id) <= 128:
+            raise ValueError("Invalid E2E session binding")
+        if not isinstance(local_device_id, str) or not isinstance(peer_device_id, str) or not 1 <= len(local_device_id) <= 64 or not 1 <= len(peer_device_id) <= 64 or local_device_id == peer_device_id:
             raise ValueError("Invalid peer identity")
         peer_der = base64.b64decode(peer_public_key_base64, validate=True)
         if not 80 <= len(peer_der) <= 256:
@@ -36,10 +38,11 @@ class DeviceE2ECrypto:
         if not isinstance(peer_public, ec.EllipticCurvePublicKey) or not isinstance(peer_public.curve, ec.SECP256R1):
             raise ValueError("Unsupported ECDH curve")
         shared = self._private.exchange(ec.ECDH(), peer_public)
-        salt = (min(local_device_id, peer_device_id) + "|" + max(local_device_id, peer_device_id)).encode("utf-8")
-        key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=b"shraddha-device-e2e-v1").derive(shared)
+        context = f"shraddha-device-e2e-v2|{session_id}|{'|'.join(sorted((local_device_id, peer_device_id)))}".encode("utf-8")
+        salt = hashlib.sha256(context).digest()
+        key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=context).derive(shared)
         first, second = sorted((self._public_der, peer_der))
-        fingerprint = hashlib.sha256(first + second).digest()[:16].hex().upper()
+        fingerprint = hashlib.sha256(context + first + second).digest()[:16].hex().upper()
         fingerprint = "-".join(fingerprint[i:i + 4] for i in range(0, 16, 4))
         return key, fingerprint
 
