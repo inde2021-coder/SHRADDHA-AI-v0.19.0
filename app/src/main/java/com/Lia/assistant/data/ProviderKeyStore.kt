@@ -12,7 +12,7 @@ object ProviderKeyStore {
     }
 
     fun get(context: Context, provider: String): String =
-        EncryptedFeatureStore(context.applicationContext).get(key(provider)).getOrDefault("").trim()
+        EncryptedFeatureStore(context.applicationContext).get(key(provider)).getOrThrow().trim()
 
     fun save(context: Context, provider: String, value: String) {
         val clean = value.trim()
