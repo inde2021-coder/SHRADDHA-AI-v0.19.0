@@ -15,6 +15,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class CouncilRole(val name: String, val responsibility: String, val output: String)
 data class CouncilPlan(val goal: String, val roles: List<CouncilRole>, val guardrails: List<String>)
 data class CouncilStageResult(val role: String, val output: String)
+data class CouncilSavedStage(val provider: String, val output: String)
 data class CouncilProviderUsage(val provider: String, val calls: Int)
 data class CouncilExecutionBudget(
     val maxProviderCalls: Int = 9,
@@ -117,6 +118,7 @@ object AgentCouncil {
         shouldContinue: () -> Boolean = { true },
         assistantName: String = AssistantBrand.FULL_NAME,
         onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
+        resumeStages: Map<String, CouncilSavedStage> = emptyMap(),
         budget: CouncilExecutionBudget = CouncilExecutionBudget(),
         onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> }
     ): Result<CouncilExecutionReport> {
@@ -172,6 +174,11 @@ object AgentCouncil {
         suspend fun runStage(role: CouncilRole, prior: List<CouncilStageResult>): CouncilStageResult {
             if (!shouldContinue()) throw CancellationException("Council cancelled before " + role.name)
             val provider = assignments.getValue(role.name)
+            val saved = resumeStages[role.name]
+            if (saved != null && saved.provider.equals(provider, ignoreCase = true) && saved.output.isNotBlank()) {
+                onProgress(role.name, progressIndex.incrementAndGet(), total)
+                return CouncilStageResult(role.name, saved.output.take(budget.maxOutputCharactersPerStage))
+            }
             val currentCall = callCount.incrementAndGet()
             if (currentCall > budget.maxProviderCalls) {
                 throw IllegalStateException("Council provider-call budget exceeded before " + role.name)
@@ -240,6 +247,7 @@ object AgentCouncil {
         shouldContinue: () -> Boolean = { true },
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> },
         onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
+        resumeStages: Map<String, CouncilSavedStage> = emptyMap(),
         budget: CouncilExecutionBudget = CouncilExecutionBudget(),
         onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> }
     ): Result<CouncilExecutionReport> {
@@ -255,7 +263,7 @@ object AgentCouncil {
         val assistantName = getAssistantName(context)
         return executeParallel(goal, language, selected, specialistCount, { _, provider, system, prompt ->
             withContext(Dispatchers.IO) { MainBrainProviderGateway.complete(context, provider, system, prompt) }
-        }, onProgress, shouldContinue, assistantName, onStageCompleted, budget, onProviderCall)
+        }, onProgress, shouldContinue, assistantName, onStageCompleted, resumeStages, budget, onProviderCall)
     }
 
     /** Runs the pipeline through the user's currently selected, configured AI provider. */
