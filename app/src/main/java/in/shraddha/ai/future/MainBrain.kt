@@ -178,7 +178,8 @@ class MainBrain(
             onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> },
             resumeStages: Map<String, CouncilSavedStage> = emptyMap(),
             budget: CouncilExecutionBudget = CouncilExecutionBudget(),
-            onProviderCall: (String, Int, Int, Long) -> Unit = { _, _, _, _ -> }
+            onProviderCall: (String, Int, Int, Long) -> Unit = { _, _, _, _ -> },
+            onTokenUsage: (com.Lia.assistant.voice.ProviderTokenUsage) -> Unit = { }
         ): Result<CouncilExecutionReport> =
             AgentCouncil.executeParallelWithConfiguredProviders(
                 context = context.applicationContext,
@@ -191,7 +192,8 @@ class MainBrain(
                 onStageCompleted = onStageCompleted,
                 resumeStages = resumeStages,
                 budget = budget,
-                onProviderCall = onProviderCall
+                onProviderCall = onProviderCall,
+                onTokenUsage = onTokenUsage
             )
 
         /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
