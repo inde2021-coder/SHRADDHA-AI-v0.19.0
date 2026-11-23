@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "socialScheduledPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledAtMs", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
