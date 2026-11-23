@@ -84,9 +84,12 @@ fun AgentCouncilScreen(
     var errorMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        configuredProviders = withContext(Dispatchers.IO) {
+        val providerResult = withContext(Dispatchers.IO) {
             runCatching { MainBrainProviderGateway.configuredProviders(context.applicationContext, preferredProvider = "GEMINI") }
-                .getOrDefault(emptyList())
+        }
+        configuredProviders = providerResult.getOrDefault(emptyList())
+        providerResult.exceptionOrNull()?.let { failure ->
+            errorMessage = "Encrypted provider credentials could not be read: ${failure.localizedMessage ?: failure.javaClass.simpleName}. Open API Keys to review or re-enter the affected key."
         }
         selectedProviders = configuredProviders.take(1).toSet()
         val savedId = withContext(Dispatchers.IO) {
