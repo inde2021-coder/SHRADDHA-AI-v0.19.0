@@ -168,8 +168,16 @@ object DeviceLinkManager {
                                 else -> ""
                             }
                             val aad = "$sessionId|$peerId|$deviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
-                            val plain = DeviceE2ECrypto.decrypt(state.key, msg.optString("nonce"), msg.optString("ciphertext"), aad)
-                            val payload = JSONObject(plain.toString(Charsets.UTF_8))
+                            val plain = try {
+                                DeviceE2ECrypto.decrypt(state.key, msg.optString("nonce"), msg.optString("ciphertext"), aad)
+                            } finally {
+                                aad.fill(0)
+                            }
+                            val payload = try {
+                                JSONObject(plain.toString(Charsets.UTF_8))
+                            } finally {
+                                plain.fill(0)
+                            }
                             when (kind) {
                                 "remote_action" -> {
                                     if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && payload.optString("kind").isNotBlank())
