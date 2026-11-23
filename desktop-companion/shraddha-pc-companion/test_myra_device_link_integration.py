@@ -60,7 +60,7 @@ class MyraShraddhaIntegrationTests(unittest.TestCase):
             executable.write_bytes(b"test")
             spec = build_launch_spec(app, "https://relay.example", "", "MYRA PC",
                                      environ={"PATH": "safe"})
-            self.assertEqual(spec["program"], str(executable))
+            self.assertTrue(os.path.samefile(spec["program"], executable))
             self.assertNotIn(".py", " ".join(spec["arguments"]))
 
     def test_saved_pairing_does_not_inherit_stale_one_time_code(self):
