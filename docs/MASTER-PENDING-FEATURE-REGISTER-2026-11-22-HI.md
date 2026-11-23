@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Accessibility settings title now reads the configured assistant name instead of a fixed Shraddha AI label.
+
+
 - Legacy hardcoded-purple Accessibility and Access Key components were moved onto the shared teal/cyan layered-glass theme, including the blocked/error state color and common elevation/rim treatment.
 
 
