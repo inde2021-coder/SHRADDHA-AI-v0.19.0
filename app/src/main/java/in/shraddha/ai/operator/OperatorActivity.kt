@@ -81,19 +81,25 @@ class OperatorActivity : Activity() {
     /** Shows restart-recovery evidence and asks before scheduling any remaining steps. */
     private fun reviewInterruptedOperatorActions() {
         Thread {
-            val engine = OperatorEngine(
-                emit = { event -> runOnUiThread {
-                    log.text = "${event.state}: ${event.message}\n" + log.text.take(4500)
-                } },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
-            )
-            val brain = `in`.shraddha.ai.future.MainBrain(
-                executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
-                context = this@OperatorActivity
-            )
-            val reviews = runCatching { brain.reviewInterruptedWorkflows() }.getOrDefault(emptyList())
+            val reviewBundle = runCatching {
+                val engine = OperatorEngine(
+                    emit = { event -> runOnUiThread {
+                        log.text = "${event.state}: ${event.message}\n" + log.text.take(4500)
+                    } },
+                    audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+                )
+                val brain = `in`.shraddha.ai.future.MainBrain(
+                    executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                    audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
+                    context = this@OperatorActivity
+                )
+                brain to brain.reviewInterruptedWorkflows()
+            }
             runOnUiThread {
+                val (brain, reviews) = reviewBundle.getOrElse { error ->
+                    log.text = "Encrypted Main Brain recovery state could not be opened. No action was replayed. ${error.localizedMessage ?: "Secure storage unavailable"}\n" + log.text.take(4500)
+                    return@runOnUiThread
+                }
                 if (reviews.isEmpty()) {
                     log.text = "कोई ऐसा interrupted Operator action नहीं मिला जिसके लिए journal उपलब्ध हो।\n" + log.text.take(4500)
                     return@runOnUiThread
