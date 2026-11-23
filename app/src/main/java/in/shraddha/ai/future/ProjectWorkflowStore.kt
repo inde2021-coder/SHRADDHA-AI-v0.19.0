@@ -93,12 +93,11 @@ class ProjectWorkflowStore(context: Context) {
             .also { save(it).getOrThrow() }
     }
 
-    private fun save(snapshot: ProjectWorkflowSnapshot) {
+    private fun save(snapshot: ProjectWorkflowSnapshot): Result<Unit> =
         store.put(key(snapshot.projectId), JSONObject().put("schema", 1).put("projectId", snapshot.projectId)
             .put("state", snapshot.state.name).put("currentMilestoneId", snapshot.currentMilestoneId ?: JSONObject.NULL)
             .put("completed", JSONArray(snapshot.completedMilestoneIds)).put("updatedAt", snapshot.updatedAt)
-            .put("message", snapshot.message.take(1000)).put("revision", snapshot.revision).toString()).getOrThrow()
-    }
+            .put("message", snapshot.message.take(1000)).put("revision", snapshot.revision).toString())
 
     private fun decode(raw: String): ProjectWorkflowSnapshot {
         val json = JSONObject(raw)
