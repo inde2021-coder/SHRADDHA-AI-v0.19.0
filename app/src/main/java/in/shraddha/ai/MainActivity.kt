@@ -166,6 +166,7 @@ class MainActivity : AppCompatActivity() {
         if (initialPage in setOf("devices", "assistant", "expert", "lab", "people", "cloud", "future", "permissions")) showPage(initialPage!!) else showHome()
         installLinkCallbacks()
         handlePairingIntent(intent)
+        handleVoicePcAction(intent)
     }
 
     override fun onResume() {
@@ -180,6 +181,33 @@ class MainActivity : AppCompatActivity() {
         val initialPage = intent.getStringExtra("initial_page")
         if (initialPage in setOf("devices", "assistant", "expert", "lab", "people", "cloud", "future", "permissions")) showPage(initialPage!!)
         handlePairingIntent(intent)
+        handleVoicePcAction(intent)
+    }
+
+
+    private fun handleVoicePcAction(intent: Intent?) {
+        val raw = intent?.getStringExtra("voice_pc_action_json") ?: return
+        val target = intent.getStringExtra("voice_pc_target_id").orEmpty().trim()
+        val action = runCatching { JSONObject(raw) }.getOrNull()
+        if (action == null || !target.matches(Regex("[A-Za-z0-9_-]{8,128}"))) {
+            status.text = "PC voice command invalid; कोई command नहीं भेजी गई।"
+            return
+        }
+        if (!::targetDevice.isInitialized) {
+            status.text = "Device Control अभी तैयार नहीं; PC command नहीं भेजी गई।"
+            return
+        }
+        targetDevice.setText(target)
+        pendingWindowsVoiceAction = action
+        pendingWindowsVoiceTarget = target
+        status.text = "Paired PC से fresh remote-control approval माँगी जा रही है…"
+        if (!DeviceLinkManager.requestRemoteControl(target, 2)) {
+            pendingWindowsVoiceAction = null
+            pendingWindowsVoiceTarget = ""
+            status.text = "Secure relay disconnected या target unavailable; PC command नहीं भेजी गई।"
+        }
+        intent.removeExtra("voice_pc_action_json")
+        intent.removeExtra("voice_pc_target_id")
     }
 
     private fun handlePairingIntent(intent: Intent?) {
