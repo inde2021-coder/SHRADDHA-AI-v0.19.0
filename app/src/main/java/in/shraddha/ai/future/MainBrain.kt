@@ -41,7 +41,8 @@ class MainBrain(
         fun createCouncilPlan(
             goal: String,
             workflowId: String,
-            title: String = goal.trim().take(120)
+            title: String = goal.trim().take(120),
+            context: Context? = null
         ): Pair<CouncilPlan, ShraddhaIntegrationHub.Session> {
             val council = AgentCouncil.plan(goal)
             val actions = council.roles.mapIndexed { index, role ->
@@ -55,7 +56,7 @@ class MainBrain(
                     estimatedMinutes = 10
                 )
             }
-            val session = ShraddhaIntegrationHub().createPlan(
+            val session = ShraddhaIntegrationHub(context = context).createPlan(
                 workflowId = workflowId,
                 title = title.ifBlank { "Shraddha AI Council plan" },
                 actions = actions
