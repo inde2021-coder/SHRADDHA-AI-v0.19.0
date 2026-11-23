@@ -116,6 +116,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         },
         QuickTile("Data Vault", "Encrypted backup and restore", Icons.Default.Security) {
             navController.navigate("data_vault")
+        },
+        QuickTile("Plugin Vault", "Verify and run signed local actions", Icons.Default.Security) {
+            navController.navigate("plugins")
         }
     )
 
