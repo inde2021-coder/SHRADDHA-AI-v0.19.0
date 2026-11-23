@@ -21,7 +21,7 @@ object SocialPublishingClient {
     suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null): JSONObject =
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("platform", platform).put("text", text).put("preview", text).put("confirmed", true)
-            if (platform == "instagram") body.put("mediaKind", mediaKind).put("mediaUrl", mediaUrl)
+            if (platform == "instagram" || platform == "facebook") body.put("mediaKind", mediaKind).put("mediaUrl", mediaUrl)
             request(context, "/api/social/publish", body)
         }
 
@@ -36,7 +36,7 @@ object SocialPublishingClient {
             request(context, "/api/social/schedule", JSONObject()
                 .put("platform", platform).put("text", text).put("preview", text).put("confirmed", true)
                 .put("scheduledAt", scheduledAt).put("idempotencyKey", idempotencyKey)
-                .apply { if (platform == "instagram") { put("mediaKind", mediaKind); put("mediaUrl", mediaUrl) } }, idToken)
+                .apply { if (platform == "instagram" || platform == "facebook") { put("mediaKind", mediaKind); put("mediaUrl", mediaUrl) } }, idToken)
         }
     }
 
