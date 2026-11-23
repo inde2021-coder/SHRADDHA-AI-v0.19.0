@@ -65,9 +65,16 @@ object DeviceLinkManager {
 
     fun restore(context: Context, done: (Result<PairResult>) -> Unit) {
         initialize(context)
-        val credentials = DeviceCredentialStore(context.applicationContext).load()
+        val credentials = DeviceCredentialStore(context.applicationContext).loadResult()
+            .getOrElse { error ->
+                done(Result.failure(IllegalStateException(
+                    "Saved device pairing could not be decrypted. The encrypted record was preserved; re-pair only if recovery is not possible. ${error.localizedMessage ?: "Keystore unavailable"}",
+                    error
+                )))
+                return
+            }
         if (credentials == null) {
-            done(Result.failure(IllegalStateException("No valid saved device pairing was found on this phone.")))
+            done(Result.failure(IllegalStateException("No saved device pairing was found on this phone.")))
             return
         }
         val pair = PairResult("", credentials.sessionId, credentials.deviceId, credentials.token)
