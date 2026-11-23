@@ -355,7 +355,7 @@ fun ProjectLabScreen(navController: NavController) {
                                             val result = withContext(Dispatchers.IO) {
                                                 runCatching {
                                                     val updatedPlan = ProjectWorkspace.update(plan, milestone.id, MilestoneState.DONE, "Checkpoint confirmed by user at ${System.currentTimeMillis()}.")
-                                                    val snapshot = workflowStore.checkpoint(plan, milestone.id, "User confirmed milestone completion: ${milestone.title}")
+                                                    val snapshot = workflowStore.checkpoint(plan, milestone.id, "User confirmed milestone completion: ${milestone.title}").getOrThrow()
                                                     ProjectPlanStore(context).save(updatedPlan).getOrThrow()
                                                     updatedPlan to snapshot
                                                 }
