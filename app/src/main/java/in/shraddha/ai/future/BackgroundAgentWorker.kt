@@ -183,6 +183,13 @@ class BackgroundAgentWorker(
                         "Attempt ${attempt + 1} failed and will retry: $message. Partial stage evidence is retained.",
                         attempt = attempt
                     ).getOrThrow()
+                    // WorkManager retries this worker with the same durable scheduler task.
+                    // Mark the claim as retry-safe FAILED so the next invocation can move it
+                    // back to PENDING through requeueInterrupted() before claimSpecific().
+                    scheduler.fail(
+                        schedulerTaskId,
+                        "Process stopped during execution; action was not replayed. Provider-only council retry: $message"
+                    )
                     Result.retry()
                 } else {
                     evidence.saveStatus(
