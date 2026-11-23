@@ -93,7 +93,12 @@ class MainBrainSchedulerStore(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val iv = cipher.iv
         val encrypted = cipher.doFinal(clear)
-        return byteArrayOf(iv.size.toByte()) + iv + encrypted
+        try {
+            byteArrayOf(iv.size.toByte()) + iv + encrypted
+        } finally {
+            iv.fill(0)
+            encrypted.fill(0)
+        }
     }
 
     private fun decrypt(payload: ByteArray): ByteArray {
