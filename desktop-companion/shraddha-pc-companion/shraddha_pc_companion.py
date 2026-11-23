@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "file_write", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "key_press", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "file_write", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
 
 
 def create_e2e_identity():
@@ -163,6 +163,17 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return False
     if kind == "type" and not allow_typing:
         return False
+    if kind == "key_press":
+        chord = action.get("chord")
+        allowed_chords = {
+            "enter", "escape", "tab", "up", "down", "left", "right", "home", "end",
+            "pageup", "pagedown", "ctrl+a", "ctrl+c", "ctrl+f", "ctrl+z", "ctrl+y",
+            "alt+tab", "alt+left", "alt+right", "win+d", "ctrl+v"
+        }
+        if not isinstance(chord, str) or chord not in allowed_chords:
+            return False
+        if chord == "ctrl+v" and not allow_typing:
+            return False
     if kind == "ocr" and not allow_ocr:
         return False
     if kind == "offline_chat" and offline_model is None:
@@ -796,6 +807,13 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
     if kind == "scroll":
         pyautogui.scroll(int(action.get("amount", -3)))
         return "scroll_executed"
+    if kind == "key_press":
+        keys = action["chord"].split("+")
+        if len(keys) == 1:
+            pyautogui.press(keys[0])
+        else:
+            pyautogui.hotkey(*keys)
+        return "key_press_sent:" + action["chord"]
     if kind == "back":
         pyautogui.hotkey("alt", "left")
         return "back_executed"
