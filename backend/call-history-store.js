@@ -28,7 +28,7 @@ export async function persistEncryptedCallRecord(collection, record, key, now = 
   const safeRecord = { ...record, originalId: record.id, id: storageId };
   const envelope = encryptCallHistoryRecord(safeRecord, key);
   const startedAt = new Date(record.startedAt || now).toISOString();
-  const expiresAt = new Date(now + CALL_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(now + CALL_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   await collection.doc(documentId(record.id)).set({
     version: 1,
     envelope,
@@ -47,7 +47,7 @@ export async function listEncryptedCallRecords(collection, key, { limit = 30, no
   const calls = [];
   for (const doc of snapshot.docs || []) {
     const data = doc.data();
-    if (!data || data.version !== 1 || typeof data.expiresAt !== 'string' || Date.parse(data.expiresAt) <= now) continue;
+    if (!data || data.version !== 1 || !data.expiresAt || new Date(data.expiresAt).getTime() <= now) continue;
     try {
       const envelope = data.envelope;
       const storageId = doc.id;
