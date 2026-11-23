@@ -40,6 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
 import com.google.ar.core.ArCoreApk
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -56,6 +59,7 @@ import javax.microedition.khronos.opengles.GL10
 fun ArMappingScreen(navController: NavController) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val activity = context as? Activity
     var cameraGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -108,6 +112,18 @@ fun ArMappingScreen(navController: NavController) {
         engine = null
         stats = "Mapping stopped. Survey contains sparse pose, plane and depth metadata."
         status = "Mapping stopped."
+    }
+
+    DisposableEffect(lifecycleOwner, surface, engine) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> { if (running) { surface?.onResume(); engine?.resume() } }
+                Lifecycle.Event.ON_PAUSE -> { surface?.onPause(); engine?.pause() }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     DisposableEffect(engine) {
