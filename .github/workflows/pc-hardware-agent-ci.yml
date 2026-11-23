@@ -6,6 +6,7 @@ on:
       - feature/complete-pending-shraddha-features
     paths:
       - "pc_companion/**"
+      - "app/src/main/java/in/shraddha/ai/MainActivity.kt"
       - ".github/workflows/pc-hardware-agent-ci.yml"
   workflow_dispatch:
 
