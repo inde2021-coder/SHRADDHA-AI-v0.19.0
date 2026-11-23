@@ -10,7 +10,7 @@ test('publishing requires explicit confirmation of the exact preview', () => {
 });
 
 test('only supported platforms and bounded non-empty posts are accepted', () => {
-  assert.throws(() => validatePublishIntent({ platform: 'instagram', text: 'x', preview: 'x', confirmed: true }), /Unsupported/);
+  assert.throws(() => validatePublishIntent({ platform: 'tiktok', text: 'x', preview: 'x', confirmed: true }), /Unsupported/);
   assert.throws(() => validatePublishIntent({ platform: 'mastodon', text: ' ', preview: ' ', confirmed: true }), /1-5000/);
   assert.throws(() => validatePublishIntent({ platform: 'telegram', text: 'x'.repeat(5001), preview: 'x'.repeat(5001), confirmed: true }), /1-5000/);
 });
