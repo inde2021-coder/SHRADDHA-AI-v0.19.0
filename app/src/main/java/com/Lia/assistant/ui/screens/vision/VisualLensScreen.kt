@@ -190,6 +190,12 @@ fun VisualLensScreen(navController: NavController) {
                     )
                 }
                 NovaButton(
+                    text = "OPEN AR WORLD MAPPING",
+                    onClick = { navController.navigate("ar_mapping") },
+                    modifier = Modifier.fillMaxWidth(),
+                    type = NovaButtonType.SECONDARY
+                )
+                NovaButton(
                     text = "Ask ${assistantName} about this view",
                     onClick = { navController.navigate("voice") },
                     modifier = Modifier.fillMaxWidth(),
