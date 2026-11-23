@@ -55,3 +55,9 @@ test('authorizes only an exact signed declarative action after explicit approval
   tampered.actions[0].body = 'changed';
   assert.throws(() => authorizePluginAction(tampered, trustedKeys, 0, true), /signature verification failed/);
 });
+
+test('rejects unused capabilities and unknown action or manifest fields', () => {
+  assert.throws(() => validatePluginManifest(signed({ capabilities: ['read_memory'] })), /unsupported capability/);
+  assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'create_note', title: 'x', body: 'y', extra: true }] })), /unsupported field/);
+  assert.throws(() => validatePluginManifest(signed({ displayUrl: 'https://example.com' })), /unsupported field/);
+});
