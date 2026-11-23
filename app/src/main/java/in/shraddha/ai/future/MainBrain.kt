@@ -468,7 +468,7 @@ class MainBrain(
             }
     }
 
-    /** Enqueue only the steps after a journal-verified interrupted action; never replays it. */
+    /** Enqueue only steps after a journal-verified or explicitly user-attested action; never replays it. */
     @Synchronized
     fun resumeInterruptedWorkflow(workflowId: String, manuallyVerified: Boolean = false): SharedTaskScheduler.Snapshot? {
         val journal = actionJournal ?: return null
