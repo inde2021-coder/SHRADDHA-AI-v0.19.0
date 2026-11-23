@@ -12,16 +12,14 @@ object MainBrainSchedulerRuntime {
     @Volatile private var scheduler: SharedTaskScheduler? = null
     @Volatile private var persistenceFailure: Throwable? = null
 
-    fun get(context: Context): SharedTaskScheduler {
+    fun get(context: Context): SharedTaskScheduler = synchronized(this) {
         persistenceFailure?.let { error ->
             throw IllegalStateException(
                 "Main Brain scheduler persistence failed; this process is locked against further task execution until restart and recovery.",
                 error
             )
         }
-        scheduler?.let { return it }
-        return synchronized(this) {
-            scheduler ?: run {
+        scheduler ?: run {
                 val store = MainBrainSchedulerStore(context.applicationContext)
                 SharedTaskScheduler(1) { snapshots ->
                     try {
@@ -47,5 +45,4 @@ object MainBrainSchedulerRuntime {
                 }
             }
         }
-    }
 }
