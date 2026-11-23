@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Main Brain scheduler restoration errors are now converted into safe user/worker failure results at voice tool, Website Forge, form extraction, learned-workflow and WorkManager entry points; a missing scheduler Keystore key no longer bubbles out as an uncaught initialization exception or causes an empty replacement queue to be saved.
+
+
 - ConversationMemory no longer deletes encrypted voice history when decryption/Keystore access fails, and it refuses to generate a replacement key while history ciphertext exists. Persist/disable operations use synchronous commits, decoded buffers are wiped, and Settings reports persistence errors and rolls the toggle back when opt-in cannot be saved.
 
 
