@@ -80,3 +80,30 @@ val LightNovaColors = NovaColorScheme(
 
 val LocalNovaColors = staticCompositionLocalOf { DarkNovaColors }
 val LocalNovaReducedMotion = staticCompositionLocalOf { false }
+
+
+/** Light lavender palette sampled from the LIA reference app's Quick actions and Settings screens. */
+val LiaReferenceColors = NovaColorScheme(
+    background = Color(0xFFF7F3FF),
+    backgroundGradientTop = Color(0xFFEDE4FF),
+    surface = Color(0xFFFFFFFF),
+    surfaceGlass = Color(0xF7FFFFFF),
+    surfaceBorder = Color(0xFFE3D7FA),
+    surfaceRaised = Color(0xFFF1EAFE),
+    accent = Color(0xFF7C3AED),
+    accentSecondary = Color(0xFFA855F7),
+    accentGlow = Color(0x337C3AED),
+    onAccent = Color(0xFFFFFFFF),
+    textPrimary = Color(0xFF26133F),
+    textSecondary = Color(0xFF705D89),
+    textTertiary = Color(0xFF9989AE),
+    success = Color(0xFF218B62),
+    warning = Color(0xFFAA6B00),
+    error = Color(0xFFD14363),
+    userBubble = Color(0xFFEDE4FF),
+    assistantBubble = Color(0xFFFFFFFF),
+    depthShadow = Color(0x160E0520),
+    rimLight = Color(0xFFFFFFFF),
+    lagoon = Color(0xFF8B5CF6),
+    lotus = Color(0xFFC084FC)
+)
