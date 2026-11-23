@@ -69,6 +69,15 @@ test('Instagram requires a safe public HTTPS media URL and a supported media typ
   assert.throws(() => validatePublishIntent({ platform: 'instagram', text: 'caption', preview: 'caption', confirmed: true, mediaKind: 'video', mediaUrl: 'https://cdn.example.com/video.mp4' }), /media type/);
 });
 
+test('Facebook Page image/video and Instagram media intents validate', () => {
+  const image = validatePublishIntent({ platform: 'facebook', text: 'Page photo', preview: 'Page photo', confirmed: true, mediaKind: 'image', mediaUrl: 'https://cdn.example.com/photo.jpg' });
+  assert.equal(image.mediaKind, 'image');
+  const video = validatePublishIntent({ platform: 'facebook', text: 'Page video', preview: 'Page video', confirmed: true, mediaKind: 'video', mediaUrl: 'https://cdn.example.com/video.mp4' });
+  assert.equal(video.mediaKind, 'video');
+  assert.throws(() => validatePublishIntent({ platform: 'facebook', text: 'Bad', preview: 'Bad', confirmed: true, mediaKind: 'reel', mediaUrl: 'https://cdn.example.com/x.mp4' }), /Facebook Page image or video/);
+  assert.throws(() => validatePublishIntent({ platform: 'facebook', text: 'Bad', preview: 'Bad', confirmed: true, mediaKind: 'image', mediaUrl: 'http://cdn.example.com/x.jpg' }), /public HTTPS/);
+});
+
 test('Facebook text posts and Instagram media posts can be scheduled safely', () => {
   assert.equal(validatePublishIntent({ platform: 'facebook', text: 'Page post', preview: 'Page post', confirmed: true }).platform, 'facebook');
   const now = Date.parse('2026-11-23T06:00:00Z');
@@ -76,5 +85,8 @@ test('Facebook text posts and Instagram media posts can be scheduled safely', ()
   assert.equal(scheduled.mediaKind, 'reel');
   assert.equal(scheduled.mediaUrl, 'https://cdn.example.com/p.mp4');
   assert.throws(() => validateScheduleIntent({ platform: 'instagram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z' }, now), /media type/);
-  assert.throws(() => validateScheduleIntent({ platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z', mediaUrl: 'https://cdn.example.com/p.jpg', mediaKind: 'image' }, now), /only supported for Instagram/);
+  assert.throws(() => validateScheduleIntent({ platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z', mediaUrl: 'https://cdn.example.com/p.jpg', mediaKind: 'image' }, now), /only for Facebook and Instagram/);
+  const fb = validateScheduleIntent({ platform: 'facebook', text: 'page photo', preview: 'page photo', confirmed: true, idempotencyKey: 'facebook_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z', mediaKind: 'image', mediaUrl: 'https://cdn.example.com/p.jpg' }, now);
+  assert.equal(fb.platform, 'facebook');
+  assert.equal(fb.mediaKind, 'image');
 });
