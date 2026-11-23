@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Native Operator console now follows the dark-teal/cyan premium direction: inset teal text fields, rounded raised cyan action buttons, cyan secondary text and a dark navy-teal canvas replace the old purple controls. The native activity has not been visually verified on a device.
+
+
 - Settings refreshes the voice action journal on screen resume, so a manual verification completed in the Operator console is reflected without requiring an app restart.
 
 
