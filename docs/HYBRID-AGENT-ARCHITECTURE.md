@@ -46,7 +46,7 @@ The gateway currently provides synchronous provider calls with token-usage evide
 
 ## Social publishing extension
 
-The social screen supports immediate text posts on Telegram, Mastodon, Bluesky, LinkedIn and Facebook, and Instagram Feed/Reel/Story through a public HTTPS media URL. Instagram Feed/Reel/Story posts can also be scheduled: the scheduler persists the approved media type and URL with the authenticated user's Firebase UID and idempotency key, then sends that same media metadata to the Instagram publisher. Telegram and Mastodon binary uploads remain immediate-only; scheduled Telegram/Mastodon posts are text-only.
+The social screen supports immediate text posts on Telegram, Mastodon, Bluesky, LinkedIn and Facebook, and Instagram Feed/Reel/Story through a public HTTPS media URL. Instagram Feed/Reel/Story and Facebook Page image/video posts can also be scheduled: the scheduler persists the approved media type and URL with the authenticated user's Firebase UID and idempotency key, then sends that same media metadata to the corresponding publisher. Telegram and Mastodon binary uploads remain immediate-only; scheduled Telegram/Mastodon posts are text-only.
 
 ## Signed plugin capabilities
 
