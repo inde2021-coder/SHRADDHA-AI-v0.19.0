@@ -73,7 +73,7 @@ def clear_peer_key(peer_keys: dict, peer_id: str) -> bool:
         return False
     key = state.pop("key", None)
     if isinstance(key, bytearray):
-        key[:] = b"\\x00" * len(key)
+        key[:] = b"\x00" * len(key)
     state.clear()
     return True
 
