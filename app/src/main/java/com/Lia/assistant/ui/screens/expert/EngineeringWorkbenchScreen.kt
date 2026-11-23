@@ -137,6 +137,19 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
             if (netlist.isNotBlank()) {
                 Text(netlist, color = colors.textSecondary)
                 NovaButton(text = "EXPORT .CIR NETLIST", onClick = { netlistLauncher.launch(projectName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "circuit" } + ".cir") }, modifier = Modifier.fillMaxWidth())
+                NovaButton(text = "EXPORT CIRCUIT BOM CSV", onClick = {
+                    val vs=ledSupply.toDoubleOrNull() ?: 0.0
+                    val vf=ledForward.toDoubleOrNull() ?: 0.0
+                    val ma=ledCurrent.toDoubleOrNull() ?: 0.0
+                    val count=seriesLedCount.toIntOrNull() ?: 0
+                    if (count !in 1..10 || vs<=count*vf || ma<=0) {
+                        result = "Generate a valid LED netlist before exporting the BOM."
+                    } else {
+                        val ohms=(vs-count*vf)/(ma/1000.0)
+                        exportText = "Reference,Component,Quantity,Value / Rating,Notes\nR1,Resistor,1,${fmt.format(ohms)} ohm,Select next higher standard value and derated power rating\nD1..D${count},LED,${count},Generic LED,Confirm forward voltage and current from actual datasheet\nV1,DC supply,1,${vs} V,Use regulated supply with suitable protection\n"
+                        exportLauncher.launch(projectName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "circuit" } + "-bom.csv")
+                    }
+                }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
             }
         }
         NovaGlassCard {
