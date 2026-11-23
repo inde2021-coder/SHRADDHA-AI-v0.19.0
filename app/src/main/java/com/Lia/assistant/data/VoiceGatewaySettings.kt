@@ -24,6 +24,8 @@ object VoiceGatewaySettings {
     private const val PAYLOAD = "config_ciphertext"
     private const val IV = "config_iv"
     private const val ALIAS = "shraddha_voice_gateway_aes_v1"
+    private data class ProviderCache(val baseUrl: String, val tokenHash: Int, val fetchedAt: Long, val providers: Set<String>)
+    @Volatile private var providerCache: ProviderCache? = null
     private val http = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -103,6 +105,7 @@ object VoiceGatewaySettings {
     }
 
     fun save(context: Context, baseUrl: String, gatewayToken: String): Result<Unit> = runCatching {
+        providerCache = null
         val url = baseUrl.trim().trimEnd('/')
         require(url.startsWith("https://", true)) { "Secure HTTPS backend URL required" }
         require(url.length <= 500 && !url.contains(" ")) { "Backend URL is invalid" }
@@ -118,6 +121,7 @@ object VoiceGatewaySettings {
     }
 
     fun clear(context: Context) {
+        providerCache = null
         check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()) {
             "Could not clear the stored Voice Gateway settings."
         }
@@ -129,6 +133,11 @@ object VoiceGatewaySettings {
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
+        val now = System.currentTimeMillis()
+        val cached = providerCache
+        if (cached != null && cached.baseUrl == config.baseUrl && cached.tokenHash == config.gatewayToken.hashCode() && now - cached.fetchedAt < 30_000L) {
+            return cached.providers
+        }
         val request = Request.Builder()
             .url(config.baseUrl.trimEnd('/') + "/api/ai/providers")
             .header("Authorization", "Bearer " + config.gatewayToken)
@@ -140,9 +149,11 @@ object VoiceGatewaySettings {
                 throw IllegalStateException(message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
             }
             val flags = JSONObject(raw).optJSONObject("providers") ?: error("Gateway provider status is malformed.")
-            return listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+            val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
                 .filter { provider -> flags.optBoolean(if (provider == "CLAUDE") "anthropic" else provider.lowercase()) }
                 .toSet()
+            providerCache = ProviderCache(config.baseUrl, config.gatewayToken.hashCode(), now, providers)
+            return providers
         }
     }
 
