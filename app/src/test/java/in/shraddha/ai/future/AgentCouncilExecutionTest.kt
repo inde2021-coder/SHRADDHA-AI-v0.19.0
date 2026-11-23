@@ -155,6 +155,45 @@ class AgentCouncilExecutionTest {
         assertTrue(result.elapsedMs >= 0L && result.elapsedMs <= 30_000L)
     }
 
+    @Test fun executeParallelResumesOnlySavedStagesFromTheSameAssignedProvider() = runBlocking {
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val saved = mapOf(
+            "Planner" to CouncilSavedStage("GEMINI", "Saved planner output"),
+            "Researcher" to CouncilSavedStage("CLAUDE", "Wrong-provider output"),
+            "Specialist 1" to CouncilSavedStage("GEMINI", "Saved specialist output")
+        )
+        val result = AgentCouncil.executeParallel(
+            goal = "Resume only trustworthy completed stages",
+            providerNames = listOf("GEMINI", "OPENAI"),
+            specialistCount = 1,
+            executor = { role, provider, _, prompt ->
+                calls += role.name
+                if (role.name == "Critic") {
+                    assertTrue(prompt.contains("Saved planner output"))
+                    assertTrue(prompt.contains("Saved specialist output"))
+                    assertTrue(prompt.contains("Researcher"))
+                }
+                "$provider fresh output for ${role.name}"
+            },
+            resumeStages = saved,
+            budget = CouncilExecutionBudget(
+                maxProviderCalls = 5,
+                maxCallsPerProvider = 3,
+                maxDurationMs = 30_000,
+                maxOutputCharactersPerStage = 1_000
+            )
+        ).getOrThrow()
+
+        assertFalse(calls.contains("Planner"))
+        assertTrue(calls.contains("Researcher"))
+        assertFalse(calls.contains("Specialist 1"))
+        assertEquals(3, calls.size)
+        assertEquals("Saved planner output", result.stages.first { it.role == "Planner" }.output)
+        assertEquals("Saved specialist output", result.stages.first { it.role == "Specialist 1" }.output)
+        assertEquals("OPENAI fresh output for Researcher", result.stages.first { it.role == "Researcher" }.output)
+        assertEquals(3, result.providerUsage.sumOf { it.calls })
+    }
+
     @Test fun executeParallelRejectsBudgetsThatCannotCoverRequiredStages() = runBlocking {
         val result = runCatching {
             AgentCouncil.executeParallel(
