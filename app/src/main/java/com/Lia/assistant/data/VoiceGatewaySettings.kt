@@ -18,7 +18,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Stores gateway URL and shared gateway credential encrypted with Android Keystore. */
 object VoiceGatewaySettings {
-    data class Config(val baseUrl: String, val gatewayToken: String)
+    data class Config(val baseUrl: String, val gatewayToken: String, val readError: String? = null)
     private const val PREFS = "shraddha_voice_gateway"
     private const val PAYLOAD = "config_ciphertext"
     private const val IV = "config_iv"
@@ -56,11 +56,14 @@ object VoiceGatewaySettings {
     fun get(context: Context): Config {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val encrypted = prefs.getString(PAYLOAD, null) ?: return Config("", "")
-        val iv = prefs.getString(IV, null) ?: return Config("", "")
+        val iv = prefs.getString(IV, null)
+            ?: return Config("", "", "Encrypted Voice Gateway settings are incomplete. Re-enter the backend URL and token.")
         return runCatching {
             val json = JSONObject(decrypt(encrypted, iv))
             Config(json.optString("baseUrl"), json.optString("gatewayToken"))
-        }.getOrElse { Config("", "") }
+        }.getOrElse { failure ->
+            Config("", "", "Could not decrypt saved Voice Gateway settings: ${failure.localizedMessage ?: failure.javaClass.simpleName}. Re-enter the settings; existing encrypted data was preserved.")
+        }
     }
 
     fun isConfigured(context: Context): Boolean {
@@ -92,6 +95,7 @@ object VoiceGatewaySettings {
     /** Requests a one-use, short-lived Gemini Live token. Must be called off the main thread. */
     fun fetchEphemeralToken(context: Context): String {
         val config = get(context)
+        require(config.readError == null) { config.readError ?: "Voice Gateway settings could not be read." }
         require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
             "Set the secure HTTPS backend URL and gateway token in Settings."
         }
