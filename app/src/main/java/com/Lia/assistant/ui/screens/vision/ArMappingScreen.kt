@@ -204,7 +204,7 @@ private class ArSurveyRenderer(
         val vertex = compileShader(GLES20.GL_VERTEX_SHADER,
             "attribute vec4 aPosition; attribute vec2 aTexCoord; varying vec2 vTexCoord; void main(){ gl_Position=aPosition; vTexCoord=aTexCoord; }")
         val fragment = compileShader(GLES20.GL_FRAGMENT_SHADER,
-            "#extension GL_OES_EGL_image_external : require\\nprecision mediump float; uniform samplerExternalOES sTexture; varying vec2 vTexCoord; void main(){ gl_FragColor=texture2D(sTexture,vTexCoord); }")
+            "#extension GL_OES_EGL_image_external : require\nprecision mediump float; uniform samplerExternalOES sTexture; varying vec2 vTexCoord; void main(){ gl_FragColor=texture2D(sTexture,vTexCoord); }")
         program = GLES20.glCreateProgram()
         GLES20.glAttachShader(program, vertex)
         GLES20.glAttachShader(program, fragment)
