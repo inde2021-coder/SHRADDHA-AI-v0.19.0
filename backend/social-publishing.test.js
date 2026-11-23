@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
+import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion, validateMediaAttachment } from './social-publishing.js';
 
 test('publishing requires explicit confirmation of the exact preview', () => {
   assert.deepEqual(validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Hello', confirmed: true }), { platform: 'telegram', text: 'Hello' });
@@ -46,4 +46,12 @@ test('LinkedIn author URN and API version are validated', () => {
   assert.equal(validateLinkedInVersion('202611'), '202611');
   assert.throws(() => validateLinkedInAuthor('https://linkedin.com/in/user'));
   assert.throws(() => validateLinkedInVersion('202613'));
+});
+test('media publishing accepts only bounded image/video attachments for supported providers', () => {
+  const bytes = Buffer.from('fake-media-bytes').toString('base64');
+  assert.equal(validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: bytes }, 'telegram').kind, 'image');
+  assert.equal(validateMediaAttachment({ mediaKind: 'video', mimeType: 'video/mp4', mediaBase64: bytes }, 'mastodon').kind, 'video');
+  assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/svg+xml', mediaBase64: bytes }, 'telegram'));
+  assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: bytes }, 'bluesky'));
+  assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: 'not-base64' }, 'telegram'));
 });
