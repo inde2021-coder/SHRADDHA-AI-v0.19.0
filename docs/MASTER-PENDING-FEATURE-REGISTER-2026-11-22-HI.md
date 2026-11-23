@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Mobile Command Center native screen now uses the configured assistant name, a dark teal canvas, inset teal input/clipboard fields and raised cyan action buttons; its existing full-page ScrollView keeps the long command list reachable on small phones.
+
+
 - Operator console now scrolls as one full page on small phones rather than hiding controls below a fixed-height log area; the log viewport uses density-independent sizing. The screen has not yet been device-checked for every display size.
 
 
