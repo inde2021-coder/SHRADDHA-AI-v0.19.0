@@ -158,7 +158,12 @@ fun SocialPublishingScreen(navController: NavController) {
         AlertDialog(
             onDismissRequest = { if (!busy) pendingAction = "" },
             title = { Text(if (pendingAction == "publish") "Confirm exact post" else "Confirm scheduled post") },
-            text = { Text("Platform: ${platform.uppercase()}\n\n${text.trim()}\n\n" + if (pendingAction == "schedule") "Scheduled at: $scheduledAt" else "Publish immediately") },
+            text = { Text(
+                "Platform: ${platform.uppercase()}\\n" +
+                    (if (platform == "instagram") "Media: $mediaKind\\nURL: $mediaUrl\\n" else "") +
+                    "\\n${text.trim()}\\n\\n" +
+                    (if (pendingAction == "schedule") "Scheduled at: $scheduledAt" else "Publish immediately")
+            ) },
             confirmButton = { TextButton(onClick = { run(pendingAction) }, enabled = !busy) { Text("Confirm") } },
             dismissButton = { TextButton(onClick = { pendingAction = "" }, enabled = !busy) { Text("Cancel") } }
         )
