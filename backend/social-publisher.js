@@ -51,6 +51,77 @@ export async function publishSocialPost(body, intent, env = process.env) {
     return { ok: true, platform: 'telegram', messageId: result.result?.message_id || null, confirmedPreview: true };
   }
 
+  if (intent.platform === 'facebook') {
+    const pageId = env.FACEBOOK_PAGE_ID || '';
+    const accessToken = env.FACEBOOK_PAGE_ACCESS_TOKEN || '';
+    const version = env.META_GRAPH_API_VERSION || 'v24.0';
+    if (!/^[0-9]{5,40}$/.test(pageId) || accessToken.length < 20 || accessToken.length > 8192 || !/^v[0-9]{1,2}\\.[0-9]$/.test(version)) {
+      fail(503, 'Facebook Page ID, Page access token and Meta Graph API version are not configured correctly');
+    }
+    let upstream;
+    try {
+      const form = new URLSearchParams({ message: intent.text, access_token: accessToken });
+      upstream = await fetch(`https://graph.facebook.com/${version}/${pageId}/feed`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: form, signal: AbortSignal.timeout(20000)
+      });
+    } catch { fail(502, 'Facebook Graph API could not be reached'); }
+    const result = await upstream.json().catch(() => ({}));
+    if (!upstream.ok || typeof result.id !== 'string') fail(502, result.error?.message || 'Facebook did not accept the Page post');
+    return { ok: true, platform: 'facebook', postId: result.id, confirmedPreview: true };
+  }
+
+  if (intent.platform === 'instagram') {
+    const accountId = env.INSTAGRAM_ACCOUNT_ID || '';
+    const accessToken = env.INSTAGRAM_ACCESS_TOKEN || '';
+    const version = env.META_GRAPH_API_VERSION || 'v24.0';
+    if (!/^[0-9]{5,40}$/.test(accountId) || accessToken.length < 20 || accessToken.length > 8192 || !/^v[0-9]{1,2}\\.[0-9]$/.test(version)) {
+      fail(503, 'Instagram professional account ID, access token and Meta Graph API version are not configured correctly');
+    }
+    const isVideo = intent.mediaKind === 'reel' || intent.mediaKind === 'story_video';
+    const mediaType = intent.mediaKind.startsWith('story_') ? 'STORIES' : intent.mediaKind === 'reel' ? 'REELS' : null;
+    const params = new URLSearchParams({ access_token: accessToken, caption: intent.text });
+    params.set(isVideo ? 'video_url' : 'image_url', intent.mediaUrl);
+    if (mediaType) params.set('media_type', mediaType);
+    if (intent.mediaKind === 'reel') params.set('share_to_feed', 'true');
+    let create;
+    try {
+      create = await fetch(`https://graph.facebook.com/${version}/${accountId}/media`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: params, signal: AbortSignal.timeout(20000)
+      });
+    } catch { fail(502, 'Instagram media container could not be created'); }
+    const container = await create.json().catch(() => ({}));
+    if (!create.ok || typeof container.id !== 'string') fail(502, container.error?.message || 'Instagram did not accept the media container');
+    if (isVideo) {
+      let ready = false;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        let poll;
+        try {
+          poll = await fetch(`https://graph.facebook.com/${version}/${container.id}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`, {
+            signal: AbortSignal.timeout(15000)
+          });
+        } catch { fail(502, 'Instagram video processing status could not be checked; do not blindly retry this container'); }
+        const state = await poll.json().catch(() => ({}));
+        if (!poll.ok || state.status_code === 'ERROR' || state.status_code === 'EXPIRED') fail(502, state.error?.message || 'Instagram video processing failed');
+        if (state.status_code === 'FINISHED') { ready = true; break; }
+      }
+      if (!ready) fail(504, 'Instagram video is still processing. Check the account before retrying.');
+    }
+    let publish;
+    try {
+      publish = await fetch(`https://graph.facebook.com/${version}/${accountId}/media_publish`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ creation_id: container.id, access_token: accessToken }),
+        signal: AbortSignal.timeout(20000)
+      });
+    } catch { fail(502, 'Instagram publish request outcome is unknown; check the account before retrying'); }
+    const result = await publish.json().catch(() => ({}));
+    if (!publish.ok || typeof result.id !== 'string') fail(502, result.error?.message || 'Instagram did not publish the media');
+    return { ok: true, platform: 'instagram', mediaKind: intent.mediaKind, postId: result.id, confirmedPreview: true };
+  }
+
   if (intent.platform === 'bluesky') {
     const credentials = (() => {
       try { return validateBlueskyCredentials(env.BLUESKY_IDENTIFIER || '', env.BLUESKY_APP_PASSWORD || ''); }
