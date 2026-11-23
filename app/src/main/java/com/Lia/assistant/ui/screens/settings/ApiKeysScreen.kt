@@ -83,9 +83,16 @@ private fun clearProviderKey(context: android.content.Context, provider: String)
 fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
+    val keyReadWarnings = remember { mutableStateMapOf<String, String>() }
     val configured = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            apiKeyProviders.forEach { put(it.id, readProviderKey(context, it.id)) }
+            apiKeyProviders.forEach { provider ->
+                val result = runCatching { readProviderKey(context, provider.id) }
+                put(provider.id, result.getOrDefault(false))
+                result.exceptionOrNull()?.let { error ->
+                    keyReadWarnings[provider.id] = "Saved key could not be decrypted. Re-enter the key if this device's Keystore was reset."
+                }
+            }
         }
     }
     val inputs = remember { mutableStateMapOf<String, String>() }
@@ -130,6 +137,9 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                         Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                             Text(provider.title, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                             Text(provider.description, color = colors.textSecondary, fontSize = 12.sp)
+                            keyReadWarnings[provider.id]?.let { warning ->
+                                Text(warning, color = colors.error, fontSize = 10.sp)
+                            }
                         }
                         if (configured[provider.id] == true) {
                             Icon(Icons.Default.CheckCircle, contentDescription = "API key saved", tint = colors.accent)
@@ -163,6 +173,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                     runCatching { saveProviderKey(context, provider.id, key) }
                                         .onSuccess {
                                             configured[provider.id] = true
+                                            keyReadWarnings.remove(provider.id)
                                             inputs[provider.id] = ""
                                             revealed[provider.id] = false
                                             Toast.makeText(context, "${provider.title} API key securely saved.", Toast.LENGTH_SHORT).show()
@@ -181,6 +192,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                 runCatching { clearProviderKey(context, provider.id) }
                                     .onSuccess {
                                         configured[provider.id] = false
+                                        keyReadWarnings.remove(provider.id)
                                         inputs[provider.id] = ""
                                         Toast.makeText(context, "${provider.title} key removed.", Toast.LENGTH_SHORT).show()
                                     }
