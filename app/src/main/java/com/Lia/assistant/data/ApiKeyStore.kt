@@ -65,7 +65,10 @@ object ApiKeyStore {
             val iv = Base64.decode(ivText, Base64.NO_WRAP)
             val encrypted = Base64.decode(ciphertext, Base64.NO_WRAP)
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, iv))
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                ?: error("Gemini API-key encryption key is missing; refusing to replace it while encrypted key data still exists.")
+            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
             String(cipher.doFinal(encrypted), Charsets.UTF_8)
         } catch (error: Exception) {
             // Never destroy ciphertext on a read failure: a transient Keystore error or
