@@ -137,7 +137,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install PC companion dependencies and packager
-        run: python -m pip install -r desktop-companion/shraddha-pc-companion/requirements.txt pyinstaller
+        run: python -m pip install -r desktop-companion/shraddha-pc-companion/requirements-all.txt pyinstaller
       - name: Run PC companion policy and protocol tests
         working-directory: desktop-companion/shraddha-pc-companion
         run: python -m unittest discover -s . -p "test_*.py" -v
