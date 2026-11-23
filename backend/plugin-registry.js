@@ -1,6 +1,6 @@
 import { createPublicKey, verify as verifySignature } from 'node:crypto';
 
-const CAPABILITIES = new Set(['read_profile', 'read_memory', 'create_note', 'show_notification']);
+const CAPABILITIES = new Set(['create_note', 'show_notification']);
 const ACTIONS = new Set(['create_note', 'show_notification']);
 const FORBIDDEN_FIELDS = new Set(['script', 'javascript', 'html', 'entrypoint', 'url', 'permissions', 'nativecode', 'dex', 'jar']);
 const ID = /^[a-z][a-z0-9._-]{2,63}$/;
@@ -43,6 +43,8 @@ export function canonicalPluginPayload(manifest) {
 }
 
 export function validatePluginManifest(manifest) {
+  const allowedManifestFields = new Set(['id', 'name', 'version', 'capabilities', 'actions', 'keyId', 'signature']);
+  if (Object.keys(manifest || {}).some(key => !allowedManifestFields.has(key))) throw new Error('Plugin manifest contains an unsupported field');
   const bytes = canonicalPluginPayload(manifest);
   if (bytes.length > 24 * 1024) throw new Error('Plugin manifest exceeds 24 KB');
   if (!ID.test(manifest.id || '')) throw new Error('Plugin id is invalid');
@@ -52,7 +54,8 @@ export function validatePluginManifest(manifest) {
   for (const capability of manifest.capabilities) if (!CAPABILITIES.has(capability)) throw new Error('Plugin requests an unsupported capability');
   if (!Array.isArray(manifest.actions) || manifest.actions.length > 20) throw new Error('Plugin actions are invalid');
   for (const action of manifest.actions) {
-    if (!action || typeof action !== 'object' || !ACTIONS.has(action.type)) throw new Error('Plugin action is not allowed');
+    if (!action || typeof action !== 'object' || Array.isArray(action) || !ACTIONS.has(action.type)) throw new Error('Plugin action is not allowed');
+    if (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key))) throw new Error('Plugin action contains an unsupported field');
     if (action.type === 'create_note' && (typeof action.title !== 'string' || action.title.length > 120 || typeof action.body !== 'string' || action.body.length > 4000)) throw new Error('Plugin note action is invalid');
     if (action.type === 'show_notification' && (typeof action.title !== 'string' || action.title.length > 80 || typeof action.body !== 'string' || action.body.length > 240)) throw new Error('Plugin notification action is invalid');
   }
