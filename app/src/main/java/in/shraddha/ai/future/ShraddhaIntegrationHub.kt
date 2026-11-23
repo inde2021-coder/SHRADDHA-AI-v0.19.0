@@ -47,6 +47,7 @@ class ShraddhaIntegrationHub(
 
     @Synchronized
     fun createPlan(workflowId: String, title: String, actions: List<Action>, now: Long = System.currentTimeMillis()): Session {
+        require(actions.isNotEmpty() && actions.size <= 256) { "A workflow must contain 1-256 actions." }
         require(workflowId.matches(Regex("[A-Za-z0-9_-]{1,64}")))
         require(title.isNotBlank() && title.length <= 120)
         val planned = AutonomousTaskPlanner.plan(actions.map {
