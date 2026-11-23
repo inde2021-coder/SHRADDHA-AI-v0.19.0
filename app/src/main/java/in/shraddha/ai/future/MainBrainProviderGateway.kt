@@ -32,12 +32,12 @@ object MainBrainProviderGateway {
             .uppercase()
         require(preferred in supportedProviders) { "Unsupported preferred AI provider: $preferred" }
         // Keep fallback order stable across devices and runtime implementations.
+        // Cloud-only keys are valid routes; provider secrets remain on the HTTPS backend.
+        val cloudProviders = VoiceGatewaySettings.configuredProviders(context).orEmpty()
         return (listOf(preferred) + providerOrder).distinct().filter { provider ->
-            // A genuinely absent key is simply unconfigured. An encrypted-store or
-            // Android Keystore read failure must propagate instead of being disguised
-            // as "no key", otherwise the UI silently hides a recoverable vault error.
-            if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
-            else ProviderKeyStore.has(context, provider)
+            val localConfigured = if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
+                else ProviderKeyStore.has(context, provider)
+            localConfigured || provider in cloudProviders
         }.take(5)
     }
 
@@ -117,11 +117,13 @@ object MainBrainProviderGateway {
         }
     }
 
-    fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String =
-        when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
+    fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
+        VoiceGatewaySettings.executeAgent(context, providerName, "Assistant", systemInstruction, prompt)?.let { return it }
+        return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text
             is ChatReplyResult.Error -> error("$providerName provider error: ${result.message}")
         }
+    }
     
     /** Returns provider text and any token counters explicitly reported by the provider. */
     fun completeWithUsage(
@@ -129,10 +131,14 @@ object MainBrainProviderGateway {
         providerName: String,
         systemInstruction: String,
         prompt: String
-    ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> =
-        when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
+    ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
+        VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let {
+            return it to null // Gateway /api/chat does not expose token usage; never estimate it.
+        }
+        return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text to result.tokenUsage
             is ChatReplyResult.Error -> error(providerName + " provider error: " + result.message)
         }
+    }
 
 }
