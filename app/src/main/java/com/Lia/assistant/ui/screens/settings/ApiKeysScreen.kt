@@ -70,6 +70,11 @@ private val apiKeyProviders = listOf(
 private fun readProviderKey(context: android.content.Context, provider: String): Boolean =
     if (provider == "GEMINI") ApiKeyStore.hasKey(context) else ProviderKeyStore.has(context, provider)
 
+private fun maskedProviderKey(context: android.content.Context, provider: String): String? {
+    val saved = if (provider == "GEMINI") ApiKeyStore.getKey(context) else ProviderKeyStore.get(context, provider)
+    return saved.takeIf { it.isNotBlank() }?.let { "Saved key: ••••••••${it.takeLast(4)}" }
+}
+
 private fun saveProviderKey(context: android.content.Context, provider: String, value: String) {
     if (provider == "GEMINI") ApiKeyStore.saveKey(context, value)
     else ProviderKeyStore.save(context, provider, value)
@@ -92,6 +97,14 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                 result.exceptionOrNull()?.let {
                     keyReadWarnings[provider.id] = "Saved key could not be decrypted. Re-enter the key if this device's Keystore was reset."
                 }
+            }
+        }
+    }
+    val savedKeyHints = remember {
+        mutableStateMapOf<String, String>().apply {
+            apiKeyProviders.forEach { provider ->
+                runCatching { maskedProviderKey(context, provider.id) }
+                    .getOrNull()?.let { put(provider.id, it) }
             }
         }
     }
@@ -162,6 +175,13 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                             }
                         }
                     )
+                    Text(
+                        text = savedKeyHints[provider.id]
+                            ?: if (configured[provider.id] == true) "Key saved securely on this phone. Enter a new key to replace it."
+                            else "Key is hidden while typing. Tap the eye icon to view it.",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         NovaButton(
                             text = "Save Key",
@@ -173,6 +193,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                     runCatching { saveProviderKey(context, provider.id, key) }
                                         .onSuccess {
                                             configured[provider.id] = true
+                                            savedKeyHints[provider.id] = "Saved key: ••••••••${key.takeLast(4)}"
                                             keyReadWarnings.remove(provider.id)
                                             inputs[provider.id] = ""
                                             revealed[provider.id] = false
@@ -192,6 +213,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                 runCatching { clearProviderKey(context, provider.id) }
                                     .onSuccess {
                                         configured[provider.id] = false
+                                        savedKeyHints.remove(provider.id)
                                         keyReadWarnings.remove(provider.id)
                                         inputs[provider.id] = ""
                                         Toast.makeText(context, "${provider.title} key removed.", Toast.LENGTH_SHORT).show()
@@ -253,7 +275,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        if (configured[provider.id] == true) "Status: Key saved on this device" else "Status: API key not added",
+                        if (configured[provider.id] == true) "Status: Key saved securely on this device • full key stays hidden" else "Status: API key not added",
                         color = colors.textSecondary,
                         fontSize = 11.sp
                     )

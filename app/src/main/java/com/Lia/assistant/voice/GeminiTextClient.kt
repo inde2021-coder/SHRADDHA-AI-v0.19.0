@@ -169,47 +169,68 @@ object GeminiTextClient {
             .post(requestBody)
             .build()
 
-        try {
-            internalHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val code = response.code
-                    val errorBody = response.body?.string() ?: ""
-                    val reason = runCatching {
-                        JSONObject(errorBody).optJSONObject("error")?.optString("message", "")
-                    }.getOrNull() ?: "HTTP error $code"
-                    return ChatReplyResult.Error(reason)
-                }
+        var lastTransientError: String? = null
+        for (attempt in 0..2) {
+            try {
+                internalHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val code = response.code
+                        val errorBody = response.body?.string().orEmpty()
+                        val providerReason = runCatching {
+                            JSONObject(errorBody).optJSONObject("error")?.optString("message", "")
+                        }.getOrNull().orEmpty().ifBlank { "HTTP error $code" }
+                        if (code in setOf(408, 425, 429, 500, 502, 503, 504) && attempt < 2) {
+                            lastTransientError = providerReason
+                            Thread.sleep(400L * (attempt + 1))
+                            return@use
+                        }
+                        val friendly = when (code) {
+                            429 -> "Gemini rate limit or quota reached (HTTP 429). Check Google AI Studio quota and billing, then try again."
+                            500, 502, 503, 504 -> "Gemini is temporarily busy or unavailable (HTTP $code). Please wait briefly and retry. $providerReason"
+                            else -> "Gemini request failed (HTTP $code): $providerReason"
+                        }
+                        return ChatReplyResult.Error(friendly)
+                    }
 
-                val body = response.body?.string() ?: ""
-                val json = JSONObject(body)
-                val candidates = json.optJSONArray("candidates")
-                if (candidates == null || candidates.length() == 0) {
-                    return ChatReplyResult.Error("The model returned an empty response.")
-                }
+                    val body = response.body?.string().orEmpty()
+                    val json = JSONObject(body)
+                    val candidates = json.optJSONArray("candidates")
+                    if (candidates == null || candidates.length() == 0) {
+                        return ChatReplyResult.Error("The model returned an empty response.")
+                    }
 
-                val firstCandidate = candidates.getJSONObject(0)
-                val content = firstCandidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val text = parts.getJSONObject(0).optString("text", "")
-                    return if (text.isNotBlank()) {
+                    val firstCandidate = candidates.getJSONObject(0)
+                    val content = firstCandidate.optJSONObject("content")
+                    val parts = content?.optJSONArray("parts")
+                    if (parts != null && parts.length() > 0) {
+                        val text = parts.getJSONObject(0).optString("text", "")
+                        if (text.isBlank()) return ChatReplyResult.Error("The model returned an empty reply.")
                         val usage = json.optJSONObject("usageMetadata")?.let { metadata ->
                             val input = metadata.optLong("promptTokenCount", -1L)
                             val output = metadata.optLong("candidatesTokenCount", -1L)
                             if (input >= 0L && output >= 0L) ProviderTokenUsage("GEMINI", modelName.removePrefix("models/"), input, output) else null
                         }
-                        ChatReplyResult.Success(text, usage)
-                    } else {
-                        ChatReplyResult.Error("The model returned an empty reply.")
+                        return ChatReplyResult.Success(text, usage)
                     }
+                    return ChatReplyResult.Error("The response was filtered or unavailable.")
                 }
-
-                return ChatReplyResult.Error("The response was filtered or unavailable.")
+                if (attempt < 2 && lastTransientError != null) continue
+            } catch (e: IOException) {
+                if (attempt < 2) {
+                    lastTransientError = e.localizedMessage ?: "network error"
+                    Thread.sleep(400L * (attempt + 1))
+                    continue
+                }
+                return ChatReplyResult.Error("Couldn't reach Gemini after 3 attempts. Check your internet connection and try again.")
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return ChatReplyResult.Error("Gemini retry was interrupted.")
+            } catch (e: Exception) {
+                return ChatReplyResult.Error("Failed to communicate with Gemini: ${e.localizedMessage ?: "Unknown error"}")
             }
-        } catch (e: IOException) {
-            return ChatReplyResult.Error("Couldn't reach Gemini. Please check your internet connection.")
-        } catch (e: Exception) {
-            return ChatReplyResult.Error("Failed to communicate with Gemini: ${e.localizedMessage ?: "Unknown error"}")
         }
+        return ChatReplyResult.Error(
+            "Gemini is still experiencing high demand or temporary server errors after 3 attempts. Please wait and try again. ${lastTransientError.orEmpty()}"
+        )
     }
 }
