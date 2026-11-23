@@ -49,6 +49,7 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
     var projectName by remember { mutableStateOf("LED Series Circuit") }
     var seriesLedCount by remember { mutableStateOf("1") }
     var netlist by remember { mutableStateOf("") }
+    var circuitNetlist by remember { mutableStateOf("V1 VIN 0 DC 12\\nR1 VIN VOUT 10k\\nR2 VOUT 0 10k\\n.op\\n.end") }
     var pendingNetlist by remember { mutableStateOf("") }
     var exportText by remember { mutableStateOf("") }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -118,6 +119,25 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
                 result = if (calculation != null) {
                     "Unloaded output: ${fmt.format(calculation.outputVolts)} V\nDivider current: ${fmt.format(calculation.currentAmps)} A\nTotal resistance: ${fmt.format(calculation.totalResistanceOhms)} Ω\nLoaded output will be lower; include load impedance in a real design."
                 } else "Enter finite input voltage and positive resistor values; totals must remain in numeric range."
+            }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+        }
+        NovaGlassCard {
+            Text("LOCAL DC CIRCUIT SIMULATOR", color = colors.accent)
+            Text("Supported: resistors (R), DC voltage sources (V), DC current sources (I), ground node 0. This is a bounded DC operating-point solver, not transient/AC SPICE.", color = colors.textSecondary)
+            OutlinedTextField(value = circuitNetlist, onValueChange = { circuitNetlist = it.take(32_000) }, label = { Text("SPICE-compatible DC netlist") }, modifier = Modifier.fillMaxWidth(), minLines = 6)
+            NovaButton(text = "RUN LOCAL DC SIMULATION", onClick = {
+                result = CircuitDcSolver.solve(circuitNetlist).fold(
+                    onSuccess = { solved ->
+                        "DC operating point\\n" + solved.nodeVoltages.entries.joinToString("\\n") { (node, volts) -> "V($node) = ${fmt.format(volts)} V" } +
+                            if (solved.voltageSourceCurrents.isEmpty()) "" else "\\n\\nVoltage source currents\\n" +
+                                solved.voltageSourceCurrents.entries.joinToString("\\n") { (name, amps) -> "I($name) = ${fmt.format(amps)} A" }
+                    },
+                    onFailure = { "Simulation failed: ${it.message ?: "invalid circuit"}" }
+                )
+            }, modifier = Modifier.fillMaxWidth())
+            NovaButton(text = "EXPORT SIMULATION NETLIST", onClick = {
+                pendingNetlist = circuitNetlist
+                netlistLauncher.launch("shraddha-dc-circuit.cir")
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
         }
         NovaGlassCard {
