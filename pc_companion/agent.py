@@ -93,6 +93,14 @@ class PcCompanionApp:
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
+        now_epoch = time.time()
+        for item in self.config.get("remoteActionReceipts", []):
+            try:
+                peer, action_id, timestamp = item
+                if isinstance(peer, str) and isinstance(action_id, str) and now_epoch - float(timestamp) <= 600:
+                    self.seen_remote_actions[(peer, action_id)] = now_epoch - max(0.0, now_epoch - float(timestamp))
+            except (TypeError, ValueError):
+                continue
         self.monitor_labels = self._monitor_labels()
         saved_monitor = str(self.config.get("monitorIndex", 1))
         initial_monitor = next((label for label in self.monitor_labels if label.split(":", 1)[0] == saved_monitor), self.monitor_labels[min(1, len(self.monitor_labels) - 1)])
@@ -187,7 +195,7 @@ class PcCompanionApp:
             return None
 
     def _claim_remote_action(self, peer_id, action_id):
-        now = time.monotonic()
+        now = time.time()
         for key, seen_at in list(self.seen_remote_actions.items()):
             if now - seen_at > 600:
                 self.seen_remote_actions.pop(key, None)
@@ -198,7 +206,20 @@ class PcCompanionApp:
             oldest = min(self.seen_remote_actions, key=self.seen_remote_actions.get)
             self.seen_remote_actions.pop(oldest, None)
         self.seen_remote_actions[key] = now
+        # Persist bounded replay receipts so restarting the Windows companion does not
+        # reopen the ten-minute replay window for an already accepted remote command.
+        self.config["remoteActionReceipts"] = [
+            [peer, action, timestamp]
+            for (peer, action), timestamp in sorted(self.seen_remote_actions.items(), key=lambda item: item[1])
+        ][-4096:]
+        try:
+            self._save_config()
+        except Exception as exc:
+            self.seen_remote_actions.pop(key, None)
+            self.events.put(("status", "Remote action rejected: replay protection could not be persisted."))
+            return False
         return True
+
     def _load_config(self):
         try:
             return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
