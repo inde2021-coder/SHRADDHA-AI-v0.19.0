@@ -26,7 +26,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed project areas
+    runs-on: ubuntu-24.04
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+      backend: ${{ steps.filter.outputs.backend }}
+      firebase: ${{ steps.filter.outputs.firebase }}
+      windows: ${{ steps.filter.outputs.windows }}
+      storyboard: ${{ steps.filter.outputs.storyboard }}
+      voice: ${{ steps.filter.outputs.voice }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            android:
+              - 'app/**'
+              - 'gradle/**'
+              - 'gradlew'
+              - 'build.gradle*'
+              - 'settings.gradle*'
+              - 'gradle.properties'
+            backend:
+              - 'backend/**'
+            firebase:
+              - 'firebase/**'
+              - 'firebase.json'
+            windows:
+              - 'pc_companion/**'
+              - 'desktop-companion/**'
+              - 'app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt'
+              - 'app/src/main/java/com/Lia/assistant/voice/LiaToolCatalog.kt'
+              - 'app/src/main/java/in/shraddha/ai/MainActivity.kt'
+            storyboard:
+              - 'reference/lia-app-recording/**'
+              - 'scripts/create_reference_storyboard.py'
+            voice:
+              - 'voice-engine/**'
+
   android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     name: Android unit tests and APK/AAB build
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -42,9 +84,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
-
-      - name: Validate backend JavaScript syntax
-        run: node --check backend/server.js
 
       - name: Run Android unit tests and build debug APK
         run: |
@@ -122,6 +161,8 @@ jobs:
           retention-days: 14
 
   backend-tests:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     name: Backend API and policy tests
     runs-on: ubuntu-24.04
     steps:
@@ -153,6 +194,8 @@ jobs:
           exit 1
 
   firebase-rules-tests:
+    needs: changes
+    if: needs.changes.outputs.firebase == 'true'
     name: Firebase Firestore, Storage and RTDB rules tests
     runs-on: ubuntu-24.04
     steps:
@@ -172,6 +215,8 @@ jobs:
         run: ./node_modules/.bin/firebase emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-ai "npm test"
 
   windows-companion-tests:
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
     name: Windows PC companion tests and EXE packaging
     runs-on: windows-latest
     steps:
@@ -198,6 +243,8 @@ jobs:
           retention-days: 14
 
   lia-reference-storyboard:
+    needs: changes
+    if: needs.changes.outputs.storyboard == 'true'
     name: Build visual storyboard from main-branch LIA reference video
     runs-on: ubuntu-24.04
     steps:
@@ -226,6 +273,8 @@ jobs:
           retention-days: 14
 
   voice-engine-check:
+    needs: changes
+    if: needs.changes.outputs.voice == 'true'
     name: Custom voice engine source validation
     runs-on: ubuntu-24.04
     steps:
