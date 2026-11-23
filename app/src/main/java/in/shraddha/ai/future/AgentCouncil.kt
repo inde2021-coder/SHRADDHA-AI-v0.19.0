@@ -30,7 +30,8 @@ data class CouncilExecutionReport(
     val completed: Boolean,
     val finalAnswer: String,
     val providerUsage: List<CouncilProviderUsage> = emptyList(),
-    val elapsedMs: Long = 0
+    val elapsedMs: Long = 0,
+    val tokenUsage: List<com.Lia.assistant.voice.ProviderTokenUsage> = emptyList()
 )
 
 object AgentCouncil {
@@ -249,7 +250,8 @@ object AgentCouncil {
         onStageCompleted: (role: String, provider: String, output: String) -> Unit = { _, _, _ -> },
         resumeStages: Map<String, CouncilSavedStage> = emptyMap(),
         budget: CouncilExecutionBudget = CouncilExecutionBudget(),
-        onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> }
+        onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> },
+        onTokenUsage: (com.Lia.assistant.voice.ProviderTokenUsage) -> Unit = { }
     ): Result<CouncilExecutionReport> {
         val configured = runCatching { MainBrainProviderGateway.configuredProviders(context) }
             .getOrElse { error ->
@@ -261,9 +263,18 @@ object AgentCouncil {
         val selected = preferredProviders.map { it.uppercase() }.distinct().filter { it in configured }
         if (selected.isEmpty()) return Result.failure(IllegalStateException("No selected AI provider API key is configured. Add provider keys in Settings."))
         val assistantName = getAssistantName(context)
-        return executeParallel(goal, language, selected, specialistCount, { _, provider, system, prompt ->
-            withContext(Dispatchers.IO) { MainBrainProviderGateway.complete(context, provider, system, prompt) }
+        val capturedUsage = java.util.Collections.synchronizedList(mutableListOf<com.Lia.assistant.voice.ProviderTokenUsage>())
+        val execution = executeParallel(goal, language, selected, specialistCount, { _, provider, system, prompt ->
+            withContext(Dispatchers.IO) {
+                val (text, usage) = MainBrainProviderGateway.completeWithUsage(context, provider, system, prompt)
+                usage?.let {
+                    capturedUsage.add(it)
+                    onTokenUsage(it)
+                }
+                text
+            }
         }, onProgress, shouldContinue, assistantName, onStageCompleted, resumeStages, budget, onProviderCall)
+        return execution.map { report -> report.copy(tokenUsage = capturedUsage.toList()) }
     }
 
     /** Runs the pipeline through the user's currently selected, configured AI provider. */
