@@ -56,6 +56,16 @@ test('authorizes only an exact signed declarative action after explicit approval
   assert.throws(() => authorizePluginAction(tampered, trustedKeys, 0, true), /signature verification failed/);
 });
 
+test('supports safe clipboard and public HTTPS actions but rejects unsafe URLs', () => {
+  const copy = signed({ capabilities: ['copy_text'], actions: [{ type: 'copy_text', title: 'Copy', body: 'Approved text' }] });
+  assert.equal(verifyPluginManifest(copy, trustedKeys).actions[0].type, 'copy_text');
+  const link = signed({ capabilities: ['open_https_url'], actions: [{ type: 'open_https_url', title: 'Open docs', url: 'https://developer.android.com' }] });
+  assert.equal(verifyPluginManifest(link, trustedKeys).actions[0].type, 'open_https_url');
+  for (const url of ['http://example.com', 'https://localhost', 'https://127.0.0.1', 'https://user:pass@example.com']) {
+    assert.throws(() => validatePluginManifest(signed({ capabilities: ['open_https_url'], actions: [{ type: 'open_https_url', title: 'Unsafe', url }] })), /public HTTPS/);
+  }
+});
+
 test('rejects unused capabilities and unknown action or manifest fields', () => {
   assert.throws(() => validatePluginManifest(signed({ capabilities: ['read_memory'] })), /unsupported capability/);
   assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'create_note', title: 'x', body: 'y', extra: true }] })), /unsupported field/);
