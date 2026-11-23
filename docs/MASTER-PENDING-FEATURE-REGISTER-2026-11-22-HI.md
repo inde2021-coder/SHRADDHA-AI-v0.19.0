@@ -206,3 +206,10 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - The integration workflow now explicitly includes the pending feature branch in its source-branch ancestry guard.
 - No build, emulator test, instrumentation test or release verification has been run after these edits. Keep all three items marked pending until a consolidated run provides evidence.
 - Corrected multi-agent stage prompt formatting: the parallel Planner/Researcher/Specialist/Critic/Verifier pipeline now sends actual line breaks between goal, role, responsibility and prior-stage evidence instead of literal \\n text. This is a source correction only; provider execution and regression tests remain pending.
+
+## 23 November 2026 — Credential persistence hardening (source-only, not tested)
+
+- Gemini API key save and removal now use synchronous SharedPreferences commits and fail explicitly if the encrypted value cannot be durably persisted. This prevents the settings UI from reporting a successful save/remove while the write is still only queued asynchronously.
+- Voice Gateway encrypted configuration save and clear now use the same durable-commit check. A failed disk write is surfaced as an error rather than being silently treated as success.
+- Android Keystore AES-GCM encryption and existing encrypted storage formats are unchanged; no plaintext credential storage was added.
+- No tests/builds were run, in accordance with the current feature-completion instruction. Verify these paths in the consolidated test/build pass, including key migration, save/remove, app restart and Keystore-loss behavior.
