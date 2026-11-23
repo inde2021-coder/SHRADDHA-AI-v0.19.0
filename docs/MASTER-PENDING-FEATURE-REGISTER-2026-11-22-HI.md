@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Device Link's direct Visual Lens analysis endpoint now rejects empty or oversized images above 2.5 MB before Base64 serialization/network dispatch, matching the screen-share frame budget.
+
+
 - Operator console's event/recovery log now has its own scrollable, bordered teal-glass viewport inside the full-page scroll layout, preventing long audit messages from pushing controls off-screen.
 
 
