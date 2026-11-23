@@ -6,6 +6,8 @@ on:
       - feature/complete-pending-shraddha-features
     paths:
       - "pc_companion/**"
+      - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
+      - "app/src/main/java/com/Lia/assistant/voice/LiaToolCatalog.kt"
       - "app/src/main/java/in/shraddha/ai/MainActivity.kt"
       - ".github/workflows/pc-hardware-agent-ci.yml"
   workflow_dispatch:
@@ -38,7 +40,7 @@ jobs:
         run: python -m unittest discover -s pc_companion/tests -t . -v
 
       - name: Compile Windows companion source
-        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py
+        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
 
       - name: Build Windows PC companion executable
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
