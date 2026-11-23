@@ -213,7 +213,7 @@ fun AgentCouncilScreen(
             Text("Specialist agents: ${specialists.toInt()}", color = colors.textPrimary, fontSize = 13.sp)
             Slider(value = specialists, onValueChange = {
                 specialists = it
-                maxCalls = maxOf(maxCalls, it.toInt() + 4).coerceAtMost(9).toFloat()
+                maxCalls = maxOf(maxCalls, (it.toInt() + 4).toFloat()).coerceAtMost(9f)
                 if (selectedProviders.isNotEmpty()) {
                     val requiredPerProvider = ((it.toInt() + 4) + selectedProviders.size - 1) / selectedProviders.size
                     callsPerProvider = maxOf(callsPerProvider, requiredPerProvider.toFloat())
