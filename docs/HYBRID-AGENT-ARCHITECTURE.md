@@ -42,4 +42,4 @@ The router balances call counts while honoring role preferences. It uses only co
 
 ## Current limitations
 
-The gateway currently provides synchronous provider calls and the app's local durable workflow checkpoints. It is not a general-purpose cloud task queue. Remote desktop media streaming and a full Windows screen-control session remain PC-specific and must not be moved into the Android APK. Play dynamic delivery requires a later source/module extraction and App Bundle validation before those modules can be called on-demand.
+The gateway currently provides synchronous provider calls with token-usage evidence returned to the app for budget enforcement; when usage is absent and a monthly cap is enabled, the app marks usage unknown and stops further council calls. The app also maintains local durable workflow checkpoints. It is not a general-purpose cloud task queue. Remote desktop media streaming and a full Windows screen-control session remain PC-specific and must not be moved into the Android APK. Play dynamic delivery requires a later source/module extraction and App Bundle validation before those modules can be called on-demand.
