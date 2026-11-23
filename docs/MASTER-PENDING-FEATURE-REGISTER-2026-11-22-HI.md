@@ -491,3 +491,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Added a MainActivity workspace for pasting user-approved source text, searching retrieved sections and reviewing citations. The UI clearly says this is local lexical retrieval and does not crawl URLs.
 - Added instrumentation tests for persistence across store recreation, source citation, encrypted-at-rest storage, consent enforcement and rejection of insecure HTTP source URIs. Tests have not been run.
 - This is not an embedding/vector database, automatic PDF/OCR ingestion, external-source crawler, semantic reranker or cross-device sync. Those remain separate implementation tasks; no semantic RAG capability is claimed.
+
+
+## 23 November 2026 — Windows PC keyboard shortcut path (source-only; verification pending)
+
+- Added a bounded `key_press` action to the Windows companion for Enter/Escape/Tab/arrows, selected Ctrl shortcuts and Alt+Tab/navigation. Arbitrary shell/system shortcuts are rejected.
+- Clipboard paste (`Ctrl+V`) is accepted only when the PC owner's separate typing permission is enabled. The companion still asks the local PC user to approve each remote action; Android sends the action over the mutually verified E2E peer channel.
+- Added Python policy tests and Device Center buttons for the allowlisted shortcuts. Python tests and Android compilation have not been run after this change.
+- This is not full remote desktop parity: continuous keyboard injection, arbitrary key combinations, multi-monitor selection, pointer-lock and full session UX remain incomplete.
