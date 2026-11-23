@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice connection startup now uses a distinct cyan-blue edge glow; violet remains for listening/processing, pink for speaking and red for errors, so connection is not visually represented as active listening.
+
+
 - Gemini, Voice Gateway and Device Link credential writers now also zero their AES-GCM IV arrays after the encoded IV is durably persisted, completing cleanup of their short-lived encryption buffers.
 
 
