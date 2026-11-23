@@ -47,7 +47,10 @@ export async function listEncryptedCallRecords(collection, key, { limit = 30, no
   const calls = [];
   for (const doc of snapshot.docs || []) {
     const data = doc.data();
-    if (!data || data.version !== 1 || !data.expiresAt || new Date(data.expiresAt).getTime() <= now) continue;
+    const expiryMs = data?.expiresAt && typeof data.expiresAt.toDate === 'function'
+      ? data.expiresAt.toDate().getTime()
+      : data?.expiresAt instanceof Date ? data.expiresAt.getTime() : Date.parse(data?.expiresAt);
+    if (!data || data.version !== 1 || !Number.isFinite(expiryMs) || expiryMs <= now) continue;
     try {
       const envelope = data.envelope;
       const storageId = doc.id;
