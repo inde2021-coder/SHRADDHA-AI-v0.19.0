@@ -162,6 +162,7 @@ fun ArMappingScreen(navController: NavController) {
                             stats = sample
                         })
                         renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                        onResume()
                         surface = this
                     }
                 },
