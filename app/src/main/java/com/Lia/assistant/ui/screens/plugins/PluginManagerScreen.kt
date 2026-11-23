@@ -116,7 +116,7 @@ fun PluginManagerScreen(navController: NavController) {
                         val action = actions.optJSONObject(i) ?: continue
                         Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                             Text("${i + 1}. ${action.optString("type")}", color = colors.textPrimary)
-                            Text(action.optString("title") + " — " + action.optString("body"), color = colors.textSecondary)
+                            Text(action.optString("title") + " — " + action.optString("body") + if (action.has("url")) " — " + action.optString("url") else "", color = colors.textSecondary)
                             NovaButton(
                                 text = "Review & run this action",
                                 onClick = { pendingIndex = i },
@@ -138,7 +138,7 @@ fun PluginManagerScreen(navController: NavController) {
         AlertDialog(
             onDismissRequest = { if (!busy) pendingIndex = null },
             title = { Text("Approve plugin action?") },
-            text = { Text(action?.let { it.optString("type") + "\\n" + it.optString("title") + "\\n" + it.optString("body") } ?: "Action unavailable") },
+            text = { Text(action?.let { it.optString("type") + "\\n" + it.optString("title") + "\\n" + it.optString("body") + if (it.has("url")) "\\n" + it.optString("url") else "" } ?: "Action unavailable") },
             confirmButton = { TextButton(onClick = { execute(index) }, enabled = !busy) { Text("Approve & run") } },
             dismissButton = { TextButton(onClick = { pendingIndex = null }, enabled = !busy) { Text("Cancel") } }
         )
