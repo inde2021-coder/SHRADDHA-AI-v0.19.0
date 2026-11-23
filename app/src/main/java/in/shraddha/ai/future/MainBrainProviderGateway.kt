@@ -23,15 +23,16 @@ import org.json.JSONObject
  * Provider credentials remain in their existing encrypted stores; this class never logs them.
  */
 object MainBrainProviderGateway {
-    val supportedProviders: Set<String> =
-        setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+    private val providerOrder = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+    val supportedProviders: Set<String> = providerOrder.toSet()
 
     fun configuredProviders(context: Context, preferredProvider: String? = null): List<String> {
         val preferred = (preferredProvider
             ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI"))
             .uppercase()
         require(preferred in supportedProviders) { "Unsupported preferred AI provider: $preferred" }
-        return (listOf(preferred) + supportedProviders).distinct().filter { provider ->
+        // Keep fallback order stable across devices and runtime implementations.
+        return (listOf(preferred) + providerOrder).distinct().filter { provider ->
             runCatching {
                 if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
                 else ProviderKeyStore.has(context, provider)
