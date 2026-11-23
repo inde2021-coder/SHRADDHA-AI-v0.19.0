@@ -33,6 +33,16 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var command: EditText
     private lateinit var assistantName: String
     private var speechLanguage = "hi-IN"
+    private var torchEnabled = false
+    private val cameraPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) runCatching {
+            torchEnabled = !torchEnabled
+            status.text = MobileHardwareController.setTorch(this, torchEnabled)
+        }.onFailure { status.text = "Flashlight control failed: ${it.message}" }
+        else status.text = "Flashlight के लिए Camera permission नहीं मिली।"
+    }
     private val voiceResultLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -113,6 +123,12 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         root.addView(action("System Settings • display / sound / permissions") {
             startActivity(Intent(Settings.ACTION_SETTINGS))
         })
+        root.addView(action("📱 Mobile Hardware • Battery / RAM / Storage / Network") { showMobileHardwareStatus() })
+        root.addView(action("🔆 Phone Brightness • Set 0–100%") { askMobilePercent("brightness") })
+        root.addView(action("🔊 Phone Volume • Set 0–100%") { askMobilePercent("volume") })
+        root.addView(action("🔦 Flashlight • ON / OFF") { togglePhoneTorch() })
+        root.addView(action("📶 Wi-Fi / Bluetooth / Internet / NFC") { showConnectivityControls() })
+        root.addView(action("⚙️ Display / Sound / Battery / Location / Permissions") { showSystemControls() })
         root.addView(action("Notes + Hindi / English OCR") { startActivity(Intent(this, NoteOcrActivity::class.java)) })
         status = TextView(this).apply {
             text = "तैयार। कुछ controls के लिए Accessibility service चालू करें। Android protected settings को सीधे बदलने के बजाय system settings खोलेगा।"
@@ -167,6 +183,32 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         if (text.isBlank()) { status.text = "पहले command बोलें या लिखें।"; return }
         val lower = text.lowercase(Locale.ROOT)
         when {
+            lower.matches(Regex("^(?:set )?(?:phone )?volume (?:100|[0-9]{1,2})%?$")) ||
+                lower.matches(Regex("^(?:फोन|मोबाइल) का वॉल्यूम (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) -> {
+                val percent = lower.filter { it.isDigit() }.toInt()
+                runCatching { status.text = MobileHardwareController.setMediaVolume(this, percent) }
+                    .onFailure { status.text = it.message ?: "Volume control failed." }
+            }
+            lower.matches(Regex("^(?:set )?(?:phone )?brightness (?:100|[0-9]{1,2})%?$")) ||
+                lower.matches(Regex("^(?:फोन|मोबाइल) की ब्राइटनेस (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) -> {
+                val percent = lower.filter { it.isDigit() }.toInt()
+                runCatching { status.text = MobileHardwareController.setBrightness(this, percent) }
+                    .onFailure { status.text = it.message ?: "Brightness control failed." }
+            }
+            lower in listOf("flashlight on", "torch on", "टॉर्च चालू करो", "फ्लैशलाइट चालू करो") -> {
+                torchEnabled = true
+                runCatching { status.text = MobileHardwareController.setTorch(this, true) }
+                    .onFailure { status.text = "Flashlight failed: ${it.message}" }
+            }
+            lower in listOf("flashlight off", "torch off", "टॉर्च बंद करो", "फ्लैशलाइट बंद करो") -> {
+                torchEnabled = false
+                runCatching { status.text = MobileHardwareController.setTorch(this, false) }
+                    .onFailure { status.text = "Flashlight failed: ${it.message}" }
+            }
+            lower in listOf("mobile hardware status", "phone status", "फोन की जानकारी बताओ", "मोबाइल का स्टेटस बताओ") -> showMobileHardwareStatus()
+            lower in listOf("wifi settings", "वाईफाई सेटिंग खोलो") -> openMobileSetting("wifi")
+            lower in listOf("bluetooth settings", "ब्लूटूथ सेटिंग खोलो") -> openMobileSetting("bluetooth")
+            lower in listOf("internet settings", "इंटरनेट सेटिंग खोलो") -> openMobileSetting("internet")
             lower in listOf("आवाज बढ़ाओ", "volume up", "volume बढ़ाओ", "आवाज तेज करो") -> {
                 (getSystemService(Context.AUDIO_SERVICE) as AudioManager).adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                 status.text = "Volume बढ़ाया।"
@@ -195,6 +237,69 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                 status.text = "Command App Operator में भेजा गया। चलाने से पहले समीक्षा करें।"
             }
         }
+    }
+
+    private fun askMobilePercent(kind: String) {
+        val isBrightness = kind == "brightness"
+        val dialog = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = "0–100"
+            setText(if (isBrightness) "50" else "50")
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(if (isBrightness) "Phone brightness %" else "Phone volume %")
+            .setView(dialog)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Apply") { _, _ ->
+                val value = dialog.text.toString().toIntOrNull()
+                if (value == null || value !in 0..100) {
+                    status.text = "कृपया 0 से 100 के बीच संख्या दें।"
+                } else runCatching {
+                    status.text = if (isBrightness) MobileHardwareController.setBrightness(this, value)
+                                  else MobileHardwareController.setMediaVolume(this, value)
+                }.onFailure { status.text = it.message ?: "Control failed." }
+            }.show()
+    }
+
+    private fun togglePhoneTorch() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+            return
+        }
+        torchEnabled = !torchEnabled
+        runCatching { status.text = MobileHardwareController.setTorch(this, torchEnabled) }
+            .onFailure { torchEnabled = false; status.text = "Flashlight control failed: ${it.message}" }
+    }
+
+    private fun showMobileHardwareStatus() {
+        runCatching {
+            val data = MobileHardwareController.status(this)
+            status.text = data.entries.joinToString("\\n") { "${it.key}: ${it.value}" }
+        }.onFailure { status.text = "Mobile hardware status unavailable: ${it.message}" }
+    }
+
+    private fun openMobileSetting(name: String) {
+        runCatching {
+            startActivity(MobileHardwareController.settingsIntent(name))
+            status.text = "${name.replaceFirstChar { it.uppercase() }} settings Android system में खोली गई।"
+        }.onFailure {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+            status.text = "इस device पर direct settings panel उपलब्ध नहीं; main Settings खोली।"
+        }
+    }
+
+    private fun showConnectivityControls() {
+        val labels = arrayOf("Wi-Fi", "Bluetooth", "Internet / SIM", "NFC")
+        val keys = arrayOf("wifi", "bluetooth", "internet", "nfc")
+        android.app.AlertDialog.Builder(this).setTitle("Connectivity controls")
+            .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
+    }
+
+    private fun showSystemControls() {
+        val labels = arrayOf("Display / Brightness", "Sound", "Battery saver", "Location", "Accessibility", "Notification access", "Apps", "Storage", "Date & time", "Language", "Security")
+        val keys = arrayOf("display", "sound", "battery", "location", "accessibility", "notifications", "apps", "storage", "date", "language", "security")
+        android.app.AlertDialog.Builder(this).setTitle("Phone system controls")
+            .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
     }
 
     private fun openMainPage(page: String) {
