@@ -20,21 +20,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Lia.assistant.license.AccessKeyManager
+import com.Lia.assistant.ui.theme.LocalNovaColors
+import com.Lia.assistant.ui.theme.depthSurface
 
 @Composable
 fun AccessibilitySettingsRow(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val colors = LocalNovaColors.current
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF17143A))
+            .depthSurface(shape = shape, elevation = 3.dp, rimColor = colors.rimLight)
+            .clip(shape)
+            .background(colors.surfaceGlass)
             .clickable {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -48,19 +52,19 @@ fun AccessibilitySettingsRow(modifier: Modifier = Modifier) {
                 text = "Shraddha AI — Device Control",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFEEE9FF)
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "Enable this service for voice app control, screen reading, taps, typing and gestures. A separate optional service is only for WhatsApp send verification.",
                 fontSize = 13.sp,
-                color = Color(0xFFA7A0CC)
+                color = colors.textSecondary
             )
         }
         Text(
             text = "Configure",
             fontSize = 13.sp,
-            color = Color(0xFFFFB547),
+            color = colors.accent,
             fontWeight = FontWeight.Bold
         )
     }
@@ -69,26 +73,29 @@ fun AccessibilitySettingsRow(modifier: Modifier = Modifier) {
 @Composable
 fun AccessKeyBanner(onActivateClick: () -> Unit, modifier: Modifier = Modifier) {
     val info by AccessKeyManager.info.collectAsState()
+    val colors = LocalNovaColors.current
     if (!info.active || info.blocked) {
+        val shape = RoundedCornerShape(16.dp)
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF5A1E28))
+                .depthSurface(shape = shape, elevation = 3.dp, rimColor = colors.rimLight)
+                .clip(shape)
+                .background(colors.surfaceGlass)
                 .clickable { onActivateClick() }
                 .padding(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (info.blocked) "Access Key Blocked - Tap to resolve" else "Access Key Required - Tap to activate",
-                    color = Color(0xFFFFE0E3),
+                    color = if (info.blocked) colors.error else colors.textPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = "Activate",
-                    color = Color(0xFFFFB547),
+                    color = colors.accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -100,13 +107,13 @@ fun AccessKeyBanner(onActivateClick: () -> Unit, modifier: Modifier = Modifier) 
 @Composable
 fun AccessKeySection(modifier: Modifier = Modifier) {
     val info by AccessKeyManager.info.collectAsState()
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF17143A))
-            .padding(16.dp)
+    val colors = LocalNovaColors.current
+    NovaGlassCard(
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = 16.dp,
+        elevation = 3.dp
     ) {
+        Column {
         Text(
             text = "License & Access Key",
             fontSize = 15.sp,
