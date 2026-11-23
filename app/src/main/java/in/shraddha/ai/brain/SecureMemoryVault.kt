@@ -15,9 +15,12 @@ class SecureMemoryVault(context: Context) {
     private val prefs = context.getSharedPreferences("shraddha_secure_vault", Context.MODE_PRIVATE)
     private val alias = "shraddha_memory_aes_v1"
 
-    private fun key(): SecretKey {
+    private fun keyForEncryption(slot: String): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
+        require(!prefs.contains("slot_$slot") && !(slot == "memory" && prefs.contains("memory"))) {
+            "Secure memory encryption key is missing; refusing to overwrite existing encrypted memory."
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -37,7 +40,7 @@ class SecureMemoryVault(context: Context) {
         val clear = text.toByteArray(Charsets.UTF_8)
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, key())
+            cipher.init(Cipher.ENCRYPT_MODE, keyForEncryption(slot))
             val encrypted = cipher.doFinal(clear)
             try {
                 val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." + Base64.encodeToString(encrypted, Base64.NO_WRAP)
