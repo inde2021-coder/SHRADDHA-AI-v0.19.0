@@ -44,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('..', import.meta.url),
-    env: { ...process.env, TRUST_PROXY: 'true', PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '', CALL_TRANSCRIPTS_ENABLED: 'false', SHRADDHA_CALL_AGENT_NAME: '', FIREBASE_SERVICE_ACCOUNT_JSON: '', FIREBASE_SERVICE_ACCOUNT_BASE64: '', CALL_HISTORY_ENCRYPTION_KEY: '' },
+    env: { ...process.env, TRUST_PROXY: 'true', PORT: String(port), GATEWAY_TOKEN: TOKEN, EDESY_STREAM_TOKEN: 'e'.repeat(40), OPENAI_API_KEY: 'sk-test-openai-key-1234567890', EDESY_API_KEY: '', EDESY_STREAM_URL: '', PUBLIC_ORIGIN: '', CALL_TRANSCRIPTS_ENABLED: 'false', SHRADDHA_CALL_AGENT_NAME: '', FIREBASE_SERVICE_ACCOUNT_JSON: '', FIREBASE_SERVICE_ACCOUNT_BASE64: '', CALL_HISTORY_ENCRYPTION_KEY: '', TWILIO_ACCOUNT_SID: '', TWILIO_AUTH_TOKEN: '', TWILIO_SMS_FROM: '', TWILIO_WHATSAPP_FROM: '' },
     stdio: 'ignore'
   });
   const deadline = Date.now() + 10_000;
@@ -84,6 +84,29 @@ test('AI gateway rejects missing and incorrect bearer credentials', async () => 
     assert.equal(response.status, 401);
     assert.match((await response.json()).error, /authentication/i);
   }
+});
+
+test('SMS and WhatsApp relay requires exact preview, E.164 recipient and a unique request ID', async () => {
+  const endpoint = `${baseUrl}/api/messages/send`;
+  const headers = { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` };
+  const base = { channel: 'whatsapp', to: '+919876543210', text: 'नमस्ते', preview: 'नमस्ते', confirmed: true, requestId: 'message_request_123456' };
+
+  const unauthorized = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(base) });
+  assert.equal(unauthorized.status, 401);
+
+  const unconfirmed = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, confirmed: false }) });
+  assert.equal(unconfirmed.status, 400);
+  assert.match((await unconfirmed.json()).error, /confirmation/i);
+
+  const invalidNumber = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, to: '9876543210', requestId: 'message_request_123457' }) });
+  assert.equal(invalidNumber.status, 400);
+  assert.match((await invalidNumber.json()).error, /E.164/i);
+
+  const missingProvider = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
+  assert.equal(missingProvider.status, 503);
+  const duplicate = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
+  assert.equal(duplicate.status, 409);
+  assert.equal((await duplicate.json()).duplicate, true);
 });
 
 test('Edesy call bridge readiness is private and reports missing external provisioning honestly', async () => {
