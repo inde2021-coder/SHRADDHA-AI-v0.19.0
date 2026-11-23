@@ -178,7 +178,30 @@ class BackgroundAgentWorker(
                         }
                     },
                     onTokenUsage = { usage ->
-                        tokenUsageRecords.add(usage)
+                        synchronized(usageLock) {
+                            tokenUsageRecords.add(usage)
+                            // Persist usage after every provider response, not only at final
+                            // completion. If WorkManager is stopped or the process dies, the
+                            // encrypted task record still contains the token evidence observed
+                            // so far. Unknown token counts remain absent; never synthesize them.
+                            val usageSnapshot = JSONObject()
+                                .put("calls", usageCounts.toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" })
+                                .put("tokens", JSONArray(tokenUsageRecords.map { item ->
+                                    JSONObject()
+                                        .put("provider", item.provider)
+                                        .put("model", item.model)
+                                        .put("inputTokens", item.inputTokens)
+                                        .put("outputTokens", item.outputTokens)
+                                }))
+                                .toString()
+                            evidence.saveStatus(
+                                schedulerTaskId,
+                                "RUNNING",
+                                "Attempt ${attempt + 1}: provider token usage securely recorded.",
+                                attempt = attempt,
+                                providerUsage = usageSnapshot
+                            ).getOrThrow()
+                        }
                     }
                 )
             }
