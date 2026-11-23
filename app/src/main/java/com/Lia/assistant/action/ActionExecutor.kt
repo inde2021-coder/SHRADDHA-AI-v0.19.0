@@ -244,27 +244,47 @@ object ActionExecutor {
                 }
 
                 val isWhatsApp = targetApp == "whatsapp"
-                val sendStatus = if (isWhatsApp) {
-                    val service = NovaAccessibilityService.instance
-                    if (service == null) "whatsapp_accessibility_required" else {
-                        val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
-                        if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
-                        else opened
+                val channel = if (isWhatsApp) "whatsapp" else "sms"
+                val gateway = VoiceGatewaySettings.get(context)
+                if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
+                    val providerResult = ProviderMessageClient.send(context, channel, phoneNumber, messageText)
+                    providerResult.onSuccess { receipt ->
+                        result.put("status", "accepted")
+                        result.put("action", "provider_message_accepted")
+                        result.put("provider", receipt.provider)
+                        result.put("provider_message_id", receipt.messageId)
+                        result.put("provider_status", receipt.status)
+                        result.put("recipient", phoneNumber)
+                        result.put("message", "Message accepted by the configured provider. Provider status: ${receipt.status}. This is not proof of handset delivery.")
+                    }.onFailure { error ->
+                        result.put("status", "error")
+                        result.put("action", "provider_message_failed")
+                        result.put("recipient", phoneNumber)
+                        result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. No local fallback was attempted, to avoid accidental duplicate delivery.")
                     }
                 } else {
-                    CommIntents.sendSms(context, phoneNumber, messageText)
+                    val sendStatus = if (isWhatsApp) {
+                        val service = NovaAccessibilityService.instance
+                        if (service == null) "whatsapp_accessibility_required" else {
+                            val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
+                            if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
+                            else opened
+                        }
+                    } else {
+                        CommIntents.sendSms(context, phoneNumber, messageText)
+                    }
+                    result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "accepted" else "error")
+                    result.put("action", sendStatus)
+                    result.put("recipient", phoneNumber)
+                    result.put("message", when (sendStatus) {
+                        "sms_sent_to_carrier" -> "SMS handed to Android's messaging service; handset delivery is not confirmed."
+                        "whatsapp_sent" -> "WhatsApp message submitted through the verified foreground chat."
+                        "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
+                        "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
+                        "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
+                        else -> "Message was not sent: $sendStatus"
+                    })
                 }
-                result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "success" else "error")
-                result.put("action", sendStatus)
-                result.put("recipient", phoneNumber)
-                result.put("message", when (sendStatus) {
-                    "sms_sent_to_carrier" -> "SMS handed to Android's messaging service for delivery."
-                    "whatsapp_sent" -> "WhatsApp message sent."
-                    "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
-                    "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
-                    "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
-                    else -> "Message was not sent: $sendStatus"
-                })
             }
 
             "read_screen" -> {
@@ -617,13 +637,27 @@ object ActionExecutor {
                                 result.put("message_preview", message.take(1000))
                                 result.put("message", "उपयोगकर्ता को यही नंबर और यही पूरा संदेश दिखाकर स्पष्ट अनुमति लें। अभी WhatsApp नहीं भेजा गया।")
                             } else {
-                                val service = NovaAccessibilityService.instance
-                                val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
-                                val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
-                                result.put("status", if (sent == "whatsapp_sent") "success" else "error")
-                                result.put("action", sent)
-                                result.put("recipient", number)
-                                result.put("message", if (sent == "whatsapp_sent") "WhatsApp message sent." else "Message not sent: $sent")
+                                val gateway = VoiceGatewaySettings.get(context)
+                                if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
+                                    ProviderMessageClient.send(context, "whatsapp", number, message)
+                                        .onSuccess { receipt ->
+                                            result.put("status", "accepted").put("action", "provider_message_accepted")
+                                                .put("provider", receipt.provider).put("provider_message_id", receipt.messageId)
+                                                .put("provider_status", receipt.status).put("recipient", number)
+                                                .put("message", "WhatsApp message accepted by provider. Handset delivery is not confirmed.")
+                                        }.onFailure { error ->
+                                            result.put("status", "error").put("action", "provider_message_failed")
+                                                .put("recipient", number).put("message", error.message ?: "Provider send failed.")
+                                        }
+                                } else {
+                                    val service = NovaAccessibilityService.instance
+                                    val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
+                                    val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
+                                    result.put("status", if (sent == "whatsapp_sent") "accepted" else "error")
+                                    result.put("action", sent)
+                                    result.put("recipient", number)
+                                    result.put("message", if (sent == "whatsapp_sent") "WhatsApp message submitted through the verified foreground chat." else "Message not sent: $sent")
+                                }
                             }
                         }
                     }
