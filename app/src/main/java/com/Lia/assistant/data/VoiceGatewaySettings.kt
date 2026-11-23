@@ -77,8 +77,10 @@ object VoiceGatewaySettings {
         val secret = gatewayToken.trim()
         require(secret.length in 16..512) { "Gateway token must contain 16-512 characters" }
         val (payload, iv) = encrypt(JSONObject().put("baseUrl", url).put("gatewayToken", secret).toString())
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(PAYLOAD, payload).putString(IV, iv).apply()
+        check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(PAYLOAD, payload).putString(IV, iv).commit()) {
+            "Could not persist the encrypted Voice Gateway settings."
+        }
     }
 
     fun clear(context: Context) {
