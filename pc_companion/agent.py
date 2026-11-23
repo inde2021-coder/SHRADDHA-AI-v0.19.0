@@ -27,7 +27,7 @@ import websocket
 from PIL import Image, ImageTk
 
 from actions import execute_action
-from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
+from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
 from e2e_crypto import DeviceE2ECrypto
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
@@ -690,6 +690,23 @@ class PcCompanionApp:
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "reason": "No active local PC approval."},
+                                       action_id, action_kind)
+                return
+            approval_summary = remote_action_approval_summary(peer_id, action)
+            if not approval_summary:
+                self.status_var.set("Blocked remote action: could not create a safe approval summary.")
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "result": "Local approval summary validation failed."},
+                                       action_id, action_kind)
+                return
+            approved = messagebox.askyesno(
+                "Shraddha AI • Approve this exact PC action",
+                approval_summary + "\\n\\nApprove only this single action? A separate approval is required for every command."
+            )
+            if not approved:
+                self.status_var.set("Remote action rejected by the local Windows user.")
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "result": "Rejected by local Windows user."},
                                        action_id, action_kind)
                 return
             self._execute(action, peer_id, action_id)
