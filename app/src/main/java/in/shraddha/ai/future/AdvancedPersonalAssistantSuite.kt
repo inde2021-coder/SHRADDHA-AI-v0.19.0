@@ -263,3 +263,36 @@ object SmartRoutineEngine {
         return Proposal(routine.id,routine.actionSummary,routine.requiresApproval)
     }
 }
+
+/**
+ * Encrypted routine registry. Trigger matching produces a proposal only; callers must obtain
+ * fresh approval and execute through the permission-aware workflow adapter.
+ */
+class PersistentRoutineRegistry(context: Context) {
+    private val store = PersonalKnowledgeStore(context.applicationContext)
+
+    fun save(routine: SmartRoutineEngine.Routine, updatedAt: Long = System.currentTimeMillis()): Result<Unit> =
+        store.saveRoutine(PersonalKnowledgeStore.Routine(
+            id = routine.id,
+            title = routine.title,
+            trigger = routine.trigger,
+            actionSummary = routine.actionSummary,
+            enabled = routine.enabled,
+            requiresApproval = routine.requiresApproval,
+            updatedAt = updatedAt
+        ))
+
+    fun all(): Result<List<SmartRoutineEngine.Routine>> = store.routines().map { records ->
+        records.map { SmartRoutineEngine.Routine(
+            id = it.id, title = it.title, trigger = it.trigger, actionSummary = it.actionSummary,
+            enabled = it.enabled, requiresApproval = it.requiresApproval
+        ) }
+    }
+
+    fun propose(routineId: String, observedTrigger: String): Result<SmartRoutineEngine.Proposal?> =
+        store.proposeRoutine(routineId, observedTrigger).map { proposal ->
+            proposal?.let { SmartRoutineEngine.Proposal(it.routineId, it.summary, it.requiresApproval) }
+        }
+
+    fun delete(routineId: String): Result<Boolean> = store.deleteRoutine(routineId)
+}
