@@ -1771,6 +1771,31 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { routineOutput.text = "Routine not saved: ${it.message}" }
             })
 
+            addView(actionButton("VIEW / DELETE SAVED ROUTINES", "Review encrypted routines; deletion is confirmation-gated") {
+                val registry = `in`.shraddha.ai.future.PersistentRoutineRegistry(this@MainActivity)
+                registry.all().onSuccess { routines ->
+                    if (routines.isEmpty()) {
+                        routineOutput.text = "No saved routines."
+                    } else {
+                        val labels = routines.map { "${it.title} • ${it.trigger}" }.toTypedArray()
+                        android.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Saved routines")
+                            .setItems(labels) { _, which ->
+                                val selected = routines[which]
+                                android.app.AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Delete routine?")
+                                    .setMessage("Delete '${selected.title}'? This cannot be undone.")
+                                    .setNegativeButton("Cancel", null)
+                                    .setPositiveButton("Delete") { _, _ ->
+                                        registry.delete(selected.id).onSuccess {
+                                            routineOutput.text = if (it) "Routine deleted." else "Routine was not found."
+                                        }.onFailure { error -> routineOutput.text = "Delete failed: ${error.message}" }
+                                    }.show()
+                            }.setNegativeButton("Close", null).show()
+                    }
+                }.onFailure { routineOutput.text = "Could not read saved routines: ${it.message}" }
+            })
+
             val knowledgeTitle = edit("Knowledge document title", "My reference notes")
             val knowledgeSource = edit("Source label", "User-selected document / notes")
             val knowledgeContent = edit("Paste approved source text", "यहाँ अपने चुने हुए document का text paste करें").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
