@@ -89,6 +89,9 @@ class PcCompanionApp:
         self.frame_photo = None
         self._pending_pairing_auth = False
         self.pending_pc_send = None
+        self.auto_reconnect_enabled = True
+        self.reconnect_attempts = 0
+        self.reconnect_scheduled = False
         self.pc_incoming = self._load_pc_incoming()
         self.remote_target_var = tk.StringVar()
         self.remote_action_var = tk.StringVar(value="home")
@@ -118,6 +121,8 @@ class PcCompanionApp:
         self.screen_thread = threading.Thread(target=self._screen_loop, daemon=True)
         self.screen_thread.start()
         self.root.after(120, self._drain_events)
+        # Reconnect saved pair automatically after app launch; no LAN discovery is required.
+        self.root.after(1500, self._auto_connect_saved_pair)
         self.root.bind("<F12>", lambda _event: self.disconnect(emergency=True))
         self.root.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -300,7 +305,40 @@ class PcCompanionApp:
                 }
             self.status_var.set(f"Pairing failed: {str(exc)[:180]}")
 
+    def _auto_connect_saved_pair(self):
+        if not self.auto_reconnect_enabled:
+            return
+        if self.config.get("sessionId") and self.config.get("deviceId") and self._token_for_saved_device():
+            self.connect_saved()
+
+    def _schedule_reconnect(self):
+        if not self.auto_reconnect_enabled or self.stop_event.is_set() or self.reconnect_scheduled:
+            return
+        self.reconnect_attempts = min(self.reconnect_attempts + 1, 8)
+        delay = min(60_000, 2_000 * (2 ** (self.reconnect_attempts - 1)))
+        self.reconnect_scheduled = True
+        self.root.after(delay, self._try_reconnect)
+
+    def _try_reconnect(self):
+        self.reconnect_scheduled = False
+        if not self.auto_reconnect_enabled or self.stop_event.is_set():
+            return
+        if self.ws_thread and self.ws_thread.is_alive():
+            self._schedule_reconnect()
+            return
+        if not self.config.get("sessionId") or not self.config.get("deviceId") or not self._token_for_saved_device():
+            self.status_var.set("Remote link paused: saved pairing credentials are unavailable.")
+            return
+        try:
+            self.device_token = self._token_for_saved_device()
+            self._connect_socket()
+            self.status_var.set("Internet relay reconnecting…")
+        except Exception as exc:
+            self.status_var.set(f"Reconnect pending: {str(exc)[:120]}")
+            self._schedule_reconnect()
+
     def connect_saved(self):
+        self.auto_reconnect_enabled = True
         try:
             if not self.config.get("sessionId") or not self.config.get("deviceId"):
                 raise ValueError("No saved PC pairing. Join with the six-digit code first.")
@@ -352,6 +390,7 @@ class PcCompanionApp:
             return False
 
     def _on_open(self, _ws):
+        self.reconnect_attempts = 0
         self.events.put(("opened", None))
 
     def _on_message(self, _ws, message):
@@ -384,6 +423,8 @@ class PcCompanionApp:
             self.events.put(("pairing_failed", f"Pairing was not authenticated ({code or 'closed'}): {str(reason or '')[:100]}"))
         else:
             self.events.put(("status", f"Disconnected ({code or 'closed'}): {str(reason or '')[:100]}"))
+            if self.auto_reconnect_enabled:
+                self.events.put(("schedule_reconnect", None))
 
     def _publish_permissions(self):
         remote = bool(self.remote_var.get())
@@ -405,7 +446,9 @@ class PcCompanionApp:
         try:
             while True:
                 kind, payload = self.events.get_nowait()
-                if kind == "status":
+                if kind == "schedule_reconnect":
+                    self._schedule_reconnect()
+                elif kind == "status":
                     self.status_var.set(payload)
                 elif kind == "credential_rejected":
                     device_id = str(self.config.get("deviceId", ""))
@@ -1204,6 +1247,8 @@ class PcCompanionApp:
             self.status_var.set(f"Pairing revoke failed: {str(exc)[:180]}")
 
     def disconnect(self, emergency=False):
+        self.auto_reconnect_enabled = False
+        self.reconnect_scheduled = False
         self.screen_event.clear()
         self.remote_var.set(False)
         self.screen_var.set(False)
