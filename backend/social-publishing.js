@@ -10,7 +10,7 @@ export function validatePublishIntent(body) {
   }
   const platform = String(body.platform || '').toLowerCase();
   if (!['telegram', 'mastodon', 'bluesky', 'linkedin'].includes(platform)) throw new Error('Unsupported social platform');
-  const text = body.text.trim();
+  const text = body.text;
   if (platform === 'bluesky' && [...text].length > 300) throw new Error('Bluesky posts must be at most 300 characters');
   if (platform === 'linkedin' && text.length > 3000) throw new Error('LinkedIn posts must be at most 3000 characters');
   return { platform, text };
@@ -61,7 +61,7 @@ export function validateMediaAttachment(body, platform) {
   const allowed = kind === 'image'
     ? new Set(['image/jpeg', 'image/png', 'image/webp'])
     : kind === 'video'
-      ? new Set(['video/mp4', 'video/quicktime'])
+      ? (platform === 'telegram' ? new Set(['video/mp4']) : new Set(['video/mp4', 'video/quicktime']))
       : new Set();
   if (!allowed.has(mimeType)) throw new Error('Media type and MIME type are not supported');
   if (typeof body.mediaBase64 !== 'string' || body.mediaBase64.length < 8 || body.mediaBase64.length > 11_200_000 ||
