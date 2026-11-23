@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Main Brain scheduler snapshots now wipe plaintext JSON, decoded ciphertext, IV and intermediate AES-GCM buffers on save/load/decrypt paths, while retaining the encrypted snapshot if Keystore authentication fails.
+
+
 - Main Brain scheduler restoration errors are now converted into safe user/worker failure results at voice tool, Website Forge, form extraction, learned-workflow and WorkManager entry points; a missing scheduler Keystore key no longer bubbles out as an uncaught initialization exception or causes an empty replacement queue to be saved.
 
 
