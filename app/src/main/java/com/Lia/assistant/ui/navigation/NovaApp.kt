@@ -25,6 +25,7 @@ import com.Lia.assistant.ui.screens.debug.DebugScreen
 import com.Lia.assistant.ui.screens.devices.DeviceCenterScreen
 import com.Lia.assistant.ui.screens.data.DataVaultScreen
 import com.Lia.assistant.ui.screens.expert.ExpertStudioScreen
+import com.Lia.assistant.ui.screens.expert.EngineeringWorkbenchScreen
 import com.Lia.assistant.ui.screens.projects.ProjectLabScreen
 import com.Lia.assistant.ui.screens.forge.ForgeScreen
 import com.Lia.assistant.ui.screens.history.HistoryScreen
@@ -122,6 +123,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("phone_call_agent") { PhoneCallAgentScreen(navController) }
                     composable("device_center") { DeviceCenterScreen(navController) }
                     composable("expert_studio") { ExpertStudioScreen(navController) }
+                    composable("engineering_workbench") { EngineeringWorkbenchScreen(navController) }
                     composable("project_lab") { ProjectLabScreen(navController) }
                     composable("data_vault") { DataVaultScreen(navController) }
 
