@@ -33,10 +33,25 @@ object ActionExecutor {
 
         when (toolName) {
 
+
+            "list_paired_devices" -> {
+                val devices = `in`.shraddha.ai.link.DeviceLinkManager.pairedDevices()
+                val array = org.json.JSONArray()
+                devices.forEach { peer ->
+                    array.put(JSONObject().put("device_id", peer.id).put("name", peer.name)
+                        .put("online", peer.online).put("platform", peer.platform))
+                }
+                result.put("status", "success").put("devices", array)
+                    .put("message", if (devices.isEmpty()) "कोई paired device अभी relay पर उपलब्ध नहीं है। Device Universe में pairing/connection जाँचें।"
+                        else "Paired device list relay से पढ़ी गई है। Offline device पर command नहीं भेजी जा सकती।")
+            }
             "control_paired_pc" -> {
                 val target = args.optString("target_device_id").trim()
                 val kind = args.optString("kind").trim().lowercase()
                 if (!target.matches(Regex("[A-Za-z0-9_-]{8,128}"))) return result.put("status", "error").put("message", "Exact paired PC device ID आवश्यक है। Device Universe में ID देखें; कोई target अनुमान से नहीं चुना जाएगा।")
+                val peer = `in`.shraddha.ai.link.DeviceLinkManager.pairedDevices().firstOrNull { it.id == target }
+                    ?: return result.put("status", "error").put("message", "यह device इस समय paired-device list में नहीं है। पहले list_paired_devices चलाएँ।")
+                if (!peer.online) return result.put("status", "error").put("message", "${peer.name} अभी offline है; कोई PC command नहीं भेजी गई।")
                 val action = JSONObject().put("kind", kind)
                 when (kind) {
                     "hardware_status", "back", "home", "screenshot" -> Unit
@@ -93,6 +108,11 @@ object ActionExecutor {
                     }
                     "set_volume", "set_brightness" -> {
                         if (percent !in 0..100) return result.put("status", "error").put("message", "percent 0 से 100 के बीच integer होना चाहिए।")
+                        if (action == "set_brightness" && !android.provider.Settings.System.canWrite(context)) {
+                            val message = hardware.setBrightness(context.applicationContext, percent)
+                            return result.put("status", "needs_user_action").put("action", "modify_system_settings_required")
+                                .put("percent", percent).put("message", message)
+                        }
                         val message = runCatching {
                             if (action == "set_volume") hardware.setMediaVolume(context.applicationContext, percent)
                             else hardware.setBrightness(context.applicationContext, percent)
