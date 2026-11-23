@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.LocalNovaReducedMotion
 import com.Lia.assistant.voice.NovaOrbState
@@ -121,7 +122,7 @@ fun LiaOrb3D(
     size: Dp = 180.dp,
     amplitude: Float = 0f,
     style: NovaOrbStyle = NovaOrbStyle.NOVA,
-    assistantName: String = "Lia"
+    assistantName: String = AssistantBrand.NAME
 ) {
     if (!agslAvailable || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
         NovaOrb(
