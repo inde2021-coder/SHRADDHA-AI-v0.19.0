@@ -75,16 +75,20 @@ test("Realtime Database encrypted vault is owner-only and rejects plaintext", as
   await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/invalid key"), encryptedRecord));
 });
 
-test("Firestore vault deletion is limited to the explicitly supported backup keys", async () => {
+test("Firestore vault deletion is owner-scoped for all bounded encrypted memory keys", async () => {
   const alice = env.authenticatedContext("alice").firestore();
-  await assertSucceeds(setDoc(doc(alice, "users/alice/vault/personal_memory"), {
+  const bob = env.authenticatedContext("bob").firestore();
+  const personal = doc(alice, "users/alice/vault/personal_memory");
+  await assertSucceeds(setDoc(personal, {
     format, payload: "ciphertext", updatedAt: Date.now()
   }));
-  await assertFails(deleteDoc(doc(alice, "users/alice/vault/personal_memory")));
+  await assertFails(deleteDoc(doc(bob, "users/alice/vault/personal_memory")));
+  await assertSucceeds(deleteDoc(personal));
   await assertSucceeds(setDoc(doc(alice, "users/alice/vault/selected_device_backup_v1"), {
     format, payload: "ciphertext", updatedAt: Date.now()
   }));
   await assertSucceeds(deleteDoc(doc(alice, "users/alice/vault/selected_device_backup_v1")));
+  await assertFails(deleteDoc(doc(alice, "users/alice/vault/invalid key")));
 });
 
 test("Firebase Storage accepts only owner-scoped encrypted backup objects", async () => {
