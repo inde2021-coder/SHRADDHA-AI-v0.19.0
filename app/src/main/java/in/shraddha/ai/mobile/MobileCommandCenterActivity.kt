@@ -207,12 +207,14 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             setText(existing)
             hint = "यहाँ text paste करें या पहले clipboard से पढ़ें"
             setTextColor(Color.WHITE)
-            setHintTextColor(0xFF8793AA.toInt())
+            setHintTextColor(0xFF8BAFB8.toInt())
             minLines = 5
             maxLines = 12
             gravity = android.view.Gravity.TOP
-            setPadding(14, 12, 14, 12)
-            setBackgroundColor(0xFF172238.toInt())
+            setPadding(16, 14, 16, 14)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
         }
         val choices = arrayOf("Trim spaces", "UPPERCASE", "lowercase", "Collapse whitespace", "Remove blank lines")
         val dialog = android.app.AlertDialog.Builder(this)
