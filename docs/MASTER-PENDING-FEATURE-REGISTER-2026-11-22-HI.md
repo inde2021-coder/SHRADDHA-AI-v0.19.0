@@ -205,3 +205,4 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Corrected the Windows desktop-companion CI job to use `desktop-companion/shraddha-pc-companion` instead of the obsolete `pc_companion` path; the actual workflow and package entry point are now used for Python tests and EXE packaging.
 - The integration workflow now explicitly includes the pending feature branch in its source-branch ancestry guard.
 - No build, emulator test, instrumentation test or release verification has been run after these edits. Keep all three items marked pending until a consolidated run provides evidence.
+- Corrected multi-agent stage prompt formatting: the parallel Planner/Researcher/Specialist/Critic/Verifier pipeline now sends actual line breaks between goal, role, responsibility and prior-stage evidence instead of literal \\n text. This is a source correction only; provider execution and regression tests remain pending.
