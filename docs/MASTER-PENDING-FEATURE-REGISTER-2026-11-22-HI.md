@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- The user-configured assistant name now propagates into Gemini Live function declarations/tool descriptions (including council planning and secure file manager) rather than retaining hardcoded Shraddha AI branding in the model-facing tool catalog.
+
+
 - Voice screen's single mic control now distinguishes CONNECTING and ERROR from an actually ready microphone session; it no longer labels the microphone ON while the secure token/WebSocket connection is still being established or has failed.
 
 
