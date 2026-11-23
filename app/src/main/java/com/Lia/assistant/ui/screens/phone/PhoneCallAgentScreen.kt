@@ -47,10 +47,13 @@ fun PhoneCallAgentScreen(navController: NavController) {
     val colors = LocalNovaColors.current
     val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
     val scope = rememberCoroutineScope()
-    var backendUrl by remember { mutableStateOf(TelephonyGatewayStore.baseUrl(context)) }
-    var gatewayToken by remember { mutableStateOf(TelephonyGatewayStore.token(context)) }
+    val savedGateway = remember { TelephonyGatewayStore.get(context) }
+    var backendUrl by remember { mutableStateOf(savedGateway.baseUrl) }
+    var gatewayToken by remember { mutableStateOf(savedGateway.token) }
     var loading by remember { mutableStateOf(false) }
-    var resultText by remember { mutableStateOf("Backend readiness has not been checked yet.") }
+    var resultText by remember {
+        mutableStateOf(savedGateway.readError ?: "Backend readiness has not been checked yet.")
+    }
     var callRows by remember { mutableStateOf(emptyList<String>()) }
 
     fun runRequest(request: suspend () -> JSONObject, onSuccess: (JSONObject) -> Unit) {
