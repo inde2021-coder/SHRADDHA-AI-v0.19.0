@@ -54,6 +54,7 @@ jobs:
           set -euo pipefail
           for branch in \
             main \
+            fix/integration-squash-merge-validation \
             feature/complete-pending-shraddha-features \
             audit-fixes-v0.19.1 \
             feature/ai-phone-agent-foundation \
@@ -81,7 +82,22 @@ jobs:
               continue
             fi
 
-            echo "::error::Source branch $branch is neither an ancestor nor recorded as squash/rebase-merged into main."
+            # Accept branches merged into an integration/source branch that
+            # itself reached main through a merged PR (including squash merges).
+            integrated=false
+            while IFS= read -r integrated_branch; do
+              [[ -n "$integrated_branch" && "$integrated_branch" != "$branch" ]] || continue
+              if git merge-base --is-ancestor "origin/$branch" "origin/$integrated_branch"; then
+                echo "Verified: $branch is included in merged main source branch $integrated_branch."
+                integrated=true
+                break
+              fi
+            done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --base main --json headRefName --jq '.[].headRefName')
+            if [[ "$integrated" == true ]]; then
+              continue
+            fi
+
+            echo "::error::Source branch $branch is neither in main ancestry nor in a branch merged into main."
             exit 1
           done
 
