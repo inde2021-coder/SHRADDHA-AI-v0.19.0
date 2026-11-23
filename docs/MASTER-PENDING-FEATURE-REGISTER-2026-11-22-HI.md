@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Clipboard-to-PC transfer now clears the temporary UTF-8 byte array after hashing/Base64 packaging and the encrypted peer send attempt.
+
+
 - Device Link's inbound E2E receiver now wipes decrypted plaintext and AAD byte arrays before dispatching the parsed message to feature callbacks; decrypted JSON is the only retained representation.
 
 
