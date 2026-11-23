@@ -31,6 +31,8 @@ class OperatorActionJournal(context: Context) {
         val absentBefore = expected.isNotBlank() && before.elements.none { element ->
             element.text.contains(expected, true) || element.description.contains(expected, true)
         }
+        val existing = getResult(workflowId).getOrElse { return false }
+        if (existing != null && existing.state !in setOf("VERIFIED", "RECOVERED_VERIFIED", "MANUALLY_VERIFIED")) return false
         val entry = OperatorActionJournalEntry(
             workflowId = workflowId,
             stepId = action.id,
@@ -46,7 +48,7 @@ class OperatorActionJournal(context: Context) {
 
     /** Marks the action only after OperatorEngine independently verifies the resulting UI. */
     fun finish(workflowId: String, action: PlannedOperatorAction, verified: Boolean): Boolean {
-        val existing = get(workflowId) ?: return false
+        val existing = getResult(workflowId).getOrNull() ?: return false
         if (existing.stepId != action.id || existing.state != "EXECUTING") return false
         return save(existing.copy(
             state = if (verified) "VERIFIED" else "FAILED",
@@ -54,30 +56,36 @@ class OperatorActionJournal(context: Context) {
         ))
     }
 
-    fun get(workflowId: String): OperatorActionJournalEntry? =
-        encrypted.get(key(workflowId)).getOrNull()?.takeIf { it.isNotBlank() }?.let { raw ->
-            runCatching {
-                val json = JSONObject(raw)
-                OperatorActionJournalEntry(
-                    workflowId = json.getString("workflowId"),
-                    stepId = json.getString("stepId"),
-                    action = json.getString("action"),
-                    packageName = json.getString("packageName"),
-                    beforeFingerprint = json.getString("beforeFingerprint"),
-                    expectedVisibleText = json.optString("expectedVisibleText"),
-                    expectedTextAbsentBefore = json.optBoolean("expectedTextAbsentBefore"),
-                    state = json.getString("state"),
-                    updatedAt = json.optLong("updatedAt")
-                )
-            }.getOrNull()
+    fun get(workflowId: String): OperatorActionJournalEntry? = getResult(workflowId).getOrNull()
+
+    private fun getResult(workflowId: String): Result<OperatorActionJournalEntry?> = runCatching {
+        val raw = encrypted.get(key(workflowId)).getOrThrow()
+        if (raw.isBlank()) return@runCatching null
+        val json = JSONObject(raw)
+        val entry = OperatorActionJournalEntry(
+            workflowId = json.getString("workflowId"),
+            stepId = json.getString("stepId"),
+            action = json.getString("action"),
+            packageName = json.getString("packageName"),
+            beforeFingerprint = json.getString("beforeFingerprint"),
+            expectedVisibleText = json.optString("expectedVisibleText"),
+            expectedTextAbsentBefore = json.optBoolean("expectedTextAbsentBefore"),
+            state = json.getString("state"),
+            updatedAt = json.optLong("updatedAt")
+        )
+        require(entry.workflowId == workflowId && entry.stepId.isNotBlank()) { "Operator action journal identity mismatch." }
+        require(entry.state in setOf("EXECUTING", "VERIFIED", "FAILED", "RECOVERED_VERIFIED", "MANUALLY_VERIFIED")) {
+            "Operator action journal state is invalid."
         }
+        entry
+    }
 
     /**
      * A process-death step is considered complete only with a newly visible, explicit
      * postcondition on the same app and a changed screen. All other cases need human review.
      */
     fun reconcileInterrupted(workflowId: String): Recovery {
-        val entry = get(workflowId) ?: return Recovery.NO_JOURNAL
+        val entry = getResult(workflowId).getOrElse { return Recovery.REVIEW_REQUIRED } ?: return Recovery.NO_JOURNAL
         if (entry.state == "VERIFIED" || entry.state == "RECOVERED_VERIFIED") return Recovery.VERIFIED_COMPLETE
         if (entry.state == "MANUALLY_VERIFIED") return Recovery.MANUALLY_VERIFIED
         if (entry.state !in setOf("EXECUTING", "FAILED")) return Recovery.NOT_INTERRUPTED
@@ -101,7 +109,7 @@ class OperatorActionJournal(context: Context) {
 
     /** User-confirmed recovery after they manually inspected the target app. */
     fun markManuallyVerified(workflowId: String): Boolean {
-        val entry = get(workflowId) ?: return false
+        val entry = getResult(workflowId).getOrNull() ?: return false
         if (entry.state !in setOf("EXECUTING", "FAILED")) return false
         return save(entry.copy(state = "MANUALLY_VERIFIED", updatedAt = System.currentTimeMillis()))
     }
