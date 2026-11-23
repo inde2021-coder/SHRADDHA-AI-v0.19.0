@@ -221,10 +221,10 @@ fun DataVaultScreen(navController: NavController) {
         )
 
         NovaGlassCard {
-            Text("MEMORY RECORD MANAGEMENT", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Text("Encrypted local memory records can be reviewed and deleted individually. Cloud deletion is optional and requires explicit consent plus Firebase credentials.", color = colors.textSecondary, fontSize = 11.sp)
+            Text("PEOPLE MEMORY", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text("Shraddha की सेव की गई यादें यहाँ दिखती हैं। सूची से याद चुनें और उसे हटाएँ। Cloud copy के लिए Firebase अनुमति अलग से चाहिए।", color = colors.textSecondary, fontSize = 11.sp)
             NovaButton(
-                text = "Refresh local memory list",
+                text = if (isBusy) "लोड हो रहा है…" else "यादें रीफ़्रेश करें",
                 onClick = {
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
@@ -241,25 +241,19 @@ fun DataVaultScreen(navController: NavController) {
                 type = NovaButtonType.SECONDARY
             )
             if (memoryRecords.isEmpty()) {
-                Text("No local memory keys loaded. Tap Refresh to inspect.", color = colors.textTertiary, fontSize = 10.sp)
+                Text("अभी कोई स्थानीय याद नहीं मिली। यादें रीफ़्रेश करें।", color = colors.textTertiary, fontSize = 10.sp)
             } else {
                 memoryRecords.take(50).forEach { key ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(key, color = colors.textPrimary, fontSize = 11.sp, modifier = Modifier.weight(1f))
                         NovaButton(
-                            text = if (selectedMemoryKey == key) "Selected" else "Select",
+                            text = if (selectedMemoryKey == key) "चुना गया" else "चुनें",
                             onClick = { selectedMemoryKey = key },
                             type = NovaButtonType.TEXT
                         )
                     }
                 }
             }
-            NovaTextField(
-                value = selectedMemoryKey,
-                onValueChange = { selectedMemoryKey = it.take(64) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = "Memory record key"
-            )
             NovaButton(
                 text = "COMPARE LOCAL & CLOUD COPIES",
                 onClick = {
@@ -318,7 +312,7 @@ fun DataVaultScreen(navController: NavController) {
                 NovaTextField(value = cloudPassword, onValueChange = { cloudPassword = it.take(128) }, modifier = Modifier.fillMaxWidth(), placeholder = "Firebase password", secret = true)
             }
             NovaButton(
-                text = "Delete ALL local memory records",
+                text = "इस फोन की सभी यादें साफ़ करें",
                 onClick = { showClearLocalMemoryConfirmation = true },
                 modifier = Modifier.fillMaxWidth(),
                 type = NovaButtonType.TEXT,
@@ -336,7 +330,7 @@ fun DataVaultScreen(navController: NavController) {
                 enabled = !isBusy && cloudDeleteConsent && cloudEmail.isNotBlank() && cloudPassword.length >= 8
             )
             NovaButton(
-                text = "Delete selected memory record",
+                text = "चुनी हुई याद हटाएँ",
                 onClick = { if (selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))) showMemoryDeleteConfirmation = true else status = "Select a valid memory record key first." },
                 modifier = Modifier.fillMaxWidth(),
                 type = NovaButtonType.TEXT,
