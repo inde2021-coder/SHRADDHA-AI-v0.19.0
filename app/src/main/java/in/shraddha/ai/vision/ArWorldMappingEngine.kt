@@ -53,7 +53,6 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
         ArCoreApk.Availability.SUPPORTED_INSTALLED -> "SUPPORTED_INSTALLED"
         ArCoreApk.Availability.SUPPORTED_NOT_INSTALLED -> "SUPPORTED_NOT_INSTALLED"
         ArCoreApk.Availability.SUPPORTED_APK_TOO_OLD -> "SUPPORTED_APK_TOO_OLD"
-        ArCoreApk.Availability.SUPPORTED_NOT由_GOOGLE_PLAY -> "SUPPORTED_NOT_INSTALLED"
         ArCoreApk.Availability.UNSUPPORTED_DEVICE_NOT_CAPABLE -> "UNSUPPORTED_DEVICE"
         else -> "CHECKING_OR_UNKNOWN"
     }
