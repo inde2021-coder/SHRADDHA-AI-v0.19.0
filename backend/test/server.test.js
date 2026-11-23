@@ -707,12 +707,12 @@ test('end-to-end remote actions require a live control grant and relay opaque ci
 
 test('switching to master-only immediately revokes old member grants and blocks encrypted actions', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.201' },
     body: JSON.stringify({ deviceName: 'Master Mode Owner' })
   });
   const owner = await ownerResponse.json();
   const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.202' },
     body: JSON.stringify({ deviceName: 'Mutual Mode Member', pairingCode: owner.pairingCode })
   });
   const member = await memberResponse.json();
