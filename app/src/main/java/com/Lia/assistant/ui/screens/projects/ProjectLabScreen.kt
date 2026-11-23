@@ -63,8 +63,15 @@ fun ProjectLabScreen(navController: NavController) {
     var pendingDelete by remember { mutableStateOf<ProjectPlan?>(null) }
 
     LaunchedEffect(Unit) {
-        plans = withContext(Dispatchers.IO) {
-            ProjectPlanStore(context).loadAll().getOrDefault(emptyList())
+        val result = withContext(Dispatchers.IO) {
+            ProjectPlanStore(context).loadAll()
+        }
+        result.onSuccess {
+            plans = it
+            status = ""
+        }.onFailure {
+            // An unreadable encrypted vault is not an empty project list.
+            status = "Project vault could not be opened: ${it.message ?: "encrypted storage unavailable"}. Existing plans were not changed."
         }
     }
 
