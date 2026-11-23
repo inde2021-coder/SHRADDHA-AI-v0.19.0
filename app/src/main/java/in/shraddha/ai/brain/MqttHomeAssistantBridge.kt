@@ -63,7 +63,6 @@ class MqttHomeAssistantBridge(context: Context) {
             keepAliveInterval = 30
             userName = config.username
             password = config.password.toCharArray()
-            isHttpsHostnameVerificationEnabled = true
         }
         client.connect(options, null, object : IMqttActionListener {
             override fun onSuccess(asyncActionToken: IMqttToken?) { onStatus("MQTT TLS connection established.") }
