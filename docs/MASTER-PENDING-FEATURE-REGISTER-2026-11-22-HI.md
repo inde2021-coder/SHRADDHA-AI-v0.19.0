@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Operator console's header now uses the configured assistant name rather than a fixed SHRADDHA product label.
+
+
 - Operator console's Voice Action Journal / Restart Recovery view now reports encrypted-journal read failures distinctly (instead of claiming no record exists) and allows manual attestation for both EXECUTING and FAILED entries after the user checks the target app.
 
 
