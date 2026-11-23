@@ -50,6 +50,7 @@ object PluginActionPolicy {
             "create_note" -> {
                 require("create_note" in capabilities) { "Plugin did not declare create_note capability." }
                 require(title.isNotBlank() && title.length <= 120 && body.length <= 4000) { "Plugin note content is invalid." }
+                require(fields == setOf("type", "title", "body")) { "Plugin note has unsupported fields." }
             }
             "show_notification" -> {
                 require("show_notification" in capabilities) { "Plugin did not declare show_notification capability." }
@@ -77,7 +78,7 @@ object PluginActionPolicy {
     }
 }
 
-/** Executes only the two built-in local handlers; never loads plugin code, DEX, scripts or URLs. */
+/** Executes four bounded built-in local handlers; never loads plugin code, DEX, scripts or remote code. */
 object DeclarativePluginRuntime {
     fun execute(context: Context, action: AuthorizedPluginAction, userConfirmed: Boolean): Result<String> = runCatching {
         require(userConfirmed) { "Explicit confirmation is required before running a plugin action." }
