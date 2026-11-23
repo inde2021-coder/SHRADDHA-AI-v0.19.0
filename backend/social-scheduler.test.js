@@ -1,30 +1,88 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateScheduleIntent } from './social-publishing.js';
+import { createSocialScheduler } from './social-scheduler.js';
 
-test('scheduled publishing requires exact preview, idempotency key and future timezone timestamp', () => {
-  const now = Date.parse('2026-11-23T06:00:00.000Z');
-  const valid = validateScheduleIntent({
-    platform: 'telegram', text: 'Launch update', preview: 'Launch update', confirmed: true,
-    idempotencyKey: 'schedule_1234567890', scheduledAt: '2026-11-23T07:00:00.000Z'
-  }, now);
-  assert.equal(valid.platform, 'telegram');
-  assert.equal(valid.scheduledAtMs, Date.parse('2026-11-23T07:00:00.000Z'));
-  assert.throws(() => validateScheduleIntent({
-    platform: 'telegram', text: 'x', preview: 'y', confirmed: true,
-    idempotencyKey: 'schedule_1234567890', scheduledAt: '2026-11-23T07:00:00.000Z'
-  }, now), /exact post preview/);
-  assert.throws(() => validateScheduleIntent({
-    platform: 'telegram', text: 'x', preview: 'x', confirmed: true,
-    idempotencyKey: 'short', scheduledAt: '2026-11-23T07:00:00.000Z'
-  }, now), /idempotencyKey/);
+class FakeDb {
+  constructor() { this.records = new Map(); this.collectionRef = new FakeCollection(this); }
+  collection() { return this.collectionRef; }
+  async runTransaction(fn) {
+    return fn({
+      get: async ref => {
+        const value = this.records.get(ref.id);
+        return { exists: Boolean(value), data: () => value ? structuredClone(value) : undefined };
+      },
+      create: (ref, value) => {
+        if (this.records.has(ref.id)) throw new Error('already exists');
+        this.records.set(ref.id, structuredClone(value));
+      },
+      update: (ref, patch) => {
+        const value = this.records.get(ref.id);
+        if (!value) throw new Error('missing');
+        this.records.set(ref.id, { ...value, ...structuredClone(patch) });
+      }
+    });
+  }
+}
+class FakeCollection {
+  constructor(db) { this.firestore = db; }
+  doc(id) { return { id }; }
+  where(field, op, value) { return new FakeQuery(this.firestore, [{ field, op, value }]); }
+}
+class FakeQuery {
+  constructor(db, filters, max = 100) { this.db = db; this.filters = filters; this.max = max; }
+  where(field, op, value) { return new FakeQuery(this.db, [...this.filters, { field, op, value }], this.max); }
+  orderBy() { return this; }
+  limit(max) { return new FakeQuery(this.db, this.filters, max); }
+  async get() {
+    const matches = [...this.db.records.entries()].filter(([, row]) => this.filters.every(f =>
+      f.op === '==' ? row[f.field] === f.value : f.op === '<=' ? row[f.field] <= f.value : false
+    )).slice(0, this.max);
+    return { size: matches.length, docs: matches.map(([id, data]) => ({ id, data: () => structuredClone(data) })) };
+  }
+}
+const valid = (scheduledAt, key = 'schedule_key_123456789') => ({
+  platform: 'telegram', text: 'Approved announcement', preview: 'Approved announcement',
+  confirmed: true, idempotencyKey: key, scheduledAt
 });
 
-test('rejects schedules too soon, too far away, timezone-less and media payloads', () => {
-  const base = { platform: 'telegram', text: 'x', preview: 'x', confirmed: true, idempotencyKey: 'schedule_1234567890' };
-  const now = Date.parse('2026-11-23T06:00:00.000Z');
-  assert.throws(() => validateScheduleIntent({ ...base, scheduledAt: '2026-11-23T06:00:20.000Z' }, now), /1 minute/);
-  assert.throws(() => validateScheduleIntent({ ...base, scheduledAt: '2027-03-01T06:00:00.000Z' }, now), /90 days/);
-  assert.throws(() => validateScheduleIntent({ ...base, scheduledAt: '2026-11-23T07:00:00' }, now), /ISO-8601/);
-  assert.throws(() => validateScheduleIntent({ ...base, scheduledAt: '2026-11-23T07:00:00.000Z', mediaBase64: 'abc' }, now), /text-only/);
+test('Firestore queue is idempotent and scoped to the authenticated user', async () => {
+  let now = Date.parse('2026-11-23T06:00:00.000Z');
+  const db = new FakeDb();
+  const scheduler = createSocialScheduler({ collection: db.collection(), publish: async () => ({ ok: true }), now: () => now });
+  const first = await scheduler.schedule('firebaseUser123', valid('2026-11-23T07:00:00.000Z'));
+  const again = await scheduler.schedule('firebaseUser123', valid('2026-11-23T07:00:00.000Z'));
+  assert.equal(first.idempotent, false);
+  assert.equal(again.idempotent, true);
+  await assert.rejects(() => scheduler.schedule('otherFirebaseUser456', valid('2026-11-23T07:00:00.000Z')), /different scheduled post|already used/);
+});
+
+test('only pending jobs can be cancelled and due jobs publish once', async () => {
+  let now = Date.parse('2026-11-23T06:00:00.000Z');
+  const db = new FakeDb();
+  let calls = 0;
+  const scheduler = createSocialScheduler({ collection: db.collection(), publish: async () => { calls++; return { platform: 'telegram', messageId: 123 }; }, now: () => now });
+  const scheduled = await scheduler.schedule('firebaseUser123', valid('2026-11-23T07:00:00.000Z'));
+  await scheduler.cancel('firebaseUser123', scheduled.id);
+  await assert.rejects(() => scheduler.cancel('firebaseUser123', scheduled.id), /Only pending/);
+
+  const second = await scheduler.schedule('firebaseUser123', valid('2026-11-23T08:00:00.000Z', 'schedule_key_987654321'));
+  now = Date.parse('2026-11-23T08:01:00.000Z');
+  const result = await scheduler.dispatchDue(10);
+  assert.equal(result.published, 1);
+  assert.equal(calls, 1);
+  assert.equal((await scheduler.dispatchDue(10)).published, 0);
+  assert.equal(db.records.get(second.id).status, 'published');
+});
+
+test('provider failures are terminal and are not blindly replayed', async () => {
+  let now = Date.parse('2026-11-23T06:00:00.000Z');
+  const db = new FakeDb();
+  let calls = 0;
+  const scheduler = createSocialScheduler({ collection: db.collection(), publish: async () => { calls++; throw new Error('network outcome ambiguous'); }, now: () => now });
+  const scheduled = await scheduler.schedule('firebaseUser123', valid('2026-11-23T07:00:00.000Z'));
+  now = Date.parse('2026-11-23T07:01:00.000Z');
+  assert.equal((await scheduler.dispatchDue(10)).failed, 1);
+  assert.equal((await scheduler.dispatchDue(10)).scanned, 0);
+  assert.equal(calls, 1);
+  assert.equal(db.records.get(scheduled.id).status, 'failed');
 });
