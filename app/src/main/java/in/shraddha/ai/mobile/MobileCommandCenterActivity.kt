@@ -21,6 +21,8 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.OperatorActivity
 import `in`.shraddha.ai.operator.files.FileAccessActivity
 import `in`.shraddha.ai.notes.NoteOcrActivity
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /**
  * Mobile counterpart of the Windows companion command centre.
@@ -43,13 +45,16 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speechLanguage = getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE).getString("speech_language", "hi-IN") ?: "hi-IN"
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 20, 20, 20)
-            setBackgroundColor(Color.rgb(9, 13, 25))
+            setBackgroundColor(Color.rgb(7, 15, 25))
         }
         root.addView(TextView(this).apply {
-            text = "SHRADDHA • MOBILE COMMAND CENTER"
+            text = "$assistantName • MOBILE COMMAND CENTER"
             textSize = 19f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
@@ -59,15 +64,15 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             text = "Android पर PC जैसे tools • Hindi + English • User permission required"
             textSize = 12f
             gravity = Gravity.CENTER
-            setTextColor(0xFFB9C5DD.toInt())
+            setTextColor(0xFF73DDE7.toInt())
             setPadding(0, 0, 0, 14)
         })
         command = EditText(this).apply {
             hint = "जैसे: आवाज बढ़ाओ, Chrome खोलो, वेब पर खोजो मौसम"
             setTextColor(Color.WHITE)
-            setHintTextColor(0xFF8793AA.toInt())
+            setHintTextColor(0xFF8BAFB8.toInt())
             setPadding(14, 12, 14, 12)
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt()) }
         }
         root.addView(command)
         root.addView(action("🎙️ Voice Control • बोलकर command दें") { captureVoice() })
@@ -111,7 +116,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         status = TextView(this).apply {
             text = "तैयार। कुछ controls के लिए Accessibility service चालू करें। Android protected settings को सीधे बदलने के बजाय system settings खोलेगा।"
             textSize = 13f
-            setTextColor(0xFFE0E6F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
             setPadding(12, 16, 12, 16)
         }
         root.addView(status)
@@ -124,10 +129,14 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
-        setTextColor(Color.WHITE)
-        backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
+        setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f
+        setPadding(18, 10, 18, 10)
         setOnClickListener { run() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
 
     private fun chooseVoiceLanguage() {
@@ -146,7 +155,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (speechLanguage == "hi-IN") "hi-IN,en-IN" else "en-IN,hi-IN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha को mobile command बताइए")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "$assistantName को mobile command बताइए")
         }
         runCatching { voiceResultLauncher.launch(intent) }
             .onFailure { status.text = "Speech recognition इस फोन पर उपलब्ध नहीं है।" }
@@ -220,7 +229,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                     .setMessage(transformed.take(3500))
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Copy to Clipboard") { _, _ ->
-                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Shraddha transformed text", transformed))
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(assistantName + " transformed text", transformed))
                         status.text = "Transformed text clipboard में copy किया।"
                     }.show()
             }
