@@ -83,7 +83,7 @@ fun SocialPublishingScreen(navController: NavController) {
             val result = runCatching {
                 when (action) {
                     "publish" -> SocialPublishingClient.publish(context, platform, text.trim(), mediaKind.takeIf { platform == "instagram" }, mediaUrl.trim().takeIf { platform == "instagram" }).toString()
-                    else -> SocialPublishingClient.schedule(context, platform, text.trim(), scheduledAt.trim()).toString()
+                    else -> SocialPublishingClient.schedule(context, platform, text.trim(), scheduledAt.trim(), mediaKind = mediaKind.takeIf { platform == "instagram" }, mediaUrl = mediaUrl.trim().takeIf { platform == "instagram" }).toString()
                 }
             }
             status = result.fold(
@@ -124,9 +124,9 @@ fun SocialPublishingScreen(navController: NavController) {
             }
         }
         NovaGlassCard {
-            Text("SCHEDULE (TEXT ONLY)", color = colors.accent)
+            Text("DURABLE SCHEDULE", color = colors.accent)
             OutlinedTextField(value = scheduledAt, onValueChange = { scheduledAt = it.take(48) }, label = { Text("ISO-8601 date/time with timezone") }, modifier = Modifier.fillMaxWidth())
-            Text("Use ISO-8601 with a timezone, for example a local timestamp ending in +05:30 or UTC ending in Z. Instagram feed/Reel/Story requires media and cannot be scheduled from this screen. Scheduling needs Firebase sign-in and backend Firebase Admin credentials. Posts are not retried automatically after an ambiguous provider response.", color = colors.textSecondary)
+            Text("Use ISO-8601 with a timezone. Instagram Feed, Reel and Story scheduling uses the selected media type and a public HTTPS media URL. Other platforms schedule text posts. Scheduling requires Firebase sign-in and backend Firebase Admin credentials. Ambiguous provider outcomes are not blindly retried.", color = colors.textSecondary)
         }
         NovaGlassCard {
             Text(status, color = colors.textSecondary)
@@ -148,7 +148,7 @@ fun SocialPublishingScreen(navController: NavController) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank(), modifier = Modifier.weight(1f))
-                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && platform != "instagram", modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && (platform != "instagram" || mediaUrl.startsWith("https://") && mediaKind in setOf("image", "reel", "story_image", "story_video")), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
             }
         }
     }
