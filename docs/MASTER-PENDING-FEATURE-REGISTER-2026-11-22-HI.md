@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Telephony gateway settings now read through an explicit Config result with a visible decryption/recovery error, save URL+token atomically in one encrypted-store transaction, and clear both keys atomically. Phone Call Agent initializes its settings message from the read result rather than silently showing blank credentials after a vault error.
+
+
 - Extended Keystore-loss fail-closed behavior to SecureMemoryVault, EncryptedFeatureStore and MainBrainSchedulerStore: existing encrypted records prevent automatic key regeneration on subsequent writes; decrypt paths require the original key and clear decoded buffers. OperatorActionJournal and WorkflowCheckpointStore now expose read failures; an unreadable action journal requires review, and AdaptiveWorkflowRunner stops before any new workflow side effect when its encrypted checkpoint cannot be read or cleared.
 
 
