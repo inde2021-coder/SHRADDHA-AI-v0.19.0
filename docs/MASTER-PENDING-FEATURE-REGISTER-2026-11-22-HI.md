@@ -161,7 +161,7 @@ A cross-layer source review found Android's previous 48,000-byte chunk sizing di
 - Added `CouncilEvidenceStore` backed by the existing encrypted feature store. Planner, Researcher, each Specialist, Critic and Verifier outputs are stored per task and retry attempt; status, final answer, provider call counts and elapsed time are retained without placing raw outputs or API keys in WorkManager Data.
 - Added `CouncilExecutionBudget`: maximum total provider calls, per-provider call cap, global execution deadline and bounded per-stage output. Background queue persists the selected limits and Main Brain enforces them.
 - Added a Multi-Agent Workspace with configured-provider selection, 1–5 specialist control, total/per-provider call budgets, time limit, language selection, live WorkManager status, saved stage evidence, result display and cancellation. Registered it in Home, Quick Actions and navigation.
-- Cancellation now records a durable CANCELLED status; transient failures can be marked RETRY_PENDING and partial evidence is retained. A retry currently starts a new attempt rather than resuming from the last completed stage.
+- Cancellation now records a durable CANCELLED status; transient failures can be marked RETRY_PENDING and partial evidence is retained. Retries now reuse only completed encrypted stages whose recorded provider still matches the deterministic provider assignment; missing/mismatched stages execute again. Checkpoint reads and initial status writes fail closed rather than leaving a claimed task stuck RUNNING.
 - Added regression-test source for provider budgets, stage callbacks and encrypted evidence persistence. Tests have not been run for these newest commits.
 - Registered the existing Phone Call Agent screen in navigation and Quick Actions.
 - Live Eyes now uses the selected AI provider rather than hardcoded Gemini; Visual Lens has an explicit voice Q&A route when camera service is active.
@@ -184,7 +184,7 @@ The user explicitly accepted the complete redesign on 18 November 2026 with thes
 The Android chunked file-transfer cap is now aligned with the relay's 100 MiB manifest limit (48 KiB chunks, 2,134 maximum chunks). The earlier Android-only 20 MB cap has been raised in the protocol helper, sender, receiver and boundary test. This is source-only; 100 MiB throughput, storage pressure, process-death resume, and low-storage behavior must be validated on physical devices before calling the larger limit production-ready.
 
 
-The local background council now has a 1–5 specialist-count control, persists that choice into WorkManager, and exposes task cancellation. Per-provider cost/time budgets and durable per-stage evidence are still pending. Source changes and regression tests are not yet verified.
+The local background council now has a 1–5 specialist-count control, persists that choice into WorkManager, exposes task cancellation, enforces provider-call/time budgets, stores encrypted per-stage evidence and resumes provider-matched completed stages after safe retries. Exact monetary cost estimation and runtime verification remain pending.
 
 
 Visual Lens UI now uses the shared dark-teal/cyan glass components, the configured assistant name, and a process-aware service state (OFF/STARTING/ACTIVE) rather than a screen-local running flag. Service status is polled while the screen is open and refreshed on resume. This source change is not yet built or device-verified.
@@ -217,6 +217,9 @@ The Privacy screen's old generic claims have been replaced with a source-accurat
 Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with category/request-bound AAD. The relay rejects plaintext `data_share_payload`, enforces the target's category permission and consumes the exact one-time grant. The Windows companion decrypts, verifies the bounded file and SHA-256, asks for local save approval and writes to a sanitized Downloads path. Android, relay and Windows regression tests have been added but not executed.
 
 ## 23 November 2026 — Source-only repair (not yet tested)
+
+- Background council retries now restore completed encrypted Planner/Researcher/Specialist/Critic/Verifier outputs only when the saved provider matches the current deterministic assignment; incomplete or mismatched stages are re-executed. Added a regression test for stage reuse and provider mismatch. Checkpoint-read or initial status-persistence failures now fail the scheduler claim closed instead of leaving it RUNNING. Tests/build remain intentionally unrun.
+
 
 - Fixed the Kotlin parser blocker in `HomeScreen.kt` by escaping the reserved `in` package segment in the generated Android `R` import. The earlier CI log showed `Syntax error: Expecting qualified name` on that import; the reported unresolved `R` at the avatar reference was a follow-on compiler error. The avatar asset exists at `app/src/main/res/drawable-nodpi/shraddha_ai_avatar.jpg`.
 - Corrected the Windows desktop-companion CI job to use `desktop-companion/shraddha-pc-companion` instead of the obsolete `pc_companion` path; the actual workflow and package entry point are now used for Python tests and EXE packaging.
