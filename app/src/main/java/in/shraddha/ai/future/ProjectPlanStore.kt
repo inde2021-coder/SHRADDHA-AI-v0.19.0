@@ -49,6 +49,44 @@ class ProjectPlanStore(context: Context) {
         }.sortedByDescending { it.createdAt }
     }
 
+    /** Portable, versioned backup. Exported JSON contains project data; keep the file private. */
+    @Synchronized
+    fun exportJson(): Result<String> = runCatching {
+        val plans = loadAll().getOrThrow()
+        JSONObject()
+            .put("format", "shraddha-project-backup")
+            .put("version", BACKUP_VERSION)
+            .put("exportedAt", System.currentTimeMillis())
+            .put("plans", JSONArray().apply { plans.forEach { put(JSONObject(encode(it))) } })
+            .toString(2)
+    }
+
+    /**
+     * Validates the entire backup before writing anything. Existing IDs are rejected rather
+     * than silently overwritten; the encrypted store is updated in one transaction.
+     */
+    @Synchronized
+    fun importJson(raw: String): Result<List<ProjectPlan>> = runCatching {
+        require(raw.isNotBlank() && raw.length <= MAX_BACKUP_CHARS) { "Backup is empty or exceeds the 1 MB limit." }
+        val root = JSONObject(raw)
+        require(root.getString("format") == "shraddha-project-backup") { "This is not a Shraddha Project Lab backup." }
+        require(root.getInt("version") == BACKUP_VERSION) { "Unsupported project backup version." }
+        val array = root.getJSONArray("plans")
+        require(array.length() in 1..MAX_PLANS) { "Backup must contain 1-$MAX_PLANS projects." }
+        val imported = (0 until array.length()).map { decode(array.getJSONObject(it).toString()) }
+        require(imported.map { it.id }.distinct().size == imported.size) { "Backup contains duplicate project IDs." }
+        val existing = loadAll().getOrThrow()
+        val existingIds = existing.map { it.id }.toSet()
+        require(imported.none { it.id in existingIds }) { "A project with the same ID already exists. Nothing was imported." }
+        require(existing.size + imported.size <= MAX_PLANS) { "Import would exceed the $MAX_PLANS project limit." }
+        val combined = (imported + existing).sortedByDescending { it.createdAt }
+        val values = linkedMapOf<String, String>()
+        combined.forEach { values[key(it.id)] = encode(it) }
+        values[INDEX_KEY] = JSONArray(combined.map { it.id }).toString()
+        store.putAllAndRemove(values, emptySet()).getOrThrow()
+        combined
+    }
+
     private fun readIndex(): List<String> {
         val raw = store.get(INDEX_KEY).getOrThrow()
         if (raw.isBlank()) return emptyList()
@@ -139,6 +177,8 @@ class ProjectPlanStore(context: Context) {
         private const val INDEX_KEY = "project_plan_index_v1"
         private const val MAX_PLANS = 20
         private const val MAX_MILESTONES = 30
+        private const val BACKUP_VERSION = 1
+        private const val MAX_BACKUP_CHARS = 1_000_000
         private val ID_PATTERN = Regex("p-[A-Za-z0-9_-]{1,48}")
     }
 }
