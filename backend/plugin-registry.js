@@ -56,8 +56,8 @@ export function validatePluginManifest(manifest) {
   for (const action of manifest.actions) {
     if (!action || typeof action !== 'object' || Array.isArray(action) || !ACTIONS.has(action.type)) throw new Error('Plugin action is not allowed');
     if (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key))) throw new Error('Plugin action contains an unsupported field');
-    if (action.type === 'create_note' && (typeof action.title !== 'string' || action.title.length > 120 || typeof action.body !== 'string' || action.body.length > 4000)) throw new Error('Plugin note action is invalid');
-    if (action.type === 'show_notification' && (typeof action.title !== 'string' || action.title.length > 80 || typeof action.body !== 'string' || action.body.length > 240)) throw new Error('Plugin notification action is invalid');
+    if (action.type === 'create_note' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || action.title.length > 120 || typeof action.body !== 'string' || action.body.length > 4000)) throw new Error('Plugin note action is invalid');
+    if (action.type === 'show_notification' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || action.title.length > 80 || typeof action.body !== 'string' || action.body.length > 240)) throw new Error('Plugin notification action is invalid');
     if (action.type === 'copy_text' && (Object.keys(action).some(key => !['type', 'title', 'body'].includes(key)) || typeof action.title !== 'string' || !action.title.trim() || action.title.length > 80 || typeof action.body !== 'string' || !action.body || action.body.length > 4000)) throw new Error('Plugin clipboard action is invalid');
     if (action.type === 'open_https_url') {
       if (Object.keys(action).some(key => !['type', 'title', 'url'].includes(key)) || typeof action.title !== 'string' || !action.title.trim() || action.title.length > 80 || typeof action.url !== 'string' || action.url.length > 2048) throw new Error('Plugin URL action is invalid');
