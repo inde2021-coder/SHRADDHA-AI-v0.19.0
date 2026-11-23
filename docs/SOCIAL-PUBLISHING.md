@@ -65,3 +65,8 @@ Required GitHub Actions secrets:
 - `SOCIAL_SCHEDULER_CRON_SECRET`: same secret as the backend environment
 
 The GitHub scheduled workflow calls `POST /api/social/schedule/dispatch` every five minutes. A job is claimed before the provider call. A failed provider call is marked failed and is not blindly retried, because a network timeout can occur after a platform accepted the post. Review ambiguous failures manually to avoid duplicate publishing. Scheduled posts require text-only content, a timestamp at least one minute and no more than 90 days in the future, and an explicit exact-preview confirmation.
+
+
+## Facebook and Instagram
+
+Configure `FACEBOOK_PAGE_ID` and `FACEBOOK_PAGE_ACCESS_TOKEN` for Facebook Page text posts. Configure `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_ACCESS_TOKEN` and `META_GRAPH_API_VERSION` for an Instagram professional account linked to a Facebook Page. The Android screen supports Image, Reel, Story image and Story video media types. Meta must be able to fetch the supplied public HTTPS media URL. The backend does not fetch arbitrary user URLs; it forwards the URL to Meta. Video containers are polled for processing completion before publishing. Instagram posts are immediate-only; scheduled media upload is not enabled.
