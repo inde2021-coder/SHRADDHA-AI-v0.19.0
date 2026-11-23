@@ -9,11 +9,31 @@ export function validatePublishIntent(body) {
     throw new Error('Post text must be 1-5000 characters');
   }
   const platform = String(body.platform || '').toLowerCase();
-  if (!['telegram', 'mastodon', 'bluesky', 'linkedin'].includes(platform)) throw new Error('Unsupported social platform');
+  if (!['telegram', 'mastodon', 'bluesky', 'linkedin', 'facebook', 'instagram'].includes(platform)) throw new Error('Unsupported social platform');
   const text = body.text;
   if (platform === 'bluesky' && [...text].length > 300) throw new Error('Bluesky posts must be at most 300 characters');
   if (platform === 'linkedin' && text.length > 3000) throw new Error('LinkedIn posts must be at most 3000 characters');
+  if (platform === 'instagram') {
+    if (text.length > 2200) throw new Error('Instagram captions must be at most 2200 characters');
+    const mediaKind = String(body.mediaKind || '').toLowerCase();
+    if (!['image', 'reel', 'story_image', 'story_video'].includes(mediaKind)) throw new Error('Choose an Instagram image, Reel, or Story media type');
+    return { platform, text, mediaKind, mediaUrl: validateInstagramMediaUrl(body.mediaUrl) };
+  }
+  if (body.mediaUrl !== undefined || body.mediaKind !== undefined) throw new Error('Public media URLs are only supported for Instagram');
   return { platform, text };
+}
+
+export function validateInstagramMediaUrl(value) {
+  if (typeof value !== 'string' || value.length > 2048) throw new Error('Instagram media URL must be a public HTTPS URL up to 2048 characters');
+  let url;
+  try { url = new URL(value); } catch { throw new Error('Instagram media URL is invalid'); }
+  const host = url.hostname.toLowerCase();
+  const ipv4 = /^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$/.test(host);
+  if (url.protocol !== 'https:' || url.username || url.password || url.hash ||
+      host === 'localhost' || host.endsWith('.local') || !host.includes('.') || ipv4 || host.startsWith('[')) {
+    throw new Error('Instagram media URL must use a public HTTPS hostname without credentials, IP address or fragment');
+  }
+  return url.toString();
 }
 
 export function validateBlueskyCredentials(identifier, appPassword) {
@@ -76,7 +96,7 @@ export function validateMediaAttachment(body, platform) {
 
 export function validateScheduleIntent(body, now = Date.now()) {
   const intent = validatePublishIntent(body);
-  if (body.mediaBase64 !== undefined) throw new Error('Scheduled media uploads are not enabled; schedule text-only posts.');
+  if (body.mediaBase64 !== undefined || body.mediaUrl !== undefined || intent.platform === 'instagram') throw new Error('Scheduled media publishing is not enabled; schedule text-only posts on Telegram, Mastodon, Bluesky, LinkedIn or Facebook.');
   const idempotencyKey = String(body.idempotencyKey || '');
   if (!/^[A-Za-z0-9_-]{16,80}$/.test(idempotencyKey)) throw new Error('idempotencyKey must contain 16-80 safe characters');
   const scheduledAt = String(body.scheduledAt || '');
