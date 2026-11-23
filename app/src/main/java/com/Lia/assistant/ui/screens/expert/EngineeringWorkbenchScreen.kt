@@ -49,7 +49,7 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
     var projectName by remember { mutableStateOf("LED Series Circuit") }
     var seriesLedCount by remember { mutableStateOf("1") }
     var netlist by remember { mutableStateOf("") }
-    var circuitNetlist by remember { mutableStateOf("V1 VIN 0 DC 12\\nR1 VIN VOUT 10k\\nR2 VOUT 0 10k\\n.op\\n.end") }
+    var circuitNetlist by remember { mutableStateOf("V1 VIN 0 DC 12\nR1 VIN VOUT 10k\nR2 VOUT 0 10k\n.op\n.end") }
     var boardWidthMm by remember { mutableStateOf("80") }
     var boardHeightMm by remember { mutableStateOf("50") }
     var plateThicknessMm by remember { mutableStateOf("3") }
@@ -133,9 +133,9 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
             NovaButton(text = "RUN LOCAL DC SIMULATION", onClick = {
                 result = CircuitDcSolver.solve(circuitNetlist).fold(
                     onSuccess = { solved ->
-                        "DC operating point\\n" + solved.nodeVoltages.entries.joinToString("\\n") { (node, volts) -> "V($node) = ${fmt.format(volts)} V" } +
-                            if (solved.voltageSourceCurrents.isEmpty()) "" else "\\n\\nVoltage source currents\\n" +
-                                solved.voltageSourceCurrents.entries.joinToString("\\n") { (name, amps) -> "I($name) = ${fmt.format(amps)} A" }
+                        "DC operating point\n" + solved.nodeVoltages.entries.joinToString("\n") { (node, volts) -> "V($node) = ${fmt.format(volts)} V" } +
+                            if (solved.voltageSourceCurrents.isEmpty()) "" else "\n\nVoltage source currents\n" +
+                                solved.voltageSourceCurrents.entries.joinToString("\n") { (name, amps) -> "I($name) = ${fmt.format(amps)} A" }
                     },
                     onFailure = { "Simulation failed: ${it.message ?: "invalid circuit"}" }
                 )
