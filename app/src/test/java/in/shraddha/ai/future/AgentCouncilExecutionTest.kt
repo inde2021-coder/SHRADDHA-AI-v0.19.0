@@ -53,11 +53,11 @@ class AgentCouncilExecutionTest {
         assertEquals(listOf("Planner", "Researcher"), calls)
     }
 
-    @Test fun configuredProvidersAreAssignedAcrossRolesInStableRoundRobinOrder() {
+    @Test fun configuredProvidersAreAssignedByRoleSpecialtyAndBalancedAcrossAvailableProviders() {
         val roles = AgentCouncil.plan("Test multi-provider routing").roles
         val assignments = AgentCouncil.assignProviders(roles, listOf("GEMINI", "OPENAI", "GROQ"))
         assertEquals(
-            listOf("GEMINI", "OPENAI", "GROQ", "GEMINI", "OPENAI"),
+            listOf("GEMINI", "OPENAI", "GROQ", "OPENAI", "GROQ"),
             roles.map { assignments.getValue(it.name) }
         )
     }
@@ -229,3 +229,18 @@ class AgentCouncilExecutionTest {
         assertFalse(plan.guardrails.isEmpty())
     }
 }
+
+    @Test fun specialistRoutingPrefersClaudeAndResearcherPrefersPerplexityWhenConfigured() {
+        val roles = AgentCouncil.plan("Route specialist agents").roles
+        val assigned = AgentProviderPolicy.assign(roles, listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY"))
+        assertEquals("GEMINI", assigned.getValue("Planner"))
+        assertEquals("PERPLEXITY", assigned.getValue("Researcher"))
+        assertEquals("CLAUDE", assigned.getValue("Specialist"))
+        assertEquals("OPENAI", assigned.getValue("Critic"))
+        assertEquals("GROQ", assigned.getValue("Verifier"))
+    }
+
+    @Test fun providerTransportUsesSecureGatewayWhenServerKeyIsConfigured() {
+        assertEquals(AgentTransport.CLOUD_GATEWAY_HTTPS, AgentProviderPolicy.route("CLAUDE", true).transport)
+        assertEquals(AgentTransport.DEVICE_KEY_HTTPS, AgentProviderPolicy.route("CLAUDE", false).transport)
+    }
