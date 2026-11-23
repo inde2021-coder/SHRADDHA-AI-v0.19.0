@@ -156,7 +156,7 @@ fun DeviceCenterScreen(navController: NavController) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         NovaTopBar(
-            title = "DEVICE CENTER",
+            title = "PC CONTROL CENTER",
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
@@ -168,13 +168,13 @@ fun DeviceCenterScreen(navController: NavController) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Devices, contentDescription = null, tint = colors.accent)
                 Column(Modifier.padding(start = 10.dp)) {
-                    Text("$assistantName Device Fabric", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text("Secure phone ↔ Windows PC pairing", color = colors.textSecondary, fontSize = 10.sp)
+                    Text("$assistantName • PC Control", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Secure remote access • Internet से भी काम करेगा", color = colors.textSecondary, fontSize = 11.sp)
                 }
             }
             Text(status, color = if (connected) Color(0xFF58D6A5) else colors.textSecondary, fontSize = 12.sp)
             Text(
-                "Pairing uses the HTTPS/WSS relay. Remote control and file sharing still require peer fingerprint verification and the receiving device's approval.",
+                "पहले PC pair करें। PC पर Remote Control ON और हर action की local approval जरूरी है।",
                 color = colors.textSecondary, fontSize = 11.sp
             )
         }
