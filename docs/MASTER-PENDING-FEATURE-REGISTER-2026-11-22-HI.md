@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Operator recovery now includes both process-interrupted and runtime-FAILED workflows whenever the encrypted action journal is EXECUTING/FAILED; the user can inspect the target app and explicitly attest completion before only the remaining steps are queued. Failed steps are never auto-replayed.
+
+
 - Operator restart-recovery console now distinguishes an unreadable encrypted action journal and an unavailable Main Brain scheduler vault from an empty recovery list; it refuses to offer resume/replay when the recovery evidence cannot be opened.
 
 
