@@ -102,7 +102,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
                 SearchHit(
                     id, title, source, doc.optString("sourceUri").takeIf { it.isNotBlank() },
                     chunkIndex, chunks.size, text.take(1_200), score,
-                    "[$title — $source, section ${chunkIndex + 1}/${chunks.length()}]"
+                    "[$title — $source, section ${chunkIndex + 1}/${chunks.size}]"
                 )
             }
         }.sortedWith(compareByDescending<SearchHit> { it.score }.thenBy { it.title }.thenBy { it.chunkIndex })
