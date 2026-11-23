@@ -1843,6 +1843,73 @@ class MainActivity : AppCompatActivity() {
                     }.show()
             })
 
+            val homeAssistant = `in`.shraddha.ai.brain.HomeAssistantGateway(this@MainActivity)
+            val haUrl = edit("Home Assistant HTTPS URL", "https://home.example.com")
+            val haToken = edit("Long-lived access token", "Stored encrypted on this phone").apply {
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            val haEntity = edit("Entity ID", "light.living_room")
+            val haService = edit("Allowlisted service", "turn_on / turn_off / toggle")
+            val haTemperature = edit("Climate temperature °C (climate only)", "20.0")
+            val haOutput = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            addView(TextView(this@MainActivity).apply {
+                text = "26 • SMART HOME — HOME ASSISTANT"
+                setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4))
+            })
+            addView(haUrl); addView(haToken)
+            addView(actionButton("SAVE ENCRYPTED HOME ASSISTANT SETTINGS", "HTTPS only • token stored with Android Keystore AES-GCM") {
+                lifecycleScope.launch {
+                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        homeAssistant.saveConfig(haUrl.text.toString(), haToken.text.toString())
+                    }
+                    result.onSuccess {
+                        haToken.setText("")
+                        haOutput.text = "Home Assistant settings saved encrypted. The token is not displayed again."
+                    }.onFailure { haOutput.text = "Settings not saved: ${it.message}" }
+                }
+            })
+            addView(actionButton("LIST SUPPORTED HOME ASSISTANT ENTITIES", "Light, switch, fan, climate and cover entities only") {
+                lifecycleScope.launch {
+                    haOutput.text = "Loading Home Assistant entities…"
+                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { homeAssistant.listEntities() }
+                    result.onSuccess { entities ->
+                        haOutput.text = if (entities.isEmpty()) "No supported entities were returned." else
+                            entities.take(100).joinToString("\\n") { "${it.entityId} • ${it.name} • ${it.state}" }
+                    }.onFailure { haOutput.text = "Entity list failed: ${it.message}" }
+                }
+            })
+            addView(haEntity); addView(haService); addView(haTemperature)
+            addView(actionButton("CONTROL HOME DEVICE", "Only allowlisted service calls • each action asks for fresh confirmation") {
+                val entity = haEntity.text.toString().trim()
+                val service = haService.text.toString().trim()
+                val temperature = haTemperature.text.toString().toDoubleOrNull()
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Confirm smart-home action")
+                    .setMessage("Send '$service' to '$entity'? The request will be sent to your configured Home Assistant server.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Confirm") { _, _ ->
+                        lifecycleScope.launch {
+                            haOutput.text = "Sending approved smart-home action…"
+                            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                homeAssistant.callService(true, entity, service, temperature)
+                            }
+                            haOutput.text = result.fold({ it }, { "Smart-home action failed: ${it.message}" })
+                        }
+                    }.show()
+            })
+            addView(actionButton("CLEAR HOME ASSISTANT SETTINGS", "Delete encrypted server URL and access token") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Clear Home Assistant settings?")
+                    .setMessage("The saved encrypted server URL and token will be deleted.")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
+                        homeAssistant.clearConfig().onSuccess { haOutput.text = "Home Assistant settings cleared." }
+                            .onFailure { haOutput.text = "Could not clear settings: ${it.message}" }
+                    }.show()
+            })
+            addView(haOutput)
+
             val wakePhrase = edit("Wake phrase", "Hey Shraddha")
             val wakeConsent = CheckBox(this@MainActivity).apply { text = "मैं microphone wake phrase detection के लिए स्पष्ट अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val wakeStatus = TextView(this@MainActivity).apply { setTextColor(0xFFFFC98A.toInt()); textSize = 12f }
