@@ -51,6 +51,7 @@ jobs:
           set -euo pipefail
           for branch in \
             main \
+            feature/complete-pending-shraddha-features \
             audit-fixes-v0.19.1 \
             feature/ai-phone-agent-foundation \
             feature/complete-remaining-shraddha-features \
@@ -213,7 +214,7 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
   pc-companion-windows:
-    name: Windows PC companion tests and EXE package
+    name: Windows Shraddha desktop companion tests and EXE package
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -228,32 +229,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install PC companion dependencies
+      - name: Install desktop companion dependencies and packager
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r pc_companion/requirements.txt
+          python -m pip install -r desktop-companion/shraddha-pc-companion/requirements.txt pyinstaller
 
-      - name: Run PC companion protocol, action and E2E crypto tests
-        run: python -m unittest discover -s pc_companion/tests -v
-
-      - name: Build Windows PC companion executable
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --collect-all keyring --collect-all cryptography pc_companion/agent.py
-
-      - name: Upload Windows PC companion executable
-        uses: actions/upload-artifact@v6
-        with:
-          name: shraddha-ai-pc-companion-windows-exe
-          path: dist/ShraddhaAI-PC-Companion.exe
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Install legacy desktop companion dependencies
-        run: python -m pip install -r desktop-companion/shraddha-pc-companion/requirements.txt
-
-      - name: Run legacy Windows companion policy tests on Windows
+      - name: Run desktop companion policy and protocol tests
         working-directory: desktop-companion/shraddha-pc-companion
-        run: python -m unittest -v
+        run: python -m unittest discover -s . -p "test_*.py" -v
 
-      - name: Compile legacy Windows companion entry point
+      - name: Compile desktop companion entry point
         working-directory: desktop-companion/shraddha-pc-companion
         run: python -m py_compile shraddha_pc_companion.py
+
+      - name: Build Windows desktop companion executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-Desktop-Companion --collect-all keyring --collect-all cryptography desktop-companion/shraddha-pc-companion/shraddha_pc_companion.py
+
+      - name: Upload Windows desktop companion executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-desktop-companion-windows-exe
+          path: dist/ShraddhaAI-Desktop-Companion.exe
+          if-no-files-found: error
+          retention-days: 14
