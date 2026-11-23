@@ -127,7 +127,6 @@ object VoiceSessionManager {
                         bargeInSpeechChunks = if (amp >= BARGE_IN_RMS_THRESHOLD) bargeInSpeechChunks + 1 else 0
                         if (bargeInSpeechChunks >= BARGE_IN_REQUIRED_CHUNKS) {
                             bargeInOpen = true
-                            client?.let { /* Gemini server VAD handles the interruption turn. */ }
                         }
                     } else {
                         bargeInSpeechChunks = 0
