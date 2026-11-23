@@ -30,6 +30,7 @@
         <package android:name="com.whatsapp" />
     </queries>
     <application
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
         android:name="com.Lia.assistant.LiaApplication"
         android:allowBackup="false"
         android:label="Shraddha AI"
