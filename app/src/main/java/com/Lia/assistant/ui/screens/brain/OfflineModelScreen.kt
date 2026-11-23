@@ -110,6 +110,7 @@ fun OfflineModelScreen(navController: NavController) {
                 status = "Model imported into private app storage. Run the RAM/storage preflight before loading it."
                 answer = ""
             }.onFailure { error ->
+                runCatching { File(context.filesDir, "offline-models/active.litertlm.part").delete() }
                 status = error.localizedMessage ?: "Model import failed."
             }
         }
