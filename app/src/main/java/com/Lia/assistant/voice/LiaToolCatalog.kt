@@ -75,6 +75,16 @@ object LiaToolCatalog {
         )
 
 
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "list_paired_devices",
+                description = "Lists device names, exact device IDs and online status from the authenticated paired-device relay. Use this first when the user asks to control a paired PC; ask which named Windows PC they mean if more than one device is present. Never invent or guess a device ID.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "control_paired_pc",
