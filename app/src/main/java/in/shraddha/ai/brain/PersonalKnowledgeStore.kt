@@ -97,7 +97,7 @@ class PersonalKnowledgeStore(context: Context) {
             val summary = item.optString("summary").take(1_000)
             if (validId(id) && summary.isNotBlank()) {
                 routines.putIfAbsent(id, Routine(
-                    id, "Legacy routine", "legacy-manual-trigger", summary, true,
+                    id, "Legacy routine", "legacy-manual-trigger", summary, false,
                     item.optBoolean("requiresApproval", true), System.currentTimeMillis()
                 ))
             }
