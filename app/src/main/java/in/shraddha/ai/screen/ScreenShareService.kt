@@ -36,7 +36,10 @@ class ScreenShareService : Service() {
         @Suppress("DEPRECATION")
         val data: Intent? = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java) else intent?.getParcelableExtra(EXTRA_DATA)
         targetDeviceId = intent?.getStringExtra(EXTRA_TARGET_DEVICE_ID).orEmpty()
-        if (resultCode != Activity.RESULT_OK || data == null || targetDeviceId.isBlank()) {
+        if (resultCode != Activity.RESULT_OK || data == null ||
+            !targetDeviceId.matches(Regex("[A-Za-z0-9_-]{8,80}"))) {
+            // MediaProjection consent is necessary but not sufficient: bind sharing to
+            // one valid paired-device identifier before starting a foreground service.
             stopSelf()
             return START_NOT_STICKY
         }
@@ -93,9 +96,22 @@ class ScreenShareService : Service() {
                 val croppedBitmap = Bitmap.createBitmap(createdBitmap, 0, 0, width, height)
                 cropped = croppedBitmap
                 val out = ByteArrayOutputStream()
-                cropped.compress(Bitmap.CompressFormat.JPEG, 48, out)
-                DeviceLinkManager.sendFrame(out.toByteArray(), 1, targetDeviceId)
-                bitmap.recycle(); if (cropped !== bitmap) cropped.recycle(); lastFrameAt = now
+                try {
+                    cropped.compress(Bitmap.CompressFormat.JPEG, 48, out)
+                    val frame = out.toByteArray()
+                    try {
+                        if (frame.isNotEmpty() && frame.size <= 2_500_000) {
+                            DeviceLinkManager.sendFrame(frame, 1, targetDeviceId)
+                            lastFrameAt = now
+                        }
+                    } finally {
+                        frame.fill(0)
+                    }
+                } finally {
+                    out.reset()
+                    out.close()
+                }
+                bitmap.recycle(); if (cropped !== bitmap) cropped.recycle()
             } catch (_: Exception) { /* A dropped frame is safer than stopping the share session. */ }
             finally {
                 if (cropped != null && cropped !== bitmap && !cropped.isRecycled) cropped.recycle()
