@@ -26,14 +26,16 @@ object ProviderMessageClient {
         context: Context,
         channel: String,
         recipientE164: String,
-        exactMessage: String
+        exactMessage: String,
+        requestId: String = UUID.randomUUID().toString().replace("-", "")
     ): Result<Receipt> = withContext(Dispatchers.IO) {
         runCatching {
             require(channel == "sms" || channel == "whatsapp") { "Unsupported message channel." }
-            require(Regex("^\\\\+[1-9]\\\\d{7,14}$").matches(recipientE164)) {
+            require(Regex("^\\+[1-9]\\d{7,14}$").matches(recipientE164)) {
                 "Recipient must be an international E.164 phone number."
             }
             require(exactMessage.isNotBlank() && exactMessage.length <= 4000) { "Message length is invalid." }
+            require(Regex("^[A-Za-z0-9_-]{16,80}$").matches(requestId)) { "Message request ID is invalid." }
             val config = VoiceGatewaySettings.get(context.applicationContext)
             require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
             require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
@@ -43,7 +45,9 @@ object ProviderMessageClient {
                 .put("channel", channel)
                 .put("to", recipientE164)
                 .put("text", exactMessage)
-                .put("requestId", UUID.randomUUID().toString().replace("-", ""))
+                .put("preview", exactMessage)
+                .put("confirmed", true)
+                .put("requestId", requestId)
                 .toString()
                 .toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
