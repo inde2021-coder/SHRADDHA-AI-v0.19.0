@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Settings now provides an explicit, confirmation-gated recovery panel for unresolved voice actions (EXECUTING/FAILED). The user must inspect the target app and attest manually; this only records MANUALLY_VERIFIED and never replays the call/message/action. Encrypted journal read errors are shown separately.
+
+
 - Voice action journal now treats both EXECUTING and FAILED as unresolved and blocks a new action from overwriting either. The user can explicitly mark either state as manually verified after checking the target app; only then can a new voice action replace the journal entry.
 
 
