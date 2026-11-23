@@ -18,8 +18,8 @@ class SecureMemoryVault(context: Context) {
     private fun keyForEncryption(slot: String): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
-        require(!prefs.contains("slot_$slot") && !(slot == "memory" && prefs.contains("memory"))) {
-            "Secure memory encryption key is missing; refusing to overwrite existing encrypted memory."
+        require(prefs.all.keys.none { it.startsWith("slot_") } && !prefs.contains("memory")) {
+            "Secure memory encryption key is missing; refusing to replace it while encrypted memory exists."
         }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
