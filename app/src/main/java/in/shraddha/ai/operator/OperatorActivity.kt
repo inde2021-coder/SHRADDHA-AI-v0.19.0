@@ -32,9 +32,9 @@ class OperatorActivity : Activity() {
         val assistantName = NovaPreferences.getString(
             this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
         ).trim().ifBlank { AssistantBrand.NAME }
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.rgb(9, 13, 25)) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.rgb(7, 15, 25)) }
         root.addView(TextView(this).apply { text = "$assistantName • LIVE APP OPERATOR"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 8, 0, 18) })
-        root.addView(TextView(this).apply { text = "वास्तविक स्क्रीन निरीक्षण • कार्रवाई • परिणाम सत्यापन"; textSize = 12f; setTextColor(0xFFB9A9FF.toInt()); gravity = Gravity.CENTER; setPadding(0, 0, 0, 18) })
+        root.addView(TextView(this).apply { text = "वास्तविक स्क्रीन निरीक्षण • कार्रवाई • परिणाम सत्यापन"; textSize = 12f; setTextColor(0xFF73DDE7.toInt()); gravity = Gravity.CENTER; setPadding(0, 0, 0, 18) })
         appName = field("ऐप का नाम (जैसे Chrome)")
         target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
         typed = field("फोकस किए गए सामान्य टेक्स्ट फील्ड में लिखें")
@@ -62,7 +62,7 @@ class OperatorActivity : Activity() {
                 runOperatorStep(OperatorStep(type))
             }.show()
         })
-        log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE0E6F5.toInt()); setPadding(14, 18, 14, 18) }
+        log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE6F5F7.toInt()); setPadding(14, 18, 14, 18) }
         val scroll = ScrollView(this); scroll.addView(log); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(action("← वापस") { finish() })
         setContentView(root)
@@ -471,14 +471,21 @@ class OperatorActivity : Activity() {
         }.start()
     }
     private fun field(hintText: String) = EditText(this).apply {
-        hint = hintText; setHintTextColor(0xFF8290AA.toInt()); setTextColor(Color.WHITE); textSize = 14f
-        setSingleLine(true); setPadding(14, 10, 14, 10)
-        background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF172238.toInt()); cornerRadius = 18f; setStroke(1, 0xFF354565.toInt()) }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+        hint = hintText; setHintTextColor(0xFF8BAFB8.toInt()); setTextColor(0xFFF0FBFC.toInt()); textSize = 14f
+        setSingleLine(true); setPadding(16, 12, 16, 12)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 }
     }
     private fun action(label: String, click: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
-        setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f
+        setPadding(18, 10, 18, 10)
+        setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
     /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */
     private fun runOperatorStep(step: OperatorStep) {
