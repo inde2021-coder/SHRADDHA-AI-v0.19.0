@@ -29,6 +29,7 @@ from PIL import Image, ImageTk
 from actions import execute_action
 from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
 from e2e_crypto import DeviceE2ECrypto
+from windows_hardware import get_hardware_status, execute_hardware_action
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -139,6 +140,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
         ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
         ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
+        ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
@@ -154,7 +156,7 @@ class PcCompanionApp:
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
         ttk.Label(frame, text="Android device ID").pack(anchor="w")
         ttk.Combobox(frame, textvariable=self.remote_action_var,
-                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe"),
+                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe", "hardware_status", "set_volume", "set_brightness", "power"),
                      state="readonly").pack(fill="x", pady=3)
         ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
         ttk.Label(frame, text="Action value: app name / text / scroll amount").pack(anchor="w")
@@ -165,6 +167,16 @@ class PcCompanionApp:
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
         ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
                   wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
+
+    def _show_hardware_status(self):
+        try:
+            status = get_hardware_status()
+            messagebox.showinfo("Shraddha AI • PC Hardware Status",
+                                json.dumps(status, ensure_ascii=False, indent=2)[:12000],
+                                parent=self.root)
+            self.status_var.set("PC hardware status refreshed. Unsupported vendor sensors are reported as unavailable.")
+        except Exception as exc:
+            self.status_var.set(f"Hardware status unavailable: {str(exc)[:160]}")
 
     def _monitor_labels(self):
         try:
@@ -683,6 +695,14 @@ class PcCompanionApp:
             except ValueError:
                 self.status_var.set("Scroll amount must be an integer from -20 to 20.")
                 return
+        elif kind in ("set_volume", "set_brightness"):
+            try:
+                action["percent"] = int(value)
+            except ValueError:
+                self.status_var.set("Enter a percentage from 0 to 100.")
+                return
+        elif kind == "power":
+            action["operation"] = value.lower()
         elif kind == "tap":
             action.update(x=0.5, y=0.5)
         elif kind == "swipe":
@@ -1027,7 +1047,18 @@ class PcCompanionApp:
         ok = False
         message = "Action failed."
         try:
-            ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds())
+            if action.get("kind") in {"hardware_status", "set_volume", "set_brightness", "power"}:
+                ok, result = execute_hardware_action(
+                    action,
+                    confirm_power=lambda operation: messagebox.askyesno(
+                        "Shraddha AI • Confirm Windows power action",
+                        f"Are you sure you want to {operation} this PC now?\\n\\n"
+                        "This confirmation must be approved locally on the Windows PC."
+                    )
+                )
+                message = json.dumps(result, ensure_ascii=False)[:1200] if isinstance(result, dict) else str(result)
+            else:
+                ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds())
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
