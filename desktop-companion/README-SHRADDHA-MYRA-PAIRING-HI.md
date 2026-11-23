@@ -16,7 +16,7 @@ Android app के साथ अभी tested/implemented pairing client यह�
 5. Text paste default में बंद है; enable करने पर हर paste पर पुष्टि जरूरी है।
 
 ## MYRA Ultra desktop app
-`MYRA_ULTRA_APP/` में MYRA Ultra, Coder और Website Forge अलग desktop product/source हैं। इसे अभी Shraddha relay से paired PC control client न समझें; इसके relay adapter का integration और real Windows test बाकी है.
+`MYRA_ULTRA_APP/` में MYRA Ultra, Coder और Website Forge अलग desktop product/source हैं। MYRA main window में अब **Device Link** dock उपलब्ध है, जो HTTPS relay पर Shraddha के मौजूदा consent-gated Windows PC Companion को अलग process में launch करता है। छह-अंकों का one-time Android pairing code केवल child-process environment से जाता है; बाद की pairing Windows Credential Manager से reuse हो सकती है। MYRA dock स्वयं remote actions execute नहीं करता। वास्तविक Android↔Windows pairing, relay deployment और physical remote-control acceptance test अभी owner के devices पर करना बाकी है.
 
 Windows device token Windows Credential Manager में रखा जाता है। Config file में केवल relay URL, session ID और device ID रखे जाते हैं। Pairing code/token किसी से साझा न करें।
 
