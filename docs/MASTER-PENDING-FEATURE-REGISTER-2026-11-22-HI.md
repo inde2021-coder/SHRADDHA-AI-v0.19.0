@@ -463,3 +463,14 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Project Lab validation now rejects duplicate, missing, self-referential and cyclic milestone dependencies. Unknown persisted milestone states now fail as malformed/newer data instead of silently resetting progress to TODO. No tests/build have been run.
 
 - Offline LiteRT-LM system prompt now reads the assistant identity from the shared `AssistantBrand.NAME` source instead of embedding a second hardcoded "Shraddha AI" label. This prevents the local-model prompt from drifting away from the app's central branding source. This is source-only; compile and runtime prompt verification remain pending.
+
+
+## 23 November 2026 — Personal memory persistence implementation (source-only; verification pending)
+
+- Added `PersonalKnowledgeStore`, backed by the existing Android-Keystore AES-GCM `EncryptedFeatureStore`, for bounded persistent life-timeline events, explicitly approved skill examples and approval-gated routine proposals.
+- Replaced the in-memory-only behavior of the `LifeTimeline(context)` and `PersonalSkillLearning(context)` adapters with encrypted persistence when an Android context is supplied. Existing no-context constructors remain available for deterministic JVM-only use.
+- Added a persistent routine registry. Trigger matching returns a proposal only; it does not execute an action and retains the fresh-approval requirement.
+- Connected MainActivity's Life Timeline, Personal Skill Learning and Smart Routine controls to the encrypted persistent store. Timeline and skill deletion now target their own record families; routine creation is persisted rather than saving only a latest-proposal snapshot.
+- Added Android instrumentation coverage for persistence across store recreation, ciphertext-at-rest, matching/non-matching routine proposals and scoped deletion. Tests have deliberately not been run during this feature-completion pass.
+- Legacy `advanced25_timeline`, `advanced25_skills` and `advanced25_routine_latest` preference records have not yet been migrated into the new store. Existing user data must be migrated safely before old keys are retired; this remains a compatibility task.
+- This does not implement sensor-based life logging, automatic skill inference, cloud sync, calendar-triggered routines or automatic routine execution. Those remain separate consented integrations and are not claimed complete.
