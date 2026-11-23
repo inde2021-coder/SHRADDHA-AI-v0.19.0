@@ -110,14 +110,16 @@ object ApiKeyStore {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
             val encrypted = cipher.doFinal(clear)
+            val iv = cipher.iv
             try {
                 check(prefs.edit()
                     .putString(ENCRYPTED_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-                    .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                    .putString(IV_KEY, Base64.encodeToString(iv, Base64.NO_WRAP))
                     .remove(LEGACY_KEY)
                     .commit()) { "Could not persist the encrypted GEMINI API key." }
             } finally {
                 encrypted.fill(0)
+                iv.fill(0)
             }
         } finally {
             clear.fill(0)
