@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Firebase password-protected cloud backup encryption/decryption now wipes UTF-8 plaintext, salt, IV, decoded ciphertext and intermediate AES-GCM buffers in `finally` blocks; PBKDF2 password-char/spec cleanup remains in place.
+
+
 - MainBrainSchedulerRuntime now latches a process-local persistence fault after any failed durable snapshot write and refuses subsequent task execution in that process until restart/recovery. This prevents later callers from continuing to use a scheduler whose in-memory state may no longer match its encrypted durable snapshot.
 
 
