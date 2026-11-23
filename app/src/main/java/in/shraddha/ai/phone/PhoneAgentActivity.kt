@@ -83,7 +83,7 @@ class PhoneAgentActivity : AppCompatActivity() {
         voiceStatus = TextView(this).apply {
             text = "बोलें: ‘श्रद्धा, अमित को फोन लगाओ’"
             textSize = 14f
-            setTextColor(0xFFB8C5DD.toInt())
+            setTextColor(0xFFB6CDD2.toInt())
             setPadding(0, 18, 0, 18)
         }
         root.addView(voiceStatus)
@@ -117,15 +117,17 @@ class PhoneAgentActivity : AppCompatActivity() {
         root.addView(TextView(this).apply {
             text = "EDESY AI CALL HISTORY"
             textSize = 12f
-            setTextColor(0xFFBDA8FF.toInt())
+            setTextColor(0xFF73DDE7.toInt())
             setPadding(0, 24, 0, 8)
         })
         edesyHistory = TextView(this).apply {
             text = "Edesy status not checked yet."
             textSize = 13f
-            setTextColor(0xFFE4E9F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
             setPadding(14, 14, 14, 14)
-            setBackgroundColor(0xFF111B2D.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
         }
         root.addView(edesyHistory)
         root.addView(actionButton("Refresh Edesy AI call history") { refreshEdesyHistory() })
