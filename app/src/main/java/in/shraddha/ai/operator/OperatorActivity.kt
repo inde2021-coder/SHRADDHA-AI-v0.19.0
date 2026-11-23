@@ -620,6 +620,14 @@ class OperatorActivity : Activity() {
     }
     /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */
     private fun runOperatorStep(step: OperatorStep) {
+        if (step.action == OperatorActionType.TYPE_TEXT && step.target.isBlank()) {
+            log.text = "पहले उस टेक्स्ट फील्ड का सटीक label / hint लिखें जिसमें टेक्स्ट भरना है।"
+            return
+        }
+        if (step.action == OperatorActionType.CLICK_TEXT && step.target.isBlank()) {
+            log.text = "क्लिक करने वाले दृश्य बटन/टेक्स्ट का नाम लिखें।"
+            return
+        }
         val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY
         val engine = OperatorEngine(
             emit = { event -> runOnUiThread {
