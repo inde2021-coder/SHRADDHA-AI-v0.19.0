@@ -3351,6 +3351,19 @@ class MainActivity : AppCompatActivity() {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty().trim()
             val normalized = spoken.lowercase()
             val action = when {
+                normalized in listOf("pc hardware status", "hardware status", "पीसी की जानकारी बताओ", "कंप्यूटर की स्थिति बताओ", "पीसी का स्टेटस बताओ") -> JSONObject().put("kind", "hardware_status")
+                normalized.matches(Regex("^(?:set )?(?:pc|computer) volume (?:100|[0-9]{1,2})%?$")) ||
+                    normalized.matches(Regex("^(?:पीसी|कंप्यूटर) का (?:वॉल्यूम|आवाज) (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) ->
+                    JSONObject().put("kind", "set_volume").put("percent", normalized.filter { it.isDigit() }.toInt())
+                normalized.matches(Regex("^(?:set )?(?:pc|computer) brightness (?:100|[0-9]{1,2})%?$")) ||
+                    normalized.matches(Regex("^(?:पीसी|कंप्यूटर) की ब्राइटनेस (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) ->
+                    JSONObject().put("kind", "set_brightness").put("percent", normalized.filter { it.isDigit() }.toInt())
+                normalized in listOf("pc shutdown", "shutdown pc", "पीसी बंद करो", "कंप्यूटर बंद करो") ->
+                    JSONObject().put("kind", "power").put("operation", "shutdown")
+                normalized in listOf("restart pc", "pc restart", "पीसी रीस्टार्ट करो", "कंप्यूटर रीस्टार्ट करो") ->
+                    JSONObject().put("kind", "power").put("operation", "restart")
+                normalized in listOf("sleep pc", "pc sleep", "पीसी स्लीप करो", "कंप्यूटर को स्लीप करो") ->
+                    JSONObject().put("kind", "power").put("operation", "sleep")
                 normalized in listOf("वापस जाओ", "go back", "back") -> JSONObject().put("kind", "back")
                 normalized in listOf("होम", "डेस्कटॉप दिखाओ", "show desktop", "go home") -> JSONObject().put("kind", "home")
                 normalized in listOf("नीचे स्क्रॉल करो", "scroll down") -> JSONObject().put("kind", "scroll").put("amount", -4)
