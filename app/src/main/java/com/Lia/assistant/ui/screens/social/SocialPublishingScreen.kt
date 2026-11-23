@@ -179,7 +179,7 @@ fun SocialPublishingScreen(navController: NavController) {
             title = { Text(if (pendingAction == "publish") "Confirm exact post" else "Confirm scheduled post") },
             text = { Text(
                 "Platform: ${platform.uppercase()}\n" +
-                    (if (platform == "instagram") "Media: $mediaKind\nURL: $mediaUrl\n" else "") +
+                    (if (platform == "instagram" || platform == "facebook") "Media: $mediaKind\nURL: $mediaUrl\n" else "") +
                     "\n${text.trim()}\n\n" +
                     (if (pendingAction == "schedule") "Scheduled at: $scheduledAt" else "Publish immediately")
             ) },
