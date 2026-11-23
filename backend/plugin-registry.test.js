@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { canonicalPluginPayload, validatePluginManifest, verifyPluginManifest } from './plugin-registry.js';
+import { canonicalPluginPayload, validatePluginManifest, verifyPluginManifest, authorizePluginAction } from './plugin-registry.js';
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
 const trustedKeys = { 'shraddha.core': publicKey.export({ type: 'spki', format: 'der' }).toString('base64') };
@@ -41,4 +41,17 @@ test('rejects untrusted keys and malformed manifests', () => {
   assert.throws(() => verifyPluginManifest(signed(), {}), /not trusted/);
   assert.throws(() => validatePluginManifest(signed({ id: '../bad' })), /id is invalid/);
   assert.throws(() => validatePluginManifest(signed({ version: 'latest' })), /semantic version/);
+});
+
+test('authorizes only an exact signed declarative action after explicit approval', () => {
+  const manifest = signed();
+  const result = authorizePluginAction(manifest, trustedKeys, 0, true);
+  assert.equal(result.verified, true);
+  assert.equal(result.execution, 'client-local-allowlisted');
+  assert.deepEqual(result.action, manifest.actions[0]);
+  assert.throws(() => authorizePluginAction(manifest, trustedKeys, 0, false), /Explicit user confirmation/);
+  assert.throws(() => authorizePluginAction(manifest, trustedKeys, 4, true), /index is invalid/);
+  const tampered = signed();
+  tampered.actions[0].body = 'changed';
+  assert.throws(() => authorizePluginAction(tampered, trustedKeys, 0, true), /signature verification failed/);
 });
