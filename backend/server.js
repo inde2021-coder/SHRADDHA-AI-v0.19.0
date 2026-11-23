@@ -17,6 +17,9 @@ import { verifyPluginManifest, authorizePluginAction } from './plugin-registry.j
 import { buildVisionPrompt } from './vision-analysis.js';
 import { buildFormExtractionPrompt, normalizeFormExtraction } from './form-autofill.js';
 import { resamplePcm16 } from './telephony-audio.js';
+import { hasExplicitTranscriptConsent } from './telephony-consent.js';
+import { appendCallTranscript } from './call-transcript.js';
+import { decodeCallHistoryKey, persistEncryptedCallRecord, listEncryptedCallRecords } from './call-history-store.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -67,6 +70,24 @@ function socialScheduler() {
     publish: async body => publishSocialPost(body, validatePublishIntent(body))
   });
 }
+
+function callHistoryStore() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '';
+  if (!raw) { const error = new Error('FIREBASE_SERVICE_ACCOUNT_JSON is required for encrypted durable call history'); error.statusCode = 503; throw error; }
+  let credentials;
+  try { credentials = JSON.parse(raw); } catch { const error = new Error('FIREBASE_SERVICE_ACCOUNT_JSON is invalid'); error.statusCode = 503; throw error; }
+  const key = decodeCallHistoryKey(process.env.CALL_HISTORY_ENCRYPTION_KEY || '');
+  const appName = 'shraddha-encrypted-call-history';
+  const app = getApps().find(item => item.name === appName) || initializeApp({ credential: cert(credentials) }, appName);
+  return { collection: getFirestore(app).collection('encryptedCallHistory'), key };
+}
+
+async function persistCallHistory(record) {
+  const { collection, key } = callHistoryStore();
+  try { return await persistEncryptedCallRecord(collection, record, key); }
+  finally { key.fill(0); }
+}
+
 
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
@@ -453,14 +474,32 @@ const server = http.createServer(async (req, res) => {
           aiCallSummaries: edesyConfigured() && process.env.CALL_TRANSCRIPTS_ENABLED === 'true',
           persistentCallRecording: false, whatsappDelivery: false
         },
-        callHistory: { durable: false, missing: ['CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)'] },
+        callHistory: (() => {
+          const missingHistory = [];
+          if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) missingHistory.push('FIREBASE_SERVICE_ACCOUNT_JSON');
+          try { const key = decodeCallHistoryKey(process.env.CALL_HISTORY_ENCRYPTION_KEY || ''); key.fill(0); }
+          catch { missingHistory.push('CALL_HISTORY_ENCRYPTION_KEY (base64-encoded 32-byte key)'); }
+          return { durable: missingHistory.length === 0, missing: missingHistory };
+        })(),
         required: ['EDESY_STREAM_TOKEN', 'OPENAI_API_KEY'], missing,
         note: 'Requires a provisioned Edesy DID and configured inbound Media Stream. Audio is not recorded.'
       });
     }
     if (req.method === 'GET' && req.url === '/api/telephony/edesy/calls') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      return json(res, 200, { calls: [...edesyCalls.values()].slice(-30).reverse(), durable: false });
+      try {
+        const { collection, key } = callHistoryStore();
+        try {
+          const calls = await listEncryptedCallRecords(collection, key, { limit: 30 });
+          return json(res, 200, { calls, durable: true, retentionDays: 90 });
+        } finally { key.fill(0); }
+      } catch (error) {
+        return json(res, error.statusCode || 503, {
+          calls: [...edesyCalls.values()].slice(-30).reverse().map(({ transcript, ...call }) => call),
+          durable: false,
+          warning: String(error.message || 'Encrypted call history is unavailable').slice(0, 180)
+        });
+      }
     }
     if (req.method === 'POST' && req.url === '/api/vision') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
@@ -793,17 +832,30 @@ telephonyWss.on('connection', (carrier, context = {}) => {
     callRecord.status = 'ended';
     const transcriptText = callRecord.transcript
       .map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text)
-      .join('\n')
+      .join('\\n')
       .slice(0, 24000);
-    if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
-      callRecord.summaryStatus = 'pending';
-      askProvider('openai', 'Summarize this phone call in Hindi. Return caller intent, key details, commitments and next actions. Do not invent facts.\n\n' + transcriptText)
-        .then(summary => { callRecord.summary = String(summary).slice(0, 6000); callRecord.summaryStatus = 'ready'; })
-        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); });
-    } else {
-      callRecord.summaryStatus = 'disabled';
-    }
+    const maySummarize = callRecord.transcriptConsent === true &&
+      process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText.length > 0;
+    callRecord.summaryStatus = maySummarize ? 'pending' : 'disabled';
     edesyCalls.set(callRecord.id, callRecord);
+    callRecord.persistenceStatus = 'pending';
+    const persistFinal = async () => {
+      try {
+        await persistCallHistory(callRecord);
+        callRecord.persistenceStatus = 'saved';
+      } catch (error) {
+        callRecord.persistenceStatus = 'failed';
+        callRecord.persistenceError = String(error.message || 'Encrypted call history persistence failed').slice(0, 180);
+      }
+    };
+    if (maySummarize) {
+      askProvider('openai', 'Summarize this phone call in Hindi. Return caller intent, key details, commitments and next actions. Do not invent facts.\\n\\n' + transcriptText)
+        .then(summary => { callRecord.summary = String(summary).slice(0, 6000); callRecord.summaryStatus = 'ready'; })
+        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); })
+        .finally(persistFinal);
+    } else {
+      persistFinal();
+    }
   };
 
   const shutdown = () => {
@@ -852,11 +904,11 @@ telephonyWss.on('connection', (carrier, context = {}) => {
     if (event.type === 'session.input_audio.speech_started' && carrier.readyState === WebSocket.OPEN) {
       carrier.send(JSON.stringify({ type: 'killAudio' }));
     }
-    if (callRecord && process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
-      const text = event.delta.slice(0, 500);
-      if (event.type === 'session.input_transcript.delta') callRecord.transcript.push({ speaker: 'caller', text, at: new Date().toISOString() });
-      if (event.type === 'session.output_transcript.delta') callRecord.transcript.push({ speaker: 'shraddha', text, at: new Date().toISOString() });
-      if (callRecord.transcript.length > 300) callRecord.transcript.splice(0, callRecord.transcript.length - 300);
+    if (callRecord && callRecord.transcriptConsent === true &&
+        process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && typeof event.delta === 'string') {
+      const speaker = event.type === 'session.input_transcript.delta' ? 'caller'
+        : event.type === 'session.output_transcript.delta' ? 'assistant' : null;
+      if (speaker) appendCallTranscript(callRecord, speaker, event.delta);
     }
     if (event.type === 'session.output_audio.delta' && typeof event.delta === 'string' && carrier.readyState === WebSocket.OPEN) {
       carrier.send(resamplePcm16(Buffer.from(event.delta, 'base64'), 24000, edesySampleRate), { binary: true });
@@ -898,7 +950,13 @@ telephonyWss.on('connection', (carrier, context = {}) => {
         startedAt: new Date().toISOString(),
         endedAt: null,
         status: 'active',
-        transcript: []
+        transcript: [],
+        transcriptChars: 0,
+        transcriptConsent: hasExplicitTranscriptConsent(message),
+        transcriptConsentSource: hasExplicitTranscriptConsent(message) ? 'provider_ivr' : 'none',
+        recordingEnabled: false,
+        summaryStatus: 'disabled',
+        persistenceStatus: 'pending'
       };
       edesyCalls.set(callRecord.id, callRecord);
       while (edesyCalls.size > 100) edesyCalls.delete(edesyCalls.keys().next().value);

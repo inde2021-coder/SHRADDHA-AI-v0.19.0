@@ -149,10 +149,11 @@ test('Edesy call history requires gateway authentication', async () => {
   const allowed = await fetch(`${baseUrl}/api/telephony/edesy/calls`, {
     headers: { authorization: `Bearer ${TOKEN}` }
   });
-  assert.equal(allowed.status, 200);
+  assert.equal(allowed.status, 503);
   const body = await allowed.json();
   assert.deepEqual(body.calls, []);
   assert.equal(body.durable, false);
+  assert.match(body.warning, /FIREBASE_SERVICE_ACCOUNT_JSON|CALL_HISTORY_ENCRYPTION_KEY/);
 });
 
 test('Visual Lens validates prompt and base64 before provider invocation', async () => {

@@ -175,9 +175,17 @@ fun PhoneCallAgentScreen(navController: NavController) {
                         val calls = body.optJSONArray("calls")
                         callRows = (0 until (calls?.length() ?: 0)).mapNotNull { index ->
                             val item = calls?.optJSONObject(index) ?: return@mapNotNull null
-                            "${item.optString("startedAt", "Time unavailable")} • ${item.optString("caller", "Unknown caller")} • ${item.optString("status", "unknown")}"
+                            buildString {
+                                append(item.optString("startedAt", "Time unavailable"))
+                                append(" • ").append(item.optString("caller", "Unknown caller"))
+                                append(" • ").append(item.optString("status", "unknown"))
+                                val transcript = item.optJSONArray("transcript")
+                                append(" • Transcript: ").append(transcript?.length() ?: 0).append(" lines")
+                                val summary = item.optString("summary").trim()
+                                if (summary.isNotBlank()) append("\\nSummary: ").append(summary.take(500))
+                            }
                         }
-                        resultText = "Loaded ${callRows.size} recent call record(s). Storage: ${if (body.optBoolean("durable")) "encrypted Firestore" else "temporary backend memory"}." + if (body.optString("warning").isNotBlank()) "\\n" + body.optString("warning") else ""
+                        resultText = "Loaded ${callRows.size} recent call record(s). Storage: ${if (body.optBoolean("durable")) "encrypted Firestore" else "not durable / unavailable"}." + if (body.optString("warning").isNotBlank()) "\\n" + body.optString("warning") else ""
                     }
                 }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY, enabled = !loading)
                 if (loading) Text("Connecting securely…", color = colors.accent, fontSize = 12.sp)
