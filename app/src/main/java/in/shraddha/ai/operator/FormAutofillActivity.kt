@@ -15,6 +15,8 @@ import com.Lia.assistant.agent.core.AccessibilityScreenDriver
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import java.util.concurrent.Executors
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /**
  * Consent-gated image-to-form workflow. Every proposed field is editable and
@@ -34,16 +36,23 @@ class FormAutofillActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 24, 24, 24)
-            setBackgroundColor(Color.rgb(9, 13, 25))
+            setBackgroundColor(Color.rgb(7, 19, 29))
         }
-        root.addView(label("SHRADDHA • FORM ASSISTANT", 20f, Color.WHITE))
-        root.addView(label("Image se fields nikalein • review karein • har field ko alag approve karein", 13f, 0xFFB9A9FF.toInt()))
+        root.addView(label("$assistantName • FORM ASSISTANT", 20f, Color.WHITE))
+        root.addView(label("Image se fields nikalein • review karein • har field ko alag approve karein", 13f, 0xFF73DDE7.toInt()))
         formType = Spinner(this).apply {
             adapter = ArrayAdapter(this@FormAutofillActivity, android.R.layout.simple_spinner_dropdown_item,
                 listOf("Farmer", "Plot", "Boundary", "Land deed", "Consent", "Unknown"))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 16f; setStroke(1, 0xFF2D8490.toInt())
+            }
+            setPadding(14, 8, 14, 8)
         }
         root.addView(formType)
         cloudConsent = CheckBox(this).apply {
@@ -58,7 +67,7 @@ class FormAutofillActivity : Activity() {
         root.addView(personalConsent)
         root.addView(action("Gallery se form image chunein") { chooseImage() })
         root.addView(action("AI se fields extract karein") { extractImage() })
-        status = label("Status: Pehle image chunein. Accessibility permission zaroori hai.", 13f, 0xFFE0E6F5.toInt())
+        status = label("Status: Pehle image chunein. Accessibility permission zaroori hai.", 13f, 0xFFE6F5F7.toInt())
         root.addView(status)
         resultsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(resultsContainer)
@@ -120,14 +129,16 @@ class FormAutofillActivity : Activity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(12, 12, 12, 12)
-                setBackgroundColor(0xFF172238.toInt())
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFF102A36.toInt()); cornerRadius = 16f; setStroke(1, 0xFF2D8490.toInt())
+                }
             }
             card.addView(label("${item.label} • ${(item.confidence * 100).toInt()}% confidence • ${item.status}", 13f, Color.WHITE))
-            if (item.sourceText.isNotBlank()) card.addView(label("Source: ${item.sourceText}", 11f, 0xFF9BAAC5.toInt()))
+            if (item.sourceText.isNotBlank()) card.addView(label("Source: ${item.sourceText}", 11f, 0xFFB6CDD2.toInt()))
             val edit = EditText(this).apply {
                 setText(item.value)
                 setTextColor(Color.WHITE)
-                setHintTextColor(0xFF8998B2.toInt())
+                setHintTextColor(0xFF8BAFB8.toInt())
                 hint = "Review / edit value"
                 setSingleLine(false)
             }
@@ -184,8 +195,13 @@ class FormAutofillActivity : Activity() {
     }
 
     private fun action(value: String, click: () -> Unit) = Button(this).apply {
-        text = value; setOnClickListener { click() }
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        text = value; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f; setPadding(18, 12, 18, 12)
+        setOnClickListener { click() }
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 10 }
     }
 
     override fun onDestroy() {
