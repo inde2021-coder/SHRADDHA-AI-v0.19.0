@@ -34,6 +34,10 @@ LinkedIn:
 
 LinkedIn member posting requires `w_member_social`. Organization posting requires `w_organization_social` and an appropriate organization page role. API access may require LinkedIn review/approval; a token alone does not guarantee entitlement.
 
+## Advanced publishing status
+
+The authenticated publishing endpoint currently supports text posts only. Media attachments, Reels/Stories/video uploads and scheduled publishing are not implemented in this release. Do not treat the share-sheet receiver as a publisher: it currently closes without uploading or publishing media. A future implementation must use official platform upload APIs, durable job storage, idempotent scheduling, exact media/caption previews and explicit final confirmation.
+
 ## Scope and limits
 
 - Bluesky is limited to 300 Unicode code points per post.
