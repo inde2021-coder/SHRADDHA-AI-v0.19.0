@@ -91,6 +91,7 @@ export function authorizePluginAction(manifest, trustedKeys, actionIndex, confir
     pluginId: plugin.id,
     pluginName: plugin.name,
     version: plugin.version,
+    capabilities: [...plugin.capabilities],
     actionIndex,
     action: { ...action },
     execution: 'client-local-allowlisted',
