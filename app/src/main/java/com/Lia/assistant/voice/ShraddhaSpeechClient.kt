@@ -37,6 +37,10 @@ object ShraddhaSpeechClient {
             return
         }
         val config = com.Lia.assistant.data.VoiceGatewaySettings.get(context)
+        if (config.readError != null) {
+            done(Result.failure(IllegalStateException(config.readError)))
+            return
+        }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) {
             done(Result.failure(IllegalStateException("Secure voice backend is not configured")))
             return
