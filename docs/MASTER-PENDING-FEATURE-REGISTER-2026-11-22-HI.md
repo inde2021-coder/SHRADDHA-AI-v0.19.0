@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Screen sharing now validates a paired-device ID before starting MediaProjection foreground service, caps outgoing JPEG frame size, and zeroes both the transmitted frame copy and reusable in-memory compression buffer after dispatch. The Android media-projection consent dialog remains mandatory; no physical-device test has been run.
+
+
 - Voice entry points now enforce RECORD_AUDIO permission inside `VoiceSessionManager.start()` as well as in the foreground-service boundary, so future/direct callers cannot bypass the runtime permission check.
 - Live Eyes now checks CAMERA permission before calling `startForeground()` for its camera service. This avoids Android 14+ foreground-service startup failures when camera permission has been revoked and records OFF without briefly starting camera capture.
 - Capability system prompt now uses the configured assistant name and explicitly distinguishes supported tool behavior from unsupported WhatsApp controls, draft-vs-publish, Website Forge preview-vs-deployment and local planning-vs-external-agent execution. Added a regression test for those honesty constraints.
