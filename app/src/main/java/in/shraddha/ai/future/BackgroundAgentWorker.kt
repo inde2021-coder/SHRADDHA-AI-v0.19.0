@@ -151,7 +151,8 @@ class BackgroundAgentWorker(
             return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Task cancelled; partial output is not marked complete."))
         }
 
-        return result.fold(
+        return try {
+            result.fold(
             onSuccess = { report ->
                 val saved = evidence.saveStatus(
                     schedulerTaskId,
@@ -202,6 +203,21 @@ class BackgroundAgentWorker(
                     Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message))
                 }
             }
-        )
+            )
+        } catch (failure: Exception) {
+            val message = "Background council could not persist its execution evidence: ${failure.localizedMessage ?: failure.javaClass.simpleName}".take(1000)
+            // Do not leave a claimed task RUNNING when persistence itself fails.
+            // The task is failed closed; a user can inspect partial evidence and start a new run.
+            runCatching { scheduler.fail(schedulerTaskId, message.take(500)) }
+            runCatching {
+                evidence.saveStatus(
+                    schedulerTaskId,
+                    "FAILED",
+                    message,
+                    attempt = attempt
+                )
+            }
+            Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message))
+        }
     }
 }
