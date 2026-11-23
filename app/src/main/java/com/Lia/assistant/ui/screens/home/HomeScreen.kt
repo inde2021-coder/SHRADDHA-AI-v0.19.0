@@ -49,10 +49,10 @@ import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
 
-private val NeonBlue = Color(0xFF36D8FF)
-private val NeonPurple = Color(0xFF9A55FF)
-private val NeonMint = Color(0xFF38E7C2)
-private val GlassPanel = Color(0xCC0C1B32)
+private val NeonBlue = Color(0xFFB58BFF)
+private val NeonPurple = Color(0xFFDA8CFF)
+private val NeonMint = Color(0xFF78E4D6)
+private val GlassPanel = Color(0xCC21183A)
 
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
@@ -89,7 +89,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                .background(Brush.horizontalGradient(listOf(Color(0xFF102D50), Color(0xFF24184B))))
+                .background(Brush.horizontalGradient(listOf(Color(0xFF2C1C55), Color(0xFF311B4B))))
                 .border(1.dp, Color(0x6674DFFF), RoundedCornerShape(18.dp)).padding(13.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -297,7 +297,7 @@ private fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, des
 private fun HomeActionButton(emoji: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
         modifier.clip(RoundedCornerShape(16.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF087CB8), Color(0xFF5533A9))))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF5931A5), Color(0xFF8A3FAD))))
             .border(1.dp, Color(0xAA7DEBFF), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
