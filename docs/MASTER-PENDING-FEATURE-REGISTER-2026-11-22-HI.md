@@ -225,3 +225,12 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Gemini API key input is now bounded to 512 characters, matching the provider-key store limit and rejecting oversized values before encryption.
 - Non-Gemini provider-key reads now propagate encrypted-store/Keystore failures instead of silently presenting them as an absent key; the API Keys screen catches the failure and shows a recovery warning without crashing.
 - No build, tests, emulator or live provider/Firebase checks were run. Verify voice permission grant/revoke, explicit activation, service notification lifecycle, Gemini legacy migration, Keystore loss and scheduler restore in the consolidated verification pass.
+
+
+## 23 November 2026 — Device Link transport security (source-only, not tested)
+
+- Device Link AI chat now reuses the pairing relay URL validator and rejects non-HTTPS URLs before sending a request. This prevents an incorrectly configured HTTP endpoint from receiving the optional Bearer gateway token in cleartext.
+- Applied the same HTTPS enforcement to provider-status, vision-analysis and authenticated POST endpoints (including summarize, task planning, studio, expert assistance, provider comparison and confirmed social publishing).
+- Vision requests now reject unsupported provider IDs, blank prompts and empty image payloads before network dispatch. AI chat similarly validates provider selection and non-empty prompts.
+- Pairing and WebSocket paths already required HTTPS/WSS; these additional checks close the separate HTTP-capable API paths.
+- Source-only change. No unit test, build, emulator test or live relay/API request has been run yet.
