@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice Gateway decryption now requires the original Android Keystore key; a missing key no longer triggers silent key regeneration over still-present ciphertext. Saving new settings can create a key, while reading existing encrypted settings fails closed and preserves the saved bytes.
+
+
 - Live Eyes camera service now rejects null/unknown service intents and only starts on the explicit `ACTION_START`; an unreadable encrypted gateway configuration is shown as a recovery error in both the service notification and Visual Lens screen.
 
 
