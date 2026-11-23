@@ -105,6 +105,7 @@ class ProjectPlanStore(context: Context) {
         require(ids.distinct().size == ids.size && ids.all { it.matches(Regex("[A-Za-z0-9_-]{1,40}")) }) {
             "Milestone IDs must be unique and valid."
         }
+        val milestonesById = plan.milestones.associateBy { it.id }
         plan.milestones.forEach { milestone ->
             require(milestone.title.isNotBlank() && milestone.title.length <= 160)
             require(milestone.note.length <= 500)
@@ -114,6 +115,9 @@ class ProjectPlanStore(context: Context) {
             require(milestone.dependsOn.all { it in ids && it != milestone.id }) {
                 "Milestone dependencies must reference another milestone in this project."
             }
+            require(milestone.state != MilestoneState.DONE || milestone.dependsOn.all { dependencyId ->
+                milestonesById[dependencyId]?.state == MilestoneState.DONE
+            }) { "A completed milestone has an incomplete dependency." }
         }
         // A cyclic dependency graph can never reach a valid completed state.
         val byId = plan.milestones.associateBy { it.id }
