@@ -161,9 +161,11 @@ class WorkAgentActivity : AppCompatActivity() {
         val addressRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         urlInput = EditText(this).apply {
             hint = "https://example.com या खोजने के लिए शब्द"
-            setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt())
+            setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
             setSingleLine(true); setPadding(dp(10), dp(8), dp(10), dp(8))
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
         }
         addressRow.addView(urlInput, LinearLayout.LayoutParams(0, dp(48), 1f))
         addressRow.addView(button("Go") { navigateBrowser(urlInput.text.toString()) }, LinearLayout.LayoutParams(dp(64), dp(48)))
@@ -278,7 +280,13 @@ class WorkAgentActivity : AppCompatActivity() {
 
     /** Clicks one uniquely labelled visible web control only after the user approves its exact label. */
     private fun requestBrowserClick() {
-        val field = EditText(this).apply { hint = "बटन/लिंक का ठीक वही नाम"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()) }
+        val field = EditText(this).apply {
+            hint = "बटन/लिंक का ठीक वही नाम"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
+        }
         android.app.AlertDialog.Builder(this).setTitle("वेब पेज पर क्या क्लिक करें?")
             .setMessage("केवल एक ही exact नाम वाला visible button/link चुना जाएगा। Ambiguous result पर action नहीं होगा।")
             .setView(field).setNegativeButton("रद्द", null)
@@ -310,8 +318,20 @@ class WorkAgentActivity : AppCompatActivity() {
     /** Fills one uniquely labelled, non-sensitive web field. It never submits the form. */
     private fun requestBrowserFill() {
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(4), dp(8), 0) }
-        val label = EditText(this).apply { hint = "Field label / placeholder"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()) }
-        val value = EditText(this).apply { hint = "भरने वाला text"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()); minLines = 2 }
+        val label = EditText(this).apply {
+            hint = "Field label / placeholder"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
+        }
+        val value = EditText(this).apply {
+            hint = "भरने वाला text"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt()); minLines = 2
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
+        }
         panel.addView(label); panel.addView(value)
         android.app.AlertDialog.Builder(this).setTitle("वेब फॉर्म में text भरें")
             .setMessage("Password, OTP, PIN, CVV और file fields सुरक्षित रूप से block हैं। यह action form submit नहीं करेगा।")
