@@ -79,7 +79,7 @@ fun SettingsScreen(
     val savedGateway = remember { VoiceGatewaySettings.get(context) }
     var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl) }
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
-    var gatewaySaveError by remember { mutableStateOf<String?>(null) }
+    var gatewaySaveError by remember { mutableStateOf(savedGateway.readError) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
@@ -215,7 +215,7 @@ fun SettingsScreen(
                         val current = VoiceGatewaySettings.get(context)
                         gatewayUrlInput = current.baseUrl
                         gatewayTokenInput = current.gatewayToken
-                        gatewaySaveError = null
+                        gatewaySaveError = current.readError
                         showGatewayDialog = true
                     }
                 )
@@ -414,11 +414,17 @@ fun SettingsScreen(
                 NovaButton(
                     text = "Clear",
                     onClick = {
-                        VoiceGatewaySettings.clear(context)
-                        gatewayUrlInput = ""
-                        gatewayTokenInput = ""
-                        gatewayConfigured = false
-                        showGatewayDialog = false
+                        runCatching { VoiceGatewaySettings.clear(context) }
+                            .onSuccess {
+                                gatewayUrlInput = ""
+                                gatewayTokenInput = ""
+                                gatewayConfigured = false
+                                gatewaySaveError = null
+                                showGatewayDialog = false
+                            }
+                            .onFailure {
+                                gatewaySaveError = it.localizedMessage ?: "Could not clear saved backend settings"
+                            }
                     },
                     type = NovaButtonType.TEXT
                 )
