@@ -64,7 +64,7 @@ object VoiceGatewaySettings {
             ?: error("Voice Gateway encryption key is missing; refusing to replace it while encrypted settings still exist.")
         val iv = Base64.decode(ivText, Base64.NO_WRAP)
         val encrypted = Base64.decode(cipherText, Base64.NO_WRAP)
-        try {
+        return try {
             require(iv.size == 12 && encrypted.size >= 16) { "Encrypted Voice Gateway settings are invalid." }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
