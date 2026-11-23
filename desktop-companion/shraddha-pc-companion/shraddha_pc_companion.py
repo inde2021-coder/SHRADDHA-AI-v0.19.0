@@ -38,12 +38,14 @@ def create_e2e_identity():
     return private, base64.b64encode(public).decode("ascii")
 
 
-def derive_e2e_peer_key(private, peer_public_b64: str, local_id: str, peer_id: str):
+def derive_e2e_peer_key(private, peer_public_b64: str, session_id: str, local_id: str, peer_id: str):
     import base64, hashlib
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-    if not local_id or not peer_id or local_id == peer_id:
+    if not isinstance(session_id, str) or not 1 <= len(session_id) <= 128:
+        raise ValueError("Invalid E2E session binding")
+    if not isinstance(local_id, str) or not isinstance(peer_id, str) or not 1 <= len(local_id) <= 64 or not 1 <= len(peer_id) <= 64 or local_id == peer_id:
         raise ValueError("Invalid E2E peer identity")
     encoded = base64.b64decode(peer_public_b64, validate=True)
     if not 80 <= len(encoded) <= 256:
@@ -52,11 +54,12 @@ def derive_e2e_peer_key(private, peer_public_b64: str, local_id: str, peer_id: s
     if not isinstance(public, ec.EllipticCurvePublicKey) or not isinstance(public.curve, ec.SECP256R1):
         raise ValueError("Only P-256 peer keys are accepted")
     shared = private.exchange(ec.ECDH(), public)
-    salt = (min(local_id, peer_id) + "|" + max(local_id, peer_id)).encode("utf-8")
-    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=b"shraddha-device-e2e-v1").derive(shared)
+    context = f"shraddha-device-e2e-v2|{session_id}|{'|'.join(sorted((local_id, peer_id)))}".encode("utf-8")
+    salt = hashlib.sha256(context).digest()
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=context).derive(shared)
     from cryptography.hazmat.primitives import serialization as ser
     own_public = private.public_key().public_bytes(ser.Encoding.DER, ser.PublicFormat.SubjectPublicKeyInfo)
-    digest = hashlib.sha256(b"".join(sorted((own_public, encoded)))).digest()[:16]
+    digest = hashlib.sha256(context + b"".join(sorted((own_public, encoded)))).digest()[:16]
     fingerprint = "-".join(digest.hex().upper()[i:i+4] for i in range(0, 32, 4))
     return key, fingerprint
 
@@ -1221,7 +1224,7 @@ async def run_once(args) -> None:
                 if kind == "e2e_key_offer":
                     peer_id = str(message.get("fromDeviceId", ""))
                     try:
-                        key, fingerprint = derive_e2e_peer_key(e2e_private, str(message.get("publicKey", "")), device_id, peer_id)
+                        key, fingerprint = derive_e2e_peer_key(e2e_private, str(message.get("publicKey", "")), session_id, device_id, peer_id)
                         trusted = await asyncio.to_thread(confirm,
                             f"Verify Android peer {peer_id}. Compare this fingerprint with the Android screen over a separate trusted channel:\n{fingerprint}\n\nDo both devices show exactly the same fingerprint?")
                         peer_keys[peer_id] = {"key": key, "fingerprint": fingerprint,
