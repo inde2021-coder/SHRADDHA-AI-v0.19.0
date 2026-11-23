@@ -141,6 +141,8 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
         ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
         ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
@@ -156,7 +158,7 @@ class PcCompanionApp:
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
         ttk.Label(frame, text="Android device ID").pack(anchor="w")
         ttk.Combobox(frame, textvariable=self.remote_action_var,
-                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe", "hardware_status", "set_volume", "set_brightness", "power"),
+                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe"),
                      state="readonly").pack(fill="x", pady=3)
         ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
         ttk.Label(frame, text="Action value: app name / text / scroll amount").pack(anchor="w")
@@ -167,6 +169,22 @@ class PcCompanionApp:
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
         ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
                   wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
+
+    def _set_local_hardware(self, kind):
+        from tkinter import simpledialog
+        label = "PC volume" if kind == "set_volume" else "Display brightness"
+        value = simpledialog.askinteger("Shraddha AI • " + label,
+                                        "Set percentage (0–100):", minvalue=0, maxvalue=100,
+                                        parent=self.root)
+        if value is None:
+            return
+        try:
+            ok, result = execute_hardware_action({"kind": kind, "percent": value})
+            self.status_var.set(str(result))
+            if not ok:
+                messagebox.showwarning("Hardware control unavailable", str(result), parent=self.root)
+        except Exception as exc:
+            self.status_var.set(f"Hardware control failed: {str(exc)[:140]}")
 
     def _show_hardware_status(self):
         try:
