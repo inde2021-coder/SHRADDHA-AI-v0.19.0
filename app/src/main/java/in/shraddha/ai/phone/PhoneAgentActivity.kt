@@ -22,6 +22,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -52,13 +54,16 @@ class PhoneAgentActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 40, 40, 40)
-            setBackgroundColor(0xFF080D18.toInt())
+            setPadding(24, 24, 24, 24)
+            setBackgroundColor(0xFF07131D.toInt())
         }
         root.addView(TextView(this).apply {
-            text = "SHRADDHA AI  /  PHONE AGENT"
+            text = "$assistantName  /  PHONE AGENT"
             textSize = 20f
             setTextColor(-1)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -66,12 +71,12 @@ class PhoneAgentActivity : AppCompatActivity() {
         root.addView(TextView(this).apply {
             text = "Call controls, caller events and shareable call notes."
             textSize = 14f
-            setTextColor(0xFFB8C5DD.toInt())
+            setTextColor(0xFFB6CDD2.toInt())
             setPadding(0, 18, 0, 18)
         })
         status = TextView(this).apply {
             textSize = 13f
-            setTextColor(0xFF70E0C1.toInt())
+            setTextColor(0xFF73E3D2.toInt())
             setPadding(0, 12, 0, 20)
         }
         root.addView(status)
@@ -96,14 +101,16 @@ class PhoneAgentActivity : AppCompatActivity() {
         root.addView(TextView(this).apply {
             text = "CALL HISTORY"
             textSize = 12f
-            setTextColor(0xFFBDA8FF.toInt())
+            setTextColor(0xFF73DDE7.toInt())
             setPadding(0, 22, 0, 8)
         })
         history = TextView(this).apply {
             textSize = 13f
-            setTextColor(0xFFE4E9F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
             setPadding(14, 14, 14, 14)
-            setBackgroundColor(0xFF111B2D.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
         }
         root.addView(history)
         root.addView(actionButton("Share phone call summary") { shareCallSummary() })
@@ -278,6 +285,13 @@ class PhoneAgentActivity : AppCompatActivity() {
     private fun actionButton(label: String, action: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
+        setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f
+        setPadding(18, 12, 18, 12)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
         setOnClickListener { action() }
     }
 
