@@ -122,6 +122,67 @@ object VoiceGatewaySettings {
         }
     }
 
+
+    /** Returns server-side provider keys configured on the HTTPS gateway; null means no gateway. */
+    fun configuredProviders(context: Context): Set<String>? {
+        val config = get(context)
+        require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
+        if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
+        val request = Request.Builder()
+            .url(config.baseUrl.trimEnd('/') + "/api/ai/providers")
+            .header("Authorization", "Bearer " + config.gatewayToken)
+            .get().build()
+        http.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
+                throw IllegalStateException(message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
+            }
+            val flags = JSONObject(raw).optJSONObject("providers") ?: error("Gateway provider status is malformed.")
+            return listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+                .filter { provider -> flags.optBoolean(if (provider == "CLAUDE") "anthropic" else provider.lowercase()) }
+                .toSet()
+        }
+    }
+
+    /** Calls a server-side provider over authenticated HTTPS; null means it is not configured there. */
+    fun executeAgent(
+        context: Context,
+        provider: String,
+        role: String,
+        systemInstruction: String,
+        prompt: String
+    ): String? {
+        val config = get(context)
+        require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
+        if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
+        val normalized = provider.uppercase()
+        if (normalized !in configuredProviders(context).orEmpty()) return null
+        val providerId = if (normalized == "CLAUDE") "anthropic" else normalized.lowercase()
+        val combinedPrompt = "You are the " + role.take(40) + " agent in Shraddha AI.\\n" +
+            systemInstruction.take(1800) + "\\n\\n" + prompt.take(10_000)
+        require(combinedPrompt.length <= 12_000) { "Cloud agent prompt exceeds the gateway limit." }
+        val body = JSONObject().put("provider", providerId).put("prompt", combinedPrompt)
+            .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url(config.baseUrl.trimEnd('/') + "/api/chat")
+            .header("Authorization", "Bearer " + config.gatewayToken)
+            .post(body).build()
+        http.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
+                throw IllegalStateException(message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
+            }
+            val json = JSONObject(raw)
+            require(json.optString("provider").equals(providerId, true)) {
+                "Cloud gateway returned a different provider than the assigned agent."
+            }
+            return json.optString("answer").takeIf { it.isNotBlank() }
+                ?: error("Cloud agent returned an empty response.")
+        }
+    }
+
     /** Requests a one-use, short-lived Gemini Live token. Must be called off the main thread. */
     fun fetchEphemeralToken(context: Context): String {
         val config = get(context)
