@@ -25,6 +25,17 @@ class PluginActionPolicyTest {
         assertThrows(IllegalArgumentException::class.java) { PluginActionPolicy.parse(response().put("capabilities", JSONArray())) }
     }
 
+    @Test fun acceptsSafeClipboardAndHttpsActionsAndRejectsUnsafeLinks() {
+        val copy = response("copy_text").put("action", JSONObject().put("type", "copy_text").put("title", "Copy").put("body", "Approved text"))
+        assertEquals("copy_text", PluginActionPolicy.parse(copy).type)
+        val link = response("open_https_url").put("action", JSONObject().put("type", "open_https_url").put("title", "Docs").put("url", "https://developer.android.com"))
+        assertEquals("open_https_url", PluginActionPolicy.parse(link).type)
+        for (url in listOf("http://example.com", "https://localhost", "https://127.0.0.1", "https://user:pass@example.com")) {
+            val bad = response("open_https_url").put("action", JSONObject().put("type", "open_https_url").put("title", "Bad").put("url", url))
+            assertThrows(IllegalArgumentException::class.java) { PluginActionPolicy.parse(bad) }
+        }
+    }
+
     @Test fun rejectsInvalidIdentityAndActionBounds() {
         assertThrows(IllegalArgumentException::class.java) { PluginActionPolicy.parse(response().put("pluginId", "../bad")) }
         assertThrows(IllegalArgumentException::class.java) { PluginActionPolicy.parse(response().put("actionIndex", -1)) }
