@@ -19,6 +19,7 @@ on:
       - "app/src/main/java/in/shraddha/ai/operator/**"
       - "app/src/main/java/in/shraddha/ai/phone/**"
       - "app/src/main/java/com/Lia/assistant/ui/screens/home/HomeScreen.kt"
+      - "app/src/main/java/com/Lia/assistant/ui/screens/devices/DeviceCenterScreen.kt"
       - "app/src/main/java/com/Lia/assistant/ui/screens/phone/**"
       - "app/src/test/java/in/shraddha/ai/operator/**"
       - ".github/workflows/live-operator-android.yml"
