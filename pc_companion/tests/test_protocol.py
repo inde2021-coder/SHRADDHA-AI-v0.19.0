@@ -57,6 +57,28 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(validate_remote_action_envelope({"kind": "home"}, "tap"))
         self.assertIsNone(validate_remote_action_envelope({"kind": "exec"}, "exec"))
 
+    def test_hardware_status_is_allowlisted_without_parameters(self):
+        self.assertEqual(validate_remote_action({"kind": "hardware_status"}), {"kind": "hardware_status"})
+
+    def test_volume_and_brightness_percentages_are_bounded(self):
+        self.assertEqual(validate_remote_action({"kind": "set_volume", "percent": 50}),
+                         {"kind": "set_volume", "percent": 50})
+        self.assertEqual(validate_remote_action({"kind": "set_brightness", "percent": 0}),
+                         {"kind": "set_brightness", "percent": 0})
+        for action in (
+            {"kind": "set_volume", "percent": 101},
+            {"kind": "set_volume", "percent": True},
+            {"kind": "set_brightness", "percent": -1},
+            {"kind": "set_brightness", "percent": 50.5},
+        ):
+            self.assertIsNone(validate_remote_action(action))
+
+    def test_power_actions_are_strictly_allowlisted(self):
+        for operation in ("shutdown", "restart", "sleep"):
+            self.assertEqual(validate_remote_action({"kind": "power", "operation": operation}),
+                             {"kind": "power", "operation": operation})
+        self.assertIsNone(validate_remote_action({"kind": "power", "operation": "format_disk"}))
+
     def test_unknown_action_is_rejected(self):
         self.assertIsNone(validate_remote_action({"kind": "exec", "command": "calc.exe"}))
 
