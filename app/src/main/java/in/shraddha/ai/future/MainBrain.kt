@@ -451,7 +451,15 @@ class MainBrain(
             .filter { it.state == SharedTaskScheduler.State.FAILED &&
                 it.error?.startsWith("Process stopped during execution; action was not replayed.") == true }
             .mapNotNull { snapshot ->
-                val entry = journal.get(snapshot.task.id) ?: return@mapNotNull null
+                val entry = journal.getResult(snapshot.task.id).getOrElse { error ->
+                    audit("operator_recovery", "journal_unreadable",
+                        "workflow=" + snapshot.task.id + "; reason=" + (error.javaClass.simpleName))
+                    return@mapNotNull InterruptedWorkflowReview(
+                        snapshot.task.id, snapshot.task.title, "unknown",
+                        "journal_unreadable", "unknown (encrypted journal unavailable)",
+                        OperatorActionJournal.Recovery.REVIEW_REQUIRED
+                    )
+                } ?: return@mapNotNull null
                 val recovery = journal.reconcileInterrupted(snapshot.task.id)
                 audit("operator_recovery", recovery.name.lowercase(),
                     "workflow=" + snapshot.task.id + "; step=" + entry.stepId + "; action=" + entry.action)
@@ -473,7 +481,7 @@ class MainBrain(
                 OperatorActionJournal.Recovery.VERIFIED_COMPLETE,
                 OperatorActionJournal.Recovery.MANUALLY_VERIFIED
             )) return null
-        val entry = journal.get(workflowId) ?: return null
+        val entry = journal.getResult(workflowId).getOrNull() ?: return null
         val request = decodeRequest(original.task.payload) ?: return null
         val completedIndex = request.actions.indexOfFirst { it.id == entry.stepId }
         if (completedIndex < 0) return null
