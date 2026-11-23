@@ -7,7 +7,12 @@ import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
-import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion, validateMediaAttachment } from './social-publishing.js';
+import { validatePublishIntent } from './social-publishing.js';
+import { publishSocialPost } from './social-publisher.js';
+import { createSocialScheduler } from './social-scheduler.js';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 import { verifyPluginManifest, authorizePluginAction } from './plugin-registry.js';
 import { buildVisionPrompt } from './vision-analysis.js';
 import { buildFormExtractionPrompt, normalizeFormExtraction } from './form-autofill.js';
@@ -25,9 +30,44 @@ const apiAttempts = new Map();
 const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/social/schedule','/api/social/schedule/cancel','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+
+function getSocialAdmin() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '';
+  if (!raw) {
+    const error = new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not configured for durable social scheduling');
+    error.statusCode = 503;
+    throw error;
+  }
+  let credentials;
+  try { credentials = JSON.parse(raw); } catch { const error = new Error('FIREBASE_SERVICE_ACCOUNT_JSON is invalid'); error.statusCode = 503; throw error; }
+  const appName = 'shraddha-social-scheduler';
+  const app = getApps().find(item => item.name === appName) || initializeApp({ credential: cert(credentials) }, appName);
+  return { app, auth: getAuth(app), db: getFirestore(app) };
+}
+
+async function authenticatedFirebaseUid(req) {
+  const idToken = String(req.headers['x-firebase-id-token'] || '');
+  if (!idToken || idToken.length > 8192) {
+    const error = new Error('Firebase user ID token is required for scheduled post ownership');
+    error.statusCode = 401;
+    throw error;
+  }
+  const { auth } = getSocialAdmin();
+  const decoded = await auth.verifyIdToken(idToken);
+  return decoded.uid;
+}
+
+function socialScheduler() {
+  const { db } = getSocialAdmin();
+  return createSocialScheduler({
+    collection: db.collection('socialScheduledPosts'),
+    publish: async body => publishSocialPost(body, validatePublishIntent(body))
+  });
+}
+
 const token = () => randomBytes(32).toString('base64url');
 const safeEqual = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
 const clientIp = req => {
@@ -340,133 +380,41 @@ const server = http.createServer(async (req, res) => {
       let intent;
       try { intent = validatePublishIntent(body); }
       catch (error) { return json(res, 400, { error: error.message }); }
-      if (body.mediaBase64 !== undefined && !['telegram', 'mastodon'].includes(intent.platform)) return json(res, 400, { error: 'Media publishing is not enabled for this platform; no post was sent.' });
-      if (body.mediaBase64 !== undefined && intent.platform === 'telegram' && intent.text.length > 1024) return json(res, 400, { error: 'Telegram media captions are limited to 1024 characters.' });
-      if (body.mediaBase64 !== undefined && intent.platform === 'telegram') {
-        let media;
-        try { media = validateMediaAttachment(body, intent.platform); }
-        catch (error) { return json(res, 400, { error: error.message }); }
-        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-        const chatId = process.env.TELEGRAM_CHAT_ID || '';
-        if (!/^[0-9]+:[A-Za-z0-9_-]{20,}$/.test(botToken) || !chatId || chatId.length > 128) return json(res, 503, { error: 'Telegram bot credentials and destination are not configured on the server' });
-        const form = new FormData();
-        form.set('chat_id', chatId);
-        form.set('caption', intent.text);
-        form.set(media.kind === 'video' ? 'video' : 'photo', new Blob([media.bytes], { type: media.mimeType }), media.fileName);
-        let upstream;
-        try {
-          upstream = await fetch(`https://api.telegram.org/bot${botToken}/${media.kind === 'video' ? 'sendVideo' : 'sendPhoto'}`, {
-            method: 'POST', body: form, signal: AbortSignal.timeout(45000)
-          });
-        } catch { return json(res, 502, { error: 'Telegram media upload could not be reached' }); }
-        const result = await upstream.json().catch(() => ({}));
-        if (!upstream.ok || result.ok !== true) return json(res, 502, { error: 'Telegram did not accept the media post' });
-        return json(res, 200, { ok: true, platform: 'telegram', mediaKind: media.kind, messageId: result.result?.message_id || null, confirmedPreview: true });
-      }
-      if (intent.platform === 'telegram') {
-        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-        const chatId = process.env.TELEGRAM_CHAT_ID || '';
-        if (!/^[0-9]+:[A-Za-z0-9_-]{20,}$/.test(botToken) || !chatId || chatId.length > 128) {
-          return json(res, 503, { error: 'Telegram bot credentials and destination are not configured on the server' });
-        }
-        let upstream;
-        try {
-          upstream = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            signal: AbortSignal.timeout(15000),
-            body: JSON.stringify({ chat_id: chatId, text: intent.text, disable_web_page_preview: true })
-          });
-        } catch { return json(res, 502, { error: 'Telegram service could not be reached' }); }
-        const result = await upstream.json().catch(() => ({}));
-        if (!upstream.ok || result.ok !== true) return json(res, 502, { error: 'Telegram did not accept the post' });
-        return json(res, 200, { ok: true, platform: 'telegram', messageId: result.result?.message_id || null, confirmedPreview: true });
-      }
-      if (intent.platform === 'bluesky') {
-        let credentials;
-        try { credentials = validateBlueskyCredentials(process.env.BLUESKY_IDENTIFIER || '', process.env.BLUESKY_APP_PASSWORD || ''); }
-        catch (error) { return json(res, 503, { error: error.message }); }
-        let session;
-        try {
-          const login = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
-            method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
-            body: JSON.stringify({ identifier: credentials.identifier, password: credentials.appPassword })
-          });
-          session = await login.json().catch(() => ({}));
-          if (!login.ok || typeof session.accessJwt !== 'string' || typeof session.did !== 'string') return json(res, 502, { error: 'Bluesky authentication failed; check the app password and identifier' });
-          const post = await fetch('https://bsky.social/xrpc/com.atproto.repo.createRecord', {
-            method: 'POST', headers: { authorization: 'Bearer ' + session.accessJwt, 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
-            body: JSON.stringify({ repo: session.did, collection: 'app.bsky.feed.post', record: { '$type': 'app.bsky.feed.post', text: intent.text, createdAt: new Date().toISOString() } })
-          });
-          const result = await post.json().catch(() => ({}));
-          if (!post.ok || typeof result.uri !== 'string') return json(res, 502, { error: 'Bluesky did not accept the post' });
-          return json(res, 200, { ok: true, platform: 'bluesky', postId: result.uri, url: result.uri, confirmedPreview: true });
-        } catch { return json(res, 502, { error: 'Bluesky service could not be reached' }); }
-      }
-      if (intent.platform === 'linkedin') {
-        const accessToken = process.env.LINKEDIN_ACCESS_TOKEN || '';
-        let author, version;
-        try { author = validateLinkedInAuthor(process.env.LINKEDIN_AUTHOR_URN || ''); version = validateLinkedInVersion(process.env.LINKEDIN_VERSION || ''); }
-        catch (error) { return json(res, 503, { error: error.message }); }
-        if (!accessToken || accessToken.length > 8192) return json(res, 503, { error: 'LINKEDIN_ACCESS_TOKEN is not configured on the server' });
-        let upstream;
-        try {
-          upstream = await fetch('https://api.linkedin.com/rest/posts', {
-            method: 'POST',
-            headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json', 'Linkedin-Version': version, 'X-Restli-Protocol-Version': '2.0.0' },
-            signal: AbortSignal.timeout(20000),
-            body: JSON.stringify({ author, commentary: intent.text, visibility: 'PUBLIC', distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] }, lifecycleState: 'PUBLISHED', isReshare: false })
-          });
-        } catch { return json(res, 502, { error: 'LinkedIn service could not be reached' }); }
-        const result = await upstream.json().catch(() => ({}));
-        const postId = upstream.headers.get('x-restli-id') || result.id || result.urn;
-        if (!upstream.ok || typeof postId !== 'string') return json(res, 502, { error: 'LinkedIn did not accept the post', status: upstream.status });
-        return json(res, 200, { ok: true, platform: 'linkedin', postId, confirmedPreview: true });
-      }
-      const base = process.env.MASTODON_BASE_URL || '';
-      const accessToken = process.env.MASTODON_ACCESS_TOKEN || '';
-      if (!base || !accessToken) return json(res, 503, { error: 'Mastodon server URL and access token are not configured on the server' });
-      let origin, visibility;
-      try { origin = validateMastodonOrigin(base); visibility = mastodonVisibility(process.env.MASTODON_VISIBILITY); }
-      catch (error) { return json(res, 503, { error: error.message }); }
-      if (body.mediaBase64 !== undefined) {
-        let media;
-        try { media = validateMediaAttachment(body, intent.platform); }
-        catch (error) { return json(res, 400, { error: error.message }); }
-        let upload;
-        try {
-          const form = new FormData();
-          form.set('file', new Blob([media.bytes], { type: media.mimeType }), media.fileName);
-          upload = await fetch(origin + '/api/v2/media', {
-            method: 'POST', headers: { authorization: 'Bearer ' + accessToken },
-            body: form, signal: AbortSignal.timeout(45000)
-          });
-        } catch { return json(res, 502, { error: 'Mastodon media upload could not be reached' }); }
-        const uploaded = await upload.json().catch(() => ({}));
-        if (!upload.ok || typeof uploaded.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the media upload' });
-        let post;
-        try {
-          post = await fetch(origin + '/api/v1/statuses', {
-            method: 'POST', headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
-            signal: AbortSignal.timeout(20000),
-            body: JSON.stringify({ status: intent.text, visibility, media_ids: [uploaded.id] })
-          });
-        } catch { return json(res, 502, { error: 'Mastodon media post could not be reached; check account before retrying' }); }
-        const result = await post.json().catch(() => ({}));
-        if (!post.ok || typeof result.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the media post; media may remain in the account upload library' });
-        return json(res, 200, { ok: true, platform: 'mastodon', mediaKind: media.kind, postId: result.id, url: typeof result.url === 'string' ? result.url : '', visibility, confirmedPreview: true });
-      }
-      let upstream;
+      try { return json(res, 200, await publishSocialPost(body, intent)); }
+      catch (error) { return json(res, error.statusCode || 502, { error: String(error.message || 'Social publish failed').slice(0, 240), ...(error.details || {}) }); }
+    }
+    if (req.method === 'POST' && req.url === '/api/social/schedule') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const body = await readBody(req, 24 * 1024);
       try {
-        upstream = await fetch(origin + '/api/v1/statuses', {
-          method: 'POST',
-          headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
-          signal: AbortSignal.timeout(15000),
-          body: JSON.stringify({ status: intent.text, visibility })
-        });
-      } catch { return json(res, 502, { error: 'Mastodon service could not be reached' }); }
-      const result = await upstream.json().catch(() => ({}));
-      if (!upstream.ok || typeof result.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the post' });
-      return json(res, 200, { ok: true, platform: 'mastodon', postId: result.id, url: typeof result.url === 'string' ? result.url : '', visibility, confirmedPreview: true });
+        const uid = await authenticatedFirebaseUid(req);
+        const scheduled = await socialScheduler().schedule(uid, body);
+        return json(res, scheduled.idempotent ? 200 : 201, { ok: true, ...scheduled });
+      } catch (error) {
+        return json(res, error.statusCode || 400, { error: String(error.message || 'Schedule request failed').slice(0, 240) });
+      }
+    }
+    if (req.method === 'POST' && req.url === '/api/social/schedule/cancel') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const body = await readBody(req, 8 * 1024);
+      try {
+        const uid = await authenticatedFirebaseUid(req);
+        const cancelled = await socialScheduler().cancel(uid, body.id);
+        return json(res, 200, { ok: true, ...cancelled });
+      } catch (error) {
+        return json(res, error.statusCode || 400, { error: String(error.message || 'Cancel request failed').slice(0, 240) });
+      }
+    }
+    if (req.method === 'POST' && req.url === '/api/social/schedule/dispatch') {
+      const expected = process.env.SOCIAL_SCHEDULER_CRON_SECRET || '';
+      const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+      if (!expected || !safeEqual(supplied, expected)) return json(res, 401, { error: 'Scheduler authorization is required' });
+      try {
+        const result = await socialScheduler().dispatchDue(10);
+        return json(res, 200, { ok: true, ...result });
+      } catch (error) {
+        return json(res, error.statusCode || 503, { error: String(error.message || 'Scheduler dispatch failed').slice(0, 240) });
+      }
     }
     if (req.method === 'POST' && req.url === '/api/telephony/edesy/preflight') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
