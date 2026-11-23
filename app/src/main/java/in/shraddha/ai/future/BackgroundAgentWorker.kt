@@ -259,6 +259,9 @@ class BackgroundAgentWorker(
                                 attempt = attempt,
                                 providerUsage = usageSnapshot
                             ).getOrThrow()
+                            // Persist evidence first, then enforce the user's monthly cost ceiling.
+                            // Throwing here stops the council before it can start another provider call.
+                            CouncilCostBudget.recordUsageAndEnforce(applicationContext, usage)
                         }
                     }
                 )
