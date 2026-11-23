@@ -1,0 +1,32 @@
+name: Social publishing scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shraddha-social-scheduler
+  cancel-in-progress: false
+
+jobs:
+  dispatch-due-posts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch due Firestore jobs
+        env:
+          BACKEND_ORIGIN: ${{ secrets.SHRADDHA_BACKEND_ORIGIN }}
+          CRON_SECRET: ${{ secrets.SOCIAL_SCHEDULER_CRON_SECRET }}
+        run: |
+          test -n "$BACKEND_ORIGIN"
+          test -n "$CRON_SECRET"
+          case "$BACKEND_ORIGIN" in https://*) ;; *) echo "Backend origin must use HTTPS"; exit 1;; esac
+          curl --fail-with-body --silent --show-error \
+            -X POST "${BACKEND_ORIGIN%/}/api/social/schedule/dispatch" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}'
