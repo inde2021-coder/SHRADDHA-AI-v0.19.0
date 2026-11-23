@@ -1,0 +1,70 @@
+name: Android APK Size Audit
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "gradlew"
+      - "build.gradle*"
+      - "settings.gradle*"
+      - "gradle.properties"
+      - ".github/workflows/android-size-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-size-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arm64-release-size:
+    name: Build and measure arm64 release APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Build optimized arm64 release APK and AAB
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:testDebugUnitTest :app:lintRelease :app:assembleRelease :app:bundleRelease -PshraddhaAbi=arm64-v8a --no-daemon --stacktrace
+      - name: Generate APK and AAB size report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p size-report
+          apk="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          aab="app/build/outputs/bundle/release/app-release.aab"
+          test -n "$apk"
+          test -s "$aab"
+          {
+            echo "# Shraddha AI Android size report"
+            echo
+            echo "- Commit: $GITHUB_SHA"
+            echo "- ABI filter: arm64-v8a"
+            echo "- Native library packaging: compressed in APK; extracted at install time"
+            echo
+            echo "| Artifact | Bytes | MiB |"
+            echo "|---|---:|---:|"
+            for file in "$apk" "$aab"; do
+              bytes="$(stat -c '%s' "$file")"
+              mib="$(awk -v n="$bytes" 'BEGIN { printf "%.2f", n/1048576 }')"
+              printf '| %s | %s | %s |\n' "$(basename "$file")" "$bytes" "$mib"
+            done
+          } > size-report/ANDROID-SIZE-REPORT.md
+          cp "$apk" size-report/
+          cp "$aab" size-report/
+          cat size-report/ANDROID-SIZE-REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-arm64-size-audit
+          path: size-report/*
+          if-no-files-found: error
+          retention-days: 30
