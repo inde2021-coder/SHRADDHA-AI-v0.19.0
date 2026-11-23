@@ -42,6 +42,7 @@ jobs:
       windows: ${{ steps.filter.outputs.windows }}
       storyboard: ${{ steps.filter.outputs.storyboard }}
       voice: ${{ steps.filter.outputs.voice }}
+      validation: ${{ steps.filter.outputs.validation }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -117,8 +118,8 @@ jobs:
 
   android-emulator:
     name: Android emulator instrumentation and launch validation
-    if: github.event_name == 'workflow_dispatch'
-    needs: android
+    if: needs.changes.outputs.validation == 'true'
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -280,7 +281,7 @@ jobs:
 
   voice-engine-check:
     needs: changes
-    if: needs.changes.outputs.voice == 'true'
+    if: needs.changes.outputs.voice == 'true' || needs.changes.outputs.validation == 'true'
     name: Custom voice engine source validation
     runs-on: ubuntu-24.04
     steps:
