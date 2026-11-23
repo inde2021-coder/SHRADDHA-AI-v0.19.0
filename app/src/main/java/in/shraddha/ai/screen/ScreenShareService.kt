@@ -23,6 +23,14 @@ import com.Lia.assistant.data.AssistantBrand
 import java.io.ByteArrayOutputStream
 
 /** User-started screen sharing. Android's MediaProjection consent dialog is required every session. */
+private class WipingByteArrayOutputStream : ByteArrayOutputStream() {
+    fun wipe() {
+        buf.fill(0)
+        reset()
+    }
+}
+
+/** User-started screen sharing. Android's MediaProjection consent dialog is required every session. */
 class ScreenShareService : Service() {
     private var projection: MediaProjection? = null
     private var reader: ImageReader? = null
@@ -95,7 +103,7 @@ class ScreenShareService : Service() {
                 createdBitmap.copyPixelsFromBuffer(buffer)
                 val croppedBitmap = Bitmap.createBitmap(createdBitmap, 0, 0, width, height)
                 cropped = croppedBitmap
-                val out = ByteArrayOutputStream()
+                val out = WipingByteArrayOutputStream()
                 try {
                     cropped.compress(Bitmap.CompressFormat.JPEG, 48, out)
                     val frame = out.toByteArray()
@@ -108,7 +116,7 @@ class ScreenShareService : Service() {
                         frame.fill(0)
                     }
                 } finally {
-                    out.reset()
+                    out.wipe()
                     out.close()
                 }
                 bitmap.recycle(); if (cropped !== bitmap) cropped.recycle()
