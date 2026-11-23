@@ -74,6 +74,7 @@ fun VoiceScreen(
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val isActive by VoiceSessionManager.isActive.collectAsState()
     val statusText by VoiceSessionManager.statusText.collectAsState()
+    val microphoneReady = isActive && state !in setOf(NovaOrbState.IDLE, NovaOrbState.CONNECTING, NovaOrbState.ERROR)
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val orbSize = screenWidth * 0.70f
@@ -248,12 +249,22 @@ fun VoiceScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Mic,
-                            contentDescription = if (isActive) "Turn microphone off" else "Turn microphone on",
-                            tint = if (isActive) colors.accent else colors.textPrimary,
+                            contentDescription = when {
+                                !isActive -> "Turn microphone on"
+                                state == NovaOrbState.CONNECTING -> "Cancel voice connection"
+                                state == NovaOrbState.ERROR -> "Stop voice session with an error"
+                                else -> "Turn microphone off"
+                            },
+                            tint = if (microphoneReady) colors.accent else colors.textPrimary,
                             modifier = Modifier.size(26.dp)
                         )
                         Text(
-                            text = if (isActive) "MICROPHONE ON · TAP TO TURN OFF" else "MICROPHONE OFF · TAP TO TURN ON",
+                            text = when {
+                                !isActive -> "MICROPHONE OFF · TAP TO TURN ON"
+                                state == NovaOrbState.CONNECTING -> "CONNECTING · TAP TO CANCEL"
+                                state == NovaOrbState.ERROR -> "VOICE SESSION ERROR · TAP TO STOP"
+                                else -> "MICROPHONE ON · TAP TO TURN OFF"
+                            },
                             color = colors.textPrimary,
                             fontSize = 12.sp
                         )
