@@ -91,6 +91,26 @@ test("Firestore vault deletion is owner-scoped for all bounded encrypted memory 
   await assertFails(deleteDoc(doc(alice, "users/alice/vault/invalid key")));
 });
 
+test("Firebase Storage social media uploads are bounded and owner-scoped", async () => {
+  const alice = env.authenticatedContext("alice").storage();
+  const bob = env.authenticatedContext("bob").storage();
+  const path = "social-media/alice/" + "a".repeat(32);
+  const metadata = {
+    contentType: "image/jpeg",
+    customMetadata: { ownerUid: "alice", purpose: "social-publishing" }
+  };
+  const bytes = new Uint8Array([1, 2, 3, 4]);
+  await assertSucceeds(uploadBytes(ref(alice, path), bytes, metadata));
+  await assertSucceeds(getBytes(ref(alice, path), 16));
+  await assertFails(getBytes(ref(bob, path), 16));
+  await assertFails(uploadBytes(ref(alice, "social-media/bob/" + "b".repeat(32)), bytes, metadata));
+  await assertFails(uploadBytes(ref(alice, "social-media/alice/not-a-uuid"), bytes, metadata));
+  await assertFails(uploadBytes(ref(alice, "social-media/alice/" + "c".repeat(32)), bytes, {
+    contentType: "application/pdf",
+    customMetadata: { ownerUid: "alice", purpose: "social-publishing" }
+  }));
+});
+
 test("Firebase Storage accepts only owner-scoped encrypted backup objects", async () => {
   const alice = env.authenticatedContext("alice").storage();
   const bob = env.authenticatedContext("bob").storage();
