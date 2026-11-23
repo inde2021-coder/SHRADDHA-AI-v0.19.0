@@ -32,11 +32,16 @@ class BackgroundAgentWorker(
         // WorkManager may restart this provider-reasoning task after process death.
         // Previous stage evidence is retained encrypted; retries are a new attempt and
         // never mark an incomplete run as completed.
-        scheduler.requeueInterrupted(schedulerTaskId) { task ->
-            runCatching { JSONObject(task.payload).optString("kind") == "background_council" }
-                .getOrDefault(false)
+        val claimed = try {
+            scheduler.requeueInterrupted(schedulerTaskId) { task ->
+                runCatching { JSONObject(task.payload).optString("kind") == "background_council" }
+                    .getOrDefault(false)
+            }
+            scheduler.claimSpecific(schedulerTaskId)
+        } catch (error: Exception) {
+            val message = "Main Brain could not safely claim the background council task: ${error.localizedMessage ?: error.javaClass.simpleName}"
+            return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message.take(1000)))
         }
-        val claimed = scheduler.claimSpecific(schedulerTaskId)
         if (claimed == null) {
             val current = scheduler.get(schedulerTaskId)
             return if (current?.state == SharedTaskScheduler.State.PENDING || current?.state == SharedTaskScheduler.State.RUNNING) {
