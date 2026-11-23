@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, clear_peer_key, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, clear_peer_key, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, validate_missing_transfer_indexes, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -137,6 +137,13 @@ class PcCompanionPolicyTests(unittest.TestCase):
             self.assertEqual(manifest['chunks'], 2)
             self.assertEqual(len(read_file_chunk(str(path), 0)), 48 * 1024)
             with self.assertRaises(ValueError): read_file_chunk(str(path), 2)
+
+    def test_resume_manifest_requires_unique_bounded_indexes(self):
+        self.assertEqual(validate_missing_transfer_indexes([0, 2, 4], 5), [0, 2, 4])
+        self.assertEqual(validate_missing_transfer_indexes([], 5), [])
+        for indexes, total in [([0, 0], 5), ([-1], 5), ([5], 5), ([True], 5), (list(range(2201)), 2201)]:
+            with self.assertRaises(ValueError):
+                validate_missing_transfer_indexes(indexes, total)
 
     def test_file_write_is_atomic_requires_overwrite_and_keeps_backup(self):
         import tempfile
