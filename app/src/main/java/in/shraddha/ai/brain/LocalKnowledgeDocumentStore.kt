@@ -67,9 +67,6 @@ class LocalKnowledgeDocumentStore(context: Context) {
             .put("sourceUri", sourceUri)
             .put("content", normalized)
             .put("importedAt", importedAt)
-            .put("chunks", JSONArray().apply {
-                chunks.forEach { put(JSONObject().put("index", it.index).put("text", it.text)) }
-            })
         index += id
         store.putAll(mapOf(DOC_PREFIX + id to record.toString(), INDEX_KEY to JSONArray(index.sorted()).toString()))
             .getOrThrow()
@@ -88,10 +85,9 @@ class LocalKnowledgeDocumentStore(context: Context) {
             require(doc.getInt("schemaVersion") == 1 && doc.getString("id") == id) {
                 "Knowledge document is malformed or belongs to another schema."
             }
-            val chunks = doc.getJSONArray("chunks")
-            (0 until chunks.length()).mapNotNull { i ->
-                val chunk = chunks.getJSONObject(i)
-                val text = chunk.getString("text")
+            val chunks = chunk(doc.getString("content"))
+            chunks.mapNotNull { chunk ->
+                val text = chunk.text
                 val words = tokens(text)
                 if (words.isEmpty()) return@mapNotNull null
                 val frequencies = words.groupingBy { it }.eachCount()
@@ -100,12 +96,12 @@ class LocalKnowledgeDocumentStore(context: Context) {
                 val tf = terms.sumOf { term -> (frequencies[term] ?: 0).coerceAtMost(5).toDouble() }
                 val coverage = matched.toDouble() / terms.size
                 val score = coverage * (1.0 + tf / terms.size)
-                val chunkIndex = chunk.getInt("index")
+                val chunkIndex = chunk.index
                 val title = doc.getString("title")
                 val source = doc.getString("sourceLabel")
                 SearchHit(
                     id, title, source, doc.optString("sourceUri").takeIf { it.isNotBlank() },
-                    chunkIndex, chunks.length(), text.take(1_200), score,
+                    chunkIndex, chunks.size, text.take(1_200), score,
                     "[$title — $source, section ${chunkIndex + 1}/${chunks.length()}]"
                 )
             }
