@@ -14,6 +14,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -84,7 +85,7 @@ fun SmartHomeScreen(navController: NavController) {
         NovaGlassCard {
             Text("HOME ASSISTANT • SECURE CONNECTOR", color = colors.accent)
             OutlinedTextField(value = baseUrl, onValueChange = { baseUrl = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("HTTPS server URL") }, singleLine = true)
-            OutlinedTextField(value = token, onValueChange = { token = it.take(4096) }, modifier = Modifier.fillMaxWidth(), label = { Text("Long-lived access token") }, singleLine = true)
+            OutlinedTextField(value = token, onValueChange = { token = it.take(4096) }, modifier = Modifier.fillMaxWidth(), label = { Text("Long-lived access token") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
             NovaButton(text = "SAVE ENCRYPTED CONNECTION", onClick = {
                 busy = true
                 scope.launch {
@@ -138,7 +139,7 @@ fun SmartHomeScreen(navController: NavController) {
             Text("Optional local-network broker adapter. The broker must expose TLS (ssl://host:8883) and implement the documented topic contract.", color = colors.textSecondary)
             OutlinedTextField(value = mqttUrl, onValueChange = { mqttUrl = it.take(300) }, modifier = Modifier.fillMaxWidth(), label = { Text("TLS broker URL • ssl://host:8883") }, singleLine = true)
             OutlinedTextField(value = mqttUser, onValueChange = { mqttUser = it.take(128) }, modifier = Modifier.fillMaxWidth(), label = { Text("MQTT username") }, singleLine = true)
-            OutlinedTextField(value = mqttPassword, onValueChange = { mqttPassword = it.take(512) }, modifier = Modifier.fillMaxWidth(), label = { Text("MQTT password") }, singleLine = true)
+            OutlinedTextField(value = mqttPassword, onValueChange = { mqttPassword = it.take(512) }, modifier = Modifier.fillMaxWidth(), label = { Text("MQTT password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
             OutlinedTextField(value = mqttTopic, onValueChange = { mqttTopic = it.take(120) }, modifier = Modifier.fillMaxWidth(), label = { Text("Base topic") }, singleLine = true)
             NovaButton(text = "SAVE MQTT SETTINGS", onClick = {
                 val saved = mqtt.saveConfig(mqttUrl, mqttUser, mqttPassword, mqttTopic)
