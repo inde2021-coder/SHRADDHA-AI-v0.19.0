@@ -243,7 +243,13 @@ object AgentCouncil {
         budget: CouncilExecutionBudget = CouncilExecutionBudget(),
         onProviderCall: (provider: String, providerCalls: Int, totalCalls: Int, elapsedMs: Long) -> Unit = { _, _, _, _ -> }
     ): Result<CouncilExecutionReport> {
-        val configured = MainBrainProviderGateway.configuredProviders(context)
+        val configured = runCatching { MainBrainProviderGateway.configuredProviders(context) }
+            .getOrElse { error ->
+                return Result.failure(IllegalStateException(
+                    "Could not read encrypted AI provider credentials: ${error.message ?: "secure storage unavailable"}",
+                    error
+                ))
+            }
         val selected = preferredProviders.map { it.uppercase() }.distinct().filter { it in configured }
         if (selected.isEmpty()) return Result.failure(IllegalStateException("No selected AI provider API key is configured. Add provider keys in Settings."))
         val assistantName = getAssistantName(context)
@@ -275,7 +281,13 @@ object AgentCouncil {
         shouldContinue: () -> Boolean = { true },
         onProgress: (role: String, index: Int, total: Int) -> Unit = { _, _, _ -> }
     ): Result<CouncilExecutionReport> {
-        val configured = MainBrainProviderGateway.configuredProviders(context, preferredProvider)
+        val configured = runCatching { MainBrainProviderGateway.configuredProviders(context, preferredProvider) }
+            .getOrElse { error ->
+                return Result.failure(IllegalStateException(
+                    "Could not read encrypted AI provider credentials: ${error.message ?: "secure storage unavailable"}",
+                    error
+                ))
+            }
         if (configured.isEmpty()) return Result.failure(IllegalStateException("No AI provider API key is configured. Add at least one provider key in Settings."))
         return executeWithProviderSet(context, goal, language, configured, shouldContinue, onProgress)
     }
