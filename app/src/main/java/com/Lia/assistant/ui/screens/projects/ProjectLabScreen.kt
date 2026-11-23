@@ -48,6 +48,9 @@ import `in`.shraddha.ai.future.MilestoneState
 import `in`.shraddha.ai.future.ProjectPlan
 import `in`.shraddha.ai.future.ProjectPlanStore
 import `in`.shraddha.ai.future.ProjectWorkspace
+import `in`.shraddha.ai.future.ProjectWorkflowStore
+import `in`.shraddha.ai.future.ProjectWorkflowSnapshot
+import `in`.shraddha.ai.future.ProjectWorkflowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +69,7 @@ fun ProjectLabScreen(navController: NavController) {
     var isSaving by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<ProjectPlan?>(null) }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    var workflowSnapshots by remember { mutableStateOf<Map<String, ProjectWorkflowSnapshot>>(emptyMap()) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -120,6 +124,30 @@ fun ProjectLabScreen(navController: NavController) {
         }.onFailure {
             // An unreadable encrypted vault is not an empty project list.
             status = "Project vault could not be opened: ${it.message ?: "encrypted storage unavailable"}. Existing plans were not changed."
+        }
+    }
+
+    LaunchedEffect(plans) {
+        if (plans.isNotEmpty()) {
+            val store = ProjectWorkflowStore(context)
+            val restored = withContext(Dispatchers.IO) {
+                plans.mapNotNull { plan ->
+                    store.load(plan.id).getOrNull()?.let { plan.id to it }
+                }.toMap()
+            }
+            workflowSnapshots = restored
+        }
+    }
+
+    fun updateWorkflow(plan: ProjectPlan, operation: suspend () -> Result<ProjectWorkflowSnapshot>) {
+        scope.launch {
+            isSaving = true
+            val result = withContext(Dispatchers.IO) { operation() }
+            result.onSuccess { snapshot ->
+                workflowSnapshots = workflowSnapshots + (plan.id to snapshot)
+                status = snapshot.message
+            }.onFailure { status = it.message ?: "Workflow operation failed." }
+            isSaving = false
         }
     }
 
@@ -256,7 +284,63 @@ fun ProjectLabScreen(navController: NavController) {
                             Text("Delete", color = Color(0xFFFF9A9A))
                         }
                     }
-                    plan.milestones.forEach { milestone ->
+                    val workflow = workflowSnapshots[plan.id]
+                    val workflowStore = remember(plan.id) { ProjectWorkflowStore(context) }
+                    Text(
+                        "Workflow: ${workflow?.state?.name ?: "NOT STARTED"} • ${workflow?.completedMilestoneIds?.size ?: 0}/${plan.milestones.size} checkpoints",
+                        color = colors.textSecondary, fontSize = 10.sp
+                    )
+                    if (workflow?.message?.isNotBlank() == true) {
+                        Text(workflow.message, color = colors.textTertiary, fontSize = 9.sp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        NovaButton(
+                            text = if (workflow == null || workflow.state == ProjectWorkflowState.IDLE) "Start workflow" else "Resume workflow",
+                            onClick = {
+                                if (workflow == null || workflow.state == ProjectWorkflowState.IDLE || workflow.state == ProjectWorkflowState.COMPLETED) {
+                                    updateWorkflow(plan) { workflowStore.start(plan) }
+                                } else updateWorkflow(plan) { workflowStore.resume(plan.id) }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSaving && workflow?.state != ProjectWorkflowState.RUNNING
+                        )
+                        NovaButton(
+                            text = "Pause",
+                            onClick = { updateWorkflow(plan) { workflowStore.pause(plan.id) } },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSaving && workflow?.state == ProjectWorkflowState.RUNNING,
+                            type = com.Lia.assistant.ui.components.NovaButtonType.SECONDARY
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        NovaButton(
+                            text = "Rollback checkpoint",
+                            onClick = {
+                                scope.launch {
+                                    isSaving = true
+                                    val result = withContext(Dispatchers.IO) { workflowStore.rollbackLastCheckpoint(plan) }
+                                    result.onSuccess { (revisedPlan, snapshot) ->
+                                        val saved = withContext(Dispatchers.IO) { ProjectPlanStore(context).save(revisedPlan) }
+                                        saved.onSuccess {
+                                            plans = it
+                                            workflowSnapshots = workflowSnapshots + (plan.id to snapshot)
+                                            status = snapshot.message
+                                        }.onFailure { status = it.message ?: "Rollback plan save failed." }
+                                    }.onFailure { status = it.message ?: "Rollback failed." }
+                                    isSaving = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSaving && workflow != null && workflow.state != ProjectWorkflowState.RUNNING && workflow.completedMilestoneIds.isNotEmpty(),
+                            type = com.Lia.assistant.ui.components.NovaButtonType.SECONDARY
+                        )
+                    }
+                    Text(
+                        "Workflow records checkpoints and recovers interrupted sessions as PAUSED. It does not silently replay external actions; milestone completion still needs explicit confirmation.",
+                        color = colors.textTertiary, fontSize = 9.sp
+                    )
+
+                                        plan.milestones.forEach { milestone ->
                         Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
                             Text(milestone.title, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             if (milestone.note.isNotBlank()) {
