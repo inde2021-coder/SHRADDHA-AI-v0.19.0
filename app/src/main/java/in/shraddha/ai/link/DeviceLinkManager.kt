@@ -170,6 +170,7 @@ object DeviceLinkManager {
                                 "file_transfer_chunk" -> "$transferId:$index"
                                 "clipboard_payload" -> msg.optString("requestId")
                                 "data_share_payload" -> msg.optString("requestId") + "|" + msg.optString("category")
+                                "task_handoff", "task_handoff_response" -> msg.optString("requestId")
                                 else -> ""
                             }
                             val aad = "$sessionId|$peerId|$deviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
@@ -208,13 +209,24 @@ object DeviceLinkManager {
                                         .put("category", msg.optString("category")).put("requestId", msg.optString("requestId"))
                                     onPeerMessage?.invoke(payload)
                                 }
+                                "task_handoff" -> {
+                                    payload.put("type", "task_handoff").put("fromDeviceId", peerId)
+                                        .put("fromDeviceName", msg.optString("fromDeviceName"))
+                                    onPeerMessage?.invoke(payload)
+                                }
+                                "task_handoff_response" -> {
+                                    payload.put("type", "task_handoff_response").put("fromDeviceId", peerId)
+                                        .put("fromDeviceName", msg.optString("fromDeviceName"))
+                                        .put("taskId", msg.optString("requestId"))
+                                    onPeerMessage?.invoke(payload)
+                                }
                                 else -> onStatus?.invoke("Unsupported encrypted peer message blocked.")
                             }
                         }
 
                         "e2e_key_offer" -> {
                             val peerId = msg.optString("fromDeviceId")
-                            val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), deviceId.orEmpty(), peerId)
+                            val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), sessionId.orEmpty(), deviceId.orEmpty(), peerId)
                             peerKeys.put(peerId, PeerKeyState(derived.first, derived.second))?.key?.fill(0)
                             clearVisualFrameState(peerId)
                             onE2EVerification?.invoke(peerId, derived.second)
@@ -270,6 +282,11 @@ object DeviceLinkManager {
                             }
                             if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) {
                                 sendE2EKeyOffer(peerId)
+                            } else if (peerId.isNotBlank() && peerId != deviceId) {
+                                // A disconnect is a key-lifecycle boundary. Do not retain a stale
+                                // peer key or replay window for a future reconnect.
+                                peerKeys.remove(peerId)?.key?.fill(0)
+                                clearVisualFrameState(peerId)
                             }
                             onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}")
                             onPeerMessage?.invoke(msg)
@@ -296,8 +313,7 @@ object DeviceLinkManager {
                 val localDevice = deviceId ?: return
                 val sequenceKey = envelope.sourceDeviceId + ":" + envelope.frameType
                 val jpeg = try {
-                    val aad = "$localSession|${envelope.sourceDeviceId}|$localDevice|visual_frame|${envelope.frameType}|${envelope.sequence}"
-                        .toByteArray(Charsets.UTF_8)
+                    val aad = DeviceE2ECrypto.visualFrameAad(localSession, envelope.sourceDeviceId, localDevice, envelope.frameType, envelope.sequence)
                     synchronized(receivedVisualFrameLock) {
                         if (envelope.sequence <= (receivedVisualFrameSequence[sequenceKey] ?: 0L)) return
                         val plain = DeviceE2ECrypto.decrypt(
@@ -322,13 +338,19 @@ object DeviceLinkManager {
                 else onScreenFrame?.invoke(envelope.sourceDeviceId, jpeg)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (socket === webSocket) socket = null
+                if (socket === webSocket) {
+                    socket = null
+                    clearAllPeerE2EState()
+                }
                 onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
                 if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
                 scheduleReconnect(baseUrl, pair)
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                if (socket === webSocket) socket = null
+                if (socket === webSocket) {
+                    socket = null
+                    clearAllPeerE2EState()
+                }
                 onStatus?.invoke("Disconnected: $reason")
                 if (code != 1000) scheduleReconnect(baseUrl, pair)
             }
@@ -584,6 +606,14 @@ object DeviceLinkManager {
         }
     }
 
+    /** Clear all ephemeral peer keys and replay windows at a transport boundary. */
+    private fun clearAllPeerE2EState() {
+        peerKeys.values.forEach { it.key.fill(0) }
+        peerKeys.clear()
+        nextVisualFrameSequence.clear()
+        synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
+    }
+
     fun isE2ETrusted(peerId: String): Boolean =
         peerKeys[peerId]?.let { it.localConfirmed && it.remoteConfirmed } == true
 
@@ -620,7 +650,7 @@ object DeviceLinkManager {
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
-        if (kind == "clipboard_payload") message.put("requestId", correlationId)
+        if (kind == "clipboard_payload" || kind == "task_handoff" || kind == "task_handoff_response") message.put("requestId", correlationId)
         if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
         return socket?.send(message.toString()) == true
@@ -639,18 +669,23 @@ object DeviceLinkManager {
         if (relativePath.isBlank()) false else sendAction(targetDeviceId,
             JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
 
-    fun sendChat(message: String): Boolean = socket?.send(JSONObject().put("type", "chat").put("message", message.take(2000)).toString()) == true
+    @Deprecated("Plaintext peer chat is disabled; use a mutually verified E2E peer channel.")
+    fun sendChat(message: String): Boolean = false
     fun sendTaskHandoff(targetDeviceId: String, title: String, description: String, steps: List<String>): Boolean {
         if (targetDeviceId.isBlank() || title.isBlank() || description.isBlank()) return false
+        val taskId = java.util.UUID.randomUUID().toString().replace("-", "")
         val cleanSteps = JSONArray()
         steps.take(12).forEach { cleanSteps.put(it.take(300)) }
-        val task = JSONObject().put("title", title.trim().take(120))
+        val task = JSONObject().put("id", taskId).put("title", title.trim().take(120))
             .put("description", description.trim().take(3000)).put("steps", cleanSteps)
-        return socket?.send(JSONObject().put("type", "task_handoff").put("targetDeviceId", targetDeviceId).put("task", task).toString()) == true
+        val payload = JSONObject().put("task", task).put("expiresAt", System.currentTimeMillis() + 15 * 60_000L)
+        return sendEncryptedPeerMessage(targetDeviceId, "task_handoff", payload, taskId)
     }
-    fun respondTaskHandoff(fromDeviceId: String, taskId: String, accepted: Boolean, note: String = ""): Boolean =
-        socket?.send(JSONObject().put("type", "task_handoff_response").put("targetDeviceId", fromDeviceId)
-            .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
+    fun respondTaskHandoff(fromDeviceId: String, taskId: String, accepted: Boolean, note: String = ""): Boolean {
+        if (!taskId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return false
+        return sendEncryptedPeerMessage(fromDeviceId, "task_handoff_response",
+            JSONObject().put("accepted", accepted).put("note", note.take(300)), taskId)
+    }
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
         if (jpeg.size !in 1..2_500_000 || !DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
@@ -667,7 +702,7 @@ object DeviceLinkManager {
         val sequence = nextVisualFrameSequence.computeIfAbsent(sequenceKey) { AtomicLong(0L) }.incrementAndGet()
         if (sequence <= 0L) return false
         return try {
-            val aad = "$localSession|$localDevice|$target|visual_frame|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+            val aad = DeviceE2ECrypto.visualFrameAad(localSession, localDevice, target, frameType, sequence)
             val sealed = DeviceE2ECrypto.encrypt(state.key, jpeg, aad)
             val nonce = java.util.Base64.getDecoder().decode(sealed.nonce)
             val ciphertext = java.util.Base64.getDecoder().decode(sealed.ciphertext)
@@ -687,11 +722,8 @@ object DeviceLinkManager {
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectPending = false
         reconnectAttempts = 0
-        peerKeys.values.forEach { it.key.fill(0) }
-        peerKeys.clear()
+        clearAllPeerE2EState()
         pairedDeviceSnapshots.clear()
-        nextVisualFrameSequence.clear()
-        synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
         if (clearSavedCredentials) appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
         lastBaseUrl = null
         lastPair = null

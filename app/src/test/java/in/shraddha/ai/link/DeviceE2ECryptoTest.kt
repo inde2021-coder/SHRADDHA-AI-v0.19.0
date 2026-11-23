@@ -10,17 +10,40 @@ class DeviceE2ECryptoTest {
     @Test fun p256PeersDeriveSameKeyAndFingerprint() {
         val android = DeviceE2ECrypto.create()
         val windows = DeviceE2ECrypto.create()
-        val (androidKey, androidFingerprint) = android.derivePeerKey(windows.publicKeyBase64(), "android-1", "windows-1")
-        val (windowsKey, windowsFingerprint) = windows.derivePeerKey(android.publicKeyBase64(), "windows-1", "android-1")
+        val (androidKey, androidFingerprint) = android.derivePeerKey(windows.publicKeyBase64(), "session-123456789012", "android-1", "windows-1")
+        val (windowsKey, windowsFingerprint) = windows.derivePeerKey(android.publicKeyBase64(), "session-123456789012", "windows-1", "android-1")
         assertArrayEquals(androidKey, windowsKey)
         assertEquals(androidFingerprint, windowsFingerprint)
+    }
+
+    @Test fun visualFrameAadBindsSessionPeersFrameTypeAndSequence() {
+        assertArrayEquals(
+            "session-1|source|target|visual_frame|2|42".toByteArray(Charsets.UTF_8),
+            DeviceE2ECrypto.visualFrameAad("session-1", "source", "target", 2, 42L)
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            DeviceE2ECrypto.visualFrameAad("session-1", "same", "same", 1, 1L)
+        }
+    }
+
+    @Test fun peerKeyAndFingerprintAreBoundToTheSameSession() {
+        val alice = DeviceE2ECrypto.create()
+        val bob = DeviceE2ECrypto.create()
+        val (sessionOneKey, sessionOneFingerprint) =
+            alice.derivePeerKey(bob.publicKeyBase64(), "session-one-123456", "alice", "bob")
+        val (sessionTwoKey, sessionTwoFingerprint) =
+            alice.derivePeerKey(bob.publicKeyBase64(), "session-two-123456", "alice", "bob")
+        assertNotEquals(sessionOneKey.toList(), sessionTwoKey.toList())
+        assertNotEquals(sessionOneFingerprint, sessionTwoFingerprint)
+        sessionOneKey.fill(0)
+        sessionTwoKey.fill(0)
     }
 
     @Test fun aesGcmAuthenticatesPayloadAndAssociatedData() {
         val alice = DeviceE2ECrypto.create()
         val bob = DeviceE2ECrypto.create()
-        val (keyA, _) = alice.derivePeerKey(bob.publicKeyBase64(), "a", "b")
-        val (keyB, _) = bob.derivePeerKey(alice.publicKeyBase64(), "b", "a")
+        val (keyA, _) = alice.derivePeerKey(bob.publicKeyBase64(), "session-123456789012", "a", "b")
+        val (keyB, _) = bob.derivePeerKey(alice.publicKeyBase64(), "session-123456789012", "b", "a")
         val aad = "a|b|remote_action".toByteArray()
         val plain = """{"kind":"back"}""".toByteArray()
         val sealed = DeviceE2ECrypto.encrypt(keyA, plain, aad)
@@ -37,8 +60,8 @@ class DeviceE2ECryptoTest {
     @Test fun quickShareCategoryAndOneTimeRequestAreBoundToAesGcmAad() {
         val sender = DeviceE2ECrypto.create()
         val receiver = DeviceE2ECrypto.create()
-        val senderKey = sender.derivePeerKey(receiver.publicKeyBase64(), "sender", "receiver").first
-        val receiverKey = receiver.derivePeerKey(sender.publicKeyBase64(), "receiver", "sender").first
+        val senderKey = sender.derivePeerKey(receiver.publicKeyBase64(), "session-123456789012", "sender", "receiver").first
+        val receiverKey = receiver.derivePeerKey(sender.publicKeyBase64(), "session-123456789012", "receiver", "sender").first
         val requestId = "shareRequest123456"
         val aad = "session|sender|receiver|data_share_payload|$requestId|media".toByteArray(Charsets.UTF_8)
         val payload = """{"fileName":"photo.jpg","sizeBytes":4,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","payload":"/////w=="}""".toByteArray()
@@ -57,8 +80,8 @@ class DeviceE2ECryptoTest {
         val a = DeviceE2ECrypto.create()
         val b = DeviceE2ECrypto.create()
         val c = DeviceE2ECrypto.create()
-        val (ab, _) = a.derivePeerKey(b.publicKeyBase64(), "a", "b")
-        val (ac, _) = a.derivePeerKey(c.publicKeyBase64(), "a", "c")
+        val (ab, _) = a.derivePeerKey(b.publicKeyBase64(), "session-123456789012", "a", "b")
+        val (ac, _) = a.derivePeerKey(c.publicKeyBase64(), "session-123456789012", "a", "c")
         assertNotEquals(ab.toList(), ac.toList())
     }
 }

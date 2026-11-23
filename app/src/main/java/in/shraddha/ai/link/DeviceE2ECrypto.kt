@@ -22,8 +22,16 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
 
     fun publicKeyBase64(): String = Base64.getEncoder().encodeToString(pair.public.encoded)
 
-    fun derivePeerKey(peerPublicKeyBase64: String, localDeviceId: String, peerDeviceId: String): Pair<ByteArray, String> {
-        require(localDeviceId.isNotBlank() && peerDeviceId.isNotBlank() && localDeviceId != peerDeviceId)
+    fun derivePeerKey(
+        peerPublicKeyBase64: String,
+        sessionId: String,
+        localDeviceId: String,
+        peerDeviceId: String
+    ): Pair<ByteArray, String> {
+        require(sessionId.isNotBlank() && sessionId.length <= 128) { "Invalid E2E session binding" }
+        require(localDeviceId.length in 1..64 && peerDeviceId.length in 1..64 && localDeviceId != peerDeviceId) {
+            "Invalid E2E peer identity"
+        }
         val encoded = Base64.getDecoder().decode(peerPublicKeyBase64)
         require(encoded.size in 80..256) { "Invalid ECDH public key size" }
         val publicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded))
@@ -31,27 +39,49 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
         agreement.init(pair.private)
         agreement.doPhase(publicKey, true)
         val shared = agreement.generateSecret()
-        val salt = (minOf(localDeviceId, peerDeviceId) + "|" + maxOf(localDeviceId, peerDeviceId)).toByteArray(Charsets.UTF_8)
+        val sortedIds = listOf(localDeviceId, peerDeviceId).sorted().joinToString("|")
+        val context = "shraddha-device-e2e-v2|$sessionId|$sortedIds".toByteArray(Charsets.UTF_8)
+        val salt = MessageDigest.getInstance("SHA-256").digest(context)
         val prkMac = Mac.getInstance("HmacSHA256")
-        prkMac.init(SecretKeySpec(salt, "HmacSHA256"))
-        val prk = prkMac.doFinal(shared)
-        prkMac.init(SecretKeySpec(prk, "HmacSHA256"))
-        prkMac.update("shraddha-device-e2e-v1".toByteArray(Charsets.UTF_8))
-        prkMac.update(1.toByte())
-        val key = prkMac.doFinal()
+        val prk = try {
+            prkMac.init(SecretKeySpec(salt, "HmacSHA256"))
+            val extracted = prkMac.doFinal(shared)
+            prkMac.init(SecretKeySpec(extracted, "HmacSHA256"))
+            prkMac.update(context)
+            prkMac.update(1.toByte())
+            val expanded = prkMac.doFinal()
+            extracted.fill(0)
+            expanded
+        } finally {
+            shared.fill(0)
+            salt.fill(0)
+        }
         val publicKeys = listOf(pair.public.encoded, encoded).sortedWith { a, b ->
             val limit = minOf(a.size, b.size)
             var result = 0
             for (i in 0 until limit) { result = (a[i].toInt() and 255).compareTo(b[i].toInt() and 255); if (result != 0) break }
             if (result == 0) a.size.compareTo(b.size) else result
         }
-        val fingerprintDigest = MessageDigest.getInstance("SHA-256").digest(publicKeys[0] + publicKeys[1])
+        val fingerprintDigest = MessageDigest.getInstance("SHA-256").digest(context + publicKeys[0] + publicKeys[1])
         val fingerprint = fingerprintDigest.take(16).joinToString("") { "%02X".format(it) }.chunked(4).joinToString("-")
-        shared.fill(0); prk.fill(0)
-        return key to fingerprint
+        context.fill(0)
+        return prk to fingerprint
     }
 
     companion object {
+        fun visualFrameAad(
+            sessionId: String,
+            sourceDeviceId: String,
+            targetDeviceId: String,
+            frameType: Int,
+            sequence: Long
+        ): ByteArray {
+            require(sessionId.isNotBlank() && sessionId.length <= 128)
+            require(sourceDeviceId.length in 1..64 && targetDeviceId.length in 1..64 && sourceDeviceId != targetDeviceId)
+            require(frameType in 1..2 && sequence > 0L)
+            return "$sessionId|$sourceDeviceId|$targetDeviceId|visual_frame|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+        }
+
         fun create(): DeviceE2ECrypto {
             val generator = KeyPairGenerator.getInstance("EC")
             generator.initialize(ECGenParameterSpec("secp256r1"))

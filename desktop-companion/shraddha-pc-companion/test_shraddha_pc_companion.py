@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, clear_peer_key, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -10,8 +10,8 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data, decrypt_e2e_message
         android_private, android_public = create_e2e_identity()
         windows_private, windows_public = create_e2e_identity()
-        android_key, android_fp = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
-        windows_key, windows_fp = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
+        android_key, android_fp = derive_e2e_peer_key(android_private, windows_public, "session-1", "android-1", "windows-1")
+        windows_key, windows_fp = derive_e2e_peer_key(windows_private, android_public, "session-1", "windows-1", "android-1")
         self.assertEqual(android_key, windows_key)
         self.assertEqual(android_fp, windows_fp)
         self.assertRegex(android_fp, r"^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$")
@@ -39,14 +39,41 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         with self.assertRaises(Exception):
             AESGCM(windows_key).decrypt(nonce, encrypted, aad + b"tampered")
 
+    def test_peer_ephemeral_key_is_discarded_on_disconnect_or_revocation(self):
+        from shraddha_pc_companion import clear_peer_key
+        mutable_key = bytearray(b"k" * 32)
+        peers = {"peer-1": {"key": mutable_key, "local_confirmed": True, "remote_confirmed": True}}
+        self.assertTrue(clear_peer_key(peers, "peer-1"))
+        self.assertEqual(mutable_key, bytearray(32))
+        self.assertNotIn("peer-1", peers)
+        self.assertFalse(clear_peer_key(peers, "peer-1"))
+
+    def test_e2e_peer_keys_are_bound_to_the_relay_session(self):
+        from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key
+        alice_private, alice_public = create_e2e_identity()
+        bob_private, bob_public = create_e2e_identity()
+        alice_key, alice_fingerprint = derive_e2e_peer_key(
+            alice_private, bob_public, "session-one-123456", "alice-device", "bob-device"
+        )
+        bob_key, bob_fingerprint = derive_e2e_peer_key(
+            bob_private, alice_public, "session-one-123456", "bob-device", "alice-device"
+        )
+        other_session_key, other_fingerprint = derive_e2e_peer_key(
+            alice_private, bob_public, "session-two-123456", "alice-device", "bob-device"
+        )
+        self.assertEqual(alice_key, bob_key)
+        self.assertEqual(alice_fingerprint, bob_fingerprint)
+        self.assertNotEqual(alice_key, other_session_key)
+        self.assertNotEqual(alice_fingerprint, other_fingerprint)
+
     def test_encrypted_small_file_share_binds_one_time_request_and_category(self):
         import base64, json
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data, decrypt_e2e_message
         android_private, android_public = create_e2e_identity()
         windows_private, windows_public = create_e2e_identity()
-        android_key, _ = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
-        windows_key, _ = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
+        android_key, _ = derive_e2e_peer_key(android_private, windows_public, "session-1", "android-1", "windows-1")
+        windows_key, _ = derive_e2e_peer_key(windows_private, android_public, "session-1", "windows-1", "android-1")
         request_id = "shareRequest123456"
         category = "media"
         payload = {"fileName": "photo.jpg", "mimeType": "image/jpeg", "contentType": "file",
@@ -72,8 +99,8 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from e2e_crypto import DeviceE2ECrypto
         alice = DeviceE2ECrypto()
         bob = DeviceE2ECrypto()
-        alice_key, alice_fingerprint = alice.derive_peer_key(bob.public_key_base64, "android-device", "windows-device")
-        bob_key, bob_fingerprint = bob.derive_peer_key(alice.public_key_base64, "windows-device", "android-device")
+        alice_key, alice_fingerprint = alice.derive_peer_key(bob.public_key_base64, "session-1", "android-device", "windows-device")
+        bob_key, bob_fingerprint = bob.derive_peer_key(alice.public_key_base64, "session-1", "windows-device", "android-device")
         self.assertEqual(alice_key, bob_key)
         self.assertEqual(alice_fingerprint, bob_fingerprint)
         sealed = DeviceE2ECrypto.encrypt(alice_key, b"approved remote command", b"android-device|windows-device|remote_action")
@@ -86,7 +113,7 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         from e2e_crypto import DeviceE2ECrypto
         alice = DeviceE2ECrypto()
         with self.assertRaises(ValueError):
-            alice.derive_peer_key("%%%invalid%%%", "a", "b")
+            alice.derive_peer_key("%%%invalid%%%", "session-1", "a", "b")
         with self.assertRaises(ValueError):
             DeviceE2ECrypto.encrypt(b"x" * 31, b"hello", b"aad")
 
@@ -172,13 +199,12 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertEqual(reconnect_delay(99), 60.0)
 
 
-    def test_android_screen_frame_protocol_is_decoded_and_validated(self):
-        packet = bytes([6]) + b"phone1" + bytes([1]) + b"\xff\xd8jpeg"
-        self.assertEqual(decode_screen_frame(packet), ("phone1", 1, b"\xff\xd8jpeg"))
+    def test_plaintext_android_screen_frames_are_rejected(self):
+        packet = bytes([6]) + b"phone1" + bytes([1, 255, 216]) + b"jpeg"
         with self.assertRaises(ValueError):
-            decode_screen_frame(b"\x00")
+            decode_screen_frame(packet)
         with self.assertRaises(ValueError):
-            decode_screen_frame(bytes([1]) + b"x" + bytes([9]) + b"jpeg")
+            decode_screen_frame(b"\\x00")
 
 
     def test_windows_can_build_bounded_actions_for_an_approved_android_phone(self):

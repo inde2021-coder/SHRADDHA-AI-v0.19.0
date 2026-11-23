@@ -38,12 +38,14 @@ def create_e2e_identity():
     return private, base64.b64encode(public).decode("ascii")
 
 
-def derive_e2e_peer_key(private, peer_public_b64: str, local_id: str, peer_id: str):
+def derive_e2e_peer_key(private, peer_public_b64: str, session_id: str, local_id: str, peer_id: str):
     import base64, hashlib
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-    if not local_id or not peer_id or local_id == peer_id:
+    if not isinstance(session_id, str) or not 1 <= len(session_id) <= 128:
+        raise ValueError("Invalid E2E session binding")
+    if not isinstance(local_id, str) or not isinstance(peer_id, str) or not 1 <= len(local_id) <= 64 or not 1 <= len(peer_id) <= 64 or local_id == peer_id:
         raise ValueError("Invalid E2E peer identity")
     encoded = base64.b64decode(peer_public_b64, validate=True)
     if not 80 <= len(encoded) <= 256:
@@ -52,13 +54,28 @@ def derive_e2e_peer_key(private, peer_public_b64: str, local_id: str, peer_id: s
     if not isinstance(public, ec.EllipticCurvePublicKey) or not isinstance(public.curve, ec.SECP256R1):
         raise ValueError("Only P-256 peer keys are accepted")
     shared = private.exchange(ec.ECDH(), public)
-    salt = (min(local_id, peer_id) + "|" + max(local_id, peer_id)).encode("utf-8")
-    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=b"shraddha-device-e2e-v1").derive(shared)
+    context = f"shraddha-device-e2e-v2|{session_id}|{'|'.join(sorted((local_id, peer_id)))}".encode("utf-8")
+    salt = hashlib.sha256(context).digest()
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=context).derive(shared)
     from cryptography.hazmat.primitives import serialization as ser
     own_public = private.public_key().public_bytes(ser.Encoding.DER, ser.PublicFormat.SubjectPublicKeyInfo)
-    digest = hashlib.sha256(b"".join(sorted((own_public, encoded)))).digest()[:16]
+    digest = hashlib.sha256(context + b"".join(sorted((own_public, encoded)))).digest()[:16]
     fingerprint = "-".join(digest.hex().upper()[i:i+4] for i in range(0, 32, 4))
     return key, fingerprint
+
+
+def clear_peer_key(peer_keys: dict, peer_id: str) -> bool:
+    """Drop ephemeral E2E material when a paired peer disconnects or is revoked."""
+    if not isinstance(peer_keys, dict) or not isinstance(peer_id, str) or not peer_id:
+        return False
+    state = peer_keys.pop(peer_id, None)
+    if not isinstance(state, dict):
+        return False
+    key = state.pop("key", None)
+    if isinstance(key, bytearray):
+        key[:] = b"\x00" * len(key)
+    state.clear()
+    return True
 
 
 def e2e_associated_data(session_id: str, sender_id: str, receiver_id: str, kind: str, correlation: str) -> bytes:
@@ -429,21 +446,49 @@ def search_safe_text_files(root: str, relative: str, query: str, limit: int = 20
 
 
 def decode_screen_frame(packet: bytes) -> tuple[str, int, bytes]:
-    """Decode relay frame [source-id-length][source-id][frame-type][JPEG]."""
-    if not isinstance(packet, (bytes, bytearray)) or len(packet) < 4:
-        raise ValueError("Invalid or truncated screen frame")
+    """Reject the retired plaintext visual-frame protocol."""
+    raise ValueError("Plaintext visual frames are disabled; use decode_encrypted_screen_frame")
+
+
+def decode_encrypted_screen_frame(packet: bytes, peer_keys: dict, session_id: str,
+                                  local_device_id: str, seen_sequences: dict) -> tuple[str, int, bytes]:
+    """Authenticate and decrypt the relay's source-prefixed visual-frame v2 envelope."""
+    import struct
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    if not isinstance(packet, (bytes, bytearray)) or len(packet) < 1 + 1 + 8 + 12 + 16:
+        raise ValueError("Invalid or truncated encrypted visual frame")
     source_length = packet[0]
-    frame_offset = 1 + source_length
-    if source_length < 1 or frame_offset >= len(packet):
-        raise ValueError("Screen frame source ID is missing")
+    if source_length < 1 or source_length > 64 or len(packet) < 1 + source_length + 1 + 8 + 12 + 16:
+        raise ValueError("Invalid visual-frame source ID length")
     try:
-        source_id = bytes(packet[1:frame_offset]).decode("utf-8")
+        source_id = bytes(packet[1:1 + source_length]).decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise ValueError("Screen frame source ID is invalid") from exc
-    frame_type = packet[frame_offset]
-    jpeg = bytes(packet[frame_offset + 1:])
-    if frame_type not in (1, 2) or not jpeg or len(jpeg) > 2_500_000:
-        raise ValueError("Screen frame type or JPEG payload is invalid")
+        raise ValueError("Visual-frame source ID is invalid") from exc
+    type_offset = 1 + source_length
+    encoded_type = packet[type_offset]
+    if encoded_type not in (0x81, 0x82):
+        raise ValueError("Plaintext or unsupported visual frame type")
+    frame_type = encoded_type & 0x7f
+    sequence_offset = type_offset + 1
+    sequence = struct.unpack_from(">Q", packet, sequence_offset)[0]
+    if sequence < 1:
+        raise ValueError("Invalid visual-frame sequence")
+    nonce_offset = sequence_offset + 8
+    nonce = bytes(packet[nonce_offset:nonce_offset + 12])
+    ciphertext = bytes(packet[nonce_offset + 12:])
+    if len(ciphertext) < 16 or len(ciphertext) > 2_500_016:
+        raise ValueError("Encrypted visual frame exceeds size limits")
+    state = peer_keys.get(source_id)
+    if not state or not state.get("local_confirmed") or not state.get("remote_confirmed"):
+        raise ValueError("Visual-frame peer fingerprint is not mutually verified")
+    sequence_key = (source_id, frame_type)
+    if sequence <= seen_sequences.get(sequence_key, 0):
+        raise ValueError("Replayed visual frame rejected")
+    aad = f"{session_id}|{source_id}|{local_device_id}|visual_frame|{frame_type}|{sequence}".encode("utf-8")
+    jpeg = AESGCM(bytes(state["key"])).decrypt(nonce, ciphertext, aad)
+    if len(jpeg) < 4 or len(jpeg) > 2_500_000 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\xff\xd9":
+        raise ValueError("Decrypted visual frame is not a bounded JPEG")
+    seen_sequences[sequence_key] = sequence
     return source_id, frame_type, jpeg
 
 
@@ -462,10 +507,30 @@ def show_phone_screen_frame(jpeg: bytes) -> None:
 
 
 def encode_screen_frame(jpeg: bytes, target_device_id: str = "") -> bytes:
+    """Reject the retired plaintext sender protocol."""
+    raise ValueError("Plaintext visual frames are disabled; use encode_encrypted_screen_frame")
+
+
+def encode_encrypted_screen_frame(jpeg: bytes, target_device_id: str, peer_keys: dict,
+                                  session_id: str, sender_device_id: str, sequence: int,
+                                  frame_type: int = 1) -> bytes:
+    """Create the relay's encrypted sender packet; the server only forwards opaque ciphertext."""
+    import secrets
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     target = target_device_id.encode("utf-8")
-    if not jpeg or len(jpeg) > 2_500_000 or len(target) > 255:
-        raise ValueError("Screen frame is empty or exceeds relay limits")
-    return bytes((1, len(target))) + target + jpeg
+    if (not jpeg or len(jpeg) > 2_500_000 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\xff\xd9" or
+            not 1 <= len(target) <= 64 or not 1 <= len(session_id) <= 128 or
+            not 1 <= len(sender_device_id) <= 64 or sender_device_id == target_device_id or
+            not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1 or
+            frame_type not in (1, 2)):
+        raise ValueError("Invalid encrypted visual-frame fields")
+    state = peer_keys.get(target_device_id)
+    if not state or not state.get("local_confirmed") or not state.get("remote_confirmed"):
+        raise RuntimeError("Visual sharing requires a mutually verified E2E peer")
+    nonce = secrets.token_bytes(12)
+    aad = f"{session_id}|{sender_device_id}|{target_device_id}|visual_frame|{frame_type}|{sequence}".encode("utf-8")
+    ciphertext = AESGCM(bytes(state["key"])).encrypt(nonce, bytes(jpeg), aad)
+    return bytes((0x80 | frame_type, len(target))) + target + sequence.to_bytes(8, "big") + nonce + ciphertext
 
 
 def safe_active_window_region(window) -> dict | None:
@@ -511,12 +576,19 @@ def capture_screen_jpeg(max_width: int = 960, quality: int = 48) -> bytes | None
         return None
 
 
-async def share_screen_loop(ws, fps: float, target_device_id: str) -> None:
+async def share_screen_loop(ws, fps: float, target_device_id: str, peer_keys: dict,
+                           session_id: str, sender_device_id: str) -> None:
     interval = 1.0 / max(0.5, min(2.0, fps))
+    sequence = 0
     while True:
         jpeg = await asyncio.to_thread(capture_screen_jpeg)
-        if jpeg:
-            await ws.send(encode_screen_frame(jpeg, target_device_id))
+        state = peer_keys.get(target_device_id)
+        if jpeg and state and state.get("local_confirmed") and state.get("remote_confirmed"):
+            sequence += 1
+            packet = encode_encrypted_screen_frame(
+                jpeg, target_device_id, peer_keys, session_id, sender_device_id, sequence, frame_type=1
+            )
+            await ws.send(packet)
         await asyncio.sleep(interval)
 
 
@@ -1198,13 +1270,14 @@ async def run_once(args) -> None:
         approved_until = 0.0
         approved_device_id = ""
         seen_remote_actions = {}
-        screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
+        seen_visual_sequences = {}
+        screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target, peer_keys, session_id, device_id)) if share_screen else None
         try:
             async for raw in ws:
                 if isinstance(raw, bytes):
                     if args.view_phone_screen:
                         try:
-                            source_id, frame_type, jpeg = decode_screen_frame(raw)
+                            source_id, frame_type, jpeg = decode_encrypted_screen_frame(raw, peer_keys, session_id, device_id, seen_visual_sequences)
                             if frame_type == 1:
                                 show_phone_screen_frame(jpeg)
                             else:
@@ -1221,7 +1294,7 @@ async def run_once(args) -> None:
                 if kind == "e2e_key_offer":
                     peer_id = str(message.get("fromDeviceId", ""))
                     try:
-                        key, fingerprint = derive_e2e_peer_key(e2e_private, str(message.get("publicKey", "")), device_id, peer_id)
+                        key, fingerprint = derive_e2e_peer_key(e2e_private, str(message.get("publicKey", "")), session_id, device_id, peer_id)
                         trusted = await asyncio.to_thread(confirm,
                             f"Verify Android peer {peer_id}. Compare this fingerprint with the Android screen over a separate trusted channel:\n{fingerprint}\n\nDo both devices show exactly the same fingerprint?")
                         peer_keys[peer_id] = {"key": key, "fingerprint": fingerprint,
@@ -1459,10 +1532,16 @@ async def run_once(args) -> None:
                             try: temp_path.unlink(missing_ok=True)
                             except Exception: pass
                         print("Shared attachment rejected:", str(exc)[:200])
+                elif kind == "device_revoked":
+                    peer_id = str(message.get("deviceId", ""))
+                    clear_peer_key(peer_keys, peer_id)
+                    print("Paired device revoked; its ephemeral E2E key was discarded:", peer_id)
                 elif kind == "peer_status":
                     peer_id = str(message.get("deviceId", ""))
                     if message.get("online") is True and peer_id and peer_id != device_id and peer_id not in peer_keys:
                         await ws.send(json.dumps({"type": "e2e_key_offer", "targetDeviceId": peer_id, "publicKey": e2e_public_b64}))
+                    elif message.get("online") is not True:
+                        clear_peer_key(peer_keys, peer_id)
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
             if screen_task:

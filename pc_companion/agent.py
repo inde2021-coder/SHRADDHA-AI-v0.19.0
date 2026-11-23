@@ -27,8 +27,8 @@ import websocket
 from PIL import Image, ImageTk
 
 from actions import execute_action
-from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
-from e2e_crypto import DeviceE2ECrypto
+from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
+from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 
@@ -534,11 +534,11 @@ class PcCompanionApp:
             local_id = str(self.config.get("deviceId", ""))
             session_id = str(self.config.get("sessionId", ""))
             base_type = frame_type & 0x7f
-            aad = f"{session_id}|{source_id}|{local_id}|{base_type}|{sequence}".encode("utf-8")
+            aad = visual_frame_aad(session_id, source_id, local_id, base_type, sequence)
             nonce_b64 = base64.b64encode(nonce).decode("ascii").rstrip("=")
             ciphertext_b64 = base64.b64encode(ciphertext).decode("ascii").rstrip("=")
             jpeg = DeviceE2ECrypto.decrypt(key, nonce_b64, ciphertext_b64, aad)
-            if len(jpeg) < 4 or jpeg[:2] != b"\\xff\\xd8" or jpeg[-2:] != b"\\xff\\xd9":
+            if len(jpeg) < 4 or jpeg[:2] != b"\xff\xd8" or jpeg[-2:] != b"\xff\xd9":
                 return
             with self.e2e_lock:
                 current = self.peer_keys.get(source_id)
@@ -690,6 +690,23 @@ class PcCompanionApp:
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "reason": "No active local PC approval."},
+                                       action_id, action_kind)
+                return
+            approval_summary = remote_action_approval_summary(peer_id, action)
+            if not approval_summary:
+                self.status_var.set("Blocked remote action: could not create a safe approval summary.")
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "result": "Local approval summary validation failed."},
+                                       action_id, action_kind)
+                return
+            approved = messagebox.askyesno(
+                "Shraddha AI • Approve this exact PC action",
+                approval_summary + "\\n\\nApprove only this single action? A separate approval is required for every command."
+            )
+            if not approved:
+                self.status_var.set("Remote action rejected by the local Windows user.")
+                self._send_e2e_message(peer_id, "remote_action_result",
+                                       {"ok": False, "result": "Rejected by local Windows user."},
                                        action_id, action_kind)
                 return
             self._execute(action, peer_id, action_id)
@@ -1191,7 +1208,7 @@ class PcCompanionApp:
                                 sequence = current["send_sequence"]
                                 current["send_sequence"] += 1
                                 key = bytes(current["key"])
-                            aad = f"{session_id}|{source_id}|{peer_id}|1|{sequence}".encode("utf-8")
+                            aad = visual_frame_aad(session_id, source_id, peer_id, 1, sequence)
                             nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, jpeg, aad)
                             nonce = base64.b64decode(nonce_b64 + "=" * ((4 - len(nonce_b64) % 4) % 4))
                             ciphertext = base64.b64decode(ciphertext_b64 + "=" * ((4 - len(ciphertext_b64) % 4) % 4))

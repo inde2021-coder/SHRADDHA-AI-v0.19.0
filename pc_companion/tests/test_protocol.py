@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
 
 
 class ProtocolTests(unittest.TestCase):
@@ -78,6 +78,17 @@ class ProtocolTests(unittest.TestCase):
             self.assertEqual(validate_remote_action({"kind": "power", "operation": operation}),
                              {"kind": "power", "operation": operation})
         self.assertIsNone(validate_remote_action({"kind": "power", "operation": "format_disk"}))
+
+    def test_remote_action_approval_summary_shows_exact_validated_operation(self):
+        summary = remote_action_approval_summary(
+            "0123456789abcdef01234567",
+            {"kind": "type", "text": "Send this exact approved text"}
+        )
+        self.assertIn("0123456789abcdef01234567", summary)
+        self.assertIn('"kind": "type"', summary)
+        self.assertIn('"text": "Send this exact approved text"', summary)
+        self.assertIsNone(remote_action_approval_summary("", {"kind": "home"}))
+        self.assertIsNone(remote_action_approval_summary("peer", {"kind": "exec"}))
 
     def test_unknown_action_is_rejected(self):
         self.assertIsNone(validate_remote_action({"kind": "exec", "command": "calc.exe"}))

@@ -59,8 +59,8 @@ class DeviceFrameValidationTest {
     @Test fun endToEndVisualFrameCanBeEncryptedRelayedAndAuthenticated() {
         val senderCrypto = DeviceE2ECrypto.create()
         val receiverCrypto = DeviceE2ECrypto.create()
-        val senderKey = senderCrypto.derivePeerKey(receiverCrypto.publicKeyBase64(), "sender", "receiver").first
-        val receiverKey = receiverCrypto.derivePeerKey(senderCrypto.publicKeyBase64(), "receiver", "sender").first
+        val senderKey = senderCrypto.derivePeerKey(receiverCrypto.publicKeyBase64(), "session", "sender", "receiver").first
+        val receiverKey = receiverCrypto.derivePeerKey(senderCrypto.publicKeyBase64(), "session", "receiver", "sender").first
         assertArrayEquals(senderKey, receiverKey)
         val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
         val sequence = 7L
