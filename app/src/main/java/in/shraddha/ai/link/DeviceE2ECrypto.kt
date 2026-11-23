@@ -69,6 +69,19 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
     }
 
     companion object {
+        fun visualFrameAad(
+            sessionId: String,
+            sourceDeviceId: String,
+            targetDeviceId: String,
+            frameType: Int,
+            sequence: Long
+        ): ByteArray {
+            require(sessionId.isNotBlank() && sessionId.length <= 128)
+            require(sourceDeviceId.length in 1..64 && targetDeviceId.length in 1..64 && sourceDeviceId != targetDeviceId)
+            require(frameType in 1..2 && sequence > 0L)
+            return "$sessionId|$sourceDeviceId|$targetDeviceId|visual_frame|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+        }
+
         fun create(): DeviceE2ECrypto {
             val generator = KeyPairGenerator.getInstance("EC")
             generator.initialize(ECGenParameterSpec("secp256r1"))
