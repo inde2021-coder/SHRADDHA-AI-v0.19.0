@@ -19,7 +19,12 @@ export function validatePublishIntent(body) {
     if (!['image', 'reel', 'story_image', 'story_video'].includes(mediaKind)) throw new Error('Choose an Instagram image, Reel, or Story media type');
     return { platform, text, mediaKind, mediaUrl: validateInstagramMediaUrl(body.mediaUrl) };
   }
-  if (body.mediaUrl !== undefined || body.mediaKind !== undefined) throw new Error('Public media URLs are only supported for Instagram');
+  if (platform === 'facebook' && (body.mediaUrl !== undefined || body.mediaKind !== undefined)) {
+    const mediaKind = String(body.mediaKind || '').toLowerCase();
+    if (!['image', 'video'].includes(mediaKind)) throw new Error('Choose a Facebook Page image or video post');
+    return { platform, text, mediaKind, mediaUrl: validateInstagramMediaUrl(body.mediaUrl) };
+  }
+  if (body.mediaUrl !== undefined || body.mediaKind !== undefined) throw new Error('Public media URLs are only supported for Facebook and Instagram');
   return { platform, text };
 }
 
@@ -96,9 +101,9 @@ export function validateMediaAttachment(body, platform) {
 
 export function validateScheduleIntent(body, now = Date.now()) {
   const intent = validatePublishIntent(body);
-  if (body.mediaBase64 !== undefined) throw new Error('Binary media uploads cannot be stored in the schedule queue. Use a public HTTPS media URL for Instagram or schedule a text-only post.');
-  if (intent.platform === 'instagram' && (!intent.mediaKind || !intent.mediaUrl)) throw new Error('Instagram scheduled posts require a media type and public HTTPS media URL.');
-  if (intent.platform !== 'instagram' && (body.mediaUrl !== undefined || body.mediaKind !== undefined)) throw new Error('Media URL scheduling is currently supported only for Instagram.');
+  if (body.mediaBase64 !== undefined) throw new Error('Binary media uploads cannot be stored in the schedule queue. Use a public HTTPS media URL for Facebook/Instagram or schedule a text-only post.');
+  if (['instagram', 'facebook'].includes(intent.platform) && (!intent.mediaKind || !intent.mediaUrl)) throw new Error(intent.platform + ' scheduled media posts require a media type and public HTTPS media URL.');
+  if (!['instagram', 'facebook'].includes(intent.platform) && (body.mediaUrl !== undefined || body.mediaKind !== undefined)) throw new Error('Media URL scheduling is currently supported only for Facebook and Instagram.');
   const idempotencyKey = String(body.idempotencyKey || '');
   if (!/^[A-Za-z0-9_-]{16,80}$/.test(idempotencyKey)) throw new Error('idempotencyKey must contain 16-80 safe characters');
   const scheduledAt = String(body.scheduledAt || '');
