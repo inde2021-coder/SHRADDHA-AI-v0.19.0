@@ -31,6 +31,21 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
     });
   }
 
+  async function list(uid, limit = 50) {
+    if (typeof uid !== 'string' || !uid) throw new Error('Authenticated Firebase user is required');
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new Error('List limit must be 1-50');
+    const snapshot = await collection.where('uid', '==', uid).orderBy('scheduledAtMs', 'desc').limit(limit).get();
+    return snapshot.docs.map(doc => {
+      const row = doc.data();
+      return {
+        id: doc.id, platform: row.platform, text: row.text,
+        scheduledAt: row.scheduledAt, status: row.status,
+        result: row.status === 'published' ? row.result : null,
+        lastError: row.status === 'failed' ? row.lastError : null
+      };
+    });
+  }
+
   async function cancel(uid, id) {
     if (typeof uid !== 'string' || !uid) throw new Error('Authenticated Firebase user is required');
     if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{20,220}$/.test(id)) throw new Error('Scheduled post id is invalid');
@@ -80,5 +95,5 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
     return summary;
   }
 
-  return { schedule, cancel, dispatchDue };
+  return { schedule, list, cancel, dispatchDue };
 }
