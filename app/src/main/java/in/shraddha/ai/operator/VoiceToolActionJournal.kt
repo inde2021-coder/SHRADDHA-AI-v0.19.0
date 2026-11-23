@@ -73,6 +73,9 @@ class VoiceToolActionJournal(context: Context) {
     @Synchronized
     fun latest(): Entry? = readResult().getOrNull()
 
+    @Synchronized
+    fun latestResult(): Result<Entry?> = readResult()
+
     private fun readResult(): Result<Entry?> = runCatching {
         val raw = store.get(key).getOrThrow().orEmpty()
         if (raw.isBlank()) return@runCatching null
