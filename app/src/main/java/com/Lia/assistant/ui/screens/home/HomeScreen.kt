@@ -144,8 +144,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             onLiveOperator = { context.startActivity(Intent(context, OperatorActivity::class.java)) },
             onVisualLens = { navController.navigate("visual_lens") },
             onConnectPc = { navController.navigate("device_center") },
-            onAiCallGateway = { navController.navigate("phone_call_agent") },
-            onQuickActions = { navController.navigate("quick_actions") }
+            onTalk = { navController.navigate("voice") }
         )
 
         Spacer(Modifier.height(14.dp))
@@ -169,8 +168,7 @@ private fun ControlCenter(
     onLiveOperator: () -> Unit,
     onVisualLens: () -> Unit,
     onConnectPc: () -> Unit,
-    onAiCallGateway: () -> Unit,
-    onQuickActions: () -> Unit
+    onTalk: () -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -189,16 +187,12 @@ private fun ControlCenter(
             Text("● LIVE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ControlTile("Live App Operator", "ऐप कंट्रोल", "⌘", Modifier.weight(1f), onLiveOperator)
-            ControlTile("Visual Lens", "कैमरा AI", "◉", Modifier.weight(1f), onVisualLens)
+            ControlTile("Talk to Shraddha", "बोलकर काम करें", "🎙", Modifier.weight(1f), onTalk)
+            ControlTile("Live App Operator", "फोन ऐप चलाएँ", "⌘", Modifier.weight(1f), onLiveOperator)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ControlTile("Connect PC", "PC लिंक", "▣", Modifier.weight(1f), onConnectPc)
-            ControlTile("Quick Actions", "शॉर्टकट और टूल", "✦", Modifier.weight(1f), onQuickActions)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ControlTile("AI Call Gateway", "क्लाउड कॉल", "◌", Modifier.weight(1f), onAiCallGateway)
-            Spacer(Modifier.weight(1f))
+            ControlTile("Visual Lens", "कैमरे से पूछें", "◉", Modifier.weight(1f), onVisualLens)
+            ControlTile("PC Control", "कंप्यूटर जोड़ें", "▣", Modifier.weight(1f), onConnectPc)
         }
     }
 }
