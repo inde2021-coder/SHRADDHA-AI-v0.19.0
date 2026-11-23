@@ -18,7 +18,7 @@ import { buildVisionPrompt } from './vision-analysis.js';
 import { buildFormExtractionPrompt, normalizeFormExtraction } from './form-autofill.js';
 import { resamplePcm16 } from './telephony-audio.js';
 import { hasExplicitTranscriptConsent } from './telephony-consent.js';
-import { appendCallTranscript, clearCallTranscript } from './call-transcript.js';
+import { appendCallTranscript } from './call-transcript.js';
 import { decodeCallHistoryKey, persistEncryptedCallRecord, listEncryptedCallRecords } from './call-history-store.js';
 
 const PORT = Number(process.env.PORT || 8787);
