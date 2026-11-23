@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Device Transfer native workspace now uses the dark-teal glass canvas, inset paired-device ID field, cyan progress indicator and raised cyan transfer controls; SHA-256/receiver-approval behavior is unchanged.
+
+
 - Form Autofill and private Notes/OCR native screens now use the configured assistant name, teal glass fields/cards, cyan action controls and consistent dark canvas. Notes/OCR editor now has a density-aware fixed viewport inside its ScrollView (previous zero-height weighted child could collapse).
 
 
