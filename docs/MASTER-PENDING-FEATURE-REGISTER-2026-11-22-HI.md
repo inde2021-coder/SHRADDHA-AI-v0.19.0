@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Operator console now scrolls as one full page on small phones rather than hiding controls below a fixed-height log area; the log viewport uses density-independent sizing. The screen has not yet been device-checked for every display size.
+
+
 - Native Operator console now follows the dark-teal/cyan premium direction: inset teal text fields, rounded raised cyan action buttons, cyan secondary text and a dark navy-teal canvas replace the old purple controls. The native activity has not been visually verified on a device.
 
 
