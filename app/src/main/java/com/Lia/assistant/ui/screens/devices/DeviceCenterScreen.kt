@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -80,6 +81,10 @@ fun DeviceCenterScreen(navController: NavController) {
     var pendingFingerprint by remember { mutableStateOf<Pair<String, String>?>(null) }
     var pendingRevoke by remember { mutableStateOf<LinkedPeer?>(null) }
     var showClearPairing by remember { mutableStateOf(false) }
+    var appToOpen by remember { mutableStateOf("Notepad") }
+    var textToType by remember { mutableStateOf("") }
+    var volumePercent by remember { mutableStateOf(50f) }
+    var brightnessPercent by remember { mutableStateOf(70f) }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -330,22 +335,64 @@ fun DeviceCenterScreen(navController: NavController) {
                         }
                     }
                 }
+                Text("QUICK PC CONTROLS", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text("Windows Companion में समर्थित actions ही दिखाए गए हैं। PC पर हर action की पुष्टि जरूरी है。",
+                    color = colors.textSecondary, fontSize = 10.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NovaButton(
-                        text = "Request PC OCR",
-                        onClick = { status = if (DeviceLinkManager.requestPcOcr(peer.id)) "PC OCR request sent." else "PC OCR request failed." },
-                        modifier = Modifier.weight(1f),
-                        type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted
-                    )
-                    NovaButton(
-                        text = "List PC Files",
-                        onClick = { status = if (DeviceLinkManager.requestPcFileList(peer.id)) "PC file-list request sent." else "PC file-list request failed." },
-                        modifier = Modifier.weight(1f),
-                        type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted
-                    )
+                    NovaButton(text = "Show Desktop",
+                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "home"))) "Desktop command भेजा गया। PC confirmation की प्रतीक्षा है।" else "Command नहीं भेजा गया। Pairing जाँचें।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted)
+                    NovaButton(text = "Back",
+                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "back"))) "Back command भेजा गया।" else "Back command नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted)
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(text = "Scroll Up",
+                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "scroll").put("amount", 5))) "Scroll up भेजा गया।" else "Scroll command नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted)
+                    NovaButton(text = "Scroll Down",
+                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "scroll").put("amount", -5))) "Scroll down भेजा गया।" else "Scroll command नहीं भेजा गया।" },
+                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted)
+                }
+                NovaTextField(value = appToOpen, onValueChange = { appToOpen = it.take(80) },
+                    modifier = Modifier.fillMaxWidth(), placeholder = "Windows app name, e.g. Notepad")
+                NovaButton(text = "Open App",
+                    onClick = {
+                        status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "open_app").put("appName", appToOpen.trim())))
+                            "App launch request भेजा गया। PC पर confirmation और Start Menu shortcut जरूरी है।"
+                        else "App launch request नहीं भेजा गया।"
+                    },
+                    modifier = Modifier.fillMaxWidth(), enabled = connected && peer.online && peerTrusted && appToOpen.isNotBlank())
+                Text("PC Volume: " + volumePercent.toInt() + "%", color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Slider(value = volumePercent, onValueChange = { volumePercent = it }, valueRange = 0f..100f,
+                    enabled = connected && peer.online && peerTrusted)
+                NovaButton(text = "Apply PC Volume",
+                    onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "set_volume").put("percent", volumePercent.toInt()))) "Volume request भेजा गया।" else "Volume request नहीं भेजा गया।" },
+                    modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY,
+                    enabled = connected && peer.online && peerTrusted)
+                Text("PC Brightness: " + brightnessPercent.toInt() + "%", color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Slider(value = brightnessPercent, onValueChange = { brightnessPercent = it }, valueRange = 0f..100f,
+                    enabled = connected && peer.online && peerTrusted)
+                NovaButton(text = "Apply PC Brightness",
+                    onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "set_brightness").put("percent", brightnessPercent.toInt()))) "Brightness request भेजा गया।" else "Brightness request नहीं भेजा गया।" },
+                    modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY,
+                    enabled = connected && peer.online && peerTrusted)
+                NovaButton(text = "Refresh PC Hardware Status",
+                    onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "hardware_status"))) "Hardware status request भेजा गया।" else "Hardware status request नहीं भेजा गया।" },
+                    modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY,
+                    enabled = connected && peer.online && peerTrusted)
+                NovaTextField(value = textToType, onValueChange = { textToType = it.take(500) },
+                    modifier = Modifier.fillMaxWidth(), placeholder = "Text to type into the focused PC field")
+                Text("Text typing के लिए Windows Companion को --allow-typing के साथ चलाना होगा। हर paste की PC पर अलग पुष्टि होगी।",
+                    color = colors.textSecondary, fontSize = 10.sp)
+                NovaButton(text = "Type on PC",
+                    onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "type").put("text", textToType))) "Text request भेजा गया; PC approval की प्रतीक्षा है।" else "Text request नहीं भेजा गया।" },
+                    modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY,
+                    enabled = connected && peer.online && peerTrusted && textToType.isNotBlank())
                 NovaButton(
                     text = "Open Encrypted File Transfer",
                     onClick = {
