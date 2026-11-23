@@ -27,14 +27,16 @@ object SocialPublishingClient {
 
     suspend fun schedule(
         context: Context, platform: String, text: String, scheduledAt: String,
-        idempotencyKey: String = UUID.randomUUID().toString().replace("-", "")
+        idempotencyKey: String = UUID.randomUUID().toString().replace("-", ""),
+        mediaKind: String? = null, mediaUrl: String? = null
     ): JSONObject {
         val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in with Firebase before scheduling posts.")
         val idToken = user.getIdToken(false).await().token ?: error("Could not obtain Firebase user token.")
         return withContext(Dispatchers.IO) {
             request(context, "/api/social/schedule", JSONObject()
                 .put("platform", platform).put("text", text).put("preview", text).put("confirmed", true)
-                .put("scheduledAt", scheduledAt).put("idempotencyKey", idempotencyKey), idToken)
+                .put("scheduledAt", scheduledAt).put("idempotencyKey", idempotencyKey)
+                .apply { if (platform == "instagram") { put("mediaKind", mediaKind); put("mediaUrl", mediaUrl) } }, idToken)
         }
     }
 
