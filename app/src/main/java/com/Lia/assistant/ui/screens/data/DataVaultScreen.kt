@@ -232,7 +232,7 @@ fun DataVaultScreen(navController: NavController) {
                 color = colors.textSecondary, fontSize = 11.sp
             )
             Text(
-                "Excluded: API keys, gateway tokens, passwords, biometrics, device-pairing secrets, Project Lab plans, Expert Studio results and multi-agent evidence.",
+                "Excluded: API keys, gateway tokens, passwords, biometrics, device-pairing secrets, Project Lab plans, Expert Studio results, multi-agent evidence, Personal Timeline/Skill/Routine records and imported Personal Knowledge documents.",
                 color = colors.textSecondary, fontSize = 11.sp
             )
         }
