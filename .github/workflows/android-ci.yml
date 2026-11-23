@@ -44,7 +44,8 @@ jobs:
       - name: Run Android unit tests and build debug APK
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:bundleRelease --no-daemon --stacktrace
+          ls -lh app/build/outputs/apk/debug/*.apk app/build/outputs/bundle/release/*.aab
 
       - name: Boot Android emulator, install APK and verify launch
         uses: reactivecircus/android-emulator-runner@v2
@@ -69,6 +70,15 @@ jobs:
           name: shraddha-ai-android-instrumentation-reports
           path: app/build/reports/androidTests/connected/
           if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload optimized Android App Bundle
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-android-app-bundle
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
           retention-days: 14
 
       - name: Upload debug APK
