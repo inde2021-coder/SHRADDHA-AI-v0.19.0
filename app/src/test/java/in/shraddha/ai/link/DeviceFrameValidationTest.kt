@@ -25,7 +25,7 @@ class DeviceFrameValidationTest {
     @Test fun encryptedVisualFrameSurvivesRelayEnvelopeAndRetainsAuthenticatedFields() {
         val nonce = ByteArray(12) { it.toByte() }
         val ciphertext = ByteArray(32) { (it + 1).toByte() }
-        val senderPacket = DeviceFrameValidation.encodeForRelay(2, "target-device", 42L, nonce, ciphertext)
+        val senderPacket = DeviceFrameValidation.encodeForRelay(2, "target-device", "source-device", 42L, nonce, ciphertext)
         val targetLength = senderPacket[1].toInt() and 0xff
         val opaquePayload = senderPacket.copyOfRange(2 + targetLength, senderPacket.size)
         val source = "source-device".toByteArray(Charsets.UTF_8)
@@ -44,13 +44,13 @@ class DeviceFrameValidationTest {
         val nonce = ByteArray(12)
         val ciphertext = ByteArray(16)
         assertThrows(IllegalArgumentException::class.java) {
-            DeviceFrameValidation.encodeForRelay(3, "peer", 1L, nonce, ciphertext)
+            DeviceFrameValidation.encodeForRelay(3, "peer", "sender", 1L, nonce, ciphertext)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DeviceFrameValidation.encodeForRelay(1, "", 1L, nonce, ciphertext)
+            DeviceFrameValidation.encodeForRelay(1, "", "sender", 1L, nonce, ciphertext)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DeviceFrameValidation.encodeForRelay(1, "peer", 0L, nonce, ciphertext)
+            DeviceFrameValidation.encodeForRelay(1, "peer", "sender", 0L, nonce, ciphertext)
         }
         assertFalse(DeviceFrameValidation.decodeFromRelay(byteArrayOf(0, 0x81.toByte())) != null)
     }
