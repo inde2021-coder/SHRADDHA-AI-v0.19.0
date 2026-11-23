@@ -60,6 +60,7 @@ fun SmartHomeScreen(navController: NavController) {
     var pendingService by remember { mutableStateOf("") }
     var temperature by remember { mutableStateOf("24") }
     var status by remember { mutableStateOf("Connect a Home Assistant HTTPS endpoint. Credentials are stored in the encrypted feature vault.") }
+    fun reportStatus(message: String) { scope.launch { status = message } }
     var busy by remember { mutableStateOf(false) }
     var showConfirm by remember { mutableStateOf(false) }
 
@@ -145,9 +146,9 @@ fun SmartHomeScreen(navController: NavController) {
             }, modifier = Modifier.fillMaxWidth(), enabled = mqttPassword.length >= 8)
             NovaButton(text = "CONNECT & SUBSCRIBE", onClick = {
                 mqtt.connect { message ->
-                    status = message
+                    reportStatus(message)
                     if (message.contains("connected", ignoreCase = true) || message.contains("established", ignoreCase = true)) {
-                        mqtt.subscribeStateTopics { status = it }.onFailure { status = it.localizedMessage ?: "MQTT subscription failed." }
+                        mqtt.subscribeStateTopics { reportStatus(it) }.onFailure { status = it.localizedMessage ?: "MQTT subscription failed." }
                     }
                 }.onFailure { status = it.localizedMessage ?: "MQTT connection failed." }
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
@@ -168,7 +169,7 @@ fun SmartHomeScreen(navController: NavController) {
             text = { Text("Publish $mqttCommand to $mqttTopic/$mqttDevice/set? This sends a real command to your local broker.") },
             confirmButton = { NovaButton(text = "PUBLISH", onClick = {
                 mqttConfirm = false
-                mqtt.publishCommand(mqttDevice, mqttCommand, true) { status = it }
+                mqtt.publishCommand(mqttDevice, mqttCommand, true) { reportStatus(it) }
                     .onFailure { status = it.localizedMessage ?: "MQTT publish failed." }
             }) },
             dismissButton = { NovaButton(text = "CANCEL", onClick = { mqttConfirm = false }, type = NovaButtonType.TEXT) })
