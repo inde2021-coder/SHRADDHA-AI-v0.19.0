@@ -1771,6 +1771,53 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { routineOutput.text = "Routine not saved: ${it.message}" }
             })
 
+            val knowledgeTitle = edit("Knowledge document title", "My reference notes")
+            val knowledgeSource = edit("Source label", "User-selected document / notes")
+            val knowledgeContent = edit("Paste approved source text", "यहाँ अपने चुने हुए document का text paste करें").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
+            val knowledgeQuery = edit("Search personal knowledge", "calibration, invoice, project...")
+            val knowledgeConsent = CheckBox(this@MainActivity).apply {
+                text = "मैं इस source text को encrypted personal knowledge में save करने की अनुमति देता/देती हूँ।"
+                setTextColor(0xFFE4E9F5.toInt())
+            }
+            val knowledgeOutput = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            val knowledgeStore = `in`.shraddha.ai.brain.LocalKnowledgeDocumentStore(this@MainActivity)
+            addView(TextView(this@MainActivity).apply {
+                text = "25 • PERSONAL KNOWLEDGE BRAIN (LOCAL SOURCE RETRIEVAL)"
+                setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4))
+            })
+            addView(knowledgeTitle); addView(knowledgeSource); addView(knowledgeContent)
+            addView(knowledgeConsent); addView(knowledgeQuery); addView(knowledgeOutput)
+            addView(actionButton("IMPORT APPROVED KNOWLEDGE TEXT", "Paste-only import • encrypted local storage • no automatic URL crawling") {
+                runCatching {
+                    require(knowledgeConsent.isChecked) { "पहले source import consent दें।" }
+                    val id = "doc-" + java.util.UUID.randomUUID().toString().replace("-", "")
+                    knowledgeStore.importText(
+                        true, id, knowledgeTitle.text.toString(), knowledgeSource.text.toString(),
+                        content = knowledgeContent.text.toString()
+                    ).getOrThrow()
+                    knowledgeOutput.text = "Source text imported securely. Documents: ${knowledgeStore.listDocuments().getOrThrow().size}"
+                }.onFailure { knowledgeOutput.text = "Import failed: ${it.message}" }
+            })
+            addView(actionButton("SEARCH KNOWLEDGE WITH CITATIONS", "Lexical local retrieval; each result cites its saved source and section") {
+                runCatching { knowledgeStore.search(knowledgeQuery.text.toString().trim(), 8).getOrThrow() }
+                    .onSuccess { hits ->
+                        knowledgeOutput.text = if (hits.isEmpty()) "No matching source sections." else
+                            hits.joinToString("\\n\\n") { "${it.citation}\\n${it.excerpt}" }
+                    }.onFailure { knowledgeOutput.text = "Search failed: ${it.message}" }
+            })
+            addView(actionButton("DELETE PERSONAL KNOWLEDGE DOCUMENTS", "Permanent local deletion • requires confirmation") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete personal knowledge?")
+                    .setMessage("सभी imported personal knowledge documents permanently delete होंगे।")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                        runCatching { knowledgeStore.clear().getOrThrow() }
+                            .onSuccess { knowledgeOutput.text = "Deleted ${it} knowledge document(s)." }
+                            .onFailure { knowledgeOutput.text = "Delete failed: ${it.message}" }
+                    }.show()
+            })
+
             val wakePhrase = edit("Wake phrase", "Hey Shraddha")
             val wakeConsent = CheckBox(this@MainActivity).apply { text = "मैं microphone wake phrase detection के लिए स्पष्ट अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val wakeStatus = TextView(this@MainActivity).apply { setTextColor(0xFFFFC98A.toInt()); textSize = 12f }
