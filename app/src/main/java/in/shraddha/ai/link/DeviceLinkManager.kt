@@ -573,7 +573,13 @@ object DeviceLinkManager {
             else -> correlationId
         }
         val aad = "$sessionId|$deviceId|$targetDeviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
-        val sealed = DeviceE2ECrypto.encrypt(state.key, payload.toString().toByteArray(Charsets.UTF_8), aad)
+        val plain = payload.toString().toByteArray(Charsets.UTF_8)
+        val sealed = try {
+            DeviceE2ECrypto.encrypt(state.key, plain, aad)
+        } finally {
+            plain.fill(0)
+            aad.fill(0)
+        }
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
