@@ -14,6 +14,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import java.util.Locale
@@ -61,6 +62,9 @@ object MobileHardwareController {
         val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
         val temp = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+        val plugged = batteryIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        val batteryHealth = batteryIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1
+        val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val memory = ActivityManager.MemoryInfo()
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(memory)
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -70,10 +74,14 @@ object MobileHardwareController {
         val wifiState = runCatching { (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager).isWifiEnabled }.getOrNull()
         val bluetoothState = runCatching { BluetoothAdapter.getDefaultAdapter()?.isEnabled }.getOrNull()
         return linkedMapOf(
+            "device_model" to (Build.MANUFACTURER + " " + Build.MODEL),
             "android_version" to Build.VERSION.RELEASE,
             "sdk" to Build.VERSION.SDK_INT,
             "battery_percent" to if (level >= 0) level * 100 / scale.coerceAtLeast(1) else null,
             "battery_temperature_c" to if (temp >= 0) temp / 10f else null,
+            "charging" to (plugged != 0),
+            "battery_health_code" to batteryHealth,
+            "thermal_status" to if (Build.VERSION.SDK_INT >= 29) power.currentThermalStatus else null,
             "ram_total_bytes" to memory.totalMem,
             "ram_available_bytes" to memory.availMem,
             "storage_total_bytes" to stat.totalBytes,
@@ -85,6 +93,7 @@ object MobileHardwareController {
                 val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
                 manager.cameraIdList.any { manager.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
             }.getOrDefault(false),
+            "current_brightness_0_255" to runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrNull(),
             "brightness_write_permission" to Settings.System.canWrite(context)
         )
     }
@@ -105,6 +114,8 @@ object MobileHardwareController {
             "date" -> Settings.ACTION_DATE_SETTINGS
             "language" -> Settings.ACTION_LOCALE_SETTINGS
             "security" -> Settings.ACTION_SECURITY_SETTINGS
+            "dnd" -> Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS
+            "rotation" -> Settings.ACTION_DISPLAY_SETTINGS
             "storage" -> Settings.ACTION_INTERNAL_STORAGE_SETTINGS
             else -> Settings.ACTION_SETTINGS
         }
