@@ -3,6 +3,8 @@ package `in`.shraddha.ai.vision
 import android.content.Context
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
+import com.google.ar.core.Coordinates2d
+import com.google.ar.core.Frame
 import com.google.ar.core.Plane
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
@@ -47,6 +49,7 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
 
     private val appContext = context.applicationContext
     private var session: Session? = null
+    private var latestFrame: Frame? = null
     private var depthEnabled = false
     private var lastPathSampleAt = 0L
     private val cameraPath = JSONArray()
@@ -81,12 +84,18 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
         arSession.resume()
     }
 
+    @Synchronized
+    fun setDisplayGeometry(rotation: Int, width: Int, height: Int) {
+        if (width > 0 && height > 0) runCatching { session?.setDisplayGeometry(rotation, width, height) }
+    }
+
     /** Call only on the GL render thread after start(). Returns null while ARCore has no frame. */
     @Synchronized
     fun update(): FrameSample? {
         val arSession = session ?: return null
         if (closed.get()) return null
         val frame = try { arSession.update() } catch (_: Exception) { return null }
+        latestFrame = frame
         val camera = frame.camera
         val poseMatrix = FloatArray(16)
         camera.pose.toMatrix(poseMatrix, 0)
@@ -186,6 +195,17 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
         )
     }
 
+    @Synchronized
+    fun cameraTextureCoordinates(): FloatArray? {
+        val frame = latestFrame ?: return null
+        val ndc = floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
+        val texture = FloatArray(8)
+        return runCatching {
+            frame.transformCoordinates2d(Coordinates2d.OPENGL_NORMALIZED_DEVICE_COORDINATES, ndc, Coordinates2d.TEXTURE_NORMALIZED, texture)
+            texture
+        }.getOrNull()
+    }
+
     /** Export is a pose/plane/depth survey, not a photorealistic mesh or a cloud anchor. */
     @Synchronized
     fun exportSurveyJson(): String {
@@ -219,6 +239,7 @@ class ArWorldMappingEngine(context: Context) : AutoCloseable {
         planeAnchors.values.forEach { runCatching { it.detach() } }
         planeAnchors.clear()
         runCatching { session?.close() }
+        latestFrame = null
         session = null
     }
 
