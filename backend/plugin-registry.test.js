@@ -33,7 +33,8 @@ test('rejects modified payload after signing', () => {
 test('rejects unknown capabilities and arbitrary executable payloads', () => {
   assert.throws(() => validatePluginManifest(signed({ capabilities: ['shell_exec'] })), /unsupported capability/);
   assert.throws(() => validatePluginManifest(signed({ script: 'process.exit(0)' })), /Executable or remote/);
-  assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'open_url', url: 'https://evil.example' }] })), /not allowed/);
+  assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'open_url' }] })), /not allowed/);
+  assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'create_note', title: 'x', body: 'y', url: 'https://evil.example' }] })), /Executable or remote/);
 });
 
 test('rejects untrusted keys and malformed manifests', () => {
