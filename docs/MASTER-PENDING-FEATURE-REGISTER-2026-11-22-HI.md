@@ -215,3 +215,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - No tests/builds were run, in accordance with the current feature-completion instruction.
 - Provider-specific OpenAI/Groq/Claude/Perplexity key removal now checks the encrypted-store commit result; the UI can no longer report a successful removal when the persisted record could not be deleted.
 - Main Brain provider fallback now follows an explicit stable order (preferred provider first, then Gemini/OpenAI/Groq/Claude/Perplexity) rather than relying on Set iteration order. Verify these paths in the consolidated test/build pass, including key migration, save/remove, app restart and Keystore-loss behavior.
+
+## 23 November 2026 — Voice activation and encrypted-state recovery hardening (source-only, not tested)
+
+- Voice screen no longer auto-requests microphone permission or starts the microphone merely because the screen opens. A user must tap the permission action or the single microphone control; an already-granted permission does not cause an automatic session start on navigation.
+- Microphone permission state is refreshed when the screen resumes. If Android revokes microphone permission during capture, the session stops reconnecting and the foreground service notification is removed instead of continuing to claim that the microphone is active.
+- Gemini key migration now relies on the encrypted save's single synchronous commit. A decryption failure no longer deletes the stored ciphertext; it reports a recoverable error so transient Keystore failures or device restores cannot silently destroy the user's only saved credential copy.
+- Main Brain scheduler restore now refuses to generate a replacement Keystore key when the original encryption key is missing. Existing encrypted task state is preserved and restore fails closed rather than overwriting the key and making the snapshot permanently unreadable.
+- No build, tests, emulator or live provider/Firebase checks were run. Verify voice permission grant/revoke, explicit activation, service notification lifecycle, Gemini legacy migration, Keystore loss and scheduler restore in the consolidated verification pass.
