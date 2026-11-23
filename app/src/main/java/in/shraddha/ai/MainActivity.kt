@@ -1877,7 +1877,7 @@ class MainActivity : AppCompatActivity() {
                     val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { homeAssistant.listEntities() }
                     result.onSuccess { entities ->
                         haOutput.text = if (entities.isEmpty()) "No supported entities were returned." else
-                            entities.take(100).joinToString("\\n") { "${it.entityId} • ${it.name} • ${it.state}" }
+                            entities.take(100).joinToString("\n") { "${it.entityId} • ${it.name} • ${it.state}" }
                     }.onFailure { haOutput.text = "Entity list failed: ${it.message}" }
                 }
             })
