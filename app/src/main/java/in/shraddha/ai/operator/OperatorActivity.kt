@@ -62,7 +62,16 @@ class OperatorActivity : Activity() {
                 runOperatorStep(OperatorStep(type))
             }.show()
         })
-        log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE6F5F7.toInt()); setPadding(14, 18, 14, 18) }
+        log = TextView(this).apply {
+            text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"
+            textSize = 13f
+            setTextColor(0xFFE6F5F7.toInt())
+            setPadding(14, 18, 14, 18)
+            movementMethod = android.text.method.ScrollingMovementMethod()
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF0D2531.toInt()); cornerRadius = 16f; setStroke(1, 0xFF2D8490.toInt())
+            }
+        }
         val logHeight = (240 * resources.displayMetrics.density).toInt()
         root.addView(log, LinearLayout.LayoutParams(-1, logHeight))
         root.addView(action("← वापस") { finish() })
