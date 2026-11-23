@@ -306,6 +306,30 @@ fun DeviceCenterScreen(navController: NavController) {
                     enabled = connected && peer.online && peerTrusted,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Text("WINDOWS PC KEYBOARD", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("Each shortcut is end-to-end encrypted and still requires local approval on the PC companion. Use only with a paired Windows PC.", color = colors.textSecondary, fontSize = 10.sp)
+                listOf(
+                    listOf("Enter" to "enter", "Esc" to "escape"),
+                    listOf("Ctrl+C" to "ctrl+c", "Ctrl+F" to "ctrl+f"),
+                    listOf("Ctrl+Z" to "ctrl+z", "Alt+Tab" to "alt+tab"),
+                    listOf("← Back" to "alt+left", "→ Forward" to "alt+right")
+                ).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { (label, chord) ->
+                            NovaButton(
+                                text = label,
+                                onClick = {
+                                    status = if (DeviceLinkManager.sendAction(
+                                        peer.id, JSONObject().put("kind", "key_press").put("chord", chord)
+                                    )) "Keyboard shortcut request sent. Confirm it on the PC." else "Shortcut could not be sent; verify pairing and remote-control approval."
+                                },
+                                modifier = Modifier.weight(1f),
+                                type = NovaButtonType.SECONDARY,
+                                enabled = connected && peer.online && peerTrusted
+                            )
+                        }
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NovaButton(
                         text = "Request PC OCR",
