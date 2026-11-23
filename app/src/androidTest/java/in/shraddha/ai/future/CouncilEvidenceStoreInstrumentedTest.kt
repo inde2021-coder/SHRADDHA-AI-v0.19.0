@@ -30,16 +30,28 @@ class CouncilEvidenceStoreInstrumentedTest {
                 status = "RUNNING",
                 message = "Provider request recorded",
                 attempt = 1,
-                providerUsage = "GEMINI:1",
+                providerUsage = """{"calls":"GEMINI:1","tokens":[{"provider":"GEMINI","model":"gemini-test","inputTokens":120,"outputTokens":45}]}""",
                 elapsedMs = 1234L
             ).isSuccess)
 
+            // A later progress update must not erase token evidence already recorded.
+            assertTrue(evidence.saveStatus(
+                taskId = taskId,
+                status = "RUNNING",
+                message = "Next stage started",
+                attempt = 1
+            ).isSuccess)
             val records = evidence.readTask(taskId).getOrThrow()
             val stage = records.first { it.has("output") }
             val status = records.first { it.has("status") && !it.has("output") }
             assertEquals(sensitiveOutput, stage.getString("output"))
             assertEquals("GEMINI", stage.getString("provider"))
-            assertEquals("GEMINI:1", status.getString("providerUsage"))
+            val usage = org.json.JSONObject(status.getString("providerUsage"))
+            assertEquals("GEMINI:1", usage.getString("calls"))
+            val token = usage.getJSONArray("tokens").getJSONObject(0)
+            assertEquals("gemini-test", token.getString("model"))
+            assertEquals(120, token.getInt("inputTokens"))
+            assertEquals(45, token.getInt("outputTokens"))
             assertEquals(1234L, status.getLong("elapsedMs"))
 
             val prefix = "council_${taskId}_"
