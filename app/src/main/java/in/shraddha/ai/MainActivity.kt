@@ -1711,7 +1711,7 @@ class MainActivity : AppCompatActivity() {
                 runCatching { timeline.search(timelineQuery.text.toString().trim()) }
                     .onSuccess { hits ->
                         timelineOutput.text = if (hits.isEmpty()) "No matching saved events." else
-                            hits.joinToString("\\n\\n") { "${it.title} • ${it.category}\\n${it.note}" }
+                            hits.joinToString("\n\n") { "${it.title} • ${it.category}\\n${it.note}" }
                     }.onFailure { timelineOutput.text = "Search failed: ${it.message}" }
             })
             addView(actionButton("DELETE ALL TIMELINE EVENTS", "Permanent local deletion • requires confirmation") {
@@ -1767,7 +1767,7 @@ class MainActivity : AppCompatActivity() {
                     registry.save(routine).getOrThrow()
                     val proposal = registry.propose(id, routineTrigger.text.toString()).getOrThrow()
                         ?: error("Routine did not match its trigger")
-                    routineOutput.text = "Routine saved securely. Trigger: ${routine.trigger}\\nAction proposal: ${proposal.summary}\\nFresh user approval required: YES"
+                    routineOutput.text = "Routine saved securely. Trigger: ${routine.trigger}\nAction proposal: ${proposal.summary}\nFresh user approval required: YES"
                 }.onFailure { routineOutput.text = "Routine not saved: ${it.message}" }
             })
 
@@ -1847,7 +1847,7 @@ class MainActivity : AppCompatActivity() {
             addView(troubleCategory); addView(troubleOutput)
             addView(actionButton("SHOW SAFE TROUBLESHOOTING STEPS", "Safety-first guide; not a diagnosis or automatic device repair") {
                 val steps = `in`.shraddha.ai.future.VisualTroubleshootingEngine.playbook(troubleCategory.selectedItem.toString())
-                troubleOutput.text = steps.mapIndexed { index, step -> "${index + 1}. ${step.instruction}\\n   Expected: ${step.expectedObservation}" }.joinToString("\\n\\n")
+                troubleOutput.text = steps.mapIndexed { index, step -> "${index + 1}. ${step.instruction}\\n   Expected: ${step.expectedObservation}" }.joinToString("\n\n")
             })
 
             val notificationPrefs = getSharedPreferences(`in`.shraddha.ai.future.ShraddhaNotificationListener.PREFS, MODE_PRIVATE)
