@@ -5,7 +5,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
-import { resolveProviderOrder } from './provider-routing.js';
+import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
+import { requestProviderJson } from './provider-http.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent } from './social-publishing.js';
 import { publishSocialPost } from './social-publisher.js';
@@ -104,35 +105,31 @@ async function readBody(req, limit = MAX_BODY) { let raw = ''; for await (const 
 async function askProviderDirect(provider, prompt) {
   if (provider === 'openai') {
     if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured');
-    const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', messages: [{ role: 'user', content: prompt }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'OpenAI request failed'); return { answer: d.choices?.[0]?.message?.content || '', model: d.model || process.env.OPENAI_MODEL || 'gpt-4.1-mini', usage: d.usage ? { inputTokens: d.usage.prompt_tokens ?? d.usage.input_tokens, outputTokens: d.usage.completion_tokens ?? d.usage.output_tokens } : null };
+    const d = await requestProviderJson('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', messages: [{ role: 'user', content: prompt }] }) }, { provider: 'OpenAI' }); return { answer: d.choices?.[0]?.message?.content || '', model: d.model || process.env.OPENAI_MODEL || 'gpt-4.1-mini', usage: d.usage ? { inputTokens: d.usage.prompt_tokens ?? d.usage.input_tokens, outputTokens: d.usage.completion_tokens ?? d.usage.output_tokens } : null };
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
     const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini request failed'); return { answer: d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '', model: d.modelVersion || model, usage: d.usageMetadata ? { inputTokens: d.usageMetadata.promptTokenCount, outputTokens: d.usageMetadata.candidatesTokenCount } : null };
+    const d = await requestProviderJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }, { provider: 'Gemini' }); return { answer: d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '', model: d.modelVersion || model, usage: d.usageMetadata ? { inputTokens: d.usageMetadata.promptTokenCount, outputTokens: d.usageMetadata.candidatesTokenCount } : null };
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic request failed'); return { answer: d.content?.map(p => p.text || '').join('') || '', model: d.model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', usage: d.usage ? { inputTokens: d.usage.input_tokens, outputTokens: d.usage.output_tokens } : null };
+    const d = await requestProviderJson('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) }, { provider: 'Anthropic' }); return { answer: d.content?.map(p => p.text || '').join('') || '', model: d.model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', usage: d.usage ? { inputTokens: d.usage.input_tokens, outputTokens: d.usage.output_tokens } : null };
   }
   if (provider === 'groq') {
     if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
     const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const d = await requestProviderJson('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'content-type': 'application/json' },
       signal: AbortSignal.timeout(45_000),
       body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
-    });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Groq request failed');
+    }, { provider: 'Groq' });
     return { answer: d.choices?.[0]?.message?.content || '', model: d.model || model, usage: d.usage ? { inputTokens: d.usage.prompt_tokens ?? d.usage.input_tokens, outputTokens: d.usage.completion_tokens ?? d.usage.output_tokens } : null };
   }
   if (provider === 'perplexity') {
     if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY is not configured');
-    const r = await fetch('https://api.perplexity.ai/v1/agent', {
+    const d = await requestProviderJson('https://api.perplexity.ai/v1/agent', {
       method: 'POST',
       headers: { authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`, 'content-type': 'application/json' },
       signal: AbortSignal.timeout(90_000),
@@ -141,9 +138,7 @@ async function askProviderDirect(provider, prompt) {
         input: prompt.slice(0, 12000),
         max_output_tokens: 2048
       })
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error?.message || 'Perplexity Agent request failed');
+    }, { provider: 'Perplexity' });
     if (d.status === 'failed' || d.status === 'cancelled') throw new Error(d.error?.message || `Perplexity request ${d.status}`);
     const answer = [];
     const sources = new Map();
@@ -194,19 +189,16 @@ async function askProvider(provider, prompt) {
 async function askVisionDirect(provider, prompt, imageBase64, mimeType) {
   if (provider === 'openai') {
     if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured');
-    const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } }] }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'OpenAI vision request failed'); return d.choices?.[0]?.message?.content || '';
+    const d = await requestProviderJson('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } }] }] }) }, { provider: 'OpenAI Vision' }); return d.choices?.[0]?.message?.content || '';
   }
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
     const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Gemini vision request failed'); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+    const d = await requestProviderJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }] }) }, { provider: 'Gemini Vision' }); return d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   }
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) });
-    const d = await r.json(); if (!r.ok) throw new Error(d.error?.message || 'Anthropic vision request failed'); return d.content?.map(p => p.text || '').join('') || '';
+    const d = await requestProviderJson('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5', max_tokens: 1200, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } }] }] }) }, { provider: 'Anthropic Vision' }); return d.content?.map(p => p.text || '').join('') || '';
   }
   throw new Error('Unsupported provider');
 }
@@ -567,13 +559,29 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url === '/api/ai/providers') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      const configured = {
-        gemini: Boolean(process.env.GEMINI_API_KEY), openai: Boolean(process.env.OPENAI_API_KEY),
-        anthropic: Boolean(process.env.ANTHROPIC_API_KEY), groq: Boolean(process.env.GROQ_API_KEY),
-        perplexity: Boolean(process.env.PERPLEXITY_API_KEY)
-      };
+      const configured = configuredProviderMap(process.env);
       const autoOrder = resolveProviderOrder({ requested: 'auto', env: process.env });
-      return json(res, 200, { providers: configured, configuredCount: Object.values(configured).filter(Boolean).length, autoRouting: { available: autoOrder.length > 0, order: autoOrder, fallbackEnabled: true }, keysRemainServerSide: true });
+      const models = {
+        gemini: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+        openai: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+        anthropic: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+        groq: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+        perplexity: process.env.PERPLEXITY_MODEL || 'sonar'
+      };
+      const capabilities = {
+        gemini: ['text', 'vision'],
+        openai: ['text', 'vision'],
+        anthropic: ['text', 'vision'],
+        groq: ['text'],
+        perplexity: ['text', 'web-search']
+      };
+      return json(res, 200, {
+        providers: configured,
+        configuredCount: Object.values(configured).filter(Boolean).length,
+        catalog: Object.keys(configured).map(name => ({ name, configured: configured[name], model: models[name], capabilities: capabilities[name] })),
+        autoRouting: { available: autoOrder.length > 0, order: autoOrder, fallbackEnabled: true, retriesTransientErrors: true },
+        keysRemainServerSide: true
+      });
     }
     if (req.method === 'POST' && req.url === '/api/ai/summarize') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });

@@ -86,6 +86,21 @@ test('AI gateway rejects missing and incorrect bearer credentials', async () => 
   }
 });
 
+test('provider catalog exposes only safe configuration, model and capability metadata', async () => {
+  const response = await fetch(`${baseUrl}/api/ai/providers`, {
+    headers: { authorization: `Bearer ${TOKEN}` }
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.providers.openai, true);
+  assert.equal(body.providers.gemini, false);
+  assert.equal(body.keysRemainServerSide, true);
+  assert.equal(body.autoRouting.available, true);
+  assert.equal(body.catalog.find(item => item.name === 'openai').model, 'gpt-4.1-mini');
+  assert.deepEqual(body.catalog.find(item => item.name === 'groq').capabilities, ['text']);
+  assert.equal(JSON.stringify(body).includes('sk-test-openai-key'), false);
+});
+
 test('Edesy call bridge readiness is private and reports missing external provisioning honestly', async () => {
   const denied = await fetch(`${baseUrl}/api/telephony/edesy/status`);
   assert.equal(denied.status, 401);

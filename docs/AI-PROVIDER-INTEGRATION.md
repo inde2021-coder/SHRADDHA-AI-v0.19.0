@@ -29,3 +29,12 @@ Provider model catalogs and account entitlements change. The app surfaces provid
 - Perplexity's `fast` effort level enables quick web-grounded research; source URLs are displayed when the response includes search results or citation annotations. Presets may resolve to a third-party model.
 - The backend proxy, per-provider usage accounting, and failover routing are not implemented by this client adapter.
 - Validate each provider with a real user-owned key and test Hindi/English responses before release.
+
+
+## Backend provider gateway hardening
+
+The authenticated backend gateway now exposes a safe provider catalog at `GET /api/ai/providers`: configured state, selected model IDs, and supported capabilities only. It never returns API key material. Supported server-side keys are `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, and `PERPLEXITY_API_KEY`. Optional model overrides are `GEMINI_MODEL`, `OPENAI_MODEL`, `ANTHROPIC_MODEL`, `GROQ_MODEL`, and `PERPLEXITY_MODEL`.
+
+Server-side text, Visual Lens, and Perplexity requests use a shared HTTPS-only transport with a 2 MiB response ceiling and at most three attempts for network failures, timeouts, HTTP 408/425/429 and selected 5xx responses. Authentication, permission, invalid-request and quota policy errors are not blindly retried. The transport honors a bounded Retry-After delay when provided. Automatic provider failover remains opt-in through provider=auto and only selects providers with configured server-side keys; explicit provider selection never silently changes providers.
+
+The Android direct-key text adapter remains a separate client-side mode and is not automatically routed through the backend gateway. For a centrally managed deployment, use the authenticated backend endpoints and keep provider keys only in server environment secrets. Provider-specific real account access, quotas, model entitlements, and billing must still be validated with owner-controlled keys.
