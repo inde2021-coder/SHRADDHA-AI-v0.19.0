@@ -284,7 +284,7 @@ fun DataVaultScreen(navController: NavController) {
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = cloudDeleteConsent, onCheckedChange = { cloudDeleteConsent = it; if (!it) cloudPassword = "" })
-                Text("Also delete this record from Firebase cloud mirrors (explicit consent)", color = colors.textSecondary, fontSize = 10.sp)
+                Text("Allow authenticated Firebase operations (compare, resolve conflict or delete cloud copy)", color = colors.textSecondary, fontSize = 10.sp)
             }
             if (cloudDeleteConsent) {
                 NovaTextField(value = cloudEmail, onValueChange = { cloudEmail = it.take(254) }, modifier = Modifier.fillMaxWidth(), placeholder = "Firebase account email")
