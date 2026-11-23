@@ -100,9 +100,7 @@ internal class DeviceCredentialStore(context: Context) {
         // Delete the Keystore key only after the ciphertext removal is durable.
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         if (store.containsAlias(KEY_ALIAS)) {
-            check(store.deleteEntry(KEY_ALIAS)) {
-                "Device credentials were cleared, but the unused Keystore key could not be removed."
-            }
+            store.deleteEntry(KEY_ALIAS)
         }
     }
 
