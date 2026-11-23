@@ -830,27 +830,30 @@ telephonyWss.on('connection', (carrier, context = {}) => {
     callRecord.status = 'ended';
     const transcriptText = callRecord.transcript
       .map(item => (item.speaker === 'caller' ? 'Caller: ' : 'Shraddha: ') + item.text)
-      .join('\n')
+      .join('\\n')
       .slice(0, 24000);
-    if (process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText) {
-      callRecord.summaryStatus = 'pending';
-      askProvider('openai', 'Summarize this phone call in Hindi. Return caller intent, key details, commitments and next actions. Do not invent facts.\n\n' + transcriptText)
-        .then(summary => { callRecord.summary = String(summary).slice(0, 6000); callRecord.summaryStatus = 'ready'; })
-        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); });
-    } else {
-      callRecord.summaryStatus = 'disabled';
-    }
+    const maySummarize = callRecord.transcriptConsent === true &&
+      process.env.CALL_TRANSCRIPTS_ENABLED === 'true' && transcriptText.length > 0;
+    callRecord.summaryStatus = maySummarize ? 'pending' : 'disabled';
     edesyCalls.set(callRecord.id, callRecord);
-    const saveFinal = () => persistCallHistory(callRecord).catch(error => {
-      callRecord.persistenceStatus = 'failed';
-      callRecord.persistenceError = String(error.message || 'Encrypted call history persistence failed').slice(0, 180);
-    });
     callRecord.persistenceStatus = 'pending';
-    if (callRecord.summaryStatus === 'pending') {
-      // Persist the final summary only after it is ready; never store raw audio.
-      callRecord.summaryPromise = Promise.resolve();
+    const persistFinal = async () => {
+      try {
+        await persistCallHistory(callRecord);
+        callRecord.persistenceStatus = 'saved';
+      } catch (error) {
+        callRecord.persistenceStatus = 'failed';
+        callRecord.persistenceError = String(error.message || 'Encrypted call history persistence failed').slice(0, 180);
+      }
+    };
+    if (maySummarize) {
+      askProvider('openai', 'Summarize this phone call in Hindi. Return caller intent, key details, commitments and next actions. Do not invent facts.\\n\\n' + transcriptText)
+        .then(summary => { callRecord.summary = String(summary).slice(0, 6000); callRecord.summaryStatus = 'ready'; })
+        .catch(error => { callRecord.summaryStatus = 'failed'; callRecord.summaryError = String(error.message || 'Summary unavailable').slice(0, 180); })
+        .finally(persistFinal);
+    } else {
+      persistFinal();
     }
-    saveFinal().then(() => { if (callRecord.persistenceStatus !== 'failed') callRecord.persistenceStatus = 'saved'; });
   };
 
   const shutdown = () => {
