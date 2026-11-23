@@ -36,14 +36,16 @@ internal class DeviceCredentialStore(context: Context) {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
             val ciphertext = cipher.doFinal(plaintext)
+            val iv = cipher.iv
             try {
                 val saved = preferences.edit()
-                    .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                    .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
                     .putString("payload", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
                     .commit()
                 check(saved) { "Unable to persist encrypted device credentials" }
             } finally {
                 ciphertext.fill(0)
+                iv.fill(0)
             }
         } finally {
             plaintext.fill(0)
