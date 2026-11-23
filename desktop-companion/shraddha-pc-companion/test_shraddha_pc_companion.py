@@ -214,7 +214,7 @@ class PcCompanionPolicyTests(unittest.TestCase):
         bob_key, _ = derive_e2e_peer_key(
             bob_private, alice_public, "session-visual-123", "bob-device", "alice-device"
         )
-        jpeg = b"\\xff\\xd8" + b"shraddha-test-frame" + b"\\xff\\xd9"
+        jpeg = b"\xff\xd8" + b"shraddha-test-frame" + b"\xff\xd9"
         sender_peers = {"bob-device": {"key": alice_key, "local_confirmed": True, "remote_confirmed": True}}
         receiver_peers = {"alice-device": {"key": bob_key, "local_confirmed": True, "remote_confirmed": True}}
         sender_packet = encode_encrypted_screen_frame(
