@@ -1,6 +1,5 @@
 package com.Lia.assistant.ui.screens.home
 
-import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,14 +47,12 @@ import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
 import `in`.shraddha.ai.operator.OperatorActivity
-import `in`.shraddha.ai.phone.PhoneAgentActivity
 
 private val Accent = Color(0xFFB58BFF)
 private val Mint = Color(0xFF78E4D6)
 
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val colors = LocalNovaColors.current
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
@@ -142,7 +139,6 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
         // Integrated controls live inside the main Shraddha AI home design.
         ControlCenter(
-            onPhoneAgent = { context.startActivity(Intent(context, PhoneAgentActivity::class.java)) },
             onLiveOperator = { context.startActivity(Intent(context, OperatorActivity::class.java)) },
             onVisualLens = { navController.navigate("visual_lens") },
             onConnectPc = { navController.navigate("device_center") },
@@ -168,7 +164,6 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
 @Composable
 private fun ControlCenter(
-    onPhoneAgent: () -> Unit,
     onLiveOperator: () -> Unit,
     onVisualLens: () -> Unit,
     onConnectPc: () -> Unit,
@@ -192,16 +187,16 @@ private fun ControlCenter(
             Text("● LIVE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ControlTile("Phone Agent", "कॉल और कॉन्टैक्ट", "☎", Modifier.weight(1f), onPhoneAgent)
             ControlTile("Live Operator", "ऐप कंट्रोल", "⌘", Modifier.weight(1f), onLiveOperator)
+            ControlTile("Visual Lens", "कैमरा AI", "◉", Modifier.weight(1f), onVisualLens)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ControlTile("Visual Lens", "कैमरा AI", "◉", Modifier.weight(1f), onVisualLens)
             ControlTile("Connect PC", "PC लिंक", "▣", Modifier.weight(1f), onConnectPc)
+            ControlTile("Quick Actions", "शॉर्टकट और टूल", "✦", Modifier.weight(1f), onQuickActions)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             ControlTile("AI Call Gateway", "क्लाउड कॉल", "◌", Modifier.weight(1f), onAiCallGateway)
-            ControlTile("Quick Actions", "शॉर्टकट और टूल", "✦", Modifier.weight(1f), onQuickActions)
+            Spacer(Modifier.weight(1f))
         }
     }
 }
