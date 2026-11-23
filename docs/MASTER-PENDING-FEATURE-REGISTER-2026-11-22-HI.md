@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Phone Agent native screen now follows the configured assistant name and shared dark-teal/cyan visual language, with raised rounded action controls and inset glass call-history panels.
+
+
 - Mobile Command Center native screen now uses the configured assistant name, a dark teal canvas, inset teal input/clipboard fields and raised cyan action buttons; its existing full-page ScrollView keeps the long command list reachable on small phones.
 
 
