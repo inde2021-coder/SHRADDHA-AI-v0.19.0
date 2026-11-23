@@ -6,7 +6,14 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
-  # One consolidated verification is started manually after the source-completion pass.
+  push:
+    branches:
+      - feature/complete-pending-shraddha-features
+    paths:
+      - "app/**"
+      - "pc_companion/**"
+      - ".github/workflows/android-ci.yml"
+      - ".github/workflows/pc-hardware-agent-ci.yml"
   workflow_dispatch:
 
 permissions:
