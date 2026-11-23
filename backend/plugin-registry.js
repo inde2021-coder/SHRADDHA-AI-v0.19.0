@@ -47,7 +47,7 @@ export function validatePluginManifest(manifest) {
   if (bytes.length > 24 * 1024) throw new Error('Plugin manifest exceeds 24 KB');
   if (!ID.test(manifest.id || '')) throw new Error('Plugin id is invalid');
   if (typeof manifest.name !== 'string' || !manifest.name.trim() || manifest.name.length > 80) throw new Error('Plugin name is invalid');
-  if (typeof manifest.version !== 'string' || !/^\\d+\\.\\d+\\.\\d+$/.test(manifest.version)) throw new Error('Plugin version must use semantic version format');
+  if (typeof manifest.version !== 'string' || !/^[0-9]+\\.[0-9]+\\.[0-9]+$/.test(manifest.version)) throw new Error('Plugin version must use semantic version format');
   if (!Array.isArray(manifest.capabilities) || manifest.capabilities.length > 8 || new Set(manifest.capabilities).size !== manifest.capabilities.length) throw new Error('Plugin capabilities are invalid');
   for (const capability of manifest.capabilities) if (!CAPABILITIES.has(capability)) throw new Error('Plugin requests an unsupported capability');
   if (!Array.isArray(manifest.actions) || manifest.actions.length > 20) throw new Error('Plugin actions are invalid');
