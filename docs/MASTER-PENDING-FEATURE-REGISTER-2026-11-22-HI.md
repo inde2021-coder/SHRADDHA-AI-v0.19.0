@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Firebase restore now validates the backup format and non-empty ciphertext for Firestore, Realtime Database mirror, named recovery revisions and Storage metadata/object consistency; malformed records fail closed instead of being presented as a missing backup. Source changes are not yet verified against a live Firebase project.
+
+
 - Corrected the Claude Messages adapter model identifier from the obsolete `claude-sonnet-5` to the currently documented `claude-sonnet-5-5`. This is a source-level compatibility correction only; a live Claude API request still requires the user's own key and provider-side verification.
 - OpenAI `gpt-5.5` and Perplexity `POST /v1/agent` identifiers/endpoints were checked against current provider documentation. Provider model availability can still depend on the user's account and rate limits.
 
