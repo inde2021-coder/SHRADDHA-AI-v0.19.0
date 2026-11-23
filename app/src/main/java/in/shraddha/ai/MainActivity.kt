@@ -1855,6 +1855,11 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
                 setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
             }
+            lifecycleScope.launch {
+                val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { homeAssistant.loadConfig() }
+                saved.onSuccess { config -> if (config != null) haUrl.setText(config.baseUrl) }
+                    .onFailure { haOutput.text = "Saved Home Assistant settings could not be read: ${it.message}" }
+            }
             addView(TextView(this@MainActivity).apply {
                 text = "26 • SMART HOME — HOME ASSISTANT"
                 setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4))
