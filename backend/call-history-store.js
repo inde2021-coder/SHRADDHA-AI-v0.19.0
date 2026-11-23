@@ -24,13 +24,13 @@ function documentId(recordId) {
 export async function persistEncryptedCallRecord(collection, record, key, now = Date.now()) {
   if (!collection || typeof collection.doc !== 'function') throw new Error('Durable call-history collection is unavailable.');
   if (!record || typeof record.id !== 'string' || !record.id || record.id.length > 120) throw new Error('Call-history record is invalid.');
-  const safeRecord = { ...record };
+  const storageId = documentId(record.id);
+  const safeRecord = { ...record, originalId: record.id, id: storageId };
   const envelope = encryptCallHistoryRecord(safeRecord, key);
   const startedAt = new Date(record.startedAt || now).toISOString();
   const expiresAt = new Date(now + CALL_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
   await collection.doc(documentId(record.id)).set({
     version: 1,
-    recordId: record.id,
     envelope,
     startedAt,
     expiresAt,
@@ -50,11 +50,13 @@ export async function listEncryptedCallRecords(collection, key, { limit = 30, no
     if (!data || data.version !== 1 || typeof data.expiresAt !== 'string' || Date.parse(data.expiresAt) <= now) continue;
     try {
       const envelope = data.envelope;
-      // Record ID is encrypted, so use the validated id stored in the encrypted envelope's AAD
-      // index metadata, which is separately HMAC-independent and not a caller phone number.
-      const id = typeof data.recordId === 'string' ? data.recordId : '';
-      if (!id) continue;
-      calls.push(decryptCallHistoryRecord(envelope, key, id));
+      const storageId = doc.id;
+      if (typeof storageId !== 'string' || !/^[a-f0-9]{64}$/.test(storageId)) continue;
+      const record = decryptCallHistoryRecord(envelope, key, storageId);
+      if (typeof record.originalId !== 'string' || !record.originalId) continue;
+      record.id = record.originalId;
+      delete record.originalId;
+      calls.push(record);
     } catch { /* fail closed for corrupt records */ }
   }
   return calls;
