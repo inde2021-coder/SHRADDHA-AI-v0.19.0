@@ -265,3 +265,5 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - No tests/build/emulator/live gateway calls were run. Verify normal save/read/restart, corrupted ciphertext, missing Keystore key, partial preferences, explicit clear and speech-client error propagation in the single consolidated verification pass.
 
 - Agent Council provider discovery previously caught encrypted-key/Keystore read exceptions and replaced them with an empty provider list. The screen now displays a specific recovery message and directs the user to API Keys; a genuinely absent key remains a normal unconfigured state. Source-only; UI and vault failure cases remain pending consolidated verification.
+
+- Background council worker now catches execution-evidence persistence exceptions in the final result/retry handling path, fails the claimed scheduler task closed, attempts to record a FAILED status, and returns a WorkManager failure instead of leaving the task stuck RUNNING. If evidence storage itself is unavailable, the scheduler still receives a best-effort terminal failure transition. This failure-injection path has not been tested.
