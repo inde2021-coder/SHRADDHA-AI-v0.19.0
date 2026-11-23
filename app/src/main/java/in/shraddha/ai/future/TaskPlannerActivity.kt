@@ -61,7 +61,9 @@ class TaskPlannerActivity : AppCompatActivity() {
         root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); bottomMargin = dp(14) })
         briefingToggle = android.widget.Switch(this).apply {
             text = "Daily briefing • around 8:00 AM"
-            setTextColor(0xFFE4E9F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
+            thumbTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+            trackTintList = android.content.res.ColorStateList.valueOf(0xFF2D8490.toInt())
             isChecked = prefs.getBoolean("daily_briefing_enabled", false)
             setOnCheckedChangeListener { _, enabled ->
                 prefs.edit().putBoolean("daily_briefing_enabled", enabled).apply()
@@ -89,7 +91,9 @@ class TaskPlannerActivity : AppCompatActivity() {
         root.addView(researchTopics, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         researchToggle = android.widget.Switch(this).apply {
             text = "Daily source-linked web research • Perplexity"
-            setTextColor(0xFFE4E9F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
+            thumbTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+            trackTintList = android.content.res.ColorStateList.valueOf(0xFF2D8490.toInt())
             isChecked = prefs.getBoolean(DailyBriefingResearchWorker.KEY_ENABLED, false)
             setOnCheckedChangeListener { _, enabled ->
                 val topics = researchTopics.text.toString().trim().take(1000)
@@ -255,8 +259,8 @@ class TaskPlannerActivity : AppCompatActivity() {
 
 
     private fun editTask(task: Task) {
-        val titleInput = EditText(this).apply { setText(task.title); hint = "Task title"; setTextColor(Color.WHITE) }
-        val noteInput = EditText(this).apply { setText(task.note); hint = "Optional details"; setTextColor(Color.WHITE) }
+        val titleInput = taskField("Task title").apply { setText(task.title) }
+        val noteInput = taskField("Optional details").apply { setText(task.note) }
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
@@ -330,6 +334,16 @@ class TaskPlannerActivity : AppCompatActivity() {
         val array = JSONArray()
         tasks.forEach { array.put(JSONObject().put("id", it.id).put("title", it.title).put("note", it.note).put("dueAt", it.dueAt).put("done", it.done)) }
         prefs.edit().putString("tasks", array.toString()).apply()
+    }
+
+    private fun taskField(hintText: String) = EditText(this).apply {
+        hint = hintText
+        setTextColor(Color.WHITE)
+        setHintTextColor(0xFF8BAFB8.toInt())
+        setPadding(dp(12), dp(10), dp(12), dp(10))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+        }
     }
 
     private fun panel() = android.graphics.drawable.GradientDrawable(
