@@ -18,6 +18,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Stores gateway URL and shared gateway credential encrypted with Android Keystore. */
 object VoiceGatewaySettings {
+    data class AgentReply(val text: String, val provider: String, val model: String?, val inputTokens: Long?, val outputTokens: Long?)
     data class Config(val baseUrl: String, val gatewayToken: String, val readError: String? = null)
     private const val PREFS = "shraddha_voice_gateway"
     private const val PAYLOAD = "config_ciphertext"
@@ -152,7 +153,7 @@ object VoiceGatewaySettings {
         role: String,
         systemInstruction: String,
         prompt: String
-    ): String? {
+    ): AgentReply? {
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
@@ -178,8 +179,12 @@ object VoiceGatewaySettings {
             require(json.optString("provider").equals(providerId, true)) {
                 "Cloud gateway returned a different provider than the assigned agent."
             }
-            return json.optString("answer").takeIf { it.isNotBlank() }
+            val answer = json.optString("answer").takeIf { it.isNotBlank() }
                 ?: error("Cloud agent returned an empty response.")
+            val usage = json.optJSONObject("usage")
+            val inputTokens = usage?.takeIf { it.has("inputTokens") && !it.isNull("inputTokens") }?.optLong("inputTokens")?.takeIf { it >= 0L }
+            val outputTokens = usage?.takeIf { it.has("outputTokens") && !it.isNull("outputTokens") }?.optLong("outputTokens")?.takeIf { it >= 0L }
+            return AgentReply(answer, normalized, json.optString("model").takeIf { it.isNotBlank() }, inputTokens, outputTokens)
         }
     }
 
