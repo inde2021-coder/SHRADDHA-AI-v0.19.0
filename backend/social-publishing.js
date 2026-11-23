@@ -28,7 +28,7 @@ export function validateInstagramMediaUrl(value) {
   let url;
   try { url = new URL(value); } catch { throw new Error('Instagram media URL is invalid'); }
   const host = url.hostname.toLowerCase();
-  const ipv4 = /^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$/.test(host);
+  const ipv4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
   if (url.protocol !== 'https:' || url.username || url.password || url.hash ||
       host === 'localhost' || host.endsWith('.local') || !host.includes('.') || ipv4 || host.startsWith('[')) {
     throw new Error('Instagram media URL must use a public HTTPS hostname without credentials, IP address or fragment');
