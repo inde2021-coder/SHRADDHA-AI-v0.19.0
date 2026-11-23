@@ -82,6 +82,7 @@ class PcCompanionApp:
         self.e2e_crypto = DeviceE2ECrypto()
         self.peer_keys = {}
         self.e2e_lock = threading.RLock()
+        self.seen_remote_actions = {}
         self.frame_window = None
         self.frame_label = None
         self.frame_photo = None
@@ -92,6 +93,7 @@ class PcCompanionApp:
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
+        self.monitor_var = tk.StringVar(value=str(self.config.get('monitorIndex', 1)))
 
         self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
         self.name_var = tk.StringVar(value=self.config.get("deviceName", "Windows PC"))
@@ -131,6 +133,10 @@ class PcCompanionApp:
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
         ttk.Checkbutton(frame, text="Share this PC screen with paired devices",
                         variable=self.screen_var, command=self._publish_permissions).pack(anchor="w", pady=4)
+        monitor_row = ttk.Frame(frame)
+        monitor_row.pack(fill="x", pady=(2, 6))
+        ttk.Label(monitor_row, text="Display to share/control").pack(side="left")
+        ttk.Combobox(monitor_row, textvariable=self.monitor_var, values=self._monitor_labels(), state="readonly", width=28).pack(side="left", padx=8)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Label(frame, text="CONTROL PAIRED ANDROID (phone approval required)").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
@@ -148,6 +154,42 @@ class PcCompanionApp:
         ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
                   wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
 
+    def _monitor_labels(self):
+        try:
+            with mss.mss() as capture:
+                return [str(index) + ': ' + str(item.get('width', 0)) + 'x' + str(item.get('height', 0)) for index, item in enumerate(capture.monitors)]
+        except Exception:
+            return ['1: Primary display']
+
+    def _selected_monitor_index(self):
+        try:
+            index = int(str(self.monitor_var.get()).split(':', 1)[0])
+            with mss.mss() as capture:
+                return index if 0 <= index < len(capture.monitors) else 1
+        except Exception:
+            return 1
+
+    def _selected_monitor_bounds(self):
+        try:
+            with mss.mss() as capture:
+                item = capture.monitors[self._selected_monitor_index()]
+                return (int(item['left']), int(item['top']), int(item['width']), int(item['height']))
+        except Exception:
+            return None
+
+    def _claim_remote_action(self, peer_id, action_id):
+        now = time.monotonic()
+        for key, seen_at in list(self.seen_remote_actions.items()):
+            if now - seen_at > 600:
+                self.seen_remote_actions.pop(key, None)
+        key = (peer_id, action_id)
+        if key in self.seen_remote_actions:
+            return False
+        if len(self.seen_remote_actions) >= 4096:
+            oldest = min(self.seen_remote_actions, key=self.seen_remote_actions.get)
+            self.seen_remote_actions.pop(oldest, None)
+        self.seen_remote_actions[key] = now
+        return True
     def _load_config(self):
         try:
             return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -286,6 +328,8 @@ class PcCompanionApp:
     def _publish_permissions(self):
         remote = bool(self.remote_var.get())
         screen = bool(self.screen_var.get())
+        self.config['monitorIndex'] = self._selected_monitor_index()
+        self._save_config()
         if not remote:
             self.control_grant_until = 0
         if screen:
@@ -533,6 +577,10 @@ class PcCompanionApp:
                     raise ValueError("Action payload or action-kind binding is invalid.")
             except Exception as exc:
                 self.status_var.set(f"Encrypted action rejected: {str(exc)[:140]}")
+                return
+            if not self._claim_remote_action(peer_id, action_id):
+                self.status_var.set("Blocked replayed remote action ID.")
+                self._send_e2e_message(peer_id, "remote_action_result", {"ok": False, "reason": "Duplicate action ID rejected."}, action_id, action_kind)
                 return
             if not self.remote_var.get() or time.time() > self.control_grant_until:
                 self.status_var.set("Ignored action: no active local PC approval.")
@@ -949,7 +997,7 @@ class PcCompanionApp:
         ok = False
         message = "Action failed."
         try:
-            ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut)
+            ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds())
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
@@ -992,7 +1040,7 @@ class PcCompanionApp:
                 continue
             try:
                 with mss.mss() as capture:
-                    monitor = capture.monitors[1]
+                    monitor = capture.monitors[self._selected_monitor_index()]
                     shot = capture.grab(monitor)
                 image = Image.frombytes("RGB", shot.size, shot.rgb)
                 try:
