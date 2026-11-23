@@ -38,16 +38,36 @@ class LiveVisualTranslationSession(
         val frame = jpeg.copyOf()
         val prompt = "Read all legible text in this live camera frame. Return a concise translation from $sourceLanguage to $targetLanguage. Preserve names, numbers, dates and units exactly. If no text is visible, say 'No readable text'. Mark uncertain words as [unclear]. Do not infer missing content."
         audit("frame_requested", "bytes=${frame.size}; frame_content_not_logged")
-        DeviceLinkManager.analyzeScreen(baseUrl, gatewayToken, provider, prompt, frame, "document") { result ->
-            frame.fill(0)
-            result.onSuccess { translated ->
-                if (gate.isActive() && generation.get() == requestGeneration) onUpdate(translated)
-                audit("frame_completed", "result_not_logged")
-            }.onFailure { error ->
-                if (gate.isActive() && generation.get() == requestGeneration) onUpdate("Live translation error: ${error.message ?: "backend unavailable"}")
-                audit("frame_failed", "error_type=${error.javaClass.simpleName}")
+
+        // The gateway may fail before registering its callback, and UI callbacks may throw.
+        // Both paths must release the copied frame and the single-flight gate.
+        try {
+            DeviceLinkManager.analyzeScreen(baseUrl, gatewayToken, provider, prompt, frame, "document") { result ->
+                try {
+                    result.onSuccess { translated ->
+                        if (gate.isActive() && generation.get() == requestGeneration) onUpdate(translated)
+                        audit("frame_completed", "result_not_logged")
+                    }.onFailure { error ->
+                        if (gate.isActive() && generation.get() == requestGeneration) {
+                            onUpdate("Live translation error: ${error.message ?: "backend unavailable"}")
+                        }
+                        audit("frame_failed", "error_type=${error.javaClass.simpleName}")
+                    }
+                } finally {
+                    frame.fill(0)
+                    if (generation.get() == requestGeneration) gate.complete()
+                }
             }
-            if (generation.get() == requestGeneration) gate.complete()
+        } catch (error: Exception) {
+            frame.fill(0)
+            if (generation.get() == requestGeneration) {
+                try {
+                    if (gate.isActive()) onUpdate("Live translation error: ${error.message ?: "backend unavailable"}")
+                    audit("frame_failed", "error_type=${error.javaClass.simpleName}")
+                } finally {
+                    gate.complete()
+                }
+            }
         }
     }
 
