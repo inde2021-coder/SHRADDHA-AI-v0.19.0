@@ -234,3 +234,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Vision requests now reject unsupported provider IDs, blank prompts and empty image payloads before network dispatch. AI chat similarly validates provider selection and non-empty prompts.
 - Pairing and WebSocket paths already required HTTPS/WSS; these additional checks close the separate HTTP-capable API paths.
 - Source-only change. No unit test, build, emulator test or live relay/API request has been run yet.
+
+
+## 23 November 2026 — Background council retry recovery (source-only, not tested)
+
+- Fixed a retry-state deadlock in the WorkManager background council adapter. Previously, a retryable provider/network failure saved RETRY_PENDING evidence but left the shared scheduler task in RUNNING; the next WorkManager attempt could not claim it and would retry without executing the council.
+- Retryable failures now transition the scheduler claim into the explicit interrupted/retry-safe FAILED marker. The next worker invocation requeues only the typed `background_council` task to PENDING before claiming it. Device-action task types are not eligible for this retry path.
+- Added a scheduler regression test covering RUNNING → retry-safe FAILED → PENDING → re-claim.
+- This is source/test coverage only. The test, Android build, WorkManager process-death behavior and provider timeout/429/5xx retry behavior have not been executed yet.
