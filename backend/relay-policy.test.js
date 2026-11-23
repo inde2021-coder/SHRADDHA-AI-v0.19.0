@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -91,4 +91,29 @@ test('only the owner can revoke another paired device and revocation clears gran
   assert.equal(revokePairedDevice(session, 'member', 'owner'), true);
   assert.equal(session.devices.has('member'), false);
   assert.equal(grants.size, 0);
+});
+
+
+test('remote control authorization rechecks target opt-in, expiry, identity and current master-only mode', () => {
+  const owner = { role: 'owner' };
+  const member = { role: 'member' };
+  const target = {
+    role: 'member',
+    sharePermissions: { remote_control: true },
+    controlGrants: new Map([['owner', 500], ['member', 500]])
+  };
+  const session = { controlMode: 'mutual', devices: new Map([['owner', owner], ['member', member], ['target', target]]) };
+  assert.equal(canUseRemoteControl(session, 'owner', 'target', 100), true);
+  assert.equal(canUseRemoteControl(session, 'member', 'target', 100), true);
+  assert.equal(canUseRemoteControl(session, 'member', 'target', 500), false);
+  assert.equal(canUseRemoteControl(session, 'missing', 'target', 100), false);
+  assert.equal(canUseRemoteControl(session, 'member', 'member', 100), false);
+  target.sharePermissions.remote_control = false;
+  assert.equal(canUseRemoteControl(session, 'owner', 'target', 100), false);
+  target.sharePermissions.remote_control = true;
+  session.controlMode = 'master';
+  assert.equal(canUseRemoteControl(session, 'owner', 'target', 100), true);
+  assert.equal(canUseRemoteControl(session, 'member', 'target', 100), false);
+  session.controlMode = 'unknown';
+  assert.equal(canUseRemoteControl(session, 'owner', 'target', 100), false);
 });

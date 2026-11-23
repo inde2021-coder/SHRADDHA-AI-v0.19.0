@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
@@ -980,18 +980,18 @@ wss.on('connection', (ws, ctx) => {
           !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 22 || ciphertext.length > 3_400_000 ||
           !/^[A-Za-z0-9+/]+=*$/.test(ciphertext)) return;
       if (messageKind === 'remote_action') {
-        const grantExpiry = target.controlGrants?.get(deviceId) || 0;
         const actionId = String(msg.actionId || '');
         const actionKind = String(msg.actionKind || '');
-        if (grantExpiry < Date.now() || !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
+        if (!canUseRemoteControl(session, deviceId, targetId, Date.now()) ||
+            !/^[A-Za-z0-9_-]{12,64}$/.test(actionId) ||
             !ALLOWED_REMOTE_ACTION_KINDS.has(actionKind)) return;
         target.pendingRemoteActions ||= new Map();
         if (target.pendingRemoteActions.size >= 32 || target.pendingRemoteActions.has(actionId)) return;
         target.pendingRemoteActions.set(actionId, { requesterId: deviceId, actionKind, expiresAt: Date.now() + 60_000 });
       } else if (messageKind === 'remote_action_result') {
         const pending = device.pendingRemoteActions?.get(String(msg.actionId || ''));
-        const expiry = device.controlGrants?.get(targetId) || 0;
-        if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() || expiry < Date.now()) return;
+        if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() ||
+            !canUseRemoteControl(session, targetId, deviceId, Date.now())) return;
         device.pendingRemoteActions.delete(String(msg.actionId));
       } else if (messageKind === 'file_transfer_chunk') {
         const transfer = target.incomingTransfers?.get(String(msg.transferId || ''));
@@ -1048,7 +1048,8 @@ wss.on('connection', (ws, ctx) => {
       const requesterId = String(msg.requesterDeviceId || '');
       const requester = session.devices.get(requesterId);
       const hasLiveRequest = resolveControlApproval(device.pendingControlRequests, requesterId, msg.approved === true);
-      const approved = Boolean(requester && hasLiveRequest && device.sharePermissions?.remote_control === true);
+      const approved = Boolean(requester && hasLiveRequest && device.sharePermissions?.remote_control === true &&
+        (session.controlMode !== 'master' || requester.role === 'owner'));
       if (approved) device.controlGrants.set(requesterId, Date.now() + Math.min(5, Math.max(1, Number(msg.minutes) || 5)) * 60_000);
       send(requesterId, JSON.stringify({ type: 'control_result', targetDeviceId: deviceId, approved, expiresInMinutes: approved ? Math.min(5, Math.max(1, Number(msg.minutes) || 5)) : 0, reason: approved ? '' : 'Request denied or target permission is disabled.' }));
     } else if (msg.type === 'remote_action') {
@@ -1096,6 +1097,32 @@ wss.on('connection', (ws, ctx) => {
     } else if (msg.type === 'set_control_mode') {
       if (device.role !== 'owner' || !['master', 'mutual'].includes(msg.mode)) return;
       session.controlMode = msg.mode;
+      if (session.controlMode === 'master') {
+        // A mode change must revoke previously approved non-owner grants immediately.
+        for (const [targetId, target] of session.devices) {
+          for (const requesterId of [...target.controlGrants.keys()]) {
+            if (session.devices.get(requesterId)?.role !== 'owner') {
+              target.controlGrants.delete(requesterId);
+              send(requesterId, JSON.stringify({
+                type: 'control_result', targetDeviceId: targetId, approved: false, expiresInMinutes: 0,
+                reason: 'Control mode changed to owner-only; previous remote access was revoked.'
+              }));
+            }
+          }
+          for (const requesterId of [...target.pendingControlRequests.keys()]) {
+            if (session.devices.get(requesterId)?.role !== 'owner') {
+              target.pendingControlRequests.delete(requesterId);
+              send(requesterId, JSON.stringify({
+                type: 'control_result', targetDeviceId: targetId, approved: false, expiresInMinutes: 0,
+                reason: 'Control mode changed to owner-only; pending request was cancelled.'
+              }));
+            }
+          }
+          for (const [actionId, pending] of target.pendingRemoteActions) {
+            if (session.devices.get(pending.requesterId)?.role !== 'owner') target.pendingRemoteActions.delete(actionId);
+          }
+        }
+      }
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'control_mode', mode: session.controlMode }));
     } else if (msg.type === 'permission_update') {
       // A device can only publish its own sharing policy. Every category is opt-in.

@@ -97,3 +97,22 @@ export function validRemoteAction(action) {
       return false;
   }
 }
+
+
+/**
+ * Fail-closed authorization for an already-approved remote-control action.
+ * The target's current opt-in and the session's current control mode are
+ * checked on every action, not only when the original request was approved.
+ */
+export function canUseRemoteControl(session, requesterId, targetId, now = Date.now()) {
+  if (!session?.devices || !(session.devices instanceof Map) ||
+      typeof requesterId !== 'string' || typeof targetId !== 'string' ||
+      !requesterId || !targetId || requesterId === targetId || !Number.isFinite(now)) return false;
+  if (session.controlMode !== 'mutual' && session.controlMode !== 'master') return false;
+  const requester = session.devices.get(requesterId);
+  const target = session.devices.get(targetId);
+  if (!requester || !target || target.sharePermissions?.remote_control !== true) return false;
+  if (session.controlMode === 'master' && requester.role !== 'owner') return false;
+  const expiresAt = target.controlGrants instanceof Map ? target.controlGrants.get(requesterId) : 0;
+  return Number.isFinite(expiresAt) && expiresAt > now;
+}
