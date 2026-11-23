@@ -68,7 +68,7 @@ jobs:
 
   android:
     needs: changes
-    if: needs.changes.outputs.android == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.android == 'true'
     name: Android unit tests and APK/AAB build
     runs-on: ubuntu-24.04
     timeout-minutes: 35
