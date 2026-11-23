@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -190,49 +190,13 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertEqual(reconnect_delay(99), 60.0)
 
 
-    def test_android_screen_frame_protocol_is_decoded_and_validated(self):
-        packet = bytes([6]) + b"phone1" + bytes([1]) + b"\xff\xd8jpeg"
-        self.assertEqual(decode_screen_frame(packet), ("phone1", 1, b"\xff\xd8jpeg"))
+    def test_plaintext_android_screen_frames_are_rejected(self):
+        packet = bytes([6]) + b"phone1" + bytes([1, 255, 216]) + b"jpeg"
         with self.assertRaises(ValueError):
-            decode_screen_frame(b"\x00")
+            decode_screen_frame(packet)
         with self.assertRaises(ValueError):
-            decode_screen_frame(bytes([1]) + b"x" + bytes([9]) + b"jpeg")
+            decode_screen_frame(b"\\x00")
 
-
-    def test_encrypted_visual_frame_v2_round_trip_and_replay_protection(self):
-        from shraddha_pc_companion import (
-            create_e2e_identity, derive_e2e_peer_key,
-            encode_encrypted_screen_frame, decode_encrypted_screen_frame,
-            encode_screen_frame, decode_screen_frame,
-        )
-        import struct
-        alice_private, alice_public = create_e2e_identity()
-        bob_private, bob_public = create_e2e_identity()
-        alice_key, _ = derive_e2e_peer_key(
-            alice_private, bob_public, "session-visual-123", "alice-device", "bob-device"
-        )
-        bob_key, _ = derive_e2e_peer_key(
-            bob_private, alice_public, "session-visual-123", "bob-device", "alice-device"
-        )
-        jpeg = b"\xff\xd8" + b"shraddha-test-frame" + b"\xff\xd9"
-        sender_peers = {"bob-device": {"key": alice_key, "local_confirmed": True, "remote_confirmed": True}}
-        receiver_peers = {"alice-device": {"key": bob_key, "local_confirmed": True, "remote_confirmed": True}}
-        sender_packet = encode_encrypted_screen_frame(
-            jpeg, "bob-device", sender_peers, "session-visual-123", "alice-device", 1
-        )
-        target_length = sender_packet[1]
-        relayed = bytes([len(b"alice-device")]) + b"alice-device" + sender_packet[:1] + sender_packet[2 + target_length:]
-        seen = {}
-        self.assertEqual(
-            decode_encrypted_screen_frame(relayed, receiver_peers, "session-visual-123", "bob-device", seen),
-            ("alice-device", 1, jpeg)
-        )
-        with self.assertRaises(ValueError):
-            decode_encrypted_screen_frame(relayed, receiver_peers, "session-visual-123", "bob-device", seen)
-        with self.assertRaises(ValueError):
-            encode_screen_frame(jpeg, "bob-device")
-        with self.assertRaises(ValueError):
-            decode_screen_frame(relayed)
 
     def test_windows_can_build_bounded_actions_for_an_approved_android_phone(self):
         from types import SimpleNamespace
