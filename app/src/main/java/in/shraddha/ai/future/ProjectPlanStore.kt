@@ -70,8 +70,25 @@ class ProjectPlanStore(context: Context) {
         plan.milestones.forEach { milestone ->
             require(milestone.title.isNotBlank() && milestone.title.length <= 160)
             require(milestone.note.length <= 500)
-            require(milestone.dependsOn.all { it in ids && it != milestone.id })
+            require(milestone.dependsOn.distinct().size == milestone.dependsOn.size) {
+                "Milestone dependencies must not contain duplicates."
+            }
+            require(milestone.dependsOn.all { it in ids && it != milestone.id }) {
+                "Milestone dependencies must reference another milestone in this project."
+            }
         }
+        // A cyclic dependency graph can never reach a valid completed state.
+        val byId = plan.milestones.associateBy { it.id }
+        val visiting = mutableSetOf<String>()
+        val visited = mutableSetOf<String>()
+        fun visit(id: String) {
+            if (id in visited) return
+            require(visiting.add(id)) { "Milestone dependencies contain a cycle." }
+            byId.getValue(id).dependsOn.forEach(::visit)
+            visiting.remove(id)
+            visited.add(id)
+        }
+        ids.forEach(::visit)
     }
 
     private fun encode(plan: ProjectPlan): String = JSONObject()
@@ -97,8 +114,8 @@ class ProjectPlanStore(context: Context) {
         require(array.length() in 1..MAX_MILESTONES)
         val milestones = (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
-            val state = runCatching { MilestoneState.valueOf(item.optString("state")) }
-                .getOrDefault(MilestoneState.TODO)
+            // Unknown states indicate a newer/corrupt record; never silently reset progress to TODO.
+            val state = MilestoneState.valueOf(item.getString("state"))
             val deps = item.optJSONArray("dependsOn") ?: JSONArray()
             ProjectMilestone(
                 id = item.getString("id"),
