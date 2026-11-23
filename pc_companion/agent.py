@@ -93,7 +93,10 @@ class PcCompanionApp:
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
-        self.monitor_var = tk.StringVar(value=str(self.config.get('monitorIndex', 1)))
+        self.monitor_labels = self._monitor_labels()
+        saved_monitor = str(self.config.get("monitorIndex", 1))
+        initial_monitor = next((label for label in self.monitor_labels if label.split(":", 1)[0] == saved_monitor), self.monitor_labels[min(1, len(self.monitor_labels) - 1)])
+        self.monitor_var = tk.StringVar(value=initial_monitor)
 
         self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
         self.name_var = tk.StringVar(value=self.config.get("deviceName", "Windows PC"))
@@ -136,7 +139,8 @@ class PcCompanionApp:
         monitor_row = ttk.Frame(frame)
         monitor_row.pack(fill="x", pady=(2, 6))
         ttk.Label(monitor_row, text="Display to share/control").pack(side="left")
-        ttk.Combobox(monitor_row, textvariable=self.monitor_var, values=self._monitor_labels(), state="readonly", width=28).pack(side="left", padx=8)
+        ttk.Combobox(monitor_row, textvariable=self.monitor_var, values=self.monitor_labels, state="readonly", width=28).pack(side="left", padx=8)
+        monitor_row.winfo_children()[-1].bind("<<ComboboxSelected>>", lambda _event: self._save_monitor_selection())
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Label(frame, text="CONTROL PAIRED ANDROID (phone approval required)").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
@@ -160,6 +164,11 @@ class PcCompanionApp:
                 return [str(index) + ': ' + str(item.get('width', 0)) + 'x' + str(item.get('height', 0)) for index, item in enumerate(capture.monitors)]
         except Exception:
             return ['1: Primary display']
+
+    def _save_monitor_selection(self):
+        self.config["monitorIndex"] = self._selected_monitor_index()
+        self._save_config()
+        self.status_var.set("Display selection saved: " + str(self.monitor_var.get()))
 
     def _selected_monitor_index(self):
         try:
