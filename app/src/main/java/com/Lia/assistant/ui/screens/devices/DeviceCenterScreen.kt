@@ -117,7 +117,7 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                     "peer_status" -> status = message.optString("name", "Device") + ": " +
                         if (message.optBoolean("online")) "online" else "offline"
-                    "remote_action_result" -> status = "PC action result: " + message.optString("result").take(300)
+                    "remote_action_result" -> status = (if (message.optBoolean("ok")) "PC action succeeded: " else "PC action failed: ") + message.optString("result").take(300)
                     else -> status = message.optString("type", "Relay message received")
                 }
             }
