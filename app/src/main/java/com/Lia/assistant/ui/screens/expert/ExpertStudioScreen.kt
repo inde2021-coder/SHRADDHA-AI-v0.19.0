@@ -247,6 +247,7 @@ fun ExpertStudioScreen(navController: NavController) {
         )
 
         NovaGlassCard(cornerRadius = 22.dp, elevation = 6.dp) {
+            NovaButton(text = "OPEN ENGINEERING WORKBENCH", onClick = { navController.navigate("engineering_workbench") }, type = NovaButtonType.SECONDARY, modifier = Modifier.fillMaxWidth())
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = colors.accent)
                 Column(Modifier.padding(start = 10.dp)) {
