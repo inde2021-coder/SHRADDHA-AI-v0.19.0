@@ -41,6 +41,7 @@ import com.Lia.assistant.ui.screens.settings.SettingsScreen
 import com.Lia.assistant.ui.screens.settings.ApiKeysScreen
 import com.Lia.assistant.ui.screens.voice.VoiceScreen
 import com.Lia.assistant.ui.screens.vision.VisualLensScreen
+import com.Lia.assistant.ui.screens.vision.ArMappingScreen
 import com.Lia.assistant.ui.theme.LocalBottomBarInset
 import com.Lia.assistant.ui.theme.nightSky
 
@@ -98,6 +99,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("api_keys") { ApiKeysScreen(navController) }
                     composable("voice") { VoiceScreen(navController, appState) }
                     composable("visual_lens") { VisualLensScreen(navController) }
+                    composable("ar_mapping") { ArMappingScreen(navController) }
                     composable("quick_actions") { QuickActionsScreen(navController) }
                     composable("profile") { ProfileScreen(navController, appState) }
                     composable("personality") { PersonalityScreen(navController, appState) }
