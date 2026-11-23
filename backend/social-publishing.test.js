@@ -76,5 +76,5 @@ test('Facebook text posts and Instagram media posts can be scheduled safely', ()
   assert.equal(scheduled.mediaKind, 'reel');
   assert.equal(scheduled.mediaUrl, 'https://cdn.example.com/p.mp4');
   assert.throws(() => validateScheduleIntent({ platform: 'instagram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z' }, now), /media type/);
-  assert.throws(() => validateScheduleIntent({ platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z', mediaUrl: 'https://cdn.example.com/p.jpg', mediaKind: 'image' }, now), /only for Instagram/);
+  assert.throws(() => validateScheduleIntent({ platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, idempotencyKey: 'schedule_key_123456', scheduledAt: '2026-11-23T08:00:00.000Z', mediaUrl: 'https://cdn.example.com/p.jpg', mediaKind: 'image' }, now), /only supported for Instagram/);
 });
