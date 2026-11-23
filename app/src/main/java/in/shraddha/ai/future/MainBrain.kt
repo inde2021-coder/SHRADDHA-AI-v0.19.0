@@ -111,7 +111,12 @@ class MainBrain(
                 return JSONObject().put("status", "error")
                     .put("message", error.message ?: "Main Brain could not queue the voice tool.")
             }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { error ->
+                return JSONObject().put("status", "error")
+                    .put("action", "scheduler_claim_failed")
+                    .put("message", error.localizedMessage ?: "Main Brain could not safely claim the voice action.")
+            }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return JSONObject().put("status", "scheduler_busy")
                     .put("message", "Main Brain is executing a higher-priority task. Please retry after it finishes.")
@@ -207,7 +212,8 @@ class MainBrain(
                     payload = payload
                 )))
             }.getOrElse { return false }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { return false }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return false
             }
@@ -254,7 +260,8 @@ class MainBrain(
                     payload = payload
                 )))
             }.getOrElse { return Result.failure(it) }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { return Result.failure(it) }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return Result.failure(IllegalStateException("Main Brain is busy with a higher-priority task."))
             }
@@ -304,7 +311,8 @@ class MainBrain(
                     payload = payload
                 )))
             }.getOrElse { return false }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { return false }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return false
             }
