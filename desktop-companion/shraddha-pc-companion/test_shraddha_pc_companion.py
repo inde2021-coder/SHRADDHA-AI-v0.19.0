@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, clear_peer_key, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, encode_encrypted_screen_frame, decode_encrypted_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -38,6 +38,15 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         self.assertEqual(clipboard_decoded["category"], "clipboard")
         with self.assertRaises(Exception):
             AESGCM(windows_key).decrypt(nonce, encrypted, aad + b"tampered")
+
+    def test_peer_ephemeral_key_is_discarded_on_disconnect_or_revocation(self):
+        from shraddha_pc_companion import clear_peer_key
+        mutable_key = bytearray(b"k" * 32)
+        peers = {"peer-1": {"key": mutable_key, "local_confirmed": True, "remote_confirmed": True}}
+        self.assertTrue(clear_peer_key(peers, "peer-1"))
+        self.assertEqual(mutable_key, bytearray(32))
+        self.assertNotIn("peer-1", peers)
+        self.assertFalse(clear_peer_key(peers, "peer-1"))
 
     def test_e2e_peer_keys_are_bound_to_the_relay_session(self):
         from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key
