@@ -126,7 +126,7 @@ class VoiceForegroundService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(assistantName)
-            .setContentText("Voice session active • microphone in use")
+            .setContentText("Voice session started • microphone opens only after secure connection")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
