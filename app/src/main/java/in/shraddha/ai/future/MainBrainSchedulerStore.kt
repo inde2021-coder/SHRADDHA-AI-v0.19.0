@@ -84,7 +84,10 @@ class MainBrainSchedulerStore(context: Context) {
         require(ivSize in 12..16 && payload.size > 1 + ivSize) { "Stored scheduler IV is invalid" }
         val iv = payload.copyOfRange(1, 1 + ivSize)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+        val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
+        val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+            ?: error("Main Brain scheduler encryption key is missing; refusing to replace it while encrypted tasks still exist.")
+        cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
         return cipher.doFinal(payload.copyOfRange(1 + ivSize, payload.size))
     }
 
