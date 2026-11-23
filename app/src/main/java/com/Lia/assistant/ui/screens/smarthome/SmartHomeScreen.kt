@@ -16,6 +16,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.brain.HomeAssistantGateway
+import `in`.shraddha.ai.brain.MqttHomeAssistantBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +44,15 @@ fun SmartHomeScreen(navController: NavController) {
     val colors = LocalNovaColors.current
     val scope = rememberCoroutineScope()
     val gateway = remember { HomeAssistantGateway(context.applicationContext) }
+    val mqtt = remember { MqttHomeAssistantBridge(context.applicationContext) }
+    var mqttUrl by remember { mutableStateOf("") }
+    var mqttUser by remember { mutableStateOf("") }
+    var mqttPassword by remember { mutableStateOf("") }
+    var mqttTopic by remember { mutableStateOf("homeassistant") }
+    var mqttDevice by remember { mutableStateOf("living_room_light") }
+    var mqttCommand by remember { mutableStateOf("ON") }
+    var mqttConfirm by remember { mutableStateOf(false) }
+    DisposableEffect(mqtt) { onDispose { mqtt.disconnect() } }
     var baseUrl by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
     var entities by remember { mutableStateOf(emptyList<HomeAssistantGateway.Entity>()) }
@@ -120,8 +131,43 @@ fun SmartHomeScreen(navController: NavController) {
                 }
             }
         }
+        NovaGlassCard {
+            Text("LOCAL MQTT • TLS BROKER", color = colors.accent)
+            Text("Optional local-network broker adapter. The broker must expose TLS (ssl://host:8883) and implement the documented topic contract.", color = colors.textSecondary)
+            OutlinedTextField(value = mqttUrl, onValueChange = { mqttUrl = it.take(300) }, modifier = Modifier.fillMaxWidth(), label = { Text("TLS broker URL • ssl://host:8883") }, singleLine = true)
+            OutlinedTextField(value = mqttUser, onValueChange = { mqttUser = it.take(128) }, modifier = Modifier.fillMaxWidth(), label = { Text("MQTT username") }, singleLine = true)
+            OutlinedTextField(value = mqttPassword, onValueChange = { mqttPassword = it.take(512) }, modifier = Modifier.fillMaxWidth(), label = { Text("MQTT password") }, singleLine = true)
+            OutlinedTextField(value = mqttTopic, onValueChange = { mqttTopic = it.take(120) }, modifier = Modifier.fillMaxWidth(), label = { Text("Base topic") }, singleLine = true)
+            NovaButton(text = "SAVE MQTT SETTINGS", onClick = {
+                val saved = mqtt.saveConfig(mqttUrl, mqttUser, mqttPassword, mqttTopic)
+                saved.onSuccess { mqttPassword = ""; status = "MQTT credentials saved in encrypted storage." }
+                    .onFailure { status = it.localizedMessage ?: "MQTT settings invalid." }
+            }, modifier = Modifier.fillMaxWidth(), enabled = mqttPassword.length >= 8)
+            NovaButton(text = "CONNECT & SUBSCRIBE", onClick = {
+                mqtt.connect { status = it }.onFailure { status = it.localizedMessage ?: "MQTT connection failed." }
+                mqtt.subscribeStateTopics { status = it }.onFailure { status = it.localizedMessage ?: "MQTT subscription failed." }
+            }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+            OutlinedTextField(value = mqttDevice, onValueChange = { mqttDevice = it.take(48) }, modifier = Modifier.fillMaxWidth(), label = { Text("Device ID") }, singleLine = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NovaButton(text = "ON", onClick = { mqttCommand = "ON"; mqttConfirm = true }, modifier = Modifier.weight(1f), enabled = mqttDevice.isNotBlank())
+                NovaButton(text = "OFF", onClick = { mqttCommand = "OFF"; mqttConfirm = true }, modifier = Modifier.weight(1f), enabled = mqttDevice.isNotBlank(), type = NovaButtonType.SECONDARY)
+            }
+            NovaButton(text = "CLEAR MQTT SETTINGS", onClick = {
+                mqtt.clearConfig().onSuccess { status = "MQTT settings cleared." }.onFailure { status = it.localizedMessage ?: "Could not clear MQTT settings." }
+            }, type = NovaButtonType.TEXT)
+        }
         NovaGlassCard { Text(status, color = colors.textSecondary) }
         Text("This build uses the HTTPS Home Assistant REST adapter with explicit per-action confirmation and a service allowlist. MQTT, Matter commissioning and vendor-specific local radios need their respective broker/hardware adapters; they are not falsely shown as connected.", color = colors.textSecondary)
+    }
+    if (mqttConfirm) {
+        AlertDialog(onDismissRequest = { mqttConfirm = false }, title = { Text("Confirm MQTT command") },
+            text = { Text("Publish $mqttCommand to $mqttTopic/$mqttDevice/set? This sends a real command to your local broker.") },
+            confirmButton = { NovaButton(text = "PUBLISH", onClick = {
+                mqttConfirm = false
+                mqtt.publishCommand(mqttDevice, mqttCommand, true) { status = it }
+                    .onFailure { status = it.localizedMessage ?: "MQTT publish failed." }
+            }) },
+            dismissButton = { NovaButton(text = "CANCEL", onClick = { mqttConfirm = false }, type = NovaButtonType.TEXT) })
     }
     if (showConfirm) {
         AlertDialog(onDismissRequest = { showConfirm = false }, title = { Text("Confirm smart-home action") },
