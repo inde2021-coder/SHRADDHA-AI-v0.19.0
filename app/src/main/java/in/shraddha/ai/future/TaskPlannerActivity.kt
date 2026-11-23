@@ -125,7 +125,9 @@ class TaskPlannerActivity : AppCompatActivity() {
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(Button(this).apply {
-            text = "← Back to Shraddha AI"; isAllCaps = false; setOnClickListener { finish() }
+            text = "← Back"; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+            elevation = dp(6).toFloat(); setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         setContentView(root)
         render()
@@ -207,6 +209,9 @@ class TaskPlannerActivity : AppCompatActivity() {
             })
             row.addView(Button(this).apply {
                 text = if (task.done) "Undo" else "Done"; isAllCaps = false
+                setTextColor(0xFF04161C.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+                elevation = dp(4).toFloat()
                 setOnClickListener {
                     val updated = task.copy(done = !task.done)
                     val index = tasks.indexOfFirst { it.id == task.id }
@@ -217,10 +222,16 @@ class TaskPlannerActivity : AppCompatActivity() {
             })
             row.addView(Button(this).apply {
                 text = "Edit"; isAllCaps = false
+                setTextColor(0xFF04161C.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+                elevation = dp(4).toFloat()
                 setOnClickListener { editTask(task) }
             })
             row.addView(Button(this).apply {
                 text = "×"; contentDescription = "Delete task"
+                setTextColor(0xFF04161C.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+                elevation = dp(4).toFloat()
                 setOnClickListener {
                     AlertDialog.Builder(this@TaskPlannerActivity).setMessage("Delete this task?")
                         .setNegativeButton("Keep", null).setPositiveButton("Delete") { _, _ ->
