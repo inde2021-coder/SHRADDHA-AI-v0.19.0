@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Live Eyes camera service now rejects null/unknown service intents and only starts on the explicit `ACTION_START`; an unreadable encrypted gateway configuration is shown as a recovery error in both the service notification and Visual Lens screen.
+
+
 - Firebase restore now validates the backup format and non-empty ciphertext for Firestore, Realtime Database mirror, named recovery revisions and Storage metadata/object consistency; malformed records fail closed instead of being presented as a missing backup. Source changes are not yet verified against a live Firebase project.
 
 
