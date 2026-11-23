@@ -6,17 +6,30 @@ import java.net.URI
 
 /** Stores the backend gateway URL and bearer token encrypted with the Android Keystore vault. */
 object TelephonyGatewayStore {
+    data class Config(val baseUrl: String, val token: String, val readError: String? = null)
+
     private const val BASE_URL = "telephony_gateway_base_url"
     private const val TOKEN = "telephony_gateway_token"
 
-    fun baseUrl(context: Context): String =
-        EncryptedFeatureStore(context.applicationContext).get(BASE_URL).getOrDefault("").trim()
+    fun get(context: Context): Config {
+        val store = EncryptedFeatureStore(context.applicationContext)
+        return runCatching {
+            Config(
+                baseUrl = store.get(BASE_URL).getOrThrow().trim(),
+                token = store.get(TOKEN).getOrThrow().trim()
+            )
+        }.getOrElse { error ->
+            Config("", "", "Could not decrypt the saved telephony backend settings: ${error.localizedMessage ?: "secure storage unavailable"}. Existing encrypted data was preserved.")
+        }
+    }
 
-    fun token(context: Context): String =
-        EncryptedFeatureStore(context.applicationContext).get(TOKEN).getOrDefault("").trim()
+    fun baseUrl(context: Context): String = get(context).baseUrl
+    fun token(context: Context): String = get(context).token
 
-    fun isConfigured(context: Context): Boolean =
-        baseUrl(context).isNotBlank() && token(context).length >= 20
+    fun isConfigured(context: Context): Boolean {
+        val config = get(context)
+        return config.readError == null && config.baseUrl.isNotBlank() && config.token.length >= 20
+    }
 
     fun save(context: Context, baseUrl: String, token: String) {
         val cleanUrl = baseUrl.trim().trimEnd('/')
@@ -29,13 +42,11 @@ object TelephonyGatewayStore {
         val cleanToken = token.trim()
         require(cleanToken.length in 20..512) { "Gateway token must contain 20-512 characters." }
         val store = EncryptedFeatureStore(context.applicationContext)
-        store.put(BASE_URL, cleanUrl).getOrThrow()
-        store.put(TOKEN, cleanToken).getOrThrow()
+        store.putAll(mapOf(BASE_URL to cleanUrl, TOKEN to cleanToken)).getOrThrow()
     }
 
     fun clear(context: Context) {
         val store = EncryptedFeatureStore(context.applicationContext)
-        check(store.remove(BASE_URL)) { "Could not clear the saved backend URL." }
-        check(store.remove(TOKEN)) { "Could not clear the saved gateway token." }
+        store.putAllAndRemove(emptyMap(), setOf(BASE_URL, TOKEN)).getOrThrow()
     }
 }
