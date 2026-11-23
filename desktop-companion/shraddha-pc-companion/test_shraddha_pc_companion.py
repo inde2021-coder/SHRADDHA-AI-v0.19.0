@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -38,6 +38,35 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         self.assertEqual(clipboard_decoded["category"], "clipboard")
         with self.assertRaises(Exception):
             AESGCM(windows_key).decrypt(nonce, encrypted, aad + b"tampered")
+
+    def test_encrypted_small_file_share_binds_one_time_request_and_category(self):
+        import base64, json
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from shraddha_pc_companion import create_e2e_identity, derive_e2e_peer_key, e2e_associated_data, decrypt_e2e_message
+        android_private, android_public = create_e2e_identity()
+        windows_private, windows_public = create_e2e_identity()
+        android_key, _ = derive_e2e_peer_key(android_private, windows_public, "android-1", "windows-1")
+        windows_key, _ = derive_e2e_peer_key(windows_private, android_public, "windows-1", "android-1")
+        request_id = "shareRequest123456"
+        category = "media"
+        payload = {"fileName": "photo.jpg", "mimeType": "image/jpeg", "contentType": "file",
+                   "sizeBytes": 4, "sha256": "a" * 64, "payload": "/////w=="}
+        aad = e2e_associated_data("session-1", "android-1", "windows-1", "data_share_payload", request_id + "|" + category)
+        nonce = bytes([7]) * 12
+        encrypted = AESGCM(android_key).encrypt(nonce, json.dumps(payload, separators=(",", ":")).encode(), aad)
+        message = {"fromDeviceId": "android-1", "messageKind": "data_share_payload", "requestId": request_id,
+                   "category": category, "nonce": base64.b64encode(nonce).decode().rstrip("="),
+                   "ciphertext": base64.b64encode(encrypted).decode().rstrip("=")}
+        decoded = decrypt_e2e_message(message, {"android-1": {"key": windows_key, "local_confirmed": True, "remote_confirmed": True}},
+                                     "session-1", "windows-1")
+        self.assertEqual(decoded["type"], "data_share_payload")
+        self.assertEqual(decoded["category"], "media")
+        self.assertEqual(decoded["requestId"], request_id)
+        self.assertEqual(decoded["fileName"], "photo.jpg")
+        tampered = dict(message, category="documents")
+        with self.assertRaises(Exception):
+            decrypt_e2e_message(tampered, {"android-1": {"key": windows_key, "local_confirmed": True, "remote_confirmed": True}},
+                                "session-1", "windows-1")
 
     def test_p256_key_agreement_and_aes_gcm_roundtrip(self):
         from e2e_crypto import DeviceE2ECrypto
@@ -125,6 +154,18 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertEqual(parse_voice_device_command('ऐप खोलो settings'), {'kind': 'open_app', 'appName': 'settings'})
         with self.assertRaises(ValueError): parse_voice_device_command('send all passwords')
 
+    def test_remote_action_ids_are_single_use_per_peer_and_bounded(self):
+        seen = {}
+        action_id = "action_1234567890"
+        self.assertTrue(claim_remote_action_id(seen, "android-device-1", action_id))
+        self.assertFalse(claim_remote_action_id(seen, "android-device-1", action_id))
+        self.assertTrue(claim_remote_action_id(seen, "android-device-2", action_id))
+        self.assertFalse(claim_remote_action_id(seen, "android-device-1", "bad"))
+        self.assertFalse(claim_remote_action_id(seen, "", "action_1234567890"))
+        for index in range(20):
+            self.assertTrue(claim_remote_action_id(seen, "peer", f"action_{index:08d}", limit=8))
+        self.assertLessEqual(len(seen), 8)
+
     def test_reconnect_backoff_is_bounded(self):
         self.assertEqual(reconnect_delay(0), 1.0)
         self.assertEqual(reconnect_delay(6), 60.0)
@@ -181,6 +222,14 @@ class PcCompanionPolicyTests(unittest.TestCase):
     def test_type_is_disabled_by_default(self):
         self.assertFalse(validate_action({"kind": "type", "text": "hello"}))
         self.assertTrue(validate_action({"kind": "type", "text": "hello"}, allow_typing=True))
+
+    def test_remote_keyboard_shortcuts_are_allowlisted_and_paste_requires_typing_consent(self):
+        for chord in ("enter", "escape", "tab", "up", "ctrl+a", "ctrl+c", "ctrl+f", "alt+tab", "win+d"):
+            self.assertTrue(validate_action({"kind": "key_press", "chord": chord}))
+        self.assertFalse(validate_action({"kind": "key_press", "chord": "ctrl+v"}))
+        self.assertTrue(validate_action({"kind": "key_press", "chord": "ctrl+v"}, allow_typing=True))
+        for chord in ("ctrl+alt+delete", "win+r", "powershell", "ctrl+shift+esc", "", "x" * 50):
+            self.assertFalse(validate_action({"kind": "key_press", "chord": chord}))
 
     def test_scroll_amount_is_bounded_and_directional(self):
         self.assertTrue(validate_action({"kind": "scroll", "amount": 4}))

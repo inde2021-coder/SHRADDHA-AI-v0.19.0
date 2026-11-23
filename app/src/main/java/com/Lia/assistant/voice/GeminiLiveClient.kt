@@ -12,7 +12,10 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-class GeminiLiveClient(private val listener: Listener) {
+class GeminiLiveClient(
+    private val listener: Listener,
+    private val assistantName: String = com.Lia.assistant.data.AssistantBrand.FULL_NAME
+) {
 
     interface Listener {
         fun onSetupComplete()
@@ -109,7 +112,7 @@ class GeminiLiveClient(private val listener: Listener) {
 
         val tools = JSONArray()
         val toolObj = JSONObject()
-        toolObj.put("functionDeclarations", LiaToolCatalog.declarations())
+        toolObj.put("functionDeclarations", LiaToolCatalog.declarations(assistantName))
         tools.put(toolObj)
         setup.put("tools", tools)
 

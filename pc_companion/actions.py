@@ -1,14 +1,17 @@
 """Allowlisted Windows UI actions. No shell execution or arbitrary process launch."""
-def execute_action(action, pyautogui, clipboard, open_shortcut):
+def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=None):
     kind = action["kind"]
     try:
         width, height = pyautogui.size()
+        left, top = 0, 0
+        if monitor_bounds:
+            left, top, width, height = monitor_bounds
         if kind == "tap":
-            pyautogui.click(round(action["x"] * (width - 1)), round(action["y"] * (height - 1)))
+            pyautogui.click(left + round(action["x"] * (width - 1)), top + round(action["y"] * (height - 1)))
             return True, "Mouse click completed."
         if kind == "swipe":
-            x1, y1 = round(action["x1"] * (width - 1)), round(action["y1"] * (height - 1))
-            x2, y2 = round(action["x2"] * (width - 1)), round(action["y2"] * (height - 1))
+            x1, y1 = left + round(action["x1"] * (width - 1)), top + round(action["y1"] * (height - 1))
+            x2, y2 = left + round(action["x2"] * (width - 1)), top + round(action["y2"] * (height - 1))
             pyautogui.moveTo(x1, y1)
             pyautogui.mouseDown()
             try:
@@ -16,6 +19,9 @@ def execute_action(action, pyautogui, clipboard, open_shortcut):
             finally:
                 pyautogui.mouseUp()
             return True, "Mouse drag completed."
+        if kind == "key_press":
+            pyautogui.hotkey(*action["chord"].split("+"))
+            return True, "Keyboard shortcut " + action["chord"] + " completed."
         if kind == "type":
             clipboard.copy(action["text"])
             pyautogui.hotkey("ctrl", "v")

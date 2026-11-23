@@ -37,6 +37,10 @@ Allowed domain keys: `electronics`, `electrical`, `mechanical`, `medical`, `agri
 
 Allowed mode keys: `learn`, `solve`, `design`, `diagnose`, `exam`, `create`.
 
+## Engineering Workbench
+
+The Android Expert Studio links to a local Engineering Workbench with first-order Ohm's law, LED series-resistor and unloaded resistive voltage-divider calculations. It can export worksheets and BOMs, generate a reviewable SPICE netlist, run a bounded local DC operating-point solver for resistors and independent DC voltage/current sources, generate parametric OpenSCAD mounting-plate source, and export a KiCad-compatible component placement CSV. The local solver is not transient/AC SPICE; the placement CSV is not a routed PCB or schematic. Full PCB routing, thermal/structural simulation and engineering certification are not provided. Verify component ratings, tolerances, load effects, wiring, protection and applicable standards before construction.
+
 ## Safety boundaries
 - Medical: educational content only; no diagnosis or prescription.
 - Law: general legal information; jurisdiction-specific lawyer review for actual cases.

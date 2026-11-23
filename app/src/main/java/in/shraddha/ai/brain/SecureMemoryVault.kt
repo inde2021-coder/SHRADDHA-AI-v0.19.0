@@ -15,9 +15,12 @@ class SecureMemoryVault(context: Context) {
     private val prefs = context.getSharedPreferences("shraddha_secure_vault", Context.MODE_PRIVATE)
     private val alias = "shraddha_memory_aes_v1"
 
-    private fun key(): SecretKey {
+    private fun keyForEncryption(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
+        require(prefs.all.keys.none { it.startsWith("slot_") } && !prefs.contains("memory")) {
+            "Secure memory encryption key is missing; refusing to replace it while encrypted memory exists."
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -34,11 +37,20 @@ class SecureMemoryVault(context: Context) {
     @Synchronized fun saveSlot(slot: String, text: String): Result<Unit> = runCatching {
         require(validSlot(slot)) { "Invalid secure memory slot" }
         require(text.length <= 16000) { "Memory is limited to 16,000 characters" }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val encrypted = cipher.doFinal(text.toByteArray(Charsets.UTF_8))
-        val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." + Base64.encodeToString(encrypted, Base64.NO_WRAP)
-        check(prefs.edit().putString("slot_$slot", payload).commit()) { "Could not save secure memory" }
+        val clear = text.toByteArray(Charsets.UTF_8)
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, keyForEncryption())
+            val encrypted = cipher.doFinal(clear)
+            try {
+                val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." + Base64.encodeToString(encrypted, Base64.NO_WRAP)
+                check(prefs.edit().putString("slot_$slot", payload).commit()) { "Could not save secure memory" }
+            } finally {
+                encrypted.fill(0)
+            }
+        } finally {
+            clear.fill(0)
+        }
     }
 
     @Synchronized fun loadSlot(slot: String): Result<String> = runCatching {
@@ -50,15 +62,29 @@ class SecureMemoryVault(context: Context) {
         require(parts.size == 2) { "Vault data is invalid" }
         val iv = Base64.decode(parts[0], Base64.NO_WRAP)
         val data = Base64.decode(parts[1], Base64.NO_WRAP)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-        val plaintext = String(cipher.doFinal(data), Charsets.UTF_8)
-        // One-time migration from the original pre-slot memory preference.
-        if (stored == null && legacy != null && slot == "memory") {
-            saveSlot("memory", plaintext).getOrThrow()
-            prefs.edit().remove("memory").commit()
+        try {
+            require(iv.size == 12 && data.size >= 16) { "Vault encryption parameters are invalid" }
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val existingKey = keyStore.getKey(alias, null) as? SecretKey
+                ?: error("Secure memory encryption key is missing; refusing to replace it while encrypted memory exists.")
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(data)
+            try {
+                val plaintext = String(clear, Charsets.UTF_8)
+                // One-time migration from the original pre-slot memory preference.
+                if (stored == null && legacy != null && slot == "memory") {
+                    saveSlot("memory", plaintext).getOrThrow()
+                    check(prefs.edit().remove("memory").commit()) { "Secure memory was migrated but legacy cleanup failed." }
+                }
+                plaintext
+            } finally {
+                clear.fill(0)
+            }
+        } finally {
+            iv.fill(0)
+            data.fill(0)
         }
-        plaintext
     }
 
     @Synchronized fun clearSlot(slot: String): Boolean {

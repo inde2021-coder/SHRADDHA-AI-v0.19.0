@@ -36,37 +36,55 @@ class MainBrainSchedulerStore(context: Context) {
                 .put("submittedOrder", item.submittedOrder)
                 .put("error", item.error ?: JSONObject.NULL))
         }
-        val encrypted = encrypt(array.toString().toByteArray(StandardCharsets.UTF_8))
-        check(prefs.edit().putString(KEY_SNAPSHOT, Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit()) {
-            "Could not persist Main Brain scheduler state"
+        val clear = array.toString().toByteArray(StandardCharsets.UTF_8)
+        try {
+            val encrypted = encrypt(clear)
+            try {
+                check(prefs.edit().putString(KEY_SNAPSHOT, Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit()) {
+                    "Could not persist Main Brain scheduler state"
+                }
+            } finally {
+                encrypted.fill(0)
+            }
+        } finally {
+            clear.fill(0)
         }
     }
 
     @Synchronized
     fun load(): List<SharedTaskScheduler.Snapshot> {
         val encoded = prefs.getString(KEY_SNAPSHOT, null) ?: return emptyList()
-        val clear = decrypt(Base64.decode(encoded, Base64.NO_WRAP))
-        val array = JSONArray(String(clear, StandardCharsets.UTF_8))
-        return (0 until array.length()).map { index ->
-            val item = array.getJSONObject(index)
-            val dependencies = item.getJSONArray("dependsOn")
-            val task = SharedTaskScheduler.Task(
-                id = item.getString("id"),
-                title = item.getString("title"),
-                dependsOn = (0 until dependencies.length()).map { dependencies.getString(it) }.toSet(),
-                priority = item.getInt("priority"),
-                payload = item.optString("payload")
-            )
-            val savedState = SharedTaskScheduler.State.valueOf(item.getString("state"))
-            val safeState = if (savedState == SharedTaskScheduler.State.RUNNING) SharedTaskScheduler.State.FAILED else savedState
-            SharedTaskScheduler.Snapshot(
-                task = task,
-                state = safeState,
-                submittedOrder = item.getLong("submittedOrder"),
-                error = if (savedState == SharedTaskScheduler.State.RUNNING)
-                    "Process stopped during execution; action was not replayed. Review and enqueue again."
-                else item.optString("error").takeIf { it.isNotBlank() && it != "null" }
-            )
+        val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+        return try {
+            val clear = decrypt(bytes)
+            try {
+                val array = JSONArray(String(clear, StandardCharsets.UTF_8))
+                (0 until array.length()).map { index ->
+                    val item = array.getJSONObject(index)
+                    val dependencies = item.getJSONArray("dependsOn")
+                    val task = SharedTaskScheduler.Task(
+                        id = item.getString("id"),
+                        title = item.getString("title"),
+                        dependsOn = (0 until dependencies.length()).map { dependencies.getString(it) }.toSet(),
+                        priority = item.getInt("priority"),
+                        payload = item.optString("payload")
+                    )
+                    val savedState = SharedTaskScheduler.State.valueOf(item.getString("state"))
+                    val safeState = if (savedState == SharedTaskScheduler.State.RUNNING) SharedTaskScheduler.State.FAILED else savedState
+                    SharedTaskScheduler.Snapshot(
+                        task = task,
+                        state = safeState,
+                        submittedOrder = item.getLong("submittedOrder"),
+                        error = if (savedState == SharedTaskScheduler.State.RUNNING)
+                            "Process stopped during execution; action was not replayed. Review and enqueue again."
+                        else item.optString("error").takeIf { it.isNotBlank() && it != "null" }
+                    )
+                }
+            } finally {
+                clear.fill(0)
+            }
+        } finally {
+            bytes.fill(0)
         }
     }
 
@@ -75,7 +93,12 @@ class MainBrainSchedulerStore(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val iv = cipher.iv
         val encrypted = cipher.doFinal(clear)
-        return byteArrayOf(iv.size.toByte()) + iv + encrypted
+        return try {
+            byteArrayOf(iv.size.toByte()) + iv + encrypted
+        } finally {
+            iv.fill(0)
+            encrypted.fill(0)
+        }
     }
 
     private fun decrypt(payload: ByteArray): ByteArray {
@@ -83,14 +106,26 @@ class MainBrainSchedulerStore(context: Context) {
         val ivSize = payload[0].toInt() and 0xff
         require(ivSize in 12..16 && payload.size > 1 + ivSize) { "Stored scheduler IV is invalid" }
         val iv = payload.copyOfRange(1, 1 + ivSize)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-        return cipher.doFinal(payload.copyOfRange(1 + ivSize, payload.size))
+        val encrypted = payload.copyOfRange(1 + ivSize, payload.size)
+        return try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
+            val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                ?: error("Main Brain scheduler encryption key is missing; refusing to replace it while encrypted tasks still exist.")
+            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+            cipher.doFinal(encrypted)
+        } finally {
+            iv.fill(0)
+            encrypted.fill(0)
+        }
     }
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        require(!prefs.contains(KEY_SNAPSHOT)) {
+            "Main Brain scheduler encryption key is missing; refusing to replace it while encrypted tasks exist."
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
             KeyGenParameterSpec.Builder(

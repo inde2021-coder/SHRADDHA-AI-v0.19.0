@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.os.Build
 import android.graphics.Color
 import android.widget.*
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /** User-granted Android file manager: search, open, copy and move through Storage Access Framework. */
 class FileAccessActivity : Activity() {
@@ -20,13 +22,16 @@ class FileAccessActivity : Activity() {
     private var latestMatches = emptyList<DeviceFileLocator.LocatedFile>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20); setBackgroundColor(0xFF0B1020.toInt()) }
-        root.addView(TextView(this).apply { text = "SHRADDHA • FILE ACCESS"; textSize = 20f; setTextColor(Color.WHITE) })
-        root.addView(TextView(this).apply { text = "AI केवल आपके द्वारा चुने गए फ़ोल्डर/Android media permission में फ़ाइलें खोजेगा।"; setTextColor(0xFFB9A9FF.toInt()); setPadding(0,8,0,14) })
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24); setBackgroundColor(0xFF07131D.toInt()) }
+        root.addView(TextView(this).apply { text = "$assistantName • FILE ACCESS"; textSize = 20f; setTextColor(Color.WHITE) })
+        root.addView(TextView(this).apply { text = "AI केवल आपके द्वारा चुने गए फ़ोल्डर/Android media permission में फ़ाइलें खोजेगा।"; setTextColor(0xFF73DDE7.toInt()); setPadding(0,8,0,14) })
         root.addView(button("Media फ़ाइल permission माँगें") { requestMediaPermissions() })
         root.addView(button("फ़ोल्डर की अनुमति दें (एक बार)") { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 41) })
-        filename = EditText(this).apply { hint = "उदाहरण: Rahul.jpg या invoice.pdf"; setTextColor(Color.WHITE); setHintTextColor(0xFF8894AE.toInt()) }; root.addView(filename)
-        folder = EditText(this).apply { hint = "वैकल्पिक फ़ोल्डर संकेत: Download"; setTextColor(Color.WHITE); setHintTextColor(0xFF8894AE.toInt()) }; root.addView(folder)
+        filename = field("उदाहरण: Rahul.jpg या invoice.pdf"); root.addView(filename)
+        folder = field("वैकल्पिक फ़ोल्डर संकेत: Download"); root.addView(folder)
         root.addView(button("फ़ाइल खोजें") { search() })
         root.addView(button("फ़ाइल चुनें (Open / Copy / Move)") { chooseSourceFile() })
         root.addView(button("चुनी हुई फ़ाइल खोलें") { openSelected() })
@@ -36,7 +41,7 @@ class FileAccessActivity : Activity() {
         root.addView(button("फ़ाइल का नाम बदलें") { renameSelected() })
         root.addView(button("फ़ाइल Delete करें") { deleteSelected() })
         root.addView(button("फ़ाइल Share / Upload करें") { shareSelected() })
-        status = TextView(this).apply { setTextColor(0xFFE5EAF5.toInt()); text = "फ़ाइल का पूरा नाम दें। समान नाम की कई फ़ाइलें हों तो सही फ़ाइल चुननी होगी।"; setPadding(0,16,0,16) }
+        status = TextView(this).apply { setTextColor(0xFFE6F5F7.toInt()); text = "फ़ाइल का पूरा नाम दें। समान नाम की कई फ़ाइलें हों तो सही फ़ाइल चुननी होगी।"; setPadding(0,16,0,16) }
         root.addView(status)
         root.addView(button("बंद करें") { finish() })
         val outer = ScrollView(this); outer.addView(root); setContentView(outer)
@@ -205,5 +210,22 @@ class FileAccessActivity : Activity() {
         }
     }
 
-    private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF5946A8.toInt()); setOnClickListener { action() } }
+    private fun field(hintText: String) = EditText(this).apply {
+        hint = hintText; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+        setPadding(16, 12, 16, 12)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+    }
+
+    private fun button(label: String, action: () -> Unit) = Button(this).apply {
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f; setPadding(18, 12, 18, 12)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+        setOnClickListener { action() }
+    }
 }

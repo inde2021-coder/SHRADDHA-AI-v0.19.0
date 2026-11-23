@@ -29,15 +29,15 @@ data class NovaColorScheme(
 )
 
 val DarkNovaColors = NovaColorScheme(
-    background = Color(0xFF070C16),
-    backgroundGradientTop = Color(0xFF172541),
-    surface = Color(0xFF111D31),
-    surfaceGlass = Color(0xCC111D31),
-    surfaceBorder = Color(0x556C9CCB),
-    surfaceRaised = Color(0xFF1A2B46),
-    accent = Color(0xFF73D7FF),
-    accentSecondary = Color(0xFF9B8CFF),
-    accentGlow = Color(0x5573D7FF),
+    background = Color(0xFF07131B),
+    backgroundGradientTop = Color(0xFF12323D),
+    surface = Color(0xFF102A35),
+    surfaceGlass = Color(0xCC102A35),
+    surfaceBorder = Color(0x5566C2C8),
+    surfaceRaised = Color(0xFF173B47),
+    accent = Color(0xFF68E7EA),
+    accentSecondary = Color(0xFF62D7C8),
+    accentGlow = Color(0x5568E7EA),
     onAccent = Color(0xFF07111D),
     textPrimary = Color(0xFFF0F6FF),
     textSecondary = Color(0xFFA7B8CE),
@@ -45,12 +45,12 @@ val DarkNovaColors = NovaColorScheme(
     success = Color(0xFF3FE0D0),
     warning = Color(0xFFFFC36B),
     error = Color(0xFFFF5252),
-    userBubble = Color(0xFF183A55),
+    userBubble = Color(0xFF164A55),
     assistantBubble = Color(0xFF111D31),
     depthShadow = Color(0x80000000),
     rimLight = Color(0x26FFFFFF),
     lagoon = Color(0xFF62E5D0),
-    lotus = Color(0xFFB49AFF)
+    lotus = Color(0xFF8CE8E7)
 )
 
 val LightNovaColors = NovaColorScheme(
@@ -59,9 +59,9 @@ val LightNovaColors = NovaColorScheme(
     surface = Color(0xFFFFFFFF),
     surfaceGlass = Color(0xCCFFFFFF),
     surfaceBorder = Color(0x334A7192),
-    surfaceRaised = Color(0xFFFBF9FF),
+    surfaceRaised = Color(0xFFF2FBFA),
     accent = Color(0xFF087EA8),
-    accentSecondary = Color(0xFF6554C0),
+    accentSecondary = Color(0xFF087F83),
     accentGlow = Color(0x33087EA8),
     onAccent = Color(0xFFFFFFFF),
     textPrimary = Color(0xFF102033),
@@ -75,8 +75,35 @@ val LightNovaColors = NovaColorScheme(
     depthShadow = Color(0x1F000000),
     rimLight = Color(0x40FFFFFF),
     lagoon = Color(0xFF008DA8),
-    lotus = Color(0xFF7257C7)
+    lotus = Color(0xFF0A9CA0)
 )
 
 val LocalNovaColors = staticCompositionLocalOf { DarkNovaColors }
 val LocalNovaReducedMotion = staticCompositionLocalOf { false }
+
+
+/** Light lavender palette sampled from the LIA reference app's Quick actions and Settings screens. */
+val LiaReferenceColors = NovaColorScheme(
+    background = Color(0xFFF7F3FF),
+    backgroundGradientTop = Color(0xFFEDE4FF),
+    surface = Color(0xFFFFFFFF),
+    surfaceGlass = Color(0xF7FFFFFF),
+    surfaceBorder = Color(0xFFE3D7FA),
+    surfaceRaised = Color(0xFFF1EAFE),
+    accent = Color(0xFF7C3AED),
+    accentSecondary = Color(0xFFA855F7),
+    accentGlow = Color(0x337C3AED),
+    onAccent = Color(0xFFFFFFFF),
+    textPrimary = Color(0xFF26133F),
+    textSecondary = Color(0xFF705D89),
+    textTertiary = Color(0xFF9989AE),
+    success = Color(0xFF218B62),
+    warning = Color(0xFFAA6B00),
+    error = Color(0xFFD14363),
+    userBubble = Color(0xFFEDE4FF),
+    assistantBubble = Color(0xFFFFFFFF),
+    depthShadow = Color(0x160E0520),
+    rimLight = Color(0xFFFFFFFF),
+    lagoon = Color(0xFF8B5CF6),
+    lotus = Color(0xFFC084FC)
+)

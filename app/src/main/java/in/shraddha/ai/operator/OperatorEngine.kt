@@ -57,8 +57,18 @@ class OperatorEngine(
                 match != null && ShraddhaAccessibilityService.clickVisibleText(step.target)
             }
             OperatorActionType.TYPE_TEXT -> {
-                val focused = before.elements.firstOrNull { it.editable && !it.password }
-                focused != null && ShraddhaAccessibilityService.fillFocusedField(step.value.take(2000))
+                // Never type into whichever field happens to have focus. The caller
+                // must identify one visible, non-sensitive field by its exact label,
+                // hint or resource ID; the service independently checks uniqueness.
+                val wanted = step.target.trim()
+                val matches = before.elements.filter { element ->
+                    element.editable && !element.password && wanted.isNotBlank() &&
+                        listOf(element.id, element.text, element.description, element.hintText)
+                            .any { it.isNotBlank() && it.trim().equals(wanted, ignoreCase = true) }
+                }
+                matches.size == 1 && ShraddhaAccessibilityService.fillEditableField(
+                    wanted, step.value.take(2000)
+                )
             }
             OperatorActionType.BACK -> ShraddhaAccessibilityService.goBack()
             OperatorActionType.HOME -> ShraddhaAccessibilityService.goHome()

@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkManager
 import java.util.UUID
 import com.Lia.assistant.data.ApiKeyStore
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
@@ -51,6 +52,7 @@ class WorkAgentActivity : AppCompatActivity() {
     private lateinit var urlInput: EditText
     private lateinit var pageStatus: TextView
     private lateinit var browser: WebView
+    private lateinit var assistantName: String
     private lateinit var status: TextView
     private val history = mutableListOf<ChatTurn>()
     private var pageText = ""
@@ -79,14 +81,17 @@ class WorkAgentActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.decorView.setBackgroundColor(0xFF090D19.toInt())
+        assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
+        window.decorView.setBackgroundColor(0xFF07131D.toInt())
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(12))
-            setBackgroundColor(0xFF090D19.toInt())
+            setBackgroundColor(0xFF07131D.toInt())
         }
         root.addView(TextView(this).apply {
-            text = "SHRADDHA • AI WORK AGENT"
+            text = "$assistantName • AI WORK AGENT"
             textSize = 19f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(12))
         })
@@ -96,7 +101,7 @@ class WorkAgentActivity : AppCompatActivity() {
         root.addView(tabs)
         status = TextView(this).apply {
             text = "AI provider: " + NovaPreferences.getString(this@WorkAgentActivity, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
-            textSize = 11f; setTextColor(0xFF9FB2D1.toInt())
+            textSize = 11f; setTextColor(0xFF73DDE7.toInt())
             setPadding(dp(4), dp(8), dp(4), dp(8))
         }
         root.addView(status)
@@ -118,7 +123,7 @@ class WorkAgentActivity : AppCompatActivity() {
         chatPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         chatPanel.addView(TextView(this).apply {
             text = "बताइए क्या काम करना है। मैं योजना बनाऊँगा, वेब पेज समझूँगा या App Operator को reviewed task भेजूँगा।"
-            textSize = 13f; setTextColor(0xFFD4DDF0.toInt())
+            textSize = 13f; setTextColor(0xFFB6CDD2.toInt())
             setPadding(dp(4), dp(4), dp(4), dp(8))
         })
         chatScroll = ScrollView(this)
@@ -127,9 +132,11 @@ class WorkAgentActivity : AppCompatActivity() {
         chatPanel.addView(chatScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         input = EditText(this).apply {
             hint = "उदाहरण: इस वेबसाइट पर मेरा काम पूरा करने में मदद करो…"
-            setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt())
+            setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
             setPadding(dp(12), dp(10), dp(12), dp(10)); minLines = 2; maxLines = 4
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
         }
         chatPanel.addView(input)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -154,16 +161,18 @@ class WorkAgentActivity : AppCompatActivity() {
         val addressRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         urlInput = EditText(this).apply {
             hint = "https://example.com या खोजने के लिए शब्द"
-            setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt())
+            setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
             setSingleLine(true); setPadding(dp(10), dp(8), dp(10), dp(8))
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
         }
         addressRow.addView(urlInput, LinearLayout.LayoutParams(0, dp(48), 1f))
         addressRow.addView(button("Go") { navigateBrowser(urlInput.text.toString()) }, LinearLayout.LayoutParams(dp(64), dp(48)))
         browserPanel.addView(addressRow)
         pageStatus = TextView(this).apply {
             text = "Browser HTTP/HTTPS navigation के साथ तैयार है।"
-            setTextColor(0xFFB9C6DD.toInt()); textSize = 11f
+            setTextColor(0xFF73DDE7.toInt()); textSize = 11f
             setPadding(dp(4), dp(6), dp(4), dp(6))
         }
         browserPanel.addView(pageStatus)
@@ -271,7 +280,13 @@ class WorkAgentActivity : AppCompatActivity() {
 
     /** Clicks one uniquely labelled visible web control only after the user approves its exact label. */
     private fun requestBrowserClick() {
-        val field = EditText(this).apply { hint = "बटन/लिंक का ठीक वही नाम"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()) }
+        val field = EditText(this).apply {
+            hint = "बटन/लिंक का ठीक वही नाम"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
+        }
         android.app.AlertDialog.Builder(this).setTitle("वेब पेज पर क्या क्लिक करें?")
             .setMessage("केवल एक ही exact नाम वाला visible button/link चुना जाएगा। Ambiguous result पर action नहीं होगा।")
             .setView(field).setNegativeButton("रद्द", null)
@@ -303,8 +318,20 @@ class WorkAgentActivity : AppCompatActivity() {
     /** Fills one uniquely labelled, non-sensitive web field. It never submits the form. */
     private fun requestBrowserFill() {
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(4), dp(8), 0) }
-        val label = EditText(this).apply { hint = "Field label / placeholder"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()) }
-        val value = EditText(this).apply { hint = "भरने वाला text"; setTextColor(Color.WHITE); setHintTextColor(0xFF8C9AB2.toInt()); minLines = 2 }
+        val label = EditText(this).apply {
+            hint = "Field label / placeholder"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
+        }
+        val value = EditText(this).apply {
+            hint = "भरने वाला text"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt()); minLines = 2
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
+        }
         panel.addView(label); panel.addView(value)
         android.app.AlertDialog.Builder(this).setTitle("वेब फॉर्म में text भरें")
             .setMessage("Password, OTP, PIN, CVV और file fields सुरक्षित रूप से block हैं। यह action form submit नहीं करेगा।")
@@ -463,7 +490,7 @@ class WorkAgentActivity : AppCompatActivity() {
                 runCatching {
                     val request = DownloadManager.Request(uri)
                         .setTitle(fileName)
-                        .setDescription("Shraddha AI • ${uri.host}")
+                        .setDescription("$assistantName • ${uri.host}")
                         .setMimeType(mimeType)
                         .addRequestHeader("User-Agent", userAgent)
                         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -609,7 +636,7 @@ class WorkAgentActivity : AppCompatActivity() {
         input.setText("")
         addMessage("user", prompt)
         val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
-        val name = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, "Shraddha AI")
+        val name = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME)
         val language = NovaPreferences.getString(this, NovaPreferences.Keys.LANGUAGE, "AUTO")
         val system = """
             You are $name, a careful mobile AI work agent. Respond in the user's language ($language).
@@ -662,11 +689,15 @@ class WorkAgentActivity : AppCompatActivity() {
 
     private fun addMessage(role: String, text: String) {
         val bubble = TextView(this).apply {
-            this.text = (if (role == "user") "YOU\n" else "SHRADDHA AI\n") + text
+            this.text = (if (role == "user") "YOU\n" else "$assistantName\n") + text
             textSize = 14f
-            setTextColor(if (role == "user") Color.WHITE else 0xFFE2E9F7.toInt())
+            setTextColor(if (role == "user") Color.WHITE else 0xFFE6F5F7.toInt())
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            setBackgroundColor(if (role == "user") 0xFF27345A.toInt() else 0xFF151F32.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(if (role == "user") 0xFF164B59.toInt() else 0xFF102A36.toInt())
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), if (role == "user") 0xFF38C7D2.toInt() else 0xFF2D8490.toInt())
+            }
         }
         messages.addView(bubble, LinearLayout.LayoutParams(-1, -2).apply {
             bottomMargin = dp(8)
@@ -677,10 +708,14 @@ class WorkAgentActivity : AppCompatActivity() {
     }
 
     private fun button(label: String, click: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; setTextColor(Color.WHITE)
-        backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF403574.toInt())
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF8AF1F1.toInt())
+        }
+        elevation = dp(6).toFloat()
+        setPadding(dp(12), dp(8), dp(12), dp(8))
         setOnClickListener { click() }
-        layoutParams = LinearLayout.LayoutParams(-1, dp(46)).apply { bottomMargin = dp(6) }
+        layoutParams = LinearLayout.LayoutParams(-1, dp(46)).apply { bottomMargin = dp(8) }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

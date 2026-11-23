@@ -3,7 +3,7 @@ package com.Lia.assistant.voice
 import org.json.JSONArray
 
 object LiaToolCatalog {
-    fun declarations(): JSONArray {
+    fun declarations(assistantName: String = com.Lia.assistant.data.AssistantBrand.FULL_NAME): JSONArray {
         val array = JSONArray()
 
         // Base tools
@@ -53,9 +53,53 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "plan_multi_agent_task",
-                description = "Uses Shraddha AI's local multi-role council to plan a goal, order Planner/Researcher/Specialist/Critic/Verifier tasks by dependencies, and save the proposed plan in encrypted local memory. This is planning only: it does not contact external agents or execute actions.",
+                description = "Uses $assistantName's local multi-role council to plan a goal, order Planner/Researcher/Specialist/Critic/Verifier tasks by dependencies, and save the proposed plan in encrypted local memory. This is planning only: it does not contact external agents or execute actions.",
                 params = mapOf("goal" to "The user's goal to break into a multi-role plan, maximum 1000 characters"),
                 required = listOf("goal")
+            )
+        )
+
+
+        // Native Android hardware and system controls. PC controls are routed separately to a paired companion.
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "control_phone",
+                description = "Controls this Android phone locally. Supported action values: status, set_volume, set_brightness, flashlight_on, flashlight_off, volume_up, volume_down, media_play_pause, media_next, media_previous, and open_settings. set_volume/set_brightness require percent 0-100. open_settings accepts wifi, bluetooth, internet, display, sound, battery, location, nfc, accessibility, notifications, apps, date, language, security, dnd, rotation, or storage. Android-protected radios/settings open the official system panel instead of silently bypassing OS restrictions. Brightness may require Modify System Settings permission; flashlight requires Camera permission.",
+                params = mapOf(
+                    "action" to "One supported phone action: status, set_volume, set_brightness, flashlight_on, flashlight_off, volume_up, volume_down, media_play_pause, media_next, media_previous, open_settings",
+                    "percent" to "Required for set_volume and set_brightness; integer from 0 to 100",
+                    "setting" to "Required for open_settings; one of the documented Android settings keys"
+                ),
+                required = listOf("action")
+            )
+        )
+
+
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "list_paired_devices",
+                description = "Lists device names, exact device IDs and online status from the authenticated paired-device relay. Use this first when the user asks to control a paired PC; ask which named Windows PC they mean if more than one device is present. Never invent or guess a device ID.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "control_paired_pc",
+                description = "Sends a typed command to one already paired Windows PC through the encrypted device relay. The user must identify the exact paired device ID shown in Device Universe; never guess a target. Supported kind values: hardware_status, set_volume (percent 0-100), set_brightness (percent 0-100), power (operation shutdown/restart/sleep; ALWAYS ask the user for explicit confirmation before calling), open_app (name), back, home, scroll (amount -10..10), screenshot, web_search (query). This opens Device Control and requests fresh time-limited approval from the target PC before sending. The Windows companion performs its own per-action confirmation and reports the result; a queued request is not proof of execution.",
+                params = mapOf(
+                    "target_device_id" to "Exact paired Windows device ID shown in Device Universe",
+                    "kind" to "One of hardware_status, set_volume, set_brightness, power, open_app, back, home, scroll, screenshot, web_search",
+                    "percent" to "0-100 for set_volume or set_brightness",
+                    "operation" to "shutdown, restart, or sleep for power",
+                    "name" to "Installed application name for open_app",
+                    "amount" to "Scroll amount -10..10",
+                    "query" to "Search text for web_search",
+                    "user_confirmed" to "yes only after the user explicitly confirms a shutdown/restart/sleep command"
+                ),
+                required = listOf("target_device_id", "kind")
             )
         )
 
@@ -225,7 +269,7 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "manage_files",
-                description = "Opens Shraddha AI secure Android file manager for user-authorized file operations. Search/open/copy/move/rename/delete/share/import/export are performed only after the user selects the exact file and destination. Delete, move and rename require a visible confirmation. Share opens Android Sharesheet; the user chooses the destination app. Never claim an upload or send completed until the app reports it.",
+                description = "Opens $assistantName secure Android file manager for user-authorized file operations. Search/open/copy/move/rename/delete/share/import/export are performed only after the user selects the exact file and destination. Delete, move and rename require a visible confirmation. Share opens Android Sharesheet; the user chooses the destination app. Never claim an upload or send completed until the app reports it.",
                 params = mapOf("operation" to "One of: manage, find, open, copy, move, rename, delete, share, import, export"),
                 required = listOf("operation")
             )

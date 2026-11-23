@@ -38,7 +38,7 @@ class TaskPlannerActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(20), dp(18), dp(24))
-            setBackgroundColor(Color.rgb(7, 11, 20))
+            setBackgroundColor(Color.rgb(7, 19, 29))
         }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(this).apply {
@@ -46,16 +46,24 @@ class TaskPlannerActivity : AppCompatActivity() {
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
         })
-        top.addView(Button(this).apply { text = "＋ Add task"; isAllCaps = false; setOnClickListener { createTask() } })
+        top.addView(Button(this).apply {
+            text = "＋ Add task"; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF38C7D2.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF8AF1F1.toInt())
+            }
+            elevation = dp(6).toFloat(); setOnClickListener { createTask() }
+        })
         root.addView(top)
         summary = TextView(this).apply {
-            textSize = 14f; setTextColor(Color.rgb(185, 202, 230))
+            textSize = 14f; setTextColor(0xFFB6CDD2.toInt())
             setPadding(dp(14), dp(14), dp(14), dp(14)); background = panel()
         }
         root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); bottomMargin = dp(14) })
         briefingToggle = android.widget.Switch(this).apply {
             text = "Daily briefing • around 8:00 AM"
-            setTextColor(0xFFE4E9F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
+            thumbTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+            trackTintList = android.content.res.ColorStateList.valueOf(0xFF2D8490.toInt())
             isChecked = prefs.getBoolean("daily_briefing_enabled", false)
             setOnCheckedChangeListener { _, enabled ->
                 prefs.edit().putBoolean("daily_briefing_enabled", enabled).apply()
@@ -76,12 +84,16 @@ class TaskPlannerActivity : AppCompatActivity() {
             setText(prefs.getString("daily_research_topics", "").orEmpty())
             minLines = 2; maxLines = 3
             setPadding(dp(12), dp(10), dp(12), dp(10))
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
         }
         root.addView(researchTopics, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         researchToggle = android.widget.Switch(this).apply {
             text = "Daily source-linked web research • Perplexity"
-            setTextColor(0xFFE4E9F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
+            thumbTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+            trackTintList = android.content.res.ColorStateList.valueOf(0xFF2D8490.toInt())
             isChecked = prefs.getBoolean(DailyBriefingResearchWorker.KEY_ENABLED, false)
             setOnCheckedChangeListener { _, enabled ->
                 val topics = researchTopics.text.toString().trim().take(1000)
@@ -107,17 +119,19 @@ class TaskPlannerActivity : AppCompatActivity() {
         root.addView(researchToggle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         root.addView(TextView(this).apply {
             text = "Privacy: केवल आपके लिखे topics Perplexity को web research के लिए भेजे जाएँगे। यह feature default में OFF है; tasks, contacts या notifications का content नहीं भेजा जाता।"
-            textSize = 11f; setTextColor(0xFF9EABC2.toInt())
+            textSize = 11f; setTextColor(0xFFB6CDD2.toInt())
             setPadding(dp(4), 0, dp(4), dp(10))
         })
         root.addView(TextView(this).apply {
             text = "YOUR TASKS"; textSize = 11f; letterSpacing = .12f
-            setTextColor(Color.rgb(159, 139, 255)); setPadding(dp(2), dp(8), 0, dp(8))
+            setTextColor(0xFF73DDE7.toInt()); setPadding(dp(2), dp(8), 0, dp(8))
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(Button(this).apply {
-            text = "← Back to Shraddha AI"; isAllCaps = false; setOnClickListener { finish() }
+            text = "← Back"; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+            elevation = dp(6).toFloat(); setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         setContentView(root)
         render()
@@ -199,6 +213,9 @@ class TaskPlannerActivity : AppCompatActivity() {
             })
             row.addView(Button(this).apply {
                 text = if (task.done) "Undo" else "Done"; isAllCaps = false
+                setTextColor(0xFF04161C.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+                elevation = dp(4).toFloat()
                 setOnClickListener {
                     val updated = task.copy(done = !task.done)
                     val index = tasks.indexOfFirst { it.id == task.id }
@@ -209,10 +226,16 @@ class TaskPlannerActivity : AppCompatActivity() {
             })
             row.addView(Button(this).apply {
                 text = "Edit"; isAllCaps = false
+                setTextColor(0xFF04161C.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+                elevation = dp(4).toFloat()
                 setOnClickListener { editTask(task) }
             })
             row.addView(Button(this).apply {
                 text = "×"; contentDescription = "Delete task"
+                setTextColor(0xFF04161C.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+                elevation = dp(4).toFloat()
                 setOnClickListener {
                     AlertDialog.Builder(this@TaskPlannerActivity).setMessage("Delete this task?")
                         .setNegativeButton("Keep", null).setPositiveButton("Delete") { _, _ ->
@@ -236,8 +259,8 @@ class TaskPlannerActivity : AppCompatActivity() {
 
 
     private fun editTask(task: Task) {
-        val titleInput = EditText(this).apply { setText(task.title); hint = "Task title"; setTextColor(Color.WHITE) }
-        val noteInput = EditText(this).apply { setText(task.note); hint = "Optional details"; setTextColor(Color.WHITE) }
+        val titleInput = taskField("Task title").apply { setText(task.title) }
+        val noteInput = taskField("Optional details").apply { setText(task.note) }
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
@@ -313,9 +336,19 @@ class TaskPlannerActivity : AppCompatActivity() {
         prefs.edit().putString("tasks", array.toString()).apply()
     }
 
+    private fun taskField(hintText: String) = EditText(this).apply {
+        hint = hintText
+        setTextColor(Color.WHITE)
+        setHintTextColor(0xFF8BAFB8.toInt())
+        setPadding(dp(12), dp(10), dp(12), dp(10))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+        }
+    }
+
     private fun panel() = android.graphics.drawable.GradientDrawable(
-        android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF19243A.toInt(), 0xFF101A2B.toInt())
-    ).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0xFF344668.toInt()) }
+        android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF123A46.toInt(), 0xFF0D2531.toInt())
+    ).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt()) }
 
     private fun toast(message: String) = android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

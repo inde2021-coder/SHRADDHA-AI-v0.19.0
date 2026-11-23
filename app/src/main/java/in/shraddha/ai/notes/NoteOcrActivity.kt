@@ -23,6 +23,8 @@ import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import org.json.JSONArray
 import org.json.JSONObject
 import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 import java.util.concurrent.Executors
 
 /**
@@ -38,13 +40,16 @@ class NoteOcrActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 24, 24, 24)
-            setBackgroundColor(Color.rgb(9, 13, 25))
+            setBackgroundColor(Color.rgb(7, 19, 29))
         }
         root.addView(TextView(this).apply {
-            text = "SHRADDHA • PRIVATE NOTES & OCR"
+            text = "$assistantName • PRIVATE NOTES & OCR"
             textSize = 19f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -53,7 +58,7 @@ class NoteOcrActivity : Activity() {
         status = TextView(this).apply {
             text = "OCR इस डिवाइस पर होगा। आपकी image या note इस screen से cloud पर upload नहीं होगी।"
             textSize = 13f
-            setTextColor(0xFFB9C5DD.toInt())
+            setTextColor(0xFF73DDE7.toInt())
             setPadding(0, 0, 0, 12)
         }
         root.addView(status)
@@ -62,14 +67,16 @@ class NoteOcrActivity : Activity() {
         note = EditText(this).apply {
             hint = "यहाँ अपना note लिखें या OCR text सुधारें…"
             setTextColor(Color.WHITE)
-            setHintTextColor(0xFF8793AA.toInt())
+            setHintTextColor(0xFF8BAFB8.toInt())
             setTextSize(16f)
             minLines = 9
             gravity = Gravity.TOP
             setPadding(14, 14, 14, 14)
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
         }
-        root.addView(note, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(note, LinearLayout.LayoutParams(-1, (320 * resources.displayMetrics.density).toInt()))
         root.addView(action("नोट सुरक्षित करें") { saveNote() })
         root.addView(action("Clipboard में कॉपी करें") { copyNote() })
         root.addView(action("पहले सुरक्षित नोट खोलें") { loadNote() })
@@ -83,6 +90,13 @@ class NoteOcrActivity : Activity() {
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
+        setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f
+        setPadding(18, 12, 18, 12)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
         setOnClickListener { run() }
     }
 

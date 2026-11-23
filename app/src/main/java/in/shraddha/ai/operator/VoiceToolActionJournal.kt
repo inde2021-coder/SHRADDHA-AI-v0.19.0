@@ -27,8 +27,8 @@ class VoiceToolActionJournal(context: Context) {
         if (!taskId.matches(Regex("voice_[A-Fa-f0-9]{32}"))) return false
         if (!tool.matches(Regex("[a-zA-Z0-9_]{1,80}"))) return false
         // Never overwrite an unresolved action from a previous process/session.
-        val previous = read()
-        if (previous?.state == "EXECUTING") return false
+        val previous = readResult().getOrElse { return false }
+        if (previous?.state in setOf("EXECUTING", "FAILED")) return false
         val payload = JSONObject()
             .put("task_id", taskId)
             .put("tool", tool)
@@ -41,7 +41,7 @@ class VoiceToolActionJournal(context: Context) {
 
     @Synchronized
     fun finish(taskId: String, result: JSONObject): Boolean {
-        val current = read() ?: return false
+        val current = readResult().getOrNull() ?: return false
         if (current.taskId != taskId || current.state != "EXECUTING") return false
         val status = result.optString("status", "unknown").take(40)
         val action = result.optString("action", "").take(80)
@@ -58,8 +58,8 @@ class VoiceToolActionJournal(context: Context) {
     /** Explicit user attestation after inspecting the target app; this never replays the action. */
     @Synchronized
     fun markManuallyVerified(taskId: String): Boolean {
-        val current = read() ?: return false
-        if (current.taskId != taskId || current.state != "EXECUTING") return false
+        val current = readResult().getOrNull() ?: return false
+        if (current.taskId != taskId || current.state !in setOf("EXECUTING", "FAILED")) return false
         val verified = JSONObject()
             .put("task_id", current.taskId)
             .put("tool", current.tool)
@@ -71,21 +71,30 @@ class VoiceToolActionJournal(context: Context) {
     }
 
     @Synchronized
-    fun latest(): Entry? = read()
+    fun latest(): Entry? = readResult().getOrNull()
 
-    private fun read(): Entry? {
-        val raw = store.get(key).getOrNull().orEmpty()
-        if (raw.isBlank()) return null
-        return runCatching {
-            val json = JSONObject(raw)
-            Entry(
-                taskId = json.getString("task_id"),
-                tool = json.getString("tool"),
-                state = json.getString("state"),
-                action = json.optString("action"),
-                resultStatus = json.optString("result_status"),
-                updatedAt = json.optLong("updated_at")
-            )
-        }.getOrNull()
+    @Synchronized
+    fun latestResult(): Result<Entry?> = readResult()
+
+    private fun readResult(): Result<Entry?> = runCatching {
+        val raw = store.get(key).getOrThrow().orEmpty()
+        if (raw.isBlank()) return@runCatching null
+        val json = JSONObject(raw)
+        val taskId = json.getString("task_id")
+        val tool = json.getString("tool")
+        val state = json.getString("state")
+        require(taskId.matches(Regex("voice_[A-Fa-f0-9]{32}"))) { "Stored voice action journal task ID is invalid." }
+        require(tool.matches(Regex("[a-zA-Z0-9_]{1,80}"))) { "Stored voice action journal tool is invalid." }
+        require(state in setOf("EXECUTING", "RESULT_RECORDED", "FAILED", "MANUALLY_VERIFIED")) {
+            "Stored voice action journal state is invalid."
+        }
+        Entry(
+            taskId = taskId,
+            tool = tool,
+            state = state,
+            action = json.optString("action"),
+            resultStatus = json.optString("result_status"),
+            updatedAt = json.optLong("updated_at")
+        )
     }
 }

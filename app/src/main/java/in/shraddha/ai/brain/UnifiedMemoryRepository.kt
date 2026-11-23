@@ -26,6 +26,9 @@ class UnifiedMemoryRepository(context: Context) {
 
     data class SaveResult(val localSaved: Boolean, val cloudSaved: Boolean, val message: String)
     data class LoadResult(val value: String?, val source: String)
+    data class ConflictPreview(val key: String, val localValue: String?, val cloudValue: String?, val differs: Boolean)
+    data class MemoryRecord(val key: String, val value: String)
+    data class ClearResult(val localDeleted: Boolean, val cloudDeletedCount: Int, val message: String)
 
     fun save(
         key: String,
@@ -65,6 +68,92 @@ class UnifiedMemoryRepository(context: Context) {
             }
         }
         LoadResult(local.get(localKey(key)).getOrThrow().takeIf { it.isNotEmpty() }, "device")
+    }
+
+    /**
+     * Explicitly deletes one memory record. When cloud consent is enabled, both Firebase
+     * mirrors must be deleted successfully before the local encrypted copy is removed.
+     */
+    fun delete(
+        key: String,
+        cloudConsent: Boolean = false,
+        email: String? = null,
+        password: String? = null
+    ): Result<Boolean> = runCatching {
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Invalid memory record key" }
+        val cloudRemoved = if (cloudConsent) {
+            MemorySyncPolicy.requireCloudConsent(cloudConsent)
+            val account = email?.trim().orEmpty()
+            val secret = password.orEmpty()
+            require(account.isNotBlank() && secret.length >= 8) {
+                "Firebase account credentials are required for an approved cloud deletion"
+            }
+            cloud.signInAndDelete(account, secret, key).getOrThrow()
+        } else false
+        val localRemoved = local.remove(localKey(key))
+        check(localRemoved || cloudRemoved) { "No matching local or cloud memory record was found, or local deletion failed" }
+        localRemoved || cloudRemoved
+    }
+
+    /** Lists locally stored memory keys without exposing values to callers that only need an index. */
+    fun listLocalRecords(): Result<List<MemoryRecord>> = runCatching {
+        local.getAllWithPrefixes(setOf("memory_")).getOrThrow()
+            .map { (storedKey, value) -> MemoryRecord(storedKey.removePrefix("memory_"), value) }
+            .filter { it.key.matches(Regex("[a-zA-Z0-9_-]{1,64}")) }
+            .sortedBy { it.key }
+    }
+
+    /** Explicit cloud comparison. No overwrite occurs during preview. */
+    fun compareLocalAndCloud(
+        key: String,
+        cloudConsent: Boolean,
+        email: String,
+        password: String
+    ): Result<ConflictPreview> = runCatching {
+        MemorySyncPolicy.requireCloudConsent(cloudConsent)
+        val localValue = local.get(localKey(key)).getOrThrow().takeIf { it.isNotEmpty() }
+        val cloudValue = cloud.signInAndLoad(email, password, key).getOrThrow()
+        ConflictPreview(key, localValue, cloudValue, localValue != null && cloudValue != null && localValue != cloudValue)
+    }
+
+    /** User chooses the winning copy explicitly; preview itself never mutates either copy. */
+    fun resolveConflict(
+        key: String,
+        winningCopy: String,
+        cloudConsent: Boolean,
+        email: String,
+        password: String
+    ): Result<SaveResult> = runCatching {
+        require(winningCopy == "local" || winningCopy == "cloud") { "Choose local or cloud as the winning copy." }
+        MemorySyncPolicy.requireCloudConsent(cloudConsent)
+        if (winningCopy == "cloud") {
+            val remote = cloud.signInAndLoad(email, password, key).getOrThrow()
+                ?: error("Cloud copy does not exist; nothing was changed.")
+            local.put(localKey(key), remote).getOrThrow()
+            SaveResult(true, true, "Cloud copy restored to this device. No cloud overwrite was performed.")
+        } else {
+            val localValue = local.get(localKey(key)).getOrThrow()
+            require(localValue.isNotEmpty()) { "Local copy does not exist; nothing was changed." }
+            cloud.signInAndSave(email, password, key, localValue).getOrThrow()
+            SaveResult(true, true, "Local copy uploaded to the authenticated cloud vault.")
+        }
+    }
+
+    /** Clears the local memory family; cloud copies are deleted only after explicit consent. */
+    fun clearAll(
+        cloudConsent: Boolean = false,
+        email: String? = null,
+        password: String? = null
+    ): Result<ClearResult> = runCatching {
+        val cloudCount = if (cloudConsent) {
+            MemorySyncPolicy.requireCloudConsent(cloudConsent)
+            val account = email?.trim().orEmpty()
+            val secret = password.orEmpty()
+            require(account.isNotBlank() && secret.length >= 8) { "Firebase credentials are required for cloud deletion." }
+            cloud.signInAndDeleteAll(account, secret).getOrThrow()
+        } else 0
+        clearLocal().getOrThrow()
+        ClearResult(true, cloudCount, if (cloudConsent) "Deleted local memory and $cloudCount Firebase vault record(s)." else "Deleted local memory only; Firebase cloud copies were left unchanged.")
     }
 
     fun clearLocal(): Result<Unit> = runCatching {

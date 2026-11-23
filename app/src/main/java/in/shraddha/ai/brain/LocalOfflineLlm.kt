@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Debug
 import android.os.StatFs
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -83,9 +85,14 @@ object LocalOfflineLlm {
                 } catch (error: Throwable) { lastFailure = error; continue }
                 try {
                     created.initialize()
+                    val assistantName = NovaPreferences.getString(
+                        context.applicationContext,
+                        NovaPreferences.Keys.ASSISTANT_NAME,
+                        AssistantBrand.FULL_NAME
+                    ).trim().take(48).ifBlank { AssistantBrand.FULL_NAME }
                     val chat = created.createConversation(ConversationConfig(
                         systemInstruction = Contents.of(
-                            "You are Shraddha AI, a helpful bilingual Hindi and English assistant. " +
+                            "You are $assistantName, a helpful bilingual Hindi and English assistant. " +
                             "You run fully offline on this device. Be accurate, concise, admit uncertainty, " +
                             "and never claim to have performed an action."
                         )

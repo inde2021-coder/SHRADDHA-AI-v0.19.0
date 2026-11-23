@@ -13,6 +13,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 class InCallActivity : AppCompatActivity() {
     private lateinit var stateLabel: TextView
@@ -27,17 +29,20 @@ class InCallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.decorView.setBackgroundColor(0xFF080D18.toInt())
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
+        window.decorView.setBackgroundColor(0xFF07131D.toInt())
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(32, 48, 32, 48)
-            setBackgroundColor(0xFF080D18.toInt())
+            setBackgroundColor(0xFF07131D.toInt())
         }
         root.addView(TextView(this).apply {
-            text = "SHRADDHA AI  •  PHONE"
+            text = "$assistantName  •  PHONE"
             textSize = 13f
-            setTextColor(0xFFBDA8FF.toInt())
+            setTextColor(0xFF73DDE7.toInt())
         })
         callerLabel = TextView(this).apply {
             textSize = 25f
@@ -48,7 +53,7 @@ class InCallActivity : AppCompatActivity() {
         root.addView(callerLabel)
         stateLabel = TextView(this).apply {
             textSize = 14f
-            setTextColor(0xFF9FB0CA.toInt())
+            setTextColor(0xFFB6CDD2.toInt())
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 30)
         }
@@ -82,6 +87,16 @@ class InCallActivity : AppCompatActivity() {
     private fun action(label: String, action: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
+        val isEnd = label.contains("Decline", true) || label.contains("End", true)
+        setTextColor(if (isEnd) android.graphics.Color.WHITE else 0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(if (isEnd) 0xFFE45F70.toInt() else 0xFF38C7D2.toInt())
+            cornerRadius = 22f
+            setStroke(1, if (isEnd) 0xFFFFA3AD.toInt() else 0xFF8AF1F1.toInt())
+        }
+        elevation = 8f
+        setPadding(20, 14, 20, 14)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 }
         setOnClickListener { action() }
     }
 

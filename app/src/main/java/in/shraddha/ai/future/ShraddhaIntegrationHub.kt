@@ -1,5 +1,10 @@
 package `in`.shraddha.ai.future
 
+import android.content.Context
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import org.json.JSONArray
+import org.json.JSONObject
+
 /**
  * Shared orchestration boundary for Voice/Brain/Agents -> Planner -> App Operator workflows.
  *
@@ -8,8 +13,21 @@ package `in`.shraddha.ai.future
  * only after receiving an approved RUNNING step and must report an independently observed result.
  */
 class ShraddhaIntegrationHub(
-    private val workflowEngine: WorkflowEngine = WorkflowEngine()
+    private val workflowEngine: WorkflowEngine = WorkflowEngine(),
+    context: Context? = null
 ) {
+    private val persistence = context?.applicationContext?.let(::EncryptedFeatureStore)
+    private val persistenceKey = "integration_hub_active_v1"
+    private var active: Session? = persistence?.let { loadPersisted(it) }
+
+    init {
+        // Persist the restart-recovery failure and audit event immediately so a second process
+        // restart does not repeatedly reconstruct the same event from an old RUNNING snapshot.
+        active?.takeIf { it.audit.lastOrNull()?.event == "PROCESS_RESTARTED_REQUIRES_REVIEW" }?.let {
+            persistence?.let { store -> store.put(persistenceKey, encode(it)).getOrThrow() }
+        }
+    }
+
     data class Action(
         val id: String,
         val title: String,
@@ -34,10 +52,10 @@ class ShraddhaIntegrationHub(
         val audit: List<AuditEvent>
     )
 
-    private var active: Session? = null
 
     @Synchronized
     fun createPlan(workflowId: String, title: String, actions: List<Action>, now: Long = System.currentTimeMillis()): Session {
+        require(actions.isNotEmpty() && actions.size <= 256) { "A workflow must contain 1-256 actions." }
         require(workflowId.matches(Regex("[A-Za-z0-9_-]{1,64}")))
         require(title.isNotBlank() && title.length <= 120)
         val planned = AutonomousTaskPlanner.plan(actions.map {
@@ -50,8 +68,7 @@ class ShraddhaIntegrationHub(
         }
         val snapshot = WorkflowSnapshot(workflowId, title.trim(), WorkflowStatus.DRAFT, 0, steps, "Plan ready; no action has run")
         val session = Session(planned, snapshot, listOf(AuditEvent(workflowId, null, "PLAN_CREATED", "${steps.size} ordered action(s)", now)))
-        active = session
-        return session
+        return store(session)
     }
 
     @Synchronized
@@ -126,7 +143,87 @@ class ShraddhaIntegrationHub(
     private fun requireSession(): Session = active ?: error("Create a task plan before starting a workflow")
 
     private fun store(session: Session): Session {
+        persistence?.let { it.put(persistenceKey, encode(session)).getOrThrow() }
         active = session
         return session
+    }
+
+    private fun encode(session: Session): String {
+        val planTasks = JSONArray().apply {
+            session.plan.ordered.forEach { task ->
+                put(JSONObject().put("id", task.id).put("title", task.title)
+                    .put("dependsOn", JSONArray(task.dependsOn.toList()))
+                    .put("priority", task.priority).put("estimatedMinutes", task.estimatedMinutes))
+            }
+        }
+        val steps = JSONArray().apply {
+            session.workflow.steps.forEach { step ->
+                put(JSONObject().put("id", step.id).put("title", step.title)
+                    .put("risk", step.risk.name).put("requiresApproval", step.requiresApproval))
+            }
+        }
+        val audit = JSONArray().apply {
+            session.audit.forEach { event ->
+                put(JSONObject().put("workflowId", event.workflowId).put("actionId", event.actionId)
+                    .put("event", event.event).put("detail", event.detail).put("timestamp", event.timestamp))
+            }
+        }
+        return JSONObject().put("schemaVersion", 1)
+            .put("plan", JSONObject().put("goal", session.plan.ordered.joinToString("\\n") { it.title }.take(4_000))
+                .put("totalEstimatedMinutes", session.plan.totalEstimatedMinutes).put("tasks", planTasks))
+            .put("workflow", JSONObject().put("id", session.workflow.id).put("title", session.workflow.title)
+                .put("status", session.workflow.status.name).put("currentStep", session.workflow.currentStep)
+                .put("message", session.workflow.message).put("steps", steps))
+            .put("audit", audit).toString()
+    }
+
+    private fun loadPersisted(store: EncryptedFeatureStore): Session? {
+        val raw = store.get(persistenceKey).getOrThrow()
+        if (raw.isBlank()) return null
+        val root = JSONObject(raw)
+        require(root.getInt("schemaVersion") == 1) { "Unsupported workflow recovery record version." }
+        val planJson = root.getJSONObject("plan")
+        val taskArray = planJson.getJSONArray("tasks")
+        require(taskArray.length() in 1..256) { "Persisted workflow plan is malformed." }
+        val tasks = (0 until taskArray.length()).map { index ->
+            val item = taskArray.getJSONObject(index)
+            val deps = item.getJSONArray("dependsOn")
+            val dependencies = (0 until deps.length()).map { deps.getString(it) }.toSet()
+            AutonomousTaskPlanner.Task(
+                item.getString("id"), item.getString("title"), dependencies,
+                item.getInt("priority"), item.getInt("estimatedMinutes")
+            )
+        }
+        val plan = AutonomousTaskPlanner.plan(tasks)
+        val workflowJson = root.getJSONObject("workflow")
+        val stepArray = workflowJson.getJSONArray("steps")
+        require(stepArray.length() in 1..256) { "Persisted workflow steps are malformed." }
+        val steps = (0 until stepArray.length()).map { index ->
+            val item = stepArray.getJSONObject(index)
+            WorkflowStep(item.getString("id"), item.getString("title"),
+                Risk.valueOf(item.getString("risk")), item.getBoolean("requiresApproval"))
+        }
+        var status = WorkflowStatus.valueOf(workflowJson.getString("status"))
+        var message = workflowJson.getString("message")
+        val auditArray = root.getJSONArray("audit")
+        require(auditArray.length() in 1..2_000) { "Persisted workflow audit is malformed." }
+        val audit = (0 until auditArray.length()).map { index ->
+            val item = auditArray.getJSONObject(index)
+            AuditEvent(item.getString("workflowId"), item.optString("actionId").takeIf { it.isNotBlank() },
+                item.getString("event"), item.getString("detail"), item.getLong("timestamp"))
+        }.toMutableList()
+        val workflowId = workflowJson.getString("id")
+        if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
+            status = WorkflowStatus.FAILED
+            message = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
+            audit += AuditEvent(workflowId, steps.getOrNull(workflowJson.getInt("currentStep"))?.id,
+                "PROCESS_RESTARTED_REQUIRES_REVIEW", message, System.currentTimeMillis())
+        }
+        val workflow = WorkflowSnapshot(
+            workflowId, workflowJson.getString("title"), status,
+            workflowJson.getInt("currentStep"), steps, message
+        )
+        require(workflow.currentStep in workflow.steps.indices)
+        return Session(plan, workflow, audit.toList())
     }
 }

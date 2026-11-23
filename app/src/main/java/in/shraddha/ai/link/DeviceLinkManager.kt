@@ -1,5 +1,6 @@
 package `in`.shraddha.ai.link
 
+import android.content.Context
 import android.util.Base64
 import android.os.Handler
 import android.os.Looper
@@ -12,11 +13,13 @@ import okio.ByteString
 import org.json.JSONObject
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
     private val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
     private val reconnectHandler = Handler(Looper.getMainLooper())
+    @Volatile private var appContext: Context? = null
     @Volatile private var lastBaseUrl: String? = null
     @Volatile private var lastPair: PairResult? = null
     @Volatile private var reconnectAttempts = 0
@@ -40,22 +43,106 @@ object DeviceLinkManager {
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
 
+    data class PairedDeviceSnapshot(val id: String, val name: String, val online: Boolean, val platform: String)
+    private val pairedDeviceSnapshots = ConcurrentHashMap<String, PairedDeviceSnapshot>()
+    fun pairedDevices(): List<PairedDeviceSnapshot> = pairedDeviceSnapshots.values.sortedBy { it.name.lowercase() }
+
+    private val nextVisualFrameSequence = ConcurrentHashMap<String, AtomicLong>()
+    private val receivedVisualFrameSequence = mutableMapOf<String, Long>()
+    private val receivedVisualFrameLock = Any()
+
 
     data class PairResult(val code: String, val sessionId: String, val deviceId: String, val token: String)
 
-    fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
-        result.mapCatching { body -> PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
-            .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
+    fun initialize(context: Context) {
+        appContext = context.applicationContext
     }
 
-    fun joinSession(baseUrl: String, name: String, code: String, done: (Result<PairResult>) -> Unit) = post(baseUrl, "/api/device/join", JSONObject().put("deviceName", name).put("pairingCode", code)) { result ->
-        result.mapCatching { body -> PairResult("", body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken")) }
-            .onSuccess { saveAndConnect(baseUrl, it, done) }.onFailure { done(Result.failure(it)) }
+    fun createSession(context: Context, baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) {
+        initialize(context)
+        createSession(baseUrl, name, done)
+    }
+
+    fun joinSession(context: Context, baseUrl: String, name: String, code: String, done: (Result<PairResult>) -> Unit) {
+        initialize(context)
+        joinSession(baseUrl, name, code, done)
+    }
+
+    fun restore(context: Context, done: (Result<PairResult>) -> Unit) {
+        initialize(context)
+        val credentials = DeviceCredentialStore(context.applicationContext).loadResult()
+            .getOrElse { error ->
+                done(Result.failure(IllegalStateException(
+                    "Saved device pairing could not be decrypted. The encrypted record was preserved; re-pair only if recovery is not possible. ${error.localizedMessage ?: "Keystore unavailable"}",
+                    error
+                )))
+                return
+            }
+        if (credentials == null) {
+            done(Result.failure(IllegalStateException("No saved device pairing was found on this phone.")))
+            return
+        }
+        val pair = PairResult("", credentials.sessionId, credentials.deviceId, credentials.token)
+        saveAndConnect(credentials.baseUrl, pair, done)
+    }
+
+    private fun normalizedRelayBaseUrl(raw: String): String {
+        val url = raw.trim().trimEnd('/')
+        require(url.length in 10..500 && !url.contains(" ")) { "Relay URL is invalid." }
+        val uri = java.net.URI(url)
+        require(uri.scheme.equals("https", ignoreCase = true) && uri.host != null) { "A secure HTTPS relay URL is required." }
+        require(uri.userInfo == null && uri.query == null && uri.fragment == null) {
+            "Relay URL must not contain credentials, query parameters or fragments."
+        }
+        return url
+    }
+
+    fun createSession(baseUrl: String, name: String, done: (Result<PairResult>) -> Unit) {
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        post(safeBaseUrl, "/api/device/session", JSONObject().put("deviceName", name)) { result ->
+            result.mapCatching { body ->
+                PairResult(body.getString("pairingCode"), body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken"))
+            }.onSuccess { saveAndConnect(safeBaseUrl, it, done) }
+                .onFailure { done(Result.failure(it)) }
+        }
+    }
+
+    fun joinSession(baseUrl: String, name: String, code: String, done: (Result<PairResult>) -> Unit) {
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        post(safeBaseUrl, "/api/device/join", JSONObject().put("deviceName", name).put("pairingCode", code)) { result ->
+            result.mapCatching { body ->
+                PairResult("", body.getString("sessionId"), body.getString("deviceId"), body.getString("deviceToken"))
+            }.onSuccess { saveAndConnect(safeBaseUrl, it, done) }
+                .onFailure { done(Result.failure(it)) }
+        }
     }
 
     private fun saveAndConnect(baseUrl: String, pair: PairResult, done: (Result<PairResult>) -> Unit) {
-        lastBaseUrl = baseUrl; lastPair = pair
-        sessionId = pair.sessionId; deviceId = pair.deviceId; deviceToken = pair.token
+        val app = appContext
+        if (app != null) {
+            val persisted = runCatching {
+                DeviceCredentialStore(app).save(pair.sessionId, pair.deviceId, pair.token, baseUrl)
+            }
+            if (persisted.isFailure) {
+                done(Result.failure(persisted.exceptionOrNull() ?: IllegalStateException("Could not save device credentials securely.")))
+                return
+            }
+        }
+        if (sessionId == pair.sessionId && deviceId == pair.deviceId && socket != null) {
+            done(Result.success(pair))
+            return
+        }
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectPending = false
+        socket?.close(1000, "Replacing device session connection")
+        socket = null
+        lastBaseUrl = baseUrl
+        lastPair = pair
+        sessionId = pair.sessionId
+        deviceId = pair.deviceId
+        deviceToken = pair.token
         val completionDelivered = AtomicBoolean(false)
         val wsBase = baseUrl.trim().trimEnd('/').replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
         val url = "$wsBase/ws?sessionId=${pair.sessionId}&deviceId=${pair.deviceId}"
@@ -82,11 +169,20 @@ object DeviceLinkManager {
                                 "remote_action", "remote_action_result" -> actionId
                                 "file_transfer_chunk" -> "$transferId:$index"
                                 "clipboard_payload" -> msg.optString("requestId")
+                                "data_share_payload" -> msg.optString("requestId") + "|" + msg.optString("category")
                                 else -> ""
                             }
                             val aad = "$sessionId|$peerId|$deviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
-                            val plain = DeviceE2ECrypto.decrypt(state.key, msg.optString("nonce"), msg.optString("ciphertext"), aad)
-                            val payload = JSONObject(plain.toString(Charsets.UTF_8))
+                            val plain = try {
+                                DeviceE2ECrypto.decrypt(state.key, msg.optString("nonce"), msg.optString("ciphertext"), aad)
+                            } finally {
+                                aad.fill(0)
+                            }
+                            val payload = try {
+                                JSONObject(plain.toString(Charsets.UTF_8))
+                            } finally {
+                                plain.fill(0)
+                            }
                             when (kind) {
                                 "remote_action" -> {
                                     if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && payload.optString("kind").isNotBlank())
@@ -95,7 +191,7 @@ object DeviceLinkManager {
                                 "remote_action_result" -> {
                                     onRemoteActionResult?.invoke(peerId, msg.optString("actionKind"), payload.optString("result"))
                                     onPeerMessage?.invoke(JSONObject().put("type", "remote_action_result").put("fromDeviceId", peerId)
-                                        .put("actionId", actionId).put("actionKind", msg.optString("actionKind")).put("result", payload.optString("result")))
+                                        .put("actionId", actionId).put("actionKind", msg.optString("actionKind")).put("ok", payload.optBoolean("ok")).put("result", payload.optString("result")))
                                 }
                                 "file_transfer_chunk" -> {
                                     payload.put("type", "file_transfer_chunk").put("fromDeviceId", peerId)
@@ -107,6 +203,11 @@ object DeviceLinkManager {
                                         .put("category", "clipboard").put("requestId", msg.optString("requestId"))
                                     onPeerMessage?.invoke(payload)
                                 }
+                                "data_share_payload" -> {
+                                    payload.put("type", "data_share_payload").put("fromDeviceId", peerId)
+                                        .put("category", msg.optString("category")).put("requestId", msg.optString("requestId"))
+                                    onPeerMessage?.invoke(payload)
+                                }
                                 else -> onStatus?.invoke("Unsupported encrypted peer message blocked.")
                             }
                         }
@@ -114,7 +215,8 @@ object DeviceLinkManager {
                         "e2e_key_offer" -> {
                             val peerId = msg.optString("fromDeviceId")
                             val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), deviceId.orEmpty(), peerId)
-                            peerKeys[peerId] = PeerKeyState(derived.first, derived.second)
+                            peerKeys.put(peerId, PeerKeyState(derived.first, derived.second))?.key?.fill(0)
+                            clearVisualFrameState(peerId)
                             onE2EVerification?.invoke(peerId, derived.second)
                         }
                         "e2e_key_confirm" -> {
@@ -129,9 +231,17 @@ object DeviceLinkManager {
 
                         "connected" -> {
                             val peers = msg.optJSONArray("devices")
+                            pairedDeviceSnapshots.clear()
                             for (i in 0 until (peers?.length() ?: 0)) {
-                                val peerId = peers?.optJSONObject(i)?.optString("id").orEmpty()
-                                if (peerId.isNotBlank() && peerId != deviceId) sendE2EKeyOffer(peerId)
+                                val peer = peers?.optJSONObject(i) ?: continue
+                                val peerId = peer.optString("id").trim()
+                                if (peerId.isNotBlank() && peerId != deviceId) {
+                                    pairedDeviceSnapshots[peerId] = PairedDeviceSnapshot(
+                                        peerId, peer.optString("name", "Paired device").take(80),
+                                        peer.optBoolean("online", true), peer.optString("platform", peer.optString("os", "unknown")).take(40)
+                                    )
+                                    sendE2EKeyOffer(peerId)
+                                }
                             }
                             onStatus?.invoke("Connected • " + (peers?.length() ?: 0) + " paired device(s)")
                             onPeerMessage?.invoke(msg)
@@ -139,10 +249,25 @@ object DeviceLinkManager {
                         "device_revoked" -> {
                             val revokedId = msg.optString("deviceId")
                             peerKeys.remove(revokedId)?.key?.fill(0)
+                            pairedDeviceSnapshots.remove(revokedId)
+                            clearVisualFrameState(revokedId)
+                            if (revokedId.isNotBlank() && revokedId == deviceId) {
+                                appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
+                                onStatus?.invoke("This phone's device pairing was revoked by the relay.")
+                                disconnect(clearSavedCredentials = false)
+                                return
+                            }
                             onPeerMessage?.invoke(msg)
                         }
                         "peer_status" -> {
                             val peerId = msg.optString("deviceId")
+                            if (peerId.isNotBlank() && peerId != deviceId) {
+                                val previous = pairedDeviceSnapshots[peerId]
+                                pairedDeviceSnapshots[peerId] = PairedDeviceSnapshot(
+                                    peerId, msg.optString("name", previous?.name ?: "Paired device").take(80),
+                                    msg.optBoolean("online"), msg.optString("platform", previous?.platform ?: "unknown").take(40)
+                                )
+                            }
                             if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) {
                                 sendE2EKeyOffer(peerId)
                             }
@@ -158,17 +283,55 @@ object DeviceLinkManager {
                 } catch (_: Exception) { onStatus?.invoke("Received an unreadable relay message") }
             }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                val frame = bytes.toByteArray()
-                if (frame.isEmpty()) return
-                val idLength = frame[0].toInt() and 0xFF
-                if (idLength <= 0 || frame.size <= 2 + idLength) return
-                val sourceId = frame.copyOfRange(1, 1 + idLength).toString(Charsets.UTF_8)
-                val frameType = frame[1 + idLength].toInt() and 0xFF
-                val jpeg = frame.copyOfRange(2 + idLength, frame.size)
-                if (frameType == 2) onCameraFrame?.invoke(sourceId, jpeg) else onScreenFrame?.invoke(sourceId, jpeg)
+                val envelope = DeviceFrameValidation.decodeFromRelay(bytes.toByteArray()) ?: run {
+                    onStatus?.invoke("Rejected malformed encrypted visual frame.")
+                    return
+                }
+                val state = peerKeys[envelope.sourceDeviceId]
+                if (state == null || !state.localConfirmed || !state.remoteConfirmed) {
+                    onStatus?.invoke("Visual frame blocked: peer fingerprint is not mutually verified.")
+                    return
+                }
+                val localSession = sessionId ?: return
+                val localDevice = deviceId ?: return
+                val sequenceKey = envelope.sourceDeviceId + ":" + envelope.frameType
+                val jpeg = try {
+                    val aad = "$localSession|${envelope.sourceDeviceId}|$localDevice|visual_frame|${envelope.frameType}|${envelope.sequence}"
+                        .toByteArray(Charsets.UTF_8)
+                    synchronized(receivedVisualFrameLock) {
+                        if (envelope.sequence <= (receivedVisualFrameSequence[sequenceKey] ?: 0L)) return
+                        val plain = DeviceE2ECrypto.decrypt(
+                            state.key,
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(envelope.nonce),
+                            java.util.Base64.getEncoder().withoutPadding().encodeToString(envelope.ciphertext),
+                            aad
+                        )
+                        if (!DeviceFrameValidation.isValidJpeg(plain)) {
+                            plain.fill(0)
+                            onStatus?.invoke("Rejected decrypted visual data that is not a bounded JPEG.")
+                            return
+                        }
+                        receivedVisualFrameSequence[sequenceKey] = envelope.sequence
+                        plain
+                    }
+                } catch (_: Exception) {
+                    onStatus?.invoke("Visual frame authentication failed; encrypted frame discarded.")
+                    return
+                }
+                if (envelope.frameType == 2) onCameraFrame?.invoke(envelope.sourceDeviceId, jpeg)
+                else onScreenFrame?.invoke(envelope.sourceDeviceId, jpeg)
             }
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}"); if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t)); scheduleReconnect(baseUrl, pair) }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { onStatus?.invoke("Disconnected: $reason"); if (code != 1000) scheduleReconnect(baseUrl, pair) }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (socket === webSocket) socket = null
+                onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
+                if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
+                scheduleReconnect(baseUrl, pair)
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (socket === webSocket) socket = null
+                onStatus?.invoke("Disconnected: $reason")
+                if (code != 1000) scheduleReconnect(baseUrl, pair)
+            }
         })
     }
 
@@ -198,8 +361,21 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
-        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(12000))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/chat")
+        // This endpoint may carry a bearer token. Reuse the pairing URL policy so a
+        // misconfigured HTTP URL can never leak gateway credentials over cleartext.
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        val normalizedProvider = provider.trim().uppercase()
+        if (normalizedProvider !in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
+            done(Result.failure(IllegalArgumentException("Unsupported AI provider.")))
+            return
+        }
+        if (prompt.isBlank()) {
+            done(Result.failure(IllegalArgumentException("Prompt cannot be empty.")))
+            return
+        }
+        val body = JSONObject().put("provider", normalizedProvider).put("prompt", prompt.take(12000))
+        val builder = Request.Builder().url("$safeBaseUrl/api/chat")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -251,7 +427,9 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/ai/providers").get()
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        val builder = Request.Builder().url("$safeBaseUrl/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
@@ -288,8 +466,10 @@ object DeviceLinkManager {
         body: JSONObject,
         done: (Result<String>) -> Unit,
         onCall: ((Call) -> Unit)? = null
-    ): Call {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path)
+    ): Call? {
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return null }
+        val builder = Request.Builder().url("$safeBaseUrl$path")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val call = client.newCall(builder.build())
@@ -309,9 +489,24 @@ object DeviceLinkManager {
     }
 
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
-        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000)).put("mode", mode)
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        val normalizedProvider = provider.trim().uppercase()
+        if (normalizedProvider !in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
+            done(Result.failure(IllegalArgumentException("Unsupported AI provider.")))
+            return
+        }
+        if (prompt.isBlank() || jpeg.isEmpty()) {
+            done(Result.failure(IllegalArgumentException("A prompt and image are required.")))
+            return
+        }
+        if (jpeg.size > 2_500_000) {
+            done(Result.failure(IllegalArgumentException("Image is too large for a secure paired-device request (2.5 MB maximum).")))
+            return
+        }
+        val body = JSONObject().put("provider", normalizedProvider).put("prompt", prompt.take(4000)).put("mode", mode)
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/vision")
+        val builder = Request.Builder().url("$safeBaseUrl/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
@@ -339,20 +534,28 @@ object DeviceLinkManager {
             .put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload)
         if (category == "clipboard" && contentType == "clipboard_text")
             return sendEncryptedPeerMessage(targetDeviceId, "clipboard_payload", payload, requestId)
-        return socket?.send(JSONObject().put("type", "data_share_payload").put("targetDeviceId", targetDeviceId).put("category", category).put("requestId", requestId).put("fileName", fileName.take(120)).put("mimeType", mimeType.take(100)).put("contentType", contentType).put("sizeBytes", sizeBytes).put("sha256", sha256.lowercase()).put("payload", base64Payload).toString()) == true
+        return sendEncryptedPeerMessage(targetDeviceId, "data_share_payload", payload, requestId, category = category)
     }
     fun sendClipboardText(targetDeviceId: String, requestId: String, text: String): Boolean {
         if (text.isBlank() || text.length > 20000) return false
         val bytes = text.toByteArray(Charsets.UTF_8)
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        return sendSharedPayload(targetDeviceId, "clipboard", requestId, "clipboard.txt", "text/plain", Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong(), digest, "clipboard_text")
+        return try {
+            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            sendSharedPayload(
+                targetDeviceId, "clipboard", requestId, "clipboard.txt", "text/plain",
+                Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong(), digest, "clipboard_text"
+            )
+        } finally {
+            bytes.fill(0)
+        }
     }
     fun startFileTransfer(targetDeviceId: String, requestId: String, transferId: String, fileName: String, sizeBytes: Long, chunkCount: Int, sha256: String): Boolean {
-        if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..(20_000_000L) || chunkCount !in 1..2200 || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || chunkCount != ((sizeBytes + 49151) / 48000).toInt()) return false
+        if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || DeviceFileTransferProtocol.chunkCount(sizeBytes) != chunkCount) return false
         return socket?.send(JSONObject().put("type", "file_transfer_start").put("targetDeviceId", targetDeviceId).put("requestId", requestId).put("transferId", transferId).put("fileName", fileName.take(120)).put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()).toString()) == true
     }
     fun sendFileTransferChunk(targetDeviceId: String, transferId: String, index: Int, bytes: ByteArray): Boolean {
-        if (transferId.isBlank() || index !in 0..2199 || bytes.isEmpty() || bytes.size > 48000) return false
+        if (transferId.isBlank() || index !in 0 until DeviceFileTransferProtocol.MAX_CHUNKS || bytes.isEmpty() || bytes.size > DeviceFileTransferProtocol.CHUNK_BYTES) return false
         val payload = JSONObject().put("payload", Base64.encodeToString(bytes, Base64.NO_WRAP))
         return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_chunk", payload, transferId, index)
     }
@@ -374,6 +577,13 @@ object DeviceLinkManager {
         return socket?.send(JSONObject().put("type", "e2e_key_confirm").put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
     }
 
+    private fun clearVisualFrameState(peerId: String) {
+        nextVisualFrameSequence.keys.removeAll { it.startsWith(peerId + ":") }
+        synchronized(receivedVisualFrameLock) {
+            receivedVisualFrameSequence.keys.removeAll { it.startsWith(peerId + ":") }
+        }
+    }
+
     fun isE2ETrusted(peerId: String): Boolean =
         peerKeys[peerId]?.let { it.localConfirmed && it.remoteConfirmed } == true
 
@@ -388,19 +598,30 @@ object DeviceLinkManager {
         if (!actionId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) return false
         return sendEncryptedPeerMessage(targetDeviceId, "remote_action_result", JSONObject().put("result", result.take(14000)), actionId, -1, actionKind.take(32))
     }
-    private fun sendEncryptedPeerMessage(targetDeviceId: String, kind: String, payload: JSONObject, correlationId: String, index: Int = -1, actionKind: String = ""): Boolean {
+    private fun sendEncryptedPeerMessage(targetDeviceId: String, kind: String, payload: JSONObject, correlationId: String, index: Int = -1, actionKind: String = "", category: String? = null): Boolean {
         val state = peerKeys[targetDeviceId] ?: return false
         if (!state.localConfirmed || !state.remoteConfirmed || sessionId.isNullOrBlank() || deviceId.isNullOrBlank()) {
             onStatus?.invoke("Encrypted send blocked: verify the peer fingerprint on both devices first.")
             return false
         }
-        val correlation = if (kind == "file_transfer_chunk") "$correlationId:$index" else correlationId
+        val correlation = when (kind) {
+            "file_transfer_chunk" -> "$correlationId:$index"
+            "data_share_payload" -> correlationId + "|" + category.orEmpty()
+            else -> correlationId
+        }
         val aad = "$sessionId|$deviceId|$targetDeviceId|$kind|$correlation".toByteArray(Charsets.UTF_8)
-        val sealed = DeviceE2ECrypto.encrypt(state.key, payload.toString().toByteArray(Charsets.UTF_8), aad)
+        val plain = payload.toString().toByteArray(Charsets.UTF_8)
+        val sealed = try {
+            DeviceE2ECrypto.encrypt(state.key, plain, aad)
+        } finally {
+            plain.fill(0)
+            aad.fill(0)
+        }
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
         if (kind == "clipboard_payload") message.put("requestId", correlationId)
+        if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
         return socket?.send(message.toString()) == true
     }
@@ -432,15 +653,52 @@ object DeviceLinkManager {
             .put("taskId", taskId.take(48)).put("accepted", accepted).put("note", note.take(300)).toString()) == true
     fun setControlMode(masterOnly: Boolean): Boolean = socket?.send(JSONObject().put("type", "set_control_mode").put("mode", if (masterOnly) "master" else "mutual").toString()) == true
     fun sendFrame(jpeg: ByteArray, frameType: Int = 1, targetDeviceId: String? = null): Boolean {
-        if (jpeg.size > 2_500_000 || frameType !in 1..2) return false
-        val target = targetDeviceId?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
-        if (target.size > 255) return false
-        val packet = ByteArray(2 + target.size + jpeg.size)
-        packet[0] = frameType.toByte()
-        packet[1] = target.size.toByte()
-        if (target.isNotEmpty()) System.arraycopy(target, 0, packet, 2, target.size)
-        System.arraycopy(jpeg, 0, packet, 2 + target.size, jpeg.size)
-        return socket?.send(ByteString.of(*packet)) == true
+        if (jpeg.size !in 1..2_500_000 || !DeviceFrameValidation.isValidJpeg(jpeg) || frameType !in 1..2) return false
+        val target = targetDeviceId?.trim().orEmpty()
+        if (target.isBlank()) return false
+        val state = peerKeys[target]
+        if (state == null || !state.localConfirmed || !state.remoteConfirmed) {
+            onStatus?.invoke("Visual sharing blocked: verify the target device fingerprint on both devices first.")
+            return false
+        }
+        val localSession = sessionId ?: return false
+        val localDevice = deviceId ?: return false
+        val sequenceKey = target + ":" + frameType
+        val sequence = nextVisualFrameSequence.computeIfAbsent(sequenceKey) { AtomicLong(0L) }.incrementAndGet()
+        if (sequence <= 0L) return false
+        return try {
+            val aad = "$localSession|$localDevice|$target|visual_frame|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+            val sealed = DeviceE2ECrypto.encrypt(state.key, jpeg, aad)
+            val nonce = java.util.Base64.getDecoder().decode(sealed.nonce)
+            val ciphertext = java.util.Base64.getDecoder().decode(sealed.ciphertext)
+            val packet = DeviceFrameValidation.encodeForRelay(frameType, target, sequence, nonce, ciphertext)
+            socket?.send(ByteString.of(*packet)) == true
+        } catch (_: Exception) {
+            onStatus?.invoke("Could not encrypt visual frame; frame was not sent.")
+            false
+        }
     }
-    fun disconnect() { reconnectHandler.removeCallbacksAndMessages(null); reconnectPending = false; reconnectAttempts = 0; peerKeys.values.forEach { it.key.fill(0) }; peerKeys.clear(); lastBaseUrl = null; lastPair = null; socket?.close(1000, "User disconnected"); socket = null; sessionId = null; deviceId = null; deviceToken = null }
+    fun disconnect(context: Context, clearSavedCredentials: Boolean = false) {
+        initialize(context)
+        disconnect(clearSavedCredentials)
+    }
+
+    fun disconnect(clearSavedCredentials: Boolean = false) {
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectPending = false
+        reconnectAttempts = 0
+        peerKeys.values.forEach { it.key.fill(0) }
+        peerKeys.clear()
+        pairedDeviceSnapshots.clear()
+        nextVisualFrameSequence.clear()
+        synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
+        if (clearSavedCredentials) appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
+        lastBaseUrl = null
+        lastPair = null
+        socket?.close(1000, "User disconnected")
+        socket = null
+        sessionId = null
+        deviceId = null
+        deviceToken = null
+    }
 }

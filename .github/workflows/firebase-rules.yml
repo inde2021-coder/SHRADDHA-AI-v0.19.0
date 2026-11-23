@@ -1,4 +1,4 @@
-name: Firebase Realtime Database Rules
+name: Firebase security rules
 
 env:
   GIT_CONFIG_COUNT: "1"
@@ -20,7 +20,7 @@ on:
 permissions:
   contents: read
 jobs:
-  realtime-database-rules:
+  firebase-security-rules:
     if: ${{ github.event_name != 'pull_request' || github.head_ref != 'integration/master-feature-consolidation-2026-11' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -38,6 +38,6 @@ jobs:
         run: |
           git config --global init.defaultBranch main
           npm install --no-audit --no-fund
-      - name: Run Realtime Database emulator rules tests
+      - name: Run Firestore, Storage and Realtime Database emulator rules tests
         working-directory: firebase/rules-tests
         run: ./node_modules/.bin/firebase emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-ai "npm test"

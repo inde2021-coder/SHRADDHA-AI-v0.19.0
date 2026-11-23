@@ -30,7 +30,140 @@ object ActionExecutor {
             return result
         }
 
+
         when (toolName) {
+
+
+            "list_paired_devices" -> {
+                val devices = `in`.shraddha.ai.link.DeviceLinkManager.pairedDevices()
+                val array = org.json.JSONArray()
+                devices.forEach { peer ->
+                    array.put(JSONObject().put("device_id", peer.id).put("name", peer.name)
+                        .put("online", peer.online).put("platform", peer.platform))
+                }
+                result.put("status", "success").put("devices", array)
+                    .put("message", if (devices.isEmpty()) "कोई paired device अभी relay पर उपलब्ध नहीं है। Device Universe में pairing/connection जाँचें।"
+                        else "Paired device list relay से पढ़ी गई है। Offline device पर command नहीं भेजी जा सकती।")
+            }
+            "control_paired_pc" -> {
+                val target = args.optString("target_device_id").trim()
+                val kind = args.optString("kind").trim().lowercase()
+                if (!target.matches(Regex("[A-Za-z0-9_-]{8,128}"))) return result.put("status", "error").put("message", "Exact paired PC device ID आवश्यक है। Device Universe में ID देखें; कोई target अनुमान से नहीं चुना जाएगा।")
+                val peer = `in`.shraddha.ai.link.DeviceLinkManager.pairedDevices().firstOrNull { it.id == target }
+                    ?: return result.put("status", "error").put("message", "यह device इस समय paired-device list में नहीं है। पहले list_paired_devices चलाएँ।")
+                if (!peer.online) return result.put("status", "error").put("message", "${peer.name} अभी offline है; कोई PC command नहीं भेजी गई।")
+                val action = JSONObject().put("kind", kind)
+                when (kind) {
+                    "hardware_status", "back", "home", "screenshot" -> Unit
+                    "set_volume", "set_brightness" -> {
+                        val percent = args.optInt("percent", -1)
+                        if (percent !in 0..100) return result.put("status", "error").put("message", "PC percent 0 से 100 के बीच होना चाहिए।")
+                        action.put("percent", percent)
+                    }
+                    "power" -> {
+                        val operation = args.optString("operation").lowercase()
+                        if (operation !in setOf("shutdown", "restart", "sleep")) return result.put("status", "error").put("message", "Power operation shutdown, restart या sleep होना चाहिए।")
+                        if (!args.optString("user_confirmed").equals("yes", true)) return result.put("status", "confirmation_required").put("message", "PC $operation से पहले उपयोगकर्ता से स्पष्ट हाँ लें; अभी कोई command नहीं भेजी गई।")
+                        action.put("operation", operation)
+                    }
+                    "open_app" -> {
+                        val name = args.optString("name").trim()
+                        if (name.isBlank() || name.length > 100) return result.put("status", "error").put("message", "PC app का नाम 1-100 characters होना चाहिए।")
+                        action.put("name", name)
+                    }
+                    "scroll" -> {
+                        val amount = args.optInt("amount", 0)
+                        if (amount !in -10..10 || amount == 0) return result.put("status", "error").put("message", "Scroll amount -10 से 10 के बीच non-zero होना चाहिए।")
+                        action.put("amount", amount)
+                    }
+                    "web_search" -> {
+                        val query = args.optString("query").trim()
+                        if (query.length !in 2..160) return result.put("status", "error").put("message", "PC web search query 2-160 characters की होनी चाहिए।")
+                        action.put("query", query)
+                    }
+                    else -> return result.put("status", "error").put("message", "Unsupported PC control kind.")
+                }
+                val launch = android.content.Intent(context, `in`.shraddha.ai.MainActivity::class.java)
+                    .putExtra("initial_page", "devices")
+                    .putExtra("voice_pc_action_json", action.toString())
+                    .putExtra("voice_pc_target_id", target)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                context.startActivity(launch)
+                result.put("status", "needs_user_action").put("action", "pc_control_approval_requested")
+                    .put("target_device_id", target).put("command_kind", kind)
+                    .put("message", "Device Control खोला गया है। पहले paired Windows PC से fresh permission ली जाएगी; फिर Windows companion की per-action confirmation होगी। अभी execution confirmed नहीं है।")
+            }
+            "control_phone" -> {
+                val action = args.optString("action").trim().lowercase()
+                val percent = args.optInt("percent", -1)
+                val hardware = `in`.shraddha.ai.mobile.MobileHardwareController
+                when (action) {
+                    "status" -> {
+                        val data = runCatching { hardware.status(context.applicationContext) }.getOrElse {
+                            return result.put("status", "error").put("message", it.localizedMessage ?: "Phone status unavailable.")
+                        }
+                        result.put("status", "success").put("action", "phone_status")
+                            .put("device", JSONObject(data))
+                            .put("message", "यह इस Android फोन की उपलब्ध hardware जानकारी है।")
+                    }
+                    "set_volume", "set_brightness" -> {
+                        if (percent !in 0..100) return result.put("status", "error").put("message", "percent 0 से 100 के बीच integer होना चाहिए।")
+                        if (action == "set_brightness" && !android.provider.Settings.System.canWrite(context)) {
+                            val message = hardware.setBrightness(context.applicationContext, percent)
+                            return result.put("status", "needs_user_action").put("action", "modify_system_settings_required")
+                                .put("percent", percent).put("message", message)
+                        }
+                        val message = runCatching {
+                            if (action == "set_volume") hardware.setMediaVolume(context.applicationContext, percent)
+                            else hardware.setBrightness(context.applicationContext, percent)
+                        }.getOrElse { return result.put("status", "error").put("message", it.localizedMessage ?: "Phone control failed.") }
+                        result.put("status", "success").put("action", action).put("percent", percent).put("message", message)
+                    }
+                    "flashlight_on", "flashlight_off" -> {
+                        val enabled = action == "flashlight_on"
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            val launch = android.content.Intent(context, `in`.shraddha.ai.mobile.MobileCommandCenterActivity::class.java)
+                                .putExtra("mobile_control_command", if (enabled) "flashlight on" else "flashlight off")
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(launch)
+                            result.put("status", "needs_user_action").put("action", "camera_permission_required")
+                                .put("message", "Mobile Command Center खोला गया है। Camera permission स्वीकार करने के बाद flashlight command फिर चलेगी।")
+                        } else {
+                            val message = runCatching { hardware.setTorch(context.applicationContext, enabled) }
+                                .getOrElse { return result.put("status", "error").put("message", it.localizedMessage ?: "Flashlight control failed.") }
+                            result.put("status", "success").put("action", action).put("message", message)
+                        }
+                    }
+                    "volume_up", "volume_down" -> {
+                        val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                        audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC,
+                            if (action == "volume_up") android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER,
+                            android.media.AudioManager.FLAG_SHOW_UI)
+                        result.put("status", "success").put("action", action).put("message", if (action == "volume_up") "Phone volume बढ़ाया।" else "Phone volume कम किया।")
+                    }
+                    "media_play_pause", "media_next", "media_previous" -> {
+                        val key = when (action) {
+                            "media_next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                            "media_previous" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                            else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                        }
+                        val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, key))
+                        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, key))
+                        result.put("status", "success").put("action", action).put("message", "Active Android media session को command भेजा गया।")
+                    }
+                    "open_settings" -> {
+                        val setting = args.optString("setting").trim().lowercase()
+                        val allowed = setOf("wifi", "bluetooth", "internet", "display", "sound", "battery", "location", "nfc", "accessibility", "notifications", "apps", "date", "language", "security", "dnd", "rotation", "storage")
+                        if (setting !in allowed) return result.put("status", "error").put("message", "Unsupported Android settings key.")
+                        context.startActivity(hardware.settingsIntent(setting).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        result.put("status", "needs_user_action").put("action", "android_settings_opened")
+                            .put("setting", setting).put("message", "Android का official $setting settings panel खोला गया है; protected changes वहीं confirm करें।")
+                    }
+                    else -> result.put("status", "error").put("message", "Unsupported control_phone action.")
+                }
+            }
+
             "download_file" -> {
                 val download = `in`.shraddha.ai.future.DownloadUrlPolicy.validate(args.optString("url"), args.optString("file_name"))
                 if (download == null) {
@@ -244,27 +377,47 @@ object ActionExecutor {
                 }
 
                 val isWhatsApp = targetApp == "whatsapp"
-                val sendStatus = if (isWhatsApp) {
-                    val service = NovaAccessibilityService.instance
-                    if (service == null) "whatsapp_accessibility_required" else {
-                        val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
-                        if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
-                        else opened
+                val channel = if (isWhatsApp) "whatsapp" else "sms"
+                val gateway = VoiceGatewaySettings.get(context)
+                if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
+                    val providerResult = ProviderMessageClient.send(context, channel, phoneNumber, messageText)
+                    providerResult.onSuccess { receipt ->
+                        result.put("status", "accepted")
+                        result.put("action", "provider_message_accepted")
+                        result.put("provider", receipt.provider)
+                        result.put("provider_message_id", receipt.messageId)
+                        result.put("provider_status", receipt.status)
+                        result.put("recipient", phoneNumber)
+                        result.put("message", "Message accepted by the configured provider. Provider status: ${receipt.status}. This is not proof of handset delivery.")
+                    }.onFailure { error ->
+                        result.put("status", "error")
+                        result.put("action", "provider_message_failed")
+                        result.put("recipient", phoneNumber)
+                        result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. No local fallback was attempted, to avoid accidental duplicate delivery.")
                     }
                 } else {
-                    CommIntents.sendSms(context, phoneNumber, messageText)
+                    val sendStatus = if (isWhatsApp) {
+                        val service = NovaAccessibilityService.instance
+                        if (service == null) "whatsapp_accessibility_required" else {
+                            val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
+                            if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
+                            else opened
+                        }
+                    } else {
+                        CommIntents.sendSms(context, phoneNumber, messageText)
+                    }
+                    result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "accepted" else "error")
+                    result.put("action", sendStatus)
+                    result.put("recipient", phoneNumber)
+                    result.put("message", when (sendStatus) {
+                        "sms_sent_to_carrier" -> "SMS handed to Android's messaging service; handset delivery is not confirmed."
+                        "whatsapp_sent" -> "WhatsApp message submitted through the verified foreground chat."
+                        "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
+                        "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
+                        "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
+                        else -> "Message was not sent: $sendStatus"
+                    })
                 }
-                result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "success" else "error")
-                result.put("action", sendStatus)
-                result.put("recipient", phoneNumber)
-                result.put("message", when (sendStatus) {
-                    "sms_sent_to_carrier" -> "SMS handed to Android's messaging service for delivery."
-                    "whatsapp_sent" -> "WhatsApp message sent."
-                    "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
-                    "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
-                    "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
-                    else -> "Message was not sent: $sendStatus"
-                })
             }
 
             "read_screen" -> {
@@ -617,13 +770,27 @@ object ActionExecutor {
                                 result.put("message_preview", message.take(1000))
                                 result.put("message", "उपयोगकर्ता को यही नंबर और यही पूरा संदेश दिखाकर स्पष्ट अनुमति लें। अभी WhatsApp नहीं भेजा गया।")
                             } else {
-                                val service = NovaAccessibilityService.instance
-                                val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
-                                val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
-                                result.put("status", if (sent == "whatsapp_sent") "success" else "error")
-                                result.put("action", sent)
-                                result.put("recipient", number)
-                                result.put("message", if (sent == "whatsapp_sent") "WhatsApp message sent." else "Message not sent: $sent")
+                                val gateway = VoiceGatewaySettings.get(context)
+                                if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
+                                    ProviderMessageClient.send(context, "whatsapp", number, message)
+                                        .onSuccess { receipt ->
+                                            result.put("status", "accepted").put("action", "provider_message_accepted")
+                                                .put("provider", receipt.provider).put("provider_message_id", receipt.messageId)
+                                                .put("provider_status", receipt.status).put("recipient", number)
+                                                .put("message", "WhatsApp message accepted by provider. Handset delivery is not confirmed.")
+                                        }.onFailure { error ->
+                                            result.put("status", "error").put("action", "provider_message_failed")
+                                                .put("recipient", number).put("message", error.message ?: "Provider send failed.")
+                                        }
+                                } else {
+                                    val service = NovaAccessibilityService.instance
+                                    val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
+                                    val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
+                                    result.put("status", if (sent == "whatsapp_sent") "accepted" else "error")
+                                    result.put("action", sent)
+                                    result.put("recipient", number)
+                                    result.put("message", if (sent == "whatsapp_sent") "WhatsApp message submitted through the verified foreground chat." else "Message not sent: $sent")
+                                }
                             }
                         }
                     }

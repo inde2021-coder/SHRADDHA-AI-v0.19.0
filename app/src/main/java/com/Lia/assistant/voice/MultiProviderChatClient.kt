@@ -31,11 +31,11 @@ object MultiProviderChatClient {
     )
 
     private fun config(provider: String): Config? = when (provider.uppercase()) {
-        "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-4.1-mini")
+        "OPENAI" -> Config("https://api.openai.com/v1/chat/completions", "gpt-5.5")
         // Groq retired llama-3.3-70b-versatile for developer-tier traffic in August 2026.
         "GROQ" -> Config("https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
         "PERPLEXITY" -> Config("https://api.perplexity.ai/v1/agent", "", perplexityAgent = true)
-        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5", true)
+        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5-5", true)
         else -> null
     }
 
@@ -73,8 +73,10 @@ object MultiProviderChatClient {
                 boundedHistory.forEach { turn ->
                     messages.put(JSONObject().put("role", if (turn.isUser) "user" else "assistant").put("content", turn.text))
                 }
+                // OpenAI's current Chat Completions contract uses
+                // max_completion_tokens; max_tokens is deprecated for newer models.
                 JSONObject().put("model", cfg.model).put("messages", messages)
-                    .put("temperature", 0.7).put("max_tokens", 2048)
+                    .put("max_completion_tokens", 2048)
             }
         }
 
@@ -99,8 +101,12 @@ object MultiProviderChatClient {
                     return ChatReplyResult.Error(message ?: "$selected request failed (HTTP ${response.code}).")
                 }
                 val json = JSONObject(raw)
+                val tokenUsage = parseTokenUsage(json, selected, cfg.model)
                 if (cfg.perplexityAgent) {
-                    parsePerplexityAgentResponse(json)
+                    when (val parsed = parsePerplexityAgentResponse(json)) {
+                        is ChatReplyResult.Success -> parsed.copy(tokenUsage = tokenUsage)
+                        is ChatReplyResult.Error -> parsed
+                    }
                 } else {
                     val text = if (cfg.anthropic) {
                         val content = json.optJSONArray("content") ?: JSONArray()
@@ -111,7 +117,7 @@ object MultiProviderChatClient {
                             ?.optString("content").orEmpty()
                     }
                     if (text.isBlank()) ChatReplyResult.Error("$selected returned an empty response.")
-                    else ChatReplyResult.Success(text)
+                    else ChatReplyResult.Success(text, tokenUsage)
                 }
             }
         } catch (_: IOException) {
@@ -119,6 +125,17 @@ object MultiProviderChatClient {
         } catch (e: Exception) {
             ChatReplyResult.Error("$selected request failed: ${e.localizedMessage ?: "Unknown error"}")
         }
+    }
+
+
+    /** Parse only provider-reported usage; absent/unknown counters remain null, never estimated. */
+    private fun parseTokenUsage(json: JSONObject, provider: String, fallbackModel: String): ProviderTokenUsage? {
+        val usage = json.optJSONObject("usage") ?: return null
+        val input = usage.optLong("prompt_tokens", usage.optLong("input_tokens", -1L))
+        val output = usage.optLong("completion_tokens", usage.optLong("output_tokens", -1L))
+        if (input < 0L || output < 0L) return null
+        val model = json.optString("model").takeIf { it.isNotBlank() } ?: fallbackModel
+        return runCatching { ProviderTokenUsage(provider, model, input, output) }.getOrNull()
     }
 
     private fun buildPerplexityAgentBody(systemInstruction: String, history: List<ChatTurn>): JSONObject {

@@ -19,8 +19,14 @@ import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.screens.about.AboutScreen
+import com.Lia.assistant.ui.screens.agents.AgentCouncilScreen
 import com.Lia.assistant.ui.screens.chat.ChatScreen
 import com.Lia.assistant.ui.screens.debug.DebugScreen
+import com.Lia.assistant.ui.screens.devices.DeviceCenterScreen
+import com.Lia.assistant.ui.screens.data.DataVaultScreen
+import com.Lia.assistant.ui.screens.expert.ExpertStudioScreen
+import com.Lia.assistant.ui.screens.expert.EngineeringWorkbenchScreen
+import com.Lia.assistant.ui.screens.projects.ProjectLabScreen
 import com.Lia.assistant.ui.screens.forge.ForgeScreen
 import com.Lia.assistant.ui.screens.history.HistoryScreen
 import com.Lia.assistant.ui.screens.home.HomeScreen
@@ -30,11 +36,17 @@ import com.Lia.assistant.ui.screens.permissions.PermissionsScreen
 import com.Lia.assistant.ui.screens.personality.PersonalityScreen
 import com.Lia.assistant.ui.screens.privacy.PrivacyScreen
 import com.Lia.assistant.ui.screens.profile.ProfileScreen
+import com.Lia.assistant.ui.screens.plugins.PluginManagerScreen
+import com.Lia.assistant.ui.screens.social.SocialPublishingScreen
+import com.Lia.assistant.ui.screens.phone.PhoneCallAgentScreen
 import com.Lia.assistant.ui.screens.quickactions.QuickActionsScreen
 import com.Lia.assistant.ui.screens.settings.SettingsScreen
 import com.Lia.assistant.ui.screens.settings.ApiKeysScreen
 import com.Lia.assistant.ui.screens.voice.VoiceScreen
 import com.Lia.assistant.ui.screens.vision.VisualLensScreen
+import com.Lia.assistant.ui.screens.vision.ArMappingScreen
+import com.Lia.assistant.ui.screens.brain.OfflineModelScreen
+import com.Lia.assistant.ui.screens.smarthome.SmartHomeScreen
 import com.Lia.assistant.ui.theme.LocalBottomBarInset
 import com.Lia.assistant.ui.theme.nightSky
 
@@ -92,6 +104,9 @@ fun NovaApp(appState: NovaAppState) {
                     composable("api_keys") { ApiKeysScreen(navController) }
                     composable("voice") { VoiceScreen(navController, appState) }
                     composable("visual_lens") { VisualLensScreen(navController) }
+                    composable("ar_mapping") { ArMappingScreen(navController) }
+                    composable("offline_model") { OfflineModelScreen(navController) }
+                    composable("smart_home") { SmartHomeScreen(navController) }
                     composable("quick_actions") { QuickActionsScreen(navController) }
                     composable("profile") { ProfileScreen(navController, appState) }
                     composable("personality") { PersonalityScreen(navController, appState) }
@@ -101,6 +116,20 @@ fun NovaApp(appState: NovaAppState) {
                     composable("about") { AboutScreen(navController) }
                     composable("debug") { DebugScreen(navController) }
                     composable("forge") { ForgeScreen(navController) }
+                    composable("agent_council") {
+                        AgentCouncilScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenApiKeys = { navController.navigate("api_keys") }
+                        )
+                    }
+                    composable("phone_call_agent") { PhoneCallAgentScreen(navController) }
+                    composable("device_center") { DeviceCenterScreen(navController) }
+                    composable("expert_studio") { ExpertStudioScreen(navController) }
+                    composable("engineering_workbench") { EngineeringWorkbenchScreen(navController) }
+                    composable("project_lab") { ProjectLabScreen(navController) }
+                    composable("data_vault") { DataVaultScreen(navController) }
+                    composable("plugins") { PluginManagerScreen(navController) }
+                    composable("social_publisher") { SocialPublishingScreen(navController) }
 
                     // Flavor-specific routes (e.g. accessibility disclosure in direct)
                     registerAccessibilityDisclosureRoute(navController)

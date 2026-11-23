@@ -29,6 +29,8 @@ from PIL import Image, ImageTk
 from actions import execute_action
 from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
 from e2e_crypto import DeviceE2ECrypto
+from windows_hardware import get_hardware_status, execute_hardware_action
+from reconnect import reconnect_delay_ms
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -82,16 +84,32 @@ class PcCompanionApp:
         self.e2e_crypto = DeviceE2ECrypto()
         self.peer_keys = {}
         self.e2e_lock = threading.RLock()
+        self.seen_remote_actions = {}
         self.frame_window = None
         self.frame_label = None
         self.frame_photo = None
         self._pending_pairing_auth = False
         self.pending_pc_send = None
+        self.auto_reconnect_enabled = True
+        self.reconnect_attempts = 0
+        self.reconnect_scheduled = False
         self.pc_incoming = self._load_pc_incoming()
         self.remote_target_var = tk.StringVar()
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
+        now_epoch = time.time()
+        for item in self.config.get("remoteActionReceipts", []):
+            try:
+                peer, action_id, timestamp = item
+                if isinstance(peer, str) and isinstance(action_id, str) and now_epoch - float(timestamp) <= 600:
+                    self.seen_remote_actions[(peer, action_id)] = now_epoch - max(0.0, now_epoch - float(timestamp))
+            except (TypeError, ValueError):
+                continue
+        self.monitor_labels = self._monitor_labels()
+        saved_monitor = str(self.config.get("monitorIndex", 1))
+        initial_monitor = next((label for label in self.monitor_labels if label.split(":", 1)[0] == saved_monitor), self.monitor_labels[min(1, len(self.monitor_labels) - 1)])
+        self.monitor_var = tk.StringVar(value=initial_monitor)
 
         self.base_var = tk.StringVar(value=self.config.get("baseUrl", "https://"))
         self.name_var = tk.StringVar(value=self.config.get("deviceName", "Windows PC"))
@@ -104,6 +122,8 @@ class PcCompanionApp:
         self.screen_thread = threading.Thread(target=self._screen_loop, daemon=True)
         self.screen_thread.start()
         self.root.after(120, self._drain_events)
+        # Reconnect saved pair automatically after app launch; no LAN discovery is required.
+        self.root.after(1500, self._auto_connect_saved_pair)
         self.root.bind("<F12>", lambda _event: self.disconnect(emergency=True))
         self.root.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -126,11 +146,19 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
         ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
         ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
+        ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
         ttk.Checkbutton(frame, text="Share this PC screen with paired devices",
                         variable=self.screen_var, command=self._publish_permissions).pack(anchor="w", pady=4)
+        monitor_row = ttk.Frame(frame)
+        monitor_row.pack(fill="x", pady=(2, 6))
+        ttk.Label(monitor_row, text="Display to share/control").pack(side="left")
+        ttk.Combobox(monitor_row, textvariable=self.monitor_var, values=self.monitor_labels, state="readonly", width=28).pack(side="left", padx=8)
+        monitor_row.winfo_children()[-1].bind("<<ComboboxSelected>>", lambda _event: self._save_monitor_selection())
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Label(frame, text="CONTROL PAIRED ANDROID (phone approval required)").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
@@ -147,6 +175,86 @@ class PcCompanionApp:
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
         ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
                   wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
+
+    def _set_local_hardware(self, kind):
+        from tkinter import simpledialog
+        label = "PC volume" if kind == "set_volume" else "Display brightness"
+        value = simpledialog.askinteger("Shraddha AI • " + label,
+                                        "Set percentage (0–100):", minvalue=0, maxvalue=100,
+                                        parent=self.root)
+        if value is None:
+            return
+        try:
+            ok, result = execute_hardware_action({"kind": kind, "percent": value})
+            self.status_var.set(str(result))
+            if not ok:
+                messagebox.showwarning("Hardware control unavailable", str(result), parent=self.root)
+        except Exception as exc:
+            self.status_var.set(f"Hardware control failed: {str(exc)[:140]}")
+
+    def _show_hardware_status(self):
+        try:
+            status = get_hardware_status()
+            messagebox.showinfo("Shraddha AI • PC Hardware Status",
+                                json.dumps(status, ensure_ascii=False, indent=2)[:12000],
+                                parent=self.root)
+            self.status_var.set("PC hardware status refreshed. Unsupported vendor sensors are reported as unavailable.")
+        except Exception as exc:
+            self.status_var.set(f"Hardware status unavailable: {str(exc)[:160]}")
+
+    def _monitor_labels(self):
+        try:
+            with mss.mss() as capture:
+                return [str(index) + ': ' + str(item.get('width', 0)) + 'x' + str(item.get('height', 0)) for index, item in enumerate(capture.monitors)]
+        except Exception:
+            return ['1: Primary display']
+
+    def _save_monitor_selection(self):
+        self.config["monitorIndex"] = self._selected_monitor_index()
+        self._save_config()
+        self.status_var.set("Display selection saved: " + str(self.monitor_var.get()))
+
+    def _selected_monitor_index(self):
+        try:
+            index = int(str(self.monitor_var.get()).split(':', 1)[0])
+            with mss.mss() as capture:
+                return index if 0 <= index < len(capture.monitors) else 1
+        except Exception:
+            return 1
+
+    def _selected_monitor_bounds(self):
+        try:
+            with mss.mss() as capture:
+                item = capture.monitors[self._selected_monitor_index()]
+                return (int(item['left']), int(item['top']), int(item['width']), int(item['height']))
+        except Exception:
+            return None
+
+    def _claim_remote_action(self, peer_id, action_id):
+        now = time.time()
+        for key, seen_at in list(self.seen_remote_actions.items()):
+            if now - seen_at > 600:
+                self.seen_remote_actions.pop(key, None)
+        key = (peer_id, action_id)
+        if key in self.seen_remote_actions:
+            return False
+        if len(self.seen_remote_actions) >= 4096:
+            oldest = min(self.seen_remote_actions, key=self.seen_remote_actions.get)
+            self.seen_remote_actions.pop(oldest, None)
+        self.seen_remote_actions[key] = now
+        # Persist bounded replay receipts so restarting the Windows companion does not
+        # reopen the ten-minute replay window for an already accepted remote command.
+        self.config["remoteActionReceipts"] = [
+            [peer, action, timestamp]
+            for (peer, action), timestamp in sorted(self.seen_remote_actions.items(), key=lambda item: item[1])
+        ][-4096:]
+        try:
+            self._save_config()
+        except Exception as exc:
+            self.seen_remote_actions.pop(key, None)
+            self.events.put(("status", "Remote action rejected: replay protection could not be persisted."))
+            return False
+        return True
 
     def _load_config(self):
         try:
@@ -198,7 +306,40 @@ class PcCompanionApp:
                 }
             self.status_var.set(f"Pairing failed: {str(exc)[:180]}")
 
+    def _auto_connect_saved_pair(self):
+        if not self.auto_reconnect_enabled:
+            return
+        if self.config.get("sessionId") and self.config.get("deviceId") and self._token_for_saved_device():
+            self.connect_saved()
+
+    def _schedule_reconnect(self):
+        if not self.auto_reconnect_enabled or self.stop_event.is_set() or self.reconnect_scheduled:
+            return
+        self.reconnect_attempts = min(self.reconnect_attempts + 1, 8)
+        delay = reconnect_delay_ms(self.reconnect_attempts)
+        self.reconnect_scheduled = True
+        self.root.after(delay, self._try_reconnect)
+
+    def _try_reconnect(self):
+        self.reconnect_scheduled = False
+        if not self.auto_reconnect_enabled or self.stop_event.is_set():
+            return
+        if self.ws_thread and self.ws_thread.is_alive():
+            self._schedule_reconnect()
+            return
+        if not self.config.get("sessionId") or not self.config.get("deviceId") or not self._token_for_saved_device():
+            self.status_var.set("Remote link paused: saved pairing credentials are unavailable.")
+            return
+        try:
+            self.device_token = self._token_for_saved_device()
+            self._connect_socket()
+            self.status_var.set("Internet relay reconnecting…")
+        except Exception as exc:
+            self.status_var.set(f"Reconnect pending: {str(exc)[:120]}")
+            self._schedule_reconnect()
+
     def connect_saved(self):
+        self.auto_reconnect_enabled = True
         try:
             if not self.config.get("sessionId") or not self.config.get("deviceId"):
                 raise ValueError("No saved PC pairing. Join with the six-digit code first.")
@@ -250,6 +391,7 @@ class PcCompanionApp:
             return False
 
     def _on_open(self, _ws):
+        self.reconnect_attempts = 0
         self.events.put(("opened", None))
 
     def _on_message(self, _ws, message):
@@ -282,10 +424,14 @@ class PcCompanionApp:
             self.events.put(("pairing_failed", f"Pairing was not authenticated ({code or 'closed'}): {str(reason or '')[:100]}"))
         else:
             self.events.put(("status", f"Disconnected ({code or 'closed'}): {str(reason or '')[:100]}"))
+            if self.auto_reconnect_enabled:
+                self.events.put(("schedule_reconnect", None))
 
     def _publish_permissions(self):
         remote = bool(self.remote_var.get())
         screen = bool(self.screen_var.get())
+        self.config['monitorIndex'] = self._selected_monitor_index()
+        self._save_config()
         if not remote:
             self.control_grant_until = 0
         if screen:
@@ -301,7 +447,9 @@ class PcCompanionApp:
         try:
             while True:
                 kind, payload = self.events.get_nowait()
-                if kind == "status":
+                if kind == "schedule_reconnect":
+                    self._schedule_reconnect()
+                elif kind == "status":
                     self.status_var.set(payload)
                 elif kind == "credential_rejected":
                     device_id = str(self.config.get("deviceId", ""))
@@ -534,6 +682,10 @@ class PcCompanionApp:
             except Exception as exc:
                 self.status_var.set(f"Encrypted action rejected: {str(exc)[:140]}")
                 return
+            if not self._claim_remote_action(peer_id, action_id):
+                self.status_var.set("Blocked replayed remote action ID.")
+                self._send_e2e_message(peer_id, "remote_action_result", {"ok": False, "reason": "Duplicate action ID rejected."}, action_id, action_kind)
+                return
             if not self.remote_var.get() or time.time() > self.control_grant_until:
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
@@ -605,6 +757,14 @@ class PcCompanionApp:
             except ValueError:
                 self.status_var.set("Scroll amount must be an integer from -20 to 20.")
                 return
+        elif kind in ("set_volume", "set_brightness"):
+            try:
+                action["percent"] = int(value)
+            except ValueError:
+                self.status_var.set("Enter a percentage from 0 to 100.")
+                return
+        elif kind == "power":
+            action["operation"] = value.lower()
         elif kind == "tap":
             action.update(x=0.5, y=0.5)
         elif kind == "swipe":
@@ -949,7 +1109,18 @@ class PcCompanionApp:
         ok = False
         message = "Action failed."
         try:
-            ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut)
+            if action.get("kind") in {"hardware_status", "set_volume", "set_brightness", "power"}:
+                ok, result = execute_hardware_action(
+                    action,
+                    confirm_power=lambda operation: messagebox.askyesno(
+                        "Shraddha AI • Confirm Windows power action",
+                        f"Are you sure you want to {operation} this PC now?\\n\\n"
+                        "This confirmation must be approved locally on the Windows PC."
+                    )
+                )
+                message = json.dumps(result, ensure_ascii=False)[:1200] if isinstance(result, dict) else str(result)
+            else:
+                ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds())
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
@@ -992,7 +1163,7 @@ class PcCompanionApp:
                 continue
             try:
                 with mss.mss() as capture:
-                    monitor = capture.monitors[1]
+                    monitor = capture.monitors[self._selected_monitor_index()]
                     shot = capture.grab(monitor)
                 image = Image.frombytes("RGB", shot.size, shot.rgb)
                 try:
@@ -1077,6 +1248,8 @@ class PcCompanionApp:
             self.status_var.set(f"Pairing revoke failed: {str(exc)[:180]}")
 
     def disconnect(self, emergency=False):
+        self.auto_reconnect_enabled = False
+        self.reconnect_scheduled = False
         self.screen_event.clear()
         self.remote_var.set(False)
         self.screen_var.set(False)

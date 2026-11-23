@@ -36,62 +36,69 @@ internal class DeviceCredentialStore(context: Context) {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
             val ciphertext = cipher.doFinal(plaintext)
+            val iv = cipher.iv
             try {
                 val saved = preferences.edit()
-                    .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                    .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
                     .putString("payload", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
                     .commit()
                 check(saved) { "Unable to persist encrypted device credentials" }
             } finally {
                 ciphertext.fill(0)
+                iv.fill(0)
             }
         } finally {
             plaintext.fill(0)
         }
     }
 
-    @Synchronized fun load(): Credentials? {
-        val ivText = preferences.getString("iv", null) ?: return null
-        val payloadText = preferences.getString("payload", null) ?: return null
-        return try {
-            require(ivText.length == 16 && payloadText.length in 24..8192) { "Saved credential encoding is invalid" }
-            val iv = Base64.decode(ivText, Base64.NO_WRAP)
-            val payload = Base64.decode(payloadText, Base64.NO_WRAP)
+    @Synchronized fun load(): Credentials? = loadResult().getOrNull()
+
+    @Synchronized fun loadResult(): Result<Credentials?> = runCatching {
+        val ivText = preferences.getString("iv", null)
+        val payloadText = preferences.getString("payload", null)
+        if (ivText == null && payloadText == null) return@runCatching null
+        require(ivText != null && payloadText != null) { "Saved device pairing data is incomplete; encrypted data was preserved." }
+        require(ivText.length == 16 && payloadText.length in 24..8192) { "Saved credential encoding is invalid; encrypted data was preserved." }
+        val iv = Base64.decode(ivText, Base64.NO_WRAP)
+        val payload = Base64.decode(payloadText, Base64.NO_WRAP)
+        try {
+            require(iv.size == 12) { "Invalid credential IV; encrypted data was preserved." }
+            require(payload.size >= 16) { "Invalid credential ciphertext; encrypted data was preserved." }
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                ?: error("Device pairing encryption key is missing; saved credentials were preserved.")
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(payload)
             try {
-                require(iv.size == 12) { "Invalid credential IV" }
-                require(payload.size >= 16) { "Invalid credential ciphertext" }
-                val cipher = Cipher.getInstance(TRANSFORMATION)
-                cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-                val clear = cipher.doFinal(payload)
-                try {
-                    val json = JSONObject(clear.toString(Charsets.UTF_8))
-                    val sessionId = json.getString("sessionId")
-                    val deviceId = json.getString("deviceId")
-                    val token = json.getString("deviceToken")
-                    val baseUrl = json.getString("baseUrl").trim().trimEnd('/')
-                    val parsedUrl = baseUrl.toHttpUrlOrNull()
-                    require(sessionId.isNotBlank() && sessionId.length <= 128) { "Invalid saved session ID" }
-                    require(deviceId.isNotBlank() && deviceId.length <= 64) { "Invalid saved device ID" }
-                    require(token.length in 24..512) { "Invalid saved device token" }
-                    require(parsedUrl != null && parsedUrl.scheme == "https" && parsedUrl.host.isNotBlank()) { "Invalid saved relay URL" }
-                    Credentials(sessionId, deviceId, token, baseUrl)
-                } finally {
-                    clear.fill(0)
-                }
+                val json = JSONObject(clear.toString(Charsets.UTF_8))
+                val sessionId = json.getString("sessionId")
+                val deviceId = json.getString("deviceId")
+                val token = json.getString("deviceToken")
+                val baseUrl = json.getString("baseUrl").trim().trimEnd('/')
+                val parsedUrl = baseUrl.toHttpUrlOrNull()
+                require(sessionId.isNotBlank() && sessionId.length <= 128) { "Invalid saved session ID" }
+                require(deviceId.isNotBlank() && deviceId.length <= 64) { "Invalid saved device ID" }
+                require(token.length in 24..512) { "Invalid saved device token" }
+                require(parsedUrl != null && parsedUrl.scheme == "https" && parsedUrl.host.isNotBlank()) { "Invalid saved relay URL" }
+                Credentials(sessionId, deviceId, token, baseUrl)
             } finally {
-                iv.fill(0)
-                payload.fill(0)
+                clear.fill(0)
             }
-        } catch (_: Exception) {
-            clear()
-            null
+        } finally {
+            iv.fill(0)
+            payload.fill(0)
         }
     }
 
     @Synchronized fun clear() {
-        preferences.edit().clear().commit()
-        runCatching {
-            val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        check(preferences.edit().clear().commit()) {
+            "Could not remove saved encrypted device credentials."
+        }
+        // Delete the Keystore key only after the ciphertext removal is durable.
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(KEY_ALIAS)) {
             store.deleteEntry(KEY_ALIAS)
         }
     }

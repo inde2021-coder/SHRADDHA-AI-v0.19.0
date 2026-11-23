@@ -23,19 +23,21 @@ import org.json.JSONObject
  * Provider credentials remain in their existing encrypted stores; this class never logs them.
  */
 object MainBrainProviderGateway {
-    val supportedProviders: Set<String> =
-        setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+    private val providerOrder = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
+    val supportedProviders: Set<String> = providerOrder.toSet()
 
     fun configuredProviders(context: Context, preferredProvider: String? = null): List<String> {
         val preferred = (preferredProvider
             ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI"))
             .uppercase()
         require(preferred in supportedProviders) { "Unsupported preferred AI provider: $preferred" }
-        return (listOf(preferred) + supportedProviders).distinct().filter { provider ->
-            runCatching {
-                if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
+        // Keep fallback order stable across devices and runtime implementations.
+        // Cloud-only keys are valid routes; provider secrets remain on the HTTPS backend.
+        val cloudProviders = VoiceGatewaySettings.configuredProviders(context).orEmpty()
+        return (listOf(preferred) + providerOrder).distinct().filter { provider ->
+            val localConfigured = if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
                 else ProviderKeyStore.has(context, provider)
-            }.getOrDefault(false)
+            localConfigured || provider in cloudProviders
         }.take(5)
     }
 
@@ -104,9 +106,25 @@ object MainBrainProviderGateway {
         if (provider !in supportedProviders) return ChatReplyResult.Error("Unsupported AI provider: $provider")
         if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
         val boundedHistory = history.takeLast(40).map { it.copy(text = it.text.take(8_000)) }
+        // Hybrid routing: use the authenticated HTTPS agent when this provider is configured there.
+        // A failed configured cloud route is surfaced; it is not silently retried against a
+        // different provider or billed to a second local API key.
+        val historyPrompt = boundedHistory.joinToString("\n\n") { turn ->
+            (if (turn.isUser) "User: " else "Assistant: ") + turn.text
+        }.take(12_000)
+        val cloud = runCatching {
+            VoiceGatewaySettings.executeAgent(context, provider, "Main Brain", systemInstruction.take(8_000), historyPrompt)
+        }.getOrElse { return ChatReplyResult.Error("Cloud " + provider + " agent failed: " + (it.message ?: "network error")) }
+        if (cloud != null) {
+            val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
+                runCatching { com.Lia.assistant.voice.ProviderTokenUsage(provider, cloud.model, cloud.inputTokens, cloud.outputTokens) }.getOrNull()
+            } else null
+            return ChatReplyResult.Success(cloud.text, usage)
+        }
+        // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
         return if (provider == "GEMINI") {
             val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
-                return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: ${it.message}")
+                return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
             }
             if (key.isBlank()) ChatReplyResult.Error("GEMINI API key is missing.")
             else GeminiTextClient.reply(key, systemInstruction.take(8_000), boundedHistory)
@@ -115,9 +133,34 @@ object MainBrainProviderGateway {
         }
     }
 
-    fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String =
-        when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
+    fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
+        VoiceGatewaySettings.executeAgent(context, providerName, "Assistant", systemInstruction, prompt)?.let { return it.text }
+        return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text
             is ChatReplyResult.Error -> error("$providerName provider error: ${result.message}")
         }
+    }
+    
+    /** Returns provider text and any token counters explicitly reported by the provider. */
+    fun completeWithUsage(
+        context: Context,
+        providerName: String,
+        systemInstruction: String,
+        prompt: String
+    ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
+        VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
+            val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
+                com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
+            } else {
+                CouncilCostBudget.stopIfUsageUnknown(context, providerName, cloud.model)
+                null
+            }
+            return cloud.text to usage
+        }
+        return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
+            is ChatReplyResult.Success -> result.text to result.tokenUsage
+            is ChatReplyResult.Error -> error(providerName + " provider error: " + result.message)
+        }
+    }
+
 }

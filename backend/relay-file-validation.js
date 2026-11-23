@@ -32,8 +32,8 @@ export function isAllowedShareCategory(category) {
   return ['contacts','media','documents','messages','calendar','location','device_status','ai_memory','clipboard'].includes(category);
 }
 
-export const MAX_TRANSFER_CHUNK_BYTES = 48_000;
-export const MAX_TRANSFER_BYTES = 20_000_000;
+export const MAX_TRANSFER_CHUNK_BYTES = 48 * 1024;
+export const MAX_TRANSFER_BYTES = 100 * 1024 * 1024;
 export const MAX_TRANSFER_CHUNKS = Math.ceil(MAX_TRANSFER_BYTES / MAX_TRANSFER_CHUNK_BYTES);
 
 /** Validate one bounded, independently verifiable transfer chunk before relay. */

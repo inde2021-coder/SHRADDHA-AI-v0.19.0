@@ -6,8 +6,22 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
-  # Full automatic integration checks run in android-build and master-integration-merge.
-  # Keep this workflow manual-only to avoid duplicate emulator runs.
+  push:
+    branches:
+      - feature/complete-pending-shraddha-features
+    paths:
+      - "app/**"
+      - "pc_companion/**"
+      - "backend/**"
+      - "firebase/**"
+      - "firebase.json"
+      - "voice-engine/**"
+      - "desktop-companion/**"
+      - "reference/lia-app-recording/**"
+      - "scripts/create_reference_storyboard.py"
+      - "render.yaml"
+      - ".github/workflows/android-ci.yml"
+      - ".github/workflows/pc-hardware-agent-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -18,10 +32,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  android:
-    name: Android unit tests, APK build and emulator smoke test
+  changes:
+    name: Detect changed project areas
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+      backend: ${{ steps.filter.outputs.backend }}
+      firebase: ${{ steps.filter.outputs.firebase }}
+      windows: ${{ steps.filter.outputs.windows }}
+      storyboard: ${{ steps.filter.outputs.storyboard }}
+      voice: ${{ steps.filter.outputs.voice }}
+      validation: ${{ steps.filter.outputs.validation }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            android:
+              - 'app/**'
+              - 'gradle/**'
+              - 'gradlew'
+              - 'build.gradle*'
+              - 'settings.gradle*'
+              - 'gradle.properties'
+            backend:
+              - 'backend/**'
+            firebase:
+              - 'firebase/**'
+              - 'firebase.json'
+            windows:
+              - 'pc_companion/**'
+              - 'desktop-companion/**'
+              - 'app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt'
+              - 'app/src/main/java/com/Lia/assistant/voice/LiaToolCatalog.kt'
+              - 'app/src/main/java/in/shraddha/ai/MainActivity.kt'
+            storyboard:
+              - 'reference/lia-app-recording/**'
+              - 'scripts/create_reference_storyboard.py'
+            voice:
+              - 'voice-engine/**'
+            validation:
+              - '.github/workflows/android-ci.yml'
+
+  android:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.android == 'true'
+    name: Android unit tests and APK/AAB build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -35,27 +95,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Validate backend JavaScript syntax
-        run: node --check backend/server.js
-
       - name: Run Android unit tests and build debug APK
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:bundleRelease --no-daemon --stacktrace
+          ls -lh app/build/outputs/apk/debug/*.apk app/build/outputs/bundle/release/*.aab
 
-      - name: Boot Android emulator, install APK and verify launch
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Upload optimized Android App Bundle
+        if: success()
+        uses: actions/upload-artifact@v6
         with:
-          api-level: 30
-          emulator-boot-timeout: 1200
-          target: default
-          arch: x86_64
-          profile: pixel_2
-          # Avoid the action's post-boot settings-service calls; they caused Broken pipe (32) on TCG.
-          disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
-          pre-emulator-launch-script: adb start-server
-          script: bash .github/scripts/android-ci-smoke.sh
+          name: shraddha-ai-android-app-bundle
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload debug APK
         if: success()
@@ -65,3 +118,180 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
+
+  android-emulator:
+    name: Android emulator instrumentation and launch validation
+    if: needs.changes.outputs.validation == 'true'
+    needs: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ANDROID_I_WANT_MY_TCG: "yes"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Enable KVM acceleration when available
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo "KVM acceleration enabled."; else echo "KVM unavailable; using TCG."; fi
+          else
+            echo "KVM is not exposed; using TCG fallback."
+          fi
+      - name: Boot emulator and run instrumentation + launch smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          emulator-boot-timeout: 1200
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 3072 -cores 2 -partition-size 4096
+          pre-emulator-launch-script: adb start-server
+          script: |
+            chmod +x ./gradlew
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+            bash .github/scripts/android-ci-smoke.sh
+      - name: Upload Android instrumentation reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-android-instrumentation-reports
+          path: app/build/reports/androidTests/connected/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  backend-tests:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    name: Backend API and policy tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Validate backend JavaScript
+        run: |
+          node --check backend/server.js
+          node --check backend/telephony-audio.js
+          node --check backend/form-autofill.js
+      - name: Run backend tests
+        working-directory: backend
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+      - name: Build and smoke-test the production relay container
+        run: |
+          docker build -f backend/Dockerfile -t shraddha-relay-ci:latest backend
+          docker run -d --rm --name shraddha-relay-ci -p 8787:8787 shraddha-relay-ci:latest
+          cleanup() { docker stop shraddha-relay-ci >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs shraddha-relay-ci
+          exit 1
+
+  firebase-rules-tests:
+    needs: changes
+    if: needs.changes.outputs.firebase == 'true'
+    name: Firebase Firestore, Storage and RTDB rules tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install Firebase rules test dependencies
+        working-directory: firebase/rules-tests
+        run: npm install --no-audit --no-fund
+      - name: Run Firebase emulator rules tests
+        working-directory: firebase/rules-tests
+        run: ./node_modules/.bin/firebase emulators:exec --config ../../firebase.json --only firestore,storage,database --project demo-shraddha-ai "npm test"
+
+  windows-companion-tests:
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
+    name: Windows PC companion tests and EXE packaging
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install PC companion dependencies and packager
+        run: python -m pip install -r desktop-companion/shraddha-pc-companion/requirements-all.txt pyinstaller
+      - name: Run PC companion policy and protocol tests
+        working-directory: desktop-companion/shraddha-pc-companion
+        run: python -m unittest discover -s . -p "test_*.py" -v
+      - name: Compile PC companion
+        working-directory: desktop-companion/shraddha-pc-companion
+        run: python -m py_compile shraddha_pc_companion.py
+      - name: Build Windows PC companion EXE
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-Desktop-Companion --collect-all keyring --collect-all cryptography --hidden-import pyautogui --hidden-import pygetwindow --hidden-import pywinauto --hidden-import mss --hidden-import PIL --hidden-import pytesseract --hidden-import pyperclip --hidden-import sounddevice --hidden-import vosk --hidden-import cv2 --hidden-import numpy --hidden-import screen_brightness_control desktop-companion/shraddha-pc-companion/shraddha_pc_companion.py
+      - name: Upload Windows PC companion EXE
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-desktop-companion-windows-exe
+          path: dist/ShraddhaAI-Desktop-Companion.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  lia-reference-storyboard:
+    needs: changes
+    if: needs.changes.outputs.storyboard == 'true'
+    name: Build visual storyboard from main-branch LIA reference video
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Fetch the exact reference recording from main
+        run: |
+          git fetch origin main
+          mkdir -p reference/lia-app-recording
+          git show origin/main:reference/lia-app-recording/LIA-APP-REFERENCE.mov > reference/lia-app-recording/LIA-APP-REFERENCE.mov
+          test -s reference/lia-app-recording/LIA-APP-REFERENCE.mov
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Extract contact sheet
+        run: python3 scripts/create_reference_storyboard.py
+      - name: Upload LIA reference storyboard
+        uses: actions/upload-artifact@v6
+        with:
+          name: lia-reference-video-storyboard
+          path: build/reference-storyboard/
+          if-no-files-found: error
+          retention-days: 14
+
+  voice-engine-check:
+    needs: changes
+    if: needs.changes.outputs.voice == 'true' || needs.changes.outputs.validation == 'true'
+    name: Custom voice engine source validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Compile voice engine source
+        run: python -m py_compile voice-engine/app.py

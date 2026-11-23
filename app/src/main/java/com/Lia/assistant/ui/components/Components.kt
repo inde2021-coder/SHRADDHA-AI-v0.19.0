@@ -195,7 +195,10 @@ fun NovaTextField(
             ),
             visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             cursorBrush = SolidColor(colors.accent),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().semantics {
+                contentDescription = (placeholder.ifBlank { "Text input" }) +
+                    if (secret) ", secure field" else ""
+            }
         )
     }
 }

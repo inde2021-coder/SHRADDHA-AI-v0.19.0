@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 SENSITIVE_WINDOW = re.compile(r"password|passcode|sign.?in|log.?in|bank|otp|pin|payment|checkout|credential|secure", re.I)
-SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "file_write", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
+SUPPORTED_ACTIONS = {"tap", "swipe", "scroll", "key_press", "back", "home", "type", "click_text", "ocr", "file_list", "file_read", "file_search", "file_write", "offline_chat", "code_assistant", "open_app", "media_control", "system_control", "screenshot", "clipboard_transform", "web_search"}
 
 
 def create_e2e_identity():
@@ -66,13 +66,19 @@ def e2e_associated_data(session_id: str, sender_id: str, receiver_id: str, kind:
 
 
 async def send_e2e_message(ws, peer_keys: dict, session_id: str, sender_id: str, target_id: str,
-                           kind: str, correlation: str, payload: dict, action_kind: str = "", index: int = -1):
+                           kind: str, correlation: str, payload: dict, action_kind: str = "", index: int = -1,
+                           category: str = ""):
     import base64, json, secrets
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     state = peer_keys.get(target_id)
     if not state or not state.get("local_confirmed") or not state.get("remote_confirmed"):
         raise RuntimeError("E2E peer fingerprint is not mutually verified")
-    aad_correlation = f"{correlation}:{index}" if kind == "file_transfer_chunk" else correlation
+    if kind == "file_transfer_chunk":
+        aad_correlation = f"{correlation}:{index}"
+    elif kind == "data_share_payload":
+        aad_correlation = f"{correlation}|{category}"
+    else:
+        aad_correlation = correlation
     nonce = secrets.token_bytes(12)
     ciphertext = AESGCM(state["key"]).encrypt(
         nonce, json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
@@ -85,6 +91,8 @@ async def send_e2e_message(ws, peer_keys: dict, session_id: str, sender_id: str,
         envelope.update({"transferId": correlation, "index": index})
     elif kind == "clipboard_payload":
         envelope.update({"requestId": correlation})
+    elif kind == "data_share_payload":
+        envelope.update({"requestId": correlation, "category": category})
     else:
         envelope.update({"actionId": correlation, "actionKind": action_kind[:32]})
     await ws.send(json.dumps(envelope))
@@ -101,7 +109,14 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
     action_id = str(message.get("actionId", ""))
     transfer_id = str(message.get("transferId", ""))
     index = int(message.get("index", -1))
-    correlation = f"{transfer_id}:{index}" if kind == "file_transfer_chunk" else (str(message.get("requestId", "")) if kind == "clipboard_payload" else action_id)
+    if kind == "file_transfer_chunk":
+        correlation = f"{transfer_id}:{index}"
+    elif kind in {"clipboard_payload", "data_share_payload"}:
+        correlation = str(message.get("requestId", ""))
+        if kind == "data_share_payload":
+            correlation += "|" + str(message.get("category", ""))
+    else:
+        correlation = action_id
     aad = e2e_associated_data(session_id, peer_id, local_id, kind, correlation)
     nonce_text = str(message.get("nonce", ""))
     ciphertext_text = str(message.get("ciphertext", ""))
@@ -122,6 +137,9 @@ def decrypt_e2e_message(message: dict, peer_keys: dict, session_id: str, local_i
         normalized.update({"type": "file_transfer_chunk", "transferId": transfer_id, "index": index})
     elif kind == "clipboard_payload":
         normalized.update({"type": "data_share_payload", "category": "clipboard", "requestId": correlation})
+    elif kind == "data_share_payload":
+        normalized.update({"type": "data_share_payload", "category": str(message.get("category", "")),
+                           "requestId": str(message.get("requestId", ""))})
     else:
         raise ValueError("Unsupported encrypted message kind")
     return normalized
@@ -145,6 +163,17 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
         return False
     if kind == "type" and not allow_typing:
         return False
+    if kind == "key_press":
+        chord = action.get("chord")
+        allowed_chords = {
+            "enter", "escape", "tab", "up", "down", "left", "right", "home", "end",
+            "pageup", "pagedown", "ctrl+a", "ctrl+c", "ctrl+f", "ctrl+z", "ctrl+y",
+            "alt+tab", "alt+left", "alt+right", "win+d", "ctrl+v"
+        }
+        if not isinstance(chord, str) or chord not in allowed_chords:
+            return False
+        if chord == "ctrl+v" and not allow_typing:
+            return False
     if kind == "ocr" and not allow_ocr:
         return False
     if kind == "offline_chat" and offline_model is None:
@@ -206,7 +235,7 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
     if kind == "scroll":
         amount = action.get("amount", -3)
         return isinstance(amount, (int, float)) and not isinstance(amount, bool) and -10 <= amount <= 10 and amount != 0
-    return kind in {"back", "home", "ocr", "offline_chat"}
+    return kind in {"back", "home", "ocr", "offline_chat", "key_press"}
 
 
 def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | None:
@@ -747,6 +776,19 @@ def control_grant_allows(approved: bool, expires_at: float, now: float,
                 and sender_device_id and approved_device_id == sender_device_id)
 
 
+def claim_remote_action_id(seen: dict, sender_id: str, action_id: str, limit: int = 4096) -> bool:
+    """Reject replayed action IDs within a live E2E session, with bounded memory."""
+    if not sender_id or len(sender_id) > 80 or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id or ""):
+        return False
+    key = (sender_id, action_id)
+    if key in seen:
+        return False
+    seen[key] = time.monotonic()
+    while len(seen) > max(1, min(int(limit), 8192)):
+        seen.pop(next(iter(seen)))
+    return True
+
+
 async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = False, file_root: str = "", offline_model=None) -> str:
     if not validate_action(action, allow_typing, allow_ocr, file_root, offline_model):
         return "blocked_unsupported_or_invalid_action"
@@ -765,6 +807,13 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
     if kind == "scroll":
         pyautogui.scroll(int(action.get("amount", -3)))
         return "scroll_executed"
+    if kind == "key_press":
+        keys = action["chord"].split("+")
+        if len(keys) == 1:
+            pyautogui.press(keys[0])
+        else:
+            pyautogui.hotkey(*keys)
+        return "key_press_sent:" + action["chord"]
     if kind == "back":
         pyautogui.hotkey("alt", "left")
         return "back_executed"
@@ -1135,7 +1184,7 @@ async def run_once(args) -> None:
                 print("Restored interrupted incoming transfer; missing chunks will be requested after reconnect.")
         except Exception as exc: print("Could not restore previous transfer:", str(exc)[:160])
     async with websockets.connect(url, extra_headers=headers, ping_interval=20, max_size=3 * 2**20) as ws:
-        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen, "documents": allow_file_receive}}))
+        await ws.send(json.dumps({"type": "permission_update", "permissions": {"remote_control": allow_control, "screen": share_screen, "documents": allow_file_receive, "media": allow_file_receive}}))
         print("Relay connected. Remote control:", "ON" if allow_control else "OFF", "| Screen share:", "ON" if share_screen else "OFF")
         if phone_action:
             await ws.send(json.dumps({"type": "control_request", "targetDeviceId": args.control_phone, "minutes": 2}))
@@ -1148,6 +1197,7 @@ async def run_once(args) -> None:
             print("Waiting for Android receiver to approve this file transfer…")
         approved_until = 0.0
         approved_device_id = ""
+        seen_remote_actions = {}
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
         try:
             async for raw in ws:
@@ -1231,8 +1281,8 @@ async def run_once(args) -> None:
                         continue
                     sender_id = str(message.get("fromDeviceId", ""))
                     action_id = str(message.get("actionId", ""))
-                    if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id) or message.get("requiresPerActionApproval") is not True:
-                        print("Blocked unverified remote action: missing action ID or approval requirement.")
+                    if message.get("requiresPerActionApproval") is not True or not claim_remote_action_id(seen_remote_actions, sender_id, action_id):
+                        print("Blocked remote action: invalid or replayed action ID, or missing per-action approval requirement.")
                         continue
                     if not control_grant_allows(allow_control, approved_until, time.time(), approved_device_id, sender_id):
                         print("Blocked remote action: no active grant for this exact paired requester.")
@@ -1272,7 +1322,7 @@ async def run_once(args) -> None:
                     requester_id = str(message.get("fromDeviceId", ""))
                     category = str(message.get("category", ""))
                     request_id = str(message.get("requestId", ""))
-                    allowed = (category == "documents" and allow_file_receive) or (category == "clipboard" and allow_control)
+                    allowed = (category in {"documents", "media"} and allow_file_receive) or (category == "clipboard" and allow_control)
                     approved = bool(allowed and await asyncio.to_thread(confirm, f"Allow one-time {category} share request from paired device {requester_id}?"))
                     await ws.send(json.dumps({"type": "data_share_response", "requesterDeviceId": requester_id, "category": category, "requestId": request_id, "approved": approved, "minutes": 5 if approved else 0}))
                 elif kind == "data_share_result" and clipboard_send and message.get("requestId") == clipboard_send[0]:
@@ -1359,6 +1409,56 @@ async def run_once(args) -> None:
                         import pyperclip
                         await asyncio.to_thread(pyperclip.copy, text_value)
                         print("Clipboard text copied locally.")
+                elif kind == "data_share_payload":
+                    try:
+                        import base64, hashlib, tempfile
+                        temp_path = None
+                        category = str(message.get("category", ""))
+                        if category not in {"media", "documents"}:
+                            raise ValueError("Unsupported shared-file category")
+                        if str(message.get("contentType", "")) != "file":
+                            raise ValueError("Unsupported shared attachment content type")
+                        mime_type = str(message.get("mimeType", ""))
+                        if not mime_type or len(mime_type) > 100 or any(ord(ch) < 32 for ch in mime_type):
+                            raise ValueError("Invalid shared attachment MIME type")
+                        size = int(message.get("sizeBytes", -1))
+                        if size < 1 or size > 650_000:
+                            raise ValueError("Shared attachment exceeds the 650 KB quick-share limit")
+                        encoded = str(message.get("payload", ""))
+                        raw = base64.b64decode(encoded, validate=True)
+                        if len(raw) != size:
+                            raise ValueError("Shared attachment byte length mismatch")
+                        expected = str(message.get("sha256", "")).lower()
+                        if not re.fullmatch(r"[a-f0-9]{64}", expected) or hashlib.sha256(raw).hexdigest() != expected:
+                            raise ValueError("Shared attachment SHA-256 verification failed")
+                        supplied_name = str(message.get("fileName", "shared-file"))[:120]
+                        safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(supplied_name).name).strip(" .") or "shared-file"
+                        if safe_name.split(".")[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
+                            safe_name = "_" + safe_name
+                        if not await asyncio.to_thread(confirm, f"Save verified {category} attachment '{safe_name}' to Downloads/Shraddha Transfers?"):
+                            print("Shared attachment declined by PC user.")
+                        else:
+                            destination_dir = Path.home() / "Downloads" / "Shraddha Transfers"
+                            destination_dir.mkdir(parents=True, exist_ok=True)
+                            destination = destination_dir / safe_name
+                            stem, suffix = destination.stem, destination.suffix
+                            counter = 1
+                            while destination.exists():
+                                destination = destination_dir / f"{stem} ({counter}){suffix}"
+                                counter += 1
+                            with tempfile.NamedTemporaryFile(prefix=".shraddha-", suffix=".part", dir=destination_dir, delete=False) as temp_file:
+                                temp_path = Path(temp_file.name)
+                                temp_file.write(raw)
+                                temp_file.flush()
+                                os.fsync(temp_file.fileno())
+                            os.replace(temp_path, destination)
+                            temp_path = None
+                            print(f"Saved SHA-256 verified attachment: {destination}")
+                    except Exception as exc:
+                        if temp_path is not None:
+                            try: temp_path.unlink(missing_ok=True)
+                            except Exception: pass
+                        print("Shared attachment rejected:", str(exc)[:200])
                 elif kind == "peer_status":
                     peer_id = str(message.get("deviceId", ""))
                     if message.get("online") is True and peer_id and peer_id != device_id and peer_id not in peer_keys:

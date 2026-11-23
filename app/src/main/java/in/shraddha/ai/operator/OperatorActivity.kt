@@ -16,6 +16,8 @@ import `in`.shraddha.ai.future.Risk
 import `in`.shraddha.ai.future.LocalAuditTrail
 import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 import `in`.shraddha.ai.future.WorkflowStatus
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -27,9 +29,12 @@ class OperatorActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.rgb(9, 13, 25)) }
-        root.addView(TextView(this).apply { text = "SHRADDHA • LIVE APP OPERATOR"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 8, 0, 18) })
-        root.addView(TextView(this).apply { text = "वास्तविक स्क्रीन निरीक्षण • कार्रवाई • परिणाम सत्यापन"; textSize = 12f; setTextColor(0xFFB9A9FF.toInt()); gravity = Gravity.CENTER; setPadding(0, 0, 0, 18) })
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.rgb(7, 15, 25)) }
+        root.addView(TextView(this).apply { text = "$assistantName • LIVE APP OPERATOR"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 8, 0, 18) })
+        root.addView(TextView(this).apply { text = "वास्तविक स्क्रीन निरीक्षण • कार्रवाई • परिणाम सत्यापन"; textSize = 12f; setTextColor(0xFF73DDE7.toInt()); gravity = Gravity.CENTER; setPadding(0, 0, 0, 18) })
         appName = field("ऐप का नाम (जैसे Chrome)")
         target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
         typed = field("फोकस किए गए सामान्य टेक्स्ट फील्ड में लिखें")
@@ -57,10 +62,24 @@ class OperatorActivity : Activity() {
                 runOperatorStep(OperatorStep(type))
             }.show()
         })
-        log = TextView(this).apply { text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"; textSize = 13f; setTextColor(0xFFE0E6F5.toInt()); setPadding(14, 18, 14, 18) }
-        val scroll = ScrollView(this); scroll.addView(log); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        log = TextView(this).apply {
+            text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"
+            textSize = 13f
+            setTextColor(0xFFE6F5F7.toInt())
+            setPadding(14, 18, 14, 18)
+            movementMethod = android.text.method.ScrollingMovementMethod()
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF0D2531.toInt()); cornerRadius = 16f; setStroke(1, 0xFF2D8490.toInt())
+            }
+        }
+        val logHeight = (240 * resources.displayMetrics.density).toInt()
+        root.addView(log, LinearLayout.LayoutParams(-1, logHeight))
         root.addView(action("← वापस") { finish() })
-        setContentView(root)
+        val pageScroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        }
+        setContentView(pageScroll)
         handleCouncilOperatorPlan(intent)
     }
 
@@ -71,19 +90,25 @@ class OperatorActivity : Activity() {
     /** Shows restart-recovery evidence and asks before scheduling any remaining steps. */
     private fun reviewInterruptedOperatorActions() {
         Thread {
-            val engine = OperatorEngine(
-                emit = { event -> runOnUiThread {
-                    log.text = "${event.state}: ${event.message}\n" + log.text.take(4500)
-                } },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
-            )
-            val brain = `in`.shraddha.ai.future.MainBrain(
-                executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
-                audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
-                context = this@OperatorActivity
-            )
-            val reviews = runCatching { brain.reviewInterruptedWorkflows() }.getOrDefault(emptyList())
+            val reviewBundle = runCatching {
+                val engine = OperatorEngine(
+                    emit = { event -> runOnUiThread {
+                        log.text = "${event.state}: ${event.message}\n" + log.text.take(4500)
+                    } },
+                    audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) }
+                )
+                val brain = `in`.shraddha.ai.future.MainBrain(
+                    executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                    audit = { event, outcome, detail -> LocalAuditTrail(this@OperatorActivity).append(event, outcome, detail) },
+                    context = this@OperatorActivity
+                )
+                brain to brain.reviewInterruptedWorkflows()
+            }
             runOnUiThread {
+                val (brain, reviews) = reviewBundle.getOrElse { error ->
+                    log.text = "Encrypted Main Brain recovery state could not be opened. No action was replayed. ${error.localizedMessage ?: "Secure storage unavailable"}\n" + log.text.take(4500)
+                    return@runOnUiThread
+                }
                 if (reviews.isEmpty()) {
                     log.text = "कोई ऐसा interrupted Operator action नहीं मिला जिसके लिए journal उपलब्ध हो।\n" + log.text.take(4500)
                     return@runOnUiThread
@@ -101,17 +126,23 @@ class OperatorActivity : Activity() {
                         val selected = reviews[which]
                         val machineVerified = selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.VERIFIED_COMPLETE ||
                             selected.recovery == `in`.shraddha.ai.operator.OperatorActionJournal.Recovery.MANUALLY_VERIFIED
+                        val journalUnreadable = selected.action == "journal_unreadable"
                         android.app.AlertDialog.Builder(this@OperatorActivity)
-                            .setTitle(if (machineVerified) "अगले चरण जारी करें?" else "पहले action स्वयं जाँचें")
+                            .setTitle(when {
+                                journalUnreadable -> "Secure journal unavailable"
+                                machineVerified -> "अगले चरण जारी करें?"
+                                else -> "पहले action स्वयं जाँचें"
+                            })
                             .setMessage(
-                                if (machineVerified)
-                                    "पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।"
-                                else
-                                    "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
+                                when {
+                                    journalUnreadable -> "Encrypted action journal नहीं पढ़ी जा सकी। पुराना action सुरक्षित रूप से verify नहीं हो सकता। कोई workflow resume या action replay नहीं होगा। App data reset करने से पहले recovery पर सहायता लें।"
+                                    machineVerified -> "पिछला action स्क्रीन के प्रमाण से पूरा मिला। केवल उसके बाद के बाकी steps चलेंगे; पूरा workflow दोबारा नहीं चलेगा। संवेदनशील steps पर फिर अनुमति माँगी जाएगी।"
+                                    else -> "Shraddha AI इस action का परिणाम अपने आप प्रमाणित नहीं कर सकी। पहले ${selected.packageName} ऐप खोलकर जाँचें कि पिछला action पूरा हुआ या नहीं। यदि पूरा हुआ है तभी यहाँ लौटकर पुष्टि करें। अनिश्चित होने पर Cancel चुनें।"
+                                }
                             )
                             .setNegativeButton("रद्द करें", null)
-                            .setNeutralButton(if (machineVerified) null else "ऐप खोलकर स्क्रीन verify करें") { _, _ ->
-                                if (!machineVerified) {
+                            .setNeutralButton(if (machineVerified || journalUnreadable) null else "ऐप खोलकर स्क्रीन verify करें") { _, _ ->
+                                if (!machineVerified && !journalUnreadable) {
                                     val launchIntent = packageManager.getLaunchIntentForPackage(selected.packageName)
                                     if (launchIntent == null) {
                                         Toast.makeText(this@OperatorActivity, "Target app नहीं खुल सका। आप उसे manually खोलकर जाँच सकते हैं।", Toast.LENGTH_LONG).show()
@@ -133,8 +164,10 @@ class OperatorActivity : Activity() {
                                     }
                                 }
                             }
-                            .setPositiveButton(if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
-                                Thread {
+                            .setPositiveButton(if (journalUnreadable) "ठीक है" else if (machineVerified) "जारी करें" else "मैंने जाँच लिया; जारी करें") { _, _ ->
+                                if (journalUnreadable) {
+                                    log.text = "Secure journal unreadable है। कोई action execute या resume नहीं किया गया।\n" + log.text.take(4500)
+                                } else Thread {
                                     val queued = brain.resumeInterruptedWorkflow(
                                         selected.workflowId,
                                         manuallyVerified = !machineVerified
@@ -160,10 +193,17 @@ class OperatorActivity : Activity() {
     /** Shows the latest voice-tool action journal after restart; never replays an interrupted tool. */
     private fun reviewInterruptedVoiceAction() {
         Thread {
-            val entry = runCatching {
-                VoiceToolActionJournal(this@OperatorActivity).latest()
-            }.getOrNull()
+            val journalResult = runCatching {
+                VoiceToolActionJournal(this@OperatorActivity).latestResult()
+            }.getOrElse { Result.failure(it) }
             runOnUiThread {
+                val entry = journalResult.getOrElse { error ->
+                    android.app.AlertDialog.Builder(this@OperatorActivity)
+                        .setTitle("Voice Action Journal recovery error")
+                        .setMessage("Encrypted journal नहीं पढ़ी जा सकी। Saved data सुरक्षित रखा गया है; कोई नया action शुरू न करें। ${error.localizedMessage ?: "Secure storage unavailable"}")
+                        .setPositiveButton("ठीक है", null).show()
+                    return@runOnUiThread
+                }
                 if (entry == null) {
                     android.app.AlertDialog.Builder(this@OperatorActivity)
                         .setTitle("Voice Action Journal")
@@ -171,11 +211,11 @@ class OperatorActivity : Activity() {
                         .setPositiveButton("ठीक है", null).show()
                     return@runOnUiThread
                 }
-                val interrupted = entry.state == "EXECUTING"
+                val interrupted = entry.state in setOf("EXECUTING", "FAILED")
                 val details = "Tool: ${entry.tool}\nस्थिति: ${entry.state}\nResult: ${entry.resultStatus.ifBlank { "अभी उपलब्ध नहीं" }}\nAction: ${entry.action.ifBlank { "अभी सत्यापित नहीं" }}\nसमय: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.updatedAt))}"
                 android.app.AlertDialog.Builder(this@OperatorActivity)
                     .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
-                    .setMessage(details + if (interrupted) "\n\nफोन बंद/restart होने के समय action चल रहा था। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
+                    .setMessage(details + if (interrupted) "\n\nपिछले action का परिणाम सुरक्षित रूप से confirm नहीं हुआ। इसे दोबारा अपने-आप नहीं चलाया जाएगा। Target app खोलकर परिणाम स्वयं जाँचें।" else "\n\nयह केवल दर्ज किया गया परिणाम है; external delivery की गारंटी नहीं।")
                     .setPositiveButton(if (interrupted) "मैंने target app जाँच लिया" else "ठीक है") { _, _ ->
                         if (interrupted) {
                             val verified = runCatching {
@@ -389,7 +429,7 @@ class OperatorActivity : Activity() {
         val result = NaturalLanguageWorkflowRouter.route(commandInput.text.toString(), profile)
         val route = result.route
         if (route == null) { log.text = result.message; return }
-        val variables = EditText(this).apply { hint = "अन्य मान: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
+        val variables = field("अन्य मान: customer_name=Rahul, phone=...")
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
             .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा। जोखिम वाले चरण पर अलग से अनुमति माँगी जाएगी।")
@@ -408,7 +448,7 @@ class OperatorActivity : Activity() {
             val profile = profiles.first { p -> p.workflows.keys.any { "${p.displayName} • $it" == labels[which] } }
             val name = labels[which].substringAfter(" • ")
             val steps = profile.workflows[name].orEmpty()
-            val vars = EditText(this).apply { hint = "Variable values: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
+            val vars = field("Variable values: customer_name=Rahul, phone=...")
             val container = LinearLayout(this).apply { setPadding(24, 12, 24, 0); addView(vars) }
             val checkpoint = AdaptiveWorkflowRunner(this) { }.resumableCheckpoint(profile, name)
             val dialog = android.app.AlertDialog.Builder(this).setTitle("Workflow: $name")
@@ -459,14 +499,21 @@ class OperatorActivity : Activity() {
         }.start()
     }
     private fun field(hintText: String) = EditText(this).apply {
-        hint = hintText; setHintTextColor(0xFF8290AA.toInt()); setTextColor(Color.WHITE); textSize = 14f
-        setSingleLine(true); setPadding(14, 10, 14, 10)
-        background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF172238.toInt()); cornerRadius = 18f; setStroke(1, 0xFF354565.toInt()) }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+        hint = hintText; setHintTextColor(0xFF8BAFB8.toInt()); setTextColor(0xFFF0FBFC.toInt()); textSize = 14f
+        setSingleLine(true); setPadding(16, 12, 16, 12)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 }
     }
     private fun action(label: String, click: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
-        setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f
+        setPadding(18, 10, 18, 10)
+        setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
     /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */
     private fun runOperatorStep(step: OperatorStep) {

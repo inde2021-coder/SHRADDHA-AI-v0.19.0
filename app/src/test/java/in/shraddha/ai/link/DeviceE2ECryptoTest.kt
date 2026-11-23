@@ -3,6 +3,7 @@ package `in`.shraddha.ai.link
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class DeviceE2ECryptoTest {
@@ -30,6 +31,26 @@ class DeviceE2ECryptoTest {
         } catch (_: javax.crypto.AEADBadTagException) {
             // Expected: ciphertext is authenticated, not merely encrypted.
         }
+    }
+
+
+    @Test fun quickShareCategoryAndOneTimeRequestAreBoundToAesGcmAad() {
+        val sender = DeviceE2ECrypto.create()
+        val receiver = DeviceE2ECrypto.create()
+        val senderKey = sender.derivePeerKey(receiver.publicKeyBase64(), "sender", "receiver").first
+        val receiverKey = receiver.derivePeerKey(sender.publicKeyBase64(), "receiver", "sender").first
+        val requestId = "shareRequest123456"
+        val aad = "session|sender|receiver|data_share_payload|$requestId|media".toByteArray(Charsets.UTF_8)
+        val payload = """{"fileName":"photo.jpg","sizeBytes":4,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","payload":"/////w=="}""".toByteArray()
+        val sealed = DeviceE2ECrypto.encrypt(senderKey, payload, aad)
+        val opened = DeviceE2ECrypto.decrypt(receiverKey, sealed.nonce, sealed.ciphertext, aad)
+        assertArrayEquals(payload, opened)
+        val wrongCategory = "session|sender|receiver|data_share_payload|$requestId|documents".toByteArray(Charsets.UTF_8)
+        assertThrows(javax.crypto.AEADBadTagException::class.java) {
+            DeviceE2ECrypto.decrypt(receiverKey, sealed.nonce, sealed.ciphertext, wrongCategory)
+        }
+        senderKey.fill(0)
+        receiverKey.fill(0)
     }
 
     @Test fun peersWithDifferentEphemeralKeysDoNotDeriveSameSecret() {

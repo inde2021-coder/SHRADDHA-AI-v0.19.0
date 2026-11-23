@@ -16,8 +16,12 @@ data class ChatTurn(
     val text: String
 )
 
+data class ProviderTokenUsage(val provider: String, val model: String, val inputTokens: Long, val outputTokens: Long) {
+    init { require(provider.isNotBlank() && model.isNotBlank()); require(inputTokens >= 0L && outputTokens >= 0L) }
+}
+
 sealed class ChatReplyResult {
-    data class Success(val text: String) : ChatReplyResult()
+    data class Success(val text: String, val tokenUsage: ProviderTokenUsage? = null) : ChatReplyResult()
     data class Error(val message: String) : ChatReplyResult()
 }
 
@@ -189,7 +193,12 @@ object GeminiTextClient {
                 if (parts != null && parts.length() > 0) {
                     val text = parts.getJSONObject(0).optString("text", "")
                     return if (text.isNotBlank()) {
-                        ChatReplyResult.Success(text)
+                        val usage = json.optJSONObject("usageMetadata")?.let { metadata ->
+                            val input = metadata.optLong("promptTokenCount", -1L)
+                            val output = metadata.optLong("candidatesTokenCount", -1L)
+                            if (input >= 0L && output >= 0L) ProviderTokenUsage("GEMINI", modelName.removePrefix("models/"), input, output) else null
+                        }
+                        ChatReplyResult.Success(text, usage)
                     } else {
                         ChatReplyResult.Error("The model returned an empty reply.")
                     }

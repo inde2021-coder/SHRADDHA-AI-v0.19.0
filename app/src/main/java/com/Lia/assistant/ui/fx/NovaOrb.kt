@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.LocalNovaReducedMotion
 import com.Lia.assistant.voice.NovaOrbState
@@ -52,7 +53,7 @@ fun NovaOrb(
     size: Dp = 160.dp,
     amplitude: Float = 0f,
     style: NovaOrbStyle = NovaOrbStyle.NOVA,
-    assistantName: String = "Lia"
+    assistantName: String = AssistantBrand.NAME
 ) {
     val colors = LocalNovaColors.current
     val reducedMotion = LocalNovaReducedMotion.current

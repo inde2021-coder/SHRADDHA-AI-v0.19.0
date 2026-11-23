@@ -21,6 +21,8 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.OperatorActivity
 import `in`.shraddha.ai.operator.files.FileAccessActivity
 import `in`.shraddha.ai.notes.NoteOcrActivity
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /**
  * Mobile counterpart of the Windows companion command centre.
@@ -29,7 +31,18 @@ import `in`.shraddha.ai.notes.NoteOcrActivity
 class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var command: EditText
+    private lateinit var assistantName: String
     private var speechLanguage = "hi-IN"
+    private var torchEnabled = false
+    private val cameraPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) runCatching {
+            torchEnabled = !torchEnabled
+            status.text = MobileHardwareController.setTorch(this, torchEnabled)
+        }.onFailure { status.text = "Flashlight control failed: ${it.message}" }
+        else status.text = "Flashlight के लिए Camera permission नहीं मिली।"
+    }
     private val voiceResultLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -43,13 +56,16 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speechLanguage = getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE).getString("speech_language", "hi-IN") ?: "hi-IN"
+        assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 20, 20, 20)
-            setBackgroundColor(Color.rgb(9, 13, 25))
+            setBackgroundColor(Color.rgb(7, 15, 25))
         }
         root.addView(TextView(this).apply {
-            text = "SHRADDHA • MOBILE COMMAND CENTER"
+            text = "$assistantName • MOBILE COMMAND CENTER"
             textSize = 19f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
@@ -59,15 +75,15 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             text = "Android पर PC जैसे tools • Hindi + English • User permission required"
             textSize = 12f
             gravity = Gravity.CENTER
-            setTextColor(0xFFB9C5DD.toInt())
+            setTextColor(0xFF73DDE7.toInt())
             setPadding(0, 0, 0, 14)
         })
         command = EditText(this).apply {
             hint = "जैसे: आवाज बढ़ाओ, Chrome खोलो, वेब पर खोजो मौसम"
             setTextColor(Color.WHITE)
-            setHintTextColor(0xFF8793AA.toInt())
+            setHintTextColor(0xFF8BAFB8.toInt())
             setPadding(14, 12, 14, 12)
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt()) }
         }
         root.addView(command)
         root.addView(action("🎙️ Voice Control • बोलकर command दें") { captureVoice() })
@@ -107,11 +123,17 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         root.addView(action("System Settings • display / sound / permissions") {
             startActivity(Intent(Settings.ACTION_SETTINGS))
         })
+        root.addView(action("📱 Mobile Hardware • Battery / RAM / Storage / Network") { showMobileHardwareStatus() })
+        root.addView(action("🔆 Phone Brightness • Set 0–100%") { askMobilePercent("brightness") })
+        root.addView(action("🔊 Phone Volume • Set 0–100%") { askMobilePercent("volume") })
+        root.addView(action("🔦 Flashlight • ON / OFF") { togglePhoneTorch() })
+        root.addView(action("📶 Wi-Fi / Bluetooth / Internet / NFC") { showConnectivityControls() })
+        root.addView(action("⚙️ Display / Sound / Battery / Location / Permissions") { showSystemControls() })
         root.addView(action("Notes + Hindi / English OCR") { startActivity(Intent(this, NoteOcrActivity::class.java)) })
         status = TextView(this).apply {
             text = "तैयार। कुछ controls के लिए Accessibility service चालू करें। Android protected settings को सीधे बदलने के बजाय system settings खोलेगा।"
             textSize = 13f
-            setTextColor(0xFFE0E6F5.toInt())
+            setTextColor(0xFFE6F5F7.toInt())
             setPadding(12, 16, 12, 16)
         }
         root.addView(status)
@@ -119,15 +141,22 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
+        intent.getStringExtra("mobile_control_command")?.takeIf { it.isNotBlank() }?.let { pending ->
+            command.post { runCommand(pending) }
+        }
     }
 
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
-        setTextColor(Color.WHITE)
-        backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44377D.toInt())
+        setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f
+        setPadding(18, 10, 18, 10)
         setOnClickListener { run() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
     }
 
     private fun chooseVoiceLanguage() {
@@ -146,7 +175,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (speechLanguage == "hi-IN") "hi-IN,en-IN" else "en-IN,hi-IN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha को mobile command बताइए")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "$assistantName को mobile command बताइए")
         }
         runCatching { voiceResultLauncher.launch(intent) }
             .onFailure { status.text = "Speech recognition इस फोन पर उपलब्ध नहीं है।" }
@@ -157,6 +186,36 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         if (text.isBlank()) { status.text = "पहले command बोलें या लिखें।"; return }
         val lower = text.lowercase(Locale.ROOT)
         when {
+            lower.matches(Regex("^(?:set )?(?:phone )?volume (?:100|[0-9]{1,2})%?$")) ||
+                lower.matches(Regex("^(?:फोन|मोबाइल) का वॉल्यूम (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) -> {
+                val percent = lower.filter { it.isDigit() }.toInt()
+                runCatching { status.text = MobileHardwareController.setMediaVolume(this, percent) }
+                    .onFailure { status.text = it.message ?: "Volume control failed." }
+            }
+            lower.matches(Regex("^(?:set )?(?:phone )?brightness (?:100|[0-9]{1,2})%?$")) ||
+                lower.matches(Regex("^(?:फोन|मोबाइल) की ब्राइटनेस (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) -> {
+                val percent = lower.filter { it.isDigit() }.toInt()
+                runCatching { status.text = MobileHardwareController.setBrightness(this, percent) }
+                    .onFailure { status.text = it.message ?: "Brightness control failed." }
+            }
+            lower in listOf("flashlight on", "torch on", "टॉर्च चालू करो", "फ्लैशलाइट चालू करो") -> {
+                torchEnabled = true
+                runCatching { status.text = MobileHardwareController.setTorch(this, true) }
+                    .onFailure { status.text = "Flashlight failed: ${it.message}" }
+            }
+            lower in listOf("flashlight off", "torch off", "टॉर्च बंद करो", "फ्लैशलाइट बंद करो") -> {
+                torchEnabled = false
+                runCatching { status.text = MobileHardwareController.setTorch(this, false) }
+                    .onFailure { status.text = "Flashlight failed: ${it.message}" }
+            }
+            lower in listOf("mobile hardware status", "phone status", "फोन की जानकारी बताओ", "मोबाइल का स्टेटस बताओ") -> showMobileHardwareStatus()
+            lower in listOf("wifi settings", "वाईफाई सेटिंग खोलो") -> openMobileSetting("wifi")
+            lower in listOf("bluetooth settings", "ब्लूटूथ सेटिंग खोलो") -> openMobileSetting("bluetooth")
+            lower in listOf("internet settings", "इंटरनेट सेटिंग खोलो") -> openMobileSetting("internet")
+            lower in listOf("location settings", "लोकेशन सेटिंग खोलो") -> openMobileSetting("location")
+            lower in listOf("battery settings", "बैटरी सेटिंग खोलो") -> openMobileSetting("battery")
+            lower in listOf("display settings", "डिस्प्ले सेटिंग खोलो", "auto rotate settings", "ऑटो रोटेट सेटिंग खोलो") -> openMobileSetting("display")
+            lower in listOf("do not disturb settings", "dnd settings", "डू नॉट डिस्टर्ब सेटिंग खोलो") -> openMobileSetting("dnd")
             lower in listOf("आवाज बढ़ाओ", "volume up", "volume बढ़ाओ", "आवाज तेज करो") -> {
                 (getSystemService(Context.AUDIO_SERVICE) as AudioManager).adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                 status.text = "Volume बढ़ाया।"
@@ -187,6 +246,69 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         }
     }
 
+    private fun askMobilePercent(kind: String) {
+        val isBrightness = kind == "brightness"
+        val dialog = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = "0–100"
+            setText(if (isBrightness) "50" else "50")
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(if (isBrightness) "Phone brightness %" else "Phone volume %")
+            .setView(dialog)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Apply") { _, _ ->
+                val value = dialog.text.toString().toIntOrNull()
+                if (value == null || value !in 0..100) {
+                    status.text = "कृपया 0 से 100 के बीच संख्या दें।"
+                } else runCatching {
+                    status.text = if (isBrightness) MobileHardwareController.setBrightness(this, value)
+                                  else MobileHardwareController.setMediaVolume(this, value)
+                }.onFailure { status.text = it.message ?: "Control failed." }
+            }.show()
+    }
+
+    private fun togglePhoneTorch() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+            return
+        }
+        torchEnabled = !torchEnabled
+        runCatching { status.text = MobileHardwareController.setTorch(this, torchEnabled) }
+            .onFailure { torchEnabled = false; status.text = "Flashlight control failed: ${it.message}" }
+    }
+
+    private fun showMobileHardwareStatus() {
+        runCatching {
+            val data = MobileHardwareController.status(this)
+            status.text = data.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+        }.onFailure { status.text = "Mobile hardware status unavailable: ${it.message}" }
+    }
+
+    private fun openMobileSetting(name: String) {
+        runCatching {
+            startActivity(MobileHardwareController.settingsIntent(name))
+            status.text = "${name.replaceFirstChar { it.uppercase() }} settings Android system में खोली गई।"
+        }.onFailure {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+            status.text = "इस device पर direct settings panel उपलब्ध नहीं; main Settings खोली।"
+        }
+    }
+
+    private fun showConnectivityControls() {
+        val labels = arrayOf("Wi-Fi", "Bluetooth", "Internet / SIM", "NFC")
+        val keys = arrayOf("wifi", "bluetooth", "internet", "nfc")
+        android.app.AlertDialog.Builder(this).setTitle("Connectivity controls")
+            .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
+    }
+
+    private fun showSystemControls() {
+        val labels = arrayOf("Display / Auto-rotate / Screen timeout", "Sound", "Battery saver", "Location", "Do Not Disturb", "Accessibility", "Notification access", "Apps", "Storage", "Date & time", "Language", "Security")
+        val keys = arrayOf("display", "sound", "battery", "location", "dnd", "accessibility", "notifications", "apps", "storage", "date", "language", "security")
+        android.app.AlertDialog.Builder(this).setTitle("Phone system controls")
+            .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
+    }
+
     private fun openMainPage(page: String) {
         startActivity(Intent(this, `in`.shraddha.ai.MainActivity::class.java).putExtra("initial_page", page))
     }
@@ -198,12 +320,14 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             setText(existing)
             hint = "यहाँ text paste करें या पहले clipboard से पढ़ें"
             setTextColor(Color.WHITE)
-            setHintTextColor(0xFF8793AA.toInt())
+            setHintTextColor(0xFF8BAFB8.toInt())
             minLines = 5
             maxLines = 12
             gravity = android.view.Gravity.TOP
-            setPadding(14, 12, 14, 12)
-            setBackgroundColor(0xFF172238.toInt())
+            setPadding(16, 14, 16, 14)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
         }
         val choices = arrayOf("Trim spaces", "UPPERCASE", "lowercase", "Collapse whitespace", "Remove blank lines")
         val dialog = android.app.AlertDialog.Builder(this)
@@ -220,7 +344,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                     .setMessage(transformed.take(3500))
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Copy to Clipboard") { _, _ ->
-                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Shraddha transformed text", transformed))
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(assistantName + " transformed text", transformed))
                         status.text = "Transformed text clipboard में copy किया।"
                     }.show()
             }

@@ -50,27 +50,46 @@ object ApiKeyStore {
         val ciphertext = prefs.getString(ENCRYPTED_KEY, null)
         val ivText = prefs.getString(IV_KEY, null)
 
-        if (ciphertext.isNullOrBlank() || ivText.isNullOrBlank()) {
+        if (ciphertext.isNullOrBlank() && ivText.isNullOrBlank()) {
             // Migrate old plaintext values once; never leave the old preference behind.
             val legacy = prefs.getString(LEGACY_KEY, "").orEmpty().trim()
             if (legacy.isNotEmpty()) {
+                // saveKey commits the encrypted value and removes the legacy field atomically.
                 saveKey(context, legacy)
-                prefs.edit().remove(LEGACY_KEY).apply()
                 return legacy
             }
             return ""
         }
 
         return try {
+            require(!ciphertext.isNullOrBlank() && !ivText.isNullOrBlank()) {
+                "Saved GEMINI API-key ciphertext is incomplete; existing data was preserved."
+            }
             val iv = Base64.decode(ivText, Base64.NO_WRAP)
             val encrypted = Base64.decode(ciphertext, Base64.NO_WRAP)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, iv))
-            String(cipher.doFinal(encrypted), Charsets.UTF_8)
-        } catch (_: Exception) {
-            // A restored preference without its original Keystore key cannot be decrypted.
-            prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).apply()
-            ""
+            try {
+                val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                    ?: error("Gemini API-key encryption key is missing; refusing to replace it while encrypted key data still exists.")
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+                val clear = cipher.doFinal(encrypted)
+                try {
+                    String(clear, Charsets.UTF_8)
+                } finally {
+                    clear.fill(0)
+                }
+            } finally {
+                iv.fill(0)
+                encrypted.fill(0)
+            }
+        } catch (error: Exception) {
+            // Never destroy ciphertext on a read failure: a transient Keystore error or
+            // device restore must not silently erase the user's only copy of the key.
+            throw IllegalStateException(
+                "The saved GEMINI API key could not be decrypted. Re-enter the key if this device's Keystore was reset.",
+                error
+            )
         }
     }
 
@@ -78,19 +97,33 @@ object ApiKeyStore {
     fun saveKey(context: Context, key: String) {
         val prefs = getPrefs(context)
         val trimmed = key.trim()
+        require(trimmed.length <= 512) { "GEMINI API key is too long." }
         if (trimmed.isEmpty()) {
-            prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).apply()
+            check(prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).commit()) {
+                "Could not remove the stored GEMINI API key."
+            }
             return
         }
 
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
-        val encrypted = cipher.doFinal(trimmed.toByteArray(Charsets.UTF_8))
-        prefs.edit()
-            .putString(ENCRYPTED_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .remove(LEGACY_KEY)
-            .apply()
+        val clear = trimmed.toByteArray(Charsets.UTF_8)
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
+            val encrypted = cipher.doFinal(clear)
+            val iv = cipher.iv
+            try {
+                check(prefs.edit()
+                    .putString(ENCRYPTED_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(IV_KEY, Base64.encodeToString(iv, Base64.NO_WRAP))
+                    .remove(LEGACY_KEY)
+                    .commit()) { "Could not persist the encrypted GEMINI API key." }
+            } finally {
+                encrypted.fill(0)
+                iv.fill(0)
+            }
+        } finally {
+            clear.fill(0)
+        }
     }
 
     fun hasKey(context: Context): Boolean = getKey(context).isNotEmpty()

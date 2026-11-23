@@ -1,6 +1,8 @@
 package `in`.shraddha.ai.keyboard
 
 import android.inputmethodservice.InputMethodService
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import android.graphics.Color
 import android.view.View
 import android.view.inputmethod.InputConnection
@@ -26,7 +28,8 @@ class ShraddhaKeyboardService : InputMethodService() {
         val shortcuts = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf("आज की तारीख", "धन्यवाद", "जी हाँ", "कृपया संपर्क करें").forEach { value -> shortcuts.addView(key(value) { currentInputConnection?.commitText(value, 1) }) }
         panel.addView(shortcuts)
-        val info = Button(this).apply { text = "Shraddha AI • Voice dictation के लिए ऐप का Talk बटन खोलें"; isAllCaps = false; setOnClickListener { requestHideSelf(0); Toast.makeText(this@ShraddhaKeyboardService, "Shraddha AI खोलकर Talk दबाएँ।", Toast.LENGTH_SHORT).show() } }
+        val assistantName = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME).trim().ifBlank { AssistantBrand.NAME }
+        val info = Button(this).apply { text = "$assistantName • Voice dictation के लिए ऐप का Talk बटन खोलें"; isAllCaps = false; setOnClickListener { requestHideSelf(0); Toast.makeText(this@ShraddhaKeyboardService, "$assistantName खोलकर Talk दबाएँ।", Toast.LENGTH_SHORT).show() } }
         panel.addView(info)
         return panel
     }

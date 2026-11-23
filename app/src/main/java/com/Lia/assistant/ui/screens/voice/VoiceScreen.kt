@@ -21,13 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -74,20 +70,11 @@ fun VoiceScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasKey by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
 
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasKey = VoiceGatewaySettings.isConfigured(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
     val state by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
-    val muted by VoiceSessionManager.muted.collectAsState()
+    val isActive by VoiceSessionManager.isActive.collectAsState()
     val statusText by VoiceSessionManager.statusText.collectAsState()
+    val microphoneReady = isActive && state !in setOf(NovaOrbState.IDLE, NovaOrbState.CONNECTING, NovaOrbState.ERROR)
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val orbSize = screenWidth * 0.70f
@@ -101,19 +88,24 @@ fun VoiceScreen(
         )
     }
 
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasKey = VoiceGatewaySettings.isConfigured(context)
+                hasRecordAudioPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasRecordAudioPermission = isGranted
         if (isGranted) {
-            VoiceForegroundService.start(context)
-        }
-    }
-
-    LaunchedEffect(hasRecordAudioPermission, hasKey) {
-        if (!hasRecordAudioPermission) {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        } else if (hasKey && !VoiceSessionManager.isActive.value) {
             VoiceForegroundService.start(context)
         }
     }
@@ -235,70 +227,50 @@ fun VoiceScreen(
                 }
             }
 
-            // Bottom Frosted Controls: Mute, Stop, Close
-            val frostedShape = RoundedCornerShape(50)
-            Row(
-                modifier = Modifier
-                    .depthSurface(shape = frostedShape, elevation = 4.dp)
-                    .clip(frostedShape)
-                    .background(colors.surfaceGlass)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Mute toggle
+            if (hasKey && hasRecordAudioPermission) {
+                // One microphone control: tap once to end the active session,
+                // tap again to start it. The close control above only dismisses this screen.
+                val micShape = RoundedCornerShape(50)
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(if (muted) colors.surfaceBorder else colors.surfaceRaised)
-                        .clickable { VoiceSessionManager.toggleMute() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (muted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = "Mute",
-                        tint = if (muted) colors.error else colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                // Stop button (large, red-tinted)
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF8B2535))
+                        .depthSurface(shape = micShape, elevation = 6.dp)
+                        .clip(micShape)
+                        .background(colors.surfaceGlass)
                         .clickable {
-                            VoiceForegroundService.stop(context)
-                            navController.popBackStack()
-                        },
+                            if (isActive) VoiceForegroundService.stop(context)
+                            else if (hasKey && hasRecordAudioPermission) VoiceForegroundService.start(context)
+                        }
+                        .padding(horizontal = 28.dp, vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = "Stop Voice Session",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = when {
+                                !isActive -> "Turn microphone on"
+                                state == NovaOrbState.CONNECTING -> "Cancel voice connection"
+                                state == NovaOrbState.ERROR -> "Stop voice session with an error"
+                                else -> "Turn microphone off"
+                            },
+                            tint = if (microphoneReady) colors.accent else colors.textPrimary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Text(
+                            text = when {
+                                !isActive -> "MICROPHONE OFF · TAP TO TURN ON"
+                                state == NovaOrbState.CONNECTING -> "CONNECTING · TAP TO CANCEL"
+                                state == NovaOrbState.ERROR -> "VOICE SESSION ERROR · TAP TO STOP"
+                                else -> "MICROPHONE ON · TAP TO TURN OFF"
+                            },
+                            color = colors.textPrimary,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
 
-                // Close / dismiss button
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceRaised)
-                        .clickable { navController.popBackStack() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Voice Screen",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
         }
     }

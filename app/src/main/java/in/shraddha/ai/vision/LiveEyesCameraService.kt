@@ -18,6 +18,8 @@ import android.os.HandlerThread
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.link.DeviceLinkManager
 import java.util.concurrent.atomic.AtomicBoolean
@@ -38,18 +40,31 @@ class LiveEyesCameraService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            publishState(STATE_OFF)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // A null, stale or unknown service intent must never turn on the camera.
+        if (intent?.action != ACTION_START) {
+            publishState(STATE_OFF)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // Android 14+ can reject a camera foreground-service start when CAMERA
+        // permission is absent. Check before startForeground so revocation fails closed
+        // without crashing the process or briefly advertising an active camera session.
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            publishState(STATE_OFF)
             stopSelf()
             return START_NOT_STICKY
         }
         stopped = false
-        startForeground(NOTIFICATION_ID, notification("Shraddha AI Eyes चालू हैं"))
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        publishState(STATE_STARTING)
+        val assistantName = assistantName()
+        startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
         val config = VoiceGatewaySettings.get(this)
-        if (!config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
-            updateNotification("पहले Settings में सुरक्षित AI backend जोड़ें")
+        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
+            updateNotification((config.readError ?: "पहले Settings में सुरक्षित AI backend जोड़ें").take(120))
             stopSelf()
             return START_NOT_STICKY
         }
@@ -64,15 +79,29 @@ class LiveEyesCameraService : Service() {
         val channelId = "shraddha_live_eyes"
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(channelId, "Shraddha AI Eyes", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(channelId, "${assistantName()} Eyes", NotificationManager.IMPORTANCE_LOW))
         }
         val stopIntent = Intent(this, LiveEyesCameraService::class.java).setAction(ACTION_STOP)
         val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
         val stopPendingIntent = PendingIntent.getService(this, 74, stopIntent, pendingFlags)
         return Notification.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Shraddha AI Eyes")
+            .setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("${assistantName()} Eyes")
             .setContentText(message).setOngoing(true)
             .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build()
+    }
+
+    private fun assistantName(): String =
+        NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME)
+            .trim().ifBlank { AssistantBrand.NAME }
+
+    private fun visionProvider(): String {
+        val selected = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
+            .trim().uppercase()
+        return if (selected in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
+            selected.lowercase()
+        } else {
+            "gemini"
+        }
     }
 
     private fun updateNotification(message: String) {
@@ -104,15 +133,31 @@ class LiveEyesCameraService : Service() {
                         jpeg.fill(0); requestInFlight.set(false); return@setOnImageAvailableListener
                     }
                     lastAnalysisAt = now
+                    // Run local OCR + streaming object tracking alongside cloud scene analysis.
+                    // Only concise derived observations are forwarded; raw frames are never stored here.
+                    LiveFrameIntelligence.analyzeJpeg(jpeg) { localResult ->
+                        if (!stopped) localResult.onSuccess { local ->
+                            val localContext = local.toContext()
+                            if (localContext.isNotBlank()) {
+                                VoiceSessionManager.updateLiveVisualContext(localContext)
+                                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(PREF_OBSERVATION, localContext).apply()
+                                val subtitlePreview = local.subtitles.replace('\n', ' ').take(90)
+                                updateNotification(
+                                    if (subtitlePreview.isNotBlank()) "Live text: $subtitlePreview"
+                                    else "Objects: " + local.objects.take(4).joinToString().take(80)
+                                )
+                            }
+                        }
+                    }
                     val context = previousObservation.takeLast(900)
                     val prompt = buildString {
-                        append("You are Shraddha AI's live visual eyes. Describe only what is clearly visible in this current camera view. ")
+                        append("You are " + assistantName() + "'s live visual eyes. Describe only what is clearly visible in this current camera view. ")
                         append("Identify useful objects, people only by visible non-sensitive context, text/signs, surroundings and safety-relevant changes. ")
                         append("Compare with the previous observation when useful; do not invent movement or details. ")
                         if (context.isNotBlank()) append("Previous observation: ").append(context).append(". ")
                         append("Give a concise natural Hindi response, 1-3 sentences. Current user request: बताओ अभी सामने क्या दिख रहा है और क्या बदला है?")
                     }
-                    DeviceLinkManager.analyzeScreen(baseUrl, token, "gemini", prompt, jpeg, "general") { result ->
+                    DeviceLinkManager.analyzeScreen(baseUrl, token, visionProvider(), prompt, jpeg, "general") { result ->
                         jpeg.fill(0)
                         if (!stopped) result.onSuccess { raw ->
                             val observation = raw.take(1200)
@@ -148,6 +193,7 @@ class LiveEyesCameraService : Service() {
                             override fun onConfigured(session: CameraCaptureSession) {
                                 if (camera !== device) { session.close(); return }
                                 runCatching { session.setRepeatingRequest(request, null, handler) }
+                                    .onSuccess { publishState(STATE_ACTIVE) }
                                     .onFailure { stopSelf() }
                             }
                             override fun onConfigureFailed(session: CameraCaptureSession) { stopSelf() }
@@ -170,6 +216,8 @@ class LiveEyesCameraService : Service() {
 
     override fun onDestroy() {
         stopped = true
+        publishState(STATE_OFF)
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(PREF_OBSERVATION).apply()
         closeCamera()
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         super.onDestroy()
@@ -177,7 +225,31 @@ class LiveEyesCameraService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun publishState(state: String) {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(PREF_STATE, state)
+            .putInt(PREF_PID, android.os.Process.myPid())
+            .apply()
+    }
+
     companion object {
+        private const val PREFS_NAME = "shraddha_live_eyes_state"
+        private const val PREF_STATE = "state"
+        private const val PREF_PID = "pid"
+        private const val PREF_OBSERVATION = "latest_observation"
+        const val STATE_OFF = "OFF"
+        const val STATE_STARTING = "STARTING"
+        const val STATE_ACTIVE = "ACTIVE"
+
+        fun getLatestObservation(context: Context): String = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_OBSERVATION, "").orEmpty()
+
+        fun getState(context: Context): String {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (prefs.getInt(PREF_PID, -1) != android.os.Process.myPid()) return STATE_OFF
+            return prefs.getString(PREF_STATE, STATE_OFF) ?: STATE_OFF
+        }
+
         const val ACTION_START = "in.shraddha.ai.action.LIVE_EYES_START"
         const val ACTION_STOP = "in.shraddha.ai.action.LIVE_EYES_STOP"
         private const val NOTIFICATION_ID = 73

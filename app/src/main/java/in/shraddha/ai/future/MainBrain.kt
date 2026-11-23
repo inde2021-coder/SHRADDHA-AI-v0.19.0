@@ -41,7 +41,8 @@ class MainBrain(
         fun createCouncilPlan(
             goal: String,
             workflowId: String,
-            title: String = goal.trim().take(120)
+            title: String = goal.trim().take(120),
+            context: Context? = null
         ): Pair<CouncilPlan, ShraddhaIntegrationHub.Session> {
             val council = AgentCouncil.plan(goal)
             val actions = council.roles.mapIndexed { index, role ->
@@ -55,7 +56,7 @@ class MainBrain(
                     estimatedMinutes = 10
                 )
             }
-            val session = ShraddhaIntegrationHub().createPlan(
+            val session = ShraddhaIntegrationHub(context = context).createPlan(
                 workflowId = workflowId,
                 title = title.ifBlank { "Shraddha AI Council plan" },
                 actions = actions
@@ -92,7 +93,12 @@ class MainBrain(
                     .put("action", "voice_action_result_not_journaled")
                     .put("message", "Website Forge launch का result सुरक्षित रूप से save नहीं हुआ। दोबारा launch करने से पहले Forge की स्थिति जाँचें।")
             }
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }
+                .getOrElse { error ->
+                    return JSONObject().put("status", "error")
+                        .put("action", "scheduler_storage_unavailable")
+                        .put("message", "Main Brain encrypted task history could not be opened; no voice action was started. ${error.localizedMessage ?: "Secure storage unavailable"}")
+                }
             val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "voice_tool").put("tool", toolName).put("args", args).toString()
             val submitted = runCatching {
@@ -106,7 +112,12 @@ class MainBrain(
                 return JSONObject().put("status", "error")
                     .put("message", error.message ?: "Main Brain could not queue the voice tool.")
             }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { error ->
+                return JSONObject().put("status", "error")
+                    .put("action", "scheduler_claim_failed")
+                    .put("message", error.localizedMessage ?: "Main Brain could not safely claim the voice action.")
+            }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return JSONObject().put("status", "scheduler_busy")
                     .put("message", "Main Brain is executing a higher-priority task. Please retry after it finishes.")
@@ -144,19 +155,46 @@ class MainBrain(
         }
 
         /** WorkManager remains the durable execution engine; all app enqueue requests enter here. */
-        fun enqueueBackgroundCouncil(context: Context, goal: String, provider: String, language: String = "AUTO"): UUID =
-            BackgroundTaskQueue.enqueueFromMainBrain(context.applicationContext, goal, provider, language)
+        fun enqueueBackgroundCouncil(
+            context: Context,
+            goal: String,
+            provider: String,
+            language: String = "AUTO",
+            specialistCount: Int = 3,
+            budget: CouncilExecutionBudget = CouncilExecutionBudget()
+        ): UUID = BackgroundTaskQueue.enqueueFromMainBrain(
+            context.applicationContext, goal, provider, language, specialistCount, budget
+        )
 
         /** Background workers call back through Main Brain rather than selecting providers themselves. */
-        fun executeBackgroundCouncil(
+        suspend fun executeBackgroundCouncil(
             context: Context,
             goal: String,
             language: String,
             provider: String,
+            specialistCount: Int = 3,
             shouldContinue: () -> Boolean,
-            onProgress: (String, Int, Int) -> Unit
+            onProgress: (String, Int, Int) -> Unit,
+            onStageCompleted: (String, String, String) -> Unit = { _, _, _ -> },
+            resumeStages: Map<String, CouncilSavedStage> = emptyMap(),
+            budget: CouncilExecutionBudget = CouncilExecutionBudget(),
+            onProviderCall: (String, Int, Int, Long) -> Unit = { _, _, _, _ -> },
+            onTokenUsage: (com.Lia.assistant.voice.ProviderTokenUsage) -> Unit = { }
         ): Result<CouncilExecutionReport> =
-            AgentCouncil.executeWithConfiguredProvider(context.applicationContext, goal, language, provider, shouldContinue, onProgress)
+            AgentCouncil.executeParallelWithConfiguredProviders(
+                context = context.applicationContext,
+                goal = goal,
+                language = language,
+                preferredProviders = provider.split(',').map { it.trim().uppercase() }.filter { it.isNotBlank() },
+                specialistCount = specialistCount,
+                shouldContinue = shouldContinue,
+                onProgress = onProgress,
+                onStageCompleted = onStageCompleted,
+                resumeStages = resumeStages,
+                budget = budget,
+                onProviderCall = onProviderCall,
+                onTokenUsage = onTokenUsage
+            )
 
         /** Website Forge is a first-class scheduled Main Brain task, not a direct provider bypass. */
         suspend fun forgeWebsite(
@@ -165,7 +203,7 @@ class MainBrain(
             isEdit: Boolean,
             initialHtml: String?
         ): Boolean {
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }.getOrElse { return false }
             val taskId = "forge_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "website_forge")
                 .put("edit", isEdit).put("prompt", prompt.take(6000)).toString()
@@ -177,7 +215,8 @@ class MainBrain(
                     payload = payload
                 )))
             }.getOrElse { return false }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { return false }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return false
             }
@@ -211,7 +250,8 @@ class MainBrain(
             cloudProcessingConsent: Boolean,
             personalDataConsent: Boolean = false
         ): Result<`in`.shraddha.ai.operator.FormExtractionResult> {
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }
+                .getOrElse { return Result.failure(it) }
             val taskId = "form_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "form_extraction")
                 .put("formType", formType).put("provider", provider).toString()
@@ -223,7 +263,8 @@ class MainBrain(
                     payload = payload
                 )))
             }.getOrElse { return Result.failure(it) }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { return Result.failure(it) }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return Result.failure(IllegalStateException("Main Brain is busy with a higher-priority task."))
             }
@@ -259,7 +300,7 @@ class MainBrain(
                         .run(profile, workflowName, values, confirmed, resume)
                 }.getOrDefault(false)
             }
-            val scheduler = MainBrainSchedulerRuntime.get(appContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(appContext) }.getOrElse { return false }
             val taskId = "learned_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "learned_workflow")
                 .put("package", profile.packageName)
@@ -273,7 +314,8 @@ class MainBrain(
                     payload = payload
                 )))
             }.getOrElse { return false }
-            if (scheduler.claimSpecific(taskId) == null) {
+            val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { return false }
+            if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
                 return false
             }
@@ -409,10 +451,18 @@ class MainBrain(
     fun reviewInterruptedWorkflows(): List<InterruptedWorkflowReview> {
         val journal = actionJournal ?: return emptyList()
         return scheduler.snapshot()
-            .filter { it.state == SharedTaskScheduler.State.FAILED &&
-                it.error?.startsWith("Process stopped during execution; action was not replayed.") == true }
+            .filter { it.state == SharedTaskScheduler.State.FAILED }
             .mapNotNull { snapshot ->
-                val entry = journal.get(snapshot.task.id) ?: return@mapNotNull null
+                val entry = journal.getResult(snapshot.task.id).getOrElse { error ->
+                    audit("operator_recovery", "journal_unreadable",
+                        "workflow=" + snapshot.task.id + "; reason=" + (error.javaClass.simpleName))
+                    return@mapNotNull InterruptedWorkflowReview(
+                        snapshot.task.id, snapshot.task.title, "unknown",
+                        "journal_unreadable", "unknown (encrypted journal unavailable)",
+                        OperatorActionJournal.Recovery.REVIEW_REQUIRED
+                    )
+                } ?: return@mapNotNull null
+                if (entry.state !in setOf("EXECUTING", "FAILED")) return@mapNotNull null
                 val recovery = journal.reconcileInterrupted(snapshot.task.id)
                 audit("operator_recovery", recovery.name.lowercase(),
                     "workflow=" + snapshot.task.id + "; step=" + entry.stepId + "; action=" + entry.action)
@@ -421,20 +471,19 @@ class MainBrain(
             }
     }
 
-    /** Enqueue only the steps after a journal-verified interrupted action; never replays it. */
+    /** Enqueue only steps after a journal-verified or explicitly user-attested action; never replays it. */
     @Synchronized
     fun resumeInterruptedWorkflow(workflowId: String, manuallyVerified: Boolean = false): SharedTaskScheduler.Snapshot? {
         val journal = actionJournal ?: return null
         val original = scheduler.get(workflowId) ?: return null
-        if (original.state != SharedTaskScheduler.State.FAILED ||
-            original.error?.startsWith("Process stopped during execution; action was not replayed.") != true) return null
+        if (original.state != SharedTaskScheduler.State.FAILED) return null
         if (manuallyVerified && !journal.markManuallyVerified(workflowId)) return null
         val recovery = journal.reconcileInterrupted(workflowId)
         if (recovery !in setOf(
                 OperatorActionJournal.Recovery.VERIFIED_COMPLETE,
                 OperatorActionJournal.Recovery.MANUALLY_VERIFIED
             )) return null
-        val entry = journal.get(workflowId) ?: return null
+        val entry = journal.getResult(workflowId).getOrNull() ?: return null
         val request = decodeRequest(original.task.payload) ?: return null
         val completedIndex = request.actions.indexOfFirst { it.id == entry.stepId }
         if (completedIndex < 0) return null

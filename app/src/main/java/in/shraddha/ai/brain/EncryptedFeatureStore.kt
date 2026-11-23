@@ -20,6 +20,9 @@ class EncryptedFeatureStore(context: Context) {
     }
     private fun key(): SecretKey {
         existingKey()?.let { return it }
+        require(prefs.all.isEmpty()) {
+            "Encrypted feature-store key is missing; refusing to create a replacement while encrypted records exist."
+        }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
             init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -54,15 +57,19 @@ class EncryptedFeatureStore(context: Context) {
         require(parts.size == 2) { "Encrypted feature data format is invalid" }
         val iv = Base64.decode(parts[0], Base64.NO_WRAP)
         val encrypted = Base64.decode(parts[1], Base64.NO_WRAP)
-        require(iv.size == 12 && encrypted.size >= 16) { "Encrypted feature data parameters are invalid" }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val existingKey = existingKey() ?: error("Encrypted feature-store key is missing; refusing to create a new key for decryption")
-        cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
-        val clear = cipher.doFinal(encrypted)
         try {
-            String(clear, Charsets.UTF_8)
+            require(iv.size == 12 && encrypted.size >= 16) { "Encrypted feature data parameters are invalid" }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val existingKey = existingKey() ?: error("Encrypted feature-store key is missing; refusing to create a new key for decryption")
+            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(encrypted)
+            try {
+                String(clear, Charsets.UTF_8)
+            } finally {
+                clear.fill(0)
+            }
         } finally {
-            clear.fill(0)
+            iv.fill(0)
             encrypted.fill(0)
         }
     }
@@ -80,10 +87,13 @@ class EncryptedFeatureStore(context: Context) {
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey)
                 val encrypted = cipher.doFinal(plain)
-                val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
-                    Base64.encodeToString(encrypted, Base64.NO_WRAP)
-                editor.putString(name, payload)
-                encrypted.fill(0)
+                try {
+                    val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
+                        Base64.encodeToString(encrypted, Base64.NO_WRAP)
+                    editor.putString(name, payload)
+                } finally {
+                    encrypted.fill(0)
+                }
             } finally {
                 plain.fill(0)
             }
@@ -109,9 +119,12 @@ class EncryptedFeatureStore(context: Context) {
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey)
                 val encrypted = cipher.doFinal(plain)
-                editor.putString(name, Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
-                    Base64.encodeToString(encrypted, Base64.NO_WRAP))
-                encrypted.fill(0)
+                try {
+                    editor.putString(name, Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
+                        Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                } finally {
+                    encrypted.fill(0)
+                }
             } finally {
                 plain.fill(0)
             }

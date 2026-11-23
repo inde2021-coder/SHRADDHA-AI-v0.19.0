@@ -33,7 +33,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
 
     fun resumableCheckpoint(profile: AppTrainingProfile, workflowName: String): WorkflowCheckpoint? {
         val steps = profile.workflows[workflowName] ?: return null
-        val saved = checkpoints.get(profile.packageName, workflowName) ?: return null
+        val saved = checkpoints.getResult(profile.packageName, workflowName).getOrNull() ?: return null
         if (saved.workflowHash != checkpoints.fingerprint(steps) ||
             saved.totalSteps != steps.size ||
             saved.nextStep !in 0..steps.size ||
@@ -56,7 +56,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty() || steps.size > 100) return fail("वर्कफ़्लो खाली है या निर्धारित सीमा से बड़ा है।")
         val fingerprint = checkpoints.fingerprint(steps)
-        var saved = checkpoints.get(profile.packageName, workflowName)
+        var saved = checkpoints.getResult(profile.packageName, workflowName).getOrElse {
+            return fail("Encrypted workflow checkpoint could not be read. Existing checkpoint data was preserved; no workflow action was started.")
+        }
         var reconciledStartIndex: Int? = null
         if (resume && saved?.state == "EXECUTING") {
             // A process may die after the UI side effect but before the verified checkpoint
@@ -86,7 +88,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                     if (!checkpoints.save(saved.copy(nextStep = next, state = "READY", expectedText = ""))) {
                         return fail("Recovered action सत्यापित हुआ, लेकिन सुरक्षित checkpoint save नहीं हुआ। आगे कोई action नहीं चलेगा।")
                     }
-                    saved = checkpoints.get(profile.packageName, workflowName)
+                    saved = checkpoints.getResult(profile.packageName, workflowName).getOrElse {
+                        return fail("Recovered step was saved, but the updated checkpoint could not be read. No further action was started.")
+                    }
                     reconciledStartIndex = next
                     audit.append("operator_step", "recovered_verified", "${profile.packageName}:${recoveredStep.action}")
                     emit(OperatorEvent(OperatorTaskState.VERIFYING,
@@ -114,7 +118,9 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         // pre-authorize later destructive steps in the same workflow.
         var checkpointConfirmationAvailable =
             resume && saved?.state == "WAITING_CONFIRMATION" && confirmed
-        if (!resume) checkpoints.clear(profile.packageName, workflowName)
+        if (!resume && !checkpoints.clear(profile.packageName, workflowName)) {
+            return fail("Old workflow checkpoint could not be cleared safely. No workflow action was started.")
+        }
         if (startIndex >= steps.size) {
             checkpoints.clear(profile.packageName, workflowName)
             emit(OperatorEvent(OperatorTaskState.COMPLETED, "इस वर्कफ़्लो के सभी चरण पहले ही सत्यापित हो चुके हैं।"))
@@ -172,8 +178,13 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 "CLICK", "TAP" -> if (match != null && match.score >= .50f) ShraddhaAccessibilityService.clickByResourceId(match.element.id).let { clicked -> clicked || ShraddhaAccessibilityService.clickVisibleText(match.element.text.ifBlank { match.element.description }) } else false
                 "TYPE" -> {
                     val value = resolvedInput
-                    if (match != null && match.element.id.isNotBlank()) ShraddhaAccessibilityService.fillByResourceId(match.element.id, value)
-                    else ShraddhaAccessibilityService.fillFocusedField(value)
+                    // Never fall back to whichever field happens to have focus.
+                    // A workflow must identify one trained, visible, non-sensitive field.
+                    if (match != null && match.score >= .50f && match.element.id.isNotBlank()) {
+                        ShraddhaAccessibilityService.fillByResourceId(match.element.id, value)
+                    } else {
+                        false
+                    }
                 }
                 "BACK" -> ShraddhaAccessibilityService.goBack()
                 "SCROLL" -> ShraddhaAccessibilityService.scrollForward()
@@ -193,6 +204,11 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val after: ScreenSnapshot = ShraddhaAccessibilityService.captureVisibleScreen() ?: run {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
                 return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
+            }
+            if (after.packageName != profile.packageName &&
+                after.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) {
+                checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
+                return fail("कार्रवाई के बाद foreground ऐप बदल गया। सुरक्षा के लिए workflow रोक दिया गया।")
             }
             if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,12 +20,8 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +30,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,8 +40,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
+import `in`.shraddha.ai.future.MainBrainProviderGateway
+import com.Lia.assistant.ui.components.NovaButton
+import com.Lia.assistant.ui.components.NovaButtonType
+import com.Lia.assistant.ui.components.NovaGlassCard
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 
@@ -80,13 +83,23 @@ private fun clearProviderKey(context: android.content.Context, provider: String)
 fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
+    val keyReadWarnings = remember { mutableStateMapOf<String, String>() }
     val configured = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            apiKeyProviders.forEach { put(it.id, readProviderKey(context, it.id)) }
+            apiKeyProviders.forEach { provider ->
+                val result = runCatching { readProviderKey(context, provider.id) }
+                put(provider.id, result.getOrDefault(false))
+                result.exceptionOrNull()?.let {
+                    keyReadWarnings[provider.id] = "Saved key could not be decrypted. Re-enter the key if this device's Keystore was reset."
+                }
+            }
         }
     }
     val inputs = remember { mutableStateMapOf<String, String>() }
     val revealed = remember { mutableStateMapOf<String, Boolean>() }
+    val testStatus = remember { mutableStateMapOf<String, String>() }
+    val testing = remember { mutableStateMapOf<String, Boolean>() }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
@@ -103,14 +116,9 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceRaised)
-        ) {
+        NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
             Text(
                 "API keys are saved in the phone's encrypted Android Keystore-backed storage. Never share your key or add it to screenshots.",
-                modifier = Modifier.padding(14.dp),
                 color = colors.textSecondary,
                 fontSize = 13.sp
             )
@@ -118,17 +126,20 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
 
         apiKeyProviders.forEach { provider ->
-            Card(
+            NovaGlassCard(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = colors.surfaceRaised)
+                cornerRadius = 20.dp,
+                elevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Key, contentDescription = null, tint = colors.accent)
                         Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                             Text(provider.title, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                             Text(provider.description, color = colors.textSecondary, fontSize = 12.sp)
+                            keyReadWarnings[provider.id]?.let { warning ->
+                                Text(warning, color = colors.error, fontSize = 10.sp)
+                            }
                         }
                         if (configured[provider.id] == true) {
                             Icon(Icons.Default.CheckCircle, contentDescription = "API key saved", tint = colors.accent)
@@ -152,7 +163,8 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                         }
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Button(
+                        NovaButton(
+                            text = "Save Key",
                             onClick = {
                                 val key = inputs[provider.id].orEmpty().trim()
                                 if (key.isBlank()) {
@@ -161,6 +173,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                     runCatching { saveProviderKey(context, provider.id, key) }
                                         .onSuccess {
                                             configured[provider.id] = true
+                                            keyReadWarnings.remove(provider.id)
                                             inputs[provider.id] = ""
                                             revealed[provider.id] = false
                                             Toast.makeText(context, "${provider.title} API key securely saved.", Toast.LENGTH_SHORT).show()
@@ -171,12 +184,15 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                 }
                             },
                             modifier = Modifier.weight(1f)
-                        ) { Text("Save Key") }
-                        OutlinedButton(
+                        )
+                        NovaButton(
+                            text = "Remove",
+                            type = NovaButtonType.SECONDARY,
                             onClick = {
                                 runCatching { clearProviderKey(context, provider.id) }
                                     .onSuccess {
                                         configured[provider.id] = false
+                                        keyReadWarnings.remove(provider.id)
                                         inputs[provider.id] = ""
                                         Toast.makeText(context, "${provider.title} key removed.", Toast.LENGTH_SHORT).show()
                                     }
@@ -184,9 +200,49 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                         Toast.makeText(context, "Key remove nahi hui.", Toast.LENGTH_SHORT).show()
                                     }
                             }
-                        ) { Text("Remove") }
+                        )
                     }
-                    OutlinedButton(
+                    NovaButton(
+                        text = if (testing[provider.id] == true) "Testing…" else "Test Connection",
+                        type = NovaButtonType.SECONDARY,
+                        onClick = {
+                            testing[provider.id] = true
+                            testStatus[provider.id] = "Sending one short provider request; usage charges may apply."
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        MainBrainProviderGateway.complete(
+                                            context,
+                                            provider.id,
+                                            "You are a provider connectivity check. Reply with exactly the word OK.",
+                                            "Reply with exactly the word OK."
+                                        )
+                                    }
+                                }
+                                testStatus[provider.id] = result.fold(
+                                    onSuccess = { reply ->
+                                        if (reply.isNotBlank()) "Connection successful: provider returned a response."
+                                        else "Provider responded, but the test reply was unexpected."
+                                    },
+                                    onFailure = { error -> "Connection failed: ${error.message ?: "Unknown provider error"}" }
+                                )
+                                testing[provider.id] = false
+                            }
+                        },
+                        enabled = configured[provider.id] == true && testing[provider.id] != true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    testStatus[provider.id]?.takeIf { it.isNotBlank() }?.let { message ->
+                        Text(
+                            message,
+                            color = if (message.startsWith("Connection successful")) colors.accent else colors.textSecondary,
+                            fontSize = 10.sp
+                        )
+                    }
+                    NovaButton(
+                        text = "Create API Key",
+                        icon = Icons.Default.OpenInNew,
+                        type = NovaButtonType.SECONDARY,
                         onClick = {
                             runCatching {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.createUrl)))
@@ -195,10 +251,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = null)
-                        Text(" Create API Key")
-                    }
+                    )
                     Text(
                         if (configured[provider.id] == true) "Status: Key saved on this device" else "Status: API key not added",
                         color = colors.textSecondary,

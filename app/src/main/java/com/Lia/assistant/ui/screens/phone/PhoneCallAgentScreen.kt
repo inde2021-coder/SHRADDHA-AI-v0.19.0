@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.EdesyCallAgentClient
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.TelephonyGatewayStore
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
@@ -43,11 +45,15 @@ import org.json.JSONObject
 fun PhoneCallAgentScreen(navController: NavController) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
+    val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
     val scope = rememberCoroutineScope()
-    var backendUrl by remember { mutableStateOf(TelephonyGatewayStore.baseUrl(context)) }
-    var gatewayToken by remember { mutableStateOf(TelephonyGatewayStore.token(context)) }
+    val savedGateway = remember { TelephonyGatewayStore.get(context) }
+    var backendUrl by remember { mutableStateOf(savedGateway.baseUrl) }
+    var gatewayToken by remember { mutableStateOf(savedGateway.token) }
     var loading by remember { mutableStateOf(false) }
-    var resultText by remember { mutableStateOf("Backend readiness has not been checked yet.") }
+    var resultText by remember {
+        mutableStateOf(savedGateway.readError ?: "Backend readiness has not been checked yet.")
+    }
     var callRows by remember { mutableStateOf(emptyList<String>()) }
 
     fun runRequest(request: suspend () -> JSONObject, onSuccess: (JSONObject) -> Unit) {
@@ -86,7 +92,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
                     Text("SIM no-answer call assistant", color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
                 }
                 Text(
-                    "Caller पहले आपके Jio SIM पर ring करेगा. जवाब न देने पर carrier call को Edesy DID पर forward करेगा, जहाँ Shraddha AI बातचीत संभालेगी. यह Android द्वारा SIM audio intercept नहीं करता.",
+                    "Caller पहले आपके Jio SIM पर ring करेगा. जवाब न देने पर carrier call को Edesy DID पर forward करेगा, जहाँ $assistantName बातचीत संभालेगी. यह Android द्वारा SIM audio intercept नहीं करता.",
                     color = colors.textSecondary, fontSize = 13.sp
                 )
                 Text(
@@ -141,7 +147,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
                             resultText = buildString {
                                 append("Provider configured: ").append(body.optBoolean("configured"))
                                 append("\nPreflight ready: ").append(body.optBoolean("preflightReady"))
-                                append("\nAI name: ").append(body.optString("agentName", "Shraddha AI"))
+                                append("\nAI name: ").append(assistantName)
                                 val history = body.optJSONObject("callHistory")
                                 append("\nEncrypted durable call history: ").append(if (history?.optBoolean("durable") == true) "READY" else "not configured")
                                 val historyMissing = history?.optJSONArray("missing")

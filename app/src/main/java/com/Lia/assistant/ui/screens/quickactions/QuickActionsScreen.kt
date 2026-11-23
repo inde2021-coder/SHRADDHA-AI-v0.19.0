@@ -24,6 +24,11 @@ import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -43,6 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.action.InstalledAppLabelCache
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.ui.components.NovaGlassCard
+import com.Lia.assistant.ui.theme.LiaReferenceTheme
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import kotlinx.coroutines.CoroutineScope
@@ -50,11 +59,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import `in`.shraddha.ai.operator.OperatorActivity
 
-private val PageLavender = Color(0xFFF4F0FF)
-private val TileWhite = Color(0xFFFFFFFF)
-private val Purple = Color(0xFF7134C8)
-private val BodyText = Color(0xFF211B30)
-private val Muted = Color(0xFF777087)
 
 private data class QuickTile(
     val title: String,
@@ -65,9 +69,14 @@ private data class QuickTile(
 
 @Composable
 fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifier) {
+    LiaReferenceTheme { QuickActionsContent(navController, modifier) }
+}
+
+@Composable
+private fun QuickActionsContent(navController: NavController, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
-    val scope = CoroutineScope(Dispatchers.Main)
+    val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
 
     val tiles = listOf(
         QuickTile("Open an app", "Launch an installed app", Icons.Default.Apps) {
@@ -75,6 +84,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         },
         QuickTile("Call someone", "Start a voice call", Icons.Default.Call) {
             navController.navigate("voice")
+        },
+        QuickTile("SIM Call Agent", "Configure incoming no-answer call handling", Icons.Default.Call) {
+            navController.navigate("phone_call_agent")
         },
         QuickTile("Send a message", "WhatsApp or SMS by voice", Icons.AutoMirrored.Filled.Message) {
             navController.navigate("voice")
@@ -86,30 +98,51 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         QuickTile("Visual Lens", "Ask about what you see", Icons.Default.CameraAlt) {
             navController.navigate("visual_lens")
         },
-        QuickTile("Talk to Shraddha", "Start a voice conversation", Icons.Default.Mic) {
+        QuickTile("Talk to $assistantName", "Start a voice conversation", Icons.Default.Mic) {
             navController.navigate("voice")
         },
         QuickTile("Ask anything", "Start a text conversation", Icons.Default.Language) {
             navController.navigate("chat")
         },
+        QuickTile("Multi-agent workspace", "Delegate work to Planner, Researcher and specialists", Icons.Default.Groups) {
+            navController.navigate("agent_council")
+        },
         QuickTile("Screen & phone control", "Read, tap, type and swipe", Icons.Default.PhoneAndroid) {
             context.startActivity(android.content.Intent(context, OperatorActivity::class.java))
+        },
+        QuickTile("Device Center", "Pair and control a Windows PC", Icons.Default.Devices) {
+            navController.navigate("device_center")
+        },
+        QuickTile("Expert Studio", "Engineering, agriculture, repair and learning", Icons.Default.AutoAwesome) {
+            navController.navigate("expert_studio")
+        },
+        QuickTile("Project Lab", "Create plans and track milestones", Icons.Default.AccountTree) {
+            navController.navigate("project_lab")
+        },
+        QuickTile("Data Vault", "Encrypted backup and restore", Icons.Default.Security) {
+            navController.navigate("data_vault")
+        },
+        QuickTile("Plugin Vault", "Verify and run signed local actions", Icons.Default.Security) {
+            navController.navigate("plugins")
+        },
+        QuickTile("Social Publisher", "Preview, publish and schedule posts", Icons.Default.Language) {
+            navController.navigate("social_publisher")
         }
     )
 
     Column(
-        modifier = modifier.fillMaxSize().background(PageLavender).padding(horizontal = 16.dp, vertical = 10.dp)
+        modifier = modifier.fillMaxSize().background(colors.background).padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { navController.popBackStack() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BodyText)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
             }
             Column(Modifier.weight(1f)) {
-                Text("Quick actions", color = BodyText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text("Pick one to start. You can also say it to Shraddha.", color = Muted, fontSize = 10.sp)
+                Text("Quick actions", color = colors.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text("Pick one to start. You can also say it to $assistantName.", color = colors.textSecondary, fontSize = 10.sp)
             }
         }
         Spacer(Modifier.height(13.dp))
@@ -120,25 +153,24 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
             modifier = Modifier.fillMaxSize().padding(bottom = 10.dp)
         ) {
             items(tiles) { tile ->
-                Column(
-                    modifier = Modifier.fillMaxWidth().height(143.dp).clip(RoundedCornerShape(18.dp))
-                        .background(TileWhite)
-                        .border(1.dp, Color(0xFFE8E0F4), RoundedCornerShape(18.dp))
-                        .clickable(onClick = tile.onClick)
-                        .padding(13.dp),
-                    horizontalAlignment = Alignment.Start
+                NovaGlassCard(
+                    modifier = Modifier.fillMaxWidth().height(143.dp).clickable(onClick = tile.onClick),
+                    cornerRadius = 18.dp,
+                    elevation = 5.dp
                 ) {
-                    Box(
-                        Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFFF0E7FF)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(tile.icon, contentDescription = null, tint = Purple, modifier = Modifier.size(20.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Box(
+                            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFECE4FF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(tile.icon, contentDescription = null, tint = Color(0xFF7438C8), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(tile.title, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                        Spacer(Modifier.height(3.dp))
+                        Text(tile.description, color = colors.textSecondary, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 2)
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Text(tile.title, color = BodyText, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-                    Spacer(Modifier.height(3.dp))
-                    Text(tile.description, color = Muted, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 2)
                 }
             }
         }

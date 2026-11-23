@@ -120,6 +120,64 @@ class FirebaseCloudVault(private val context: Context) {
         }
     }
 
+    /**
+     * Deletes one user-owned encrypted memory record from both Firebase mirrors.
+     * RTDB is removed first because Firestore is authoritative during restore; if Firestore
+     * deletion fails, its still-present record remains the authoritative copy.
+     */
+    fun signInAndDelete(email: String, password: String, key: String): Result<Boolean> = runCatching {
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val firestoreRef = FirebaseFirestore.getInstance(app)
+                .collection("users").document(user.uid).collection("vault").document(key)
+            val firestoreRecord = firestoreRef.get().await()
+            val realtimeRef = if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault").child(key)
+            } else null
+            val realtimeRecord = realtimeRef?.get()?.await()
+            val existed = firestoreRecord.exists() || realtimeRecord?.exists() == true
+            if (realtimeRecord?.exists() == true) realtimeRef?.removeValue()?.await()
+            if (firestoreRecord.exists()) firestoreRef.delete().await()
+            existed
+        }
+    }
+
+    /** Deletes every encrypted memory vault document for the authenticated owner. */
+    fun signInAndDeleteAll(email: String, password: String): Result<Int> = runCatching {
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val collection = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault")
+            val documents = collection.get().await().documents
+            require(documents.size <= 5_000) { "Cloud vault contains more than 5,000 records; use individual deletion or contact support." }
+            val realtimeRoot = if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault")
+            } else null
+            val realtimeSnapshot = realtimeRoot?.get()?.await()
+            val keys = (documents.map { it.id } + realtimeSnapshot?.children?.mapNotNull { it.key }.orEmpty()).distinct()
+            // Remove RTDB mirrors first; Firestore remains authoritative until all batches commit.
+            keys.forEach { key -> realtimeRoot?.child(key)?.removeValue()?.await() }
+            documents.chunked(450).forEach { group ->
+                val batch = FirebaseFirestore.getInstance(app).batch()
+                group.forEach { document -> batch.delete(document.reference) }
+                batch.commit().await()
+            }
+            keys.size
+        }
+    }
+
     fun signInAndLoad(email: String, password: String, key: String): Result<String?> = runCatching {
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
         val normalizedEmail = email.trim()
@@ -129,16 +187,36 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
             runCatching { registerStoredPushToken(app, user.uid) }
-            val firestorePayload = runCatching {
-                FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
-                    .get().await().getString("payload")
-            }.getOrNull()
-            val realtimePayload = if (firestorePayload == null && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
-                runCatching { FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+            // Firestore is authoritative. Only fall back to RTDB when the Firestore
+            // document is genuinely absent; permission/network failures must not look
+            // like an empty backup or silently trigger a potentially stale mirror.
+            val firestoreDocument = FirebaseFirestore.getInstance(app)
+                .collection("users").document(user.uid).collection("vault").document(key)
+                .get().await()
+            val firestorePayload = firestoreDocument.getString("payload")
+            if (firestoreDocument.exists()) {
+                require(firestoreDocument.getString("format") == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                    "The Firestore backup format is missing or unsupported; restore was stopped."
+                }
+                require(!firestorePayload.isNullOrBlank()) {
+                    "The Firestore backup record exists but has no payload; restore was stopped to protect backup integrity."
+                }
+            }
+            val realtimeSnapshot = if (!firestoreDocument.exists() && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
                     .reference.child("users").child(user.uid).child("vault").child(key).get().await()
-                    .child("payload").getValue(String::class.java) }.getOrNull()
             } else null
+            if (realtimeSnapshot?.exists() == true) {
+                require(realtimeSnapshot.child("format").getValue(String::class.java) == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                    "The Realtime Database backup format is missing or unsupported; restore was stopped."
+                }
+                require(!realtimeSnapshot.child("payload").getValue(String::class.java).isNullOrBlank()) {
+                    "The Realtime Database backup exists but has no payload; restore was stopped to protect backup integrity."
+                }
+            }
+            val realtimePayload = realtimeSnapshot?.child("payload")?.getValue(String::class.java)
             val payload = firestorePayload ?: realtimePayload ?: return@runBlocking null
+            require(payload.length <= 190_000) { "Encrypted backup exceeds the supported restore size." }
             decrypt(payload, password)
         }
     }
@@ -203,7 +281,14 @@ class FirebaseCloudVault(private val context: Context) {
                 ?: error("Sign-in failed")
             val document = FirebaseFirestore.getInstance(app).collection("users").document(user.uid)
                 .collection("vault").document(revisionId).get().await()
-            val payload = document.getString("payload") ?: return@runBlocking null
+            if (!document.exists()) return@runBlocking null
+            require(document.getString("format") == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                "Recovery revision format is missing or unsupported; restore was stopped."
+            }
+            val payload = document.getString("payload")
+                ?.takeIf { it.isNotBlank() }
+                ?: error("Recovery revision exists but its encrypted payload is missing; restore was stopped to protect backup integrity.")
+            require(payload.length <= 190_000) { "Recovery revision payload exceeds the supported size." }
             decrypt(payload, password)
         }
     }
@@ -299,12 +384,18 @@ class FirebaseCloudVault(private val context: Context) {
             if (!metadata.exists()) return@runBlocking null
             val storagePath = metadata.getString("storagePath") ?: error("Storage path is missing")
             require(storagePath == "users/${user.uid}/backups/${revisionId}.enc")
+            require(metadata.getString("format") == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                "Storage backup record format is missing or unsupported."
+            }
             val size = metadata.getLong("sizeBytes") ?: error("Storage backup size is missing")
             require(size in 1..(2L * 1024 * 1024)) { "Storage backup size is invalid" }
             val storageRef = FirebaseStorage.getInstance(app).reference.child(storagePath)
             val objectMetadata = storageRef.metadata.await()
             require(objectMetadata.contentType == "application/octet-stream")
             require(objectMetadata.getCustomMetadata("format") == "AES-256-GCM/PBKDF2-SHA256-v1")
+            require(objectMetadata.getCustomMetadata("updatedAt") == metadata.getLong("updatedAt")?.toString()) {
+                "Storage object timestamp does not match Firestore metadata."
+            }
             require(objectMetadata.sizeBytes == size) { "Storage object metadata does not match Firestore metadata" }
             val bytes = storageRef.getBytes(2L * 1024 * 1024).await()
             try {
@@ -417,11 +508,24 @@ class FirebaseCloudVault(private val context: Context) {
     private fun encrypt(value: String, password: String): String {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-        val key = derive(password, salt)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
-        val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-        return listOf(salt, iv, encrypted).joinToString(".") { Base64.encodeToString(it, Base64.NO_WRAP or Base64.URL_SAFE) }
+        val clear = value.toByteArray(Charsets.UTF_8)
+        try {
+            val key = derive(password, salt)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
+            val encrypted = cipher.doFinal(clear)
+            try {
+                return listOf(salt, iv, encrypted).joinToString(".") {
+                    Base64.encodeToString(it, Base64.NO_WRAP or Base64.URL_SAFE)
+                }
+            } finally {
+                encrypted.fill(0)
+            }
+        } finally {
+            clear.fill(0)
+            salt.fill(0)
+            iv.fill(0)
+        }
     }
 
     private fun decrypt(payload: String, password: String): String {
@@ -431,10 +535,21 @@ class FirebaseCloudVault(private val context: Context) {
         val salt = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
         val iv = Base64.decode(parts[1], Base64.NO_WRAP or Base64.URL_SAFE)
         val encrypted = Base64.decode(parts[2], Base64.NO_WRAP or Base64.URL_SAFE)
-        require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
-        return String(cipher.doFinal(encrypted), Charsets.UTF_8)
+        return try {
+            require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(encrypted)
+            try {
+                String(clear, Charsets.UTF_8)
+            } finally {
+                clear.fill(0)
+            }
+        } finally {
+            salt.fill(0)
+            iv.fill(0)
+            encrypted.fill(0)
+        }
     }
 
     private fun derive(password: String, salt: ByteArray): SecretKeySpec {

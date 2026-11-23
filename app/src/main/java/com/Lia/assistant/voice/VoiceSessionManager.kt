@@ -1,7 +1,11 @@
 package com.Lia.assistant.voice
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import com.Lia.assistant.action.InstalledAppLabelCache
+import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
@@ -68,15 +72,30 @@ object VoiceSessionManager {
     private var reconnectJob: Job? = null
     private var silenceWatchdogJob: Job? = null
     private var isTurnActive = false
+    @Volatile private var bargeInSpeechChunks = 0
+    @Volatile private var bargeInOpen = false
     private val pendingAssistantText = StringBuilder()
     private val pendingTextLock = Any()
+
+    private const val BARGE_IN_RMS_THRESHOLD = 0.105f
+    private const val BARGE_IN_REQUIRED_CHUNKS = 4
 
     fun isCurrentSession(epoch: Long): Boolean = sessionEpoch.get() == epoch
     fun isActiveNow(): Boolean = _isActive.value
 
     fun start(context: Context) {
         if (_isActive.value) return
-        appContext = context.applicationContext
+        val application = context.applicationContext
+        if (ContextCompat.checkSelfPermission(application, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            appContext = application
+            _lastError.value = "Microphone permission is required before starting a voice session."
+            _statusText.value = "Microphone permission required"
+            _state.value = NovaOrbState.ERROR
+            _isActive.value = false
+            _muted.value = true
+            return
+        }
+        appContext = application
 
         _isActive.value = true
         _muted.value = false
@@ -93,22 +112,54 @@ object VoiceSessionManager {
 
         audioIO = LiveAudioIO(
             onMicChunk = { bytes ->
-                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value &&
+                    (!EchoGuard.isMicMuted() || bargeInOpen)) {
                     client?.sendAudio(bytes)
                 }
             },
             onMicAmplitude = { amp ->
-                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value) {
                     _amplitude.value = amp
                     _vadActive.value = amp > 0.05f
+                    if (EchoGuard.isMicMuted()) {
+                        // AEC/NS/AGC are enabled by LiveAudioIO. Require sustained foreground
+                        // speech energy before opening the mic during assistant playback.
+                        bargeInSpeechChunks = if (amp >= BARGE_IN_RMS_THRESHOLD) bargeInSpeechChunks + 1 else 0
+                        if (bargeInSpeechChunks >= BARGE_IN_REQUIRED_CHUNKS) {
+                            bargeInOpen = true
+                        }
+                    } else {
+                        bargeInSpeechChunks = 0
+                        bargeInOpen = false
+                    }
                 }
             },
             onRecordingError = { message ->
                 scope.launch {
                     if (_isActive.value && audioEpoch.get() == currentAudioEpoch) {
                         _lastError.value = message
-                        _state.value = NovaOrbState.ERROR
-                        _statusText.value = "Microphone unavailable: $message"
+                        val hasMicrophonePermission = ContextCompat.checkSelfPermission(
+                            appContext ?: context.applicationContext,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (!hasMicrophonePermission) {
+                            // Permission revocation is a user decision, not a transient
+                            // audio failure. Do not retry or reopen the microphone.
+                            _state.value = NovaOrbState.ERROR
+                            _statusText.value = "Microphone permission was revoked. Re-enable it to continue."
+                            // Also remove the foreground notification: it must not claim
+                            // that a live microphone session is active after permission loss.
+                            VoiceForegroundService.stop(appContext ?: context.applicationContext)
+                        } else {
+                            // AudioRecord can fail after a successful Live API connection
+                            // (device contention, route changes or a transient read error).
+                            // Reuse the bounded reconnect path so stopRecording() releases
+                            // the failed AudioRecord before a fresh session is attempted.
+                            _state.value = NovaOrbState.CONNECTING
+                            _statusText.value = "Microphone interrupted; reconnecting..."
+                            scheduleReconnect()
+                        }
                     }
                 }
             }
@@ -185,6 +236,8 @@ object VoiceSessionManager {
 
                 if (!isTurnActive) {
                     isTurnActive = true
+                    bargeInSpeechChunks = 0
+                    bargeInOpen = false
                     EchoGuard.notifyPlaybackStarted()
                 }
 
@@ -245,7 +298,8 @@ object VoiceSessionManager {
                         val (council, session) = `in`.shraddha.ai.future.MainBrain.createCouncilPlan(
                             goal = goal,
                             workflowId = "voice-council-" + java.util.UUID.randomUUID().toString().take(8),
-                            title = goal.take(120)
+                            title = goal.take(120),
+                            context = currentContext
                         )
                         val roles = org.json.JSONArray()
                         council.roles.forEach { role ->
@@ -335,6 +389,8 @@ object VoiceSessionManager {
                     isTurnActive = false
                     EchoGuard.notifyPlaybackStopped()
                 }
+                bargeInSpeechChunks = 0
+                bargeInOpen = false
                 synchronized(pendingTextLock) { pendingAssistantText.clear() }
                 audioIO?.flushPlayback()
                 _state.value = NovaOrbState.LISTENING
@@ -360,7 +416,7 @@ object VoiceSessionManager {
             }
         }
 
-        val nextClient = GeminiLiveClient(liveListener)
+        val nextClient = GeminiLiveClient(liveListener, assistantName)
         synchronized(clientLock) {
             if (!_isActive.value || sessionEpoch.get() != currentEpoch) {
                 nextClient.disconnect()
@@ -385,7 +441,7 @@ object VoiceSessionManager {
         return true
     }
 
-    /** Speaks a camera observation through the configured Shraddha voice when the voice session is active. */
+    /** Speaks a camera observation through the configured assistant voice when the voice session is active. */
     fun announceVisualObservation(context: Context, text: String) {
         val clean = text.trim().take(1200)
         if (clean.isBlank() || !_isActive.value || _state.value != NovaOrbState.LISTENING) return
@@ -393,7 +449,7 @@ object VoiceSessionManager {
         scope.launch {
             val assistantName = runCatching {
                 PersonalityRepository.getAssistantName(context.applicationContext)
-            }.getOrDefault("Shraddha AI")
+            }.getOrDefault(AssistantBrand.FULL_NAME)
             if (sessionEpoch.get() == epoch && _isActive.value && _state.value == NovaOrbState.LISTENING) {
                 speakWithShraddha(context.applicationContext, epoch, assistantName, clean)
             }
@@ -424,7 +480,7 @@ object VoiceSessionManager {
                     }
                 }
             }.onFailure { error ->
-                _lastError.value = error.localizedMessage ?: "Shraddha custom voice engine unavailable"
+                _lastError.value = error.localizedMessage ?: "Custom voice engine unavailable"
                 _state.value = NovaOrbState.ERROR
                 _statusText.value = "$assistantName voice engine setup required — no Google voice fallback"
             }

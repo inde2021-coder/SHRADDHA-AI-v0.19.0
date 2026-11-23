@@ -24,8 +24,24 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - Fingerprint confirmation is not automatic identity proof: compare the exact fingerprint on both devices through a separate trusted channel. If it differs or cannot be checked, reject the peer. Keys are ephemeral and must be verified again after reconnect/restart; the relay does not persist private keys.
 - This protocol is source-integrated but still requires Android↔Windows physical-device verification, replay/tamper tests and reconnect tests before production use. WSS alone is not end-to-end privacy.
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
+- The PC user can choose the virtual desktop (all displays) or an individual monitor for screen sharing and normalized mouse coordinates. The selected monitor is stored locally; changing it affects the next capture/action.
+- Android keyboard shortcuts use a strict allowlist (Enter, Escape, Tab, Ctrl+C/F/Z/S/A/V/X, Alt+Tab/Left/Right and Shift+Tab). Arbitrary key names and shell commands are rejected.
+- Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; the Windows companion persists the bounded receipt ledger so restarting the app does not immediately reopen replay of accepted actions. If receipt persistence fails, the remote action is rejected. Encrypted receipts carry explicit success/failure state.
 - PyAutoGUI's top-left fail-safe is enabled.
 - File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
+
+## PC hardware agent
+
+The Windows companion includes a separate, allowlisted hardware adapter:
+
+- **Telemetry:** CPU utilization/core count, RAM, battery/charging, mounted disk usage and monitor dimensions.
+- **Optional GPU telemetry:** NVIDIA name, temperature, utilization and VRAM via the fixed `nvidia-smi` query when installed.
+- **Controls:** Windows master volume and supported display brightness (driver/API dependent).
+- **Power:** shutdown, restart and sleep are accepted only after a separate confirmation dialog on the physical Windows PC.
+- **Unavailable sensors:** CPU temperature and fan speed are not fabricated; they remain unavailable until a supported vendor/LibreHardwareMonitor adapter is configured.
+- **Safety:** no arbitrary PowerShell, shell command, process launch or raw hardware register access is exposed. Remote hardware commands are strictly validated, remain behind the PC remote-control permission, and destructive power actions require local confirmation.
+
+Hardware status is also available from the PC companion's **PC Hardware Status** button. The volume and brightness quick controls are local to the Windows PC. The Android-to-PC voice/UI command surface still needs a paired Android build and physical-device verification before remote hardware control can be considered complete.
 
 ## Build from source
 

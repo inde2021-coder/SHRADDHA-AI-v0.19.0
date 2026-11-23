@@ -1,0 +1,6 @@
+-r requirements.txt
+-r requirements-control.txt
+-r requirements-vision.txt
+-r requirements-clipboard.txt
+-r requirements-voice.txt
+-r requirements-qr.txt

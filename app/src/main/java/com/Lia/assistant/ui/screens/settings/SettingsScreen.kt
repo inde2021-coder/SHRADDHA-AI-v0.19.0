@@ -38,6 +38,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,13 +47,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
+import `in`.shraddha.ai.future.CouncilCostBudget
 import com.Lia.assistant.voice.ConversationMemory
+import `in`.shraddha.ai.operator.VoiceToolActionJournal
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.components.AccessibilitySettingsRow
@@ -64,24 +70,52 @@ import com.Lia.assistant.ui.components.NovaSettingsRow
 import com.Lia.assistant.ui.components.NovaTextField
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.SerifFontFamily
-import com.Lia.assistant.ui.theme.nightSky
+import com.Lia.assistant.ui.theme.LiaReferenceTheme
 
 @Composable
-fun SettingsScreen(
+fun SettingsScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
+    LiaReferenceTheme { SettingsScreenContent(navController, appState, modifier) }
+}
+
+@Composable
+private fun SettingsScreenContent(
     navController: NavController,
     appState: NovaAppState,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var showGatewayDialog by remember { mutableStateOf(false) }
+    var showCostBudgetDialog by remember { mutableStateOf(false) }
+    val initialCostSettings = remember { CouncilCostBudget.settings(context) }
+    var monthlyBudgetInput by remember { mutableStateOf(if (initialCostSettings.monthlyLimitUsd > 0) initialCostSettings.monthlyLimitUsd.toString() else "") }
+    var modelPricesInput by remember { mutableStateOf(initialCostSettings.pricesJson) }
+    var costBudgetError by remember { mutableStateOf<String?>(null) }
     val savedGateway = remember { VoiceGatewaySettings.get(context) }
     var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl) }
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
-    var gatewaySaveError by remember { mutableStateOf<String?>(null) }
+    var gatewaySaveError by remember { mutableStateOf(savedGateway.readError) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
+    var voiceMemoryError by remember { mutableStateOf(ConversationMemory.persistenceError()) }
+    val voiceActionJournal = remember { VoiceToolActionJournal(context) }
+    val initialVoiceAction = remember { voiceActionJournal.latestResult() }
+    var voiceActionEntry by remember { mutableStateOf(initialVoiceAction.getOrNull()) }
+    var voiceActionError by remember { mutableStateOf(initialVoiceAction.exceptionOrNull()?.localizedMessage) }
+    var showVoiceActionConfirm by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner, voiceActionJournal) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val refreshed = voiceActionJournal.latestResult()
+                voiceActionEntry = refreshed.getOrNull()
+                voiceActionError = refreshed.exceptionOrNull()?.localizedMessage
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
@@ -90,7 +124,7 @@ fun SettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .nightSky()
+            .background(colors.background)
             .verticalScroll(rememberScrollState())
             .padding(bottom = 100.dp)
     ) {
@@ -196,7 +230,7 @@ fun SettingsScreen(
                     }
                 )
                 NovaSettingsRow(
-                    title = "Shraddha Voice Engine",
+                    title = "${appState.assistantName} Voice Engine",
                     subtitle = "Custom Hindi-English voice • backend setup required",
                     icon = Icons.Default.RecordVoiceOver,
                     onClick = {
@@ -215,7 +249,7 @@ fun SettingsScreen(
                         val current = VoiceGatewaySettings.get(context)
                         gatewayUrlInput = current.baseUrl
                         gatewayTokenInput = current.gatewayToken
-                        gatewaySaveError = null
+                        gatewaySaveError = current.readError
                         showGatewayDialog = true
                     }
                 )
@@ -230,11 +264,21 @@ fun SettingsScreen(
                     subtitle = if (voiceMemoryEnabled) "Recent voice turns are saved encrypted on this phone" else "Off • voice turns stay in this session",
                     icon = Icons.Default.Speed,
                     switch = voiceMemoryEnabled,
-                    onCheckedChange = {
-                        voiceMemoryEnabled = it
-                        ConversationMemory.setPersistenceEnabled(context, it)
+                    onCheckedChange = { enabled ->
+                        ConversationMemory.setPersistenceEnabled(context, enabled)
+                            .onSuccess {
+                                voiceMemoryEnabled = enabled
+                                voiceMemoryError = null
+                            }
+                            .onFailure { error ->
+                                voiceMemoryEnabled = ConversationMemory.isPersistenceEnabled(context)
+                                voiceMemoryError = error.localizedMessage ?: "Could not update encrypted conversation memory."
+                            }
                     }
                 )
+                voiceMemoryError?.let { error ->
+                    Text(error, color = colors.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                }
                 NovaSettingsRow(
                     title = "Chat History",
                     subtitle = "Review saved conversations",
@@ -244,12 +288,45 @@ fun SettingsScreen(
             }
         }
 
+        if (voiceActionError != null || voiceActionEntry?.state in setOf("EXECUTING", "FAILED")) {
+            NovaSectionHeader(title = "Voice Action Recovery")
+            NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Column {
+                    Text(
+                        text = voiceActionError ?: "A previous voice action may not have a confirmed result.",
+                        color = if (voiceActionError != null) colors.error else colors.textPrimary,
+                        fontSize = 13.sp
+                    )
+                    voiceActionEntry?.takeIf { it.state in setOf("EXECUTING", "FAILED") }?.let { entry ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tool: ${entry.tool} • State: ${entry.state}",
+                            color = colors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "Check the target app yourself before confirming. This does not repeat or execute the action.",
+                            color = colors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        NovaButton(
+                            text = "I checked the app — mark verified",
+                            onClick = { showVoiceActionConfirm = true },
+                            type = NovaButtonType.SECONDARY,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+
         NovaSectionHeader(title = "Look & Feel")
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
                     title = "Assistant Picture & Profile",
-                    subtitle = "Change the Shraddha avatar and profile details",
+                    subtitle = "Change the ${appState.assistantName} avatar and profile details",
                     icon = Icons.Default.Person,
                     onClick = { navController.navigate("profile") }
                 )
@@ -314,6 +391,26 @@ fun SettingsScreen(
             }
         }
 
+        NovaSectionHeader(title = "Main Brain • API Cost Control")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
+                NovaSettingsRow(
+                    title = "Monthly API Spend Limit",
+                    subtitle = if (monthlyBudgetInput.isBlank() || monthlyBudgetInput.toDoubleOrNull() == 0.0)
+                        "Disabled • enter a USD limit to stop calls automatically"
+                    else "Limit: USD $monthlyBudgetInput • spent this month: USD ${"%.4f".format(CouncilCostBudget.monthlySpendUsd(context))}",
+                    icon = Icons.Default.Speed,
+                    onClick = {
+                        val current = CouncilCostBudget.settings(context)
+                        monthlyBudgetInput = if (current.monthlyLimitUsd > 0) current.monthlyLimitUsd.toString() else ""
+                        modelPricesInput = current.pricesJson
+                        costBudgetError = null
+                        showCostBudgetDialog = true
+                    }
+                )
+            }
+        }
+
         NovaSectionHeader(title = "Privacy & Security")
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
@@ -353,7 +450,7 @@ fun SettingsScreen(
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
-                    title = "About Shraddha AI",
+                    title = "About ${appState.assistantName}",
                     subtitle = "Version, developer contact and copyright",
                     icon = Icons.Default.Key,
                     onClick = { navController.navigate("about") }
@@ -414,11 +511,17 @@ fun SettingsScreen(
                 NovaButton(
                     text = "Clear",
                     onClick = {
-                        VoiceGatewaySettings.clear(context)
-                        gatewayUrlInput = ""
-                        gatewayTokenInput = ""
-                        gatewayConfigured = false
-                        showGatewayDialog = false
+                        runCatching { VoiceGatewaySettings.clear(context) }
+                            .onSuccess {
+                                gatewayUrlInput = ""
+                                gatewayTokenInput = ""
+                                gatewayConfigured = false
+                                gatewaySaveError = null
+                                showGatewayDialog = false
+                            }
+                            .onFailure {
+                                gatewaySaveError = it.localizedMessage ?: "Could not clear saved backend settings"
+                            }
                     },
                     type = NovaButtonType.TEXT
                 )
@@ -427,7 +530,94 @@ fun SettingsScreen(
         )
     }
 
+    if (showCostBudgetDialog) {
+        AlertDialog(
+            onDismissRequest = { showCostBudgetDialog = false },
+            title = { Text("Main Brain API Cost Budget", color = colors.textPrimary) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        "Set a monthly USD ceiling. The council records provider-reported tokens after each response and stops before starting another provider call when the estimated spend crosses the limit. A zero/blank limit disables enforcement.",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = monthlyBudgetInput,
+                        onValueChange = { monthlyBudgetInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Monthly limit (USD)") },
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("Model prices (JSON)", color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Use exact provider/model names and USD per 1 million tokens. Example: [{\"provider\":\"OPENAI\",\"model\":\"gpt-4.1-mini\",\"inputUsdPerMillionTokens\":0.4,\"outputUsdPerMillionTokens\":1.6}]",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = modelPricesInput,
+                        onValueChange = { modelPricesInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Price table JSON") },
+                        minLines = 4,
+                        maxLines = 8
+                    )
+                    if (costBudgetError != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(costBudgetError!!, color = colors.error, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                NovaButton(text = "Save Budget", onClick = {
+                    val limit = monthlyBudgetInput.trim().ifBlank { "0" }.toDoubleOrNull()
+                    if (limit == null) {
+                        costBudgetError = "Enter a valid monthly USD amount."
+                    } else {
+                        runCatching { CouncilCostBudget.saveSettings(context, limit, modelPricesInput) }
+                            .onSuccess {
+                                costBudgetError = null
+                                showCostBudgetDialog = false
+                            }
+                            .onFailure { costBudgetError = it.localizedMessage ?: "Could not save API cost settings." }
+                    }
+                })
+            },
+            dismissButton = {
+                NovaButton(text = "Close", onClick = { showCostBudgetDialog = false }, type = NovaButtonType.TEXT)
+            },
+            containerColor = colors.surfaceRaised
+        )
+    }
+
     // Assistant Name Dialog
+    if (showVoiceActionConfirm) {
+        AlertDialog(
+            onDismissRequest = { showVoiceActionConfirm = false },
+            title = { Text("Confirm voice action recovery") },
+            text = { Text("Have you personally checked the target app and confirmed whether the previous action completed? This only records your confirmation; it will not run the action again.") },
+            confirmButton = {
+                NovaButton(text = "Yes, I checked", onClick = {
+                    showVoiceActionConfirm = false
+                    val entry = voiceActionEntry
+                    if (entry != null && voiceActionJournal.markManuallyVerified(entry.taskId)) {
+                        val refreshed = voiceActionJournal.latestResult()
+                        voiceActionEntry = refreshed.getOrNull()
+                        voiceActionError = refreshed.exceptionOrNull()?.localizedMessage
+                    } else {
+                        voiceActionError = "Could not save manual verification. The previous action remains unresolved."
+                    }
+                })
+            },
+            dismissButton = {
+                NovaButton(text = "Cancel", onClick = { showVoiceActionConfirm = false }, type = NovaButtonType.TEXT)
+            }
+        )
+    }
+
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },

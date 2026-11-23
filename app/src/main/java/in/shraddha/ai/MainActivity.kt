@@ -20,6 +20,14 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import com.Lia.assistant.voice.VoiceSessionManager
+import com.Lia.assistant.voice.NovaOrbState
+import com.Lia.assistant.ui.fx.NovaOrbStyle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import `in`.shraddha.ai.vision.LiveVisualTranslationSession as LiveVisualTranslationSession
@@ -68,6 +76,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bottomNav: LinearLayout
     private lateinit var pageScroll: ScrollView
     private var currentPage: String = "home"
+    private var activeOrb: ShraddhaOrbView? = null
+    private var activeCouncilWorkId: java.util.UUID? = null
     private lateinit var relayUrl: EditText
     private lateinit var deviceName: EditText
     private lateinit var pairingCode: EditText
@@ -140,6 +150,13 @@ class MainActivity : AppCompatActivity() {
         shell.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         shell.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(shell)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { VoiceSessionManager.state.collect { activeOrb?.setVoiceState(it) } }
+                launch { VoiceSessionManager.amplitude.collect { activeOrb?.setAmplitude(it) } }
+                launch { VoiceSessionManager.muted.collect { activeOrb?.setMuted(it) } }
+            }
+        }
         status = TextView(this).apply {
             text = "Ready • $assistantDisplayName तैयार है। अपनी जरूरत का एक workspace खोलें।"
             textSize = 13f; setTextColor(0xFFE4E9F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -149,6 +166,13 @@ class MainActivity : AppCompatActivity() {
         if (initialPage in setOf("devices", "assistant", "expert", "lab", "people", "cloud", "future", "permissions")) showPage(initialPage!!) else showHome()
         installLinkCallbacks()
         handlePairingIntent(intent)
+        handleVoicePcAction(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        activeOrb?.setReducedMotion(NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false))
+        activeOrb?.setOrbStyle(NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name)))
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -157,6 +181,33 @@ class MainActivity : AppCompatActivity() {
         val initialPage = intent.getStringExtra("initial_page")
         if (initialPage in setOf("devices", "assistant", "expert", "lab", "people", "cloud", "future", "permissions")) showPage(initialPage!!)
         handlePairingIntent(intent)
+        handleVoicePcAction(intent)
+    }
+
+
+    private fun handleVoicePcAction(intent: Intent?) {
+        val raw = intent?.getStringExtra("voice_pc_action_json") ?: return
+        val target = intent.getStringExtra("voice_pc_target_id").orEmpty().trim()
+        val action = runCatching { JSONObject(raw) }.getOrNull()
+        if (action == null || !target.matches(Regex("[A-Za-z0-9_-]{8,128}"))) {
+            status.text = "PC voice command invalid; कोई command नहीं भेजी गई।"
+            return
+        }
+        if (!::targetDevice.isInitialized) {
+            status.text = "Device Control अभी तैयार नहीं; PC command नहीं भेजी गई।"
+            return
+        }
+        targetDevice.setText(target)
+        pendingWindowsVoiceAction = action
+        pendingWindowsVoiceTarget = target
+        status.text = "Paired PC से fresh remote-control approval माँगी जा रही है…"
+        if (!DeviceLinkManager.requestRemoteControl(target, 2)) {
+            pendingWindowsVoiceAction = null
+            pendingWindowsVoiceTarget = ""
+            status.text = "Secure relay disconnected या target unavailable; PC command नहीं भेजी गई।"
+        }
+        intent.removeExtra("voice_pc_action_json")
+        intent.removeExtra("voice_pc_target_id")
     }
 
     private fun handlePairingIntent(intent: Intent?) {
@@ -190,7 +241,7 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = "Single-use Shraddha device pairing QR code"
             })
             addView(TextView(this@MainActivity).apply {
-                text = "Pairing code  $code\\nValid for 5 minutes • One successful join only\\nScan with the other Shraddha AI app."
+                text = "Pairing code  $code\\nValid for 5 minutes • One successful join only\\nScan with the other $assistantDisplayName app."
                 gravity = android.view.Gravity.CENTER; textSize = 14f; setTextColor(0xFFE7EAF5.toInt()); setPadding(0, dp(10), 0, 0)
             })
         }
@@ -217,7 +268,7 @@ class MainActivity : AppCompatActivity() {
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         brand.addView(TextView(this).apply {
             text = "S H R A D D H A   /   A I"
-            textSize = 11f; letterSpacing = .12f; setTextColor(0xFF9F8BFF.toInt())
+            textSize = 11f; letterSpacing = .12f; setTextColor(0xFF8CE8E7.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         brand.addView(TextView(this).apply {
@@ -236,7 +287,7 @@ class MainActivity : AppCompatActivity() {
 
         val hero = MaterialCardView(this).apply {
             radius = dp(30).toFloat(); cardElevation = dp(12).toFloat()
-            strokeWidth = dp(1); strokeColor = 0xFF6357B9.toInt()
+            strokeWidth = dp(1); strokeColor = 0xFF14505C.toInt()
             setCardBackgroundColor(0xFF11182C.toInt())
         }
         val heroBody = LinearLayout(this).apply {
@@ -244,7 +295,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1B2044.toInt(), 0xFF111B2B.toInt(), 0xFF0B1421.toInt())
+                intArrayOf(0xFF102A35.toInt(), 0xFF111B2B.toInt(), 0xFF0B1421.toInt())
             ).apply { cornerRadius = dp(30).toFloat() }
         }
         hero.addView(heroBody)
@@ -252,7 +303,7 @@ class MainActivity : AppCompatActivity() {
         val intro = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         intro.addView(TextView(this).apply {
             text = "PERSONAL AI • MULTI-AGENT"
-            textSize = 9f; letterSpacing = .12f; setTextColor(0xFF9FBCFF.toInt())
+            textSize = 9f; letterSpacing = .12f; setTextColor(0xFF68E7EA.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         intro.addView(TextView(this).apply {
@@ -265,7 +316,17 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f; setTextColor(0xFFB9C5DD.toInt())
         })
         heroTop.addView(intro)
-        heroTop.addView(ShraddhaOrbView(this, assistantDisplayName), LinearLayout.LayoutParams(dp(138), dp(138)))
+        val homeOrb = ShraddhaOrbView(
+            this, assistantDisplayName,
+            NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false),
+            NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name))
+        ).apply {
+            setVoiceState(VoiceSessionManager.state.value)
+            setAmplitude(VoiceSessionManager.amplitude.value)
+            setMuted(VoiceSessionManager.muted.value)
+        }
+        activeOrb = homeOrb
+        heroTop.addView(homeOrb, LinearLayout.LayoutParams(dp(138), dp(138)))
         heroBody.addView(heroTop)
         heroBody.addView(actionButton("✦  START A CONVERSATION", "Hindi / English • Live voice engine") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
         pageRoot.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
@@ -337,7 +398,7 @@ class MainActivity : AppCompatActivity() {
         val accent = View(this).apply {
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF9D7BFF.toInt(), 0xFF35C9DF.toInt())
+                intArrayOf(0xFF49D8D2.toInt(), 0xFF35C9DF.toInt())
             ).apply { cornerRadius = dp(4).toFloat() }
         }
         tile.addView(accent, LinearLayout.LayoutParams(dp(4), dp(42)))
@@ -350,7 +411,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 13.5f
             letterSpacing = .02f
             maxLines = 2
-            setTextColor(0xFFF0F1FF.toInt())
+            setTextColor(0xFFEAFBFC.toInt())
             setTypeface(null, android.graphics.Typeface.BOLD)
         })
         copy.addView(TextView(this).apply {
@@ -366,7 +427,7 @@ class MainActivity : AppCompatActivity() {
             text = "›"
             textSize = 27f
             gravity = android.view.Gravity.CENTER
-            setTextColor(0xFFBCA9FF.toInt())
+            setTextColor(0xFF8CE8E7.toInt())
         }, LinearLayout.LayoutParams(dp(22), -1))
         tile.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
         return tile
@@ -376,8 +437,8 @@ class MainActivity : AppCompatActivity() {
         currentPage = page
         pageRoot.removeAllViews()
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(14)) }
-        top.addView(Button(this).apply { text = "‹  Home"; isAllCaps = false; setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF283454.toInt()); setOnClickListener { showHome() } })
-        top.addView(TextView(this).apply { text = when(page) { "assistant" -> "AI ASSISTANT"; "expert" -> "EXPERT HUB"; "devices" -> "DEVICE CONTROL"; "data" -> "DATA SHARING"; "lab" -> "AI LAB"; "kids" -> "KIDS UNIVERSE"; "people" -> "PERSON MEMORY"; "cloud" -> "SECURE CLOUD SYNC"; "future" -> "FUTURE INTELLIGENCE"; else -> "PERMISSIONS" }; textSize = 13f; setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD); setPadding(dp(14), 0, 0, 0) })
+        top.addView(Button(this).apply { text = "‹  Home"; isAllCaps = false; setTextColor(-1); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF173D59.toInt()); setOnClickListener { showHome() } })
+        top.addView(TextView(this).apply { text = when(page) { "assistant" -> "AI ASSISTANT"; "expert" -> "EXPERT HUB"; "devices" -> "DEVICE CONTROL"; "data" -> "DATA SHARING"; "lab" -> "AI LAB"; "kids" -> "KIDS UNIVERSE"; "people" -> "PERSON MEMORY"; "cloud" -> "SECURE CLOUD SYNC"; "future" -> "FUTURE INTELLIGENCE"; else -> "PERMISSIONS" }; textSize = 13f; setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD); setPadding(dp(14), 0, 0, 0) })
         pageRoot.addView(top)
         updateBottomNavigation()
         if (page == "assistant") {
@@ -385,11 +446,21 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER
                 setPadding(dp(8), dp(2), dp(8), dp(14))
             }
-            assistantHero.addView(ShraddhaOrbView(this, assistantDisplayName), LinearLayout.LayoutParams(dp(188), dp(188)))
+            val assistantOrb = ShraddhaOrbView(
+                this, assistantDisplayName,
+                NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false),
+                NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name))
+            ).apply {
+                setVoiceState(VoiceSessionManager.state.value)
+                setAmplitude(VoiceSessionManager.amplitude.value)
+                setMuted(VoiceSessionManager.muted.value)
+            }
+            activeOrb = assistantOrb
+            assistantHero.addView(assistantOrb, LinearLayout.LayoutParams(dp(188), dp(188)))
             assistantHero.addView(TextView(this).apply {
                 text = "${assistantDisplayName.uppercase()}  /  PERSONAL AI"
                 textSize = 11f; letterSpacing = .14f; gravity = android.view.Gravity.CENTER
-                setTextColor(0xFFBFAEFF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
             })
             assistantHero.addView(actionButton("🎙  Speak to $assistantDisplayName", "Live Hindi / English voice session • Tap to open") { startActivity(Intent(this@MainActivity, com.Lia.assistant.MainActivity::class.java)) })
             pageRoot.addView(assistantHero)
@@ -455,7 +526,7 @@ class MainActivity : AppCompatActivity() {
             background = android.graphics.drawable.GradientDrawable().apply {
                 setColor(0xFF10182A.toInt())
                 cornerRadii = floatArrayOf(dp(18).toFloat(), dp(18).toFloat(), dp(18).toFloat(), dp(18).toFloat(), 0f, 0f, 0f, 0f)
-                setStroke(dp(1), 0xFF273653.toInt())
+                setStroke(dp(1), 0xFF173D59.toInt())
             }
             listOf(
                 Triple("⌂", "Home", "home"),
@@ -469,7 +540,7 @@ class MainActivity : AppCompatActivity() {
                     isClickable = true; isFocusable = true; setPadding(dp(4), dp(4), dp(4), dp(4))
                     addView(TextView(this@MainActivity).apply {
                         text = item.first; textSize = 19f; gravity = android.view.Gravity.CENTER
-                        setTextColor(0xFFBFAEFF.toInt())
+                        setTextColor(0xFF8CE8E7.toInt())
                     })
                     addView(TextView(this@MainActivity).apply {
                         text = item.second; textSize = 10f; gravity = android.view.Gravity.CENTER
@@ -489,9 +560,9 @@ class MainActivity : AppCompatActivity() {
         for (i in 0 until bottomNav.childCount) {
             val tab = bottomNav.getChildAt(i) as? LinearLayout ?: continue
             val selected = tab.tag == activePage
-            tab.background = if (selected) rounded(0xFF202B49.toInt(), 14) else null
+            tab.background = if (selected) rounded(0xFF12323D.toInt(), 14) else null
             for (j in 0 until tab.childCount) {
-                (tab.getChildAt(j) as? TextView)?.setTextColor(if (selected) 0xFFE3D9FF.toInt() else 0xFF9EABC2.toInt())
+                (tab.getChildAt(j) as? TextView)?.setTextColor(if (selected) 0xFFD2FCFF.toInt() else 0xFF9EABC2.toInt())
             }
         }
     }
@@ -536,7 +607,7 @@ class MainActivity : AppCompatActivity() {
             val plannerProvider = Spinner(this@MainActivity).apply {
                 adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity"))
             }
-            addView(TextView(this@MainActivity).apply { text = "AI Task Planner"; setTextColor(0xFFBFAEFF.toInt()); textSize = 16f; setPadding(0, dp(6), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "AI Task Planner"; setTextColor(0xFF8CE8E7.toInt()); textSize = 16f; setPadding(0, dp(6), 0, dp(6)) })
             addView(plannerProvider)
             val goal = edit("Task goal", "उदाहरण: दूसरे फोन पर Chrome खोलकर मौसम वेबसाइट दिखाओ").apply { isSingleLine = false; minLines = 3 }
             addView(goal)
@@ -550,7 +621,7 @@ class MainActivity : AppCompatActivity() {
                     planResult.text = result.getOrElse { "Planner error: ${it.message}" }
                 } }
             })
-            addView(TextView(this@MainActivity).apply { text = "Multi-Model Council • एक सवाल को 2-3 AI providers से compare करें"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(14), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "Multi-Model Council • एक सवाल को 2-3 AI providers से compare करें"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(14), 0, dp(6)) })
             val councilPrompt = edit("Compare question", "किसी निर्णय या समस्या पर अलग-अलग AI राय पूछें").apply { isSingleLine = false; minLines = 2 }
             addView(councilPrompt)
             val councilProviders = CheckBox(this@MainActivity).apply { text = "Gemini"; isChecked = true; setTextColor(-1) }
@@ -568,7 +639,7 @@ class MainActivity : AppCompatActivity() {
                     councilResult.text = result.getOrElse { "Compare error: ${it.message}" }
                 } }
             })
-            addView(TextView(this@MainActivity).apply { text = "AI PROVIDER STATUS & KNOWLEDGE TOOLS"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "AI PROVIDER STATUS & KNOWLEDGE TOOLS"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val providerStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
             addView(providerStatus)
             addView(actionButton("Check Configured AI Providers", "API keys server पर ही रहेंगी; केवल configured status दिखेगा") {
@@ -588,7 +659,7 @@ class MainActivity : AppCompatActivity() {
                 DeviceLinkManager.summarize(url, gatewayToken.text.toString(), plannerProvider.selectedItem.toString(), content) { result -> runOnUiThread { summarizeResult.text = result.getOrElse { "Summarize failed: ${it.message}" } } }
             })
 
-            addView(TextView(this@MainActivity).apply { text = "ON-DEVICE INTELLIGENCE • इंटरनेट के बिना भी"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "ON-DEVICE INTELLIGENCE • इंटरनेट के बिना भी"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val offlineInput = edit("Offline voice/text command", "जैसे: WhatsApp खोलो / स्क्रीन पढ़ो / टॉर्च चालू करो")
             addView(offlineInput)
             val offlineResult = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
@@ -628,7 +699,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
 
-            addView(TextView(this@MainActivity).apply { text = "ENCRYPTED PERSONAL MEMORY VAULT"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "ENCRYPTED PERSONAL MEMORY VAULT"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val vault = SecureMemoryVault(this@MainActivity)
             val secureMemory = edit("Private memory", "निजी पसंद, project facts या चुने हुए notes लिखें").apply { isSingleLine = false; minLines = 3 }
             secureMemory.setText(vault.load().getOrElse { "" })
@@ -641,7 +712,7 @@ class MainActivity : AppCompatActivity() {
                 if (vault.clear()) { secureMemory.setText(""); status.text = "Encrypted local memory cleared." } else status.text = "Vault clear नहीं हो पाया।"
             })
 
-            addView(TextView(this@MainActivity).apply { text = "LOCAL KNOWLEDGE RETRIEVAL (RAG-LITE)"; setTextColor(0xFFBFAEFF.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
+            addView(TextView(this@MainActivity).apply { text = "LOCAL KNOWLEDGE RETRIEVAL (RAG-LITE)"; setTextColor(0xFF8CE8E7.toInt()); textSize = 15f; setPadding(0, dp(16), 0, dp(6)) })
             val knowledgeQuery = edit("Search personal notes", "अपने saved notes में कोई सवाल खोजें")
             addView(knowledgeQuery)
             val knowledgeResult = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 13f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF111B2D.toInt(), 14) }
@@ -675,11 +746,11 @@ class MainActivity : AppCompatActivity() {
             val providerPicker = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("auto", "gemini", "openai", "anthropic", "groq", "perplexity")) }
             addView(relayUrl)
             addView(gatewayToken)
-            addView(TextView(this@MainActivity).apply { text = "Select expert department"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f })
+            addView(TextView(this@MainActivity).apply { text = "Select expert department"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f })
             addView(workspacePicker)
-            addView(TextView(this@MainActivity).apply { text = "Select work mode"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
+            addView(TextView(this@MainActivity).apply { text = "Select work mode"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
             addView(taskPicker)
-            addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
+            addView(TextView(this@MainActivity).apply { text = "AI provider"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(8), 0, 0) })
             addView(providerPicker)
             val request = edit("Practical project / problem", "जैसे 2BHK का conceptual floor plan तैयार करो, मोटर की fault diagnosis करो, या फसल की समस्या का विश्लेषण करो").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
             addView(request)
@@ -774,7 +845,7 @@ class MainActivity : AppCompatActivity() {
             }
             addView(TextView(this@MainActivity).apply {
                 text = "LIVE VISUAL SHARING • अलग-अलग स्पष्ट अनुमति"
-                setTextColor(0xFFB9A9FF.toInt()); textSize = 13f; setPadding(0, dp(12), 0, dp(4))
+                setTextColor(0xFF8CE8E7.toInt()); textSize = 13f; setPadding(0, dp(12), 0, dp(4))
             })
             listOf("screen" to "इस फोन की स्क्रीन साझा करने दें", "camera" to "इस फोन का कैमरा साझा करने दें").forEach { (key, label) ->
                 val toggle = Switch(this@MainActivity).apply {
@@ -932,7 +1003,7 @@ class MainActivity : AppCompatActivity() {
                 val url = relayUrl.text.toString().trim()
                 if (!validRelay(url)) { status.text = "पहले अपना deployed HTTPS relay URL डालें।"; return@actionButton }
                 DeviceLinkManager.createSession(url, deviceName.text.toString().ifBlank { "$assistantDisplayName Phone" }) { result -> runOnUiThread {
-                    result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "One-time pairing invite created. Scan the QR on the other Shraddha AI app."; showPairingQr(url, it.code) }
+                    result.onSuccess { isSessionOwner = true; mainOnlyMode.isEnabled = true; pairingCode.setText(it.code); status.text = "One-time pairing invite created. Scan the QR on the other $assistantDisplayName app."; showPairingQr(url, it.code) }
                         .onFailure { status.text = "Pairing error: ${it.message}" }
                 } }
             })
@@ -1273,7 +1344,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "ADVANCED CAPABILITY MAP", "हर क्षमता की वास्तविक स्थिति साफ दिखाई जाती है। Roadmap का अर्थ है कि वह अभी पूर्ण रूप से उपलब्ध नहीं है।") {
             val grouped = catalog.groupBy { it.group }
             grouped.forEach { (group, items) ->
-                addView(TextView(this@MainActivity).apply { text = group.uppercase(); textSize = 11f; letterSpacing = .08f; setTextColor(0xFFBFAEFF.toInt()); setPadding(0, dp(10), 0, dp(5)) })
+                addView(TextView(this@MainActivity).apply { text = group.uppercase(); textSize = 11f; letterSpacing = .08f; setTextColor(0xFF8CE8E7.toInt()); setPadding(0, dp(10), 0, dp(5)) })
                 items.forEach { item ->
                     val state = when(item.state) {
                         `in`.shraddha.ai.future.CapabilityState.AVAILABLE -> "AVAILABLE"
@@ -1374,9 +1445,16 @@ class MainActivity : AppCompatActivity() {
             val endpoint = edit("Secure backend URL (HTTPS)", "https://your-domain.example")
             val tokenField = edit("Gateway token (required)", "Bearer token").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
             val providersField = edit("Providers (comma separated)", "gemini,openai")
+            val specialistCountField = edit("Parallel specialist agents (1-5)", "Default: 3").apply { setText("3"); inputType = android.text.InputType.TYPE_CLASS_NUMBER }
             val councilGoal = edit("Council task / goal", "उदाहरण: एक सुरक्षित Android app architecture तैयार करो").apply { minLines = 3; isSingleLine = false }
             val councilOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12),dp(12),dp(12),dp(12)); background = rounded(0xFF0C1525.toInt(),14) }
-            addView(endpoint); addView(tokenField); addView(providersField); addView(councilGoal); addView(councilOutput)
+            addView(endpoint); addView(tokenField); addView(providersField); addView(specialistCountField); addView(councilGoal); addView(councilOutput)
+            getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).getString("active_work_id", null)?.let { saved ->
+                runCatching { java.util.UUID.fromString(saved) }.getOrNull()?.let { savedId ->
+                    activeCouncilWorkId = savedId
+                    observeCouncilWork(savedId, councilOutput)
+                }
+            }
             addView(actionButton("RUN LIVE 5-ROLE AI COUNCIL", "Uses configured provider APIs • network and API charges may apply") {
                 val base = endpoint.text.toString().trim().trimEnd('/')
                 val goalText = councilGoal.text.toString().trim()
@@ -1460,6 +1538,50 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.start()
             })
+            addView(actionButton("RUN LOCAL PARALLEL COUNCIL IN BACKGROUND", "Phone-local encrypted provider keys • 3 parallel specialists • background progress") {
+                val goalText = councilGoal.text.toString().trim()
+                val specialistCount = specialistCountField.text.toString().toIntOrNull()?.takeIf { it in 1..5 }
+                val selectedProviders = providersField.text.toString().split(',')
+                    .map { it.trim().lowercase() }
+                    .mapNotNull { name -> when (name) {
+                        "gemini" -> "GEMINI"
+                        "openai" -> "OPENAI"
+                        "groq" -> "GROQ"
+                        "claude", "anthropic" -> "CLAUDE"
+                        "perplexity" -> "PERPLEXITY"
+                        else -> null
+                    } }.distinct().take(5)
+                if (goalText.isBlank() || selectedProviders.isEmpty() || specialistCount == null) {
+                    councilOutput.text = "Task goal, 1-5 specialist agents और कम-से-कम एक supported provider चुनें। API keys Settings में configured होनी चाहिए।"
+                    return@actionButton
+                }
+                try {
+                    val workId = `in`.shraddha.ai.future.BackgroundTaskQueue.enqueue(
+                        this@MainActivity, goalText, selectedProviders.joinToString(","), "AUTO", specialistCount
+                    )
+                    activeCouncilWorkId = workId
+                    getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().putString("active_work_id", workId.toString()).apply()
+                    councilOutput.text = "Parallel AI team queue में भेजी गई। Work ID: " + workId +
+                        "\nPlanner + Researcher parallel चलेंगे, फिर " + specialistCount + " Specialists, Critic और Verifier।"
+                    observeCouncilWork(workId, councilOutput)
+                } catch (error: Exception) {
+                    councilOutput.text = "Parallel council queue failed: " + (error.localizedMessage ?: "Unknown error")
+                }
+            })
+            addView(actionButton("CANCEL BACKGROUND COUNCIL", "Stops the queued/running multi-agent task") {
+                val workId = activeCouncilWorkId
+                    ?: getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).getString("active_work_id", null)?.let {
+                        runCatching { java.util.UUID.fromString(it) }.getOrNull()
+                    }
+                if (workId == null) {
+                    councilOutput.text = "No saved background council task is available to cancel."
+                } else {
+                    `in`.shraddha.ai.future.BackgroundTaskQueue.cancel(this@MainActivity, workId)
+                    activeCouncilWorkId = null
+                    getSharedPreferences("shraddha_agent_work", MODE_PRIVATE).edit().remove("active_work_id").apply()
+                    councilOutput.text = "Cancellation requested for background task " + workId
+                }
+            })
         }
         section(root, "AUTONOMOUS PROJECT WORKSPACE", "Milestones और progress फोन में local save होते हैं। यह tracker है, background में अपने-आप काम चलाने वाला executor नहीं।") {
             val projectName=edit("Project name","उदाहरण: Website launch")
@@ -1528,7 +1650,7 @@ class MainActivity : AppCompatActivity() {
         section(root, "25 ADVANCED SYSTEMS • LIVE WORKSPACE", "नए engines को सुरक्षित local storage और वास्तविक UI controls से जोड़ना। जिन systems को external model, sensor या companion चाहिए, उनकी सीमा साफ दिखाई जाएगी।") {
             val meetingText = edit("Meeting transcript / notes", "DECISION: launch after QA\\nACTION: @team: test Android release\\nQUESTION: who owns deployment?").apply { isSingleLine = false; minLines = 4 }
             val meetingOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "09 • MEETING INTELLIGENCE"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f })
+            addView(TextView(this@MainActivity).apply { text = "09 • MEETING INTELLIGENCE"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f })
             addView(meetingText); addView(meetingOutput)
             addView(actionButton("EXTRACT DECISIONS & ACTION ITEMS", "Only explicit DECISION:, ACTION: and QUESTION: transcript markers are extracted") {
                 runCatching { `in`.shraddha.ai.future.MeetingIntelligence.parse(meetingText.text.toString()) }
@@ -1547,7 +1669,7 @@ class MainActivity : AppCompatActivity() {
 
             val taskLines = edit("Task plan • one per line: id|title|dependency IDs|priority 1-5|minutes", "research|Research requirements||2|30\\nbuild|Build feature|research|1|90\\ntest|Test feature|build|1|45").apply { isSingleLine = false; minLines = 4 }
             val taskOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "02 • AUTONOMOUS TASK PLANNER + SELF-REVIEW"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "02 • AUTONOMOUS TASK PLANNER + SELF-REVIEW"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(taskLines); addView(taskOutput)
             addView(actionButton("BUILD DEPENDENCY-AWARE TASK PLAN", "DAG ordering, cycle detection and estimated duration • planning only, no automatic actions") {
                 runCatching {
@@ -1577,7 +1699,7 @@ class MainActivity : AppCompatActivity() {
 
             val briefingLines = edit("Daily briefing items • priority|kind|time|title", "1|task|09:00|Review release build\\n2|event|11:30|Project meeting\\n3|reminder|17:00|Call supplier").apply { isSingleLine = false; minLines = 3 }
             val briefingOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "10 • SMART DAILY BRIEFING"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "10 • SMART DAILY BRIEFING"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(briefingLines); addView(briefingOutput)
             addView(actionButton("GENERATE DAILY BRIEFING", "Uses only the tasks/events you enter; no calendar is read without a connector") {
                 runCatching {
@@ -1593,35 +1715,41 @@ class MainActivity : AppCompatActivity() {
                 }.onFailure { briefingOutput.text = "Briefing input invalid: ${it.message}" }
             })
 
-            val timelineTitle = edit("Life Timeline • event title", "उदाहरण: Shraddha AI milestone")
+            val timelineTitle = edit("Life Timeline • event title", "उदाहरण: $assistantDisplayName milestone")
             val timelineCategory = edit("Event category", "work / personal / project")
             val timelineNote = edit("Event note", "केवल वही जानकारी जो आप खुद सेव करना चाहते हैं")
             val timelineQuery = edit("Search timeline", "keyword")
             val timelineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "21 • LIFE TIMELINE + 22 • CONTEXT RECALL"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "21 • LIFE TIMELINE + 22 • CONTEXT RECALL"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(timelineTitle); addView(timelineCategory); addView(timelineNote); addView(timelineQuery); addView(timelineOutput)
-            fun loadTimeline(): org.json.JSONArray = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_timeline").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
-            addView(actionButton("SAVE TIMELINE EVENT", "Explicit user-entered event • encrypted with Android Keystore") {
+            val timeline = `in`.shraddha.ai.future.LifeTimeline(this@MainActivity)
+            val personalStore = `in`.shraddha.ai.brain.PersonalKnowledgeStore(this@MainActivity)
+            addView(actionButton("SAVE TIMELINE EVENT", "Explicit user-entered event • encrypted local persistence") {
                 runCatching {
                     require(timelineTitle.text.isNotBlank() && timelineCategory.text.isNotBlank())
-                    val array = loadTimeline()
-                    array.put(JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("title", timelineTitle.text.toString().take(120)).put("category", timelineCategory.text.toString().take(40)).put("note", timelineNote.text.toString().take(1000)).put("time", System.currentTimeMillis()))
-                    require(array.length() <= 500)
-                    encryptedStore.put("advanced25_timeline", array.toString()).getOrThrow()
-                    timelineOutput.text = "Encrypted timeline event saved. Total: ${array.length()}"
+                    timeline.add(`in`.shraddha.ai.future.LifeTimeline.Event(
+                        java.util.UUID.randomUUID().toString().replace("-", ""),
+                        timelineTitle.text.toString(), timelineCategory.text.toString(),
+                        System.currentTimeMillis(), timelineNote.text.toString()
+                    ))
+                    timelineOutput.text = "Timeline event saved in encrypted local memory."
                 }.onFailure { timelineOutput.text = "Save failed: ${it.message}" }
             })
-            addView(actionButton("SEARCH CONTEXT TIMELINE", "Search only your saved timeline events") {
-                val query = timelineQuery.text.toString().trim()
-                val array = loadTimeline()
-                val hits = (0 until array.length()).mapNotNull { array.optJSONObject(it) }.filter { it.optString("title").contains(query, true) || it.optString("note").contains(query, true) || it.optString("category").contains(query, true) }.sortedByDescending { it.optLong("time") }
-                timelineOutput.text = if (hits.isEmpty()) "No matching saved events." else hits.joinToString("\\n\\n") { "${it.optString("title")} • ${it.optString("category")}\\n${it.optString("note")}" }
+            addView(actionButton("SEARCH CONTEXT TIMELINE", "Search saved events from the encrypted personal timeline") {
+                runCatching { timeline.search(timelineQuery.text.toString().trim()) }
+                    .onSuccess { hits ->
+                        timelineOutput.text = if (hits.isEmpty()) "No matching saved events." else
+                            hits.joinToString("\n\n") { "${it.title} • ${it.category}\\n${it.note}" }
+                    }.onFailure { timelineOutput.text = "Search failed: ${it.message}" }
             })
             addView(actionButton("DELETE ALL TIMELINE EVENTS", "Permanent local deletion • requires confirmation") {
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete timeline?").setMessage("सभी locally saved timeline events हटेंगे। यह undo नहीं होगा।").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
-                    val removed = encryptedStore.remove("advanced25_timeline")
-                    timelineOutput.text = if (removed) "Timeline events deleted." else "Could not delete timeline."
-                }.show()
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete timeline?")
+                    .setMessage("सभी locally saved timeline events हटेंगे। यह undo नहीं होगा।")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                        runCatching { personalStore.clearTimeline().getOrThrow() }
+                            .onSuccess { timelineOutput.text = "Deleted ${it} timeline event(s)." }
+                            .onFailure { timelineOutput.text = "Could not delete timeline: ${it.message}" }
+                    }.show()
             })
 
             val skillName = edit("Personal skill name", "उदाहरण: My Hindi writing style")
@@ -1629,47 +1757,197 @@ class MainActivity : AppCompatActivity() {
             val skillOutputText = edit("Your approved output", "वह उत्तर जो आपने सही माना").apply { isSingleLine = false; minLines = 2 }
             val skillConsent = CheckBox(this@MainActivity).apply { text = "मैं इस example को future personalization के लिए save करने की अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val skillStatus = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
-            addView(TextView(this@MainActivity).apply { text = "23 • PERSONAL SKILL LEARNING"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "23 • PERSONAL SKILL LEARNING"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(skillName); addView(skillInput); addView(skillOutputText); addView(skillConsent); addView(skillStatus)
-            addView(actionButton("SAVE APPROVED SKILL EXAMPLE", "Explicit consent • encrypted local storage • user can delete") {
+            addView(actionButton("SAVE APPROVED SKILL EXAMPLE", "Explicit consent • Android Keystore encrypted persistence") {
                 runCatching {
                     require(skillConsent.isChecked) { "पहले learning consent checkbox चुनें।" }
-                    val learning = `in`.shraddha.ai.future.PersonalSkillLearning()
+                    val learning = `in`.shraddha.ai.future.PersonalSkillLearning(this@MainActivity)
                     learning.add(true, skillName.text.toString(), skillInput.text.toString(), skillOutputText.text.toString())
-                    val array = runCatching { org.json.JSONArray(encryptedStore.get("advanced25_skills").getOrDefault("[]")) }.getOrDefault(org.json.JSONArray())
-                    array.put(JSONObject().put("skill", skillName.text.toString().take(60)).put("input", skillInput.text.toString().take(2000)).put("approvedOutput", skillOutputText.text.toString().take(4000)).put("approvedAt", System.currentTimeMillis()))
-                    require(array.length() <= 200)
-                    encryptedStore.put("advanced25_skills", array.toString()).getOrThrow()
-                    skillStatus.text = "Approved example encrypted and saved. Examples: ${array.length()}"
+                    skillStatus.text = "Approved example saved in encrypted memory. This skill has ${learning.examplesFor(skillName.text.toString()).size} example(s)."
                 }.onFailure { skillStatus.text = "Not saved: ${it.message}" }
             })
-            addView(actionButton("FORGET ALL LEARNED SKILL EXAMPLES", "Permanent deletion of this feature's encrypted examples") {
-                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Forget learned examples?").setMessage("All saved personal skill examples will be deleted.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
-                    skillStatus.text = if (encryptedStore.remove("advanced25_skills")) "All saved skill examples deleted." else "Could not delete examples."
-                }.show()
+            addView(actionButton("FORGET ALL LEARNED SKILL EXAMPLES", "Permanent deletion of all approved skill examples") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Forget learned examples?")
+                    .setMessage("All saved personal skill examples will be deleted.").setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        runCatching { personalStore.clearSkillExamples().getOrThrow() }
+                            .onSuccess { skillStatus.text = "Deleted ${it} saved skill example(s)." }
+                            .onFailure { skillStatus.text = "Could not delete examples: ${it.message}" }
+                    }.show()
             })
 
             val routineTrigger = edit("Routine trigger phrase", "When I say: prepare morning briefing")
             val routineAction = edit("Proposed routine action", "Prepare briefing draft and show it for review")
             val routineConsent = CheckBox(this@MainActivity).apply { text = "इस routine को enabled proposal के रूप में save करें; actions फिर भी approval माँगेंगे।"; setTextColor(0xFFE4E9F5.toInt()) }
             val routineOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f }
-            addView(TextView(this@MainActivity).apply { text = "24 • SMART ROUTINE AUTOMATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "24 • SMART ROUTINE AUTOMATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(routineTrigger); addView(routineAction); addView(routineConsent); addView(routineOutput)
-            addView(actionButton("SAVE APPROVAL-GATED ROUTINE", "Routine proposal only; no background action is executed") {
+            addView(actionButton("SAVE APPROVAL-GATED ROUTINE", "Encrypted persistent proposal only; no background action is executed") {
                 runCatching {
                     require(routineConsent.isChecked && routineTrigger.text.isNotBlank() && routineAction.text.isNotBlank())
-                    val routine = `in`.shraddha.ai.future.SmartRoutineEngine.Routine("routine-${System.currentTimeMillis()}", routineTrigger.text.toString(), routineTrigger.text.toString(), routineAction.text.toString(), true, true)
-                    val proposal = `in`.shraddha.ai.future.SmartRoutineEngine.propose(routine, routineTrigger.text.toString()) ?: error("Routine did not match its trigger")
-                    encryptedStore.put("advanced25_routine_latest", JSONObject().put("id", proposal.routineId).put("summary", proposal.summary).put("requiresApproval", proposal.requiresApproval).toString()).getOrThrow()
-                    routineOutput.text = "Routine saved. Trigger: ${routine.trigger}\\nAction proposal: ${proposal.summary}\\nFresh user approval required: YES"
+                    val id = "routine-" + java.util.UUID.randomUUID().toString().replace("-", "")
+                    val registry = `in`.shraddha.ai.future.PersistentRoutineRegistry(this@MainActivity)
+                    val routine = `in`.shraddha.ai.future.SmartRoutineEngine.Routine(
+                        id, routineTrigger.text.toString(), routineTrigger.text.toString(),
+                        routineAction.text.toString(), true, true
+                    )
+                    registry.save(routine).getOrThrow()
+                    val proposal = registry.propose(id, routineTrigger.text.toString()).getOrThrow()
+                        ?: error("Routine did not match its trigger")
+                    routineOutput.text = "Routine saved securely. Trigger: ${routine.trigger}\nAction proposal: ${proposal.summary}\nFresh user approval required: YES"
                 }.onFailure { routineOutput.text = "Routine not saved: ${it.message}" }
             })
+
+            addView(actionButton("VIEW / DELETE SAVED ROUTINES", "Review encrypted routines; deletion is confirmation-gated") {
+                val registry = `in`.shraddha.ai.future.PersistentRoutineRegistry(this@MainActivity)
+                registry.all().onSuccess { routines ->
+                    if (routines.isEmpty()) {
+                        routineOutput.text = "No saved routines."
+                    } else {
+                        val labels = routines.map { "${it.title} • ${it.trigger}" }.toTypedArray()
+                        android.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Saved routines")
+                            .setItems(labels) { _, which ->
+                                val selected = routines[which]
+                                android.app.AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Delete routine?")
+                                    .setMessage("Delete '${selected.title}'? This cannot be undone.")
+                                    .setNegativeButton("Cancel", null)
+                                    .setPositiveButton("Delete") { _, _ ->
+                                        registry.delete(selected.id).onSuccess {
+                                            routineOutput.text = if (it) "Routine deleted." else "Routine was not found."
+                                        }.onFailure { error -> routineOutput.text = "Delete failed: ${error.message}" }
+                                    }.show()
+                            }.setNegativeButton("Close", null).show()
+                    }
+                }.onFailure { routineOutput.text = "Could not read saved routines: ${it.message}" }
+            })
+
+            val knowledgeTitle = edit("Knowledge document title", "My reference notes")
+            val knowledgeSource = edit("Source label", "User-selected document / notes")
+            val knowledgeContent = edit("Paste approved source text", "यहाँ अपने चुने हुए document का text paste करें").apply { isSingleLine = false; minLines = 4; maxLines = 8 }
+            val knowledgeQuery = edit("Search personal knowledge", "calibration, invoice, project...")
+            val knowledgeConsent = CheckBox(this@MainActivity).apply {
+                text = "मैं इस source text को encrypted personal knowledge में save करने की अनुमति देता/देती हूँ।"
+                setTextColor(0xFFE4E9F5.toInt())
+            }
+            val knowledgeOutput = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            val knowledgeStore = `in`.shraddha.ai.brain.LocalKnowledgeDocumentStore(this@MainActivity)
+            addView(TextView(this@MainActivity).apply {
+                text = "25 • PERSONAL KNOWLEDGE BRAIN (LOCAL SOURCE RETRIEVAL)"
+                setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4))
+            })
+            addView(knowledgeTitle); addView(knowledgeSource); addView(knowledgeContent)
+            addView(knowledgeConsent); addView(knowledgeQuery); addView(knowledgeOutput)
+            addView(actionButton("IMPORT APPROVED KNOWLEDGE TEXT", "Paste-only import • encrypted local storage • no automatic URL crawling") {
+                runCatching {
+                    require(knowledgeConsent.isChecked) { "पहले source import consent दें।" }
+                    val id = "doc-" + java.util.UUID.randomUUID().toString().replace("-", "")
+                    knowledgeStore.importText(
+                        true, id, knowledgeTitle.text.toString(), knowledgeSource.text.toString(),
+                        content = knowledgeContent.text.toString()
+                    ).getOrThrow()
+                    knowledgeOutput.text = "Source text imported securely. Documents: ${knowledgeStore.listDocuments().getOrThrow().size}"
+                }.onFailure { knowledgeOutput.text = "Import failed: ${it.message}" }
+            })
+            addView(actionButton("SEARCH KNOWLEDGE WITH CITATIONS", "Lexical local retrieval; each result cites its saved source and section") {
+                runCatching { knowledgeStore.search(knowledgeQuery.text.toString().trim(), 8).getOrThrow() }
+                    .onSuccess { hits ->
+                        knowledgeOutput.text = if (hits.isEmpty()) "No matching source sections." else
+                            hits.joinToString("\n\n") { "${it.citation}\n${it.excerpt}" }
+                    }.onFailure { knowledgeOutput.text = "Search failed: ${it.message}" }
+            })
+            addView(actionButton("DELETE PERSONAL KNOWLEDGE DOCUMENTS", "Permanent local deletion • requires confirmation") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Delete personal knowledge?")
+                    .setMessage("सभी imported personal knowledge documents permanently delete होंगे।")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                        runCatching { knowledgeStore.clear().getOrThrow() }
+                            .onSuccess { knowledgeOutput.text = "Deleted ${it} knowledge document(s)." }
+                            .onFailure { knowledgeOutput.text = "Delete failed: ${it.message}" }
+                    }.show()
+            })
+
+            val homeAssistant = `in`.shraddha.ai.brain.HomeAssistantGateway(this@MainActivity)
+            val haUrl = edit("Home Assistant HTTPS URL", "https://home.example.com")
+            val haToken = edit("Long-lived access token", "Stored encrypted on this phone").apply {
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            val haEntity = edit("Entity ID", "light.living_room")
+            val haService = edit("Allowlisted service", "turn_on / turn_off / toggle")
+            val haTemperature = edit("Climate temperature °C (climate only)", "20.0")
+            val haOutput = TextView(this@MainActivity).apply {
+                setTextColor(0xFFE4E9F5.toInt()); textSize = 12f
+                setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14)
+            }
+            lifecycleScope.launch {
+                val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { homeAssistant.loadConfig() }
+                saved.onSuccess { config -> if (config != null) haUrl.setText(config.baseUrl) }
+                    .onFailure { haOutput.text = "Saved Home Assistant settings could not be read: ${it.message}" }
+            }
+            addView(TextView(this@MainActivity).apply {
+                text = "26 • SMART HOME — HOME ASSISTANT"
+                setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4))
+            })
+            addView(haUrl); addView(haToken)
+            addView(actionButton("SAVE ENCRYPTED HOME ASSISTANT SETTINGS", "HTTPS only • token stored with Android Keystore AES-GCM") {
+                lifecycleScope.launch {
+                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        homeAssistant.saveConfig(haUrl.text.toString(), haToken.text.toString())
+                    }
+                    result.onSuccess {
+                        haToken.setText("")
+                        haOutput.text = "Home Assistant settings saved encrypted. The token is not displayed again."
+                    }.onFailure { haOutput.text = "Settings not saved: ${it.message}" }
+                }
+            })
+            addView(actionButton("LIST SUPPORTED HOME ASSISTANT ENTITIES", "Light, switch, fan, climate and cover entities only") {
+                lifecycleScope.launch {
+                    haOutput.text = "Loading Home Assistant entities…"
+                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { homeAssistant.listEntities() }
+                    result.onSuccess { entities ->
+                        haOutput.text = if (entities.isEmpty()) "No supported entities were returned." else
+                            entities.take(100).joinToString("\n") { "${it.entityId} • ${it.name} • ${it.state}" }
+                    }.onFailure { haOutput.text = "Entity list failed: ${it.message}" }
+                }
+            })
+            addView(haEntity); addView(haService); addView(haTemperature)
+            addView(actionButton("CONTROL HOME DEVICE", "Only allowlisted service calls • each action asks for fresh confirmation") {
+                val entity = haEntity.text.toString().trim()
+                val service = haService.text.toString().trim()
+                val temperature = haTemperature.text.toString().toDoubleOrNull()
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Confirm smart-home action")
+                    .setMessage("Send '$service' to '$entity'? The request will be sent to your configured Home Assistant server.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Confirm") { _, _ ->
+                        lifecycleScope.launch {
+                            haOutput.text = "Sending approved smart-home action…"
+                            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                homeAssistant.callService(true, entity, service, temperature)
+                            }
+                            haOutput.text = result.fold({ it }, { "Smart-home action failed: ${it.message}" })
+                        }
+                    }.show()
+            })
+            addView(actionButton("CLEAR HOME ASSISTANT SETTINGS", "Delete encrypted server URL and access token") {
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle("Clear Home Assistant settings?")
+                    .setMessage("The saved encrypted server URL and token will be deleted.")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
+                        homeAssistant.clearConfig().onSuccess { haOutput.text = "Home Assistant settings cleared." }
+                            .onFailure { haOutput.text = "Could not clear settings: ${it.message}" }
+                    }.show()
+            })
+            addView(haOutput)
 
             val wakePhrase = edit("Wake phrase", "Hey Shraddha")
             val wakeConsent = CheckBox(this@MainActivity).apply { text = "मैं microphone wake phrase detection के लिए स्पष्ट अनुमति देता/देती हूँ।"; setTextColor(0xFFE4E9F5.toInt()) }
             val wakeStatus = TextView(this@MainActivity).apply { setTextColor(0xFFFFC98A.toInt()); textSize = 12f }
             var wakeGate = `in`.shraddha.ai.future.WakePhraseGate("Hey Shraddha")
-            addView(TextView(this@MainActivity).apply { text = "07 • WAKE PHRASE FOUNDATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "07 • WAKE PHRASE FOUNDATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(wakePhrase); addView(wakeConsent); addView(wakeStatus)
             addView(actionButton("ARM WAKE PHRASE STATE", "This validates consent/state only. Acoustic wake-word model is not bundled or running.") {
                 runCatching {
@@ -1690,7 +1968,7 @@ class MainActivity : AppCompatActivity() {
             val translationTarget = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("en", "hi", "mr", "es", "fr", "de")) }
             val translationText = edit("Text to translate", "यहाँ text लिखें").apply { isSingleLine = false; minLines = 2 }
             val translationOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "12 • AI TRANSLATION"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "12 • AI TRANSLATION"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(translationSource); addView(translationTarget); addView(translationText); addView(translationOutput)
             addView(actionButton("TRANSLATE USING CONFIGURED AI", "Provider-based text translation • live camera overlay is not yet connected") {
                 runCatching { `in`.shraddha.ai.future.LiveTranslationEngine.prepare(translationText.text.toString(), translationSource.selectedItem.toString(), translationTarget.selectedItem.toString()) }
@@ -1737,11 +2015,11 @@ class MainActivity : AppCompatActivity() {
 
             val troubleCategory = Spinner(this@MainActivity).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("network", "battery", "electrical", "general")) }
             val troubleOutput = TextView(this@MainActivity).apply { setTextColor(0xFFE4E9F5.toInt()); textSize = 12f; setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(0xFF0C1525.toInt(), 14) }
-            addView(TextView(this@MainActivity).apply { text = "13 • VISUAL TROUBLESHOOTING PLAYBOOKS"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "13 • VISUAL TROUBLESHOOTING PLAYBOOKS"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(troubleCategory); addView(troubleOutput)
             addView(actionButton("SHOW SAFE TROUBLESHOOTING STEPS", "Safety-first guide; not a diagnosis or automatic device repair") {
                 val steps = `in`.shraddha.ai.future.VisualTroubleshootingEngine.playbook(troubleCategory.selectedItem.toString())
-                troubleOutput.text = steps.mapIndexed { index, step -> "${index + 1}. ${step.instruction}\\n   Expected: ${step.expectedObservation}" }.joinToString("\\n\\n")
+                troubleOutput.text = steps.mapIndexed { index, step -> "${index + 1}. ${step.instruction}\\n   Expected: ${step.expectedObservation}" }.joinToString("\n\n")
             })
 
             val notificationPrefs = getSharedPreferences(`in`.shraddha.ai.future.ShraddhaNotificationListener.PREFS, MODE_PRIVATE)
@@ -1763,7 +2041,7 @@ class MainActivity : AppCompatActivity() {
                 val events = runCatching { val saved = EncryptedFeatureStore(this@MainActivity).get(`in`.shraddha.ai.future.ShraddhaNotificationListener.ENCRYPTED_EVENTS_KEY).getOrThrow(); if (saved.isBlank()) 0 else org.json.JSONArray(saved).length() }.getOrDefault(0)
                 notificationStatus.text = "OS notification access: ${if (access) "GRANTED" else "NOT GRANTED"}\nMetadata capture: ${if (notificationConsent.isChecked) "ON" else "OFF"}\nStored metadata events: $events / 100\nNotification content is never read; notifications are never dismissed."
             }
-            addView(TextView(this@MainActivity).apply { text = "19 • SMART NOTIFICATION MANAGER"; setTextColor(0xFFBFAEFF.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
+            addView(TextView(this@MainActivity).apply { text = "19 • SMART NOTIFICATION MANAGER"; setTextColor(0xFF8CE8E7.toInt()); textSize = 14f; setPadding(0, dp(12), 0, dp(4)) })
             addView(notificationConsent); addView(quietHoursConsent); addView(notificationStatus)
             addView(actionButton("SAVE NOTIFICATION PRIVACY SETTINGS", "Metadata-only, local, bounded history; off by default") {
                 notificationPrefs.edit()
@@ -2501,18 +2779,70 @@ class MainActivity : AppCompatActivity() {
             })
         }
     }
+    private fun observeCouncilWork(workId: java.util.UUID, output: TextView) {
+        androidx.work.WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId).observe(this) { info ->
+            if (info == null) return@observe
+            val message = when (info.state) {
+                androidx.work.WorkInfo.State.ENQUEUED -> "Queued — network मिलने पर शुरू होगा."
+                androidx.work.WorkInfo.State.RUNNING -> {
+                    val role = info.progress.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_ROLE).orEmpty()
+                    val index = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_INDEX, 0)
+                    val total = info.progress.getInt(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_PROGRESS_TOTAL, 7)
+                    "Working: " + role + " (" + index + "/" + total + ")"
+                }
+                androidx.work.WorkInfo.State.SUCCEEDED -> "Completed. Verifier report:\n" +
+                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_FINAL_REPORT).orEmpty()
+                androidx.work.WorkInfo.State.FAILED -> "Failed: " +
+                    info.outputData.getString(`in`.shraddha.ai.future.BackgroundTaskQueue.KEY_ERROR).orEmpty()
+                androidx.work.WorkInfo.State.CANCELLED -> "Cancelled by WorkManager."
+                else -> "Waiting for background worker."
+            }
+            output.text = "Parallel council • " + message
+            if ((info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
+                info.state == androidx.work.WorkInfo.State.FAILED ||
+                info.state == androidx.work.WorkInfo.State.CANCELLED) && activeCouncilWorkId == workId) {
+                activeCouncilWorkId = null
+                val prefs = getSharedPreferences("shraddha_agent_work", MODE_PRIVATE)
+                if (prefs.getString("active_work_id", null) == workId.toString()) prefs.edit().remove("active_work_id").apply()
+            }
+        }
+    }
+
     private fun section(root: LinearLayout, title: String, subtitle: String, content: LinearLayout.() -> Unit): LinearLayout {
         val card = MaterialCardView(this).apply {
-            radius = dp(22).toFloat(); cardElevation = dp(3).toFloat()
-            strokeWidth = dp(1); strokeColor = 0xFF26344D.toInt()
-            setCardBackgroundColor(0xFF111827.toInt())
+            radius = dp(22).toFloat()
+            cardElevation = dp(8).toFloat()
+            maxCardElevation = dp(10).toFloat()
+            strokeWidth = dp(1)
+            strokeColor = 0xFF2D6671.toInt()
+            setCardBackgroundColor(0xFF0A1120.toInt())
+            useCompatPadding = true
+            preventCornerOverlap = true
+            translationZ = dp(1).toFloat()
         }
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(12)) }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(12))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF173540.toInt(), 0xFF102B37.toInt(), 0xFF0C202D.toInt())
+            ).apply {
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), 0xFF2D6874.toInt())
+            }
+        }
         card.addView(body)
-        body.addView(TextView(this).apply { text = title; textSize = 14f; letterSpacing = .06f; setTextColor(0xFFBDA8FF.toInt()); setTypeface(null, android.graphics.Typeface.BOLD) })
-        body.addView(TextView(this).apply { text = subtitle; textSize = 12f; setTextColor(0xFF93A2BA.toInt()); setPadding(0, dp(5), 0, dp(14)) })
+        body.addView(TextView(this).apply {
+            text = title; textSize = 14f; letterSpacing = .06f
+            setTextColor(0xFF8CE8E7.toInt()); setTypeface(null, android.graphics.Typeface.BOLD)
+            setShadowLayer(dp(5).toFloat(), 0f, 1f, 0x5534D6D0)
+        })
+        body.addView(TextView(this).apply {
+            text = subtitle; textSize = 12f; setTextColor(0xFFAAB8D0.toInt())
+            setPadding(0, dp(5), 0, dp(14))
+        })
         body.content()
-        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
         return body
     }
 
@@ -3049,6 +3379,19 @@ class MainActivity : AppCompatActivity() {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty().trim()
             val normalized = spoken.lowercase()
             val action = when {
+                normalized in listOf("pc hardware status", "hardware status", "पीसी की जानकारी बताओ", "कंप्यूटर की स्थिति बताओ", "पीसी का स्टेटस बताओ") -> JSONObject().put("kind", "hardware_status")
+                normalized.matches(Regex("^(?:set )?(?:pc|computer) volume (?:100|[0-9]{1,2})%?$")) ||
+                    normalized.matches(Regex("^(?:पीसी|कंप्यूटर) का (?:वॉल्यूम|आवाज) (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) ->
+                    JSONObject().put("kind", "set_volume").put("percent", normalized.filter { it.isDigit() }.toInt())
+                normalized.matches(Regex("^(?:set )?(?:pc|computer) brightness (?:100|[0-9]{1,2})%?$")) ||
+                    normalized.matches(Regex("^(?:पीसी|कंप्यूटर) की ब्राइटनेस (?:100|[0-9]{1,2})(?: प्रतिशत|%)?$")) ->
+                    JSONObject().put("kind", "set_brightness").put("percent", normalized.filter { it.isDigit() }.toInt())
+                normalized in listOf("pc shutdown", "shutdown pc", "पीसी बंद करो", "कंप्यूटर बंद करो") ->
+                    JSONObject().put("kind", "power").put("operation", "shutdown")
+                normalized in listOf("restart pc", "pc restart", "पीसी रीस्टार्ट करो", "कंप्यूटर रीस्टार्ट करो") ->
+                    JSONObject().put("kind", "power").put("operation", "restart")
+                normalized in listOf("sleep pc", "pc sleep", "पीसी स्लीप करो", "कंप्यूटर को स्लीप करो") ->
+                    JSONObject().put("kind", "power").put("operation", "sleep")
                 normalized in listOf("वापस जाओ", "go back", "back") -> JSONObject().put("kind", "back")
                 normalized in listOf("होम", "डेस्कटॉप दिखाओ", "show desktop", "go home") -> JSONObject().put("kind", "home")
                 normalized in listOf("नीचे स्क्रॉल करो", "scroll down") -> JSONObject().put("kind", "scroll").put("amount", -4)
@@ -3113,8 +3456,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun validRelay(url: String) = url.startsWith("https://") && !url.contains("your-domain")
     private fun edit(label: String, hint: String) = EditText(this).apply {
-        this.hint = "$label  •  $hint"; setHintTextColor(0xFF8291AA.toInt()); setTextColor(-1); textSize = 14f
-        setSingleLine(true); setPadding(dp(14), dp(13), dp(14), dp(13)); background = rounded(0xFF0B1220.toInt(), 14)
+        this.hint = "$label  •  $hint"
+        setHintTextColor(0xFF8291AA.toInt())
+        setTextColor(-1)
+        textSize = 14f
+        setSingleLine(true)
+        setPadding(dp(14), dp(13), dp(14), dp(13))
+        background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF07151F.toInt(), 0xFF102A35.toInt())
+        ).apply {
+            cornerRadius = dp(14).toFloat()
+            setStroke(dp(1), 0xFF2D6874.toInt())
+        }
+        elevation = dp(1).toFloat()
+        minimumHeight = dp(50)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
     }
     private fun actionButton(label: String, hint: String, action: () -> Unit): LinearLayout {
@@ -3124,10 +3480,10 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(15), dp(11), dp(14), dp(11))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF493B80.toInt(), 0xFF26385C.toInt())
+                intArrayOf(0xFF14505C.toInt(), 0xFF173D59.toInt())
             ).apply {
                 cornerRadius = dp(17).toFloat()
-                setStroke(dp(1), 0xFF7464B8.toInt())
+                setStroke(dp(1), 0xFF4CBFC8.toInt())
             }
             foreground = android.util.TypedValue().let { value ->
                 context.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
@@ -3150,14 +3506,14 @@ class MainActivity : AppCompatActivity() {
         textColumn.addView(TextView(this).apply {
             text = hint
             textSize = 10.5f
-            setTextColor(0xFFD0D5EA.toInt())
+            setTextColor(0xFFB7E5E8.toInt())
             setPadding(0, dp(3), 0, 0)
         })
         button.addView(textColumn, LinearLayout.LayoutParams(0, -2, 1f))
         button.addView(TextView(this).apply {
             text = "↗"
             textSize = 18f
-            setTextColor(0xFFE0D8FF.toInt())
+            setTextColor(0xFFD2FCFF.toInt())
             gravity = android.view.Gravity.CENTER
         }, LinearLayout.LayoutParams(dp(24), -1))
         button.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
@@ -3181,8 +3537,46 @@ object VoiceCommandParser {
 }
 
 
-/** Animated 3D-style energy orb. Its animation is decorative; microphone state is reported separately. */
-private class ShraddhaOrbView(context: android.content.Context, assistantName: String) : View(context) {
+/** Animated 3D energy core. Motion and accessibility state follow the real voice session. */
+private class ShraddhaOrbView(context: android.content.Context, private val assistantName: String, private var reducedMotion: Boolean, private var orbStyle: NovaOrbStyle) : View(context) {
+    private var voiceState: NovaOrbState = NovaOrbState.IDLE
+    private var microphoneAmplitude: Float = 0f
+    private var microphoneMuted: Boolean = false
+
+    fun setVoiceState(state: NovaOrbState) {
+        voiceState = state
+        updateDescription()
+        invalidate()
+    }
+
+    fun setAmplitude(value: Float) {
+        microphoneAmplitude = value.coerceIn(0f, 1f)
+        invalidate()
+    }
+
+    fun setMuted(muted: Boolean) {
+        microphoneMuted = muted
+        updateDescription()
+        invalidate()
+    }
+
+    fun setOrbStyle(style: NovaOrbStyle) {
+        orbStyle = style
+        invalidate()
+    }
+
+    private fun updateDescription() {
+        val label = when {
+            microphoneMuted -> "microphone muted"
+            voiceState == NovaOrbState.LISTENING -> "microphone listening"
+            voiceState == NovaOrbState.SPEAKING -> "assistant speaking"
+            voiceState == NovaOrbState.THINKING -> "assistant thinking"
+            voiceState == NovaOrbState.CONNECTING -> "connecting; microphone capture has not started"
+            voiceState == NovaOrbState.ERROR -> "voice error; microphone is not active"
+            else -> "idle; microphone is not active"
+        }
+        contentDescription = "$assistantName energy core. Current state: $label."
+    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -3196,13 +3590,21 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        contentDescription = "$assistantName animated energy orb. Microphone state is shown by the voice controls."
+        updateDescription()
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (!animator.isStarted) animator.start()
+        if (!reducedMotion && !animator.isStarted) animator.start()
+    }
+
+    fun setReducedMotion(enabled: Boolean) {
+        if (reducedMotion == enabled) return
+        reducedMotion = enabled
+        if (enabled) animator.cancel()
+        else if (isAttachedToWindow && !animator.isStarted) animator.start()
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -3211,15 +3613,43 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         val cy = height / 2f
         val base = minOf(width, height) * .285f
         if (base <= 0f) return
-        val wave = (kotlin.math.sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
-        val pulse = 1f + .035f * wave
-        val rotation = phase * 360f
+        val motionPhase = if (reducedMotion) 0f else phase
+        val wave = (kotlin.math.sin(motionPhase * Math.PI * 2.0).toFloat() + 1f) * .5f
+        val statePulse = if (microphoneMuted && voiceState == NovaOrbState.LISTENING) .012f else when (voiceState) {
+            NovaOrbState.LISTENING -> .045f + microphoneAmplitude * .11f
+            NovaOrbState.SPEAKING -> .065f + microphoneAmplitude * .10f
+            NovaOrbState.THINKING -> .045f
+            NovaOrbState.CONNECTING -> .018f
+            NovaOrbState.ERROR -> .006f
+            NovaOrbState.IDLE -> .012f
+        }
+        val pulse = 1f + statePulse * wave
+        val spinRate = if (microphoneMuted && voiceState == NovaOrbState.LISTENING) .55f else when (voiceState) {
+            NovaOrbState.LISTENING -> 1.2f
+            NovaOrbState.THINKING -> .68f
+            NovaOrbState.SPEAKING -> 1.55f
+            NovaOrbState.CONNECTING -> .82f
+            NovaOrbState.ERROR -> .22f
+            NovaOrbState.IDLE -> .55f
+        }
+        val styleSpin = when (orbStyle) {
+            NovaOrbStyle.MINIMAL -> .42f
+            NovaOrbStyle.SATURN -> .78f
+            NovaOrbStyle.ARCHER -> 1.08f
+            else -> 1f
+        }
+        val rotation = motionPhase * 360f * spinRate * styleSpin
 
         // Soft atmospheric halo behind the core.
         paint.style = Paint.Style.FILL
         paint.shader = RadialGradient(
             cx, cy, base * 2.05f,
-            intArrayOf(0x443D7BFF, 0x222B4DCE, 0x003D7BFF),
+            when (orbStyle) {
+                NovaOrbStyle.ARCHER -> intArrayOf(0x44FFD36A, 0x224C3A1C, 0x00FFD36A)
+                NovaOrbStyle.GLASS -> intArrayOf(0x448CE8E7, 0x223B8B9A, 0x008CE8E7)
+                NovaOrbStyle.MINIMAL -> intArrayOf(0x2230DDE5, 0x11225F7C, 0x0030DDE5)
+                else -> intArrayOf(0x4430DDE5, 0x22225F7C, 0x0030DDE5)
+            },
             floatArrayOf(0f, .52f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -3227,11 +3657,25 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         paint.shader = null
 
         // Three tilted orbital rings create a layered, dimensional silhouette.
-        val ringColors = intArrayOf(0xAA74E6FF.toInt(), 0x997D76FF.toInt(), 0x8878B7FF.toInt())
-        for (i in 0..2) {
+        val ringColors = if (voiceState == NovaOrbState.ERROR) {
+            intArrayOf(0xFFFF7C82.toInt(), 0xCCFF9A86.toInt(), 0xAAE46B78.toInt())
+        } else when (orbStyle) {
+            NovaOrbStyle.ARCHER -> intArrayOf(0xFFFFD36A.toInt(), 0xCCF2A94A.toInt(), 0x99E7C06D.toInt())
+            NovaOrbStyle.AURORA -> intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8866C2A0.toInt())
+            NovaOrbStyle.PLASMA -> intArrayOf(0xAA68E7EA.toInt(), 0x9972B9D9.toInt(), 0x8852A9D4.toInt())
+            NovaOrbStyle.GLASS -> intArrayOf(0xAAE6FFFF.toInt(), 0x9978C9D8.toInt(), 0x8868A9C2.toInt())
+            NovaOrbStyle.MINIMAL -> intArrayOf(0x8868E7EA.toInt(), 0x0071D7C9.toInt(), 0x0072B9D9.toInt())
+            else -> intArrayOf(0xAA68E7EA.toInt(), 0x9971D7C9.toInt(), 0x8872B9D9.toInt())
+        }
+        val ringCount = when (orbStyle) {
+            NovaOrbStyle.MINIMAL -> 1
+            NovaOrbStyle.GLASS -> 2
+            else -> 3
+        }
+        for (i in 0 until ringCount) {
             canvas.save()
             canvas.rotate(rotation * (if (i == 1) -0.72f else 0.48f) + i * 58f, cx, cy)
-            canvas.scale(1f, if (i == 1) .34f else .48f, cx, cy)
+            canvas.scale(if (orbStyle == NovaOrbStyle.SATURN && i == 0) 1.55f else 1f, if (orbStyle == NovaOrbStyle.SATURN && i == 0) .25f else if (i == 1) .34f else .48f, cx, cy)
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = base * (if (i == 0) .027f else .016f)
             paint.color = ringColors[i]
@@ -3241,16 +3685,22 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
             val orbit = base * (1.28f + i * .12f)
             val dx = cx + kotlin.math.cos(dotAngle).toFloat() * orbit
             val dy = cy + kotlin.math.sin(dotAngle).toFloat() * orbit
-            paint.color = if (i == 0) 0xFFE8FCFF.toInt() else 0xFFD8C8FF.toInt()
+            paint.color = if (i == 0) 0xFFE8FCFF.toInt() else 0xFFD4FFFF.toInt()
             canvas.drawCircle(dx, dy, base * .055f, paint)
             canvas.restore()
         }
 
         // Core depth: dark outer shell, luminous radial volume, then specular highlights.
         paint.style = Paint.Style.FILL
+        val coreColors = when (orbStyle) {
+            NovaOrbStyle.ARCHER -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFE9B0.toInt(), 0xFFFFC45C.toInt(), 0xFF9B5C24.toInt(), 0xFF081C2B.toInt())
+            NovaOrbStyle.GLASS -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFE6FFFF.toInt(), 0xFF9DE4EA.toInt(), 0xFF347F95.toInt(), 0xFF081C2B.toInt())
+            NovaOrbStyle.MINIMAL -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFC9FFF8.toInt(), 0xFF68E7EA.toInt(), 0xFF237D91.toInt(), 0xFF081C2B.toInt())
+            else -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFC9FFF8.toInt(), 0xFF4FD9D0.toInt(), 0xFF237D91.toInt(), 0xFF081C2B.toInt())
+        }
         paint.shader = RadialGradient(
             cx - base * .30f, cy - base * .36f, base * 1.48f,
-            intArrayOf(0xFFFFFFFF.toInt(), 0xFFDAD4FF.toInt(), 0xFF8F79FF.toInt(), 0xFF414DB5.toInt(), 0xFF111A3B.toInt()),
+            coreColors,
             floatArrayOf(0f, .16f, .42f, .76f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -3263,12 +3713,13 @@ private class ShraddhaOrbView(context: android.content.Context, assistantName: S
         canvas.drawCircle(cx + base * .34f, cy + base * .28f, base * .24f, paint)
 
         // Small orbiting energy points add motion without implying a live camera feed.
-        for (i in 0 until 12) {
-            val angle = phase * Math.PI * 2.0 + i * (Math.PI * 2.0 / 12.0)
+        val energyPoints = if (orbStyle == NovaOrbStyle.MINIMAL) 0 else if (orbStyle == NovaOrbStyle.GLASS) 6 else 12
+        for (i in 0 until energyPoints) {
+            val angle = motionPhase * Math.PI * 2.0 + i * (Math.PI * 2.0 / energyPoints)
             val orbit = base * (1.58f + .08f * kotlin.math.sin(angle * 2.0).toFloat())
             val x = cx + kotlin.math.cos(angle).toFloat() * orbit
             val y = cy + kotlin.math.sin(angle).toFloat() * orbit * .72f
-            paint.color = if (i % 3 == 0) 0xFFD9FBFF.toInt() else 0x997F9DFF.toInt()
+            paint.color = if (i % 3 == 0) 0xFFD9FBFF.toInt() else 0x9981DDE3.toInt()
             canvas.drawCircle(x, y, base * (if (i % 3 == 0) .026f else .014f), paint)
         }
     }

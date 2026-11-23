@@ -17,7 +17,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-/** SAF-based, consent-gated 100 MB file transfer workspace. */
+/** SAF-based, consent-gated 100 MiB file transfer workspace. */
 class DeviceTransferActivity : Activity() {
     private lateinit var peer: EditText
     private lateinit var progress: ProgressBar
@@ -48,17 +48,26 @@ class DeviceTransferActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(22,22,22,22); setBackgroundColor(0xFF080E1B.toInt()) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24); setBackgroundColor(0xFF07131D.toInt()) }
         root.addView(TextView(this).apply { text = "DEVICE UNIVERSE • FILE TRANSFER"; textSize = 19f; setTextColor(Color.WHITE); setTypeface(null, android.graphics.Typeface.BOLD) })
-        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 20 MB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
-        peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()); setText(intent.getStringExtra("peer").orEmpty()) }; root.addView(peer)
+        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MiB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFF73DDE7.toInt()); setPadding(0,8,0,14) })
+        peer = EditText(this).apply {
+            hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+            setText(intent.getStringExtra("peer").orEmpty()); setPadding(16, 12, 16, 12)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
+        }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
         pauseButton = button("PAUSE TRANSFER") { paused.set(!paused.get()); pauseButton.text = if (paused.get()) "RESUME TRANSFER" else "PAUSE TRANSFER"; status.text = if (paused.get()) "Paused locally. Resume to continue." else "Resuming transfer…" }
         root.addView(pauseButton)
         root.addView(button("CANCEL TRANSFER") { cancelTransfer() })
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0 }; root.addView(progress)
-        status = TextView(this).apply { text = "Select a paired device ID. Receiver must enable Documents sharing and approve the incoming file."; setTextColor(0xFFE4EAF6.toInt()); setPadding(0,14,0,14) }; root.addView(status)
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; progress = 0
+            progressTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+        }; root.addView(progress)
+        status = TextView(this).apply { text = "Select a paired device ID. Receiver must enable Documents sharing and approve the incoming file."; setTextColor(0xFFE6F5F7.toInt()); setPadding(0,14,0,14) }; root.addView(status)
         root.addView(button("CLOSE") { finish() })
         setContentView(ScrollView(this).apply { addView(root) })
         restoreTransferState()
@@ -76,8 +85,12 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; setTextColor(Color.WHITE)
-        backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF5547A8.toInt())
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f; setPadding(18, 12, 18, 12)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
         setOnClickListener { action() }
     }
 
@@ -95,7 +108,7 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256"); var total = 0L
         contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(64 * 1024)
-            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 20_000_000L) { "Maximum file size is 20 MB" }; digest.update(buffer, 0, n) }
+            while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= DeviceFileTransferProtocol.MAX_FILE_BYTES) { "Maximum file size is 100 MiB" }; digest.update(buffer, 0, n) }
         } ?: throw IllegalStateException("Cannot open selected file")
         require(total > 0) { "Empty files are not supported" }
         return total to digest.digest().joinToString("") { "%02x".format(it) }
@@ -145,7 +158,7 @@ class DeviceTransferActivity : Activity() {
         val target = peer.text.toString().trim(); val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
         persistTransferState()
-        val chunks = ((sourceSize + 49151) / 48000).toInt()
+        val chunks = DeviceFileTransferProtocol.chunkCount(sourceSize) ?: run { status.text = "Unsupported file size."; return }
         if (!DeviceLinkManager.startFileTransfer(target, requestId, transferId, sourceName, sourceSize, chunks, sourceHash)) { status.text = "Could not start transfer. Check relay and receiver permission."; return }
         status.text = "Transfer started. Waiting for receiver to accept and select destination…"
     }
@@ -154,9 +167,9 @@ class DeviceTransferActivity : Activity() {
         val uri = sourceUri ?: throw IllegalStateException("Source file is no longer selected")
         val input = contentResolver.openInputStream(uri) ?: throw IllegalStateException("Cannot reopen source file")
         input.use {
-            var skip = index.toLong() * 48000L
+            var skip = index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES
             while (skip > 0) { val n = it.skip(skip); if (n <= 0) throw IllegalStateException("Could not seek source file"); skip -= n }
-            val buffer = ByteArray(48000); var count = 0
+            val buffer = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES); var count = 0
             while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
             val bytes = buffer.copyOf(count)
             require(bytes.isNotEmpty())
@@ -169,7 +182,7 @@ class DeviceTransferActivity : Activity() {
         cancelled.set(false)
         sendThread = thread(name = "shraddha-file-send") {
             try {
-                val all = if (indexes.isEmpty()) (0 until ((sourceSize + 49151) / 48000).toInt()).toList() else indexes
+                val all = if (indexes.isEmpty()) (0 until (DeviceFileTransferProtocol.chunkCount(sourceSize) ?: 0)).toList() else indexes
                 for ((position, index) in all.withIndex()) {
                     while (paused.get() && !cancelled.get()) Thread.sleep(200)
                     if (cancelled.get()) break
@@ -194,7 +207,7 @@ class DeviceTransferActivity : Activity() {
                 incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
                 incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..(20_000_000L) || incomingCount !in 1..417 || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
+                if (incomingSize !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || incomingCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
@@ -231,9 +244,9 @@ class DeviceTransferActivity : Activity() {
             require(msg.optString("transferId") == transferId && incomingOut != null)
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = if (index == incomingCount - 1) (incomingSize - index * 48000L).toInt() else 48000
+            val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
             require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * 48000L); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
+            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
             progress.progress = (incomingChunks * 100 / incomingCount)
             status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"

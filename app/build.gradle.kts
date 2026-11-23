@@ -43,6 +43,10 @@ android {
             ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
         if (requestedAbis.isNotEmpty()) ndk { abiFilters += requestedAbis }
     }
+    // Keep APK packaging deterministic. Play App Bundles generate device-specific
+    // ABI/configuration splits automatically; a manual ABI split here duplicates
+    // resource outputs in buildReleasePreBundle on the current AGP toolchain.
+    
     // Release signing is configured only when CI signing secrets are present.
     signingConfigs {
         create("release") {
@@ -108,6 +112,10 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraXVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
     implementation("androidx.camera:camera-view:$cameraXVersion")
+    // ARCore world tracking and optional depth mapping (supported devices only).
+    implementation("com.google.ar:core:1.49.0")
+    // TLS MQTT client for explicitly configured local smart-home brokers.
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
@@ -123,6 +131,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
+    implementation("com.google.mlkit:object-detection:17.0.2")
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.1")
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")

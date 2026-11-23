@@ -7,8 +7,8 @@ Shraddha AI has a native Android inference path using Google's LiteRT-LM Kotlin 
 1. Obtain a compatible `.litertlm` model from the [LiteRT Community model collection](https://huggingface.co/LiteRT).
 2. Review the model licence and usage terms.
 3. Choose a model that fits the phone's RAM and storage. Weights are not bundled in the APK.
-4. In the AI Assistant workspace, select **SELECT ON-DEVICE LLM MODEL** and import the file.
-5. Select **CHECK DEVICE RAM & STORAGE** before inference.
+4. On the home screen, open **Offline AI** and import the file. The app copies it to private internal storage as the active model.
+5. Select **CHECK DEVICE RAM & STORAGE** before inference, then use **RUN OFFLINE MODEL** to execute a real local prompt.
 
 ## Memory preflight
 
@@ -43,3 +43,9 @@ Acceleration is device- and model-dependent. Selecting GPU or NPU does not guara
 - [LiteRT hardware backends](https://developers.google.com/edge/litert)
 
 The Gradle dependency is pinned in `app/build.gradle.kts` to `com.google.ai.edge.litertlm:litertlm-android:0.19.1` for reproducible builds. Check the project's version catalog before upgrading it.
+
+## Offline Model Manager screen
+
+The Home screen now links to Offline AI. It imports a user-selected `.litertlm` file through Android Storage Access Framework, validates the extension and minimum size, copies it into app-private storage with a bounded 5 GB import limit, persists the active model path, runs the existing memory preflight, and invokes `LocalOfflineLlm.generate()` on an IO dispatcher. The model inference path has no network client and no cloud fallback. Removing the imported model closes the runtime and deletes the app-private copy.
+
+No model weights are bundled with this source or APK: model weights are large, device-specific and have independent licence terms. The app requires the user to obtain a compatible model from a trusted source and review its licence. Offline voice recognition and speech synthesis remain separate integrations; this screen provides local text inference only.

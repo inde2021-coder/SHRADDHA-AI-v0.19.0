@@ -1,0 +1,54 @@
+name: Windows PC Hardware Agent CI
+
+on:
+  push:
+    branches:
+      - feature/complete-pending-shraddha-features
+    paths:
+      - "pc_companion/**"
+      - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
+      - "app/src/main/java/com/Lia/assistant/voice/LiaToolCatalog.kt"
+      - "app/src/main/java/in/shraddha/ai/MainActivity.kt"
+      - ".github/workflows/pc-hardware-agent-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc-hardware-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-hardware-agent:
+    name: Hardware agent tests and Windows EXE
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Windows companion dependencies
+        run: python -m pip install -r pc_companion/requirements.txt
+
+      - name: Run hardware, protocol, crypto and action tests
+        run: python -m unittest discover -s pc_companion/tests -t . -v
+
+      - name: Compile Windows companion source
+        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
+
+      - name: Build Windows PC companion executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
+
+      - name: Upload Windows PC companion executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-pc-companion-windows
+          path: dist/ShraddhaAI-PC-Companion.exe
+          if-no-files-found: error
+          retention-days: 14

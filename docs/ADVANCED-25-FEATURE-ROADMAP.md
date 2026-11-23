@@ -11,7 +11,7 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 
 | # | Feature | Current implementation | Remaining integration |
 |---:|---|---|---|
-| 1 | Multi-Agent Intelligence | AgentCouncil role planner and provider comparison/council endpoints exist. | Real parallel specialist execution, shared evidence state, critic/verifier loops, cost/time budgets and UI. |
+| 1 | Multi-Agent Intelligence | Dependency-aware Android council engine now runs Planner + Researcher concurrently, fans out 1–5 independent Specialists across configured providers, shares their evidence with Critic and Verifier, and is wired into durable WorkManager background council jobs. | Android Advanced AI Lab now exposes a local background-council action with provider selection, a 1–5 specialist-count control, cancellation and WorkManager progress/result observation. Specialist/provider budgets, per-provider cost/time budgets, persistent per-stage evidence and cross-device cancellation/recovery remain. This path is source-added but not yet CI-verified. |
 | 2 | Autonomous Task Planner | Backend task planning, WorkflowEngine lifecycle and new dependency-aware DAG planner. | Persisted plans, calendar/task inputs, planner UI, resumable execution wired to Operator. |
 | 3 | Personal Knowledge Brain | KnowledgeGraph, LocalKnowledgeBase, encrypted memory and Firebase vault exist. | Unified ingestion/indexing, embedding retrieval, source provenance and cross-device sync UI. |
 | 4 | Predictive Assistant | Opt-in suggestions from manually recorded repeated events added. | Persistent event source, user feedback loop and scheduled suggestion UI; no hidden tracking. |
@@ -25,8 +25,8 @@ This roadmap tracks the 25 features proposed on 20 November 2026. A reusable eng
 | 12 | Live Translation | Translation request validation/envelope added; provider text capability exists. | Streaming speech/camera translation, subtitle overlay, offline language packs and quality tests. |
 | 13 | Visual Troubleshooting | Safety-first network, battery and electrical troubleshooting playbooks added. | Camera-guided step validation, device-specific trusted manuals and escalation UI. |
 | 14 | 3D Environment Mapping | Validated 3D landmark/coordinate data model added. | Camera/ARCore or depth sensor capture, SLAM, persistence, renderer and device calibration. |
-| 15 | Cross-Device Clipboard | Paired relay transport is integrated for manually triggered text sharing. Clipboard is an explicitly approved share category; exact one-time request grants, category opt-in, local expiry checks, SHA-256 integrity checks and a second receiver confirmation before copying are enforced. 20,000-character cap. | End-to-end encryption/key agreement, key rotation and replay-resistant packet IDs remain incomplete; relay can see payload text. |
-| 16 | Universal File Transfer | One-time peer-approved small-file relay binds the grant to the exact request ID, validates canonical Base64, exact byte length and SHA-256 at relay and receiver; receiver commits only verified files atomically. 650 KB cap. A bounded per-chunk envelope validator (48 KB chunks, transfer ID/index/count, SHA-256) and unit test are now added as groundwork. | Chunk relay/reassembly, resumable persistence, progress/cancel UI, end-to-end encryption, quotas and malware scanning remain incomplete; chunk validation alone is not a working chunk transport. |
+| 15 | Cross-Device Clipboard | Clipboard payloads use the mutually fingerprint-confirmed ECDH/AES-GCM peer-message path, one-time request grants, category opt-in, expiry checks and SHA-256 integrity checks; receiver confirmation is required before copying. 20,000-character cap. | Durable device keys, key rotation, replay-resistant request IDs and physical multi-device tests remain. |
+| 16 | Universal File Transfer | SAF-based sender/receiver workflow supports files up to 100 MiB, one-time receiver approval, 48 KB encrypted E2E chunks, SHA-256 verification, receiver-selected save destination, pause/resume, missing-chunk requests and cancellation. | Increase tested size only after device validation; durable relay-side transfer state, robust process-death resume, quotas, malware scanning and interruption/device-matrix tests remain. |
 | 17 | App Workflow Automation | Accessibility Operator, app learning profiles, adaptive workflow runner and checkpoints exist. | Voice-created training, robust OCR fallback for canvas controls, broader app recovery and device matrix. |
 | 18 | Remote Desktop Workspace | Paired-device control and consent-gated screen streaming exist. | Full remote desktop session UX, keyboard/mouse parity, multi-monitor, file transfer and security review. |
 | 19 | Smart Notification Manager | Opt-in Android NotificationListenerService captures metadata only (no title/body), stores a bounded 100-event history encrypted at rest with Android Keystore AES-GCM, exposes access/consent controls and clear-history action, and applies quiet-hour policy. If encryption/decryption fails, new history is not written in plaintext. | Rich per-app rule editor, encrypted history, retention/deletion UX and Android version/device matrix. |
@@ -147,3 +147,55 @@ speaker capture already have user-started on-device sample capture, model
 inference, consent-gated encrypted templates and match/identify flows, but
 threshold calibration and anti-spoof certification/device accuracy testing
 remain release blockers.
+
+
+## Parallel council implementation update (22 November 2026)
+
+The pending-features branch now includes a dependency-aware parallel council execution path:
+- Planner and Researcher execute concurrently.
+- One to five independent Specialist workers execute concurrently after the shared foundation outputs are available.
+- Critic compares the independent solutions; Verifier performs the final acceptance review.
+- Provider assignment is distributed across one to five configured providers; background task payloads accept a comma-separated provider set.
+- Durable WorkManager background council jobs now call this parallel path; progress is reported by stage and cancellation is checked between stages.
+- The original sequential API remains available for compatibility.
+
+**Not yet verified:** this change has not been built or tested, by instruction. UI for selecting specialist count, provider spend/time budgets, durable per-stage evidence, and process-death recovery of in-flight provider calls remain to be completed. The current UI selects providers but uses a fixed three-specialist configuration. A provider call already in flight cannot be forcibly interrupted by the current synchronous gateway client.
+
+
+## Encrypted visual relay correction — 22 November 2026
+
+A source review found that Android's `ScreenShareService` and `RemoteCameraService` called `DeviceLinkManager.sendFrame` with raw JPEG bytes while the backend relay had already been hardened to accept only the encrypted `0x81/0x82` frame envelope. The old Android sender/receiver therefore did not match the current relay protocol.
+
+The pending branch now adds:
+- a strict visual frame envelope codec matching the relay's source-ID/type/sequence/nonce/ciphertext format;
+- AES-256-GCM encryption using the mutually fingerprint-confirmed peer key and AAD bound to session, sender, receiver, frame type and sequence;
+- receiver authentication, JPEG validation and per-peer/frame-type replay rejection;
+- a unit-test case for ECDH key agreement, relay envelope reconstruction, successful decryption and AAD tamper rejection.
+
+This is a source-level protocol correction only. It has not been built, unit-tested or exercised between physical devices yet. Camera/screen streaming must remain labelled unverified until the consolidated test and real-device pass.
+
+
+### File-transfer chunk-size defect found and corrected — 22 November
+
+A source-only cross-layer review found that the Android sender used 48,000-byte chunks and an incorrect ceiling formula, while the relay requires exactly 48 KiB (49,152-byte) chunks. Exact 48,000-byte multiples could therefore produce an empty trailing chunk, and the relay could reject the sender's manifest. The pending branch now centralizes the Android transfer limit/chunk size in `DeviceFileTransferProtocol` and uses the relay's 48 KiB contract in manifest calculation, sender offsets, chunk reads, receiver offsets and final-chunk validation. Boundary regression tests were added for exact multiples, final chunks and the 100 MiB cap. These tests have not been run.
+
+
+### Transfer capacity update — 22 November
+
+The Android chunked file-transfer cap is now aligned with the relay's 100 MiB manifest limit (48 KiB chunks, 2,134 maximum chunks). The earlier Android-only 20 MB cap has been raised in the protocol helper, sender, receiver and boundary test. This is source-only; 100 MiB throughput, storage pressure, process-death resume, and low-storage behavior must be validated on physical devices before calling the larger limit production-ready.
+
+
+### Configurable specialist fan-out — 22 November
+
+The local background council now persists the user's selected 1–5 Specialist count through the queue payload and Worker into the parallel orchestration engine. The Advanced AI Lab validates the range before enqueueing; the task summary reports the selected fan-out. No tests have been run.
+
+
+The Advanced AI Lab now restores the latest WorkManager council ID after Activity recreation and reattaches its progress/result observer. A cancel control can cancel the restored task as well. This survives screen/activity recreation; it does not claim that in-flight provider reasoning resumes mid-stage after process death.
+
+
+The WorkManager council worker now applies a bounded retry policy for transient provider failures (network I/O, timeout, HTTP 429 and HTTP 5xx), with at most two retries. Permanent errors fail the task and are surfaced to the UI. In-flight synchronous provider calls still cannot be forcibly cancelled; this change is not yet tested.
+
+
+### End-to-end encryption for quick-share attachments — 22 November
+
+The Android quick-share path previously sent small attachment payloads as plaintext JSON through the relay. It now uses the same mutually verified ECDH/AES-GCM peer channel as clipboard text, with the one-time request ID and share category bound into authenticated data. The relay validates the category permission and consumes the exact one-time grant before forwarding only opaque ciphertext. Plaintext `data_share_payload` messages are rejected. The Windows companion now decrypts the category-bound envelope, validates type/size/Base64/SHA-256, asks the local user again, and saves to a sanitized Downloads folder without overwriting an existing file. Android and Windows regression tests were added; they have not been run.

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getBytes } from "firebase/storage";
 import { ref as databaseRef, set as databaseSet, get as databaseGet } from "firebase/database";
 
@@ -75,6 +75,42 @@ test("Realtime Database encrypted vault is owner-only and rejects plaintext", as
   await assertFails(databaseSet(databaseRef(alice, "users/alice/vault/invalid key"), encryptedRecord));
 });
 
+test("Firestore vault deletion is owner-scoped for all bounded encrypted memory keys", async () => {
+  const alice = env.authenticatedContext("alice").firestore();
+  const bob = env.authenticatedContext("bob").firestore();
+  const personal = doc(alice, "users/alice/vault/personal_memory");
+  await assertSucceeds(setDoc(personal, {
+    format, payload: "ciphertext", updatedAt: Date.now()
+  }));
+  await assertFails(deleteDoc(doc(bob, "users/alice/vault/personal_memory")));
+  await assertSucceeds(deleteDoc(personal));
+  await assertSucceeds(setDoc(doc(alice, "users/alice/vault/selected_device_backup_v1"), {
+    format, payload: "ciphertext", updatedAt: Date.now()
+  }));
+  await assertSucceeds(deleteDoc(doc(alice, "users/alice/vault/selected_device_backup_v1")));
+  await assertFails(deleteDoc(doc(alice, "users/alice/vault/invalid key")));
+});
+
+test("Firebase Storage social media uploads are bounded and owner-scoped", async () => {
+  const alice = env.authenticatedContext("alice").storage();
+  const bob = env.authenticatedContext("bob").storage();
+  const path = "social-media/alice/" + "a".repeat(32);
+  const metadata = {
+    contentType: "image/jpeg",
+    customMetadata: { ownerUid: "alice", purpose: "social-publishing" }
+  };
+  const bytes = new Uint8Array([1, 2, 3, 4]);
+  await assertSucceeds(uploadBytes(ref(alice, path), bytes, metadata));
+  await assertSucceeds(getBytes(ref(alice, path), 16));
+  await assertFails(getBytes(ref(bob, path), 16));
+  await assertFails(uploadBytes(ref(alice, "social-media/bob/" + "b".repeat(32)), bytes, metadata));
+  await assertFails(uploadBytes(ref(alice, "social-media/alice/not-a-uuid"), bytes, metadata));
+  await assertFails(uploadBytes(ref(alice, "social-media/alice/" + "c".repeat(32)), bytes, {
+    contentType: "application/pdf",
+    customMetadata: { ownerUid: "alice", purpose: "social-publishing" }
+  }));
+});
+
 test("Firebase Storage accepts only owner-scoped encrypted backup objects", async () => {
   const alice = env.authenticatedContext("alice").storage();
   const bob = env.authenticatedContext("bob").storage();
@@ -95,5 +131,8 @@ test("Firebase Storage accepts only owner-scoped encrypted backup objects", asyn
   }));
   await assertFails(uploadBytes(ref(alice, "users/alice/backups/backup_1770000000001_deadbeef.enc"), bytes, {
     contentType: "application/octet-stream", customMetadata: { format: "plaintext", updatedAt: String(Date.now()) }
+  }));
+  await assertFails(uploadBytes(ref(alice, "users/alice/documents/private.pdf"), bytes, {
+    contentType: "application/pdf"
   }));
 });

@@ -13,6 +13,29 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 @Composable
+fun LiaReferenceTheme(content: @Composable () -> Unit) {
+    val colors = LiaReferenceColors
+    CompositionLocalProvider(LocalNovaColors provides colors) {
+        MaterialTheme(
+            colorScheme = lightColorScheme(
+                primary = colors.accent,
+                onPrimary = colors.onAccent,
+                primaryContainer = colors.surfaceRaised,
+                onPrimaryContainer = colors.textPrimary,
+                secondary = colors.accentSecondary,
+                background = colors.background,
+                onBackground = colors.textPrimary,
+                surface = colors.surface,
+                onSurface = colors.textPrimary,
+                error = colors.error
+            ),
+            typography = NovaTypography,
+            content = content
+        )
+    }
+}
+
+@Composable
 fun NovaTheme(
     mode: String = "DARK",
     reducedMotion: Boolean = false,

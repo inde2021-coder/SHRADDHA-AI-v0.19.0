@@ -117,6 +117,25 @@ class SharedTaskSchedulerTest {
         assertNull(restored.requeueInterrupted("device") { true })
     }
 
+    @Test fun retryableBackgroundCouncilFailureCanBeRequeuedForWorkManagerRetry() {
+        val scheduler = SharedTaskScheduler()
+        scheduler.submitAll(listOf(
+            SharedTaskScheduler.Task("bg_retry", "Provider-only council", payload = """{"kind":"background_council"}""")
+        ))
+        assertEquals("bg_retry", scheduler.claimSpecific("bg_retry")?.task?.id)
+        scheduler.fail(
+            "bg_retry",
+            "Process stopped during execution; action was not replayed. Provider-only council retry: HTTP 503"
+        )
+
+        assertEquals(SharedTaskScheduler.State.FAILED, scheduler.get("bg_retry")?.state)
+        assertEquals(
+            SharedTaskScheduler.State.PENDING,
+            scheduler.requeueInterrupted("bg_retry") { it.payload.contains("background_council") }?.state
+        )
+        assertEquals("bg_retry", scheduler.claimSpecific("bg_retry")?.task?.id)
+    }
+
     @Test fun schedulerChangeCallbackReceivesDurableTransitions() {
         val updates = mutableListOf<List<SharedTaskScheduler.Snapshot>>()
         val scheduler = SharedTaskScheduler(onChanged = { updates += it })
