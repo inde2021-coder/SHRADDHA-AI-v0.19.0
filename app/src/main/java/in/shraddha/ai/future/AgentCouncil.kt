@@ -139,7 +139,7 @@ object AgentCouncil {
         require(budget.maxDurationMs in 10_000..600_000) { "Council time budget must be between 10 seconds and 10 minutes." }
         require(budget.maxOutputCharactersPerStage in 1_000..9_000) { "Stage output limit must be between 1,000 and 9,000 characters." }
 
-        val assignments = roles.mapIndexed { index, role -> role.name to providers[index % providers.size] }.toMap()
+        val assignments = AgentProviderPolicy.assign(roles, providers)
         val providerLabel = assignments.values.distinct().joinToString(" → ")
         val system = """
             You are a real specialist worker inside $assistantName's multi-agent team.
@@ -281,11 +281,7 @@ object AgentCouncil {
     /** Round-robin role assignment across every provider with a locally configured key. */
     fun assignProviders(roles: List<CouncilRole>, providers: List<String>): Map<String, String> {
         require(roles.isNotEmpty()) { "At least one agent role is required" }
-        val clean = providers.map { it.uppercase() }.distinct()
-        require(clean.isNotEmpty() && clean.size <= 5 && clean.all {
-            it in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
-        }) { "Configure between one and five supported providers" }
-        return roles.mapIndexed { index, role -> role.name to clean[index % clean.size] }.toMap()
+        return AgentProviderPolicy.assign(roles, providers)
     }
 
     private fun getAssistantName(context: Context): String =
