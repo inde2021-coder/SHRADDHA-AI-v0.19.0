@@ -64,12 +64,22 @@ object ApiKeyStore {
         return try {
             val iv = Base64.decode(ivText, Base64.NO_WRAP)
             val encrypted = Base64.decode(ciphertext, Base64.NO_WRAP)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
-                ?: error("Gemini API-key encryption key is missing; refusing to replace it while encrypted key data still exists.")
-            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
-            String(cipher.doFinal(encrypted), Charsets.UTF_8)
+            try {
+                val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                    ?: error("Gemini API-key encryption key is missing; refusing to replace it while encrypted key data still exists.")
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+                val clear = cipher.doFinal(encrypted)
+                try {
+                    String(clear, Charsets.UTF_8)
+                } finally {
+                    clear.fill(0)
+                }
+            } finally {
+                iv.fill(0)
+                encrypted.fill(0)
+            }
         } catch (error: Exception) {
             // Never destroy ciphertext on a read failure: a transient Keystore error or
             // device restore must not silently erase the user's only copy of the key.
@@ -92,14 +102,23 @@ object ApiKeyStore {
             return
         }
 
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
-        val encrypted = cipher.doFinal(trimmed.toByteArray(Charsets.UTF_8))
-        check(prefs.edit()
-            .putString(ENCRYPTED_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .remove(LEGACY_KEY)
-            .commit()) { "Could not persist the encrypted GEMINI API key." }
+        val clear = trimmed.toByteArray(Charsets.UTF_8)
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
+            val encrypted = cipher.doFinal(clear)
+            try {
+                check(prefs.edit()
+                    .putString(ENCRYPTED_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                    .remove(LEGACY_KEY)
+                    .commit()) { "Could not persist the encrypted GEMINI API key." }
+            } finally {
+                encrypted.fill(0)
+            }
+        } finally {
+            clear.fill(0)
+        }
     }
 
     fun hasKey(context: Context): Boolean = getKey(context).isNotEmpty()
