@@ -9,6 +9,11 @@ import android.content.pm.PackageManager
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import java.nio.FloatBuffer
+import java.nio.ByteOrder
+import java.nio.ByteBuffer
+import android.view.WindowManager
+import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -137,7 +142,7 @@ fun ArMappingScreen(navController: NavController) {
                         setEGLContextClientVersion(2)
                         preserveEGLContextOnPause = true
                         val activeEngine = requireNotNull(engine)
-                        setRenderer(ArSurveyRenderer(activeEngine) { sample ->
+                        setRenderer(ArSurveyRenderer(viewContext, activeEngine) { sample ->
                             stats = sample
                         })
                         renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
@@ -176,11 +181,15 @@ fun ArMappingScreen(navController: NavController) {
 }
 
 private class ArSurveyRenderer(
+    private val context: Context,
     private val engine: ArWorldMappingEngine,
     private val onSample: (String) -> Unit
 ) : GLSurfaceView.Renderer {
     private var textureId = 0
+    private var program = 0
     private var lastUiUpdate = 0L
+    private val positions = floatBuffer(floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f))
+    private val texCoords = floatBuffer(floatArrayOf(0f, 1f, 1f, 1f, 0f, 0f, 1f, 0f))
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.025f, 0.035f, 0.06f, 1f)
@@ -192,16 +201,32 @@ private class ArSurveyRenderer(
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        val vertex = compileShader(GLES20.GL_VERTEX_SHADER,
+            "attribute vec4 aPosition; attribute vec2 aTexCoord; varying vec2 vTexCoord; void main(){ gl_Position=aPosition; vTexCoord=aTexCoord; }")
+        val fragment = compileShader(GLES20.GL_FRAGMENT_SHADER,
+            "#extension GL_OES_EGL_image_external : require\\nprecision mediump float; uniform samplerExternalOES sTexture; varying vec2 vTexCoord; void main(){ gl_FragColor=texture2D(sTexture,vTexCoord); }")
+        program = GLES20.glCreateProgram()
+        GLES20.glAttachShader(program, vertex)
+        GLES20.glAttachShader(program, fragment)
+        GLES20.glLinkProgram(program)
+        val linked = IntArray(1)
+        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linked, 0)
+        if (linked[0] == 0) onSample("Camera preview shader failed: " + GLES20.glGetProgramInfoLog(program).take(160))
+        GLES20.glDeleteShader(vertex)
+        GLES20.glDeleteShader(fragment)
         runCatching { engine.start(textureId) }.onFailure { onSample("ARCore session error: ${it.message}") }
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
+        val rotation = runCatching { (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation }.getOrDefault(Surface.ROTATION_0)
+        engine.setDisplayGeometry(rotation, width, height)
     }
 
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         val sample = engine.update() ?: return
+        drawCameraBackground()
         val now = System.currentTimeMillis()
         if (now - lastUiUpdate >= 750L) {
             lastUiUpdate = now
@@ -211,4 +236,38 @@ private class ArSurveyRenderer(
             )
         }
     }
+
+    private fun drawCameraBackground() {
+        if (program == 0) return
+        val transformed = engine.cameraTextureCoordinates() ?: return
+        texCoords.clear()
+        texCoords.put(transformed)
+        texCoords.position(0)
+        GLES20.glUseProgram(program)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "sTexture"), 0)
+        val positionHandle = GLES20.glGetAttribLocation(program, "aPosition")
+        val textureHandle = GLES20.glGetAttribLocation(program, "aTexCoord")
+        GLES20.glEnableVertexAttribArray(positionHandle)
+        GLES20.glEnableVertexAttribArray(textureHandle)
+        GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, positions)
+        GLES20.glVertexAttribPointer(textureHandle, 2, GLES20.GL_FLOAT, false, 0, texCoords)
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+        GLES20.glDisableVertexAttribArray(positionHandle)
+        GLES20.glDisableVertexAttribArray(textureHandle)
+    }
+
+    private fun compileShader(type: Int, source: String): Int {
+        val shader = GLES20.glCreateShader(type)
+        GLES20.glShaderSource(shader, source)
+        GLES20.glCompileShader(shader)
+        val compiled = IntArray(1)
+        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0)
+        check(compiled[0] != 0) { "Camera shader compilation failed: " + GLES20.glGetShaderInfoLog(shader).take(160) }
+        return shader
+    }
+
+    private fun floatBuffer(values: FloatArray): FloatBuffer =
+        ByteBuffer.allocateDirect(values.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(values); position(0) }
 }
