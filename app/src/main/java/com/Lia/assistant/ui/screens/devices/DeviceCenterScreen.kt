@@ -352,29 +352,6 @@ fun DeviceCenterScreen(navController: NavController) {
                         }
                     }
                 }
-                Text("QUICK PC CONTROLS", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Text("Windows Companion में समर्थित actions ही दिखाए गए हैं। PC पर हर action की पुष्टि जरूरी है。",
-                    color = colors.textSecondary, fontSize = 10.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NovaButton(text = "Show Desktop",
-                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "home"))) "Desktop command भेजा गया। PC confirmation की प्रतीक्षा है।" else "Command नहीं भेजा गया। Pairing जाँचें।" },
-                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted)
-                    NovaButton(text = "Back",
-                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "back"))) "Back command भेजा गया।" else "Back command नहीं भेजा गया।" },
-                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NovaButton(text = "Scroll Up",
-                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "scroll").put("amount", 5))) "Scroll up भेजा गया।" else "Scroll command नहीं भेजा गया।" },
-                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted)
-                    NovaButton(text = "Scroll Down",
-                        onClick = { status = if (DeviceLinkManager.sendAction(peer.id, JSONObject().put("kind", "scroll").put("amount", -5))) "Scroll down भेजा गया।" else "Scroll command नहीं भेजा गया।" },
-                        modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted)
-                }
                 NovaTextField(value = appToOpen, onValueChange = { appToOpen = it.take(80) },
                     modifier = Modifier.fillMaxWidth(), placeholder = "Windows app name, e.g. Notepad")
                 NovaButton(text = "Open App",
