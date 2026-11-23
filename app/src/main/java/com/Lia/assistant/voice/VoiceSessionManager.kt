@@ -121,6 +121,9 @@ object VoiceSessionManager {
                             // audio failure. Do not retry or reopen the microphone.
                             _state.value = NovaOrbState.ERROR
                             _statusText.value = "Microphone permission was revoked. Re-enable it to continue."
+                            // Also remove the foreground notification: it must not claim
+                            // that a live microphone session is active after permission loss.
+                            VoiceForegroundService.stop(appContext ?: context.applicationContext)
                         } else {
                             // AudioRecord can fail after a successful Live API connection
                             // (device contention, route changes or a transient read error).
