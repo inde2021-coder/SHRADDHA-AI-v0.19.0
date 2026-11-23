@@ -518,8 +518,16 @@ object DeviceLinkManager {
     fun sendClipboardText(targetDeviceId: String, requestId: String, text: String): Boolean {
         if (text.isBlank() || text.length > 20000) return false
         val bytes = text.toByteArray(Charsets.UTF_8)
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        return sendSharedPayload(targetDeviceId, "clipboard", requestId, "clipboard.txt", "text/plain", Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong(), digest, "clipboard_text")
+        return try {
+            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            sendSharedPayload(
+                targetDeviceId, "clipboard", requestId, "clipboard.txt", "text/plain",
+                Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong(), digest, "clipboard_text"
+            )
+        } finally {
+            bytes.fill(0)
+        }
     }
     fun startFileTransfer(targetDeviceId: String, requestId: String, transferId: String, fileName: String, sizeBytes: Long, chunkCount: Int, sha256: String): Boolean {
         if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || DeviceFileTransferProtocol.chunkCount(sizeBytes) != chunkCount) return false
