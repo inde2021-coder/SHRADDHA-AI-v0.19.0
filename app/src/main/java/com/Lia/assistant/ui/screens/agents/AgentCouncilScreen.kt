@@ -49,6 +49,7 @@ import `in`.shraddha.ai.future.BackgroundTaskQueue
 import `in`.shraddha.ai.future.CouncilEvidenceStore
 import `in`.shraddha.ai.future.CouncilExecutionBudget
 import `in`.shraddha.ai.future.MainBrainProviderGateway
+import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,6 +83,8 @@ fun AgentCouncilScreen(
     var stageEvidence by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var voicePlanSession by remember { mutableStateOf<ShraddhaIntegrationHub.Session?>(null) }
+    var voicePlanLoadError by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         val providerResult = withContext(Dispatchers.IO) {
@@ -96,6 +99,11 @@ fun AgentCouncilScreen(
             EncryptedFeatureStore(context.applicationContext).get(LAST_COUNCIL_WORK_ID).getOrDefault("")
         }
         workId = runCatching { savedId.takeIf { it.isNotBlank() }?.let(UUID::fromString) }.getOrNull()
+        val savedVoicePlan = withContext(Dispatchers.IO) {
+            runCatching { ShraddhaIntegrationHub(context.applicationContext).current() }
+        }
+        voicePlanSession = savedVoicePlan.getOrNull()
+        voicePlanLoadError = savedVoicePlan.exceptionOrNull()?.localizedMessage.orEmpty()
     }
 
     DisposableEffect(workId, lifecycleOwner) {
@@ -154,6 +162,33 @@ fun AgentCouncilScreen(
                 }
             }
         )
+
+        if (voicePlanSession != null || voicePlanLoadError.isNotBlank()) {
+            NovaGlassCard {
+                Text("LAST VOICE-PLANNED WORKFLOW", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                if (voicePlanLoadError.isNotBlank()) {
+                    Text("Encrypted recovery record could not be opened: $voicePlanLoadError", color = Color(0xFFFF8585), fontSize = 11.sp)
+                } else {
+                    val saved = voicePlanSession!!
+                    Text(saved.workflow.title, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Status: ${saved.workflow.status} • Step ${saved.workflow.currentStep + 1}/${saved.workflow.steps.size}", color = if (saved.workflow.status.name == "FAILED") Color(0xFFFF8585) else colors.textSecondary, fontSize = 11.sp)
+                    Text(saved.workflow.message, color = colors.textSecondary, fontSize = 11.sp)
+                    saved.workflow.steps.forEachIndexed { index, step ->
+                        Text("${index + 1}. ${step.title} • ${step.risk}", color = colors.textPrimary, fontSize = 11.sp)
+                    }
+                    Text("यह restored plan review-only है। Restart के समय चल रहा action auto-replay नहीं किया गया।", color = colors.textTertiary, fontSize = 10.sp)
+                }
+                NovaButton("Refresh saved workflow", onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            runCatching { ShraddhaIntegrationHub(context.applicationContext).current() }
+                        }
+                        voicePlanSession = result.getOrNull()
+                        voicePlanLoadError = result.exceptionOrNull()?.localizedMessage.orEmpty()
+                    }
+                }, type = NovaButtonType.SECONDARY)
+            }
+        }
 
         NovaGlassCard(cornerRadius = 22.dp, elevation = 6.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
