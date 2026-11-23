@@ -48,17 +48,26 @@ class DeviceTransferActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(22,22,22,22); setBackgroundColor(0xFF080E1B.toInt()) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24); setBackgroundColor(0xFF07131D.toInt()) }
         root.addView(TextView(this).apply { text = "DEVICE UNIVERSE • FILE TRANSFER"; textSize = 19f; setTextColor(Color.WHITE); setTypeface(null, android.graphics.Typeface.BOLD) })
-        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MiB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFFB8C5DC.toInt()); setPadding(0,8,0,14) })
-        peer = EditText(this).apply { hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8997B0.toInt()); setText(intent.getStringExtra("peer").orEmpty()) }; root.addView(peer)
+        root.addView(TextView(this).apply { text = "Android ↔ paired device • SHA-256 integrity • 100 MiB maximum • explicit receiver approval"; textSize = 12f; setTextColor(0xFF73DDE7.toInt()); setPadding(0,8,0,14) })
+        peer = EditText(this).apply {
+            hint = "Paired device ID"; setTextColor(Color.WHITE); setHintTextColor(0xFF8BAFB8.toInt())
+            setText(intent.getStringExtra("peer").orEmpty()); setPadding(16, 12, 16, 12)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+            }
+        }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
         pauseButton = button("PAUSE TRANSFER") { paused.set(!paused.get()); pauseButton.text = if (paused.get()) "RESUME TRANSFER" else "PAUSE TRANSFER"; status.text = if (paused.get()) "Paused locally. Resume to continue." else "Resuming transfer…" }
         root.addView(pauseButton)
         root.addView(button("CANCEL TRANSFER") { cancelTransfer() })
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0 }; root.addView(progress)
-        status = TextView(this).apply { text = "Select a paired device ID. Receiver must enable Documents sharing and approve the incoming file."; setTextColor(0xFFE4EAF6.toInt()); setPadding(0,14,0,14) }; root.addView(status)
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; progress = 0
+            progressTintList = android.content.res.ColorStateList.valueOf(0xFF38C7D2.toInt())
+        }; root.addView(progress)
+        status = TextView(this).apply { text = "Select a paired device ID. Receiver must enable Documents sharing and approve the incoming file."; setTextColor(0xFFE6F5F7.toInt()); setPadding(0,14,0,14) }; root.addView(status)
         root.addView(button("CLOSE") { finish() })
         setContentView(ScrollView(this).apply { addView(root) })
         restoreTransferState()
@@ -76,8 +85,12 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; setTextColor(Color.WHITE)
-        backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF5547A8.toInt())
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f; setPadding(18, 12, 18, 12)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
         setOnClickListener { action() }
     }
 
