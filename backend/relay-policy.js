@@ -57,7 +57,7 @@ export function revokePairedDevice(session, deviceId, actorId) {
   const target = session.devices.get(deviceId);
   if (!actor || !target || actor.role !== 'owner') return false;
   target.controlGrants?.clear(); target.pendingControlRequests?.clear(); target.grants?.clear();
-  target.incomingTransfers?.clear();
+  target.incomingTransfers?.clear(); target.pendingTaskHandoffs?.clear();
   try { target.socket?.close(4003, 'Device revoked by owner'); } catch {}
   session.devices.delete(deviceId);
   return true;
