@@ -209,7 +209,14 @@ class FirebaseCloudVault(private val context: Context) {
                 ?: error("Sign-in failed")
             val document = FirebaseFirestore.getInstance(app).collection("users").document(user.uid)
                 .collection("vault").document(revisionId).get().await()
-            val payload = document.getString("payload") ?: return@runBlocking null
+            if (!document.exists()) return@runBlocking null
+            require(document.getString("format") == "AES-256-GCM/PBKDF2-SHA256-v1") {
+                "Recovery revision format is missing or unsupported; restore was stopped."
+            }
+            val payload = document.getString("payload")
+                ?.takeIf { it.isNotBlank() }
+                ?: error("Recovery revision exists but its encrypted payload is missing; restore was stopped to protect backup integrity.")
+            require(payload.length <= 190_000) { "Recovery revision payload exceeds the supported size." }
             decrypt(payload, password)
         }
     }
