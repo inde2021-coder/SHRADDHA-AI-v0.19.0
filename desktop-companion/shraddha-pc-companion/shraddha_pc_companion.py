@@ -765,6 +765,19 @@ def control_grant_allows(approved: bool, expires_at: float, now: float,
                 and sender_device_id and approved_device_id == sender_device_id)
 
 
+def claim_remote_action_id(seen: dict, sender_id: str, action_id: str, limit: int = 4096) -> bool:
+    """Reject replayed action IDs within a live E2E session, with bounded memory."""
+    if not sender_id or len(sender_id) > 80 or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id or ""):
+        return False
+    key = (sender_id, action_id)
+    if key in seen:
+        return False
+    seen[key] = time.monotonic()
+    while len(seen) > max(1, min(int(limit), 8192)):
+        seen.pop(next(iter(seen)))
+    return True
+
+
 async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = False, file_root: str = "", offline_model=None) -> str:
     if not validate_action(action, allow_typing, allow_ocr, file_root, offline_model):
         return "blocked_unsupported_or_invalid_action"
@@ -1166,6 +1179,7 @@ async def run_once(args) -> None:
             print("Waiting for Android receiver to approve this file transfer…")
         approved_until = 0.0
         approved_device_id = ""
+        seen_remote_actions = {}
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target)) if share_screen else None
         try:
             async for raw in ws:
@@ -1249,8 +1263,8 @@ async def run_once(args) -> None:
                         continue
                     sender_id = str(message.get("fromDeviceId", ""))
                     action_id = str(message.get("actionId", ""))
-                    if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id) or message.get("requiresPerActionApproval") is not True:
-                        print("Blocked unverified remote action: missing action ID or approval requirement.")
+                    if message.get("requiresPerActionApproval") is not True or not claim_remote_action_id(seen_remote_actions, sender_id, action_id):
+                        print("Blocked remote action: invalid or replayed action ID, or missing per-action approval requirement.")
                         continue
                     if not control_grant_allows(allow_control, approved_until, time.time(), approved_device_id, sender_id):
                         print("Blocked remote action: no active grant for this exact paired requester.")
