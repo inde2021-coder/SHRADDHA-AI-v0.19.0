@@ -224,7 +224,7 @@ fun DataVaultScreen(navController: NavController) {
                 }
             }
             Text(
-                "This creates an encrypted backup file on a location you choose. Cloud sync is not active in this build; you may choose a cloud-drive folder through Android's file picker.",
+                "This creates an encrypted backup file at a location you choose. Automatic cloud sync is not active; individual cloud-memory deletion is available only when Firebase is configured and you explicitly consent.",
                 color = Color(0xFFFFC477), fontSize = 11.sp
             )
             Text(
@@ -337,6 +337,7 @@ fun DataVaultScreen(navController: NavController) {
                                 cloudPassword.takeIf { cloudDeleteConsent }
                             )
                         }
+                        if (cloudDeleteConsent) cloudPassword = ""
                         status = result.fold(
                             onSuccess = { if (it) "Memory record deleted." else "Memory record was not found." },
                             onFailure = { "Memory deletion failed: ${it.message}" }
