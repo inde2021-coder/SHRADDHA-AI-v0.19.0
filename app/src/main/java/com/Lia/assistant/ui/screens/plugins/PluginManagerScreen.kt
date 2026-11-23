@@ -98,7 +98,7 @@ fun PluginManagerScreen(navController: NavController) {
         })
         NovaGlassCard {
             Text("SIGNED DECLARATIVE PLUGINS", color = colors.accent)
-            Text("Only Ed25519-trusted manifests and two built-in actions are supported: encrypted local note and Android notification. Scripts, shell commands, remote URLs, DEX/JAR and arbitrary permissions are never executed.", color = colors.textSecondary)
+            Text("Only Ed25519-trusted manifests and four built-in actions are supported: encrypted local note, Android notification, clipboard copy and safe HTTPS browser hand-off. Scripts, shell commands, remote URLs, DEX/JAR and arbitrary permissions are never executed.", color = colors.textSecondary)
             OutlinedTextField(
                 value = rawManifest, onValueChange = { rawManifest = it.take(32_000) },
                 modifier = Modifier.fillMaxWidth(), minLines = 8, maxLines = 16,
