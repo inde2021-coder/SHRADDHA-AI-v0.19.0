@@ -3,6 +3,9 @@ package `in`.shraddha.ai.social
 import android.content.Context
 import com.Lia.assistant.data.VoiceGatewaySettings
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -17,6 +20,24 @@ import java.util.concurrent.TimeUnit
 object SocialPublishingClient {
     private val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS).build()
+
+    /** Uploads selected media to the signed-in user's private Storage folder and returns its tokenized HTTPS URL for Meta fetch. */
+    suspend fun uploadMedia(context: Context, uri: Uri, platform: String, mediaKind: String): String = withContext(Dispatchers.IO) {
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in with Firebase before uploading social media.")
+        require(platform == "instagram" || platform == "facebook") { "Media URL upload is supported only for Instagram and Facebook Pages." }
+        val mime = context.contentResolver.getType(uri)?.lowercase() ?: error("The selected file has no recognized MIME type.")
+        val video = mediaKind in setOf("video", "reel", "story_video")
+        val allowed = if (video) setOf("video/mp4") else setOf("image/jpeg", "image/png", "image/webp")
+        require(mime in allowed) { if (video) "Choose an MP4 video for this post." else "Choose a JPEG, PNG or WebP image for this post." }
+        val measuredSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+        require(measuredSize <= 100L * 1024L * 1024L) { "Social media uploads are limited to 100 MiB." }
+        val mediaId = UUID.randomUUID().toString().replace("-", "")
+        val metadata = StorageMetadata.Builder().setContentType(mime)
+            .setCustomMetadata("ownerUid", user.uid).setCustomMetadata("purpose", "social-publishing").build()
+        val ref = FirebaseStorage.getInstance().reference.child("social-media/${user.uid}/$mediaId")
+        ref.putFile(uri, metadata).await()
+        ref.downloadUrl.await().toString()
+    }
 
     suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null): JSONObject =
         withContext(Dispatchers.IO) {
