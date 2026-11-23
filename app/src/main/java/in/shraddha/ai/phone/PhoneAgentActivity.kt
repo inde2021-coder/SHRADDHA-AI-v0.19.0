@@ -147,7 +147,7 @@ class PhoneAgentActivity : AppCompatActivity() {
             textSize = 13f; setTextColor(0xFF80E6C1.toInt())
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF091927); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A)
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
             }
         }
         statusPanel.addView(status)
@@ -160,7 +160,7 @@ class PhoneAgentActivity : AppCompatActivity() {
             textSize = 13f; setTextColor(0xFFD9EDF3.toInt())
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF091927); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A)
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
             }
         }
         voicePanel.addView(voiceStatus)
@@ -180,7 +180,7 @@ class PhoneAgentActivity : AppCompatActivity() {
             textSize = 12f; setTextColor(0xFFE3F1F5.toInt())
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF091927); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A)
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
             }
         }
         historyPanel.addView(history)
@@ -193,7 +193,7 @@ class PhoneAgentActivity : AppCompatActivity() {
             textSize = 12f; setTextColor(0xFFE3F1F5.toInt())
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF091927); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A)
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
             }
         }
         aiPanel.addView(edesyHistory)

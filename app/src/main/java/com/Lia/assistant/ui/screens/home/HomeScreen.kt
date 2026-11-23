@@ -33,11 +33,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import android.content.Intent
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.fx.LiaOrb3D
 import com.Lia.assistant.ui.fx.rememberDailyOrbTheme
@@ -53,6 +55,7 @@ private val Mint = Color(0xFF78E4D6)
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
+    val context = LocalContext.current
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
@@ -186,7 +189,7 @@ private fun ControlCenter(
             Text("● LIVE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ControlTile("Live Operator", "ऐप कंट्रोल", "⌘", Modifier.weight(1f), onLiveOperator)
+            ControlTile("Live App Operator", "ऐप कंट्रोल", "⌘", Modifier.weight(1f), onLiveOperator)
             ControlTile("Visual Lens", "कैमरा AI", "◉", Modifier.weight(1f), onVisualLens)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {

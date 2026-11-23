@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Devices
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,16 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.Lia.assistant.action.InstalledAppLabelCache
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.components.NovaGlassCard
 import com.Lia.assistant.ui.theme.LiaReferenceTheme
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.theme.LocalNovaColors
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import `in`.shraddha.ai.operator.OperatorActivity
 
 
@@ -79,9 +73,6 @@ private fun QuickActionsContent(navController: NavController, modifier: Modifier
     val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
 
     val tiles = listOf(
-        QuickTile("Open an app", "Launch an installed app", Icons.Default.Apps) {
-            context.startActivity(android.content.Intent(context, OperatorActivity::class.java))
-        },
         QuickTile("Call someone", "Start a voice call", Icons.Default.Call) {
             navController.navigate("voice")
         },
@@ -107,7 +98,7 @@ private fun QuickActionsContent(navController: NavController, modifier: Modifier
         QuickTile("Multi-agent workspace", "Delegate work to Planner, Researcher and specialists", Icons.Default.Groups) {
             navController.navigate("agent_council")
         },
-        QuickTile("Screen & phone control", "Read, tap, type and swipe", Icons.Default.PhoneAndroid) {
+        QuickTile("Live App Operator", "Open apps, read screen and perform approved actions", Icons.Default.AutoAwesome) {
             context.startActivity(android.content.Intent(context, OperatorActivity::class.java))
         },
         QuickTile("Device Center", "Pair and control a Windows PC", Icons.Default.Devices) {
