@@ -515,3 +515,14 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Device actions require a fresh confirmation dialog in the app; arbitrary services, scripts, shell commands and insecure HTTP endpoints are rejected. Climate setpoint is bounded to 16–30°C.
 - Added a MainActivity setup/control workspace and URL-policy unit tests. No Home Assistant server credentials or live device were available for integration verification.
 - MQTT transport, Matter commissioning/device discovery and broader vendor-specific local-network adapters remain unimplemented. This is a Home Assistant REST connector, not complete universal IoT support.
+
+
+## 23 November 2026 — CI observation (run 45110015539; commit 95b4fac; not a release pass)
+
+- Backend API/policy tests: passed.
+- Firebase Firestore/Storage/RTDB rules tests: passed for the rules version in that commit.
+- Custom voice engine source validation: passed.
+- Windows PC companion policy tests and EXE packaging: passed for the source version in that commit.
+- Android unit tests and Debug APK assembly: passed after fixing the nullable encrypted-persistence call in `ShraddhaIntegrationHub`.
+- Android emulator install/launch/instrumentation step: failed because the hosted emulator/ADB reported no compatible device and unresponsive `emulator-5554`; this is an environment/device failure, not a passing instrumentation result.
+- This run predates later knowledge retrieval, Data Vault deletion UI, Home Assistant and remote keyboard changes. Those later changes remain unbuilt/unverified. CI was switched to manual-only so the consolidated verification can be run after the source pass, not on every commit.
