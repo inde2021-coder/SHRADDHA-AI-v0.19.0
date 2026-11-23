@@ -534,7 +534,7 @@ class PcCompanionApp:
             local_id = str(self.config.get("deviceId", ""))
             session_id = str(self.config.get("sessionId", ""))
             base_type = frame_type & 0x7f
-            aad = f"{session_id}|{source_id}|{local_id}|{base_type}|{sequence}".encode("utf-8")
+            aad = f"{session_id}|{source_id}|{local_id}|visual_frame|{base_type}|{sequence}".encode("utf-8")
             nonce_b64 = base64.b64encode(nonce).decode("ascii").rstrip("=")
             ciphertext_b64 = base64.b64encode(ciphertext).decode("ascii").rstrip("=")
             jpeg = DeviceE2ECrypto.decrypt(key, nonce_b64, ciphertext_b64, aad)
@@ -1191,7 +1191,7 @@ class PcCompanionApp:
                                 sequence = current["send_sequence"]
                                 current["send_sequence"] += 1
                                 key = bytes(current["key"])
-                            aad = f"{session_id}|{source_id}|{peer_id}|1|{sequence}".encode("utf-8")
+                            aad = f"{session_id}|{source_id}|{peer_id}|visual_frame|1|{sequence}".encode("utf-8")
                             nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, jpeg, aad)
                             nonce = base64.b64decode(nonce_b64 + "=" * ((4 - len(nonce_b64) % 4) % 4))
                             ciphertext = base64.b64decode(ciphertext_b64 + "=" * ((4 - len(ciphertext_b64) % 4) % 4))
