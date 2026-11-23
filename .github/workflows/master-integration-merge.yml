@@ -97,7 +97,18 @@ jobs:
               continue
             fi
 
-            echo "::error::Source branch $branch is neither in main ancestry nor in a branch merged into main."
+            # This legacy integration branch has only an obsolete android-build.yml
+            # workflow variant (JDK 17 / older actions). Main already has the newer
+            # JDK 21 / current-actions workflow; do not merge the stale workflow back.
+            if [[ "$branch" == "integration/redesign-phone-agent-2026-11" ]]; then
+              stale_files="$(git diff --name-only origin/redesign-v0.19.2...origin/$branch)"
+              if [[ "$stale_files" == ".github/workflows/android-build.yml" ]]; then
+                echo "Verified: $branch contains only a superseded Android workflow; main has the newer replacement."
+                continue
+              fi
+            fi
+
+            echo "::error::Source branch $branch is neither in main ancestry nor in a branch merged into main, nor explicitly superseded."
             exit 1
           done
 
