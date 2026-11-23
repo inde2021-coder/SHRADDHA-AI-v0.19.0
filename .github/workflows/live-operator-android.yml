@@ -7,6 +7,7 @@ on:
     paths:
       - "app/src/main/java/in/shraddha/ai/operator/**"
       - "app/src/main/java/in/shraddha/ai/phone/**"
+      - "app/src/main/java/com/Lia/assistant/ui/screens/phone/**"
       - "app/src/main/java/com/Lia/assistant/ui/fx/NovaOrb.kt"
       - ".github/workflows/live-operator-android.yml"
   pull_request:
