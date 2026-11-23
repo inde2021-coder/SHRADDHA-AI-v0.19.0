@@ -67,6 +67,31 @@ class UnifiedMemoryRepository(context: Context) {
         LoadResult(local.get(localKey(key)).getOrThrow().takeIf { it.isNotEmpty() }, "device")
     }
 
+    /**
+     * Explicitly deletes one memory record. When cloud consent is enabled, both Firebase
+     * mirrors must be deleted successfully before the local encrypted copy is removed.
+     */
+    fun delete(
+        key: String,
+        cloudConsent: Boolean = false,
+        email: String? = null,
+        password: String? = null
+    ): Result<Boolean> = runCatching {
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Invalid memory record key" }
+        if (cloudConsent) {
+            MemorySyncPolicy.requireCloudConsent(cloudConsent)
+            val account = email?.trim().orEmpty()
+            val secret = password.orEmpty()
+            require(account.isNotBlank() && secret.length >= 8) {
+                "Firebase account credentials are required for an approved cloud deletion"
+            }
+            cloud.signInAndDelete(account, secret, key).getOrThrow()
+        }
+        val localRemoved = local.remove(localKey(key))
+        check(localRemoved) { "Could not remove the encrypted local memory record" }
+        true
+    }
+
     fun clearLocal(): Result<Unit> = runCatching {
         check(local.removeAllWithPrefix("memory_")) { "Could not clear local memory" }
     }
