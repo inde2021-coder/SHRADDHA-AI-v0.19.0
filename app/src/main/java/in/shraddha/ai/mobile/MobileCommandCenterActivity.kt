@@ -274,7 +274,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     private fun showMobileHardwareStatus() {
         runCatching {
             val data = MobileHardwareController.status(this)
-            status.text = data.entries.joinToString("\\n") { "${it.key}: ${it.value}" }
+            status.text = data.entries.joinToString("\n") { "${it.key}: ${it.value}" }
         }.onFailure { status.text = "Mobile hardware status unavailable: ${it.message}" }
     }
 
