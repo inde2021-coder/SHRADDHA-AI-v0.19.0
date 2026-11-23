@@ -21,7 +21,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
         val privateTitle = "Private timeline title $suffix"
         try {
             store.addTimelineEvent(PersonalKnowledgeStore.TimelineEvent(
-                eventId, privateTitle, "work", 123456L, "private note"
+                eventId, privateTitle, "work", 123456L, "private note $suffix"
             )).getOrThrow()
             store.addApprovedSkillExample(true, PersonalKnowledgeStore.SkillExample(
                 skillId, skillName, "input", "approved output", 123456L
@@ -31,7 +31,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
             )).getOrThrow()
 
             val reopened = PersonalKnowledgeStore(context)
-            assertEquals(privateTitle, reopened.searchTimeline("private note").getOrThrow().single().title)
+            assertEquals(privateTitle, reopened.searchTimeline("private note $suffix").getOrThrow().single().title)
             assertEquals("approved output", reopened.skillExamples(skillName.lowercase()).getOrThrow().single().approvedOutput)
             assertEquals("Prepare briefing", reopened.proposeRoutine(routineId, "07:00").getOrThrow()?.summary)
             assertNull(reopened.proposeRoutine(routineId, "08:00").getOrThrow())
@@ -45,7 +45,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
             assertTrue(reopened.deleteRoutine(routineId).getOrThrow())
         } finally {
             store.deleteTimelineEvent(eventId)
-            store.forgetSkill("Hindi")
+            store.forgetSkill(skillName)
             store.deleteRoutine(routineId)
         }
     }
