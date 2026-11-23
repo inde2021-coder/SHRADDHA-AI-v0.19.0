@@ -82,8 +82,8 @@ fun SocialPublishingScreen(navController: NavController) {
         scope.launch {
             val result = runCatching {
                 when (action) {
-                    "publish" -> SocialPublishingClient.publish(context, platform, text.trim(), mediaKind.takeIf { platform == "instagram" }, mediaUrl.trim().takeIf { platform == "instagram" }).toString()
-                    else -> SocialPublishingClient.schedule(context, platform, text.trim(), scheduledAt.trim(), mediaKind = mediaKind.takeIf { platform == "instagram" }, mediaUrl = mediaUrl.trim().takeIf { platform == "instagram" }).toString()
+                    "publish" -> SocialPublishingClient.publish(context, platform, text.trim(), mediaKind.takeIf { platform == "instagram" || platform == "facebook" }, mediaUrl.trim().takeIf { platform == "instagram" || platform == "facebook" }).toString()
+                    else -> SocialPublishingClient.schedule(context, platform, text.trim(), scheduledAt.trim(), mediaKind = mediaKind.takeIf { platform == "instagram" || platform == "facebook" }, mediaUrl = mediaUrl.trim().takeIf { platform == "instagram" || platform == "facebook" }).toString()
                 }
             }
             status = result.fold(
@@ -112,21 +112,21 @@ fun SocialPublishingScreen(navController: NavController) {
             }
             OutlinedTextField(value = text, onValueChange = { text = it.take(5000) }, label = { Text("Post text") }, modifier = Modifier.fillMaxWidth(), minLines = 6)
             Text("${text.length}/5000 characters", color = colors.textSecondary)
-            if (platform == "instagram") {
-                Text("Instagram media type", color = colors.accent)
+            if (platform == "instagram" || platform == "facebook") {
+                Text(if (platform == "instagram") "Instagram media type" else "Facebook Page media type", color = colors.accent)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("image", "reel", "story_image", "story_video").forEach { kind ->
+                    (if (platform == "instagram") listOf("image", "reel", "story_image", "story_video") else listOf("image", "video")).forEach { kind ->
                         FilterChip(selected = mediaKind == kind, onClick = { mediaKind = kind }, label = { Text(kind.replace('_', ' ').replaceFirstChar { it.uppercase() }) })
                     }
                 }
                 OutlinedTextField(value = mediaUrl, onValueChange = { mediaUrl = it.take(2048) }, label = { Text("Public HTTPS media URL") }, modifier = Modifier.fillMaxWidth())
-                Text("Meta must be able to fetch this public URL. Use an image URL for Image/Story image, or a video URL for Reel/Story video. Credentials stay on the backend.", color = colors.textSecondary)
+                Text("Meta must be able to fetch this public HTTPS URL. Instagram supports Feed, Reel and Story; Facebook Pages support image and video posts. Credentials stay on the backend.", color = colors.textSecondary)
             }
         }
         NovaGlassCard {
             Text("DURABLE SCHEDULE", color = colors.accent)
             OutlinedTextField(value = scheduledAt, onValueChange = { scheduledAt = it.take(48) }, label = { Text("ISO-8601 date/time with timezone") }, modifier = Modifier.fillMaxWidth())
-            Text("Use ISO-8601 with a timezone. Instagram Feed, Reel and Story scheduling uses the selected media type and a public HTTPS media URL. Other platforms schedule text posts. Scheduling requires Firebase sign-in and backend Firebase Admin credentials. Ambiguous provider outcomes are not blindly retried.", color = colors.textSecondary)
+            Text("Use ISO-8601 with a timezone. Instagram Feed/Reel/Story and Facebook Page image/video scheduling use the selected media type and a public HTTPS media URL. Other platforms schedule text posts. Scheduling requires Firebase sign-in and backend Firebase Admin credentials. Ambiguous provider outcomes are not blindly retried.", color = colors.textSecondary)
         }
         NovaGlassCard {
             Text(status, color = colors.textSecondary)
@@ -148,8 +148,8 @@ fun SocialPublishingScreen(navController: NavController) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank() && (platform != "instagram" || mediaUrl.startsWith("https://") && mediaKind in setOf("image", "reel", "story_image", "story_video")), modifier = Modifier.weight(1f))
-                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && (platform != "instagram" || mediaUrl.startsWith("https://") && mediaKind in setOf("image", "reel", "story_image", "story_video")), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank() && ( platform !in setOf("instagram", "facebook") || mediaUrl.startsWith("https://") && mediaKind in if (platform == "instagram") setOf("image", "reel", "story_image", "story_video") else setOf("image", "video")), modifier = Modifier.weight(1f))
+                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && (platform !in setOf("instagram", "facebook") || mediaUrl.startsWith("https://") && mediaKind in if (platform == "instagram") setOf("image", "reel", "story_image", "story_video") else setOf("image", "video")), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
             }
         }
     }
