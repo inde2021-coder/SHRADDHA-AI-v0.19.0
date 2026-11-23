@@ -22,7 +22,7 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import java.io.ByteArrayOutputStream
 
-/** User-started screen sharing. Android's MediaProjection consent dialog is required every session. */
+/** Wipes the reusable JPEG compression buffer after each screen frame. */
 private class WipingByteArrayOutputStream : ByteArrayOutputStream() {
     fun wipe() {
         buf.fill(0)
