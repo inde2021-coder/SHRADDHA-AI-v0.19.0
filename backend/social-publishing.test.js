@@ -4,6 +4,7 @@ import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, vali
 
 test('publishing requires explicit confirmation of the exact preview', () => {
   assert.deepEqual(validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Hello', confirmed: true }), { platform: 'telegram', text: 'Hello' });
+  assert.deepEqual(validatePublishIntent({ platform: 'telegram', text: ' Hello ', preview: ' Hello ', confirmed: true }), { platform: 'telegram', text: ' Hello ' });
   assert.throws(() => validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Changed', confirmed: true }), /exact post preview/);
   assert.throws(() => validatePublishIntent({ platform: 'telegram', text: 'Hello', preview: 'Hello', confirmed: false }), /confirmation/);
 });
@@ -52,6 +53,7 @@ test('media publishing accepts only bounded image/video attachments for supporte
   assert.equal(validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: bytes }, 'telegram').kind, 'image');
   assert.equal(validateMediaAttachment({ mediaKind: 'video', mimeType: 'video/mp4', mediaBase64: bytes }, 'mastodon').kind, 'video');
   assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/svg+xml', mediaBase64: bytes }, 'telegram'));
+  assert.throws(() => validateMediaAttachment({ mediaKind: 'video', mimeType: 'video/quicktime', mediaBase64: bytes }, 'telegram'));
   assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: bytes }, 'bluesky'));
   assert.throws(() => validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: 'not-base64' }, 'telegram'));
 });
