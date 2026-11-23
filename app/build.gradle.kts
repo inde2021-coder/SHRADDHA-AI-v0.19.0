@@ -43,6 +43,17 @@ android {
             ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
         if (requestedAbis.isNotEmpty()) ndk { abiFilters += requestedAbis }
     }
+    // Device-specific APKs avoid shipping native libraries for every CPU architecture.
+    // Play App Bundles additionally deliver matching ABI/configuration splits.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true // keep a universal debug APK for sideloading and CI smoke tests
+        }
+    }
+
     // Release signing is configured only when CI signing secrets are present.
     signingConfigs {
         create("release") {
