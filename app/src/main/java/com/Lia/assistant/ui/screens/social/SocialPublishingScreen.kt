@@ -36,6 +36,7 @@ import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.social.SocialPublishingClient
 import kotlinx.coroutines.launch
 import java.time.Instant
+import org.json.JSONArray
 
 @Composable
 fun SocialPublishingScreen(navController: NavController) {
@@ -49,6 +50,29 @@ fun SocialPublishingScreen(navController: NavController) {
     var pendingAction by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Choose a platform, review the exact post, then publish now or schedule it.") }
+    var scheduledPosts by remember { mutableStateOf<JSONArray?>(null) }
+
+    fun loadPosts() {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val result = runCatching { SocialPublishingClient.list(context) }
+            result.onSuccess { scheduledPosts = it.optJSONArray("posts") ?: JSONArray(); status = "Loaded scheduled post history." }
+                .onFailure { status = "Could not load schedule: ${it.message}" }
+            busy = false
+        }
+    }
+
+    fun cancelPost(id: String) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val result = runCatching { SocialPublishingClient.cancel(context, id) }
+            status = result.fold({ "Scheduled post cancelled." }, { "Cancel failed: ${it.message}" })
+            busy = false
+            loadPosts()
+        }
+    }
 
     fun run(action: String) {
         if (busy) return
@@ -94,6 +118,22 @@ fun SocialPublishingScreen(navController: NavController) {
         }
         NovaGlassCard {
             Text(status, color = colors.textSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NovaButton(text = "REFRESH SCHEDULE", onClick = { loadPosts() }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+            }
+            scheduledPosts?.let { posts ->
+                for (i in 0 until posts.length()) {
+                    val post = posts.optJSONObject(i) ?: continue
+                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${post.optString("platform").uppercase()} • ${post.optString("status").uppercase()}", color = colors.accent)
+                        Text(post.optString("scheduledAt"), color = colors.textSecondary)
+                        Text(post.optString("text"), color = colors.textPrimary)
+                        if (post.optString("status") == "pending") {
+                            NovaButton(text = "CANCEL SCHEDULED POST", onClick = { cancelPost(post.optString("id")) }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                        }
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank(), modifier = Modifier.weight(1f))
                 NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank(), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
