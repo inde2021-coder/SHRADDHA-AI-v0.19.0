@@ -38,6 +38,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -75,6 +79,7 @@ fun SettingsScreen(
 ) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var showGatewayDialog by remember { mutableStateOf(false) }
     val savedGateway = remember { VoiceGatewaySettings.get(context) }
@@ -89,6 +94,17 @@ fun SettingsScreen(
     var voiceActionEntry by remember { mutableStateOf(initialVoiceAction.getOrNull()) }
     var voiceActionError by remember { mutableStateOf(initialVoiceAction.exceptionOrNull()?.localizedMessage) }
     var showVoiceActionConfirm by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner, voiceActionJournal) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val refreshed = voiceActionJournal.latestResult()
+                voiceActionEntry = refreshed.getOrNull()
+                voiceActionError = refreshed.exceptionOrNull()?.localizedMessage
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
     var showNameDialog by remember { mutableStateOf(false) }
