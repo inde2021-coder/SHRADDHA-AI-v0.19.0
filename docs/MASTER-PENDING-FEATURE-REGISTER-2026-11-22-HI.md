@@ -14,6 +14,11 @@ This register consolidates the user's earlier feature requests and the current s
 - **Not implemented** — no complete production path has been verified.
 - **Do not claim complete** — safety, legal, licensing or physical-device evidence is missing.
 
+## Provider compatibility audit (23 November 2026)
+
+- Corrected the Claude Messages adapter model identifier from the obsolete `claude-sonnet-5` to the currently documented `claude-sonnet-5-5`. This is a source-level compatibility correction only; a live Claude API request still requires the user's own key and provider-side verification.
+- OpenAI `gpt-5.5` and Perplexity `POST /v1/agent` identifiers/endpoints were checked against current provider documentation. Provider model availability can still depend on the user's account and rate limits.
+
 ## A. Product identity, voice and design
 
 | Request | Current source observation | Remaining work |
