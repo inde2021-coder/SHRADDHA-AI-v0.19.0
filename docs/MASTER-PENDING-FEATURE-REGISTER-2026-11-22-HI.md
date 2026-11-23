@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- One Android CI push run had already started before the manual-only trigger change and exposed compiler errors in credential decrypt return expressions, scheduler snapshot return expressions, Device Link save result handling, About email copy callback, Agent Council numeric slider typing, Quick Actions tile delimiter and Mobile Command Center assistant-name scope. Source fixes for each diagnostic are committed; no new CI run was started to verify them.
+
+
 - Android CI no longer runs on every feature-branch push; the complete unit-test/build/emulator smoke workflow is now `workflow_dispatch` only, so source-audit commits do not trigger repeated test runs. The owner can start one consolidated verification when implementation review is complete.
 
 
