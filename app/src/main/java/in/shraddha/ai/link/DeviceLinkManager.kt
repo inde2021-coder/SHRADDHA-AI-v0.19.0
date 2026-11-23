@@ -391,7 +391,9 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/ai/providers").get()
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        val builder = Request.Builder().url("$safeBaseUrl/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
@@ -428,8 +430,10 @@ object DeviceLinkManager {
         body: JSONObject,
         done: (Result<String>) -> Unit,
         onCall: ((Call) -> Unit)? = null
-    ): Call {
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + path)
+    ): Call? {
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return null }
+        val builder = Request.Builder().url("$safeBaseUrl$path")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val call = client.newCall(builder.build())
@@ -449,9 +453,20 @@ object DeviceLinkManager {
     }
 
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
-        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(4000)).put("mode", mode)
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        val normalizedProvider = provider.trim().uppercase()
+        if (normalizedProvider !in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
+            done(Result.failure(IllegalArgumentException("Unsupported AI provider.")))
+            return
+        }
+        if (prompt.isBlank() || jpeg.isEmpty()) {
+            done(Result.failure(IllegalArgumentException("A prompt and image are required.")))
+            return
+        }
+        val body = JSONObject().put("provider", normalizedProvider).put("prompt", prompt.take(4000)).put("mode", mode)
             .put("mimeType", "image/jpeg").put("imageBase64", Base64.encodeToString(jpeg, Base64.NO_WRAP))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/vision")
+        val builder = Request.Builder().url("$safeBaseUrl/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
