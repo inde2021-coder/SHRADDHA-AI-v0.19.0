@@ -56,6 +56,7 @@ fun VisualLensScreen(navController: NavController) {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     var serviceState by remember { mutableStateOf(LiveEyesCameraService.getState(context)) }
+    var liveObservation by remember { mutableStateOf(LiveEyesCameraService.getLatestObservation(context)) }
     var status by remember { mutableStateOf("कैमरा बंद है। Start दबाने पर Android permission और foreground notification दिखाई देंगे।") }
 
     fun startEyes() {
@@ -109,6 +110,7 @@ fun VisualLensScreen(navController: NavController) {
     LaunchedEffect(context) {
         while (true) {
             serviceState = LiveEyesCameraService.getState(context)
+            liveObservation = LiveEyesCameraService.getLatestObservation(context)
             delay(500)
         }
     }
@@ -151,6 +153,10 @@ fun VisualLensScreen(navController: NavController) {
                     color = colors.textSecondary
                 )
                 Text(status, color = colors.textSecondary)
+                if (liveObservation.isNotBlank()) {
+                    Text("LIVE SUBTITLES + OBJECT TRACKING", color = colors.accent)
+                    Text(liveObservation, color = colors.textPrimary)
+                }
             }
         }
 
