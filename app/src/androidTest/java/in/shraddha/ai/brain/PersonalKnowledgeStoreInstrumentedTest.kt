@@ -16,6 +16,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
         val suffix = System.currentTimeMillis().toString()
         val eventId = "timeline_$suffix"
         val skillId = "skill_$suffix"
+        val skillName = "Hindi-$suffix"
         val routineId = "routine_$suffix"
         val privateTitle = "Private timeline title $suffix"
         try {
@@ -23,7 +24,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
                 eventId, privateTitle, "work", 123456L, "private note"
             )).getOrThrow()
             store.addApprovedSkillExample(true, PersonalKnowledgeStore.SkillExample(
-                skillId, "Hindi", "input", "approved output", 123456L
+                skillId, skillName, "input", "approved output", 123456L
             )).getOrThrow()
             store.saveRoutine(PersonalKnowledgeStore.Routine(
                 routineId, "Morning brief", "07:00", "Prepare briefing", true, true, 123456L
@@ -31,7 +32,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
 
             val reopened = PersonalKnowledgeStore(context)
             assertEquals(privateTitle, reopened.searchTimeline("private note").getOrThrow().single().title)
-            assertEquals("approved output", reopened.skillExamples("hindi").getOrThrow().single().approvedOutput)
+            assertEquals("approved output", reopened.skillExamples(skillName.lowercase()).getOrThrow().single().approvedOutput)
             assertEquals("Prepare briefing", reopened.proposeRoutine(routineId, "07:00").getOrThrow()?.summary)
             assertNull(reopened.proposeRoutine(routineId, "08:00").getOrThrow())
 
@@ -40,7 +41,7 @@ class PersonalKnowledgeStoreInstrumentedTest {
             assertTrue(encrypted.isNotEmpty())
             assertFalse(encrypted.any { it.contains(privateTitle) || it.contains("approved output") })
             assertTrue(reopened.deleteTimelineEvent(eventId).getOrThrow())
-            assertEquals(1, reopened.forgetSkill("Hindi").getOrThrow())
+            assertEquals(1, reopened.forgetSkill(skillName).getOrThrow())
             assertTrue(reopened.deleteRoutine(routineId).getOrThrow())
         } finally {
             store.deleteTimelineEvent(eventId)
