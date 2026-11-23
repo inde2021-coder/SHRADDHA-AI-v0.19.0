@@ -106,9 +106,9 @@ def execute_hardware_action(action, confirm_power=None):
             return False, "Power action cancelled or not locally confirmed."
         try:
             if operation == "sleep":
-                ctypes.windll.powrprof.SetSuspendState(False, True, False)
+                ctypes.windll.powrprof.SetSuspendState(False, False, False)
             else:
-                flag = 0x00000008 if operation == "restart" else 0x00000001
+                flag = 0x00000002 if operation == "restart" else 0x00000001
                 if not ctypes.windll.user32.ExitWindowsEx(flag | 0x00000004, 0x00040000):
                     raise OSError("Windows rejected the power request.")
             return True, f"Windows {operation} request accepted."
