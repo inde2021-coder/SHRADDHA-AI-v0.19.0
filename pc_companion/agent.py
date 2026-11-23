@@ -30,6 +30,7 @@ from actions import execute_action
 from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope
 from e2e_crypto import DeviceE2ECrypto
 from windows_hardware import get_hardware_status, execute_hardware_action
+from reconnect import reconnect_delay_ms
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -315,7 +316,7 @@ class PcCompanionApp:
         if not self.auto_reconnect_enabled or self.stop_event.is_set() or self.reconnect_scheduled:
             return
         self.reconnect_attempts = min(self.reconnect_attempts + 1, 8)
-        delay = min(60_000, 2_000 * (2 ** (self.reconnect_attempts - 1)))
+        delay = reconnect_delay_ms(self.reconnect_attempts)
         self.reconnect_scheduled = True
         self.root.after(delay, self._try_reconnect)
 
