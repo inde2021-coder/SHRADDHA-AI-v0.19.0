@@ -450,11 +450,24 @@ class FirebaseCloudVault(private val context: Context) {
     private fun encrypt(value: String, password: String): String {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-        val key = derive(password, salt)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
-        val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-        return listOf(salt, iv, encrypted).joinToString(".") { Base64.encodeToString(it, Base64.NO_WRAP or Base64.URL_SAFE) }
+        val clear = value.toByteArray(Charsets.UTF_8)
+        try {
+            val key = derive(password, salt)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
+            val encrypted = cipher.doFinal(clear)
+            try {
+                return listOf(salt, iv, encrypted).joinToString(".") {
+                    Base64.encodeToString(it, Base64.NO_WRAP or Base64.URL_SAFE)
+                }
+            } finally {
+                encrypted.fill(0)
+            }
+        } finally {
+            clear.fill(0)
+            salt.fill(0)
+            iv.fill(0)
+        }
     }
 
     private fun decrypt(payload: String, password: String): String {
@@ -464,10 +477,21 @@ class FirebaseCloudVault(private val context: Context) {
         val salt = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
         val iv = Base64.decode(parts[1], Base64.NO_WRAP or Base64.URL_SAFE)
         val encrypted = Base64.decode(parts[2], Base64.NO_WRAP or Base64.URL_SAFE)
-        require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
-        return String(cipher.doFinal(encrypted), Charsets.UTF_8)
+        try {
+            require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(encrypted)
+            try {
+                String(clear, Charsets.UTF_8)
+            } finally {
+                clear.fill(0)
+            }
+        } finally {
+            salt.fill(0)
+            iv.fill(0)
+            encrypted.fill(0)
+        }
     }
 
     private fun derive(password: String, salt: ByteArray): SecretKeySpec {
