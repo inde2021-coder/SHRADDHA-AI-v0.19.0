@@ -54,15 +54,19 @@ class EncryptedFeatureStore(context: Context) {
         require(parts.size == 2) { "Encrypted feature data format is invalid" }
         val iv = Base64.decode(parts[0], Base64.NO_WRAP)
         val encrypted = Base64.decode(parts[1], Base64.NO_WRAP)
-        require(iv.size == 12 && encrypted.size >= 16) { "Encrypted feature data parameters are invalid" }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val existingKey = existingKey() ?: error("Encrypted feature-store key is missing; refusing to create a new key for decryption")
-        cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
-        val clear = cipher.doFinal(encrypted)
         try {
-            String(clear, Charsets.UTF_8)
+            require(iv.size == 12 && encrypted.size >= 16) { "Encrypted feature data parameters are invalid" }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val existingKey = existingKey() ?: error("Encrypted feature-store key is missing; refusing to create a new key for decryption")
+            cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(encrypted)
+            try {
+                String(clear, Charsets.UTF_8)
+            } finally {
+                clear.fill(0)
+            }
         } finally {
-            clear.fill(0)
+            iv.fill(0)
             encrypted.fill(0)
         }
     }
