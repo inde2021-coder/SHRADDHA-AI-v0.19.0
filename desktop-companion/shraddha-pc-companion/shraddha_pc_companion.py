@@ -64,6 +64,20 @@ def derive_e2e_peer_key(private, peer_public_b64: str, session_id: str, local_id
     return key, fingerprint
 
 
+def clear_peer_key(peer_keys: dict, peer_id: str) -> bool:
+    """Drop ephemeral E2E material when a paired peer disconnects or is revoked."""
+    if not isinstance(peer_keys, dict) or not isinstance(peer_id, str) or not peer_id:
+        return False
+    state = peer_keys.pop(peer_id, None)
+    if not isinstance(state, dict):
+        return False
+    key = state.pop("key", None)
+    if isinstance(key, bytearray):
+        key[:] = b"\\x00" * len(key)
+    state.clear()
+    return True
+
+
 def e2e_associated_data(session_id: str, sender_id: str, receiver_id: str, kind: str, correlation: str) -> bytes:
     return f"{session_id}|{sender_id}|{receiver_id}|{kind}|{correlation}".encode("utf-8")
 
@@ -1518,10 +1532,16 @@ async def run_once(args) -> None:
                             try: temp_path.unlink(missing_ok=True)
                             except Exception: pass
                         print("Shared attachment rejected:", str(exc)[:200])
+                elif kind == "device_revoked":
+                    peer_id = str(message.get("deviceId", ""))
+                    clear_peer_key(peer_keys, peer_id)
+                    print("Paired device revoked; its ephemeral E2E key was discarded:", peer_id)
                 elif kind == "peer_status":
                     peer_id = str(message.get("deviceId", ""))
                     if message.get("online") is True and peer_id and peer_id != device_id and peer_id not in peer_keys:
                         await ws.send(json.dumps({"type": "e2e_key_offer", "targetDeviceId": peer_id, "publicKey": e2e_public_b64}))
+                    elif message.get("online") is not True:
+                        clear_peer_key(peer_keys, peer_id)
                     print("Paired device", message.get("name"), "online" if message.get("online") else "offline")
         finally:
             if screen_task:
