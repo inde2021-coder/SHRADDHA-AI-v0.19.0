@@ -51,7 +51,7 @@ import com.Lia.assistant.action.InstalledAppLabelCache
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.ui.components.NovaGlassCard
-import com.Lia.assistant.ui.theme.nightSky
+import com.Lia.assistant.ui.theme.LiaReferenceTheme
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import kotlinx.coroutines.CoroutineScope
@@ -69,6 +69,11 @@ private data class QuickTile(
 
 @Composable
 fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifier) {
+    LiaReferenceTheme { QuickActionsContent(navController, modifier) }
+}
+
+@Composable
+private fun QuickActionsContent(navController: NavController, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
     val context = LocalContext.current
     val assistantName = NovaPreferences.getString(context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME).trim().ifBlank { AssistantBrand.FULL_NAME }
@@ -126,7 +131,7 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
     )
 
     Column(
-        modifier = modifier.fillMaxSize().nightSky().padding(horizontal = 16.dp, vertical = 10.dp)
+        modifier = modifier.fillMaxSize().background(colors.background).padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -156,10 +161,10 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
                     Column(horizontalAlignment = Alignment.Start) {
                         Box(
                             Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF30204F)),
+                                .background(Color(0xFFECE4FF)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(tile.icon, contentDescription = null, tint = Color(0xFFC5A6FF), modifier = Modifier.size(20.dp))
+                            Icon(tile.icon, contentDescription = null, tint = Color(0xFF7438C8), modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(tile.title, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2)
