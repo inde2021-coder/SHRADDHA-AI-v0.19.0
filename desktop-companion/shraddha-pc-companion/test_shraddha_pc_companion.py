@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, parse_pairing_qr, build_phone_action, decode_screen_frame
+from shraddha_pc_companion import build_clipboard_payload, decode_clipboard_payload, file_transfer_manifest, read_file_chunk, validate_transfer_chunk, sanitize_clipboard_text, parse_voice_device_command, reconnect_delay, normalize_point, is_sensitive_window, validate_action, encode_screen_frame, safe_active_window_region, resolve_unique_text_target, safe_relative_path, list_safe_files, read_safe_text_file, write_safe_text_file, redact_ocr_text, search_safe_text_files, control_grant_allows, claim_remote_action_id, parse_pairing_qr, build_phone_action, decode_screen_frame
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -153,6 +153,18 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertEqual(parse_voice_device_command('go back'), {'kind': 'back'})
         self.assertEqual(parse_voice_device_command('ऐप खोलो settings'), {'kind': 'open_app', 'appName': 'settings'})
         with self.assertRaises(ValueError): parse_voice_device_command('send all passwords')
+
+    def test_remote_action_ids_are_single_use_per_peer_and_bounded(self):
+        seen = {}
+        action_id = "action_1234567890"
+        self.assertTrue(claim_remote_action_id(seen, "android-device-1", action_id))
+        self.assertFalse(claim_remote_action_id(seen, "android-device-1", action_id))
+        self.assertTrue(claim_remote_action_id(seen, "android-device-2", action_id))
+        self.assertFalse(claim_remote_action_id(seen, "android-device-1", "bad"))
+        self.assertFalse(claim_remote_action_id(seen, "", "action_1234567890"))
+        for index in range(20):
+            self.assertTrue(claim_remote_action_id(seen, "peer", f"action_{index:08d}", limit=8))
+        self.assertLessEqual(len(seen), 8)
 
     def test_reconnect_backoff_is_bounded(self):
         self.assertEqual(reconnect_delay(0), 1.0)
