@@ -66,6 +66,18 @@ object CouncilCostBudget {
         if (updated > limit) throw IllegalStateException("Monthly API budget exceeded: estimated spend USD ${updated} is above configured limit USD ${limit}. Further council provider calls are stopped.")
     }
 
+    /** Cloud gateways without token evidence must stop budgeted work instead of bypassing the cap. */
+    fun stopIfUsageUnknown(context: Context, provider: String, model: String?) {
+        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (p.getFloat(KEY_LIMIT, 0f).toDouble() <= 0.0) return
+        val month = YearMonth.now(ZoneOffset.UTC).toString()
+        if (p.getString(KEY_MONTH, null) != month) {
+            p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f).putBoolean(KEY_UNKNOWN, false).commit()
+        }
+        check(p.edit().putBoolean(KEY_UNKNOWN, true).commit()) { "Could not persist unknown provider usage state." }
+        throw IllegalStateException("Monthly API budget is enabled, but the HTTPS gateway returned no token usage for $provider/${model ?: "unknown model"}. The call may already have been billed; further council calls are stopped until usage pricing is reviewed.")
+    }
+
     fun monthlySpendUsd(context: Context): Double {
         val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return if (p.getString(KEY_MONTH, null) == YearMonth.now(ZoneOffset.UTC).toString()) p.getFloat(KEY_SPEND, 0f).toDouble() else 0.0
