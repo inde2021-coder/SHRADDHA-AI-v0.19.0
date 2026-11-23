@@ -48,7 +48,7 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.ui.theme.LiaReferenceTheme
 import com.Lia.assistant.ui.theme.LocalNovaColors
-import \`in\`.shraddha.ai.operator.OperatorActivity
+import `in`.shraddha.ai.operator.OperatorActivity
 
 private data class ActionItem(
     val title: String,
