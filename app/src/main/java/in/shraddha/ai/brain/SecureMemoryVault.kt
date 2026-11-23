@@ -15,7 +15,7 @@ class SecureMemoryVault(context: Context) {
     private val prefs = context.getSharedPreferences("shraddha_secure_vault", Context.MODE_PRIVATE)
     private val alias = "shraddha_memory_aes_v1"
 
-    private fun keyForEncryption(slot: String): SecretKey {
+    private fun keyForEncryption(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
         require(prefs.all.keys.none { it.startsWith("slot_") } && !prefs.contains("memory")) {
@@ -40,7 +40,7 @@ class SecureMemoryVault(context: Context) {
         val clear = text.toByteArray(Charsets.UTF_8)
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, keyForEncryption(slot))
+            cipher.init(Cipher.ENCRYPT_MODE, keyForEncryption())
             val encrypted = cipher.doFinal(clear)
             try {
                 val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." + Base64.encodeToString(encrypted, Base64.NO_WRAP)
