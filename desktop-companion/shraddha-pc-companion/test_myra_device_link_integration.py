@@ -1,3 +1,4 @@
+import ast
 import os
 import sys
 import tempfile
@@ -10,6 +11,14 @@ from shraddha_link_core import build_launch_spec, validate_pairing_code, validat
 
 
 class MyraShraddhaIntegrationTests(unittest.TestCase):
+    def test_myra_integration_modules_and_entrypoint_parse(self):
+        for path in (MYRA_ROOT / "shraddha_link_core.py",
+                     MYRA_ROOT / "shraddha_device_link.py",
+                     MYRA_ROOT / "Main_normal.py",
+                     Path(__file__).resolve().parent / "shraddha_pc_companion.py"):
+            with self.subTest(path=str(path)):
+                ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
     def test_relay_requires_https_origin_only(self):
         self.assertEqual(validate_relay_url("https://relay.example/"), "https://relay.example")
         for value in ("http://relay.example", "relay.example", "https://user:pass@relay.example",
