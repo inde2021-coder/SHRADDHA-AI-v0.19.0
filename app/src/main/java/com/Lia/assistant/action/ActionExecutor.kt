@@ -32,6 +32,52 @@ object ActionExecutor {
 
 
         when (toolName) {
+
+            "control_paired_pc" -> {
+                val target = args.optString("target_device_id").trim()
+                val kind = args.optString("kind").trim().lowercase()
+                if (!target.matches(Regex("[A-Za-z0-9_-]{8,128}"))) return result.put("status", "error").put("message", "Exact paired PC device ID आवश्यक है। Device Universe में ID देखें; कोई target अनुमान से नहीं चुना जाएगा।")
+                val action = JSONObject().put("kind", kind)
+                when (kind) {
+                    "hardware_status", "back", "home", "screenshot" -> Unit
+                    "set_volume", "set_brightness" -> {
+                        val percent = args.optInt("percent", -1)
+                        if (percent !in 0..100) return result.put("status", "error").put("message", "PC percent 0 से 100 के बीच होना चाहिए।")
+                        action.put("percent", percent)
+                    }
+                    "power" -> {
+                        val operation = args.optString("operation").lowercase()
+                        if (operation !in setOf("shutdown", "restart", "sleep")) return result.put("status", "error").put("message", "Power operation shutdown, restart या sleep होना चाहिए।")
+                        if (!args.optString("user_confirmed").equals("yes", true)) return result.put("status", "confirmation_required").put("message", "PC $operation से पहले उपयोगकर्ता से स्पष्ट हाँ लें; अभी कोई command नहीं भेजी गई।")
+                        action.put("operation", operation)
+                    }
+                    "open_app" -> {
+                        val name = args.optString("name").trim()
+                        if (name.isBlank() || name.length > 100) return result.put("status", "error").put("message", "PC app का नाम 1-100 characters होना चाहिए।")
+                        action.put("name", name)
+                    }
+                    "scroll" -> {
+                        val amount = args.optInt("amount", 0)
+                        if (amount !in -10..10 || amount == 0) return result.put("status", "error").put("message", "Scroll amount -10 से 10 के बीच non-zero होना चाहिए।")
+                        action.put("amount", amount)
+                    }
+                    "web_search" -> {
+                        val query = args.optString("query").trim()
+                        if (query.length !in 2..160) return result.put("status", "error").put("message", "PC web search query 2-160 characters की होनी चाहिए।")
+                        action.put("query", query)
+                    }
+                    else -> return result.put("status", "error").put("message", "Unsupported PC control kind.")
+                }
+                val launch = android.content.Intent(context, `in`.shraddha.ai.MainActivity::class.java)
+                    .putExtra("initial_page", "devices")
+                    .putExtra("voice_pc_action_json", action.toString())
+                    .putExtra("voice_pc_target_id", target)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                context.startActivity(launch)
+                result.put("status", "needs_user_action").put("action", "pc_control_approval_requested")
+                    .put("target_device_id", target).put("command_kind", kind)
+                    .put("message", "Device Control खोला गया है। पहले paired Windows PC से fresh permission ली जाएगी; फिर Windows companion की per-action confirmation होगी। अभी execution confirmed नहीं है।")
+            }
             "control_phone" -> {
                 val action = args.optString("action").trim().lowercase()
                 val percent = args.optInt("percent", -1)
