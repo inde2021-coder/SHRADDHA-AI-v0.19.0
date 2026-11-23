@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- ConversationMemory no longer deletes encrypted voice history when decryption/Keystore access fails, and it refuses to generate a replacement key while history ciphertext exists. Persist/disable operations use synchronous commits, decoded buffers are wiped, and Settings reports persistence errors and rolls the toggle back when opt-in cannot be saved.
+
+
 - Telephony gateway settings now read through an explicit Config result with a visible decryption/recovery error, save URL+token atomically in one encrypted-store transaction, and clear both keys atomically. Phone Call Agent initializes its settings message from the read result rather than silently showing blank credentials after a vault error.
 
 
