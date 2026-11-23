@@ -1255,7 +1255,8 @@ async def run_once(args) -> None:
             print("Waiting for Android receiver to approve this file transfer…")
         approved_until = 0.0
         approved_device_id = ""
-        seen_remote_actions = {}\n        seen_visual_sequences = {}
+        seen_remote_actions = {}
+        seen_visual_sequences = {}
         screen_task = asyncio.create_task(share_screen_loop(ws, args.screen_fps, args.screen_target, peer_keys, session_id, device_id)) if share_screen else None
         try:
             async for raw in ws:
