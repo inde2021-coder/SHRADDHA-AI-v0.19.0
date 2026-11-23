@@ -7,9 +7,10 @@ env:
 on:
   workflow_dispatch:
   push:
-    branches: [work/step-01-source-audit-fixes, optimization/apk-size-without-feature-loss]
+    branches: [work/step-01-source-audit-fixes, optimization/apk-size-without-feature-loss, feature/myra-shraddha-desktop-integration]
     paths:
       - "desktop-companion/shraddha-pc-companion/**"
+      - "desktop-companion/MYRA_ULTRA_APP/**"
       - ".github/workflows/pc-companion-windows.yml"
 jobs:
   advanced-desktop-companion:

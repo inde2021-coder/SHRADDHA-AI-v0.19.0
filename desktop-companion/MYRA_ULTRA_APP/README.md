@@ -69,6 +69,17 @@ Qt signals → live UI update
 Done → MYRA bolti hai congratulations!
 ```
 
+## Shraddha AI Device Link
+
+MYRA ULTRA includes a **Device Link** dock. It starts the official Shraddha Windows PC companion as a separate process; the Android APK does not include MYRA's Python/PyQt/Node runtime. See [MYRA-SHRADDHA-INTEGRATION.md](MYRA-SHRADDHA-INTEGRATION.md) for pairing, dependency and security details.
+
+1. Install the companion core requirements from `../shraddha-pc-companion/requirements.txt` in the Python environment used by MYRA.
+2. Deploy the Shraddha HTTPS/WSS relay and create a one-time pairing code in Android → Device Universe.
+3. Open MYRA → **Device Link** → **Show Shraddha ↔ MYRA connection**. Enter the relay origin and code, then connect.
+4. The PC still asks for local approval for every control session and every action. Use **Disconnect** to stop the companion.
+
+For a packaged MYRA build, place the separately built `ShraddhaAI-Desktop-Companion.exe` beside MYRA. This keeps optional automation packages out of the MYRA bundle.
+
 ## Configuration
 
 `.env` file:

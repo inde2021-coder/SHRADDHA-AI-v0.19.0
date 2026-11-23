@@ -1502,7 +1502,7 @@ async def run(args) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Consent-gated Shraddha AI Windows PC companion")
     parser.add_argument("--base-url", default="", help="HTTPS URL of your Shraddha relay (saved after pairing)")
-    parser.add_argument("--pairing-code", default="", help="Six-digit code shown by the Android owner device (first run or re-pair)")
+    parser.add_argument("--pairing-code", default=os.environ.get("SHRADDHA_PAIRING_CODE", ""), help="Six-digit code shown by the Android owner device (first run or re-pair); environment is supported for MYRA handoff")
     parser.add_argument("--scan-pairing-qr", action="store_true", help="Use the PC camera to scan a Shraddha pairing QR; requires requirements-qr.txt")
     parser.add_argument("--control-phone", default="", help="Paired Android device ID to control after its owner approves")
     parser.add_argument("--voice-control-phone", default="", help="Listen for one allowlisted offline voice command for this paired Android device")

@@ -28,6 +28,7 @@ def _preload():
         import camera_vision_module
         import screen_share_module
         import myra_coder_integration
+        import shraddha_device_link
         print("[MYRA ULTRA] All modules loaded OK")
     except Exception as e:
         print(f"[NEW MODULES] Load warning: {e}")
@@ -68,6 +69,7 @@ class TITANAppNormal:
         self._LogS      = None
         self._single    = None      # SingleInstance (dobara chalane par purani window khule)
         self.splash     = None      # MyraSplash (startup progress)
+        self._device_link_dock = None
 
     def _run_preload(self):
         """Imports background thread mein; main thread splash animate karta hai."""
@@ -140,6 +142,13 @@ class TITANAppNormal:
             finally:
                 _aria_mod._startup_hook = None
             self._TITAN_win.setWindowTitle(f"MYRA ULTRA v8.0 — {name}" if name else "MYRA ULTRA v8.0")
+            # Keep MYRA's desktop runtime separate; delegate paired-device work to Shraddha's
+            # existing consent-gated PC companion process.
+            try:
+                from shraddha_device_link import attach_device_link
+                self._device_link_dock = attach_device_link(self._TITAN_win)
+            except Exception as link_error:
+                print(f"[MYRA] Shraddha Device Link unavailable: {link_error}")
 
             try:
                 w = self._TITAN_win._worker
