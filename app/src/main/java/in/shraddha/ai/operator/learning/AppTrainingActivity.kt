@@ -9,6 +9,8 @@ import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService
 import `in`.shraddha.ai.operator.OperatorEvent
 import `in`.shraddha.ai.operator.OperatorTaskState
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 
 /** User-driven per-app training: teach semantic anchors and reusable, verifiable action recipes. */
 class AppTrainingActivity : Activity() {
@@ -26,9 +28,12 @@ class AppTrainingActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20); setBackgroundColor(0xFF0B1020.toInt()) }
-        root.addView(TextView(this).apply { text = "SHRADDHA • APP LEARNING LAB"; textSize = 20f; gravity = Gravity.CENTER; setTextColor(Color.WHITE) })
-        root.addView(TextView(this).apply { text = "हर ऐप का अलग प्रोफ़ाइल • Semantic UI सीखना • सुरक्षित Workflow"; gravity = Gravity.CENTER; setTextColor(0xFFB8A8FF.toInt()); setPadding(0, 8, 0, 16) })
+        val assistantName = NovaPreferences.getString(
+            this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+        ).trim().ifBlank { AssistantBrand.NAME }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(0xFF07131D.toInt()) }
+        root.addView(TextView(this).apply { text = "$assistantName • APP LEARNING LAB"; textSize = 20f; gravity = Gravity.CENTER; setTextColor(Color.WHITE) })
+        root.addView(TextView(this).apply { text = "हर ऐप का अलग प्रोफ़ाइल • Semantic UI सीखना • सुरक्षित Workflow"; gravity = Gravity.CENTER; setTextColor(0xFF73DDE7.toInt()); setPadding(0, 8, 0, 16) })
         appLabel = field("ऐप का नाम (पहले स्क्रीन देखें)"); root.addView(appLabel)
         root.addView(button("वर्तमान ऐप/स्क्रीन पहचानें") { captureApp() })
         target = field("स्क्रीन पर दिखने वाला सटीक बटन/फ़ील्ड नाम"); root.addView(target)
@@ -42,7 +47,7 @@ class AppTrainingActivity : Activity() {
         root.addView(button("वर्तमान लक्ष्य के लिए Workflow Step जोड़ें") { addStep() })
         root.addView(button("पूरा Workflow इस ऐप में सहेजें") { saveWorkflow() })
         root.addView(button("सहेजे गए ऐप प्रोफ़ाइल देखें") { showProfiles() })
-        status = TextView(this).apply { setTextColor(0xFFE1E7F5.toInt()); textSize = 13f; setPadding(12, 18, 12, 18); text = "पहले ऐप खोलें और Accessibility अनुमति चालू करें।" }
+        status = TextView(this).apply { setTextColor(0xFFE6F5F7.toInt()); textSize = 13f; setPadding(12, 18, 12, 18); text = "पहले ऐप खोलें और Accessibility अनुमति चालू करें।" }
         root.addView(status)
         root.addView(button("वापस") { finish() })
         val outer = ScrollView(this); outer.addView(root); setContentView(outer)
@@ -92,7 +97,22 @@ class AppTrainingActivity : Activity() {
 
     private fun showProfiles() { report(store.all().joinToString("\n\n") { "${it.displayName} (${it.packageName})\nAnchors: ${it.anchors.size}\nWorkflows: ${it.workflows.keys.joinToString()}" }.ifBlank { "अभी कोई ऐप प्रोफ़ाइल नहीं है।" }) }
     private fun report(text: String) { status.text = text }
-    private fun field(hintText: String) = EditText(this).apply { hint = hintText; setHintTextColor(0xFF8894AE.toInt()); setTextColor(Color.WHITE); textSize = 14f; setPadding(14, 12, 14, 12); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF18243A.toInt()); cornerRadius = 16f; setStroke(1, 0xFF405477.toInt()) }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 } }
+    private fun field(hintText: String) = EditText(this).apply {
+        hint = hintText; setHintTextColor(0xFF8BAFB8.toInt()); setTextColor(Color.WHITE); textSize = 14f
+        setPadding(16, 12, 16, 12)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+    }
     private fun spinner(items: List<String>) = Spinner(this).apply { adapter = ArrayAdapter(this@AppTrainingActivity, android.R.layout.simple_spinner_dropdown_item, items); layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 } }
-    private fun button(label: String, click: () -> Unit) = Button(this).apply { text = label; isAllCaps = false; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF5946A8.toInt()); setOnClickListener { click() }; layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 7 } }
+    private fun button(label: String, click: () -> Unit) = Button(this).apply {
+        text = label; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
+        }
+        elevation = 7f; setPadding(18, 12, 18, 12)
+        setOnClickListener { click() }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+    }
 }
