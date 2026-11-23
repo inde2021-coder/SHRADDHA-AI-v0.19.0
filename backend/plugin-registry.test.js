@@ -34,7 +34,7 @@ test('rejects unknown capabilities and arbitrary executable payloads', () => {
   assert.throws(() => validatePluginManifest(signed({ capabilities: ['shell_exec'] })), /unsupported capability/);
   assert.throws(() => validatePluginManifest(signed({ script: 'process.exit(0)' })), /Executable or remote/);
   assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'open_url' }] })), /not allowed/);
-  assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'create_note', title: 'x', body: 'y', url: 'https://evil.example' }] })), /Executable or remote/);
+  assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'create_note', title: 'x', body: 'y', url: 'https://evil.example' }] })), /unsupported field/);
 });
 
 test('rejects untrusted keys and malformed manifests', () => {
@@ -56,16 +56,12 @@ test('authorizes only an exact signed declarative action after explicit approval
   assert.throws(() => authorizePluginAction(tampered, trustedKeys, 0, true), /signature verification failed/);
 });
 
-test('supports safe clipboard and public HTTPS actions but rejects unsafe URLs', () => {
+test('rejects clipboard, remote URL and unsupported plugin action types', () => {
   const copy = signed({ capabilities: ['copy_text'], actions: [{ type: 'copy_text', title: 'Copy', body: 'Approved text' }] });
-  assert.equal(verifyPluginManifest(copy, trustedKeys).actions[0].type, 'copy_text');
+  assert.throws(() => validatePluginManifest(copy), /unsupported capability|action is not allowed/);
   const link = signed({ capabilities: ['open_https_url'], actions: [{ type: 'open_https_url', title: 'Open docs', url: 'https://developer.android.com' }] });
-  assert.equal(verifyPluginManifest(link, trustedKeys).actions[0].type, 'open_https_url');
-  for (const url of ['http://example.com', 'https://localhost', 'https://127.0.0.1', 'https://user:pass@example.com']) {
-    assert.throws(() => validatePluginManifest(signed({ capabilities: ['open_https_url'], actions: [{ type: 'open_https_url', title: 'Unsafe', url }] })), /public HTTPS/);
-  }
+  assert.throws(() => validatePluginManifest(link), /unsupported capability|action is not allowed/);
 });
-
 test('rejects unused capabilities and unknown action or manifest fields', () => {
   assert.throws(() => validatePluginManifest(signed({ capabilities: ['read_memory'] })), /unsupported capability/);
   assert.throws(() => validatePluginManifest(signed({ actions: [{ type: 'create_note', title: 'x', body: 'y', extra: true }] })), /unsupported field/);
