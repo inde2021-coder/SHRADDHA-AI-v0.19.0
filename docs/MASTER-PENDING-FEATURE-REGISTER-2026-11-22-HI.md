@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice Gateway settings now distinguish a completely absent record from a partial payload/IV pair and display a recovery error instead of silently treating a partial encrypted record as an empty configuration.
+
+
 - The E2E frame sender itself enforces the same 2.5 MB maximum, so camera and screen-share callers cannot bypass the payload bound by skipping the UI/service path.
 
 
