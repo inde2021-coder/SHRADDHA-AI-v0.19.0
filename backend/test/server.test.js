@@ -705,6 +705,62 @@ test('end-to-end remote actions require a live control grant and relay opaque ci
   }
 });
 
+test('switching to master-only immediately revokes old member grants and blocks encrypted actions', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.201' },
+    body: JSON.stringify({ deviceName: 'Master Mode Owner' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.202' },
+    body: JSON.stringify({ deviceName: 'Mutual Mode Member', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner);
+  const memberSocket = connect(member);
+  const waitType = (socket, type, predicate = () => true, timeoutMs = 5_000) =>
+    nextWsMessage(socket, data => {
+      try { const message = JSON.parse(data.toString()); return message.type === type && predicate(message); }
+      catch { return false; }
+    }, timeoutMs);
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const permission = waitType(memberSocket, 'permission_status');
+    ownerSocket.send(JSON.stringify({ type: 'permission_update', permissions: { remote_control: true } }));
+    await permission;
+
+    const request = waitType(ownerSocket, 'control_request');
+    memberSocket.send(JSON.stringify({ type: 'control_request', targetDeviceId: owner.deviceId, minutes: 5 }));
+    await request;
+    const approval = waitType(memberSocket, 'control_result', message => message.approved === true);
+    ownerSocket.send(JSON.stringify({ type: 'control_response', requesterDeviceId: member.deviceId, approved: true, minutes: 5 }));
+    await approval;
+
+    const revoked = waitType(memberSocket, 'control_result', message =>
+      message.approved === false && message.reason.includes('owner-only'));
+    ownerSocket.send(JSON.stringify({ type: 'set_control_mode', mode: 'master' }));
+    await revoked;
+
+    const unexpectedAction = waitType(ownerSocket, 'e2e_message', () => true, 300);
+    memberSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: owner.deviceId, messageKind: 'remote_action',
+      actionId: 'stale_grant_action_01', actionKind: 'tap',
+      nonce: Buffer.alloc(12, 7).toString('base64').replace(/=+$/, ''),
+      ciphertext: Buffer.alloc(16, 8).toString('base64').replace(/=+$/, '')
+    }));
+    await assert.rejects(unexpectedAction, /Timed out waiting/);
+  } finally {
+    const closes = [ownerSocket, memberSocket].map(socket =>
+      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
+        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
+
 test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.81' },
