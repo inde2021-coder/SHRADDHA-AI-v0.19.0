@@ -15,13 +15,14 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
       const existing = await tx.get(ref);
       if (existing.exists) {
         const saved = existing.data();
-        if (saved.uid !== uid || saved.platform !== intent.platform || saved.text !== intent.text || saved.scheduledAtMs !== intent.scheduledAtMs) {
+        if (saved.uid !== uid || saved.platform !== intent.platform || saved.text !== intent.text || saved.mediaKind !== (intent.mediaKind || null) || saved.mediaUrl !== (intent.mediaUrl || null) || saved.scheduledAtMs !== intent.scheduledAtMs) {
           throw new Error('Idempotency key was already used for a different scheduled post');
         }
         return { id, status: saved.status, scheduledAt: saved.scheduledAt, idempotent: true };
       }
       const record = {
         uid, platform: intent.platform, text: intent.text, preview: intent.text,
+        mediaKind: intent.mediaKind || null, mediaUrl: intent.mediaUrl || null,
         scheduledAt: intent.scheduledAt, scheduledAtMs: intent.scheduledAtMs,
         idempotencyKey: intent.idempotencyKey, status: 'pending',
         createdAtMs: now(), claimToken: null, result: null, lastError: null
@@ -38,7 +39,7 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
     return snapshot.docs.map(doc => {
       const row = doc.data();
       return {
-        id: doc.id, platform: row.platform, text: row.text,
+        id: doc.id, platform: row.platform, text: row.text, mediaKind: row.mediaKind || null,
         scheduledAt: row.scheduledAt, status: row.status,
         result: row.status === 'published' ? row.result : null,
         lastError: row.status === 'failed' ? row.lastError : null
@@ -76,6 +77,7 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
       if (!claimed) { summary.skipped++; continue; }
       try {
         const body = { platform: claimed.platform, text: claimed.text, preview: claimed.preview, confirmed: true };
+        if (claimed.mediaKind && claimed.mediaUrl) { body.mediaKind = claimed.mediaKind; body.mediaUrl = claimed.mediaUrl; }
         const result = await publish(body);
         await collection.firestore.runTransaction(async tx => {
           const current = await tx.get(ref);
