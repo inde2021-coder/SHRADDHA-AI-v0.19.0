@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- The E2E frame sender itself enforces the same 2.5 MB maximum, so camera and screen-share callers cannot bypass the payload bound by skipping the UI/service path.
+
+
 - Device Link's direct Visual Lens analysis endpoint now rejects empty or oversized images above 2.5 MB before Base64 serialization/network dispatch, matching the screen-share frame budget.
 
 
