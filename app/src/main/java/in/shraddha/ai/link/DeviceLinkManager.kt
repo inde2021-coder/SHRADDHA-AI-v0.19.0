@@ -339,13 +339,19 @@ object DeviceLinkManager {
                 else onScreenFrame?.invoke(envelope.sourceDeviceId, jpeg)
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (socket === webSocket) socket = null
+                if (socket === webSocket) {
+                    socket = null
+                    clearAllPeerE2EState()
+                }
                 onStatus?.invoke("Relay error: ${t.message ?: "connection failed"}")
                 if (completionDelivered.compareAndSet(false, true)) done(Result.failure(t))
                 scheduleReconnect(baseUrl, pair)
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                if (socket === webSocket) socket = null
+                if (socket === webSocket) {
+                    socket = null
+                    clearAllPeerE2EState()
+                }
                 onStatus?.invoke("Disconnected: $reason")
                 if (code != 1000) scheduleReconnect(baseUrl, pair)
             }
@@ -601,6 +607,14 @@ object DeviceLinkManager {
         }
     }
 
+    /** Clear all ephemeral peer keys and replay windows at a transport boundary. */
+    private fun clearAllPeerE2EState() {
+        peerKeys.values.forEach { it.key.fill(0) }
+        peerKeys.clear()
+        nextVisualFrameSequence.clear()
+        synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
+    }
+
     fun isE2ETrusted(peerId: String): Boolean =
         peerKeys[peerId]?.let { it.localConfirmed && it.remoteConfirmed } == true
 
@@ -709,11 +723,8 @@ object DeviceLinkManager {
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectPending = false
         reconnectAttempts = 0
-        peerKeys.values.forEach { it.key.fill(0) }
-        peerKeys.clear()
+        clearAllPeerE2EState()
         pairedDeviceSnapshots.clear()
-        nextVisualFrameSequence.clear()
-        synchronized(receivedVisualFrameLock) { receivedVisualFrameSequence.clear() }
         if (clearSavedCredentials) appContext?.let { runCatching { DeviceCredentialStore(it).clear() } }
         lastBaseUrl = null
         lastPair = null
