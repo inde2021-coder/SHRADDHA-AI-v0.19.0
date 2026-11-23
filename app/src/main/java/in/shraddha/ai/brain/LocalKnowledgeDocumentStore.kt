@@ -42,7 +42,8 @@ class LocalKnowledgeDocumentStore(context: Context) {
 
     private data class Chunk(val index: Int, val text: String)
 
-    private val store = EncryptedFeatureStore(context.applicationContext)
+    private val contextRef = context.applicationContext
+    private val store = EncryptedFeatureStore(contextRef)
 
     @Synchronized
     fun importText(
@@ -221,6 +222,76 @@ class LocalKnowledgeDocumentStore(context: Context) {
             .take(limit)
     }
 
+    /**
+     * Explicitly syncs imported documents to the authenticated Firebase vault.
+     * The cloud vault stores only the encrypted records produced by UnifiedMemoryRepository.
+     */
+    @Synchronized
+    fun syncToCloud(
+        cloudConsent: Boolean,
+        email: String,
+        password: String
+    ): Result<Int> = runCatching {
+        require(cloudConsent) { "Enable cloud memory sync explicitly before uploading knowledge." }
+        val cloud = UnifiedMemoryRepository(storeContext())
+        val ids = readIndex().sorted()
+        ids.forEach { id ->
+            val raw = store.get(DOC_PREFIX + id).getOrThrow()
+            require(raw.isNotBlank()) { "A local knowledge document is missing; sync was stopped." }
+            cloud.save(cloudKey(id), raw, true, email, password).getOrThrow()
+        }
+        cloud.save(CLOUD_INDEX_KEY, JSONArray(ids).toString(), true, email, password).getOrThrow()
+        ids.size
+    }
+
+    /**
+     * Restores only documents named by the cloud index, validates each payload, then commits
+     * the local encrypted index and records together. Existing local documents are preserved.
+     */
+    @Synchronized
+    fun restoreFromCloud(
+        cloudConsent: Boolean,
+        email: String,
+        password: String
+    ): Result<Int> = runCatching {
+        require(cloudConsent) { "Enable cloud memory sync explicitly before restoring knowledge." }
+        val cloud = UnifiedMemoryRepository(storeContext())
+        val index = cloud.load(CLOUD_INDEX_KEY, true, email, password).getOrThrow().value
+            ?: return@runCatching 0
+        val remoteIdsArray = JSONArray(index)
+        require(remoteIdsArray.length() <= MAX_DOCUMENTS) { "Cloud knowledge index exceeds the supported limit." }
+        val remoteIds = (0 until remoteIdsArray.length()).map { remoteIdsArray.getString(it) }
+        require(remoteIds.distinct().size == remoteIds.size && remoteIds.all { it.matches(ID_PATTERN) }) {
+            "Cloud knowledge index is malformed."
+        }
+        val merged = readIndex().toMutableSet()
+        val writes = linkedMapOf<String, String>()
+        remoteIds.forEach { id ->
+            val raw = cloud.load(cloudKey(id), true, email, password).getOrThrow().value
+                ?: error("Cloud knowledge record is missing: $id")
+            val record = JSONObject(raw)
+            require(record.getInt("schemaVersion") == 1 && record.getString("id") == id) {
+                "Cloud knowledge record failed validation."
+            }
+            require(record.getString("content").length <= MAX_DOCUMENT_CHARS)
+            merged += id
+            writes[DOC_PREFIX + id] = raw
+        }
+        require(merged.size <= MAX_DOCUMENTS) { "Restoring these documents would exceed the local knowledge limit." }
+        writes[INDEX_KEY] = JSONArray(merged.sorted()).toString()
+        store.putAll(writes).getOrThrow()
+        remoteIds.size
+    }
+
+    private fun cloudKey(id: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(id.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return "knowledge_$digest"
+    }
+
+    private fun storeContext(): Context = contextRef.applicationContext
+
     @Synchronized
     fun listDocuments(): Result<List<Document>> = runCatching {
         readIndex().map { id ->
@@ -332,6 +403,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         private const val VECTOR_SIZE = 384
         private const val MAX_PDF_PAGES = 40
         private const val INDEX_KEY = "knowledge_docs_index_v1"
+        private const val CLOUD_INDEX_KEY = "knowledge_docs_cloud_index_v1"
         private const val DOC_PREFIX = "knowledge_doc_"
         private const val MAX_DOCUMENTS = 50
         private const val MAX_DOCUMENT_CHARS = 50_000
