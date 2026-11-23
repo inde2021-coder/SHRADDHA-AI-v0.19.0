@@ -122,4 +122,17 @@ object MainBrainProviderGateway {
             is ChatReplyResult.Success -> result.text
             is ChatReplyResult.Error -> error("$providerName provider error: ${result.message}")
         }
+    
+    /** Returns provider text and any token counters explicitly reported by the provider. */
+    fun completeWithUsage(
+        context: Context,
+        providerName: String,
+        systemInstruction: String,
+        prompt: String
+    ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> =
+        when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
+            is ChatReplyResult.Success -> result.text to result.tokenUsage
+            is ChatReplyResult.Error -> error(providerName + " provider error: " + result.message)
+        }
+
 }
