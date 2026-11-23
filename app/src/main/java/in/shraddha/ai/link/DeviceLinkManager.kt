@@ -296,7 +296,7 @@ object DeviceLinkManager {
                 val localDevice = deviceId ?: return
                 val sequenceKey = envelope.sourceDeviceId + ":" + envelope.frameType
                 val jpeg = try {
-                    val aad = "$localSession|${envelope.sourceDeviceId}|$localDevice|visual_frame|${envelope.frameType}|${envelope.sequence}"
+                    val aad = DeviceE2ECrypto.visualFrameAad(localSession, envelope.sourceDeviceId, localDevice, envelope.frameType, envelope.sequence)
                         .toByteArray(Charsets.UTF_8)
                     synchronized(receivedVisualFrameLock) {
                         if (envelope.sequence <= (receivedVisualFrameSequence[sequenceKey] ?: 0L)) return
@@ -667,7 +667,7 @@ object DeviceLinkManager {
         val sequence = nextVisualFrameSequence.computeIfAbsent(sequenceKey) { AtomicLong(0L) }.incrementAndGet()
         if (sequence <= 0L) return false
         return try {
-            val aad = "$localSession|$localDevice|$target|visual_frame|$frameType|$sequence".toByteArray(Charsets.UTF_8)
+            val aad = DeviceE2ECrypto.visualFrameAad(localSession, localDevice, target, frameType, sequence)
             val sealed = DeviceE2ECrypto.encrypt(state.key, jpeg, aad)
             val nonce = java.util.Base64.getDecoder().decode(sealed.nonce)
             val ciphertext = java.util.Base64.getDecoder().decode(sealed.ciphertext)
