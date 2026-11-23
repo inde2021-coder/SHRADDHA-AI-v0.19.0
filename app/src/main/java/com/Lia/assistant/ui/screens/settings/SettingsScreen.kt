@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
+import `in`.shraddha.ai.future.CouncilCostBudget
 import com.Lia.assistant.voice.ConversationMemory
 import `in`.shraddha.ai.operator.VoiceToolActionJournal
 import com.Lia.assistant.data.LanguagePreference
@@ -82,6 +83,11 @@ fun SettingsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showGatewayDialog by remember { mutableStateOf(false) }
+    var showCostBudgetDialog by remember { mutableStateOf(false) }
+    val initialCostSettings = remember { CouncilCostBudget.settings(context) }
+    var monthlyBudgetInput by remember { mutableStateOf(if (initialCostSettings.monthlyLimitUsd > 0) initialCostSettings.monthlyLimitUsd.toString() else "") }
+    var modelPricesInput by remember { mutableStateOf(initialCostSettings.pricesJson) }
+    var costBudgetError by remember { mutableStateOf<String?>(null) }
     val savedGateway = remember { VoiceGatewaySettings.get(context) }
     var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl) }
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
@@ -380,6 +386,26 @@ fun SettingsScreen(
             }
         }
 
+        NovaSectionHeader(title = "Main Brain • API Cost Control")
+        NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column {
+                NovaSettingsRow(
+                    title = "Monthly API Spend Limit",
+                    subtitle = if (monthlyBudgetInput.isBlank() || monthlyBudgetInput.toDoubleOrNull() == 0.0)
+                        "Disabled • enter a USD limit to stop calls automatically"
+                    else "Limit: USD $monthlyBudgetInput • spent this month: USD ${"%.4f".format(CouncilCostBudget.monthlySpendUsd(context))}",
+                    icon = Icons.Default.Speed,
+                    onClick = {
+                        val current = CouncilCostBudget.settings(context)
+                        monthlyBudgetInput = if (current.monthlyLimitUsd > 0) current.monthlyLimitUsd.toString() else ""
+                        modelPricesInput = current.pricesJson
+                        costBudgetError = null
+                        showCostBudgetDialog = true
+                    }
+                )
+            }
+        }
+
         NovaSectionHeader(title = "Privacy & Security")
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
@@ -494,6 +520,69 @@ fun SettingsScreen(
                     },
                     type = NovaButtonType.TEXT
                 )
+            },
+            containerColor = colors.surfaceRaised
+        )
+    }
+
+    if (showCostBudgetDialog) {
+        AlertDialog(
+            onDismissRequest = { showCostBudgetDialog = false },
+            title = { Text("Main Brain API Cost Budget", color = colors.textPrimary) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        "Set a monthly USD ceiling. The council records provider-reported tokens after each response and stops before starting another provider call when the estimated spend crosses the limit. A zero/blank limit disables enforcement.",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = monthlyBudgetInput,
+                        onValueChange = { monthlyBudgetInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Monthly limit (USD)") },
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("Model prices (JSON)", color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Use exact provider/model names and USD per 1 million tokens. Example: [{\"provider\":\"OPENAI\",\"model\":\"gpt-4.1-mini\",\"inputUsdPerMillionTokens\":0.4,\"outputUsdPerMillionTokens\":1.6}]",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = modelPricesInput,
+                        onValueChange = { modelPricesInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Price table JSON") },
+                        minLines = 4,
+                        maxLines = 8
+                    )
+                    if (costBudgetError != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(costBudgetError!!, color = colors.error, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                NovaButton(text = "Save Budget", onClick = {
+                    val limit = monthlyBudgetInput.trim().ifBlank { "0" }.toDoubleOrNull()
+                    if (limit == null) {
+                        costBudgetError = "Enter a valid monthly USD amount."
+                    } else {
+                        runCatching { CouncilCostBudget.saveSettings(context, limit, modelPricesInput) }
+                            .onSuccess {
+                                costBudgetError = null
+                                showCostBudgetDialog = false
+                            }
+                            .onFailure { costBudgetError = it.localizedMessage ?: "Could not save API cost settings." }
+                    }
+                })
+            },
+            dismissButton = {
+                NovaButton(text = "Close", onClick = { showCostBudgetDialog = false }, type = NovaButtonType.TEXT)
             },
             containerColor = colors.surfaceRaised
         )
