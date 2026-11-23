@@ -32,23 +32,35 @@ class WorkflowCheckpointStore(context: Context) {
     }
 
     fun get(packageName: String, workflowName: String): WorkflowCheckpoint? =
-        encrypted.get(key(packageName, workflowName)).getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { raw -> runCatching {
-                val o = JSONObject(raw)
-                WorkflowCheckpoint(
-                    packageName = o.getString("packageName"),
-                    workflowName = o.getString("workflowName"),
-                    workflowHash = o.getString("workflowHash"),
-                    nextStep = o.getInt("nextStep"),
-                    totalSteps = o.getInt("totalSteps"),
-                    state = o.getString("state"),
-                    expectedText = o.optString("expectedText"),
-                    beforeScreenFingerprint = o.optString("beforeScreenFingerprint"),
-                    expectedTextAbsentBefore = o.optBoolean("expectedTextAbsentBefore", false),
-                    updatedAt = o.optLong("updatedAt")
-                )
-            }.getOrNull() }
+        getResult(packageName, workflowName).getOrNull()
+
+    fun getResult(packageName: String, workflowName: String): Result<WorkflowCheckpoint?> = runCatching {
+        val raw = encrypted.get(key(packageName, workflowName)).getOrThrow()
+        if (raw.isBlank()) return@runCatching null
+        val o = JSONObject(raw)
+        val checkpoint = WorkflowCheckpoint(
+            packageName = o.getString("packageName"),
+            workflowName = o.getString("workflowName"),
+            workflowHash = o.getString("workflowHash"),
+            nextStep = o.getInt("nextStep"),
+            totalSteps = o.getInt("totalSteps"),
+            state = o.getString("state"),
+            expectedText = o.optString("expectedText"),
+            beforeScreenFingerprint = o.optString("beforeScreenFingerprint"),
+            expectedTextAbsentBefore = o.optBoolean("expectedTextAbsentBefore", false),
+            updatedAt = o.optLong("updatedAt")
+        )
+        require(checkpoint.packageName == packageName && checkpoint.workflowName == workflowName) {
+            "Workflow checkpoint identity mismatch; saved data was preserved."
+        }
+        require(checkpoint.totalSteps in 1..100 && checkpoint.nextStep in 0..checkpoint.totalSteps) {
+            "Workflow checkpoint bounds are invalid; saved data was preserved."
+        }
+        require(checkpoint.state in setOf("READY", "PAUSED", "WAITING_CONFIRMATION", "EXECUTING", "FAILED")) {
+            "Workflow checkpoint state is invalid; saved data was preserved."
+        }
+        checkpoint
+    }
 
     fun save(checkpoint: WorkflowCheckpoint): Boolean {
         if (checkpoint.packageName.isBlank() || checkpoint.workflowName.isBlank()) return false
