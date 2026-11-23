@@ -235,7 +235,7 @@ def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = 
     if kind == "scroll":
         amount = action.get("amount", -3)
         return isinstance(amount, (int, float)) and not isinstance(amount, bool) and -10 <= amount <= 10 and amount != 0
-    return kind in {"back", "home", "ocr", "offline_chat"}
+    return kind in {"back", "home", "ocr", "offline_chat", "key_press"}
 
 
 def resolve_unique_text_target(candidates: list[dict], label: str) -> dict | None:
