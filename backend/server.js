@@ -210,7 +210,7 @@ function createSession(ownerName) {
   const sessionId = randomBytes(18).toString('base64url');
   const ownerDeviceId = randomBytes(12).toString('hex');
   const ownerToken = token();
-  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), incomingTransfers: new Map() }]]), createdAt: Date.now() };
+  const session = { id: sessionId, controlMode: 'mutual', devices: new Map([[ownerDeviceId, { name: ownerName.slice(0, 48), token: ownerToken, role: 'owner', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), pendingTaskHandoffs: new Map(), incomingTransfers: new Map() }]]), createdAt: Date.now() };
   sessions.set(sessionId, session);
   let code;
   do { code = String(randomInt(100000, 1000000)); } while (pairCodes.has(code));
@@ -260,7 +260,7 @@ const server = http.createServer(async (req, res) => {
       const consumed = consumePairingCode(pairCodes, code);
       if (!consumed || consumed.sessionId !== session.id) return json(res, 400, { error: 'Pairing code invalid, expired, or already used' });
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
-      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), incomingTransfers: new Map() });
+      session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), pendingTaskHandoffs: new Map(), incomingTransfers: new Map() });
       // The invitation remains valid until expiry so the owner can pair several phones.
       return json(res, 200, { sessionId: session.id, deviceId, deviceToken, devices: [...session.devices.entries()].map(([id, d]) => ({ id, name: d.name, role: d.role })) });
     }
@@ -284,6 +284,7 @@ const server = http.createServer(async (req, res) => {
             peer.pendingControlRequests?.clear();
             peer.pendingRemoteActions?.clear();
             peer.pendingDataShares?.clear();
+            peer.pendingTaskHandoffs?.clear();
             peer.grants?.clear();
             peer.incomingTransfers?.clear();
             try { peer.socket?.close(4003, 'Owner revoked the entire paired session'); } catch {}
@@ -301,6 +302,7 @@ const server = http.createServer(async (req, res) => {
         actor.pendingControlRequests?.clear();
         actor.pendingRemoteActions?.clear();
         actor.pendingDataShares?.clear();
+        actor.pendingTaskHandoffs?.clear();
         actor.grants?.clear();
         actor.incomingTransfers?.clear();
         try { actor.socket?.close(4003, 'Device revoked its own pairing'); } catch {}
@@ -1010,8 +1012,20 @@ wss.on('connection', (ws, ctx) => {
         if (!isAllowedShareCategory(category) || target.sharePermissions?.[category] !== true ||
             !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId)) return;
         target.grants.delete(deviceId + ':' + category);
+      } else if (messageKind === 'task_handoff') {
+        const requestId = String(msg.requestId || '');
+        if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId)) return;
+        target.pendingTaskHandoffs ||= new Map();
+        if (target.pendingTaskHandoffs.size >= 32 || target.pendingTaskHandoffs.has(requestId)) return;
+        target.pendingTaskHandoffs.set(requestId, { fromDeviceId: deviceId, expiresAt: Date.now() + 15 * 60_000 });
+      } else if (messageKind === 'task_handoff_response') {
+        const requestId = String(msg.requestId || '');
+        const pending = device.pendingTaskHandoffs?.get(requestId);
+        if (!/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !pending ||
+            pending.fromDeviceId !== targetId || pending.expiresAt <= Date.now()) return;
+        device.pendingTaskHandoffs.delete(requestId);
       }
-      send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, messageKind, actionId: String(msg.actionId || '').slice(0,64),
+      send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, fromDeviceName: device.name, messageKind, actionId: String(msg.actionId || '').slice(0,64),
         actionKind: String(msg.actionKind || '').slice(0,32), transferId: String(msg.transferId || '').slice(0,64),
         category: String(msg.category || '').slice(0,32),
         index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, requestId: String(msg.requestId || '').slice(0,64), nonce, ciphertext }));
@@ -1090,7 +1104,7 @@ wss.on('connection', (ws, ctx) => {
     } else if (msg.type === 'leave_session') {
       if (device.role === 'owner') return;
       for (const [id] of session.devices) if (id !== deviceId) send(id, JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: false, revoked: true }));
-      device.controlGrants?.clear(); device.grants?.clear(); device.pendingControlRequests?.clear(); device.incomingTransfers?.clear();
+      device.controlGrants?.clear(); device.grants?.clear(); device.pendingControlRequests?.clear(); device.pendingTaskHandoffs?.clear(); device.incomingTransfers?.clear();
       try { ws.close(1000, 'Device left session'); } catch {}
       session.devices.delete(deviceId);
       return;
@@ -1245,6 +1259,7 @@ wss.on('connection', (ws, ctx) => {
       target?.incomingTransfers?.delete(transferId); device.incomingTransfers?.delete(transferId);
       if (target && targetId !== deviceId) send(targetId, JSON.stringify({ type: 'file_transfer_cancel', fromDeviceId: deviceId, transferId, reason: String(msg.reason || 'cancelled').slice(0, 120) }));
     } else if (msg.type === 'task_handoff') {
+      return; // Task offers must use the mutually verified E2E envelope.
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const raw = msg.task && typeof msg.task === 'object' && !Array.isArray(msg.task) ? msg.task : {};
@@ -1260,6 +1275,7 @@ wss.on('connection', (ws, ctx) => {
         expiresAt: Date.now() + 15 * 60_000
       }));
     } else if (msg.type === 'task_handoff_response') {
+      return; // Task responses must use the mutually verified E2E envelope.
       const requesterId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(requesterId);
       const taskId = String(msg.taskId || '').slice(0, 48);
