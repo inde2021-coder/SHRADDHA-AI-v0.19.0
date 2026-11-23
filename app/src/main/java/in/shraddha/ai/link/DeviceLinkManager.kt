@@ -214,7 +214,7 @@ object DeviceLinkManager {
 
                         "e2e_key_offer" -> {
                             val peerId = msg.optString("fromDeviceId")
-                            val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), deviceId.orEmpty(), peerId)
+                            val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), sessionId.orEmpty(), deviceId.orEmpty(), peerId)
                             peerKeys.put(peerId, PeerKeyState(derived.first, derived.second))?.key?.fill(0)
                             clearVisualFrameState(peerId)
                             onE2EVerification?.invoke(peerId, derived.second)
