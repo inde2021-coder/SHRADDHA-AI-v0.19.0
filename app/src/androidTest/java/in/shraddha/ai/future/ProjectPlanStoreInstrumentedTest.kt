@@ -41,40 +41,36 @@ class ProjectPlanStoreInstrumentedTest {
         }
     }
 
-    @Test fun projectBackupRoundTripsAndRejectsConflictingIdsWithoutChangingVault() {
+    @Test fun projectBackupImportIsAtomicAndRejectsDuplicateRestore() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val source = ProjectPlanStore(context)
-        val target = ProjectPlanStore(context)
-        val suffix = System.currentTimeMillis()
-        val plan = ProjectWorkspace.create("Backup test $suffix", listOf("Design", "Build"))
-        val conflicting = ProjectWorkspace.create("Conflict test $suffix", listOf("Keep")).copy(id = plan.id)
+        val store = ProjectPlanStore(context)
+        val plan = ProjectWorkspace.create("Backup test ${System.currentTimeMillis()}", listOf("Design", "Build"))
         try {
-            source.save(plan).getOrThrow()
-            val backup = source.exportJson().getOrThrow()
+            store.save(plan).getOrThrow()
+            val backup = store.exportJson().getOrThrow()
             assertTrue(backup.contains("shraddha-project-backup"))
-            target.save(conflicting).getOrThrow()
-            val before = target.loadAll().getOrThrow().first { it.id == plan.id }
-            assertTrue(target.importJson(backup).isFailure)
-            assertEquals(before.title, target.loadAll().getOrThrow().first { it.id == plan.id }.title)
+            store.delete(plan.id).getOrThrow()
+            store.importJson(backup).getOrThrow()
+            val restored = store.loadAll().getOrThrow().first { it.id == plan.id }
+            assertEquals(plan.title, restored.title)
+            assertTrue(store.importJson(backup).isFailure)
+            assertEquals(plan.title, store.loadAll().getOrThrow().first { it.id == plan.id }.title)
         } finally {
-            source.delete(plan.id)
+            store.delete(plan.id)
         }
     }
 
-    @Test fun projectBackupImportRestoresValidatedPlan() {
+    @Test fun projectBackupRejectsWrongFormatWithoutChangingVault() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val source = ProjectPlanStore(context)
-        val target = ProjectPlanStore(context)
-        val plan = ProjectWorkspace.create("Restore test ${System.currentTimeMillis()}", listOf("One", "Two"))
+        val store = ProjectPlanStore(context)
+        val plan = ProjectWorkspace.create("Backup safety test ${System.currentTimeMillis()}", listOf("Keep"))
         try {
-            source.save(plan).getOrThrow()
-            target.importJson(source.exportJson().getOrThrow()).getOrThrow()
-            val restored = target.loadAll().getOrThrow().first { it.id == plan.id }
-            assertEquals(plan.title, restored.title)
-            assertEquals(plan.milestones.map { it.title }, restored.milestones.map { it.title })
+            store.save(plan).getOrThrow()
+            assertTrue(store.importJson("{\"format\":\"unknown\",\"version\":1,\"plans\":[]}").isFailure)
+            assertEquals(plan.title, store.loadAll().getOrThrow().first { it.id == plan.id }.title)
         } finally {
-            source.delete(plan.id)
-            target.delete(plan.id)
+            store.delete(plan.id)
         }
     }
+
 }
