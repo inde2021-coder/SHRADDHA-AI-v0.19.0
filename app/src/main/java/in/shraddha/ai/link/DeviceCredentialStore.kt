@@ -60,8 +60,11 @@ internal class DeviceCredentialStore(context: Context) {
             try {
                 require(iv.size == 12) { "Invalid credential IV" }
                 require(payload.size >= 16) { "Invalid credential ciphertext" }
+                val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                val existingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                    ?: error("Device pairing encryption key is missing; saved credentials were preserved.")
                 val cipher = Cipher.getInstance(TRANSFORMATION)
-                cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+                cipher.init(Cipher.DECRYPT_MODE, existingKey, GCMParameterSpec(128, iv))
                 val clear = cipher.doFinal(payload)
                 try {
                     val json = JSONObject(clear.toString(Charsets.UTF_8))
@@ -83,7 +86,9 @@ internal class DeviceCredentialStore(context: Context) {
                 payload.fill(0)
             }
         } catch (_: Exception) {
-            clear()
+            // Preserve ciphertext on authentication/key-loss errors. Clearing here
+            // destroys the only recoverable pairing record when Android Keystore
+            // entries are invalidated (for example after backup/restore or OS reset).
             null
         }
     }
