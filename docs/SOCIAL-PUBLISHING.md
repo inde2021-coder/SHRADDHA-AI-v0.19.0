@@ -36,13 +36,13 @@ LinkedIn member posting requires `w_member_social`. Organization posting require
 
 ## Advanced publishing status
 
-The authenticated publishing endpoint currently supports text posts only. Media attachments, Reels/Stories/video uploads and scheduled publishing are not implemented in this release. Do not treat the share-sheet receiver as a publisher: it currently closes without uploading or publishing media. A future implementation must use official platform upload APIs, durable job storage, idempotent scheduling, exact media/caption previews and explicit final confirmation.
+The authenticated publishing endpoint supports text posts on Telegram, Mastodon, Bluesky and LinkedIn. Bounded image/video uploads (JPEG/PNG/WebP images and MP4/MOV videos, max 8 MiB) are currently implemented only for Telegram and Mastodon. Media upload is not yet wired to a native Android publisher UI. Scheduled publishing, Instagram/Facebook publishing, Reels/Stories and YouTube video upload are not implemented. Do not treat the share-sheet receiver as a publisher: it currently closes without uploading or publishing media. Scheduling requires durable queue storage, idempotent execution and explicit schedule approval; these are still pending.
 
 ## Scope and limits
 
 - Bluesky is limited to 300 Unicode code points per post.
 - LinkedIn is limited to 3000 characters by this connector.
-- Current connector publishes text only. It does not upload photos/videos, schedule posts, read comments/analytics, or delete/edit published posts.
+- Telegram and Mastodon support bounded image/video uploads; Bluesky and LinkedIn remain text-only. The connector does not yet schedule posts, read comments/analytics, or delete/edit published posts.
 - Instagram and Facebook Page publishing are not enabled; they require Meta app review, eligible account/page linkage and media-specific publishing flows. YouTube video upload is not enabled because it requires OAuth scopes, resumable media upload and upload processing/status handling.
 - Never automate browser login or store a user's social password. Use official APIs and dedicated tokens/app passwords only.
 
