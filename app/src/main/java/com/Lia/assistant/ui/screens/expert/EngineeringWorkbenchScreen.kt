@@ -50,6 +50,11 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
     var seriesLedCount by remember { mutableStateOf("1") }
     var netlist by remember { mutableStateOf("") }
     var circuitNetlist by remember { mutableStateOf("V1 VIN 0 DC 12\\nR1 VIN VOUT 10k\\nR2 VOUT 0 10k\\n.op\\n.end") }
+    var boardWidthMm by remember { mutableStateOf("80") }
+    var boardHeightMm by remember { mutableStateOf("50") }
+    var plateThicknessMm by remember { mutableStateOf("3") }
+    var holeDiameterMm by remember { mutableStateOf("4") }
+    var holeOffsetMm by remember { mutableStateOf("8") }
     var pendingNetlist by remember { mutableStateOf("") }
     var exportText by remember { mutableStateOf("") }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -189,6 +194,43 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
                     }
                 }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
             }
+        }
+        NovaGlassCard {
+            Text("PARAMETRIC CAD • PCB EXPORT", color = colors.accent)
+            Text("Generate an editable OpenSCAD mounting plate and a KiCad-compatible component placement CSV. Review dimensions, footprints and clearances before fabrication.", color = colors.textSecondary)
+            OutlinedTextField(value = boardWidthMm, onValueChange = { boardWidthMm = it.take(12) }, label = { Text("Board / plate width (mm)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = boardHeightMm, onValueChange = { boardHeightMm = it.take(12) }, label = { Text("Board / plate height (mm)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = plateThicknessMm, onValueChange = { plateThicknessMm = it.take(12) }, label = { Text("Plate thickness (mm)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = holeDiameterMm, onValueChange = { holeDiameterMm = it.take(12) }, label = { Text("Mounting hole diameter (mm)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = holeOffsetMm, onValueChange = { holeOffsetMm = it.take(12) }, label = { Text("Hole centre offset (mm)") }, modifier = Modifier.fillMaxWidth())
+            NovaButton(text = "EXPORT OPENSCAD .SCAD", onClick = {
+                val values = listOf(boardWidthMm, boardHeightMm, plateThicknessMm, holeDiameterMm, holeOffsetMm).map { it.toDoubleOrNull() }
+                if (values.any { it == null }) {
+                    result = "Enter valid numeric CAD dimensions."
+                } else {
+                    val generated = EngineeringExports.openScadMountingPlate(
+                        values[0]!!, values[1]!!, values[2]!!, values[3]!!, values[4]!!
+                    )
+                    generated.onSuccess {
+                        pendingNetlist = it
+                        netlistLauncher.launch("shraddha-mounting-plate.scad")
+                        result = "OpenSCAD source generated. Review tolerances before manufacturing."
+                    }.onFailure { result = it.message ?: "CAD export failed." }
+                }
+            }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+            NovaButton(text = "EXPORT KICAD PLACEMENT CSV", onClick = {
+                val width = boardWidthMm.toDoubleOrNull()
+                val height = boardHeightMm.toDoubleOrNull()
+                val count = seriesLedCount.toIntOrNull()
+                if (width == null || height == null || count == null) {
+                    result = "Enter valid board dimensions and LED count."
+                } else {
+                    EngineeringExports.kicadPlacementCsv(width, height, count).onSuccess {
+                        exportText = it
+                        exportLauncher.launch("shraddha-kicad-placement.csv")
+                    }.onFailure { result = it.message ?: "PCB placement export failed." }
+                }
+            }, modifier = Modifier.fillMaxWidth())
         }
         NovaGlassCard {
             Text("CALCULATION RESULT", color = colors.accent)
