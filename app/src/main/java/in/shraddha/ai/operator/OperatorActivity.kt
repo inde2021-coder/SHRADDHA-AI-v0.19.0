@@ -401,7 +401,7 @@ class OperatorActivity : Activity() {
         val result = NaturalLanguageWorkflowRouter.route(commandInput.text.toString(), profile)
         val route = result.route
         if (route == null) { log.text = result.message; return }
-        val variables = EditText(this).apply { hint = "अन्य मान: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
+        val variables = field("अन्य मान: customer_name=Rahul, phone=...")
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
             .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा। जोखिम वाले चरण पर अलग से अनुमति माँगी जाएगी।")
