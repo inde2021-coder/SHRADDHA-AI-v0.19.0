@@ -133,7 +133,7 @@ fun AboutScreen(
                     Text("Email", color = colors.textSecondary, fontSize = 11.sp)
                     Text(DEVELOPER_EMAIL, color = colors.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
-                IconButton(onClick = { copyDeveloperEmail(context) }) {
+                IconButton(onClick = { copyDeveloperEmail(context, assistantName) }) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "Copy developer email", tint = colors.accent)
                 }
             }
