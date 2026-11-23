@@ -359,6 +359,7 @@ object ActionExecutor {
                 val userConfirmed = args.optString("user_confirmed", "").equals("yes", true)
                 val confirmedRecipient = args.optString("confirmed_recipient", "").trim()
                 val confirmedMessage = args.optString("confirmed_message", "")
+                val requestId = args.optString("request_id").ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
                 // Bind approval to the exact resolved recipient and exact message body.
                 // A generic yes must never authorize a changed recipient or edited text.
                 if (!MessageApprovalPolicy.isApproved(
@@ -371,8 +372,15 @@ object ActionExecutor {
                     result.put("status", "confirmation_required")
                     result.put("action", "message_confirmation_required")
                     result.put("recipient", phoneNumber)
-                    result.put("message_preview", messageText.take(1000))
+                    result.put("message_preview", messageText)
+                    result.put("request_id", requestId)
                     result.put("message", "भेजने से पहले उपयोगकर्ता को यही प्राप्तकर्ता और यही पूरा संदेश दिखाएँ। स्पष्ट हाँ मिलने के बाद user_confirmed=yes, confirmed_recipient में यही नंबर और confirmed_message में यही अक्षरशः संदेश दें। अभी कोई SMS/WhatsApp नहीं भेजा गया।")
+                    return result
+                }
+
+                if (!Regex("^[A-Za-z0-9_-]{16,80}$").matches(args.optString("request_id"))) {
+                    result.put("status", "error").put("action", "message_request_id_required")
+                    result.put("message", "Approved send must reuse the request_id shown with the exact message preview; ask for confirmation again if it was lost.")
                     return result
                 }
 
@@ -380,7 +388,7 @@ object ActionExecutor {
                 val channel = if (isWhatsApp) "whatsapp" else "sms"
                 val gateway = VoiceGatewaySettings.get(context)
                 if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
-                    val providerResult = ProviderMessageClient.send(context, channel, phoneNumber, messageText)
+                    val providerResult = ProviderMessageClient.send(context, channel, phoneNumber, messageText, requestId)
                     providerResult.onSuccess { receipt ->
                         result.put("status", "accepted")
                         result.put("action", "provider_message_accepted")
@@ -756,6 +764,7 @@ object ActionExecutor {
                             result.put("action", "recipient_not_found")
                             result.put("message", "Provide a full phone number or grant Contacts permission.")
                         } else {
+                            val requestId = args.optString("request_id").ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
                             val approved = MessageApprovalPolicy.isApproved(
                                 actualRecipient = number,
                                 actualMessage = message,
@@ -767,12 +776,16 @@ object ActionExecutor {
                                 result.put("status", "confirmation_required")
                                 result.put("action", "message_confirmation_required")
                                 result.put("recipient", number)
-                                result.put("message_preview", message.take(1000))
+                                result.put("message_preview", message)
+                                result.put("request_id", requestId)
                                 result.put("message", "उपयोगकर्ता को यही नंबर और यही पूरा संदेश दिखाकर स्पष्ट अनुमति लें। अभी WhatsApp नहीं भेजा गया।")
+                            } else if (!Regex("^[A-Za-z0-9_-]{16,80}$").matches(args.optString("request_id"))) {
+                                result.put("status", "error").put("action", "message_request_id_required")
+                                    .put("message", "Approved send must reuse the request_id shown with the exact message preview; ask for confirmation again if it was lost.")
                             } else {
                                 val gateway = VoiceGatewaySettings.get(context)
                                 if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
-                                    ProviderMessageClient.send(context, "whatsapp", number, message)
+                                    ProviderMessageClient.send(context, "whatsapp", number, message, requestId)
                                         .onSuccess { receipt ->
                                             result.put("status", "accepted").put("action", "provider_message_accepted")
                                                 .put("provider", receipt.provider).put("provider_message_id", receipt.messageId)
