@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice foreground notification no longer claims the microphone is already in use during token acquisition/connection setup; it reports a running voice session and retains the explicit stop action.
+
+
 - EncryptedFeatureStore batch writes now wipe each intermediate AES-GCM ciphertext buffer in `finally` blocks, including failures during Base64 encoding or editor updates.
 
 
