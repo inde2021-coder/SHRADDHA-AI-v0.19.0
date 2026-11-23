@@ -45,4 +45,26 @@ class LocalKnowledgeDocumentStoreInstrumentedTest {
         assertTrue(store.importText(true, id, "Title", "User text", "http://example.invalid/file",
             "approved content").isFailure)
     }
+
+    @Test fun exactPhraseAndTitleRelevanceRankAboveScatteredTermMatches() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = LocalKnowledgeDocumentStore(context)
+        val suffix = System.currentTimeMillis()
+        val exactId = "knowledge_exact_$suffix"
+        val broadId = "knowledge_broad_$suffix"
+        try {
+            assertTrue(store.importText(true, exactId, "Telescope calibration guide", "Approved manual",
+                content = "Telescope calibration must be completed before every observation.").isSuccess)
+            assertTrue(store.importText(true, broadId, "General observatory notes", "Approved notes",
+                content = "The telescope is stored in the dome. Later, the team reviews calibration records.").isSuccess)
+            val hits = store.search("telescope calibration", limit = 10).getOrThrow()
+            assertTrue(hits.isNotEmpty())
+            assertEquals(exactId, hits.first().documentId)
+            assertTrue(hits.first().score > hits.firstOrNull { it.documentId == broadId }!!.score)
+            assertTrue(hits.first().citation.contains("Telescope calibration guide"))
+        } finally {
+            store.delete(exactId)
+            store.delete(broadId)
+        }
+    }
 }
