@@ -149,6 +149,35 @@ class FirebaseCloudVault(private val context: Context) {
         }
     }
 
+    /** Deletes every encrypted memory vault document for the authenticated owner. */
+    fun signInAndDeleteAll(email: String, password: String): Result<Int> = runCatching {
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val collection = FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault")
+            val documents = collection.get().await().documents
+            require(documents.size <= 5_000) { "Cloud vault contains more than 5,000 records; use individual deletion or contact support." }
+            val realtimeRoot = if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault")
+            } else null
+            val realtimeSnapshot = realtimeRoot?.get()?.await()
+            val keys = (documents.map { it.id } + realtimeSnapshot?.children?.mapNotNull { it.key }.orEmpty()).distinct()
+            // Remove RTDB mirrors first; Firestore remains authoritative until all batches commit.
+            keys.forEach { key -> realtimeRoot?.child(key)?.removeValue()?.await() }
+            documents.chunked(450).forEach { group ->
+                val batch = FirebaseFirestore.getInstance(app).batch()
+                group.forEach { document -> batch.delete(document.reference) }
+                batch.commit().await()
+            }
+            keys.size
+        }
+    }
+
     fun signInAndLoad(email: String, password: String, key: String): Result<String?> = runCatching {
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
         val normalizedEmail = email.trim()
