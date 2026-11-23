@@ -28,6 +28,7 @@ def _preload():
         import camera_vision_module
         import screen_share_module
         import myra_coder_integration
+        import shraddha_device_link
         print("[MYRA ULTRA] All modules loaded OK")
     except Exception as e:
         print(f"[NEW MODULES] Load warning: {e}")
