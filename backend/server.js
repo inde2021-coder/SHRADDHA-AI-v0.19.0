@@ -420,7 +420,7 @@ const server = http.createServer(async (req, res) => {
       const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
       if (!expected || !safeEqual(supplied, expected)) return json(res, 401, { error: 'Scheduler authorization is required' });
       try {
-        const result = await socialScheduler().dispatchDue(10);
+        const result = await socialScheduler().dispatchDue(2);
         return json(res, 200, { ok: true, ...result });
       } catch (error) {
         return json(res, error.statusCode || 503, { error: String(error.message || 'Scheduler dispatch failed').slice(0, 240) });
