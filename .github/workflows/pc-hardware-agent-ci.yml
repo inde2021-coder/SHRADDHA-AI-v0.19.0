@@ -3,7 +3,17 @@ name: Windows PC Hardware Agent CI
 on:
   push:
     branches:
+      - main
       - feature/complete-pending-shraddha-features
+    paths:
+      - "pc_companion/**"
+      - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
+      - "app/src/main/java/com/Lia/assistant/voice/LiaToolCatalog.kt"
+      - "app/src/main/java/in/shraddha/ai/MainActivity.kt"
+      - ".github/workflows/pc-hardware-agent-ci.yml"
+  pull_request:
+    branches:
+      - main
     paths:
       - "pc_companion/**"
       - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
