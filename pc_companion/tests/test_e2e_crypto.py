@@ -1,6 +1,6 @@
 import unittest
 
-from pc_companion.e2e_crypto import DeviceE2ECrypto, MAX_PLAINTEXT_BYTES
+from pc_companion.e2e_crypto import DeviceE2ECrypto, MAX_PLAINTEXT_BYTES, visual_frame_aad
 
 
 class DeviceE2ECryptoTests(unittest.TestCase):
@@ -43,6 +43,19 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         replacement = ("A" if ciphertext[0] != "A" else "B") + ciphertext[1:]
         with self.assertRaises(ValueError):
             DeviceE2ECrypto.decrypt(key, nonce, replacement, b"aad")
+
+    def test_visual_frame_aad_matches_android_wire_format(self):
+        self.assertEqual(
+            visual_frame_aad("session-1", "source", "target", 2, 42),
+            b"session-1|source|target|visual_frame|2|42"
+        )
+        for args in (
+            ("session", "same", "same", 1, 1),
+            ("session", "source", "target", 3, 1),
+            ("session", "source", "target", 1, 0),
+        ):
+            with self.assertRaises(ValueError):
+                visual_frame_aad(*args)
 
     def test_nonce_is_fresh_for_each_encryption(self):
         key = b"k" * 32
