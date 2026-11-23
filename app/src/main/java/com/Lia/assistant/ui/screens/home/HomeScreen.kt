@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.fx.LiaOrb3D
+import com.Lia.assistant.ui.fx.rememberDailyOrbTheme
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
@@ -60,6 +61,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
+    val dailyOrbTheme = rememberDailyOrbTheme()
 
     Column(
         modifier = modifier.fillMaxSize().nightSky().verticalScroll(rememberScrollState())
@@ -90,9 +92,10 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 Text("$assistantName • AI ONLINE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
             Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).size(104.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFB78BFF), Color(0xFF6B39C8), Color(0xCC210F46)))).border(2.dp, Color(0xCCDCBCFF), CircleShape), contentAlignment = Alignment.Center) {
-                LiaOrb3D(state = orbState, size = 98.dp, amplitude = amplitude, assistantName = assistantName)
+                LiaOrb3D(state = orbState, size = 98.dp, amplitude = amplitude, style = dailyOrbTheme.style, assistantName = assistantName)
             }
         }
+        Text("${dailyOrbTheme.dayName.uppercase()} • ${dailyOrbTheme.style.displayName.uppercase()}", color = NeonMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.clip(CircleShape).background(Color(0xCC1A1430)).border(1.dp, Color(0x557D52D8), CircleShape).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Icon(Icons.Default.GraphicEq, null, tint = NeonMint, modifier = Modifier.size(14.dp))
