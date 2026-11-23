@@ -279,7 +279,8 @@ object VoiceSessionManager {
                         val (council, session) = `in`.shraddha.ai.future.MainBrain.createCouncilPlan(
                             goal = goal,
                             workflowId = "voice-council-" + java.util.UUID.randomUUID().toString().take(8),
-                            title = goal.take(120)
+                            title = goal.take(120),
+                            context = currentContext
                         )
                         val roles = org.json.JSONArray()
                         council.roles.forEach { role ->
