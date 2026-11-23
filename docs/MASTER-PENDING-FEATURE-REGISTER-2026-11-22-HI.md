@@ -198,3 +198,10 @@ The Privacy screen's old generic claims have been replaced with a source-accurat
 
 
 Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with category/request-bound AAD. The relay rejects plaintext `data_share_payload`, enforces the target's category permission and consumes the exact one-time grant. The Windows companion decrypts, verifies the bounded file and SHA-256, asks for local save approval and writes to a sanitized Downloads path. Android, relay and Windows regression tests have been added but not executed.
+
+## 23 November 2026 — Source-only repair (not yet tested)
+
+- Fixed the Kotlin parser blocker in `HomeScreen.kt` by escaping the reserved `in` package segment in the generated Android `R` import. The earlier CI log showed `Syntax error: Expecting qualified name` on that import; the reported unresolved `R` at the avatar reference was a follow-on compiler error. The avatar asset exists at `app/src/main/res/drawable-nodpi/shraddha_ai_avatar.jpg`.
+- Corrected the Windows desktop-companion CI job to use `desktop-companion/shraddha-pc-companion` instead of the obsolete `pc_companion` path; the actual workflow and package entry point are now used for Python tests and EXE packaging.
+- The integration workflow now explicitly includes the pending feature branch in its source-branch ancestry guard.
+- No build, emulator test, instrumentation test or release verification has been run after these edits. Keep all three items marked pending until a consolidated run provides evidence.
