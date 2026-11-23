@@ -1805,7 +1805,7 @@ class MainActivity : AppCompatActivity() {
                 runCatching { knowledgeStore.search(knowledgeQuery.text.toString().trim(), 8).getOrThrow() }
                     .onSuccess { hits ->
                         knowledgeOutput.text = if (hits.isEmpty()) "No matching source sections." else
-                            hits.joinToString("\\n\\n") { "${it.citation}\\n${it.excerpt}" }
+                            hits.joinToString("\n\n") { "${it.citation}\n${it.excerpt}" }
                     }.onFailure { knowledgeOutput.text = "Search failed: ${it.message}" }
             })
             addView(actionButton("DELETE PERSONAL KNOWLEDGE DOCUMENTS", "Permanent local deletion • requires confirmation") {
