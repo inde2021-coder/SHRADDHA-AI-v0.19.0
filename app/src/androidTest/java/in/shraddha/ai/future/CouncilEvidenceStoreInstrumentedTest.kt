@@ -54,10 +54,15 @@ class CouncilEvidenceStoreInstrumentedTest {
             assertEquals(45, token.getInt("outputTokens"))
             assertEquals(1234L, status.getLong("elapsedMs"))
 
+            // getAllWithPrefixes() intentionally decrypts values. Inspect the underlying
+            // SharedPreferences payload to verify ciphertext-at-rest instead.
             val prefix = "council_${taskId}_"
-            val rawValues = rawStore.getAllWithPrefixes(setOf(prefix)).getOrThrow().values
-            assertTrue(rawValues.isNotEmpty())
-            assertFalse(rawValues.any { it.contains(sensitiveOutput) })
+            val encryptedValues = context.getSharedPreferences(
+                "shraddha_feature_store", Context.MODE_PRIVATE
+            ).all.filterKeys { it.startsWith(prefix) }.values.mapNotNull { it as? String }
+            assertTrue(encryptedValues.isNotEmpty())
+            assertFalse(encryptedValues.any { it.contains(sensitiveOutput) })
+            assertTrue(encryptedValues.all { it.contains(".") })
 
             assertTrue(evidence.removeTask(taskId))
             assertTrue(evidence.readTask(taskId).getOrThrow().isEmpty())
