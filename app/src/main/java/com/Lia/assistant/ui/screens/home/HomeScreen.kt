@@ -236,6 +236,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             MiniFeature("🤖", "Multiple AI", Modifier.weight(1f)) { navController.navigate("settings") }
             MiniFeature("📱", "Phone ↔ PC", Modifier.weight(1f)) { navController.navigate("quick_actions") }
             MiniFeature("💾", "Offline AI", Modifier.weight(1f)) { navController.navigate("offline_model") }
+            MiniFeature("🏠", "Smart Home", Modifier.weight(1f)) { navController.navigate("smart_home") }
         }
         Spacer(Modifier.height(14.dp))
     }
