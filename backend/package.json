@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check telephony-audio.js && node --check social-publisher.js && node --check social-scheduler.js && node --check plugin-registry.js",
+    "check": "node --check server.js && node --check message-send-policy.js && node --check telephony-audio.js && node --check social-publisher.js && node --check social-scheduler.js && node --check plugin-registry.js",
     "test": "node --test"
   },
   "engines": {
