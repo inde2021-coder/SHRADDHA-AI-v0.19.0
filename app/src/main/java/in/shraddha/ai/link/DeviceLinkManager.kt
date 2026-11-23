@@ -282,6 +282,11 @@ object DeviceLinkManager {
                             }
                             if (msg.optBoolean("online") && peerId.isNotBlank() && peerId != deviceId) {
                                 sendE2EKeyOffer(peerId)
+                            } else if (peerId.isNotBlank() && peerId != deviceId) {
+                                // A disconnect is a key-lifecycle boundary. Do not retain a stale
+                                // peer key or replay window for a future reconnect.
+                                peerKeys.remove(peerId)?.key?.fill(0)
+                                clearVisualFrameState(peerId)
                             }
                             onStatus?.invoke("${msg.optString("name", "Device")}: ${if (msg.optBoolean("online")) "online" else "offline"}")
                             onPeerMessage?.invoke(msg)
