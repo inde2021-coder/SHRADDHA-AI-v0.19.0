@@ -263,3 +263,5 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - The speech client and Gemini Live token path now stop with that explicit error rather than attempting a request with silently blank credentials.
 - Settings opens the gateway dialog with the recovery warning visible. Clearing the encrypted settings is now guarded so a failed durable clear is reported instead of crashing or closing the dialog as if it succeeded.
 - No tests/build/emulator/live gateway calls were run. Verify normal save/read/restart, corrupted ciphertext, missing Keystore key, partial preferences, explicit clear and speech-client error propagation in the single consolidated verification pass.
+
+- Agent Council provider discovery previously caught encrypted-key/Keystore read exceptions and replaced them with an empty provider list. The screen now displays a specific recovery message and directs the user to API Keys; a genuinely absent key remains a normal unconfigured state. Source-only; UI and vault failure cases remain pending consolidated verification.
