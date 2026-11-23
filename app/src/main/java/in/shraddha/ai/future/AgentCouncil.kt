@@ -154,11 +154,11 @@ object AgentCouncil {
         fun elapsedMs(): Long = ((System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(0L)
 
         fun promptFor(role: CouncilRole, prior: List<CouncilStageResult>): String = buildString {
-            append("USER GOAL:\\n").append(plan.goal).append("\\n\\n")
-            append("ROLE: ").append(role.name).append("\\nRESPONSIBILITY: ").append(role.responsibility).append("\\n")
+            append("USER GOAL:\n").append(plan.goal).append("\n\n")
+            append("ROLE: ").append(role.name).append("\nRESPONSIBILITY: ").append(role.responsibility).append("\n")
             if (prior.isNotEmpty()) {
-                append("\\nSHARED EVIDENCE AND PRIOR OUTPUTS (verify; do not assume true):\\n")
-                prior.forEach { append("### ").append(it.role).append("\\n").append(it.output.take(5000)).append("\\n\\n") }
+                append("\nSHARED EVIDENCE AND PRIOR OUTPUTS (verify; do not assume true):\n")
+                prior.forEach { append("### ").append(it.role).append("\n").append(it.output.take(5000)).append("\n\n") }
             }
             when {
                 role.name == "Planner" -> append("Define measurable acceptance criteria, dependencies, risks and execution order.")
