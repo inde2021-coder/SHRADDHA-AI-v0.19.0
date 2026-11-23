@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Device Link's E2E message sender now wipes serialized plaintext JSON and additional-authenticated-data buffers immediately after encryption, including exceptional paths.
+
+
 - Voice Gateway settings now distinguish a completely absent record from a partial payload/IV pair and display a recovery error instead of silently treating a partial encrypted record as an empty configuration.
 
 
