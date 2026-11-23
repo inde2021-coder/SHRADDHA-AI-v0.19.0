@@ -52,3 +52,24 @@ export function mastodonVisibility(value) {
   if (!VISIBILITIES.has(visibility)) throw new Error('MASTODON_VISIBILITY must be public, unlisted, private or direct');
   return visibility;
 }
+
+export function validateMediaAttachment(body, platform) {
+  if (!body || typeof body !== 'object') throw new Error('Media request is invalid');
+  if (!['telegram', 'mastodon'].includes(platform)) throw new Error('Media publishing is not enabled for this platform');
+  const mimeType = String(body.mimeType || '').toLowerCase();
+  const kind = String(body.mediaKind || '').toLowerCase();
+  const allowed = kind === 'image'
+    ? new Set(['image/jpeg', 'image/png', 'image/webp'])
+    : kind === 'video'
+      ? new Set(['video/mp4', 'video/quicktime'])
+      : new Set();
+  if (!allowed.has(mimeType)) throw new Error('Media type and MIME type are not supported');
+  if (typeof body.mediaBase64 !== 'string' || body.mediaBase64.length < 8 || body.mediaBase64.length > 11_200_000 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.mediaBase64)) {
+    throw new Error('Media must be valid Base64 and no larger than 8 MiB');
+  }
+  const bytes = Buffer.from(body.mediaBase64, 'base64');
+  if (bytes.length < 1 || bytes.length > 8 * 1024 * 1024) throw new Error('Media must be between 1 byte and 8 MiB');
+  const fileName = typeof body.fileName === 'string' ? body.fileName.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 100) : '';
+  return { kind, mimeType, bytes, fileName: fileName || (kind === 'video' ? 'upload.mp4' : 'upload.jpg') };
+}
