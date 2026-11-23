@@ -35,7 +35,7 @@ object MultiProviderChatClient {
         // Groq retired llama-3.3-70b-versatile for developer-tier traffic in August 2026.
         "GROQ" -> Config("https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b")
         "PERPLEXITY" -> Config("https://api.perplexity.ai/v1/agent", "", perplexityAgent = true)
-        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5", true)
+        "CLAUDE" -> Config("https://api.anthropic.com/v1/messages", "claude-sonnet-5-5", true)
         else -> null
     }
 
