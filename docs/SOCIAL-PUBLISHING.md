@@ -54,7 +54,7 @@ The authenticated publishing endpoint supports text posts on Telegram, Mastodon,
 
 ## Scheduled publishing
 
-The Android Social Publisher supports exact-preview text scheduling for Telegram, Mastodon, Bluesky and LinkedIn. Media uploads remain immediate-only. Schedule records are stored in Firestore collection `socialScheduledPosts`, scoped to the authenticated Firebase UID. The backend verifies both the gateway token and a Firebase ID token before creating or cancelling a job. An idempotency key prevents duplicate schedule creation.
+The Android Social Publisher supports exact-preview text publishing, schedule history and cancellation for Telegram, Mastodon, Bluesky and LinkedIn. Media uploads remain immediate-only. Schedule records are stored in Firestore collection `socialScheduledPosts`, scoped to the authenticated Firebase UID. The backend verifies both the gateway token and a Firebase ID token before creating or cancelling a job. An idempotency key prevents duplicate schedule creation.
 
 Required backend environment:
 - `FIREBASE_SERVICE_ACCOUNT_JSON`: service-account JSON for the same Firebase project as Android sign-in
