@@ -420,7 +420,7 @@ class OperatorActivity : Activity() {
             val profile = profiles.first { p -> p.workflows.keys.any { "${p.displayName} • $it" == labels[which] } }
             val name = labels[which].substringAfter(" • ")
             val steps = profile.workflows[name].orEmpty()
-            val vars = EditText(this).apply { hint = "Variable values: customer_name=Rahul, phone=..."; setTextColor(Color.WHITE); setHintTextColor(0xFF8290AA.toInt()) }
+            val vars = field("Variable values: customer_name=Rahul, phone=...")
             val container = LinearLayout(this).apply { setPadding(24, 12, 24, 0); addView(vars) }
             val checkpoint = AdaptiveWorkflowRunner(this) { }.resumableCheckpoint(profile, name)
             val dialog = android.app.AlertDialog.Builder(this).setTitle("Workflow: $name")
