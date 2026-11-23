@@ -102,6 +102,8 @@ class BackgroundAgentWorker(
             return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message))
         }
 
+        val priorAttemptCallCounts = usageCounts.toMap()
+
         val resumableRoles = buildSet {
             add("Planner")
             add("Researcher")
@@ -194,7 +196,7 @@ class BackgroundAgentWorker(
                     budget = budget,
                     onProviderCall = { providerName, providerCalls, totalCalls, elapsed ->
                         synchronized(usageLock) {
-                            usageCounts[providerName] = maxOf(usageCounts[providerName] ?: 0, providerCalls)
+                            usageCounts[providerName] = (priorAttemptCallCounts[providerName] ?: 0) + providerCalls
                             evidence.saveStatus(
                                 schedulerTaskId,
                                 "RUNNING",
