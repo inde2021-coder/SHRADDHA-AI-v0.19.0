@@ -54,8 +54,8 @@ object ApiKeyStore {
             // Migrate old plaintext values once; never leave the old preference behind.
             val legacy = prefs.getString(LEGACY_KEY, "").orEmpty().trim()
             if (legacy.isNotEmpty()) {
+                // saveKey commits the encrypted value and removes the legacy field atomically.
                 saveKey(context, legacy)
-                prefs.edit().remove(LEGACY_KEY).apply()
                 return legacy
             }
             return ""
@@ -67,10 +67,13 @@ object ApiKeyStore {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(encrypted), Charsets.UTF_8)
-        } catch (_: Exception) {
-            // A restored preference without its original Keystore key cannot be decrypted.
-            prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).apply()
-            ""
+        } catch (error: Exception) {
+            // Never destroy ciphertext on a read failure: a transient Keystore error or
+            // device restore must not silently erase the user's only copy of the key.
+            throw IllegalStateException(
+                "The saved GEMINI API key could not be decrypted. Re-enter the key if this device's Keystore was reset.",
+                error
+            )
         }
     }
 
