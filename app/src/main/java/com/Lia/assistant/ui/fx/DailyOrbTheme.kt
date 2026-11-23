@@ -20,14 +20,14 @@ data class DailyOrbTheme(
 
 object DailyOrbThemeSchedule {
     fun forCalendarDay(day: Int): DailyOrbTheme = when (day) {
-        Calendar.SUNDAY -> DailyOrbTheme("Sunday", NovaOrbStyle.NOVA)
-        Calendar.MONDAY -> DailyOrbTheme("Monday", NovaOrbStyle.AURORA)
-        Calendar.TUESDAY -> DailyOrbTheme("Tuesday", NovaOrbStyle.PLASMA)
-        Calendar.WEDNESDAY -> DailyOrbTheme("Wednesday", NovaOrbStyle.GLASS)
-        Calendar.THURSDAY -> DailyOrbTheme("Thursday", NovaOrbStyle.ENERGY)
-        Calendar.FRIDAY -> DailyOrbTheme("Friday", NovaOrbStyle.ARCHER)
+        Calendar.SUNDAY -> DailyOrbTheme("Sunday", NovaOrbStyle.SUN)
+        Calendar.MONDAY -> DailyOrbTheme("Monday", NovaOrbStyle.MOON)
+        Calendar.TUESDAY -> DailyOrbTheme("Tuesday", NovaOrbStyle.MARS)
+        Calendar.WEDNESDAY -> DailyOrbTheme("Wednesday", NovaOrbStyle.MERCURY)
+        Calendar.THURSDAY -> DailyOrbTheme("Thursday", NovaOrbStyle.JUPITER)
+        Calendar.FRIDAY -> DailyOrbTheme("Friday", NovaOrbStyle.VENUS)
         Calendar.SATURDAY -> DailyOrbTheme("Saturday", NovaOrbStyle.SATURN)
-        else -> DailyOrbTheme("Sunday", NovaOrbStyle.NOVA)
+        else -> DailyOrbTheme("Sunday", NovaOrbStyle.SUN)
     }
 
     fun today(): DailyOrbTheme =

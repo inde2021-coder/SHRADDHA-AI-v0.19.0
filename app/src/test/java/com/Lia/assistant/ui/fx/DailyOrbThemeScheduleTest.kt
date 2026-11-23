@@ -8,12 +8,12 @@ class DailyOrbThemeScheduleTest {
     @Test
     fun mapsAllSevenDaysToDistinctOrbStyles() {
         val expected = listOf(
-            NovaOrbStyle.NOVA,
-            NovaOrbStyle.AURORA,
-            NovaOrbStyle.PLASMA,
-            NovaOrbStyle.GLASS,
-            NovaOrbStyle.ENERGY,
-            NovaOrbStyle.ARCHER,
+            NovaOrbStyle.SUN,
+            NovaOrbStyle.MOON,
+            NovaOrbStyle.MARS,
+            NovaOrbStyle.MERCURY,
+            NovaOrbStyle.JUPITER,
+            NovaOrbStyle.VENUS,
             NovaOrbStyle.SATURN
         )
         val actual = (Calendar.SUNDAY..Calendar.SATURDAY).map {
