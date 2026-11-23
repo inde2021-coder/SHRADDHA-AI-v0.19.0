@@ -31,6 +31,17 @@ export function validFileTransferManifest(sizeBytes, chunkCount, sha256, transfe
     typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId);
 }
 
+export function validMissingTransferIndexes(indexes, chunkCount) {
+  if (!Array.isArray(indexes) || !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
+      indexes.length > chunkCount || indexes.length > 2200) return false;
+  const seen = new Set();
+  for (const index of indexes) {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= chunkCount || seen.has(index)) return false;
+    seen.add(index);
+  }
+  return true;
+}
+
 export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
   if (!Number.isSafeInteger(index) || !Number.isSafeInteger(chunkCount) || !Number.isSafeInteger(byteLength) ||
       !Number.isSafeInteger(totalBytes) || index < 0 || index >= chunkCount || chunkCount < 1 || totalBytes < 1 || totalBytes > 100 * 1024 * 1024) return false;
