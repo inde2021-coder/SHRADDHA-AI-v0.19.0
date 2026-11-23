@@ -18,7 +18,12 @@ class BackgroundAgentWorker(
         if (isStopped) return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Task cancelled before it started."))
         val schedulerTaskId = inputData.getString(BackgroundTaskQueue.KEY_SCHEDULER_TASK_ID)
             ?: return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to "Main Brain scheduler task ID is missing."))
-        val scheduler = MainBrainSchedulerRuntime.get(applicationContext)
+        val scheduler = try {
+            MainBrainSchedulerRuntime.get(applicationContext)
+        } catch (error: Exception) {
+            val message = "Main Brain encrypted scheduler could not be restored; task was not executed: ${error.localizedMessage ?: error.javaClass.simpleName}"
+            return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message.take(1000)))
+        }
         val evidence = CouncilEvidenceStore(applicationContext)
         val attempt = runAttemptCount.coerceIn(0, 99)
         val usageLock = Any()
