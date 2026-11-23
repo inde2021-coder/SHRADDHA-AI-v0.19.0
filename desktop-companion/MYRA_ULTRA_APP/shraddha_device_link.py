@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import QProcess, QProcessEnvironment, Qt
 from PyQt5.QtWidgets import (
-    QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QPlainTextEdit, QMessageBox, QMainWindow
 )
 
@@ -23,6 +23,10 @@ class ShraddhaDeviceLinkDock(QDockWidget):
         self.process.readyReadStandardOutput.connect(self._read_output)
         self.process.finished.connect(self._process_finished)
         self.process.errorOccurred.connect(self._process_error)
+        self.process.stateChanged.connect(self._process_state_changed)
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self.stop_companion)
 
         body = QWidget(self)
         layout = QVBoxLayout(body)
@@ -78,6 +82,10 @@ class ShraddhaDeviceLinkDock(QDockWidget):
             QMessageBox.warning(self, "Shraddha Device Link", str(exc))
             return
         env = QProcessEnvironment.systemEnvironment()
+        for key in list(env.keys()):
+            upper = key.upper()
+            if any(marker in upper for marker in ("API_KEY", "TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH")):
+                env.remove(key)
         for key, value in spec["environment"].items():
             env.insert(str(key), str(value))
         self.process.setProcessEnvironment(env)
@@ -107,6 +115,12 @@ class ShraddhaDeviceLinkDock(QDockWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.output.appendPlainText("Shraddha PC companion stopped.")
+
+    def _process_state_changed(self, state):
+        running = state != QProcess.NotRunning
+        self.start_button.setEnabled(not running)
+        self.stop_button.setEnabled(running)
+        self.status.setText("Companion running" if running else "Disconnected")
 
     def _process_error(self, _error):
         self.status.setText("Companion could not start")
