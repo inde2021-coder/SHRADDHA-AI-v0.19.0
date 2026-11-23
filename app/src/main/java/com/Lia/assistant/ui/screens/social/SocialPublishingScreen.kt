@@ -10,6 +10,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -53,6 +56,17 @@ fun SocialPublishingScreen(navController: NavController) {
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Choose a platform, review the exact post, then publish now or schedule it.") }
     var scheduledPosts by remember { mutableStateOf<JSONArray?>(null) }
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null && !busy) {
+            busy = true
+            scope.launch {
+                val result = runCatching { SocialPublishingClient.uploadMedia(context, uri, platform, mediaKind) }
+                result.onSuccess { mediaUrl = it; status = "Media uploaded securely. Meta can fetch it using the protected download URL." }
+                    .onFailure { status = "Media upload failed: " + (it.message ?: "unknown error") }
+                busy = false
+            }
+        }
+    }
 
     fun loadPosts() {
         if (busy) return
@@ -120,6 +134,11 @@ fun SocialPublishingScreen(navController: NavController) {
                     }
                 }
                 OutlinedTextField(value = mediaUrl, onValueChange = { mediaUrl = it.take(2048) }, label = { Text("Public HTTPS media URL") }, modifier = Modifier.fillMaxWidth())
+                NovaButton(text = if (busy) "UPLOADING…" else "SELECT & UPLOAD MEDIA", onClick = {
+                    val types = if (mediaKind in setOf("image", "story_image")) arrayOf("image/jpeg", "image/png", "image/webp") else arrayOf("video/mp4")
+                    mediaPicker.launch(types)
+                }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                Text("Maximum 100 MiB. Files are stored under your Firebase account; the download URL is shared with the selected social provider only when you publish or schedule.", color = colors.textSecondary)
                 Text("Meta must be able to fetch this public HTTPS URL. Instagram supports Feed, Reel and Story; Facebook Pages support image and video posts. Credentials stay on the backend.", color = colors.textSecondary)
             }
         }
