@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: integration-full-checks-${{ github.event.pull_request.number || github.ref }}
@@ -45,8 +46,10 @@ jobs:
       - name: Fetch every source branch
         run: git fetch origin --prune
 
-      - name: Verify every source branch is already included in this commit
+      - name: Verify source branches are integrated (merge commits or squash-merged PRs)
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           for branch in \
@@ -66,12 +69,20 @@ jobs:
             redesign-v0.19.2 \
             work/step-01-source-audit-fixes
           do
-            if ! git merge-base --is-ancestor "origin/$branch" HEAD; then
-              echo "::error::Source branch $branch is not fully merged into the current integration commit."
-              echo "Merge $branch into integration and push before running the full suite."
-              exit 1
+            if git merge-base --is-ancestor "origin/$branch" HEAD; then
+              echo "Verified: $branch is included by commit ancestry."
+              continue
             fi
-            echo "Verified: $branch is included in $(git rev-parse --short HEAD)"
+
+            # Squash/rebase merges intentionally do not preserve the source branch
+            # tip as an ancestor. Accept a merged PR into main as equivalent proof.
+            if gh pr list --repo "$GITHUB_REPOSITORY" --state merged --base main --head "$branch" --json number --jq 'length > 0' | grep -qx true; then
+              echo "Verified: $branch was integrated through a merged PR into main."
+              continue
+            fi
+
+            echo "::error::Source branch $branch is neither an ancestor nor recorded as squash/rebase-merged into main."
+            exit 1
           done
 
       - name: Check integrated diff for whitespace errors
