@@ -94,10 +94,15 @@ internal class DeviceCredentialStore(context: Context) {
     }
 
     @Synchronized fun clear() {
-        preferences.edit().clear().commit()
-        runCatching {
-            val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            store.deleteEntry(KEY_ALIAS)
+        check(preferences.edit().clear().commit()) {
+            "Could not remove saved encrypted device credentials."
+        }
+        // Delete the Keystore key only after the ciphertext removal is durable.
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(KEY_ALIAS)) {
+            check(store.deleteEntry(KEY_ALIAS)) {
+                "Device credentials were cleared, but the unused Keystore key could not be removed."
+            }
         }
     }
 
