@@ -78,7 +78,7 @@ class UnifiedMemoryRepository(context: Context) {
         password: String? = null
     ): Result<Boolean> = runCatching {
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}"))) { "Invalid memory record key" }
-        if (cloudConsent) {
+        val cloudRemoved = if (cloudConsent) {
             MemorySyncPolicy.requireCloudConsent(cloudConsent)
             val account = email?.trim().orEmpty()
             val secret = password.orEmpty()
@@ -86,10 +86,10 @@ class UnifiedMemoryRepository(context: Context) {
                 "Firebase account credentials are required for an approved cloud deletion"
             }
             cloud.signInAndDelete(account, secret, key).getOrThrow()
-        }
+        } else false
         val localRemoved = local.remove(localKey(key))
-        check(localRemoved) { "Could not remove the encrypted local memory record" }
-        true
+        check(localRemoved || cloudRemoved) { "No matching local or cloud memory record was found, or local deletion failed" }
+        localRemoved || cloudRemoved
     }
 
     fun clearLocal(): Result<Unit> = runCatching {
