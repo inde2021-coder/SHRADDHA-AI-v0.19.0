@@ -28,7 +28,7 @@ from PIL import Image, ImageTk
 
 from actions import execute_action
 from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
-from e2e_crypto import DeviceE2ECrypto
+from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 
@@ -534,7 +534,7 @@ class PcCompanionApp:
             local_id = str(self.config.get("deviceId", ""))
             session_id = str(self.config.get("sessionId", ""))
             base_type = frame_type & 0x7f
-            aad = f"{session_id}|{source_id}|{local_id}|visual_frame|{base_type}|{sequence}".encode("utf-8")
+            aad = visual_frame_aad(session_id, source_id, local_id, base_type, sequence)
             nonce_b64 = base64.b64encode(nonce).decode("ascii").rstrip("=")
             ciphertext_b64 = base64.b64encode(ciphertext).decode("ascii").rstrip("=")
             jpeg = DeviceE2ECrypto.decrypt(key, nonce_b64, ciphertext_b64, aad)
@@ -1208,7 +1208,7 @@ class PcCompanionApp:
                                 sequence = current["send_sequence"]
                                 current["send_sequence"] += 1
                                 key = bytes(current["key"])
-                            aad = f"{session_id}|{source_id}|{peer_id}|visual_frame|1|{sequence}".encode("utf-8")
+                            aad = visual_frame_aad(session_id, source_id, peer_id, 1, sequence)
                             nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, jpeg, aad)
                             nonce = base64.b64decode(nonce_b64 + "=" * ((4 - len(nonce_b64) % 4) % 4))
                             ciphertext = base64.b64decode(ciphertext_b64 + "=" * ((4 - len(ciphertext_b64) % 4) % 4))
