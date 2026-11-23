@@ -31,6 +31,7 @@ import com.Lia.assistant.data.NovaPreferences
 class MobileCommandCenterActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var command: EditText
+    private lateinit var assistantName: String
     private var speechLanguage = "hi-IN"
     private val voiceResultLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -45,7 +46,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speechLanguage = getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE).getString("speech_language", "hi-IN") ?: "hi-IN"
-        val assistantName = NovaPreferences.getString(
+        assistantName = NovaPreferences.getString(
             this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
         ).trim().ifBlank { AssistantBrand.NAME }
         val root = LinearLayout(this).apply {
