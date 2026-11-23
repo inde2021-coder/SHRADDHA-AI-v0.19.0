@@ -7,11 +7,11 @@ enum class MilestoneState { TODO, IN_PROGRESS, BLOCKED, DONE }
 data class ProjectMilestone(val id:String, val title:String, val state:MilestoneState = MilestoneState.TODO, val dependsOn:List<String> = emptyList(), val note:String = "")
 data class ProjectPlan(val id:String, val title:String, val milestones:List<ProjectMilestone>, val createdAt:Long = System.currentTimeMillis())
 object ProjectWorkspace {
-    fun create(title:String, milestoneTitles:List<String>):ProjectPlan {
+    fun create(title:String, milestoneTitles:List<String>, sequentialDependencies:Boolean = false):ProjectPlan {
         require(title.isNotBlank()) { "Project title is required" }
         val clean=milestoneTitles.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         require(clean.isNotEmpty()) { "Add at least one milestone" }
-        return ProjectPlan("p-" + UUID.randomUUID().toString().replace("-", ""),title.trim(),clean.mapIndexed { i,s -> ProjectMilestone("m${i+1}",s) })
+        return ProjectPlan("p-" + UUID.randomUUID().toString().replace("-", ""),title.trim(),clean.mapIndexed { i,s -> ProjectMilestone("m${i+1}",s, dependsOn = if (sequentialDependencies && i > 0) listOf("m$i") else emptyList()) })
     }
     fun update(plan:ProjectPlan, milestoneId:String, state:MilestoneState, note:String = ""):ProjectPlan {
         require(plan.milestones.any { it.id==milestoneId }) { "Milestone not found" }
