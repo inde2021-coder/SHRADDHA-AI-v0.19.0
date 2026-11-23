@@ -37,6 +37,7 @@ import com.Lia.assistant.ui.screens.personality.PersonalityScreen
 import com.Lia.assistant.ui.screens.privacy.PrivacyScreen
 import com.Lia.assistant.ui.screens.profile.ProfileScreen
 import com.Lia.assistant.ui.screens.plugins.PluginManagerScreen
+import com.Lia.assistant.ui.screens.social.SocialPublishingScreen
 import com.Lia.assistant.ui.screens.phone.PhoneCallAgentScreen
 import com.Lia.assistant.ui.screens.quickactions.QuickActionsScreen
 import com.Lia.assistant.ui.screens.settings.SettingsScreen
@@ -128,6 +129,7 @@ fun NovaApp(appState: NovaAppState) {
                     composable("project_lab") { ProjectLabScreen(navController) }
                     composable("data_vault") { DataVaultScreen(navController) }
                     composable("plugins") { PluginManagerScreen(navController) }
+                    composable("social_publisher") { SocialPublishingScreen(navController) }
 
                     // Flavor-specific routes (e.g. accessibility disclosure in direct)
                     registerAccessibilityDisclosureRoute(navController)
