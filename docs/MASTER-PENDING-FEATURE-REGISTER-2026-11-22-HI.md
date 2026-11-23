@@ -395,3 +395,5 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 
 
 - Project Lab validation now rejects duplicate, missing, self-referential and cyclic milestone dependencies. Unknown persisted milestone states now fail as malformed/newer data instead of silently resetting progress to TODO. No tests/build have been run.
+
+- Offline LiteRT-LM system prompt now reads the assistant identity from the shared `AssistantBrand.NAME` source instead of embedding a second hardcoded "Shraddha AI" label. This prevents the local-model prompt from drifting away from the app's central branding source. This is source-only; compile and runtime prompt verification remain pending.
