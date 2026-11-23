@@ -67,7 +67,14 @@ class BackgroundAgentWorker(
             add("Critic")
             add("Verifier")
         }
-        val resumeStages = evidence.readTask(schedulerTaskId).getOrThrow()
+        val savedEvidence = try {
+            evidence.readTask(schedulerTaskId).getOrThrow()
+        } catch (error: Exception) {
+            val message = "Could not read encrypted council checkpoints: ${error.localizedMessage ?: error.javaClass.simpleName}"
+            runCatching { scheduler.fail(schedulerTaskId, message.take(500)) }
+            return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message.take(1000)))
+        }
+        val resumeStages = savedEvidence
             .filter { record ->
                 record.optInt("schemaVersion") == 1 &&
                     record.optString("status") == "COMPLETED" &&
@@ -87,14 +94,19 @@ class BackgroundAgentWorker(
                 else role to CouncilSavedStage(savedProvider, savedOutput)
             }.toMap()
 
-        evidence.saveStatus(
+        val runningStatus = evidence.saveStatus(
             schedulerTaskId,
             "RUNNING",
             "Attempt ${attempt + 1}: provider council started. Reusing ${resumeStages.size} securely saved, provider-matched stages.",
             attempt = attempt,
             providerUsage = "",
             elapsedMs = 0L
-        ).getOrThrow()
+        )
+        if (runningStatus.isFailure) {
+            val message = "Could not persist council start status: ${runningStatus.exceptionOrNull()?.localizedMessage ?: "encrypted storage unavailable"}"
+            runCatching { scheduler.fail(schedulerTaskId, message.take(500)) }
+            return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message.take(1000)))
+        }
 
         val result = try {
             withContext(Dispatchers.IO) {
