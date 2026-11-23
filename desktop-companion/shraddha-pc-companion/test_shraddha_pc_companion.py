@@ -223,6 +223,14 @@ class PcCompanionPolicyTests(unittest.TestCase):
         self.assertFalse(validate_action({"kind": "type", "text": "hello"}))
         self.assertTrue(validate_action({"kind": "type", "text": "hello"}, allow_typing=True))
 
+    def test_remote_keyboard_shortcuts_are_allowlisted_and_paste_requires_typing_consent(self):
+        for chord in ("enter", "escape", "tab", "up", "ctrl+a", "ctrl+c", "ctrl+f", "alt+tab", "win+d"):
+            self.assertTrue(validate_action({"kind": "key_press", "chord": chord}))
+        self.assertFalse(validate_action({"kind": "key_press", "chord": "ctrl+v"}))
+        self.assertTrue(validate_action({"kind": "key_press", "chord": "ctrl+v"}, allow_typing=True))
+        for chord in ("ctrl+alt+delete", "win+r", "powershell", "ctrl+shift+esc", "", "x" * 50):
+            self.assertFalse(validate_action({"kind": "key_press", "chord": chord}))
+
     def test_scroll_amount_is_bounded_and_directional(self):
         self.assertTrue(validate_action({"kind": "scroll", "amount": 4}))
         self.assertTrue(validate_action({"kind": "scroll", "amount": -6}))
