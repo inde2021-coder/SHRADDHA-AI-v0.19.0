@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -46,6 +47,8 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.future.SecureBackupCodec
 import `in`.shraddha.ai.future.UserBackupManager
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
+import `in`.shraddha.ai.brain.UnifiedMemoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,6 +71,12 @@ fun DataVaultScreen(navController: NavController) {
     var pendingExport by remember { mutableStateOf<String?>(null) }
     var pendingImport by remember { mutableStateOf<String?>(null) }
     var showRestoreConfirmation by remember { mutableStateOf(false) }
+    var memoryRecords by remember { mutableStateOf(emptyList<String>()) }
+    var selectedMemoryKey by remember { mutableStateOf("") }
+    var cloudDeleteConsent by remember { mutableStateOf(false) }
+    var cloudEmail by remember { mutableStateOf("") }
+    var cloudPassword by remember { mutableStateOf("") }
+    var showMemoryDeleteConfirmation by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val envelope = pendingExport
@@ -148,6 +157,63 @@ fun DataVaultScreen(navController: NavController) {
                 }
             }
         )
+
+        NovaGlassCard {
+            Text("MEMORY RECORD MANAGEMENT", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text("Encrypted local memory records can be reviewed and deleted individually. Cloud deletion is optional and requires explicit consent plus Firebase credentials.", color = colors.textSecondary, fontSize = 11.sp)
+            NovaButton(
+                text = "Refresh local memory list",
+                onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            EncryptedFeatureStore(context.applicationContext).getAllWithPrefixes(setOf("memory_"))
+                        }
+                        result.onSuccess { values ->
+                            memoryRecords = values.keys.map { it.removePrefix("memory_") }.sorted()
+                            if (selectedMemoryKey !in memoryRecords) selectedMemoryKey = ""
+                            status = "Loaded ${memoryRecords.size} local memory record(s)."
+                        }.onFailure { status = "Could not read encrypted memory index: ${it.message}" }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                type = NovaButtonType.SECONDARY
+            )
+            if (memoryRecords.isEmpty()) {
+                Text("No local memory keys loaded. Tap Refresh to inspect.", color = colors.textTertiary, fontSize = 10.sp)
+            } else {
+                memoryRecords.take(50).forEach { key ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(key, color = colors.textPrimary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        NovaButton(
+                            text = if (selectedMemoryKey == key) "Selected" else "Select",
+                            onClick = { selectedMemoryKey = key },
+                            type = NovaButtonType.TEXT
+                        )
+                    }
+                }
+            }
+            NovaTextField(
+                value = selectedMemoryKey,
+                onValueChange = { selectedMemoryKey = it.take(64) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = "Memory record key"
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = cloudDeleteConsent, onCheckedChange = { cloudDeleteConsent = it })
+                Text("Also delete this record from Firebase cloud mirrors (explicit consent)", color = colors.textSecondary, fontSize = 10.sp)
+            }
+            if (cloudDeleteConsent) {
+                NovaTextField(value = cloudEmail, onValueChange = { cloudEmail = it.take(254) }, modifier = Modifier.fillMaxWidth(), placeholder = "Firebase account email")
+                NovaTextField(value = cloudPassword, onValueChange = { cloudPassword = it.take(128) }, modifier = Modifier.fillMaxWidth(), placeholder = "Firebase password", secret = true)
+            }
+            NovaButton(
+                text = "Delete selected memory record",
+                onClick = { if (selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))) showMemoryDeleteConfirmation = true else status = "Select a valid memory record key first." },
+                modifier = Modifier.fillMaxWidth(),
+                type = NovaButtonType.TEXT,
+                enabled = !isBusy && selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))
+            )
+        }
 
         NovaGlassCard(cornerRadius = 22.dp, elevation = 6.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -247,6 +313,48 @@ fun DataVaultScreen(navController: NavController) {
             }
         }
         Spacer(Modifier.height(20.dp))
+    }
+
+    if (showMemoryDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showMemoryDeleteConfirmation = false },
+            title = { Text("Delete memory record?") },
+            text = {
+                Text(
+                    if (cloudDeleteConsent) "This deletes the selected encrypted record from Firebase mirrors and this device. The remote account will be authenticated first."
+                    else "This deletes only the selected local encrypted record. Any cloud copy remains untouched."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showMemoryDeleteConfirmation = false
+                    val key = selectedMemoryKey
+                    scope.launch {
+                        isBusy = true
+                        val result = withContext(Dispatchers.IO) {
+                            UnifiedMemoryRepository(context.applicationContext).delete(
+                                key, cloudDeleteConsent, cloudEmail.takeIf { cloudDeleteConsent },
+                                cloudPassword.takeIf { cloudDeleteConsent }
+                            )
+                        }
+                        status = result.fold(
+                            onSuccess = { if (it) "Memory record deleted." else "Memory record was not found." },
+                            onFailure = { "Memory deletion failed: ${it.message}" }
+                        )
+                        if (result.isSuccess) {
+                            val refreshed = withContext(Dispatchers.IO) {
+                                EncryptedFeatureStore(context.applicationContext).getAllWithPrefixes(setOf("memory_"))
+                            }
+                            memoryRecords = refreshed.getOrDefault(emptyMap()).keys.map { it.removePrefix("memory_") }.sorted()
+                            selectedMemoryKey = ""
+                            cloudPassword = ""
+                        }
+                        isBusy = false
+                    }
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showMemoryDeleteConfirmation = false }) { Text("Cancel") } }
+        )
     }
 
     if (showRestoreConfirmation && pendingImport != null) {
