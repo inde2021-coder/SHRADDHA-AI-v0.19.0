@@ -59,6 +59,21 @@ object LiaToolCatalog {
             )
         )
 
+
+        // Native Android hardware and system controls. PC controls are routed separately to a paired companion.
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "control_phone",
+                description = "Controls this Android phone locally. Supported action values: status, set_volume, set_brightness, flashlight_on, flashlight_off, volume_up, volume_down, media_play_pause, media_next, media_previous, and open_settings. set_volume/set_brightness require percent 0-100. open_settings accepts wifi, bluetooth, internet, display, sound, battery, location, nfc, accessibility, notifications, apps, date, language, security, dnd, rotation, or storage. Android-protected radios/settings open the official system panel instead of silently bypassing OS restrictions. Brightness may require Modify System Settings permission; flashlight requires Camera permission.",
+                params = mapOf(
+                    "action" to "One supported phone action: status, set_volume, set_brightness, flashlight_on, flashlight_off, volume_up, volume_down, media_play_pause, media_next, media_previous, open_settings",
+                    "percent" to "Required for set_volume and set_brightness; integer from 0 to 100",
+                    "setting" to "Required for open_settings; one of the documented Android settings keys"
+                ),
+                required = listOf("action")
+            )
+        )
+
         // Screen accessibility tools
         array.put(
             GeminiToolUtils.functionDecl(
