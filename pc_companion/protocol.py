@@ -1,4 +1,5 @@
 """Strict validation for remote actions received by the Windows companion."""
+import json
 import math
 import re
 
@@ -88,3 +89,17 @@ def validate_remote_action_envelope(payload, action_kind):
     if not action or action.get("kind") != action_kind:
         return None
     return action
+
+
+def remote_action_approval_summary(peer_id, action):
+    """Build the exact bounded action summary shown before local PC approval."""
+    if not isinstance(peer_id, str) or not peer_id.strip() or len(peer_id) > 80:
+        return None
+    clean = validate_remote_action(action)
+    if clean is None:
+        return None
+    return (
+        f"Paired device: {peer_id.strip()}\\n"
+        "Exact requested action (review before approving):\\n"
+        + json.dumps(clean, ensure_ascii=False, sort_keys=True)
+    )
