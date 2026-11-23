@@ -17,6 +17,7 @@ The class in.shraddha.ai.vision.ArWorldMappingEngine provides the ARCore capture
 - Configures horizontal + vertical plane finding and latest-camera-image updates.
 - Enables ARCore AUTOMATIC depth only on devices that report support.
 - Samples camera pose path, tracked plane centers/extents, point-cloud count and depth-image range.
-- Exports a JSON survey with pose path and plane anchors.
+- Samples camera intrinsics (focal length, principal point and image dimensions) for calibration metadata.
+- Exports a bounded point-cloud sample and a 24×18 depth grid using the image plane row/pixel stride, plus pose path and plane anchors.
 
 The host Activity must request ARCore installation and CAMERA permission, create an OpenGL external camera texture, call start(textureId), call update() on its GL render thread, and pause/resume/close with lifecycle. The current class is a mapping engine, not a complete rendered AR UI. Its export is a sparse pose/plane/depth survey, not a dense textured mesh, photogrammetry scan, CAD-grade measurement or cloud-shared map. Device depth capability varies; devices without it still get plane/pose tracking.
