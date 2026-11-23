@@ -620,6 +620,21 @@ def read_file_chunk(path: str, index: int) -> bytes:
     if not data: raise ValueError('Chunk outside file')
     return data
 
+def validate_missing_transfer_indexes(indexes, total: int) -> list[int]:
+    if not isinstance(total, int) or isinstance(total, bool) or not 1 <= total <= 2200:
+        raise ValueError('Invalid transfer chunk count')
+    if not isinstance(indexes, list) or len(indexes) > total or len(indexes) > 2200:
+        raise ValueError('Invalid resume index list')
+    clean = []
+    seen = set()
+    for index in indexes:
+        if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < total or index in seen:
+            raise ValueError('Invalid or duplicate missing chunk index')
+        seen.add(index)
+        clean.append(index)
+    return clean
+
+
 def validate_transfer_chunk(index: int, total: int, encoded: str) -> bytes:
     import base64
     if not isinstance(index, int) or not isinstance(total, int) or total < 1 or total > 2200 or not 0 <= index < total: raise ValueError('Invalid chunk index')
@@ -1328,7 +1343,10 @@ async def run_once(args) -> None:
                         if peer_id and peer_id != device_id:
                             await ws.send(json.dumps({"type": "e2e_key_offer", "targetDeviceId": peer_id, "publicKey": e2e_public_b64}))
                     if incoming_transfer:
-                        await ws.send(json.dumps({"type": "file_transfer_resume", "targetDeviceId": incoming_transfer["source"], "transferId": incoming_transfer["id"]}))
+                        missing = [index for index in range(incoming_transfer["chunks"]) if index not in incoming_transfer["received"]]
+                        await ws.send(json.dumps({"type": "file_transfer_resume", "targetDeviceId": incoming_transfer["source"],
+                                                  "transferId": incoming_transfer["id"], "chunkCount": incoming_transfer["chunks"],
+                                                  "missingIndexes": missing}))
                 elif kind == "control_request":
                     requester_id = str(message.get("fromDeviceId", ""))
                     requester_valid = bool(requester_id) and len(requester_id) <= 80
@@ -1459,8 +1477,15 @@ async def run_once(args) -> None:
                             transfer_state_file.unlink(missing_ok=True)
                     except Exception as exc: print("File receive error:", str(exc)[:200])
                 elif kind == "file_transfer_resume" and file_send and message.get("transferId") == file_send["transferId"]:
-                    missing = message.get("missingIndexes") or []
-                    safe_missing = [int(i) for i in missing if isinstance(i, int) and 0 <= i < file_send["manifest"]["chunks"]]
+                    if (message.get("fromDeviceId") != file_send["target"] or
+                        message.get("chunkCount") != file_send["manifest"]["chunks"]):
+                        print("Rejected resume request: paired peer or transfer manifest mismatch.")
+                        continue
+                    try:
+                        safe_missing = validate_missing_transfer_indexes(message.get("missingIndexes"), file_send["manifest"]["chunks"])
+                    except ValueError as exc:
+                        print("Rejected resume request:", str(exc))
+                        continue
                     print(f"Resume requested: retransmitting {len(safe_missing)} missing chunks.")
                     await send_file_chunks(ws, file_send["target"], file_send["transferId"], file_send["path"], safe_missing, peer_keys, session_id, device_id)
                 elif kind == "file_transfer_ack" and file_send and message.get("transferId") == file_send["transferId"]:
