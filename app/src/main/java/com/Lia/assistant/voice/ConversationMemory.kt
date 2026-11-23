@@ -85,16 +85,24 @@ object ConversationMemory {
 
     fun persistenceError(): String? = persistenceError
 
-    fun setPersistenceEnabled(context: Context, enabled: Boolean) {
+    fun setPersistenceEnabled(context: Context, enabled: Boolean): Result<Unit> = runCatching {
         synchronized(lock) {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            persistenceEnabled = enabled
-            check(prefs.edit().putBoolean(ENABLED, enabled).commit()) { "Could not save conversation-memory preference." }
             if (enabled) {
                 appContext = context.applicationContext
+                persistenceEnabled = true
                 persistLocked()
+                check(persistenceError == null) {
+                    persistenceError ?: "Could not persist encrypted conversation history."
+                }
+                check(prefs.edit().putBoolean(ENABLED, true).commit()) {
+                    "Could not save conversation-memory preference."
+                }
             } else {
-                check(prefs.edit().remove(PAYLOAD).remove(IV).commit()) { "Could not clear encrypted conversation history." }
+                check(prefs.edit().putBoolean(ENABLED, false).remove(PAYLOAD).remove(IV).commit()) {
+                    "Could not clear encrypted conversation history."
+                }
+                persistenceEnabled = false
                 persistenceError = null
             }
         }
