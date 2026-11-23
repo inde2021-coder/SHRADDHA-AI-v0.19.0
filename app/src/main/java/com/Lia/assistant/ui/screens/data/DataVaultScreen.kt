@@ -79,6 +79,7 @@ fun DataVaultScreen(navController: NavController) {
     var cloudPassword by remember { mutableStateOf("") }
     var showMemoryDeleteConfirmation by remember { mutableStateOf(false) }
     var showClearLocalMemoryConfirmation by remember { mutableStateOf(false) }
+    var memoryConflict by remember { mutableStateOf<UnifiedMemoryRepository.ConflictPreview?>(null) }
     var knowledgeDocuments by remember { mutableStateOf(emptyList<LocalKnowledgeDocumentStore.Document>()) }
     var knowledgeQuery by remember { mutableStateOf("") }
     var knowledgeResults by remember { mutableStateOf(emptyList<LocalKnowledgeDocumentStore.SearchHit>()) }
@@ -232,6 +233,55 @@ fun DataVaultScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = "Memory record key"
             )
+            NovaButton(
+                text = "COMPARE LOCAL & CLOUD COPIES",
+                onClick = {
+                    if (!cloudDeleteConsent) status = "Enable explicit Firebase consent and enter credentials before comparing cloud copies."
+                    else if (!selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))) status = "Select a valid memory record key first."
+                    else scope.launch {
+                        isBusy = true
+                        val preview = withContext(Dispatchers.IO) {
+                            UnifiedMemoryRepository(context.applicationContext).compareLocalAndCloud(
+                                selectedMemoryKey, true, cloudEmail, cloudPassword
+                            )
+                        }
+                        preview.onSuccess { memoryConflict = it; status = if (it.differs) "Conflict found. Choose which copy should win." else "No conflicting copies found, or only one copy exists." }
+                            .onFailure { status = it.localizedMessage ?: "Could not compare memory copies." }
+                        isBusy = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                type = NovaButtonType.SECONDARY,
+                enabled = !isBusy && selectedMemoryKey.matches(Regex("[A-Za-z0-9_-]{1,64}"))
+            )
+            memoryConflict?.let { conflict ->
+                Text("Local: ${conflict.localValue?.take(180) ?: "Missing"}", color = colors.textSecondary, fontSize = 10.sp)
+                Text("Cloud: ${conflict.cloudValue?.take(180) ?: "Missing"}", color = colors.textSecondary, fontSize = 10.sp)
+                if (conflict.differs) {
+                    NovaButton(text = "KEEP LOCAL • UPLOAD TO CLOUD", onClick = {
+                        scope.launch {
+                            isBusy = true
+                            val result = withContext(Dispatchers.IO) {
+                                UnifiedMemoryRepository(context.applicationContext).resolveConflict(conflict.key, "local", true, cloudEmail, cloudPassword)
+                            }
+                            result.onSuccess { status = it.message; memoryConflict = null }
+                                .onFailure { status = it.localizedMessage ?: "Could not resolve conflict." }
+                            isBusy = false
+                        }
+                    }, modifier = Modifier.fillMaxWidth(), enabled = !isBusy)
+                    NovaButton(text = "KEEP CLOUD • RESTORE TO DEVICE", onClick = {
+                        scope.launch {
+                            isBusy = true
+                            val result = withContext(Dispatchers.IO) {
+                                UnifiedMemoryRepository(context.applicationContext).resolveConflict(conflict.key, "cloud", true, cloudEmail, cloudPassword)
+                            }
+                            result.onSuccess { status = it.message; memoryConflict = null }
+                                .onFailure { status = it.localizedMessage ?: "Could not resolve conflict." }
+                            isBusy = false
+                        }
+                    }, modifier = Modifier.fillMaxWidth(), enabled = !isBusy, type = NovaButtonType.SECONDARY)
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = cloudDeleteConsent, onCheckedChange = { cloudDeleteConsent = it; if (!it) cloudPassword = "" })
                 Text("Also delete this record from Firebase cloud mirrors (explicit consent)", color = colors.textSecondary, fontSize = 10.sp)
