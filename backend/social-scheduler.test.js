@@ -93,6 +93,19 @@ test('Instagram media schedule persists and dispatches its approved media metada
   assert.equal(sent.mediaUrl, 'https://cdn.example.com/reel.mp4');
 });
 
+test('Facebook media schedule persists and dispatches its approved media metadata', async () => {
+  let now = Date.parse('2026-11-23T06:00:00.000Z');
+  const db = new FakeDb();
+  let sent;
+  const scheduler = createSocialScheduler({ collection: db.collection(), publish: async body => { sent = body; return { ok: true, postId: 'fb-post-1' }; }, now: () => now });
+  const item = await scheduler.schedule('firebaseUser123', { platform: 'facebook', text: 'Page photo', preview: 'Page photo', confirmed: true, idempotencyKey: 'facebook_key_123456', scheduledAt: '2026-11-23T07:00:00.000Z', mediaKind: 'image', mediaUrl: 'https://cdn.example.com/photo.jpg' });
+  now = Date.parse('2026-11-23T07:01:00.000Z');
+  assert.equal((await scheduler.dispatchDue()).published, 1);
+  assert.equal(sent.mediaKind, 'image');
+  assert.equal(sent.mediaUrl, 'https://cdn.example.com/photo.jpg');
+  assert.equal(db.records.get(item.id).status, 'published');
+});
+
 test('provider failures are terminal and are not blindly replayed', async () => {
   let now = Date.parse('2026-11-23T06:00:00.000Z');
   const db = new FakeDb();
