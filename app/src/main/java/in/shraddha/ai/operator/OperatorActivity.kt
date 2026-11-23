@@ -160,10 +160,17 @@ class OperatorActivity : Activity() {
     /** Shows the latest voice-tool action journal after restart; never replays an interrupted tool. */
     private fun reviewInterruptedVoiceAction() {
         Thread {
-            val entry = runCatching {
-                VoiceToolActionJournal(this@OperatorActivity).latest()
-            }.getOrNull()
+            val journalResult = runCatching {
+                VoiceToolActionJournal(this@OperatorActivity).latestResult()
+            }.getOrElse { Result.failure(it) }
             runOnUiThread {
+                val entry = journalResult.getOrElse { error ->
+                    android.app.AlertDialog.Builder(this@OperatorActivity)
+                        .setTitle("Voice Action Journal recovery error")
+                        .setMessage("Encrypted journal नहीं पढ़ी जा सकी। Saved data सुरक्षित रखा गया है; कोई नया action शुरू न करें। ${error.localizedMessage ?: "Secure storage unavailable"}")
+                        .setPositiveButton("ठीक है", null).show()
+                    return@runOnUiThread
+                }
                 if (entry == null) {
                     android.app.AlertDialog.Builder(this@OperatorActivity)
                         .setTitle("Voice Action Journal")
@@ -171,7 +178,7 @@ class OperatorActivity : Activity() {
                         .setPositiveButton("ठीक है", null).show()
                     return@runOnUiThread
                 }
-                val interrupted = entry.state == "EXECUTING"
+                val interrupted = entry.state in setOf("EXECUTING", "FAILED")
                 val details = "Tool: ${entry.tool}\nस्थिति: ${entry.state}\nResult: ${entry.resultStatus.ifBlank { "अभी उपलब्ध नहीं" }}\nAction: ${entry.action.ifBlank { "अभी सत्यापित नहीं" }}\nसमय: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.updatedAt))}"
                 android.app.AlertDialog.Builder(this@OperatorActivity)
                     .setTitle(if (interrupted) "अधूरा Voice Action — जाँच आवश्यक" else "Voice Action का रिकॉर्ड")
