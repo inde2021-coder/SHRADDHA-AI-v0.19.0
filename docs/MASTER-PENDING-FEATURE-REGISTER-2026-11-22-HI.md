@@ -472,5 +472,14 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Added a persistent routine registry. Trigger matching returns a proposal only; it does not execute an action and retains the fresh-approval requirement.
 - Connected MainActivity's Life Timeline, Personal Skill Learning and Smart Routine controls to the encrypted persistent store. Timeline and skill deletion now target their own record families; routine creation is persisted rather than saving only a latest-proposal snapshot.
 - Added Android instrumentation coverage for persistence across store recreation, ciphertext-at-rest, matching/non-matching routine proposals and scoped deletion. Tests have deliberately not been run during this feature-completion pass.
-- Legacy `advanced25_timeline`, `advanced25_skills` and `advanced25_routine_latest` preference records have not yet been migrated into the new store. Existing user data must be migrated safely before old keys are retired; this remains a compatibility task.
+- Added a one-time migration for legacy `advanced25_timeline`, `advanced25_skills` and `advanced25_routine_latest` encrypted records. It merges into the new record families and removes old keys only in the same encrypted transaction; malformed legacy data aborts migration and preserves the original records. Migration still needs instrumentation verification against representative legacy payloads.
 - This does not implement sensor-based life logging, automatic skill inference, cloud sync, calendar-triggered routines or automatic routine execution. Those remain separate consented integrations and are not claimed complete.
+
+
+## 23 November 2026 — Durable workflow-hub recovery implementation (source-only; verification pending)
+
+- `ShraddhaIntegrationHub` now accepts an optional Android context and persists its plan, ordered workflow steps, current lifecycle state and append-only audit events in the Android-Keystore encrypted feature store.
+- Restoring a workflow that was RUNNING or VERIFYING after process restart converts it to FAILED with a review-required message and an audit event. No action is automatically replayed because the prior action may already have reached the target app.
+- Workflow plans are bounded to 256 actions and persisted recovery records are schema-checked. Encrypted-store read/write errors propagate instead of silently returning an empty workflow.
+- Added Android instrumentation coverage for encrypted persistence and fail-closed process-restart recovery. Tests have not been run during the feature-completion pass.
+- Platform adapters are not yet wired to instantiate this hub with application context across all voice/operator entry points; adapter integration and recovery UI remain required before claiming the autonomous project manager complete.
