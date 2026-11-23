@@ -8,6 +8,7 @@ import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
+import { verifyPluginManifest } from './plugin-registry.js';
 import { buildVisionPrompt } from './vision-analysis.js';
 import { buildFormExtractionPrompt, normalizeFormExtraction } from './form-autofill.js';
 import { resamplePcm16 } from './telephony-audio.js';
@@ -24,7 +25,7 @@ const apiAttempts = new Map();
 const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
-const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/messages/send','/api/form/extract']);
+const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/plugins/verify','/api/messages/send','/api/form/extract']);
 const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 const token = () => randomBytes(32).toString('base64url');
@@ -307,6 +308,19 @@ const server = http.createServer(async (req, res) => {
       const response = await upstream.json().catch(() => ({}));
       if (!upstream.ok || !response.sid) return json(res, 502, { error: String(response.message || 'Messaging provider rejected the message').slice(0, 240) });
       return json(res, 200, { ok: true, channel, provider: 'twilio', messageId: response.sid, providerStatus: response.status || 'accepted', recipient: to });
+    }
+    if (req.method === 'POST' && req.url === '/api/plugins/verify') {
+      if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      const body = await readBody(req, 32 * 1024);
+      let trustedKeys;
+      try {
+        trustedKeys = JSON.parse(process.env.PLUGIN_TRUSTED_PUBLIC_KEYS || '{}');
+        if (!trustedKeys || typeof trustedKeys !== 'object' || Array.isArray(trustedKeys)) throw new Error('Invalid trusted key map');
+        const plugin = verifyPluginManifest(body, trustedKeys);
+        return json(res, 200, { ok: true, plugin, note: 'Verified declarative plugin only; arbitrary code is never downloaded or executed.' });
+      } catch (error) {
+        return json(res, 400, { error: String(error?.message || 'Plugin verification failed').slice(0, 240) });
+      }
     }
     if (req.method === 'POST' && req.url === '/api/social/publish') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
