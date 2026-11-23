@@ -129,14 +129,17 @@ class FirebaseCloudVault(private val context: Context) {
             val app = initialize()
             val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user ?: error("Sign-in failed")
             runCatching { registerStoredPushToken(app, user.uid) }
-            val firestorePayload = runCatching {
-                FirebaseFirestore.getInstance(app).collection("users").document(user.uid).collection("vault").document(key)
-                    .get().await().getString("payload")
-            }.getOrNull()
-            val realtimePayload = if (firestorePayload == null && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
-                runCatching { FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+            // Firestore is authoritative. Only fall back to RTDB when the Firestore
+            // document is genuinely absent; permission/network failures must not look
+            // like an empty backup or silently trigger a potentially stale mirror.
+            val firestoreDocument = FirebaseFirestore.getInstance(app)
+                .collection("users").document(user.uid).collection("vault").document(key)
+                .get().await()
+            val firestorePayload = firestoreDocument.getString("payload")
+            val realtimePayload = if (!firestoreDocument.exists() && BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
                     .reference.child("users").child(user.uid).child("vault").child(key).get().await()
-                    .child("payload").getValue(String::class.java) }.getOrNull()
+                    .child("payload").getValue(String::class.java)
             } else null
             val payload = firestorePayload ?: realtimePayload ?: return@runBlocking null
             decrypt(payload, password)
