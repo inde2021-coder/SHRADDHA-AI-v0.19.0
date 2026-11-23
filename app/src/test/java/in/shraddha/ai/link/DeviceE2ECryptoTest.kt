@@ -16,6 +16,16 @@ class DeviceE2ECryptoTest {
         assertEquals(androidFingerprint, windowsFingerprint)
     }
 
+    @Test fun visualFrameAadBindsSessionPeersFrameTypeAndSequence() {
+        assertArrayEquals(
+            "session-1|source|target|visual_frame|2|42".toByteArray(Charsets.UTF_8),
+            DeviceE2ECrypto.visualFrameAad("session-1", "source", "target", 2, 42L)
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            DeviceE2ECrypto.visualFrameAad("session-1", "same", "same", 1, 1L)
+        }
+    }
+
     @Test fun peerKeyAndFingerprintAreBoundToTheSameSession() {
         val alice = DeviceE2ECrypto.create()
         val bob = DeviceE2ECrypto.create()
