@@ -28,10 +28,38 @@ class BackgroundAgentWorker(
         val evidence = CouncilEvidenceStore(applicationContext)
         val attempt = runAttemptCount.coerceIn(0, 99)
         val usageLock = Any()
-        val usageCounts = linkedMapOf<String, Int>()
         val tokenUsageRecords = java.util.Collections.synchronizedList(
             mutableListOf<com.Lia.assistant.voice.ProviderTokenUsage>()
         )
+        // A WorkManager retry is another billable attempt. Restore previously reported
+        // provider usage before starting so final evidence never silently drops earlier spend.
+        val previousUsageRaw = evidence.readTask(schedulerTaskId).getOrThrow()
+            .lastOrNull { it.has("status") && !it.has("output") }
+            ?.optString("providerUsage").orEmpty()
+        val usageCounts = linkedMapOf<String, Int>()
+        runCatching {
+            val previousUsage = JSONObject(previousUsageRaw)
+            val calls = previousUsage.optString("calls")
+            calls.split(",").filter { it.isNotBlank() }.forEach { entry ->
+                val pair = entry.split(":", limit = 2)
+                if (pair.size == 2) {
+                    val count = pair[1].toIntOrNull()
+                    if (count != null && count >= 0) usageCounts[pair[0]] = count
+                }
+            }
+            val tokens = previousUsage.optJSONArray("tokens") ?: JSONArray()
+            repeat(tokens.length()) { index ->
+                val item = tokens.getJSONObject(index)
+                tokenUsageRecords.add(
+                    com.Lia.assistant.voice.ProviderTokenUsage(
+                        provider = item.getString("provider"),
+                        model = item.getString("model"),
+                        inputTokens = item.getLong("inputTokens"),
+                        outputTokens = item.getLong("outputTokens")
+                    )
+                )
+            }
+        }
 
         // WorkManager may restart this provider-reasoning task after process death.
         // Previous stage evidence is retained encrypted; retries are a new attempt and
@@ -113,7 +141,7 @@ class BackgroundAgentWorker(
             "RUNNING",
             "Attempt ${attempt + 1}: provider council started. Reusing ${resumeStages.size} securely saved, provider-matched stages.",
             attempt = attempt,
-            providerUsage = "",
+            providerUsage = previousUsageRaw.takeIf { it.isNotBlank() },
             elapsedMs = 0L
         )
         if (runningStatus.isFailure) {
