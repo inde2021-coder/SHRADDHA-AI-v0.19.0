@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Extended Keystore-loss fail-closed behavior to SecureMemoryVault, EncryptedFeatureStore and MainBrainSchedulerStore: existing encrypted records prevent automatic key regeneration on subsequent writes; decrypt paths require the original key and clear decoded buffers. OperatorActionJournal and WorkflowCheckpointStore now expose read failures; an unreadable action journal requires review, and AdaptiveWorkflowRunner stops before any new workflow side effect when its encrypted checkpoint cannot be read or cleared.
+
+
 - EncryptedFeatureStore now zeroes decoded IV/ciphertext buffers in a `finally` block even when Keystore lookup, AES-GCM authentication or decryption fails; plaintext continues to be wiped after conversion. This is source hardening, not a substitute for device-side memory/security testing.
 
 
