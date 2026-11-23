@@ -119,6 +119,9 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         },
         QuickTile("Plugin Vault", "Verify and run signed local actions", Icons.Default.Security) {
             navController.navigate("plugins")
+        },
+        QuickTile("Social Publisher", "Preview, publish and schedule posts", Icons.Default.Language) {
+            navController.navigate("social_publisher")
         }
     )
 
