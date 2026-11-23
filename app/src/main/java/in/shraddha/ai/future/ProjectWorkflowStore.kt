@@ -74,9 +74,17 @@ class ProjectWorkflowStore(context: Context) {
         require(current.state != ProjectWorkflowState.RUNNING) { "Pause the workflow before rollback." }
         require(current.completedMilestoneIds.isNotEmpty()) { "There is no completed checkpoint to roll back." }
         val removed = current.completedMilestoneIds.last()
-        val remaining = current.completedMilestoneIds.dropLast(1)
+        val resetIds = mutableSetOf(removed)
+        var changed: Boolean
+        do {
+            changed = false
+            plan.milestones.forEach { milestone ->
+                if (milestone.dependsOn.any { it in resetIds } && resetIds.add(milestone.id)) changed = true
+            }
+        } while (changed)
+        val remaining = current.completedMilestoneIds.filterNot { it in resetIds }
         val updatedPlan = plan.copy(milestones = plan.milestones.map { milestone ->
-            if (milestone.id == removed || milestone.dependsOn.any { it == removed }) milestone.copy(state = MilestoneState.TODO, note = "") else milestone
+            if (milestone.id in resetIds) milestone.copy(state = MilestoneState.TODO, note = "") else milestone
         })
         val next = updatedPlan.milestones.firstOrNull { it.id !in remaining && it.dependsOn.all(remaining::contains) }
         val snapshot = current.copy(state = ProjectWorkflowState.PAUSED, currentMilestoneId = next?.id,
