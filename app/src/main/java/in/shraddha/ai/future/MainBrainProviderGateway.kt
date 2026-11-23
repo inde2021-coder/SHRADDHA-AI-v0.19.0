@@ -33,10 +33,11 @@ object MainBrainProviderGateway {
         require(preferred in supportedProviders) { "Unsupported preferred AI provider: $preferred" }
         // Keep fallback order stable across devices and runtime implementations.
         return (listOf(preferred) + providerOrder).distinct().filter { provider ->
-            runCatching {
-                if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
-                else ProviderKeyStore.has(context, provider)
-            }.getOrDefault(false)
+            // A genuinely absent key is simply unconfigured. An encrypted-store or
+            // Android Keystore read failure must propagate instead of being disguised
+            // as "no key", otherwise the UI silently hides a recoverable vault error.
+            if (provider == "GEMINI") ApiKeyStore.getKey(context).isNotBlank()
+            else ProviderKeyStore.has(context, provider)
         }.take(5)
     }
 
