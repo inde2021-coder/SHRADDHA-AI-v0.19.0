@@ -17,6 +17,9 @@ object ProjectWorkspace {
         require(plan.milestones.any { it.id==milestoneId }) { "Milestone not found" }
         val target=plan.milestones.first { it.id==milestoneId }
         require(state!=MilestoneState.DONE || target.dependsOn.all { id -> plan.milestones.any { it.id==id && it.state==MilestoneState.DONE } }) { "Complete dependencies first" }
+        require(state==MilestoneState.DONE || plan.milestones.none { it.state==MilestoneState.DONE && milestoneId in it.dependsOn }) {
+            "A completed milestone depends on this step. Reopen dependent milestones first."
+        }
         return plan.copy(milestones=plan.milestones.map { if(it.id==milestoneId) it.copy(state=state,note=note.take(500)) else it })
     }
     fun progress(plan:ProjectPlan):Int = if(plan.milestones.isEmpty()) 0 else (plan.milestones.count { it.state==MilestoneState.DONE }*100/plan.milestones.size)
