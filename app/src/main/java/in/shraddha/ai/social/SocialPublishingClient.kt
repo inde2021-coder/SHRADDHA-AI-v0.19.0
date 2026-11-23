@@ -37,6 +37,14 @@ object SocialPublishingClient {
         }
     }
 
+    suspend fun list(context: Context): JSONObject {
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in with Firebase to view scheduled posts.")
+        val idToken = user.getIdToken(false).await().token ?: error("Could not obtain Firebase user token.")
+        return withContext(Dispatchers.IO) {
+            request(context, "/api/social/schedule/list", JSONObject(), idToken, methodGet = true)
+        }
+    }
+
     suspend fun cancel(context: Context, id: String): JSONObject {
         val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in with Firebase before cancelling scheduled posts.")
         val idToken = user.getIdToken(false).await().token ?: error("Could not obtain Firebase user token.")
@@ -45,7 +53,7 @@ object SocialPublishingClient {
         }
     }
 
-    private fun request(context: Context, path: String, payload: JSONObject, firebaseIdToken: String? = null): JSONObject {
+    private fun request(context: Context, path: String, payload: JSONObject, firebaseIdToken: String? = null, methodGet: Boolean = false): JSONObject {
         val config = VoiceGatewaySettings.get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         require(config.baseUrl.startsWith("https://") && config.gatewayToken.isNotBlank()) {
@@ -53,7 +61,7 @@ object SocialPublishingClient {
         }
         val builder = Request.Builder().url(config.baseUrl.trimEnd('/') + path)
             .header("Authorization", "Bearer " + config.gatewayToken)
-            .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+        if (methodGet) builder.get() else builder.post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
         if (!firebaseIdToken.isNullOrBlank()) builder.header("X-Firebase-ID-Token", firebaseIdToken)
         http.newCall(builder.build()).execute().use { response ->
             val raw = response.body?.string().orEmpty()
