@@ -40,11 +40,16 @@ def _companion_candidates(app_dir: Path):
     frozen_root = getattr(sys, "_MEIPASS", None)
     if frozen_root:
         roots.insert(0, Path(frozen_root).resolve())
+    # Prefer the separately packaged companion executable when present.
+    exe_candidates = [Path(sys.executable).resolve().parent / "ShraddhaAI-Desktop-Companion.exe"]
+    for root in roots:
+        exe_candidates.extend([root.parent / "ShraddhaAI-Desktop-Companion.exe",
+                               root / "ShraddhaAI-Desktop-Companion.exe"])
+    for candidate in exe_candidates:
+        yield candidate
     for root in roots:
         yield root.parent / "shraddha-pc-companion" / "shraddha_pc_companion.py"
         yield root / "shraddha-pc-companion" / "shraddha_pc_companion.py"
-        yield root.parent / "ShraddhaAI-Desktop-Companion.exe"
-        yield root / "ShraddhaAI-Desktop-Companion.exe"
 
 
 def build_launch_spec(app_dir: str | Path, relay_url: str, pairing_code: str = "",
@@ -67,11 +72,22 @@ def build_launch_spec(app_dir: str | Path, relay_url: str, pairing_code: str = "
     if target.suffix.lower() == ".exe":
         program = str(target)
     else:
-        program = python_executable or sys.executable or shutil.which("python") or shutil.which("py")
+        if python_executable:
+            program = python_executable
+        elif getattr(sys, "frozen", False):
+            program = shutil.which("python") or shutil.which("py")
+        else:
+            program = sys.executable or shutil.which("python") or shutil.which("py")
         if not program:
-            raise FileNotFoundError("Python 3 is required to start the Shraddha PC companion.")
+            raise FileNotFoundError(
+                "Python 3 is required for the source companion. For packaged MYRA, place "
+                "ShraddhaAI-Desktop-Companion.exe beside MYRA."
+            )
         args.insert(0, str(target))
-    child_env = dict(os.environ if environ is None else environ)
+    inherited = dict(os.environ if environ is None else environ)
+    sensitive_markers = ("API_KEY", "TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH")
+    child_env = {key: value for key, value in inherited.items()
+                 if not any(marker in key.upper() for marker in sensitive_markers)}
     if code:
         child_env["SHRADDHA_PAIRING_CODE"] = code
     else:
