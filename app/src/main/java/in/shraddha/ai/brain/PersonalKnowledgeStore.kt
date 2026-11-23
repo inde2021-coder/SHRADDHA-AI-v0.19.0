@@ -40,6 +40,82 @@ class PersonalKnowledgeStore(context: Context) {
 
     private val store = EncryptedFeatureStore(context.applicationContext)
 
+    init {
+        migrateLegacyRecords()
+    }
+
+    /**
+     * One-time migration from the earlier Advanced AI Lab keys. All three old keys are removed
+     * only in the same encrypted preference commit that writes the merged replacement records.
+     * Any unreadable/malformed legacy record aborts migration and preserves the old ciphertext.
+     */
+    @Synchronized
+    private fun migrateLegacyRecords() {
+        val legacyKeys = setOf("advanced25_timeline", "advanced25_skills", "advanced25_routine_latest")
+        val legacy = legacyKeys.associateWith { store.get(it).getOrThrow() }
+        if (legacy.values.all { it.isBlank() }) return
+
+        val events = readEvents().associateBy { it.id }.toMutableMap()
+        val timelineRaw = legacy["advanced25_timeline"].orEmpty()
+        if (timelineRaw.isNotBlank()) {
+            val array = JSONArray(timelineRaw)
+            require(array.length() <= MAX_EVENTS) { "Legacy timeline exceeds the current limit; export it before migration." }
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                val id = item.optString("id").ifBlank { "legacy-event-$i" }
+                    .replace(Regex("[^A-Za-z0-9_-]"), "_").take(64)
+                val title = item.optString("title").take(120)
+                val category = item.optString("category").ifBlank { "legacy" }.take(40)
+                if (title.isNotBlank()) events.putIfAbsent(id, TimelineEvent(
+                    id, title, category, item.optLong("time", item.optLong("timestamp")), item.optString("note").take(1_000)
+                ))
+            }
+        }
+
+        val skills = readSkills().associateBy { it.id }.toMutableMap()
+        val skillsRaw = legacy["advanced25_skills"].orEmpty()
+        if (skillsRaw.isNotBlank()) {
+            val array = JSONArray(skillsRaw)
+            require(array.length() <= MAX_SKILL_EXAMPLES) { "Legacy skill examples exceed the current limit; export them before migration." }
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                val skill = item.optString("skill").take(60)
+                val input = item.optString("input").take(2_000)
+                val output = item.optString("approvedOutput").take(4_000)
+                if (skill.isNotBlank() && input.isNotBlank() && output.isNotBlank()) {
+                    val id = "legacy-skill-$i-" + skill.hashCode().toUInt().toString(16)
+                    skills.putIfAbsent(id, SkillExample(id, skill, input, output, item.optLong("approvedAt")))
+                }
+            }
+        }
+
+        val routines = readRoutines().associateBy { it.id }.toMutableMap()
+        val routineRaw = legacy["advanced25_routine_latest"].orEmpty()
+        if (routineRaw.isNotBlank()) {
+            val item = JSONObject(routineRaw)
+            val id = item.optString("id").take(64)
+            val summary = item.optString("summary").take(1_000)
+            if (validId(id) && summary.isNotBlank()) {
+                routines.putIfAbsent(id, Routine(
+                    id, "Legacy routine", "legacy-manual-trigger", summary, true,
+                    item.optBoolean("requiresApproval", true), System.currentTimeMillis()
+                ))
+            }
+        }
+
+        require(events.size <= MAX_EVENTS && skills.size <= MAX_SKILL_EXAMPLES && routines.size <= MAX_ROUTINES) {
+            "Merged personal memory exceeds current limits; legacy records were preserved."
+        }
+        store.putAllAndRemove(
+            mapOf(
+                EVENTS_KEY to encodeEvents(events.values),
+                SKILLS_KEY to encodeSkills(skills.values),
+                ROUTINES_KEY to encodeRoutines(routines.values)
+            ),
+            legacyKeys
+        ).getOrThrow()
+    }
+
     @Synchronized
     fun addTimelineEvent(event: TimelineEvent): Result<Unit> = runCatching {
         validateEvent(event)
