@@ -28,7 +28,7 @@ class VoiceToolActionJournal(context: Context) {
         if (!tool.matches(Regex("[a-zA-Z0-9_]{1,80}"))) return false
         // Never overwrite an unresolved action from a previous process/session.
         val previous = readResult().getOrElse { return false }
-        if (previous?.state == "EXECUTING") return false
+        if (previous?.state in setOf("EXECUTING", "FAILED")) return false
         val payload = JSONObject()
             .put("task_id", taskId)
             .put("tool", tool)
@@ -59,7 +59,7 @@ class VoiceToolActionJournal(context: Context) {
     @Synchronized
     fun markManuallyVerified(taskId: String): Boolean {
         val current = readResult().getOrNull() ?: return false
-        if (current.taskId != taskId || current.state != "EXECUTING") return false
+        if (current.taskId != taskId || current.state !in setOf("EXECUTING", "FAILED")) return false
         val verified = JSONObject()
             .put("task_id", current.taskId)
             .put("tool", current.tool)
