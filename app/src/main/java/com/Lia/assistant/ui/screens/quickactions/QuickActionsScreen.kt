@@ -104,7 +104,7 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
         },
         QuickTile("Screen & phone control", "Read, tap, type and swipe", Icons.Default.PhoneAndroid) {
             context.startActivity(android.content.Intent(context, OperatorActivity::class.java))
-        }
+        },
         QuickTile("Device Center", "Pair and control a Windows PC", Icons.Default.Devices) {
             navController.navigate("device_center")
         },
