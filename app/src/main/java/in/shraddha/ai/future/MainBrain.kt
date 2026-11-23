@@ -92,7 +92,12 @@ class MainBrain(
                     .put("action", "voice_action_result_not_journaled")
                     .put("message", "Website Forge launch का result सुरक्षित रूप से save नहीं हुआ। दोबारा launch करने से पहले Forge की स्थिति जाँचें।")
             }
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }
+                .getOrElse { error ->
+                    return JSONObject().put("status", "error")
+                        .put("action", "scheduler_storage_unavailable")
+                        .put("message", "Main Brain encrypted task history could not be opened; no voice action was started. ${error.localizedMessage ?: "Secure storage unavailable"}")
+                }
             val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "voice_tool").put("tool", toolName).put("args", args).toString()
             val submitted = runCatching {
@@ -190,7 +195,7 @@ class MainBrain(
             isEdit: Boolean,
             initialHtml: String?
         ): Boolean {
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }.getOrElse { return false }
             val taskId = "forge_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "website_forge")
                 .put("edit", isEdit).put("prompt", prompt.take(6000)).toString()
@@ -236,7 +241,8 @@ class MainBrain(
             cloudProcessingConsent: Boolean,
             personalDataConsent: Boolean = false
         ): Result<`in`.shraddha.ai.operator.FormExtractionResult> {
-            val scheduler = MainBrainSchedulerRuntime.get(context.applicationContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }
+                .getOrElse { return Result.failure(it) }
             val taskId = "form_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "form_extraction")
                 .put("formType", formType).put("provider", provider).toString()
@@ -284,7 +290,7 @@ class MainBrain(
                         .run(profile, workflowName, values, confirmed, resume)
                 }.getOrDefault(false)
             }
-            val scheduler = MainBrainSchedulerRuntime.get(appContext)
+            val scheduler = runCatching { MainBrainSchedulerRuntime.get(appContext) }.getOrElse { return false }
             val taskId = "learned_" + UUID.randomUUID().toString().replace("-", "")
             val payload = JSONObject().put("kind", "learned_workflow")
                 .put("package", profile.packageName)
