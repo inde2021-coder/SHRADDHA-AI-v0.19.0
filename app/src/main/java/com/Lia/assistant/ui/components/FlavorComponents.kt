@@ -25,6 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Lia.assistant.license.AccessKeyManager
+import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.depthSurface
 
@@ -32,6 +34,9 @@ import com.Lia.assistant.ui.theme.depthSurface
 fun AccessibilitySettingsRow(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
+    val assistantName = NovaPreferences.getString(
+        context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
+    ).trim().ifBlank { AssistantBrand.NAME }
     val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = modifier
@@ -49,7 +54,7 @@ fun AccessibilitySettingsRow(modifier: Modifier = Modifier) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Shraddha AI — Device Control",
+                text = "$assistantName — Device Control",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textPrimary
