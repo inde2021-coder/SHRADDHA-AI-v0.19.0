@@ -7,7 +7,7 @@ import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
-import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion } from './social-publishing.js';
+import { validatePublishIntent, validateMastodonOrigin, mastodonVisibility, validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion, validateMediaAttachment } from './social-publishing.js';
 import { verifyPluginManifest } from './plugin-registry.js';
 import { buildVisionPrompt } from './vision-analysis.js';
 import { buildFormExtractionPrompt, normalizeFormExtraction } from './form-autofill.js';
@@ -324,10 +324,31 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/social/publish') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
-      const body = await readBody(req, 12 * 1024);
+      const body = await readBody(req, 12 * 1024 * 1024);
       let intent;
       try { intent = validatePublishIntent(body); }
       catch (error) { return json(res, 400, { error: error.message }); }
+      if (body.mediaBase64 !== undefined && intent.platform === 'telegram') {
+        let media;
+        try { media = validateMediaAttachment(body, intent.platform); }
+        catch (error) { return json(res, 400, { error: error.message }); }
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+        const chatId = process.env.TELEGRAM_CHAT_ID || '';
+        if (!/^[0-9]+:[A-Za-z0-9_-]{20,}$/.test(botToken) || !chatId || chatId.length > 128) return json(res, 503, { error: 'Telegram bot credentials and destination are not configured on the server' });
+        const form = new FormData();
+        form.set('chat_id', chatId);
+        form.set('caption', intent.text);
+        form.set(media.kind === 'video' ? 'video' : 'photo', new Blob([media.bytes], { type: media.mimeType }), media.fileName);
+        let upstream;
+        try {
+          upstream = await fetch(`https://api.telegram.org/bot${botToken}/${media.kind === 'video' ? 'sendVideo' : 'sendPhoto'}`, {
+            method: 'POST', body: form, signal: AbortSignal.timeout(45000)
+          });
+        } catch { return json(res, 502, { error: 'Telegram media upload could not be reached' }); }
+        const result = await upstream.json().catch(() => ({}));
+        if (!upstream.ok || result.ok !== true) return json(res, 502, { error: 'Telegram did not accept the media post' });
+        return json(res, 200, { ok: true, platform: 'telegram', mediaKind: media.kind, messageId: result.result?.message_id || null, confirmedPreview: true });
+      }
       if (intent.platform === 'telegram') {
         const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
         const chatId = process.env.TELEGRAM_CHAT_ID || '';
@@ -393,6 +414,33 @@ const server = http.createServer(async (req, res) => {
       let origin, visibility;
       try { origin = validateMastodonOrigin(base); visibility = mastodonVisibility(process.env.MASTODON_VISIBILITY); }
       catch (error) { return json(res, 503, { error: error.message }); }
+      if (body.mediaBase64 !== undefined) {
+        let media;
+        try { media = validateMediaAttachment(body, intent.platform); }
+        catch (error) { return json(res, 400, { error: error.message }); }
+        let upload;
+        try {
+          const form = new FormData();
+          form.set('file', new Blob([media.bytes], { type: media.mimeType }), media.fileName);
+          upload = await fetch(origin + '/api/v2/media', {
+            method: 'POST', headers: { authorization: 'Bearer ' + accessToken },
+            body: form, signal: AbortSignal.timeout(45000)
+          });
+        } catch { return json(res, 502, { error: 'Mastodon media upload could not be reached' }); }
+        const uploaded = await upload.json().catch(() => ({}));
+        if (!upload.ok || typeof uploaded.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the media upload' });
+        let post;
+        try {
+          post = await fetch(origin + '/api/v1/statuses', {
+            method: 'POST', headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
+            signal: AbortSignal.timeout(20000),
+            body: JSON.stringify({ status: intent.text, visibility, media_ids: [uploaded.id] })
+          });
+        } catch { return json(res, 502, { error: 'Mastodon media post could not be reached; check account before retrying' }); }
+        const result = await post.json().catch(() => ({}));
+        if (!post.ok || typeof result.id !== 'string') return json(res, 502, { error: 'Mastodon did not accept the media post; media may remain in the account upload library' });
+        return json(res, 200, { ok: true, platform: 'mastodon', mediaKind: media.kind, postId: result.id, url: typeof result.url === 'string' ? result.url : '', visibility, confirmedPreview: true });
+      }
       let upstream;
       try {
         upstream = await fetch(origin + '/api/v1/statuses', {
