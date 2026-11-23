@@ -199,7 +199,7 @@ fun DataVaultScreen(navController: NavController) {
                 placeholder = "Memory record key"
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = cloudDeleteConsent, onCheckedChange = { cloudDeleteConsent = it })
+                Checkbox(checked = cloudDeleteConsent, onCheckedChange = { cloudDeleteConsent = it; if (!it) cloudPassword = "" })
                 Text("Also delete this record from Firebase cloud mirrors (explicit consent)", color = colors.textSecondary, fontSize = 10.sp)
             }
             if (cloudDeleteConsent) {
