@@ -175,7 +175,7 @@ class OperatorActivity : Activity() {
             textSize = 12f; setTextColor(0xFFD9EAF2.toInt()); setPadding(dp(12), dp(12), dp(12), dp(12))
             movementMethod = android.text.method.ScrollingMovementMethod()
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF091522); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF31566B)
+                setColor(0xFF091522.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF31566B.toInt())
             }
         }
         recoveryCard.addView(log, LinearLayout.LayoutParams(-1, dp(145)))
