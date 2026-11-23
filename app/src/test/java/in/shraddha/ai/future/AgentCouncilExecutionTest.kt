@@ -228,7 +228,6 @@ class AgentCouncilExecutionTest {
         assertEquals(4000, plan.goal.length)
         assertFalse(plan.guardrails.isEmpty())
     }
-}
 
     @Test fun specialistRoutingPrefersClaudeAndResearcherPrefersPerplexityWhenConfigured() {
         val roles = AgentCouncil.plan("Route specialist agents").roles
@@ -244,3 +243,4 @@ class AgentCouncilExecutionTest {
         assertEquals(AgentTransport.CLOUD_GATEWAY_HTTPS, AgentProviderPolicy.route("CLAUDE", true).transport)
         assertEquals(AgentTransport.DEVICE_KEY_HTTPS, AgentProviderPolicy.route("CLAUDE", false).transport)
     }
+}
