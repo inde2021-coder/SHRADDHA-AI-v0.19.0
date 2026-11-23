@@ -43,10 +43,12 @@ fun SocialPublishingScreen(navController: NavController) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
     val scope = rememberCoroutineScope()
-    val platforms = listOf("telegram", "mastodon", "bluesky", "linkedin")
+    val platforms = listOf("telegram", "mastodon", "bluesky", "linkedin", "facebook", "instagram")
     var platform by remember { mutableStateOf("telegram") }
     var text by remember { mutableStateOf("") }
     var scheduledAt by remember { mutableStateOf(Instant.now().plusSeconds(3600).toString()) }
+    var mediaKind by remember { mutableStateOf("image") }
+    var mediaUrl by remember { mutableStateOf("") }
     var pendingAction by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Choose a platform, review the exact post, then publish now or schedule it.") }
@@ -80,7 +82,7 @@ fun SocialPublishingScreen(navController: NavController) {
         scope.launch {
             val result = runCatching {
                 when (action) {
-                    "publish" -> SocialPublishingClient.publish(context, platform, text.trim()).toString()
+                    "publish" -> SocialPublishingClient.publish(context, platform, text.trim(), mediaKind.takeIf { platform == "instagram" }, mediaUrl.trim().takeIf { platform == "instagram" }).toString()
                     else -> SocialPublishingClient.schedule(context, platform, text.trim(), scheduledAt.trim()).toString()
                 }
             }
@@ -110,11 +112,21 @@ fun SocialPublishingScreen(navController: NavController) {
             }
             OutlinedTextField(value = text, onValueChange = { text = it.take(5000) }, label = { Text("Post text") }, modifier = Modifier.fillMaxWidth(), minLines = 6)
             Text("${text.length}/5000 characters", color = colors.textSecondary)
+            if (platform == "instagram") {
+                Text("Instagram media type", color = colors.accent)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("image", "reel", "story_image", "story_video").forEach { kind ->
+                        FilterChip(selected = mediaKind == kind, onClick = { mediaKind = kind }, label = { Text(kind.replace('_', ' ').replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+                OutlinedTextField(value = mediaUrl, onValueChange = { mediaUrl = it.take(2048) }, label = { Text("Public HTTPS media URL") }, modifier = Modifier.fillMaxWidth())
+                Text("Meta must be able to fetch this public URL. Use an image URL for Image/Story image, or a video URL for Reel/Story video. Credentials stay on the backend.", color = colors.textSecondary)
+            }
         }
         NovaGlassCard {
             Text("SCHEDULE (TEXT ONLY)", color = colors.accent)
             OutlinedTextField(value = scheduledAt, onValueChange = { scheduledAt = it.take(48) }, label = { Text("ISO-8601 date/time with timezone") }, modifier = Modifier.fillMaxWidth())
-            Text("Use ISO-8601 with a timezone, for example a local timestamp ending in +05:30 or UTC ending in Z. Scheduling needs Firebase sign-in and backend Firebase Admin credentials. Posts are not retried automatically after an ambiguous provider response.", color = colors.textSecondary)
+            Text("Use ISO-8601 with a timezone, for example a local timestamp ending in +05:30 or UTC ending in Z. Instagram feed/Reel/Story requires media and cannot be scheduled from this screen. Scheduling needs Firebase sign-in and backend Firebase Admin credentials. Posts are not retried automatically after an ambiguous provider response.", color = colors.textSecondary)
         }
         NovaGlassCard {
             Text(status, color = colors.textSecondary)
@@ -136,7 +148,7 @@ fun SocialPublishingScreen(navController: NavController) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank(), modifier = Modifier.weight(1f))
-                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank(), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && platform != "instagram", modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
             }
         }
     }
