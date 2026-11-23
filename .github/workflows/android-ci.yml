@@ -6,10 +6,8 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 on:
-  # Run the Android unit-test, APK-build and emulator smoke-test suite on the active Shraddha feature branch.
-  push:
-    branches:
-      - feature/complete-pending-shraddha-features
+  # Run only when the owner explicitly starts the consolidated verification.
+  # Do not auto-run repeatedly while source fixes are still being committed.
   workflow_dispatch:
 
 permissions:
