@@ -394,7 +394,7 @@ object VoiceSessionManager {
             }
         }
 
-        val nextClient = GeminiLiveClient(liveListener)
+        val nextClient = GeminiLiveClient(liveListener, assistantName)
         synchronized(clientLock) {
             if (!_isActive.value || sessionEpoch.get() != currentEpoch) {
                 nextClient.disconnect()
