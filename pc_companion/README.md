@@ -24,6 +24,9 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - Fingerprint confirmation is not automatic identity proof: compare the exact fingerprint on both devices through a separate trusted channel. If it differs or cannot be checked, reject the peer. Keys are ephemeral and must be verified again after reconnect/restart; the relay does not persist private keys.
 - This protocol is source-integrated but still requires Android↔Windows physical-device verification, replay/tamper tests and reconnect tests before production use. WSS alone is not end-to-end privacy.
 - Every remote-control session requires approval on the physical PC. The PC user can disable permission, click Disconnect, or press F12 while the companion window is focused.
+- The PC user can choose the virtual desktop (all displays) or an individual monitor for screen sharing and normalized mouse coordinates. The selected monitor is stored locally; changing it affects the next capture/action.
+- Android keyboard shortcuts use a strict allowlist (Enter, Escape, Tab, Ctrl+C/F/Z/S/A/V/X, Alt+Tab/Left/Right and Shift+Tab). Arbitrary key names and shell commands are rejected.
+- Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; encrypted receipts carry explicit success/failure state.
 - PyAutoGUI's top-left fail-safe is enabled.
 - File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
 
