@@ -507,3 +507,11 @@ Quick-share attachment payloads (not only clipboard) now use peer AES-GCM with c
 - Added `UnifiedMemoryRepository.delete`. Local-only deletion remains local when cloud consent is OFF. With explicit cloud consent and account credentials, remote mirror deletion must succeed before the local encrypted copy is removed.
 - Firestore rules now permit deletion of any valid bounded vault key by its authenticated owner only; other users and invalid keys remain denied. Added rules-test source for owner-only deletion. Tests have not been run.
 - Data Vault now lists local `memory_` keys and provides confirmation-gated local deletion or optional Firebase mirror deletion with fresh credentials. It does not yet expose cross-device conflict resolution, sync status/history or a unified export/import editor for every memory family.
+
+
+## 23 November 2026 — Home Assistant smart-home connector (source-only; verification pending)
+
+- Added an HTTPS-only Home Assistant REST gateway with Android-Keystore encrypted long-lived token storage, bounded entity discovery and explicit service allowlists for light/switch/fan/climate/cover.
+- Device actions require a fresh confirmation dialog in the app; arbitrary services, scripts, shell commands and insecure HTTP endpoints are rejected. Climate setpoint is bounded to 16–30°C.
+- Added a MainActivity setup/control workspace and URL-policy unit tests. No Home Assistant server credentials or live device were available for integration verification.
+- MQTT transport, Matter commissioning/device discovery and broader vendor-specific local-network adapters remain unimplemented. This is a Home Assistant REST connector, not complete universal IoT support.
