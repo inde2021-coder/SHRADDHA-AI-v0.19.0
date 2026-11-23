@@ -30,6 +30,19 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - PyAutoGUI's top-left fail-safe is enabled.
 - File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
 
+## PC hardware agent
+
+The Windows companion includes a separate, allowlisted hardware adapter:
+
+- **Telemetry:** CPU utilization/core count, RAM, battery/charging, mounted disk usage and monitor dimensions.
+- **Optional GPU telemetry:** NVIDIA name, temperature, utilization and VRAM via the fixed `nvidia-smi` query when installed.
+- **Controls:** Windows master volume and supported display brightness (driver/API dependent).
+- **Power:** shutdown, restart and sleep are accepted only after a separate confirmation dialog on the physical Windows PC.
+- **Unavailable sensors:** CPU temperature and fan speed are not fabricated; they remain unavailable until a supported vendor/LibreHardwareMonitor adapter is configured.
+- **Safety:** no arbitrary PowerShell, shell command, process launch or raw hardware register access is exposed. Remote hardware commands are strictly validated, remain behind the PC remote-control permission, and destructive power actions require local confirmation.
+
+Hardware status is also available from the PC companion's **PC Hardware Status** button. The volume and brightness quick controls are local to the Windows PC. The Android-to-PC voice/UI command surface still needs a paired Android build and physical-device verification before remote hardware control can be considered complete.
+
 ## Build from source
 
 Requires Python 3.12 and Windows:
