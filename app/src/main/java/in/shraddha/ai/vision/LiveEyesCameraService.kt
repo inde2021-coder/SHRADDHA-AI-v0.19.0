@@ -140,6 +140,7 @@ class LiveEyesCameraService : Service() {
                             val localContext = local.toContext()
                             if (localContext.isNotBlank()) {
                                 VoiceSessionManager.updateLiveVisualContext(localContext)
+                                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(PREF_OBSERVATION, localContext).apply()
                                 val subtitlePreview = local.subtitles.replace('\n', ' ').take(90)
                                 updateNotification(
                                     if (subtitlePreview.isNotBlank()) "Live text: $subtitlePreview"
@@ -216,6 +217,7 @@ class LiveEyesCameraService : Service() {
     override fun onDestroy() {
         stopped = true
         publishState(STATE_OFF)
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(PREF_OBSERVATION).apply()
         closeCamera()
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         super.onDestroy()
@@ -234,9 +236,13 @@ class LiveEyesCameraService : Service() {
         private const val PREFS_NAME = "shraddha_live_eyes_state"
         private const val PREF_STATE = "state"
         private const val PREF_PID = "pid"
+        private const val PREF_OBSERVATION = "latest_observation"
         const val STATE_OFF = "OFF"
         const val STATE_STARTING = "STARTING"
         const val STATE_ACTIVE = "ACTIVE"
+
+        fun getLatestObservation(context: Context): String = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_OBSERVATION, "").orEmpty()
 
         fun getState(context: Context): String {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
