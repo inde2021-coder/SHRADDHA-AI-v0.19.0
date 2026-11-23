@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Main Brain scheduler initialization and its persistence-fault check now run under one synchronized critical section, closing a race where a concurrent caller could obtain the scheduler while another thread was latching a storage failure.
+
+
 - Shared NovaTextField now exposes its placeholder/field purpose as an accessibility content description and identifies secret fields for screen readers, improving keyboard and settings form navigation.
 
 
