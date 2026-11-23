@@ -20,7 +20,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,8 +57,6 @@ fun OfflineModelScreen(navController: NavController) {
     var answer by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var showRemove by remember { mutableStateOf(false) }
-
-    DisposableEffect(Unit) { onDispose { LocalOfflineLlm.close() } }
 
     fun importModel(uri: Uri) {
         working = true
