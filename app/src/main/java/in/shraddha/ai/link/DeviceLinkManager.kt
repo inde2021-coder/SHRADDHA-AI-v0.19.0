@@ -325,8 +325,21 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
-        val body = JSONObject().put("provider", provider).put("prompt", prompt.take(12000))
-        val builder = Request.Builder().url(baseUrl.trim().trimEnd('/') + "/api/chat")
+        // This endpoint may carry a bearer token. Reuse the pairing URL policy so a
+        // misconfigured HTTP URL can never leak gateway credentials over cleartext.
+        val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
+            .getOrElse { done(Result.failure(it)); return }
+        val normalizedProvider = provider.trim().uppercase()
+        if (normalizedProvider !in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
+            done(Result.failure(IllegalArgumentException("Unsupported AI provider.")))
+            return
+        }
+        if (prompt.isBlank()) {
+            done(Result.failure(IllegalArgumentException("Prompt cannot be empty.")))
+            return
+        }
+        val body = JSONObject().put("provider", normalizedProvider).put("prompt", prompt.take(12000))
+        val builder = Request.Builder().url("$safeBaseUrl/api/chat")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         client.newCall(builder.build()).enqueue(object : Callback {
