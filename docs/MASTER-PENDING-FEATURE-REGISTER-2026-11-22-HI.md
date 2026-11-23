@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Windows PC Companion now rejects replayed E2E remote-action IDs per peer within a live connection using a bounded replay cache; added regression-test source for duplicate IDs, peer scoping, malformed IDs and cache bounds. Physical PC/phone integration remains untested.
+
+
 - Firebase deploy-source drift corrected: `firebase/firestore.rules` and `firebase/storage.rules` now match the stricter owner-scoped root rules. Storage is limited to encrypted backup objects (no generic user file uploads); Firestore deletion is restricted to the app's explicit backup keys. Emulator test source now covers restricted vault deletion and denial of non-backup Storage uploads. These tests have not been run.
 
 
