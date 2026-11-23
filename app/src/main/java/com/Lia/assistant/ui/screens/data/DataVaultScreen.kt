@@ -79,6 +79,7 @@ fun DataVaultScreen(navController: NavController) {
     var cloudPassword by remember { mutableStateOf("") }
     var showMemoryDeleteConfirmation by remember { mutableStateOf(false) }
     var showClearLocalMemoryConfirmation by remember { mutableStateOf(false) }
+    var showClearAllMemoriesConfirmation by remember { mutableStateOf(false) }
     var memoryConflict by remember { mutableStateOf<UnifiedMemoryRepository.ConflictPreview?>(null) }
     var knowledgeDocuments by remember { mutableStateOf(emptyList<LocalKnowledgeDocumentStore.Document>()) }
     var knowledgeQuery by remember { mutableStateOf("") }
@@ -296,6 +297,17 @@ fun DataVaultScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 type = NovaButtonType.TEXT,
                 enabled = !isBusy && memoryRecords.isNotEmpty()
+            )
+            NovaButton(
+                text = "DELETE ALL LOCAL + FIREBASE MEMORY",
+                onClick = {
+                    if (!cloudDeleteConsent || cloudEmail.isBlank() || cloudPassword.length < 8) {
+                        status = "Enable Firebase operations and enter the account email/password before full cloud deletion."
+                    } else showClearAllMemoriesConfirmation = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                type = NovaButtonType.TEXT,
+                enabled = !isBusy && cloudDeleteConsent && cloudEmail.isNotBlank() && cloudPassword.length >= 8
             )
             NovaButton(
                 text = "Delete selected memory record",
@@ -534,6 +546,31 @@ fun DataVaultScreen(navController: NavController) {
                 }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { showMemoryDeleteConfirmation = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showClearAllMemoriesConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearAllMemoriesConfirmation = false },
+            title = { Text("Delete every memory copy?") },
+            text = { Text("This permanently deletes all records in this account's Firebase vault (Firestore and configured Realtime Database mirror) and all local memory_ records on this device. Export an encrypted backup first. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearAllMemoriesConfirmation = false
+                    scope.launch {
+                        isBusy = true
+                        val result = withContext(Dispatchers.IO) {
+                            UnifiedMemoryRepository(context.applicationContext).clearAll(true, cloudEmail, cloudPassword)
+                        }
+                        status = result.fold(
+                            onSuccess = { memoryRecords = emptyList(); selectedMemoryKey = ""; memoryConflict = null; cloudPassword = ""; it.message },
+                            onFailure = { "Full memory deletion did not complete: ${it.message}" }
+                        )
+                        isBusy = false
+                    }
+                }) { Text("Delete everywhere") }
+            },
+            dismissButton = { TextButton(onClick = { showClearAllMemoriesConfirmation = false }) { Text("Cancel") } }
         )
     }
 
