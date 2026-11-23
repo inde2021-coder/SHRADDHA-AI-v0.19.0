@@ -60,15 +60,26 @@ export async function publishSocialPost(body, intent, env = process.env) {
     }
     let upstream;
     try {
-      const form = new URLSearchParams({ message: intent.text, access_token: accessToken });
-      upstream = await fetch(`https://graph.facebook.com/${version}/${pageId}/feed`, {
+      const endpoint = intent.mediaKind === 'video' ? 'videos' : intent.mediaKind === 'image' ? 'photos' : 'feed';
+      const form = new URLSearchParams({ access_token: accessToken });
+      if (intent.mediaKind === 'video') {
+        form.set('file_url', intent.mediaUrl);
+        form.set('description', intent.text);
+      } else if (intent.mediaKind === 'image') {
+        form.set('url', intent.mediaUrl);
+        form.set('caption', intent.text);
+      } else {
+        form.set('message', intent.text);
+      }
+      upstream = await fetch(`https://graph.facebook.com/${version}/${pageId}/${endpoint}`, {
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: form, signal: AbortSignal.timeout(20000)
+        body: form, signal: AbortSignal.timeout(intent.mediaKind === 'video' ? 90000 : 30000)
       });
     } catch { fail(502, 'Facebook Graph API could not be reached'); }
     const result = await upstream.json().catch(() => ({}));
-    if (!upstream.ok || typeof result.id !== 'string') fail(502, result.error?.message || 'Facebook did not accept the Page post');
-    return { ok: true, platform: 'facebook', postId: result.id, confirmedPreview: true };
+    const postId = result.post_id || result.id;
+    if (!upstream.ok || typeof postId !== 'string') fail(502, result.error?.message || 'Facebook did not accept the Page post');
+    return { ok: true, platform: 'facebook', mediaKind: intent.mediaKind || null, postId, confirmedPreview: true };
   }
 
   if (intent.platform === 'instagram') {
