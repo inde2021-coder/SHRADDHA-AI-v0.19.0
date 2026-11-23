@@ -38,7 +38,7 @@ class TaskPlannerActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(20), dp(18), dp(24))
-            setBackgroundColor(Color.rgb(7, 11, 20))
+            setBackgroundColor(Color.rgb(7, 19, 29))
         }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(this).apply {
@@ -46,10 +46,16 @@ class TaskPlannerActivity : AppCompatActivity() {
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
         })
-        top.addView(Button(this).apply { text = "＋ Add task"; isAllCaps = false; setOnClickListener { createTask() } })
+        top.addView(Button(this).apply {
+            text = "＋ Add task"; isAllCaps = false; setTextColor(0xFF04161C.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF38C7D2.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF8AF1F1.toInt())
+            }
+            elevation = dp(6).toFloat(); setOnClickListener { createTask() }
+        })
         root.addView(top)
         summary = TextView(this).apply {
-            textSize = 14f; setTextColor(Color.rgb(185, 202, 230))
+            textSize = 14f; setTextColor(0xFFB6CDD2.toInt())
             setPadding(dp(14), dp(14), dp(14), dp(14)); background = panel()
         }
         root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); bottomMargin = dp(14) })
@@ -76,7 +82,9 @@ class TaskPlannerActivity : AppCompatActivity() {
             setText(prefs.getString("daily_research_topics", "").orEmpty())
             minLines = 2; maxLines = 3
             setPadding(dp(12), dp(10), dp(12), dp(10))
-            setBackgroundColor(0xFF172238.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF102A36.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt())
+            }
         }
         root.addView(researchTopics, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         researchToggle = android.widget.Switch(this).apply {
@@ -107,12 +115,12 @@ class TaskPlannerActivity : AppCompatActivity() {
         root.addView(researchToggle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         root.addView(TextView(this).apply {
             text = "Privacy: केवल आपके लिखे topics Perplexity को web research के लिए भेजे जाएँगे। यह feature default में OFF है; tasks, contacts या notifications का content नहीं भेजा जाता।"
-            textSize = 11f; setTextColor(0xFF9EABC2.toInt())
+            textSize = 11f; setTextColor(0xFFB6CDD2.toInt())
             setPadding(dp(4), 0, dp(4), dp(10))
         })
         root.addView(TextView(this).apply {
             text = "YOUR TASKS"; textSize = 11f; letterSpacing = .12f
-            setTextColor(Color.rgb(159, 139, 255)); setPadding(dp(2), dp(8), 0, dp(8))
+            setTextColor(0xFF73DDE7.toInt()); setPadding(dp(2), dp(8), 0, dp(8))
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -314,8 +322,8 @@ class TaskPlannerActivity : AppCompatActivity() {
     }
 
     private fun panel() = android.graphics.drawable.GradientDrawable(
-        android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF19243A.toInt(), 0xFF101A2B.toInt())
-    ).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0xFF344668.toInt()) }
+        android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF123A46.toInt(), 0xFF0D2531.toInt())
+    ).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0xFF2D8490.toInt()) }
 
     private fun toast(message: String) = android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
