@@ -2,7 +2,7 @@
 import math
 import re
 
-_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press"}
+_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -59,6 +59,18 @@ def validate_remote_action(action):
         if not isinstance(chord, str) or chord.lower() not in _ALLOWED_CHORDS:
             return None
         clean["chord"] = chord.lower()
+    elif kind in {"set_volume", "set_brightness"}:
+        percent = action.get("percent")
+        if not isinstance(percent, int) or isinstance(percent, bool) or not 0 <= percent <= 100:
+            return None
+        clean["percent"] = percent
+    elif kind == "power":
+        operation = action.get("operation")
+        if operation not in {"shutdown", "restart", "sleep"}:
+            return None
+        clean["operation"] = operation
+    elif kind == "hardware_status":
+        pass
     elif kind == "scroll":
         amount = action.get("amount", 5)
         if not isinstance(amount, int) or isinstance(amount, bool) or not -20 <= amount <= 20 or amount == 0:
