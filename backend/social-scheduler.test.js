@@ -44,6 +44,10 @@ const valid = (scheduledAt, key = 'schedule_key_123456789') => ({
   platform: 'telegram', text: 'Approved announcement', preview: 'Approved announcement',
   confirmed: true, idempotencyKey: key, scheduledAt
 });
+const validInstagram = (scheduledAt, key = 'instagram_key_123456789') => ({
+  platform: 'instagram', text: 'Approved Reel caption', preview: 'Approved Reel caption',
+  confirmed: true, idempotencyKey: key, scheduledAt, mediaKind: 'reel', mediaUrl: 'https://cdn.example.com/reel.mp4'
+});
 
 test('Firestore queue is idempotent and scoped to the authenticated user', async () => {
   let now = Date.parse('2026-11-23T06:00:00.000Z');
@@ -72,6 +76,21 @@ test('only pending jobs can be cancelled and due jobs publish once', async () =>
   assert.equal(calls, 1);
   assert.equal((await scheduler.dispatchDue(10)).published, 0);
   assert.equal(db.records.get(second.id).status, 'published');
+});
+
+test('Instagram media schedule persists and dispatches its approved media metadata', async () => {
+  let now = Date.parse('2026-11-23T06:00:00.000Z');
+  const db = new FakeDb();
+  let sent;
+  const scheduler = createSocialScheduler({ collection: db.collection(), publish: async body => { sent = body; return { ok: true, postId: 'ig-post-1' }; }, now: () => now });
+  const item = await scheduler.schedule('firebaseUser123', validInstagram('2026-11-23T07:00:00.000Z'));
+  const saved = db.records.get(item.id);
+  assert.equal(saved.mediaKind, 'reel');
+  assert.equal(saved.mediaUrl, 'https://cdn.example.com/reel.mp4');
+  now = Date.parse('2026-11-23T07:01:00.000Z');
+  assert.equal((await scheduler.dispatchDue()).published, 1);
+  assert.equal(sent.mediaKind, 'reel');
+  assert.equal(sent.mediaUrl, 'https://cdn.example.com/reel.mp4');
 });
 
 test('provider failures are terminal and are not blindly replayed', async () => {
