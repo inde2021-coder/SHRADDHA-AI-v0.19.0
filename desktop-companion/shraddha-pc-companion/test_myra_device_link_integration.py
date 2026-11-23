@@ -37,9 +37,22 @@ class MyraShraddhaIntegrationTests(unittest.TestCase):
             self.assertEqual(spec["program"], "python-test")
             self.assertNotIn("012345", spec["arguments"])
             self.assertEqual(spec["environment"]["SHRADDHA_PAIRING_CODE"], "012345")
+            self.assertNotIn("GEMINI_API_KEY", spec["environment"])
+            self.assertNotIn("LINKEDIN_ACCESS_TOKEN", spec["environment"])
             self.assertIn("--base-url", spec["arguments"])
             self.assertEqual(spec["arguments"][-1], "MYRA Test PC")
             self.assertFalse(spec["uses_saved_pairing"])
+
+    def test_packaged_companion_executable_is_preferred(self):
+        with tempfile.TemporaryDirectory() as folder:
+            app = Path(folder) / "MYRA_ULTRA_APP"
+            app.mkdir()
+            executable = Path(folder) / "ShraddhaAI-Desktop-Companion.exe"
+            executable.write_bytes(b"test")
+            spec = build_launch_spec(app, "https://relay.example", "", "MYRA PC",
+                                     environ={"PATH": "safe"})
+            self.assertEqual(spec["program"], str(executable))
+            self.assertNotIn(".py", " ".join(spec["arguments"]))
 
     def test_saved_pairing_does_not_inherit_stale_one_time_code(self):
         with tempfile.TemporaryDirectory() as folder:
