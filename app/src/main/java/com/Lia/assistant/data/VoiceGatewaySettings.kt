@@ -171,8 +171,8 @@ object VoiceGatewaySettings {
         val normalized = provider.uppercase()
         if (normalized !in configuredProviders(context).orEmpty()) return null
         val providerId = if (normalized == "CLAUDE") "anthropic" else normalized.lowercase()
-        val combinedPrompt = "You are the " + role.take(40) + " agent in Shraddha AI.\\n" +
-            systemInstruction.take(1800) + "\\n\\n" + prompt.take(10_000)
+        val combinedPrompt = "You are the " + role.take(40) + " agent in Shraddha AI.\n" +
+            systemInstruction.take(1800) + "\n\n" + prompt.take(10_000)
         require(combinedPrompt.length <= 12_000) { "Cloud agent prompt exceeds the gateway limit." }
         val body = JSONObject().put("provider", providerId).put("prompt", combinedPrompt)
             .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
