@@ -40,4 +40,41 @@ class ProjectPlanStoreInstrumentedTest {
             store.delete(plan.id)
         }
     }
+
+    @Test fun projectBackupRoundTripsAndRejectsConflictingIdsWithoutChangingVault() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val source = ProjectPlanStore(context)
+        val target = ProjectPlanStore(context)
+        val suffix = System.currentTimeMillis()
+        val plan = ProjectWorkspace.create("Backup test $suffix", listOf("Design", "Build"))
+        val conflicting = ProjectWorkspace.create("Conflict test $suffix", listOf("Keep")).copy(id = plan.id)
+        try {
+            source.save(plan).getOrThrow()
+            val backup = source.exportJson().getOrThrow()
+            assertTrue(backup.contains("shraddha-project-backup"))
+            target.save(conflicting).getOrThrow()
+            val before = target.loadAll().getOrThrow().first { it.id == plan.id }
+            assertTrue(target.importJson(backup).isFailure)
+            assertEquals(before.title, target.loadAll().getOrThrow().first { it.id == plan.id }.title)
+        } finally {
+            source.delete(plan.id)
+        }
+    }
+
+    @Test fun projectBackupImportRestoresValidatedPlan() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val source = ProjectPlanStore(context)
+        val target = ProjectPlanStore(context)
+        val plan = ProjectWorkspace.create("Restore test ${System.currentTimeMillis()}", listOf("One", "Two"))
+        try {
+            source.save(plan).getOrThrow()
+            target.importJson(source.exportJson().getOrThrow()).getOrThrow()
+            val restored = target.loadAll().getOrThrow().first { it.id == plan.id }
+            assertEquals(plan.title, restored.title)
+            assertEquals(plan.milestones.map { it.title }, restored.milestones.map { it.title })
+        } finally {
+            source.delete(plan.id)
+            target.delete(plan.id)
+        }
+    }
 }
