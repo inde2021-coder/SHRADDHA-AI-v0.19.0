@@ -51,3 +51,17 @@ The authenticated publishing endpoint supports text posts on Telegram, Mastodon,
 - [Bluesky AT Protocol createRecord](https://docs.bsky.app/docs/api/com-atproto-repo-create-record)
 - [LinkedIn Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)
 - [YouTube videos.insert](https://developers.google.com/youtube/v3/docs/videos/insert)
+
+## Scheduled publishing
+
+The Android Social Publisher supports exact-preview text scheduling for Telegram, Mastodon, Bluesky and LinkedIn. Media uploads remain immediate-only. Schedule records are stored in Firestore collection `socialScheduledPosts`, scoped to the authenticated Firebase UID. The backend verifies both the gateway token and a Firebase ID token before creating or cancelling a job. An idempotency key prevents duplicate schedule creation.
+
+Required backend environment:
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: service-account JSON for the same Firebase project as Android sign-in
+- `SOCIAL_SCHEDULER_CRON_SECRET`: long random secret used only by the scheduler worker
+
+Required GitHub Actions secrets:
+- `SHRADDHA_BACKEND_ORIGIN`: backend HTTPS origin, without trailing slash
+- `SOCIAL_SCHEDULER_CRON_SECRET`: same secret as the backend environment
+
+The GitHub scheduled workflow calls `POST /api/social/schedule/dispatch` every five minutes. A job is claimed before the provider call. A failed provider call is marked failed and is not blindly retried, because a network timeout can occur after a platform accepted the post. Review ambiguous failures manually to avoid duplicate publishing. Scheduled posts require text-only content, a timestamp at least one minute and no more than 90 days in the future, and an explicit exact-preview confirmation.
