@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Voice action journal now treats both EXECUTING and FAILED as unresolved and blocks a new action from overwriting either. The user can explicitly mark either state as manually verified after checking the target app; only then can a new voice action replace the journal entry.
+
+
 - Voice connection startup now uses a distinct cyan-blue edge glow; violet remains for listening/processing, pink for speaking and red for errors, so connection is not visually represented as active listening.
 
 
