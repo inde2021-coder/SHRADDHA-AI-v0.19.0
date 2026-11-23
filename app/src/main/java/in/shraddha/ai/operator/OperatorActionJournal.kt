@@ -58,7 +58,7 @@ class OperatorActionJournal(context: Context) {
 
     fun get(workflowId: String): OperatorActionJournalEntry? = getResult(workflowId).getOrNull()
 
-    private fun getResult(workflowId: String): Result<OperatorActionJournalEntry?> = runCatching {
+    fun getResult(workflowId: String): Result<OperatorActionJournalEntry?> = runCatching {
         val raw = encrypted.get(key(workflowId)).getOrThrow()
         if (raw.isBlank()) return@runCatching null
         val json = JSONObject(raw)
