@@ -30,7 +30,8 @@ fun ListeningEdgeGlow(modifier: Modifier = Modifier) {
         val glowColor = when (state) {
             NovaOrbState.SPEAKING -> Color(0xFFFF6FAE) // Pink
             NovaOrbState.ERROR -> Color(0xFFFF7A85) // Red
-            else -> Color(0xFF8B5CF6) // Violet resting/listening
+            NovaOrbState.CONNECTING -> Color(0xFF38A9D6) // Cyan-blue: connecting, not listening yet
+            else -> Color(0xFF8B5CF6) // Violet listening/processing
         }
 
         Canvas(modifier = modifier.fillMaxSize()) {
