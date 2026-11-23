@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- EncryptedFeatureStore now zeroes decoded IV/ciphertext buffers in a `finally` block even when Keystore lookup, AES-GCM authentication or decryption fails; plaintext continues to be wiped after conversion. This is source hardening, not a substitute for device-side memory/security testing.
+
+
 - Voice action write-ahead journal now propagates encrypted-store read/parse errors internally; starting a new call/message/download action is denied when the prior journal cannot be read, and finish/manual-verify operations fail closed. This prevents a storage/Keystore error from overwriting an unresolved in-flight action.
 
 
