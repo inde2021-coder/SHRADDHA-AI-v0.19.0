@@ -82,6 +82,7 @@ class ShraddhaDeviceLinkDock(QDockWidget):
             QMessageBox.warning(self, "Shraddha Device Link", str(exc))
             return
         env = QProcessEnvironment.systemEnvironment()
+        env.remove("SHRADDHA_PAIRING_CODE")
         for key in list(env.keys()):
             upper = key.upper()
             if any(marker in upper for marker in ("API_KEY", "TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH", "ACCOUNT_SID", "PRIVATE_KEY")):
