@@ -81,6 +81,7 @@ object ApiKeyStore {
     fun saveKey(context: Context, key: String) {
         val prefs = getPrefs(context)
         val trimmed = key.trim()
+        require(trimmed.length <= 512) { "GEMINI API key is too long." }
         if (trimmed.isEmpty()) {
             check(prefs.edit().remove(ENCRYPTED_KEY).remove(IV_KEY).remove(LEGACY_KEY).commit()) {
                 "Could not remove the stored GEMINI API key."
