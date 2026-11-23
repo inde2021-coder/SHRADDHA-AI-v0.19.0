@@ -79,11 +79,19 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
             OutlinedTextField(value = current, onValueChange = { current = it.take(20) }, label = { Text("Current (A)") }, modifier = Modifier.fillMaxWidth())
             NovaButton(text = "CALCULATE V / I / R / POWER", onClick = {
                 val v=voltage.toDoubleOrNull(); val r=resistance.toDoubleOrNull(); val i=current.toDoubleOrNull()
-                val lines=mutableListOf<String>()
-                if(v!=null && v>=0 && r!=null && r>0) { lines += "Current from V/R = ${fmt.format(v/r)} A"; lines += "Power from V²/R = ${fmt.format(v*v/r)} W" }
-                if(v!=null && v>=0 && i!=null && i>=0) { lines += "Resistance from V/I = ${if(i>0) fmt.format(v/i)+" Ω" else "undefined at 0 A"}"; lines += "Power from V×I = ${fmt.format(v*i)} W" }
-                if(i!=null && i>=0 && r!=null && r>0) lines += "Voltage from I×R = ${fmt.format(i*r)} V"
-                result = lines.joinToString("\n").ifBlank { "Enter valid non-negative values; resistance must be greater than zero." }
+                val calculated = EngineeringCalculations.ohmsLaw(v, r, i)
+                result = if (calculated == null) {
+                    "Enter finite, non-negative values; resistance must be greater than zero and calculations must remain in range."
+                } else {
+                    buildList {
+                        calculated.currentFromVoltageAndResistance?.let { add("Current from V/R = ${fmt.format(it)} A") }
+                        calculated.powerFromVoltageAndResistance?.let { add("Power from V²/R = ${fmt.format(it)} W") }
+                        if (v != null && i != null && i == 0.0) add("Resistance from V/I = undefined at 0 A")
+                        else calculated.resistanceFromVoltageAndCurrent?.let { add("Resistance from V/I = ${fmt.format(it)} Ω") }
+                        calculated.powerFromVoltageAndCurrent?.let { add("Power from V×I = ${fmt.format(it)} W") }
+                        calculated.voltageFromCurrentAndResistance?.let { add("Voltage from I×R = ${fmt.format(it)} V") }
+                    }.joinToString("\n").ifBlank { "Enter at least two values to calculate." }
+                }
             }, modifier = Modifier.fillMaxWidth())
         }
         NovaGlassCard {
@@ -93,10 +101,10 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
             OutlinedTextField(value = ledCurrent, onValueChange = { ledCurrent=it.take(20) }, label = { Text("Target current (mA)") }, modifier = Modifier.fillMaxWidth())
             NovaButton(text = "CALCULATE LED RESISTOR", onClick = {
                 val vs=ledSupply.toDoubleOrNull(); val vf=ledForward.toDoubleOrNull(); val ma=ledCurrent.toDoubleOrNull()
-                result = if(vs!=null && vf!=null && ma!=null && vs>vf && vf>=0 && ma>0 && ma<=1000) {
-                    val ohms=(vs-vf)/(ma/1000.0); val watts=(vs-vf)*(ma/1000.0)
-                    "Required resistance: ${fmt.format(ohms)} Ω\nMinimum resistor dissipation: ${fmt.format(watts)} W\nChoose the next higher standard resistance and a suitably derated power rating."
-                } else "Supply must exceed LED forward voltage; current must be between 0 and 1000 mA."
+                val calculation = if (vs != null && vf != null && ma != null) EngineeringCalculations.ledSeriesResistor(vs, vf, ma) else null
+                result = if (calculation != null) {
+                    "Required resistance: ${fmt.format(calculation.resistanceOhms)} Ω\nMinimum resistor dissipation: ${fmt.format(calculation.resistorPowerWatts)} W\nChoose the next higher standard resistance and a suitably derated power rating."
+                } else "Supply must exceed LED forward voltage; current must be between 0 and 1000 mA, and all values must be finite."
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
         }
         NovaGlassCard {
@@ -106,10 +114,10 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
             OutlinedTextField(value = bottomResistor, onValueChange = { bottomResistor=it.take(20) }, label = { Text("Bottom resistor (Ω)") }, modifier = Modifier.fillMaxWidth())
             NovaButton(text = "CALCULATE DIVIDER", onClick = {
                 val vin=dividerSupply.toDoubleOrNull(); val r1=topResistor.toDoubleOrNull(); val r2=bottomResistor.toDoubleOrNull()
-                result = if(vin!=null && r1!=null && r2!=null && vin>=0 && r1>0 && r2>0) {
-                    val vout=vin*r2/(r1+r2); val total=r1+r2
-                    "Unloaded output: ${fmt.format(vout)} V\nDivider current: ${fmt.format(vin/total)} A\nTotal resistance: ${fmt.format(total)} Ω\nLoaded output will be lower; include load impedance in a real design."
-                } else "Enter a non-negative input voltage and positive resistor values."
+                val calculation = if (vin != null && r1 != null && r2 != null) EngineeringCalculations.voltageDivider(vin, r1, r2) else null
+                result = if (calculation != null) {
+                    "Unloaded output: ${fmt.format(calculation.outputVolts)} V\nDivider current: ${fmt.format(calculation.currentAmps)} A\nTotal resistance: ${fmt.format(calculation.totalResistanceOhms)} Ω\nLoaded output will be lower; include load impedance in a real design."
+                } else "Enter finite input voltage and positive resistor values; totals must remain in numeric range."
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
         }
         NovaGlassCard {
