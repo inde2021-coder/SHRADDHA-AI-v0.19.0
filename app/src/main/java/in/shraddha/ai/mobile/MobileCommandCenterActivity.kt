@@ -141,6 +141,9 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
+        intent.getStringExtra("mobile_control_command")?.takeIf { it.isNotBlank() }?.let { pending ->
+            command.post { runCommand(pending) }
+        }
     }
 
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
