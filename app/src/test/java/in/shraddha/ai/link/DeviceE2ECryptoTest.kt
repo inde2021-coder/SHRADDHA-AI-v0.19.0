@@ -16,6 +16,19 @@ class DeviceE2ECryptoTest {
         assertEquals(androidFingerprint, windowsFingerprint)
     }
 
+    @Test fun peerKeyAndFingerprintAreBoundToTheSameSession() {
+        val alice = DeviceE2ECrypto.create()
+        val bob = DeviceE2ECrypto.create()
+        val (sessionOneKey, sessionOneFingerprint) =
+            alice.derivePeerKey(bob.publicKeyBase64(), "session-one-123456", "alice", "bob")
+        val (sessionTwoKey, sessionTwoFingerprint) =
+            alice.derivePeerKey(bob.publicKeyBase64(), "session-two-123456", "alice", "bob")
+        assertNotEquals(sessionOneKey.toList(), sessionTwoKey.toList())
+        assertNotEquals(sessionOneFingerprint, sessionTwoFingerprint)
+        sessionOneKey.fill(0)
+        sessionTwoKey.fill(0)
+    }
+
     @Test fun aesGcmAuthenticatesPayloadAndAssociatedData() {
         val alice = DeviceE2ECrypto.create()
         val bob = DeviceE2ECrypto.create()
