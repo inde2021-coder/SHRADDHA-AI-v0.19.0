@@ -53,7 +53,7 @@ test('Firestore queue is idempotent and scoped to the authenticated user', async
   const again = await scheduler.schedule('firebaseUser123', valid('2026-11-23T07:00:00.000Z'));
   assert.equal(first.idempotent, false);
   assert.equal(again.idempotent, true);
-  await assert.rejects(() => scheduler.schedule('otherFirebaseUser456', valid('2026-11-23T07:00:00.000Z')), /different scheduled post|already used/);
+  await assert.rejects(() => scheduler.schedule('firebaseUser123', { ...valid('2026-11-23T07:00:00.000Z'), text: 'Different post', preview: 'Different post' }), /different scheduled post/);
 });
 
 test('only pending jobs can be cancelled and due jobs publish once', async () => {
