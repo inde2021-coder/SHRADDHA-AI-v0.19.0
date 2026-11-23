@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Work Agent's chat/browser surface now uses the configured assistant name in its header, message bubbles and browser accessibility description; its controls and text fields use the same raised-cyan/inset-teal glass treatment as the other native work screens.
+
+
 - Phone Agent native screen now follows the configured assistant name and shared dark-teal/cyan visual language, with raised rounded action controls and inset glass call-history panels.
 
 
