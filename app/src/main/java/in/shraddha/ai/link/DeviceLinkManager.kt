@@ -314,7 +314,6 @@ object DeviceLinkManager {
                 val sequenceKey = envelope.sourceDeviceId + ":" + envelope.frameType
                 val jpeg = try {
                     val aad = DeviceE2ECrypto.visualFrameAad(localSession, envelope.sourceDeviceId, localDevice, envelope.frameType, envelope.sequence)
-                        .toByteArray(Charsets.UTF_8)
                     synchronized(receivedVisualFrameLock) {
                         if (envelope.sequence <= (receivedVisualFrameSequence[sequenceKey] ?: 0L)) return
                         val plain = DeviceE2ECrypto.decrypt(
