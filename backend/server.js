@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder } from './provider-routing.js';
@@ -1234,14 +1234,27 @@ wss.on('connection', (ws, ctx) => {
       if (raw.length !== expected) return;
       send(targetId, JSON.stringify({ type: 'file_transfer_chunk', fromDeviceId: deviceId, transferId, index, payload: encoded }));
     } else if (msg.type === 'file_transfer_resume') {
+      // Receiver owns the durable received-chunk bitmap. The relay's in-memory
+      // acknowledgement map is only a fast-path and may be lost on restart.
       const sourceId = String(msg.targetDeviceId || '');
       const source = session.devices.get(sourceId);
       const transferId = String(msg.transferId || '');
       const transfer = device.incomingTransfers?.get(transferId);
-      if (!source || sourceId === deviceId || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now()) return;
-      const missing = [];
-      for (let i = 0; i < transfer.chunkCount && missing.length < 2200; i++) if (!transfer.chunks.has(i)) missing.push(i);
-      send(sourceId, JSON.stringify({ type: 'file_transfer_resume', fromDeviceId: deviceId, transferId, missingIndexes: missing }));
+      const chunkCount = Number(msg.chunkCount || transfer?.chunkCount);
+      const requestedMissing = msg.missingIndexes;
+      if (!source || sourceId === deviceId || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
+          !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200) return;
+      if (transfer && (transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() || transfer.chunkCount !== chunkCount)) return;
+      let missing;
+      if (requestedMissing !== undefined) {
+        if (!validMissingTransferIndexes(requestedMissing, chunkCount)) return;
+        missing = requestedMissing;
+      } else {
+        if (!transfer) return;
+        missing = [];
+        for (let i = 0; i < transfer.chunkCount && missing.length < 2200; i++) if (!transfer.chunks.has(i)) missing.push(i);
+      }
+      send(sourceId, JSON.stringify({ type: 'file_transfer_resume', fromDeviceId: deviceId, transferId, chunkCount, missingIndexes: missing }));
     } else if (msg.type === 'file_transfer_ack') {
       const targetId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(targetId);
