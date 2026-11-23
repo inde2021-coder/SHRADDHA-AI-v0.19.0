@@ -72,8 +72,13 @@ object VoiceSessionManager {
     private var reconnectJob: Job? = null
     private var silenceWatchdogJob: Job? = null
     private var isTurnActive = false
+    @Volatile private var bargeInSpeechChunks = 0
+    @Volatile private var bargeInOpen = false
     private val pendingAssistantText = StringBuilder()
     private val pendingTextLock = Any()
+
+    private const val BARGE_IN_RMS_THRESHOLD = 0.105f
+    private const val BARGE_IN_REQUIRED_CHUNKS = 4
 
     fun isCurrentSession(epoch: Long): Boolean = sessionEpoch.get() == epoch
     fun isActiveNow(): Boolean = _isActive.value
@@ -107,14 +112,27 @@ object VoiceSessionManager {
 
         audioIO = LiveAudioIO(
             onMicChunk = { bytes ->
-                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value &&
+                    (!EchoGuard.isMicMuted() || bargeInOpen)) {
                     client?.sendAudio(bytes)
                 }
             },
             onMicAmplitude = { amp ->
-                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value && !EchoGuard.isMicMuted()) {
+                if (_isActive.value && audioEpoch.get() == currentAudioEpoch && !_muted.value) {
                     _amplitude.value = amp
                     _vadActive.value = amp > 0.05f
+                    if (EchoGuard.isMicMuted()) {
+                        // AEC/NS/AGC are enabled by LiveAudioIO. Require sustained foreground
+                        // speech energy before opening the mic during assistant playback.
+                        bargeInSpeechChunks = if (amp >= BARGE_IN_RMS_THRESHOLD) bargeInSpeechChunks + 1 else 0
+                        if (bargeInSpeechChunks >= BARGE_IN_REQUIRED_CHUNKS) {
+                            bargeInOpen = true
+                            client?.let { /* Gemini server VAD handles the interruption turn. */ }
+                        }
+                    } else {
+                        bargeInSpeechChunks = 0
+                        bargeInOpen = false
+                    }
                 }
             },
             onRecordingError = { message ->
@@ -219,6 +237,8 @@ object VoiceSessionManager {
 
                 if (!isTurnActive) {
                     isTurnActive = true
+                    bargeInSpeechChunks = 0
+                    bargeInOpen = false
                     EchoGuard.notifyPlaybackStarted()
                 }
 
@@ -370,6 +390,8 @@ object VoiceSessionManager {
                     isTurnActive = false
                     EchoGuard.notifyPlaybackStopped()
                 }
+                bargeInSpeechChunks = 0
+                bargeInOpen = false
                 synchronized(pendingTextLock) { pendingAssistantText.clear() }
                 audioIO?.flushPlayback()
                 _state.value = NovaOrbState.LISTENING
