@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Operator restart-recovery console now distinguishes an unreadable encrypted action journal and an unavailable Main Brain scheduler vault from an empty recovery list; it refuses to offer resume/replay when the recovery evidence cannot be opened.
+
+
 - Task Planner's create/edit dialogs and daily-briefing/research switches now use matching inset teal fields and cyan/teal switch colors, completing the native module's primary form controls.
 
 
