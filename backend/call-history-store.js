@@ -30,6 +30,7 @@ export async function persistEncryptedCallRecord(collection, record, key, now = 
   const expiresAt = new Date(now + CALL_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
   await collection.doc(documentId(record.id)).set({
     version: 1,
+    recordId: record.id,
     envelope,
     startedAt,
     expiresAt,
