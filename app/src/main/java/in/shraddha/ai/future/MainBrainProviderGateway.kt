@@ -106,9 +106,25 @@ object MainBrainProviderGateway {
         if (provider !in supportedProviders) return ChatReplyResult.Error("Unsupported AI provider: $provider")
         if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
         val boundedHistory = history.takeLast(40).map { it.copy(text = it.text.take(8_000)) }
+        // Hybrid routing: use the authenticated HTTPS agent when this provider is configured there.
+        // A failed configured cloud route is surfaced; it is not silently retried against a
+        // different provider or billed to a second local API key.
+        val historyPrompt = boundedHistory.joinToString("\n\n") { turn ->
+            (if (turn.isUser) "User: " else "Assistant: ") + turn.text
+        }.take(12_000)
+        val cloud = runCatching {
+            VoiceGatewaySettings.executeAgent(context, provider, "Main Brain", systemInstruction.take(8_000), historyPrompt)
+        }.getOrElse { return ChatReplyResult.Error("Cloud " + provider + " agent failed: " + (it.message ?: "network error")) }
+        if (cloud != null) {
+            val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
+                runCatching { com.Lia.assistant.voice.ProviderTokenUsage(provider, cloud.model, cloud.inputTokens, cloud.outputTokens) }.getOrNull()
+            } else null
+            return ChatReplyResult.Success(cloud.text, usage)
+        }
+        // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
         return if (provider == "GEMINI") {
             val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
-                return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: ${it.message}")
+                return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
             }
             if (key.isBlank()) ChatReplyResult.Error("GEMINI API key is missing.")
             else GeminiTextClient.reply(key, systemInstruction.take(8_000), boundedHistory)
