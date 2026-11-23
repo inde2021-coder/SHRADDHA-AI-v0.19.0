@@ -46,10 +46,12 @@ object VoiceGatewaySettings {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, keyForEncryption())
             val encrypted = cipher.doFinal(clear)
+            val iv = cipher.iv
             try {
-                return Base64.encodeToString(encrypted, Base64.NO_WRAP) to Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
+                return Base64.encodeToString(encrypted, Base64.NO_WRAP) to Base64.encodeToString(iv, Base64.NO_WRAP)
             } finally {
                 encrypted.fill(0)
+                iv.fill(0)
             }
         } finally {
             clear.fill(0)
