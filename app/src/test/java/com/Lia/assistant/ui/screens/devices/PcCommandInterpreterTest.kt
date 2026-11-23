@@ -1,0 +1,34 @@
+package com.Lia.assistant.ui.screens.devices
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class PcCommandInterpreterTest {
+    @Test fun parsesEnglishAndHindiDesktopCommands() {
+        assertEquals("home", PcCommandInterpreter.parse("desktop").getOrThrow().getString("kind"))
+        assertEquals("home", PcCommandInterpreter.parse("डेस्कटॉप दिखाओ").getOrThrow().getString("kind"))
+        assertEquals("back", PcCommandInterpreter.parse("वापस जाओ").getOrThrow().getString("kind"))
+    }
+
+    @Test fun parsesOpenTypeScrollAndHardwareCommands() {
+        assertEquals("Notepad", PcCommandInterpreter.parse("Open Notepad").getOrThrow().getString("appName"))
+        assertEquals("नमस्ते", PcCommandInterpreter.parse("लिखो नमस्ते").getOrThrow().getString("text"))
+        assertEquals(-5, PcCommandInterpreter.parse("scroll down").getOrThrow().getInt("amount"))
+        assertEquals(40, PcCommandInterpreter.parse("volume 40").getOrThrow().getInt("percent"))
+        assertEquals("hardware_status", PcCommandInterpreter.parse("PC status").getOrThrow().getString("kind"))
+    }
+
+    @Test fun rejectsUnknownAndSensitiveCommands() {
+        assertFalse(PcCommandInterpreter.parse("do anything").isSuccess)
+        assertFalse(PcCommandInterpreter.parse("type my password 123").isSuccess)
+        assertFalse(PcCommandInterpreter.parse("volume 140").isSuccess)
+    }
+
+    @Test fun onlyProducesProtocolAllowlistedActions() {
+        val kinds = listOf("home", "back", "scroll up", "open Calculator", "type hello", "volume 20")
+            .map { PcCommandInterpreter.parse(it).getOrThrow().getString("kind") }
+        assertTrue(kinds.all { it in setOf("home", "back", "scroll", "open_app", "type", "set_volume") })
+    }
+}
