@@ -46,10 +46,21 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
     var topResistor by remember { mutableStateOf("10000") }
     var bottomResistor by remember { mutableStateOf("10000") }
     var result by remember { mutableStateOf("Enter values to calculate. Results are estimates, not certified designs.") }
+    var projectName by remember { mutableStateOf("LED Series Circuit") }
+    var seriesLedCount by remember { mutableStateOf("1") }
+    var netlist by remember { mutableStateOf("") }
+    var pendingNetlist by remember { mutableStateOf("") }
     var exportText by remember { mutableStateOf("") }
     var showExportDialog by remember { mutableStateOf(false) }
     val fmt = remember { DecimalFormat("0.####") }
     val context = LocalContext.current
+    val netlistLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) runCatching {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(pendingNetlist) }
+                ?: error("Could not open netlist export destination.")
+        }.onSuccess { result = "SPICE netlist exported. Run it with an external SPICE simulator after reviewing the generic diode model." }
+            .onFailure { result = it.localizedMessage ?: "Netlist export failed." }
+    }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(exportText) }
@@ -100,6 +111,33 @@ fun EngineeringWorkbenchScreen(navController: NavController) {
                     "Unloaded output: ${fmt.format(vout)} V\nDivider current: ${fmt.format(vin/total)} A\nTotal resistance: ${fmt.format(total)} Ω\nLoaded output will be lower; include load impedance in a real design."
                 } else "Enter a non-negative input voltage and positive resistor values."
             }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+        }
+        NovaGlassCard {
+            Text("CIRCUIT PROJECT • SPICE NETLIST", color = colors.accent)
+            OutlinedTextField(value = projectName, onValueChange = { projectName = it.take(80) }, label = { Text("Project name") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = seriesLedCount, onValueChange = { seriesLedCount = it.filter(Char::isDigit).take(2) }, label = { Text("Series LED count (1–10)") }, modifier = Modifier.fillMaxWidth())
+            NovaButton(text = "GENERATE SPICE NETLIST", onClick = {
+                val vs=ledSupply.toDoubleOrNull(); val vf=ledForward.toDoubleOrNull(); val ma=ledCurrent.toDoubleOrNull(); val count=seriesLedCount.toIntOrNull()
+                if (vs==null || vf==null || ma==null || count==null || count !in 1..10 || vf<0 || ma<=0 || vs<=count*vf) {
+                    result = "Cannot generate: supply must exceed total LED forward voltage and current/count must be valid."
+                } else {
+                    val r=(vs-count*vf)/(ma/1000.0)
+                    val lines=mutableListOf("* ${projectName.replace(Regex("[^A-Za-z0-9 _-]"), "").take(60)}")
+                    lines += "V1 VCC 0 DC $vs"
+                    lines += "R1 VCC N1 ${fmt.format(r)}"
+                    for (index in 1..count) lines += "D$index N$index ${if(index==count) "0" else "N${index+1}"} DLED"
+                    lines += ".model DLED D(Is=1e-14 N=2)"
+                    lines += ".op"
+                    lines += ".end"
+                    netlist = lines.joinToString("\n")
+                    pendingNetlist = netlist
+                    result = "Netlist generated for $count series LED(s). Calculated resistor: ${fmt.format(r)} Ω. Generic diode model is illustrative."
+                }
+            }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+            if (netlist.isNotBlank()) {
+                Text(netlist, color = colors.textSecondary)
+                NovaButton(text = "EXPORT .CIR NETLIST", onClick = { netlistLauncher.launch(projectName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "circuit" } + ".cir") }, modifier = Modifier.fillMaxWidth())
+            }
         }
         NovaGlassCard {
             Text("CALCULATION RESULT", color = colors.accent)
