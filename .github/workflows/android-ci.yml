@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   android:
-    name: Android unit tests, APK build and emulator smoke test
+    name: Android unit tests and APK/AAB build
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
