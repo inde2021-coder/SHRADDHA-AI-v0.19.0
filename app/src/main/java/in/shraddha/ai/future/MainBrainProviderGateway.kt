@@ -118,7 +118,7 @@ object MainBrainProviderGateway {
     }
 
     fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
-        VoiceGatewaySettings.executeAgent(context, providerName, "Assistant", systemInstruction, prompt)?.let { return it }
+        VoiceGatewaySettings.executeAgent(context, providerName, "Assistant", systemInstruction, prompt)?.let { return it.text }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text
             is ChatReplyResult.Error -> error("$providerName provider error: ${result.message}")
@@ -132,8 +132,14 @@ object MainBrainProviderGateway {
         systemInstruction: String,
         prompt: String
     ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
-        VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let {
-            return it to null // Gateway /api/chat does not expose token usage; never estimate it.
+        VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
+            val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
+                com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
+            } else {
+                CouncilCostBudget.stopIfUsageUnknown(context, providerName, cloud.model)
+                null
+            }
+            return cloud.text to usage
         }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text to result.tokenUsage
