@@ -12,6 +12,8 @@ on:
     paths:
       - "app/**"
       - "pc_companion/**"
+      - "backend/**"
+      - "render.yaml"
       - ".github/workflows/android-ci.yml"
       - ".github/workflows/pc-hardware-agent-ci.yml"
   workflow_dispatch:
@@ -113,6 +115,18 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm test
+      - name: Build and smoke-test the production relay container
+        run: |
+          docker build -f backend/Dockerfile -t shraddha-relay-ci:latest backend
+          docker run -d --rm --name shraddha-relay-ci -p 8787:8787 shraddha-relay-ci:latest
+          cleanup() { docker stop shraddha-relay-ci >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs shraddha-relay-ci
+          exit 1
 
   firebase-rules-tests:
     name: Firebase Firestore, Storage and RTDB rules tests
