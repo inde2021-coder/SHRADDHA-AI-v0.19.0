@@ -178,8 +178,13 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 "CLICK", "TAP" -> if (match != null && match.score >= .50f) ShraddhaAccessibilityService.clickByResourceId(match.element.id).let { clicked -> clicked || ShraddhaAccessibilityService.clickVisibleText(match.element.text.ifBlank { match.element.description }) } else false
                 "TYPE" -> {
                     val value = resolvedInput
-                    if (match != null && match.element.id.isNotBlank()) ShraddhaAccessibilityService.fillByResourceId(match.element.id, value)
-                    else ShraddhaAccessibilityService.fillFocusedField(value)
+                    // Never fall back to whichever field happens to have focus.
+                    // A workflow must identify one trained, visible, non-sensitive field.
+                    if (match != null && match.score >= .50f && match.element.id.isNotBlank()) {
+                        ShraddhaAccessibilityService.fillByResourceId(match.element.id, value)
+                    } else {
+                        false
+                    }
                 }
                 "BACK" -> ShraddhaAccessibilityService.goBack()
                 "SCROLL" -> ShraddhaAccessibilityService.scrollForward()
@@ -199,6 +204,11 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             val after: ScreenSnapshot = ShraddhaAccessibilityService.captureVisibleScreen() ?: run {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
                 return fail("कार्रवाई के बाद स्क्रीन सत्यापित नहीं हो सकी।")
+            }
+            if (after.packageName != profile.packageName &&
+                after.packageName !in setOf("com.google.android.documentsui", "com.google.android.providers.media.module", "com.android.documentsui")) {
+                checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
+                return fail("कार्रवाई के बाद foreground ऐप बदल गया। सुरक्षा के लिए workflow रोक दिया गया।")
             }
             if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
