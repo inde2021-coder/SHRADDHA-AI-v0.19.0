@@ -41,7 +41,7 @@ object PluginActionPolicy {
         val capabilities = (0 until capabilitiesJson.length()).map { capabilitiesJson.getString(it) }.toSet()
         val action = response.optJSONObject("action") ?: error("Authorized action is missing.")
         val type = action.optString("type")
-        require(type == "create_note" || type == "show_notification") { "Plugin action is not allowlisted." }
+        require(type in setOf("create_note", "show_notification", "copy_text", "open_https_url")) { "Plugin action is not allowlisted." }
         val title = action.optString("title")
         val body = action.optString("body")
         val url = action.optString("url").takeIf { it.isNotBlank() }
