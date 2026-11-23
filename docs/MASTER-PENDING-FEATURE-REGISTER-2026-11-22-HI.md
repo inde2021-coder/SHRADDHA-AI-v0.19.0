@@ -16,6 +16,9 @@ This register consolidates the user's earlier feature requests and the current s
 
 ## Provider compatibility audit (23 November 2026)
 
+- Gemini, Voice Gateway and Device Link credential writers now also zero their AES-GCM IV arrays after the encoded IV is durably persisted, completing cleanup of their short-lived encryption buffers.
+
+
 - Main Brain scheduler initialization and its persistence-fault check now run under one synchronized critical section, closing a race where a concurrent caller could obtain the scheduler while another thread was latching a storage failure.
 
 
