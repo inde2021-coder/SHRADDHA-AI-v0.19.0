@@ -85,7 +85,7 @@ def build_launch_spec(app_dir: str | Path, relay_url: str, pairing_code: str = "
             )
         args.insert(0, str(target))
     inherited = dict(os.environ if environ is None else environ)
-    sensitive_markers = ("API_KEY", "TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH", "ACCOUNT_SID", "PRIVATE_KEY")
+    sensitive_markers = ("API_KEY", "_KEY", "TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH", "ACCOUNT_SID", "PRIVATE", "SERVICE_ACCOUNT", "ACCESS_KEY")
     child_env = {key: value for key, value in inherited.items()
                  if not any(marker in key.upper() for marker in sensitive_markers)}
     if code:
