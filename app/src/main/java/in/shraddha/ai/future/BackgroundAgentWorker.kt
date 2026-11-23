@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 
 /** WorkManager adapter for the shared Main Brain scheduler and provider council. */
 class BackgroundAgentWorker(
@@ -28,6 +29,9 @@ class BackgroundAgentWorker(
         val attempt = runAttemptCount.coerceIn(0, 99)
         val usageLock = Any()
         val usageCounts = linkedMapOf<String, Int>()
+        val tokenUsageRecords = java.util.Collections.synchronizedList(
+            mutableListOf<com.Lia.assistant.voice.ProviderTokenUsage>()
+        )
 
         // WorkManager may restart this provider-reasoning task after process death.
         // Previous stage evidence is retained encrypted; retries are a new attempt and
@@ -172,6 +176,9 @@ class BackgroundAgentWorker(
                                 elapsedMs = elapsed
                             ).getOrThrow()
                         }
+                    },
+                    onTokenUsage = { usage ->
+                        tokenUsageRecords.add(usage)
                     }
                 )
             }
@@ -210,7 +217,15 @@ class BackgroundAgentWorker(
                     "Planner, Researcher, Specialists, Critic and Verifier finished. Final answer saved.",
                     finalAnswer = report.finalAnswer,
                     attempt = attempt,
-                    providerUsage = report.providerUsage.joinToString(",") { "${it.provider}:${it.calls}" },
+                    providerUsage = JSONObject()
+                        .put("calls", report.providerUsage.joinToString(",") { "${it.provider}:${it.calls}" })
+                        .put("tokens", JSONArray(tokenUsageRecords.map { usage ->
+                            JSONObject()
+                                .put("provider", usage.provider)
+                                .put("model", usage.model)
+                                .put("inputTokens", usage.inputTokens)
+                                .put("outputTokens", usage.outputTokens)
+                        })).toString(),
                     elapsedMs = report.elapsedMs
                 )
                 if (saved.isFailure) {
