@@ -60,10 +60,37 @@ class BackgroundAgentWorker(
             return Result.failure(workDataOf(BackgroundTaskQueue.KEY_ERROR to message))
         }
 
+        val resumableRoles = buildSet {
+            add("Planner")
+            add("Researcher")
+            repeat(specialistCount.coerceIn(1, 5)) { add("Specialist ${it + 1}") }
+            add("Critic")
+            add("Verifier")
+        }
+        val resumeStages = evidence.readTask(schedulerTaskId).getOrThrow()
+            .filter { record ->
+                record.optInt("schemaVersion") == 1 &&
+                    record.optString("status") == "COMPLETED" &&
+                    record.optString("goal") == goal &&
+                    record.optString("role") in resumableRoles &&
+                    record.optInt("attempt", -1) <= attempt
+            }
+            .groupBy { it.optString("role") }
+            .mapNotNull { (role, records) ->
+                val latest = records.maxWithOrNull(
+                    compareBy<JSONObject> { it.optInt("attempt", -1) }
+                        .thenBy { it.optLong("completedAt", 0L) }
+                ) ?: return@mapNotNull null
+                val savedProvider = latest.optString("provider").uppercase()
+                val savedOutput = latest.optString("output")
+                if (savedProvider.isBlank() || savedOutput.isBlank()) null
+                else role to CouncilSavedStage(savedProvider, savedOutput)
+            }.toMap()
+
         evidence.saveStatus(
             schedulerTaskId,
             "RUNNING",
-            "Attempt ${attempt + 1}: provider council started. Completed stages are saved separately.",
+            "Attempt ${attempt + 1}: provider council started. Reusing ${resumeStages.size} securely saved, provider-matched stages.",
             attempt = attempt,
             providerUsage = "",
             elapsedMs = 0L
@@ -109,6 +136,7 @@ class BackgroundAgentWorker(
                         attempt = attempt
                     ).getOrThrow()
                 },
+                    resumeStages = resumeStages,
                     budget = budget,
                     onProviderCall = { providerName, providerCalls, totalCalls, elapsed ->
                         synchronized(usageLock) {
