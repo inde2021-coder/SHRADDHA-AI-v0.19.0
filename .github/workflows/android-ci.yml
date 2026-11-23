@@ -144,6 +144,34 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  lia-reference-storyboard:
+    name: Build visual storyboard from main-branch LIA reference video
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Fetch the exact reference recording from main
+        run: |
+          git fetch origin main
+          mkdir -p reference/lia-app-recording
+          git show origin/main:reference/lia-app-recording/LIA-APP-REFERENCE.mov > reference/lia-app-recording/LIA-APP-REFERENCE.mov
+          test -s reference/lia-app-recording/LIA-APP-REFERENCE.mov
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Extract contact sheet
+        run: python3 scripts/create_reference_storyboard.py
+      - name: Upload LIA reference storyboard
+        uses: actions/upload-artifact@v6
+        with:
+          name: lia-reference-video-storyboard
+          path: build/reference-storyboard/
+          if-no-files-found: error
+          retention-days: 14
+
   voice-engine-check:
     name: Custom voice engine source validation
     runs-on: ubuntu-24.04
