@@ -490,7 +490,7 @@ class WorkAgentActivity : AppCompatActivity() {
                 runCatching {
                     val request = DownloadManager.Request(uri)
                         .setTitle(fileName)
-                        .setDescription("Shraddha AI • ${uri.host}")
+                        .setDescription("$assistantName • ${uri.host}")
                         .setMimeType(mimeType)
                         .addRequestHeader("User-Agent", userAgent)
                         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -636,7 +636,7 @@ class WorkAgentActivity : AppCompatActivity() {
         input.setText("")
         addMessage("user", prompt)
         val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").uppercase()
-        val name = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, "Shraddha AI")
+        val name = NovaPreferences.getString(this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME)
         val language = NovaPreferences.getString(this, NovaPreferences.Keys.LANGUAGE, "AUTO")
         val system = """
             You are $name, a careful mobile AI work agent. Respond in the user's language ($language).
