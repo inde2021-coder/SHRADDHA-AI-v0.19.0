@@ -120,6 +120,35 @@ class FirebaseCloudVault(private val context: Context) {
         }
     }
 
+    /**
+     * Deletes one user-owned encrypted memory record from both Firebase mirrors.
+     * RTDB is removed first because Firestore is authoritative during restore; if Firestore
+     * deletion fails, its still-present record remains the authoritative copy.
+     */
+    fun signInAndDelete(email: String, password: String, key: String): Result<Boolean> = runCatching {
+        require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "Valid email address required" }
+        require(password.length >= 8) { "Password must contain at least 8 characters" }
+        runBlocking {
+            val app = initialize()
+            val user = FirebaseAuth.getInstance(app).signInWithEmailAndPassword(normalizedEmail, password).await().user
+                ?: error("Sign-in failed")
+            val firestoreRef = FirebaseFirestore.getInstance(app)
+                .collection("users").document(user.uid).collection("vault").document(key)
+            val firestoreRecord = firestoreRef.get().await()
+            val realtimeRef = if (BuildConfig.FIREBASE_DATABASE_URL.isNotBlank()) {
+                FirebaseDatabase.getInstance(app, BuildConfig.FIREBASE_DATABASE_URL)
+                    .reference.child("users").child(user.uid).child("vault").child(key)
+            } else null
+            val realtimeRecord = realtimeRef?.get()?.await()
+            val existed = firestoreRecord.exists() || realtimeRecord?.exists() == true
+            if (realtimeRecord?.exists() == true) realtimeRef.removeValue().await()
+            if (firestoreRecord.exists()) firestoreRef.delete().await()
+            existed
+        }
+    }
+
     fun signInAndLoad(email: String, password: String, key: String): Result<String?> = runCatching {
         require(key.matches(Regex("[a-zA-Z0-9_-]{1,64}")))
         val normalizedEmail = email.trim()
