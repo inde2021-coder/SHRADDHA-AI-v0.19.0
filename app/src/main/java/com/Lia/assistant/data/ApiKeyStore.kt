@@ -50,7 +50,7 @@ object ApiKeyStore {
         val ciphertext = prefs.getString(ENCRYPTED_KEY, null)
         val ivText = prefs.getString(IV_KEY, null)
 
-        if (ciphertext.isNullOrBlank() || ivText.isNullOrBlank()) {
+        if (ciphertext.isNullOrBlank() && ivText.isNullOrBlank()) {
             // Migrate old plaintext values once; never leave the old preference behind.
             val legacy = prefs.getString(LEGACY_KEY, "").orEmpty().trim()
             if (legacy.isNotEmpty()) {
@@ -62,6 +62,9 @@ object ApiKeyStore {
         }
 
         return try {
+            require(!ciphertext.isNullOrBlank() && !ivText.isNullOrBlank()) {
+                "Saved GEMINI API-key ciphertext is incomplete; existing data was preserved."
+            }
             val iv = Base64.decode(ivText, Base64.NO_WRAP)
             val encrypted = Base64.decode(ciphertext, Base64.NO_WRAP)
             try {
