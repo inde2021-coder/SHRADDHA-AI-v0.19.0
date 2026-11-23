@@ -47,6 +47,15 @@ android {
     // ABI/configuration splits automatically; a manual ABI split here duplicates
     // resource outputs in buildReleasePreBundle on the current AGP toolchain.
     
+    // Compress native .so libraries inside APKs to reduce sideload download size.
+    // Android extracts these libraries at install time (minSdk 26); AAB delivery remains
+    // device-targeted and is independently measured by the size-audit workflow.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     // Release signing is configured only when CI signing secrets are present.
     signingConfigs {
         create("release") {
