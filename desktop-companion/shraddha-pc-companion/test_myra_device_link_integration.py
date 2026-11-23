@@ -48,6 +48,8 @@ class MyraShraddhaIntegrationTests(unittest.TestCase):
             self.assertEqual(spec["environment"]["SHRADDHA_PAIRING_CODE"], "012345")
             self.assertNotIn("GEMINI_API_KEY", spec["environment"])
             self.assertNotIn("LINKEDIN_ACCESS_TOKEN", spec["environment"])
+            self.assertNotIn("FIREBASE_SERVICE_ACCOUNT_JSON", spec["environment"])
+            self.assertNotIn("AWS_ACCESS_KEY_ID", spec["environment"])
             self.assertIn("--base-url", spec["arguments"])
             self.assertEqual(spec["arguments"][-1], "MYRA Test PC")
             self.assertFalse(spec["uses_saved_pairing"])
