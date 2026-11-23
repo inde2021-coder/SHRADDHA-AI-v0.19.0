@@ -477,7 +477,7 @@ class FirebaseCloudVault(private val context: Context) {
         val salt = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
         val iv = Base64.decode(parts[1], Base64.NO_WRAP or Base64.URL_SAFE)
         val encrypted = Base64.decode(parts[2], Base64.NO_WRAP or Base64.URL_SAFE)
-        try {
+        return try {
             require(salt.size == 16 && iv.size == 12 && encrypted.size >= 16) { "Encrypted backup parameters are invalid." }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, derive(password, salt), GCMParameterSpec(128, iv))
