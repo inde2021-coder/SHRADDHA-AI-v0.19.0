@@ -409,10 +409,16 @@ object ActionExecutor {
                         result.put("recipient", phoneNumber)
                         result.put("message", "Message accepted by the configured provider. Provider status: ${receipt.status}. This is not proof of handset delivery.")
                     }.onFailure { error ->
+                        val failure = error as? ProviderMessageClient.SendFailure
                         result.put("status", "error")
                         result.put("action", "provider_message_failed")
                         result.put("recipient", phoneNumber)
-                        result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. No local fallback was attempted, to avoid accidental duplicate delivery.")
+                        result.put("request_id", requestId)
+                        result.put("retry_request_id", requestId)
+                        result.put("do_not_create_new_request_id", true)
+                        result.put("provider_outcome_unknown", failure == null || failure.duplicate || failure.httpStatus >= 500)
+                        if (failure?.duplicate == true) result.put("duplicate_request", true)
+                        result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. If retrying, reuse this exact request_id; never create a new ID automatically. No local fallback was attempted.")
                     }
                 } else {
                     val sendStatus = if (isWhatsApp) {
@@ -806,8 +812,12 @@ object ActionExecutor {
                                                 .put("provider_status", receipt.status).put("recipient", number)
                                                 .put("message", "WhatsApp message accepted by provider. Handset delivery is not confirmed.")
                                         }.onFailure { error ->
+                                            val failure = error as? ProviderMessageClient.SendFailure
                                             result.put("status", "error").put("action", "provider_message_failed")
-                                                .put("recipient", number).put("message", error.message ?: "Provider send failed.")
+                                                .put("recipient", number).put("request_id", requestId)
+                                                .put("retry_request_id", requestId).put("do_not_create_new_request_id", true)
+                                                .put("provider_outcome_unknown", failure == null || failure.duplicate || failure.httpStatus >= 500)
+                                                .put("message", "${error.message ?: "Provider send failed."} Reuse the same request_id if checking or retrying; do not create a new ID.")
                                         }
                                 } else {
                                     val service = NovaAccessibilityService.instance
