@@ -76,6 +76,14 @@ def click_unique_text(label):
     return "Clicked the unique visible control labelled: " + str(label)[:120]
 
 
+def select_ocr_languages(available):
+    """Select installed English/Hindi Tesseract packs and report missing packs."""
+    installed = {str(item).strip().casefold() for item in available if isinstance(item, str)}
+    requested = ["eng", "hin"]
+    return ([language for language in requested if language in installed],
+            [language for language in requested if language not in installed])
+
+
 def read_active_window_ocr(pyautogui):
     """Read only the active non-sensitive window using local Tesseract Hindi+English OCR."""
     _, title, (left, top, width, height) = _active_window()
@@ -83,15 +91,23 @@ def read_active_window_ocr(pyautogui):
         import pytesseract
     except ImportError as exc:
         raise RuntimeError("Install the optional pytesseract package and the Windows Tesseract OCR engine with Hindi (hin) and English (eng) language data.") from exc
+    try:
+        installed = pytesseract.get_languages(config="")
+    except Exception as exc:
+        raise RuntimeError("Tesseract is not installed or its executable is not on PATH.") from exc
+    selected, missing = select_ocr_languages(installed)
+    if not selected:
+        raise RuntimeError("No supported OCR language data found. Install Tesseract eng and/or hin traineddata.")
     image = pyautogui.screenshot(region=(max(0, left), max(0, top), width, height))
     try:
-        raw = pytesseract.image_to_string(image, lang="eng+hin", config="--psm 6")
+        raw = pytesseract.image_to_string(image, lang="+".join(selected), config="--psm 6")
     except Exception as exc:
-        raise RuntimeError("Hindi/English OCR engine unavailable. Install Tesseract with eng and hin language data.") from exc
+        raise RuntimeError("Installed Tesseract OCR language data could not process this window.") from exc
     safe = redact_ocr_text(raw)
     if not safe.strip():
         raise RuntimeError("No non-sensitive readable text was found in the active window.")
-    return "OCR • " + title[:100] + "\n" + safe
+    language_note = "English + Hindi" if not missing else " + ".join(selected) + " only (missing " + ", ".join(missing) + ")"
+    return "OCR • " + title[:100] + " • " + language_note + "\n" + safe
 
 
 def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=None,
