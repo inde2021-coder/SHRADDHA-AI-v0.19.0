@@ -3051,7 +3051,9 @@ class MainActivity : AppCompatActivity() {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val prefs = appContext.getSharedPreferences("shraddha_device_link", MODE_PRIVATE)
                 val allowed = prefs.getBoolean("remote_control_consent", false)
-                val sessionGranted = prefs.getLong("remote_control_grant_until", 0L) > System.currentTimeMillis()
+                val sessionGranted = `in`.shraddha.ai.link.RemoteActionApprovalPolicy.isAuthorized(
+                    allowed, prefs.getLong("remote_control_grant_until", 0L), System.currentTimeMillis()
+                )
                 val kind = action.optString("kind", "unknown").take(32)
                 val description = when (kind) {
                     "tap" -> "Tap at (${action.optDouble("x").toInt()}, ${action.optDouble("y").toInt()})"
@@ -3078,8 +3080,15 @@ class MainActivity : AppCompatActivity() {
                         runCatching { `in`.shraddha.ai.future.LocalAuditTrail(appContext).append("remote_control", "action_denied", "kind=$kind; source_device_redacted") }
                     }
                     .setPositiveButton("Approve this action") { _, _ ->
-                        val stillAllowed = prefs.getBoolean("remote_control_consent", false)
-                        val before = ShraddhaAccessibilityService.captureVisibleScreen()
+                        // The user may leave the approval dialog open until the
+                        // five-minute grant expires. Re-check both consent and expiry
+                        // at the exact moment the action is about to execute.
+                        val stillAllowed = `in`.shraddha.ai.link.RemoteActionApprovalPolicy.isAuthorized(
+                            prefs.getBoolean("remote_control_consent", false),
+                            prefs.getLong("remote_control_grant_until", 0L),
+                            System.currentTimeMillis()
+                        )
+                        val before = if (stillAllowed) ShraddhaAccessibilityService.captureVisibleScreen() else null
                         val executed = stillAllowed && ShraddhaAccessibilityService.applyRemoteAction(action)
                         if (!executed) {
                             DeviceLinkManager.sendRemoteActionResult(fromDeviceId, actionId, kind, "FAILED: Accessibility permission, target app, or action unavailable.")
