@@ -129,3 +129,15 @@ test('receiver-owned resume index manifests are bounded, unique and in range', (
   assert.equal(validMissingTransferIndexes('0,1', 2), false);
   assert.equal(validMissingTransferIndexes([0], 0), false);
 });
+
+
+test('resume chunk indexes must be bounded, unique and within the active manifest', () => {
+  assert.equal(validMissingTransferIndexes([0, 2, 4], 5), true);
+  assert.equal(validMissingTransferIndexes([], 5), true);
+  assert.equal(validMissingTransferIndexes([5], 5), false);
+  assert.equal(validMissingTransferIndexes([-1], 5), false);
+  assert.equal(validMissingTransferIndexes([1, 1], 5), false);
+  assert.equal(validMissingTransferIndexes(Array(2201).fill(0), 2201), false);
+  assert.equal(validMissingTransferIndexes([0], 2201), true);
+  assert.equal(validMissingTransferIndexes('0', 5), false);
+});
