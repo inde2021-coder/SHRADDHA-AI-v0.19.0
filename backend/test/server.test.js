@@ -1156,6 +1156,21 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     assert.deepEqual(resume.missingIndexes, [1, 2]);
 
     // A receiver cannot close relay state until every chunk has a positive ACK.
+    // Malformed indexes must not be rewritten to the legacy -1 ready sentinel.
+    for (const malformed of [
+      { index: 'bad', complete: false, ok: true },
+      { index: -2, complete: false, ok: true },
+      { index: 0, complete: true, ok: true },
+      { index: -1, complete: false, ok: 'true' }
+    ]) {
+      const ignoredMalformedAck = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+      memberSocket.send(JSON.stringify({
+        type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+        transferId, ...malformed
+      }));
+      await ignoredMalformedAck;
+    }
+
     const prematureCompletionPromise = nextWsMessage(ownerSocket, data => {
       try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
     });
