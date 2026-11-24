@@ -357,7 +357,7 @@ class MainBrain(
             "Operator step IDs must be unique"
         }
         request.actions.forEach { action ->
-            val decision = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value)
+            val decision = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value, action.step.expectedVisibleText)
             require(decision.risk != OperatorSafetyPolicy.Risk.BLOCK) { decision.reason }
         }
         val queued = scheduler.submitAll(listOf(
