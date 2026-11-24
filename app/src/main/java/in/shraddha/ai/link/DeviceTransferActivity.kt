@@ -84,14 +84,18 @@ class DeviceTransferActivity : Activity() {
     override fun onDestroy() {
         cancelled.set(true)
         paused.set(false)
-        runCatching {
-            transferIo.execute {
-                runCatching { incomingOut?.fd?.sync() }
-                runCatching { incomingOut?.close() }
-                incomingOut = null
+        // Stop accepting work, let already-queued durable writes finish, then close
+        // the file handle. Do not enqueue cleanup into the bounded queue: it may be full.
+        transferIo.shutdown()
+        Thread({
+            while (!transferIo.isTerminated) {
+                try { transferIo.awaitTermination(1, TimeUnit.MINUTES) }
+                catch (_: InterruptedException) { /* Continue cleanup; never close during a write. */ }
             }
-            transferIo.shutdown()
-        }
+            runCatching { incomingOut?.fd?.sync() }
+            runCatching { incomingOut?.close() }
+            incomingOut = null
+        }, "ShraddhaTransferCleanup").apply { isDaemon = true; start() }
         if (DeviceLinkManager.onFileTransferMessage != null) DeviceLinkManager.onFileTransferMessage = null
         super.onDestroy()
     }
