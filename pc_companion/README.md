@@ -17,8 +17,8 @@ The PC device token is stored in Windows Credential Manager only after the relay
 
 - Supported: normalized mouse click, drag/swipe, bounded text paste, Start Menu shortcut launch, show desktop, browser-style back and bounded scroll.
 - **Text-based click:** exact, unique visible Button/Hyperlink/Tab/Menu/CheckBox/RadioButton controls can be activated through Windows UI Automation. Ambiguous labels, hidden/disabled controls and unknown/sensitive active windows fail closed.
-- **Active-window OCR:** `read screen` / `स्क्रीन पढ़ो` captures only the current non-sensitive window and runs local Tesseract OCR in English + Hindi. OCR text is redacted for credential labels and long number strings before being returned over the encrypted peer channel. It is never silently uploaded to a cloud OCR provider.
-- OCR requires the optional Python `pytesseract` package plus the Windows Tesseract engine with both `eng` and `hin` language data. If either is missing, the action returns an explicit setup error.
+- **Active-window OCR:** `read screen` / `स्क्रीन पढ़ो` captures only the current non-sensitive window and runs local Tesseract OCR. OCR text is redacted for credential labels and long number strings before being returned over the encrypted peer channel. It is never silently uploaded to a cloud OCR provider.
+- `pytesseract` is included in the companion Python requirements; install the Windows Tesseract engine separately. The companion uses both `eng` and `hin` packs when installed, gracefully falls back to either available pack, and reports which language is missing. If neither supported pack exists, OCR returns a setup error.
 - The agent never executes arbitrary shell commands, PowerShell, scripts or file operations.
 - **Revoke PC Pairing** asks for explicit confirmation, revokes this device on the relay, and deletes its Windows Credential Manager token. A new six-digit code is required to pair again.
 - Screen sharing is off by default and sends JPEG frames only while the local checkbox is enabled.
