@@ -42,10 +42,14 @@ object SocialPublishingClient {
     }
 
     /** Encodes bounded Telegram/Mastodon media for the backend's validated 8 MiB upload path. */
-    suspend fun encodeBinaryMedia(context: Context, uri: Uri, mediaKind: String): JSONObject = withContext(Dispatchers.IO) {
+    suspend fun encodeBinaryMedia(context: Context, uri: Uri, platform: String, mediaKind: String): JSONObject = withContext(Dispatchers.IO) {
+        require(platform == "telegram" || platform == "mastodon") { "Binary media is supported only for Telegram and Mastodon." }
         val mime = context.contentResolver.getType(uri)?.lowercase() ?: error("The selected file has no recognized MIME type.")
-        val allowed = if (mediaKind == "image") setOf("image/jpeg", "image/png", "image/webp")
-            else if (mediaKind == "video") setOf("video/mp4", "video/quicktime") else emptySet()
+        val allowed = when (platform) {
+            "telegram" -> if (mediaKind == "image") setOf("image/jpeg", "image/png") else if (mediaKind == "video") setOf("video/mp4") else emptySet()
+            "mastodon" -> if (mediaKind == "image") setOf("image/jpeg", "image/png", "image/webp") else if (mediaKind == "video") setOf("video/mp4", "video/quicktime") else emptySet()
+            else -> emptySet()
+        }
         require(mime in allowed) { "Choose a supported image or video file." }
         val declaredSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
         require(declaredSize <= 8L * 1024L * 1024L) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
