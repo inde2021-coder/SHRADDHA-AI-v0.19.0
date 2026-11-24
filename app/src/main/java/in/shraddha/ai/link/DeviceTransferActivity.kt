@@ -282,14 +282,16 @@ class DeviceTransferActivity : Activity() {
                 val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index)
                     ?: throw IllegalArgumentException("Invalid chunk index or manifest")
                 require(bytes.size == expected)
-                if (!receivedChunkIndexes.get(index)) {
-                    incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES)
-                    incomingOut!!.write(bytes)
-                    incomingOut!!.fd.sync()
-                    receivedChunkIndexes.set(index)
-                    incomingChunks++
-                    // The durable bitmap must be committed before the relay ACK.
-                    persistTransferState(synchronous = true)
+                synchronized(receivedChunkIndexes) {
+                    if (!receivedChunkIndexes.get(index)) {
+                        incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES)
+                        incomingOut!!.write(bytes)
+                        incomingOut!!.fd.sync()
+                        receivedChunkIndexes.set(index)
+                        incomingChunks++
+                        // The durable bitmap must be committed before the relay ACK.
+                        persistTransferState(synchronous = true)
+                    }
                 }
                 require(DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)) {
                     "Could not send receiver acknowledgement"
@@ -345,9 +347,9 @@ class DeviceTransferActivity : Activity() {
         if (sourceUri != null && sourcePeer.isBlank()) {
             status.text = "Sender ready. The receiver must request resume to identify missing chunks."
         } else if (sourcePeer.isNotBlank() && incomingCount in 1..DeviceFileTransferProtocol.MAX_CHUNKS) {
-            val missing = (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
+            val missing = synchronized(receivedChunkIndexes) { (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) } }
             if (missing.isEmpty()) {
-                if (incomingVerified && pendingSaveUri != null) saveIncoming(pendingSaveUri!!)
+                if (incomingVerified && pendingSaveUri != null) transferIo.execute { saveIncoming(pendingSaveUri!!) }
                 else status.text = "All chunks are already present. Verify or choose a save destination."
             } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
                 status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
@@ -373,7 +375,7 @@ class DeviceTransferActivity : Activity() {
             .putLong("incomingSize", incomingSize)
             .putString("incomingHash", incomingHash)
             .putString("incomingName", incomingName)
-            .putString("receivedIndexes", android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP))
+            .putString("receivedIndexes", synchronized(receivedChunkIndexes) { android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP) })
             .putBoolean("incomingVerified", incomingVerified)
             .putString("pendingSaveUri", pendingSaveUri?.toString().orEmpty())
         if (synchronous) editor.commit() else editor.apply()
@@ -384,6 +386,7 @@ class DeviceTransferActivity : Activity() {
         transferId = prefs.getString("transferId", "").orEmpty()
         if (transferId.isBlank()) return
         peer.setText(prefs.getString("peer", "").orEmpty())
+        peerIdSnapshot = peer.text.toString().trim()
         sourceUri = prefs.getString("sourceUri", "").orEmpty().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
         sourceName = prefs.getString("sourceName", "").orEmpty()
         sourceSize = prefs.getLong("sourceSize", 0L)
@@ -413,11 +416,13 @@ class DeviceTransferActivity : Activity() {
         }
         status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
         if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
-            verifyIncoming()
+            transferIo.execute { verifyIncoming() }
         }
         if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
-            runCatching { saveIncoming(pendingSaveUri!!) }
-                .onFailure { status.text = "Verified file restored. Re-select the save destination to finish." }
+            transferIo.execute {
+                runCatching { saveIncoming(pendingSaveUri!!) }
+                    .onFailure { runOnUiThread { status.text = "Verified file restored. Re-select the save destination to finish." } }
+            }
         }
     }
 
@@ -425,7 +430,7 @@ class DeviceTransferActivity : Activity() {
         sourceUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
         pendingSaveUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
         getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE).edit().clear().apply()
-        receivedChunkIndexes.clear()
+        synchronized(receivedChunkIndexes) { receivedChunkIndexes.clear() }
         incomingChunks = 0
         incomingVerified = false
         pendingSaveUri = null
