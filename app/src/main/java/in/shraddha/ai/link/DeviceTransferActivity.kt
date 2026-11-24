@@ -230,9 +230,27 @@ class DeviceTransferActivity : Activity() {
                 if (msg.optBoolean("complete")) { status.text = "Receiver verified and saved file successfully."; clearTransferState() }
             }
             "file_transfer_resume" -> {
+                // Only the sender may act on a resume request, and only for the
+                // currently selected peer and the exact active transfer manifest.
+                val expectedCount = DeviceFileTransferProtocol.chunkCount(sourceSize)
+                if (sourceUri == null || msg.optString("fromDeviceId") != peer.text.toString().trim() ||
+                    msg.optString("transferId") != transferId || expectedCount == null ||
+                    msg.optInt("chunkCount", -1) != expectedCount) {
+                    status.text = "Rejected resume request: peer or transfer manifest mismatch."
+                    return
+                }
                 val array = msg.optJSONArray("missingIndexes") ?: return
-                val indexes = (0 until array.length()).map { array.optInt(it, -1) }.filter { it >= 0 }
-                if (indexes.isNotEmpty()) startSending(indexes) else status.text = "Receiver reports no missing chunks."
+                if (array.length() > expectedCount) {
+                    status.text = "Rejected resume request: too many chunk indexes."
+                    return
+                }
+                val indexes = (0 until array.length()).map { array.optInt(it, -1) }
+                if (indexes.any { it !in 0 until expectedCount } || indexes.distinct().size != indexes.size) {
+                    status.text = "Rejected resume request: invalid or duplicate chunk indexes."
+                    return
+                }
+                if (indexes.isNotEmpty()) startSending(indexes)
+                else status.text = "Receiver reports no missing chunks."
             }
             "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
         }
@@ -284,9 +302,14 @@ class DeviceTransferActivity : Activity() {
         if (transferId.isBlank()) { status.text = "No active transfer to resume."; return }
         if (sourceUri != null && sourcePeer.isBlank()) {
             status.text = "Sender ready. The receiver must request resume to identify missing chunks."
-        } else if (sourcePeer.isNotBlank()) {
-            DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId)
-            status.text = "Requesting missing chunks from sender…"
+        } else if (sourcePeer.isNotBlank() && incomingCount in 1..DeviceFileTransferProtocol.MAX_CHUNKS) {
+            val missing = (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
+            if (missing.isEmpty()) {
+                if (incomingVerified && pendingSaveUri != null) saveIncoming(pendingSaveUri!!)
+                else status.text = "All chunks are already present. Verify or choose a save destination."
+            } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+                status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
+            } else status.text = "Could not send resume request. Verify the paired device and secure relay connection."
         } else status.text = "Reconnect to relay first, then retry."
     }
 

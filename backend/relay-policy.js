@@ -116,3 +116,15 @@ export function canUseRemoteControl(session, requesterId, targetId, now = Date.n
   const expiresAt = target.controlGrants instanceof Map ? target.controlGrants.get(requesterId) : 0;
   return Number.isFinite(expiresAt) && expiresAt > now;
 }
+
+
+export function validMissingTransferIndexes(indexes, chunkCount) {
+  if (!Array.isArray(indexes) || !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
+      indexes.length > chunkCount || indexes.length > 2200) return false;
+  const seen = new Set();
+  for (const index of indexes) {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= chunkCount || seen.has(index)) return false;
+    seen.add(index);
+  }
+  return true;
+}
