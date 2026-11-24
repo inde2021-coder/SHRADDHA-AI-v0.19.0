@@ -1245,42 +1245,7 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
   } finally {
     await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
   }
-});    const [startedMessage] = await startedPromise;
-    assert.equal(JSON.parse(startedMessage.toString()).transferId, transferId);
-
-    const resumePromise = nextWsMessage(ownerSocket, data => {
-      try { return JSON.parse(data.toString()).type === 'file_transfer_resume'; } catch { return false; }
-    });
-    memberSocket.send(JSON.stringify({
-      type: 'file_transfer_resume', targetDeviceId: owner.deviceId,
-      transferId, chunkCount: 3, missingIndexes: [1, 2]
-    }));
-    const [resumeMessage] = await resumePromise;
-    const resume = JSON.parse(resumeMessage.toString());
-    assert.equal(resume.fromDeviceId, member.deviceId);
-    assert.equal(resume.transferId, transferId);
-    assert.equal(resume.chunkCount, 3);
-    assert.deepEqual(resume.missingIndexes, [1, 2]);
-
-    for (const invalid of [
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1, 1] },
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [3] },
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1.5] },
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 2, missingIndexes: [1] },
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: '3', missingIndexes: [1] },
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId: 'invalid transfer id', chunkCount: 3, missingIndexes: [1] },
-      { type: 'file_transfer_resume', targetDeviceId: 'unknown-device', transferId, chunkCount: 3, missingIndexes: [1] },
-      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3 }
-    ]) {
-      const noForward = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
-      memberSocket.send(JSON.stringify(invalid));
-      await noForward;
-    }
-  } finally {
-    await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
-  }
 });
-
 
 
 test('short-lived device invitation can pair multiple unique devices within the session limit', async () => {
