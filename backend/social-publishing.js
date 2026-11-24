@@ -91,7 +91,7 @@ export function validateMediaAttachment(body, platform) {
   const mimeType = String(body.mimeType || '').toLowerCase();
   const kind = String(body.mediaKind || '').toLowerCase();
   const allowed = kind === 'image'
-    ? new Set(['image/jpeg', 'image/png', 'image/webp'])
+    ? (platform === 'telegram' ? new Set(['image/jpeg', 'image/png']) : new Set(['image/jpeg', 'image/png', 'image/webp']))
     : kind === 'video'
       ? (platform === 'telegram' ? new Set(['video/mp4']) : new Set(['video/mp4', 'video/quicktime']))
       : new Set();
