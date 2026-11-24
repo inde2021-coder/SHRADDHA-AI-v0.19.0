@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, valid_incoming_file_manifest, matches_transfer_peer, expected_file_chunk_bytes
 
 
 class ProtocolTests(unittest.TestCase):
@@ -11,6 +11,29 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(valid_pairing_ids("short", "b" * 24))
         self.assertFalse(valid_pairing_ids("a" * 24, "not-a-device-id"))
         self.assertFalse(valid_pairing_ids(None, "b" * 24))
+
+    def test_windows_incoming_file_manifest_requires_trusted_peer_and_single_active_transfer(self):
+        active = {}
+        self.assertTrue(valid_incoming_file_manifest("a" * 24, "transfer_123456", 49153, 2, "a" * 64, True, active))
+        self.assertFalse(valid_incoming_file_manifest("a" * 24, "../bad", 49153, 2, "a" * 64, True, active))
+        self.assertFalse(valid_incoming_file_manifest("a" * 24, "transfer_123456", True, 1, "a" * 64, True, active))
+        self.assertFalse(valid_incoming_file_manifest("a" * 24, "transfer_123456", 49153, 1, "a" * 64, True, active))
+        self.assertFalse(valid_incoming_file_manifest("a" * 24, "transfer_123456", 49153, 2, "a" * 64, False, active))
+        self.assertFalse(valid_incoming_file_manifest("a" * 24, "transfer_123456", 49153, 2, "a" * 64, True, {"other": {}}))
+
+    def test_windows_chunks_match_android_48_kib_boundaries(self):
+        self.assertEqual(expected_file_chunk_bytes(49152, 1, 0), 49152)
+        self.assertEqual(expected_file_chunk_bytes(49153, 2, 0), 49152)
+        self.assertEqual(expected_file_chunk_bytes(49153, 2, 1), 1)
+        self.assertIsNone(expected_file_chunk_bytes(49153, 1, 0))
+        self.assertIsNone(expected_file_chunk_bytes(49153, 2, 2))
+
+    def test_file_transfer_messages_require_exact_peer_and_transfer_identity(self):
+        message = {"fromDeviceId": "a" * 24, "transferId": "transfer_123456"}
+        self.assertTrue(matches_transfer_peer(message, "a" * 24, "transfer_123456"))
+        self.assertFalse(matches_transfer_peer(message, "b" * 24, "transfer_123456"))
+        self.assertFalse(matches_transfer_peer(message, "a" * 24, "transfer_654321"))
+        self.assertFalse(matches_transfer_peer({"transferId": "transfer_123456"}, "a" * 24, "transfer_123456"))
 
     def test_valid_normalized_tap(self):
         self.assertEqual(validate_remote_action({"kind": "tap", "x": 0.5, "y": 1}), {"kind": "tap", "x": 0.5, "y": 1.0})
