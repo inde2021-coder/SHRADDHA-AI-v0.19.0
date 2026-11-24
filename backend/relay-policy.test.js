@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -216,4 +216,16 @@ test('resume bitmap overwrites relay ACKs and restores only receiver-persisted c
   assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
   assert.equal(recordPersistedFileTransferChunks(transfer, [1, 1]), false);
   assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
+});
+
+
+test('file transfer admission rejects duplicate IDs and caps active receiver transfers', () => {
+  const device = { incomingTransfers: new Map() };
+  assert.equal(canStartFileTransfer(device, 'transfer_123456'), true);
+  device.incomingTransfers.set('transfer_123456', { expiresAt: Date.now() + 60000 });
+  assert.equal(canStartFileTransfer(device, 'transfer_123456'), false);
+  assert.equal(canStartFileTransfer(device, 'transfer_654321'), false);
+  assert.equal(canStartFileTransfer({}, 'transfer_123456'), false);
+  assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'bad'), false);
+  assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'transfer_123456', 0), false);
 });
