@@ -67,3 +67,22 @@ test('pinned transport rejects nonstandard HTTPS ports before DNS or socket crea
   }), /port 443/);
   assert.equal(resolved, false);
 });
+
+test('pinned transport enforces an absolute deadline against slow or stalled responses', async () => {
+  let destroyed = false;
+  const request = new EventEmitter();
+  request.setTimeout = () => {};
+  request.write = () => {};
+  request.end = () => {};
+  request.destroy = error => {
+    destroyed = true;
+    request.emit('error', error);
+  };
+  await assert.rejects(() => pinnedHttpsJsonRequest('https://mastodon.example/api/v1/statuses', {
+    timeoutMs: 15
+  }, {
+    resolve4: async () => ['8.8.8.8'],
+    request: () => request
+  }), /total time limit/);
+  assert.equal(destroyed, true);
+});
