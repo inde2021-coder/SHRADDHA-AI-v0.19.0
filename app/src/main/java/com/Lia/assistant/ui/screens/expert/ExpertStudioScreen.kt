@@ -2,6 +2,8 @@ package com.Lia.assistant.ui.screens.expert
 
 import android.os.Handler
 import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -88,6 +90,84 @@ private fun formatExpertResponse(raw: String): String {
         val content = item.optString("answer").ifBlank { item.optString("error", "No result returned.") }
         "### $providerName\n$content"
     }.joinToString("\n\n").ifBlank { raw }
+}
+
+@Composable
+private fun EngineeringExportPanel() {
+    val context = LocalContext.current
+    var plateWidth by remember { mutableStateOf("100") }
+    var plateHeight by remember { mutableStateOf("60") }
+    var plateThickness by remember { mutableStateOf("3") }
+    var holeDiameter by remember { mutableStateOf("4") }
+    var edgeOffset by remember { mutableStateOf("8") }
+    var boardWidth by remember { mutableStateOf("80") }
+    var boardHeight by remember { mutableStateOf("50") }
+    var ledCount by remember { mutableStateOf("3") }
+    var pendingScad by remember { mutableStateOf("") }
+    var pendingCsv by remember { mutableStateOf("") }
+    var exportStatus by remember { mutableStateOf("Export real project files to your device. Review dimensions before manufacturing.") }
+
+    val scadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingScad.toByteArray(Charsets.UTF_8)) }
+                    ?: error("Could not open the selected destination.")
+            }
+            exportStatus = result.fold({ "OpenSCAD file saved successfully." }, { "SCAD export failed: ${it.message}" })
+        }
+    }
+    val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingCsv.toByteArray(Charsets.UTF_8)) }
+                    ?: error("Could not open the selected destination.")
+            }
+            exportStatus = result.fold({ "KiCad placement CSV saved successfully." }, { "CSV export failed: ${it.message}" })
+        }
+    }
+
+    NovaGlassCard {
+        Text("ENGINEERING FILE EXPORTS", color = LocalNovaColors.current.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text("Generate editable files, then open them in OpenSCAD or KiCad. These are starter designs, not certified manufacturing drawings.", color = LocalNovaColors.current.textSecondary, fontSize = 10.sp)
+        Text("PARAMETRIC OPENSCAD MOUNTING PLATE (mm)", color = LocalNovaColors.current.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NovaTextField(value = plateWidth, onValueChange = { plateWidth = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Width", singleLine = true)
+            NovaTextField(value = plateHeight, onValueChange = { plateHeight = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Height", singleLine = true)
+            NovaTextField(value = plateThickness, onValueChange = { plateThickness = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Thickness", singleLine = true)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NovaTextField(value = holeDiameter, onValueChange = { holeDiameter = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Hole Ø", singleLine = true)
+            NovaTextField(value = edgeOffset, onValueChange = { edgeOffset = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Edge offset", singleLine = true)
+        }
+        NovaButton(text = "EXPORT .SCAD", onClick = {
+            val result = EngineeringExports.openScadMountingPlate(
+                plateWidth.toDoubleOrNull() ?: Double.NaN,
+                plateHeight.toDoubleOrNull() ?: Double.NaN,
+                plateThickness.toDoubleOrNull() ?: Double.NaN,
+                holeDiameter.toDoubleOrNull() ?: Double.NaN,
+                edgeOffset.toDoubleOrNull() ?: Double.NaN
+            )
+            result.onSuccess { pendingScad = it; scadLauncher.launch("shraddha-mounting-plate.scad") }
+                .onFailure { exportStatus = "SCAD export blocked: ${it.message}" }
+        }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+
+        Text("KICAD COMPONENT PLACEMENT CSV", color = LocalNovaColors.current.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NovaTextField(value = boardWidth, onValueChange = { boardWidth = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Board width", singleLine = true)
+            NovaTextField(value = boardHeight, onValueChange = { boardHeight = it.take(12) }, modifier = Modifier.weight(1f), placeholder = "Board height", singleLine = true)
+            NovaTextField(value = ledCount, onValueChange = { ledCount = it.take(3) }, modifier = Modifier.weight(1f), placeholder = "LEDs", singleLine = true)
+        }
+        NovaButton(text = "EXPORT KICAD .CSV", onClick = {
+            val result = EngineeringExports.kicadPlacementCsv(
+                boardWidth.toDoubleOrNull() ?: Double.NaN,
+                boardHeight.toDoubleOrNull() ?: Double.NaN,
+                ledCount.toIntOrNull() ?: -1
+            )
+            result.onSuccess { pendingCsv = it; csvLauncher.launch("shraddha-kicad-placement.csv") }
+                .onFailure { exportStatus = "CSV export blocked: ${it.message}" }
+        }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+        Text(exportStatus, color = LocalNovaColors.current.textSecondary, fontSize = 10.sp)
+    }
 }
 
 @Composable
@@ -284,6 +364,8 @@ fun ExpertStudioScreen(navController: NavController) {
                 type = NovaButtonType.TEXT
             )
         }
+
+        EngineeringExportPanel()
 
         NovaGlassCard {
             Text("AI PROVIDER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
