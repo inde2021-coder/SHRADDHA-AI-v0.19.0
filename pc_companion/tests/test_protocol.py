@@ -60,6 +60,7 @@ class ProtocolTests(unittest.TestCase):
     def test_ocr_is_allowlisted_without_client_supplied_payload(self):
         self.assertEqual(validate_remote_action({"kind": "ocr"}), {"kind": "ocr"})
         self.assertIsNone(validate_remote_action({"kind": "ocr", "script": "arbitrary"}))
+        self.assertIsNone(validate_remote_action({"kind": "ocr", "command": "calc.exe"}))
         self.assertEqual(validate_remote_action_envelope({"kind": "ocr"}, "ocr"), {"kind": "ocr"})
 
     def test_click_text_requires_bounded_exact_label(self):
