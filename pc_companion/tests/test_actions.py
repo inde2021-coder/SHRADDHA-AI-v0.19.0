@@ -44,6 +44,26 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(self.clipboard.value, "नमस्ते")
         self.assertIn(("hotkey", ("ctrl", "v")), self.gui.calls)
 
+    def test_remote_input_fails_closed_for_unknown_and_sensitive_windows(self):
+        actions = [
+            {"kind": "tap", "x": 0.5, "y": 0.5},
+            {"kind": "swipe", "x1": 0.2, "y1": 0.2, "x2": 0.8, "y2": 0.8},
+            {"kind": "key_press", "chord": "enter"},
+            {"kind": "scroll", "amount": 3},
+            {"kind": "type", "text": "hello"},
+            {"kind": "home"},
+            {"kind": "back"},
+        ]
+        for title in ("", "Bank - secure payment", "Enter OTP", "Password Manager"):
+            with self.subTest(window=title):
+                with patch("pc_companion.actions._active_window", side_effect=RuntimeError("blocked window")):
+                    for action in actions:
+                        ok, message = execute_action(action, self.gui, self.clipboard, lambda _name: False)
+                        self.assertFalse(ok)
+                        self.assertIn("blocked window", message)
+                self.assertEqual(self.gui.calls, [])
+                self.assertIsNone(self.clipboard.value)
+
     def test_open_app_uses_only_resolver(self):
         ok, _ = execute_action({"kind": "open_app", "appName": "Notepad"}, self.gui, self.clipboard, lambda name: name == "Notepad")
         self.assertTrue(ok)
