@@ -1330,22 +1330,14 @@ wss.on('connection', (ws, ctx) => {
       const source = session.devices.get(sourceId);
       const transferId = String(msg.transferId || '');
       const transfer = device.incomingTransfers?.get(transferId);
-      const chunkCount = Number(msg.chunkCount || transfer?.chunkCount);
-      const requestedMissing = msg.missingIndexes;
+      const chunkCount = Number(msg.chunkCount);
+      const missing = msg.missingIndexes;
+      // The receiver's persisted bitmap is authoritative. Never reconstruct it
+      // from relay ACK state: ACKs can be lost independently of saved chunks.
       if (!source || sourceId === deviceId || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
           !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
           !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() ||
-          transfer.chunkCount !== chunkCount) return;
-      let missing;
-      if (requestedMissing !== undefined) {
-        if (!validMissingTransferIndexes(requestedMissing, chunkCount)) return;
-        missing = requestedMissing;
-      } else {
-        missing = [];
-        for (let i = 0; i < transfer.chunkCount && missing.length < 2200; i++) {
-          if (!transfer.chunks.has(i)) missing.push(i);
-        }
-      }
+          transfer.chunkCount !== chunkCount || !validMissingTransferIndexes(missing, chunkCount)) return;
       send(sourceId, JSON.stringify({
         type: 'file_transfer_resume', fromDeviceId: deviceId, transferId,
         chunkCount, missingIndexes: missing
