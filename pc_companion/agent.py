@@ -1003,8 +1003,8 @@ class PcCompanionApp:
             plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
             payload = json.loads(plain.decode("utf-8"))
             data = base64.b64decode(payload["payload"], validate=True)
-            expected = transfer["size"] - index * 49152 if index == transfer["chunks"] - 1 else 49152
-            if len(data) != expected:
+            expected = expected_file_chunk_bytes(transfer["size"], transfer["chunks"], index)
+            if expected is None or len(data) != expected:
                 raise ValueError("Chunk length mismatch")
             if index not in transfer["received"]:
                 with open(transfer["path"] + ".shraddha-part", "r+b") as output:
