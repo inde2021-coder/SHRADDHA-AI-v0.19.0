@@ -10,6 +10,7 @@ from pc_companion.file_transfer import (
     validate_resume_indexes,
     valid_transfer_manifest,
     requeue_rejected_chunk,
+    prepare_retry_queue,
 )
 
 
@@ -108,3 +109,21 @@ class FileTransferNegativeAckTests(unittest.TestCase):
         self.assertFalse(requeue_rejected_chunk(queue, in_flight, 2))
         self.assertEqual(queue, [2, 3, 4])
         self.assertFalse(requeue_rejected_chunk(queue, in_flight, True))
+
+
+class FileTransferRetryQueueTests(unittest.TestCase):
+    def test_retry_queue_requeues_in_flight_chunks_without_duplicates(self):
+        queue = [5, 1, 5]
+        in_flight = {2, 1, 4}
+        count = prepare_retry_queue(queue, in_flight)
+        self.assertEqual(count, 4)
+        self.assertEqual(queue, [1, 2, 4, 5])
+        self.assertEqual(in_flight, set())
+
+    def test_retry_queue_rejects_bool_and_invalid_indexes(self):
+        with self.assertRaises(ValueError):
+            prepare_retry_queue([True], set())
+        with self.assertRaises(ValueError):
+            prepare_retry_queue([-1], set())
+        with self.assertRaises(ValueError):
+            prepare_retry_queue([], [1])
