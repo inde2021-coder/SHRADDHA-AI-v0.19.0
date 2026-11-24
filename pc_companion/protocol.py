@@ -3,6 +3,9 @@ import json
 import math
 import re
 
+CHUNK_BYTES = 48 * 1024
+MAX_FILE_BYTES = 100 * 1024 * 1024
+
 _ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
@@ -16,13 +19,13 @@ def valid_pairing_ids(session_id, device_id):
         isinstance(device_id, str) and _DEVICE_ID.fullmatch(device_id) is not None
 
 
-def valid_incoming_file_manifest(peer_id, transfer_id, size, chunks, digest, peer_trusted, active_transfers, max_size=20_000_000):
+def valid_incoming_file_manifest(peer_id, transfer_id, size, chunks, digest, peer_trusted, active_transfers, max_size=MAX_FILE_BYTES):
     """Validate untrusted Windows inbound transfer metadata before prompting or creating files."""
     return (
         isinstance(peer_id, str) and re.fullmatch(r"[a-f0-9]{24}", peer_id) is not None and
         isinstance(transfer_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) is not None and
         type(size) is int and 1 <= size <= max_size and
-        type(chunks) is int and chunks == (size + 49151) // 49152 and
+        type(chunks) is int and chunks == (size + CHUNK_BYTES - 1) // CHUNK_BYTES and
         isinstance(digest, str) and re.fullmatch(r"[a-f0-9]{64}", digest) is not None and
         peer_trusted is True and isinstance(active_transfers, dict) and
         transfer_id not in active_transfers and len(active_transfers) == 0
@@ -31,13 +34,13 @@ def valid_incoming_file_manifest(peer_id, transfer_id, size, chunks, digest, pee
 
 def expected_file_chunk_bytes(size, chunks, index):
     """Return the exact 48 KiB protocol chunk length, or None for an invalid manifest/index."""
-    if type(size) is not int or not 1 <= size <= 20_000_000:
+    if type(size) is not int or not 1 <= size <= MAX_FILE_BYTES:
         return None
     expected_chunks = (size + 49151) // 49152
     if type(chunks) is not int or chunks != expected_chunks or type(index) is not int or not 0 <= index < chunks:
         return None
-    remaining = size - index * 49152
-    return min(49152, remaining) if remaining > 0 else None
+    remaining = size - index * CHUNK_BYTES
+    return min(CHUNK_BYTES, remaining) if remaining > 0 else None
 
 
 def matches_transfer_peer(message, peer_id, transfer_id):
