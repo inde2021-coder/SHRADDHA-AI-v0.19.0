@@ -16,4 +16,12 @@ class RemoteCameraPolicyTest {
         assertFalse(RemoteCameraPolicy.mayStream(true, true, "../other", "front"))
         assertFalse(RemoteCameraPolicy.mayStream(true, true, "paired_device_123", "external"))
     }
+    @Test fun stopsStreamingWhenFrameCannotBeDelivered() {
+        assertFalse(RemoteCameraPolicy.shouldContinueAfterFrame(false, true, true, "device_123456", "back"))
+        assertFalse(RemoteCameraPolicy.shouldContinueAfterFrame(true, false, true, "device_123456", "back"))
+        assertFalse(RemoteCameraPolicy.shouldContinueAfterFrame(true, true, false, "device_123456", "back"))
+        assertFalse(RemoteCameraPolicy.shouldContinueAfterFrame(true, true, true, "", "back"))
+        assertTrue(RemoteCameraPolicy.shouldContinueAfterFrame(true, true, true, "device_123456", "back"))
+    }
+
 }
