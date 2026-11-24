@@ -3,7 +3,6 @@ package com.Lia.assistant.ui.screens.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -59,6 +57,8 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.ChatPromptBuilder
+import com.Lia.assistant.voice.ShraddhaSpeechClient
+import com.Lia.assistant.voice.LanguageDetector
 import `in`.shraddha.ai.brain.PersistentChatMemory
 import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import com.Lia.assistant.voice.ChatReplyResult
@@ -68,7 +68,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 @Composable
 fun ChatScreen(
@@ -92,21 +91,6 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var isTyping by remember { mutableStateOf(false) }
-
-    // TTS lifecycle
-    var tts: TextToSpeech? by remember { mutableStateOf(null) }
-    DisposableEffect(Unit) {
-        val ttsInstance = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.ENGLISH
-            }
-        }
-        tts = ttsInstance
-        onDispose {
-            ttsInstance.stop()
-            ttsInstance.shutdown()
-        }
-    }
 
     // Auto-scroll on new message
     LaunchedEffect(messages.size, isTyping) {
@@ -283,7 +267,11 @@ fun ChatScreen(
                 NovaMessageBubble(
                     message = msg,
                     onSpeakClick = {
-                        tts?.speak(msg.text, TextToSpeech.QUEUE_FLUSH, null, null)
+                        ShraddhaSpeechClient.speak(context, msg.text, LanguageDetector.detect(msg.text)) { result ->
+                            result.exceptionOrNull()?.let { error ->
+                                android.widget.Toast.makeText(context, error.localizedMessage ?: "Shraddha voice unavailable", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
                     },
                     onCopyClick = {
                         val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
