@@ -222,7 +222,7 @@ class MainActivity : AppCompatActivity() {
         showPage("devices")
         relayUrl.setText(relay)
         pairingCode.setText(code)
-        status.text = "QR invitation loaded. Verify the relay and tap Join Another Phone. The code is single-use."
+        status.text = "QR invitation loaded. Verify the relay and tap Join Another Phone. This invitation can add multiple devices until it expires or the session reaches its limit."
     }
 
     private fun showPairingQr(relay: String, code: String) {
@@ -238,10 +238,10 @@ class MainActivity : AppCompatActivity() {
             addView(ImageView(this@MainActivity).apply {
                 setImageBitmap(bitmap); adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_CENTER
                 layoutParams = LinearLayout.LayoutParams(-1, dp(280))
-                contentDescription = "Single-use Shraddha device pairing QR code"
+                contentDescription = "Shraddha device pairing QR code; reusable until expiry or device limit"
             })
             addView(TextView(this@MainActivity).apply {
-                text = "Pairing code  $code\\nValid for 5 minutes • One successful join only\\nScan with the other $assistantDisplayName app."
+                text = "Pairing code  $code\\nValid for 5 minutes • Add multiple devices (up to the session limit)\\nScan with another $assistantDisplayName app."
                 gravity = android.view.Gravity.CENTER; textSize = 14f; setTextColor(0xFFE7EAF5.toInt()); setPadding(0, dp(10), 0, 0)
             })
         }
