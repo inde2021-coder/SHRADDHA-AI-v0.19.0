@@ -1,11 +1,13 @@
 package com.Lia.assistant.ui.screens.phone
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -86,10 +88,42 @@ fun PhoneCallAgentScreen(navController: NavController) {
         )
 
         NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(colors.accent.copy(alpha = 0.9f), colors.accent.copy(alpha = 0.35f))
+                            ),
+                            shape = androidx.compose.foundation.shape.CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Call, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(30.dp))
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("$assistantName Phone Agent", color = colors.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("LIVE CALL CONTROL CENTER", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text(
+                        if (savedGateway.baseUrl.isNotBlank() && savedGateway.token.isNotBlank()) "Secure gateway details saved on this phone"
+                        else "Secure gateway setup required",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Call, contentDescription = null, tint = colors.accent)
-                    Text("SIM no-answer call assistant", color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+                    Text("INBOUND AI CALL ROUTING", color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp), fontSize = 13.sp)
                 }
                 Text(
                     "Caller पहले आपके Jio SIM पर ring करेगा. जवाब न देने पर carrier call को Edesy DID पर forward करेगा, जहाँ $assistantName बातचीत संभालेगी. यह Android द्वारा SIM audio intercept नहीं करता.",
@@ -104,7 +138,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
 
         NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Secure backend connection", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                Text("01  •  SECURE GATEWAY", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                 NovaTextField(value = backendUrl, onValueChange = { backendUrl = it },
                     modifier = Modifier.fillMaxWidth(), placeholder = "https://your-backend.example.com")
                 NovaTextField(value = gatewayToken, onValueChange = { gatewayToken = it },
@@ -137,7 +171,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
 
         NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Readiness & live audio preflight", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                Text("02  •  LIVE AUDIO READINESS", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                 Text(resultText, color = colors.textSecondary, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NovaButton(text = "Check Readiness", onClick = {
@@ -195,7 +229,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
         if (callRows.isNotEmpty()) {
             NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Recent inbound calls", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                    Text("03  •  RECENT AI CALLS", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                     callRows.forEach { Text(it, color = colors.textSecondary, fontSize = 12.sp) }
                 }
             }

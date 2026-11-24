@@ -1,0 +1,36 @@
+"""Small allow-listed text command parser for PC-to-Android control."""
+import re
+
+
+def parse_android_command(raw):
+    command = " ".join(str(raw).strip().split())
+    if not command:
+        raise ValueError("Type a command first.")
+    if len(command) > 500:
+        raise ValueError("Command is too long.")
+    lower = command.lower()
+    if lower in {"home", "होम", "home screen"}:
+        return {"kind": "home"}
+    if lower in {"back", "go back", "वापस", "पीछे जाओ"}:
+        return {"kind": "back"}
+    if lower in {"scroll up", "ऊपर scroll", "ऊपर स्क्रॉल"}:
+        return {"kind": "scroll", "amount": 5}
+    if lower in {"scroll down", "नीचे scroll", "नीचे स्क्रॉल"}:
+        return {"kind": "scroll", "amount": -5}
+    match = re.match(r"^(?:open|launch|खोलो|खोल)\s+(.+)$", command, re.I)
+    if match:
+        name = match.group(1).strip()
+        if len(name) > 80 or any(ch in name for ch in "\\/:") or ".." in name:
+            raise ValueError("App name is invalid.")
+        return {"kind": "open_app", "appName": name}
+    match = re.match(r"^(?:type|लिखो|टाइप करो)\s+(.+)$", command, re.I)
+    if match:
+        text = match.group(1)
+        if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase)\b|पासवर्ड|ओटीपी|पिन", text):
+            raise ValueError("Sensitive password, OTP or PIN text cannot be typed remotely.")
+        return {"kind": "type", "text": text}
+    if lower in {"tap center", "tap", "बीच में टैप"}:
+        return {"kind": "tap", "x": 0.5, "y": 0.5}
+    if lower in {"swipe up", "ऊपर swipe"}:
+        return {"kind": "swipe", "x1": 0.5, "y1": 0.75, "x2": 0.5, "y2": 0.25}
+    raise ValueError("Command not understood. Try: home, back, open Settings, scroll down, type Hello.")

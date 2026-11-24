@@ -109,12 +109,21 @@ fun ExpertStudioScreen(navController: NavController) {
     var expandedEntry by remember { mutableStateOf<ExpertProjectLibrary.Entry?>(null) }
 
     LaunchedEffect(Unit) {
-        gatewayConfigured = withContext(Dispatchers.IO) { VoiceGatewaySettings.isConfigured(context) }
-        library = withContext(Dispatchers.IO) {
-            ExpertProjectLibrary(context).load().getOrDefault(emptyList())
+        val initialization = withContext(Dispatchers.IO) {
+            val configured = runCatching { VoiceGatewaySettings.isConfigured(context) }
+            val savedLibrary = runCatching { ExpertProjectLibrary(context).load().getOrThrow() }
+            val preferred = runCatching {
+                NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").trim().uppercase()
+            }.getOrDefault("GEMINI")
+            Triple(configured, savedLibrary, preferred)
         }
-        val preferred = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI").trim().uppercase()
-        provider = preferred.takeIf { it in EXPERT_PROVIDERS } ?: EXPERT_PROVIDERS.first()
+        gatewayConfigured = initialization.first.getOrDefault(false)
+        library = initialization.second.getOrDefault(emptyList())
+        provider = initialization.third.takeIf { it in EXPERT_PROVIDERS } ?: EXPERT_PROVIDERS.first()
+        val initializationError = initialization.first.exceptionOrNull() ?: initialization.second.exceptionOrNull()
+        if (initializationError != null) {
+            status = "Studio opened in safe mode: ${initializationError.localizedMessage ?: "local settings could not be loaded"}. Retry after checking Settings."
+        }
     }
 
     fun saveResult(title: String, content: String, workspace: String, task: String, usedProvider: String) {

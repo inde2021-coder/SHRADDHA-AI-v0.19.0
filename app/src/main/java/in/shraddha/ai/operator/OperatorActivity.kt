@@ -25,6 +25,7 @@ class OperatorActivity : Activity() {
     private lateinit var appName: EditText
     private lateinit var target: EditText
     private lateinit var typed: EditText
+    private lateinit var typedTarget: EditText
     private lateinit var commandInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,58 +33,159 @@ class OperatorActivity : Activity() {
         val assistantName = NovaPreferences.getString(
             this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
         ).trim().ifBlank { AssistantBrand.NAME }
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24); setBackgroundColor(Color.rgb(7, 15, 25)) }
-        root.addView(TextView(this).apply { text = "$assistantName • LIVE APP OPERATOR"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 8, 0, 18) })
-        root.addView(TextView(this).apply { text = "वास्तविक स्क्रीन निरीक्षण • कार्रवाई • परिणाम सत्यापन"; textSize = 12f; setTextColor(0xFF73DDE7.toInt()); gravity = Gravity.CENTER; setPadding(0, 0, 0, 18) })
-        appName = field("ऐप का नाम (जैसे Chrome)")
-        target = field("स्क्रीन पर दिखने वाला बटन/टेक्स्ट")
-        typed = field("फोकस किए गए सामान्य टेक्स्ट फील्ड में लिखें")
-        root.addView(appName); root.addView(target); root.addView(typed)
-        commandInput = field("श्रद्धा को निर्देश दें: जैसे Rahul.jpg upload करो")
-        root.addView(commandInput)
-        intent.getStringExtra("mobile_voice_command")?.takeIf { it.isNotBlank() }?.let { commandInput.setText(it); }
-        root.addView(action("🎙️ बोलकर निर्देश दें") { captureVoiceCommand() })
-        root.addView(action("प्राकृतिक भाषा निर्देश चलाएँ") { routeNaturalCommand() })
-        root.addView(action("Task Planner → Verified Operator") { runPlannedOperator() })
-        root.addView(action("फोन restart के बाद Interrupted Action जाँचें") { reviewInterruptedOperatorActions() })
-        root.addView(action("Voice Action Journal / Restart Recovery जाँचें") { reviewInterruptedVoiceAction() })
-        root.addView(action("स्क्रीन देखें / Refresh") { runOperator { it.observe() } })
-        root.addView(action("फॉर्म इमेज → AI Autofill Review") { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) })
-        root.addView(action("App Training / सीखने की लैब") { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
-        root.addView(action("सीखे हुए Workflow चलाएँ") { chooseLearnedWorkflow() })
-        root.addView(action("फ़ाइल Access / फ़ोल्डर अनुमति") { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
-        root.addView(action("ऐप खोलें") { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) })
-        root.addView(action("दिख रहे टेक्स्ट पर क्लिक करें") { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString(), requiresConfirmation = true)) })
-        root.addView(action("फोकस किए गए फील्ड में टाइप करें") { runOperatorStep(OperatorStep(OperatorActionType.TYPE_TEXT, value = typed.text.toString(), requiresConfirmation = true)) })
-        root.addView(action("Back / Home / Scroll") {
-            val choices = arrayOf("Back", "Home", "Scroll forward")
-            android.app.AlertDialog.Builder(this).setTitle("कार्रवाई चुनें").setItems(choices) { _, which ->
-                val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
-                runOperatorStep(OperatorStep(type))
-            }.show()
-        })
-        log = TextView(this).apply {
-            text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"
-            textSize = 13f
-            setTextColor(0xFFE6F5F7.toInt())
-            setPadding(14, 18, 14, 18)
-            movementMethod = android.text.method.ScrollingMovementMethod()
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF0D2531.toInt()); cornerRadius = 16f; setStroke(1, 0xFF2D8490.toInt())
+
+        fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+        fun card(title: String, subtitle: String = ""): LinearLayout {
+            return LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(15), dp(16), dp(15))
+                background = android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.rgb(20, 38, 57), Color.rgb(11, 23, 38))
+                ).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0xFF294B62.toInt()) }
+                layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) }
+                addView(TextView(this@OperatorActivity).apply {
+                    text = title; textSize = 15f; setTextColor(Color.WHITE); typeface = android.graphics.Typeface.DEFAULT_BOLD
+                })
+                if (subtitle.isNotBlank()) addView(TextView(this@OperatorActivity).apply {
+                    text = subtitle; textSize = 11f; setTextColor(0xFF8DB5C8.toInt())
+                    setPadding(0, dp(4), 0, dp(11))
+                })
             }
         }
-        val logHeight = (240 * resources.displayMetrics.density).toInt()
-        root.addView(log, LinearLayout.LayoutParams(-1, logHeight))
-        root.addView(action("← वापस") { finish() })
-        val pageScroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(root)
+        fun chip(label: String, primary: Boolean = false, click: () -> Unit): Button =
+            Button(this).apply {
+                text = label; isAllCaps = false; textSize = 12f
+                setTextColor(if (primary) 0xFF06141D.toInt() else 0xFFDDF8FF.toInt())
+                background = android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                    if (primary) intArrayOf(0xFF65E5E8.toInt(), 0xFF22AFC4.toInt())
+                    else intArrayOf(0xFF1B354B.toInt(), 0xFF13283B.toInt())
+                ).apply {
+                    cornerRadius = dp(15).toFloat()
+                    setStroke(dp(1), if (primary) 0xFF9AF8F3.toInt() else 0xFF345A70.toInt())
+                }
+                elevation = dp(3).toFloat()
+                setPadding(dp(7), dp(7), dp(7), dp(7))
+                setOnClickListener { click() }
+            }
+        fun row(parent: LinearLayout, first: Pair<String, () -> Unit>, second: Pair<String, () -> Unit>) {
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            line.addView(chip(first.first, true, first.second), LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(6) })
+            line.addView(chip(second.first, false, second.second), LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
+            parent.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
-        setContentView(pageScroll)
+
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(22))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF050B14.toInt(), 0xFF0A1726.toInt(), 0xFF07111D.toInt())
+            )
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(5), dp(4), dp(17))
+        }
+        val emblem = TextView(this).apply {
+            text = "✦"; textSize = 27f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF39D4E0.toInt(), 0xFF315C9B.toInt())
+            ).apply { shape = android.graphics.drawable.GradientDrawable.OVAL }
+            layoutParams = LinearLayout.LayoutParams(dp(54), dp(54)).apply { rightMargin = dp(12) }
+        }
+        header.addView(emblem)
+        header.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@OperatorActivity).apply {
+                text = "$assistantName Operator"; textSize = 19f; setTextColor(Color.WHITE)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            })
+            addView(TextView(this@OperatorActivity).apply {
+                text = "LIVE APP CONTROL CENTER"; textSize = 10f; setTextColor(0xFF62DCE7.toInt())
+                letterSpacing = 0.12f
+            })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(TextView(this).apply {
+            text = "● READY"; textSize = 10f; setTextColor(0xFF70E6B2.toInt())
+            setPadding(dp(9), dp(7), dp(9), dp(7))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x2226C88A); cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0x6656D9A3)
+            }
+        })
+        page.addView(header)
+
+        val commandCard = card("COMMAND DECK", "बोलकर या लिखकर श्रद्धा को काम बताइए")
+        commandInput = field("उदाहरण: Chrome खोलो और वेबसाइट खोजो")
+        commandInput.setSingleLine(false); commandInput.maxLines = 3
+        intent.getStringExtra("mobile_voice_command")?.takeIf { it.isNotBlank() }?.let { commandInput.setText(it) }
+        commandCard.addView(commandInput)
+        row(commandCard,
+            "🎙 बोलकर बताएं" to { captureVoiceCommand() },
+            "निर्देश समझें" to { routeNaturalCommand() })
+        row(commandCard,
+            "Task Planner चलाएँ" to { runPlannedOperator() },
+            "स्क्रीन Refresh" to { runOperator { it.observe() } })
+        page.addView(commandCard)
+
+        val controls = card("LIVE SCREEN CONTROLS", "पहले target app खोलें और Shraddha AI की Accessibility अनुमति चालू रखें")
+        appName = field("ऐप का नाम — जैसे Chrome")
+        target = field("स्क्रीन पर क्लिक करने वाले बटन का सटीक नाम")
+        typedTarget = field("जिस टेक्स्ट फील्ड में लिखना है उसका label / hint")
+        typed = field("वह टेक्स्ट जो फील्ड में भरना है")
+        controls.addView(appName); controls.addView(target); controls.addView(typedTarget); controls.addView(typed)
+        row(controls,
+            "ऐप खोलें" to { runOperatorStep(OperatorStep(OperatorActionType.OPEN_APP, target = appName.text.toString())) },
+            "दिख रहे बटन पर क्लिक" to { runOperatorStep(OperatorStep(OperatorActionType.CLICK_TEXT, target = target.text.toString(), requiresConfirmation = true)) })
+        row(controls,
+            "पहचाने गए फील्ड में लिखें" to {
+                runOperatorStep(OperatorStep(
+                    OperatorActionType.TYPE_TEXT,
+                    target = typedTarget.text.toString(),
+                    value = typed.text.toString(),
+                    requiresConfirmation = true
+                ))
+            },
+            "Back / Home / Scroll" to {
+                val choices = arrayOf("Back", "Home", "Scroll forward")
+                android.app.AlertDialog.Builder(this).setTitle("नेविगेशन कार्रवाई चुनें").setItems(choices) { _, which ->
+                    val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
+                    runOperatorStep(OperatorStep(type))
+                }.show()
+            })
+        page.addView(controls)
+
+        val toolsCard = card("AUTOMATION TOOLS", "सीखे हुए ऐप, फ़ॉर्म और फ़ाइल वर्कफ़्लो")
+        row(toolsCard,
+            "सीखा Workflow चलाएँ" to { chooseLearnedWorkflow() },
+            "App Training Lab" to { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
+        row(toolsCard,
+            "AI Form Autofill" to { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) },
+            "File Access" to { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
+        page.addView(toolsCard)
+
+        val recoveryCard = card("SAFETY & RECOVERY", "हर संवेदनशील कार्रवाई पर पुष्टि • कार्रवाई के बाद परिणाम जाँच")
+        row(recoveryCard,
+            "Interrupted Action जाँचें" to { reviewInterruptedOperatorActions() },
+            "Voice Action Journal" to { reviewInterruptedVoiceAction() })
+        log = TextView(this).apply {
+            text = "स्थिति: Accessibility permission चालू करें।\nसंवेदनशील/पासवर्ड स्क्रीन पर कार्रवाई रोकी जाएगी।"
+            textSize = 12f; setTextColor(0xFFD9EAF2.toInt()); setPadding(dp(12), dp(12), dp(12), dp(12))
+            movementMethod = android.text.method.ScrollingMovementMethod()
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF091522.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF31566B.toInt())
+            }
+        }
+        recoveryCard.addView(log, LinearLayout.LayoutParams(-1, dp(145)))
+        recoveryCard.addView(chip("← वापस", false) { finish() }, LinearLayout.LayoutParams(-1, dp(46)))
+        page.addView(recoveryCard)
+
+        val scroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false; setPadding(0, 0, 0, dp(8)); addView(page) }
+        setContentView(scroll)
         handleCouncilOperatorPlan(intent)
     }
-
-
 
 
 
@@ -330,9 +432,10 @@ class OperatorActivity : Activity() {
                 dependsOn = previous?.let { setOf(it) } ?: emptySet(), risk = Risk.SENSITIVE, requiresApproval = true)
             previous = id
         }
+        if (value.isNotBlank() && typedTarget.text.toString().isBlank()) { log.text = "टाइप करने के लिए पहले टेक्स्ट फील्ड का सटीक label / hint दें।"; return }
         if (value.isNotBlank()) {
             val id = "type_value"
-            planned += PlannedOperatorAction(id, "Enter supplied text", OperatorStep(OperatorActionType.TYPE_TEXT, value = value, requiresConfirmation = true),
+            planned += PlannedOperatorAction(id, "Enter supplied text", OperatorStep(OperatorActionType.TYPE_TEXT, target = typedTarget.text.toString().trim(), value = value, requiresConfirmation = true),
                 dependsOn = previous?.let { setOf(it) } ?: emptySet(), risk = Risk.SENSITIVE, requiresApproval = true)
         }
         if (planned.isEmpty()) { log.text = "पहले ऐप का नाम, target text या सामान्य text भरें।"; return }
@@ -517,6 +620,14 @@ class OperatorActivity : Activity() {
     }
     /** Single-step UI actions use the same durable Main Brain queue as multi-step workflows. */
     private fun runOperatorStep(step: OperatorStep) {
+        if (step.action == OperatorActionType.TYPE_TEXT && step.target.isBlank()) {
+            log.text = "पहले उस टेक्स्ट फील्ड का सटीक label / hint लिखें जिसमें टेक्स्ट भरना है।"
+            return
+        }
+        if (step.action == OperatorActionType.CLICK_TEXT && step.target.isBlank()) {
+            log.text = "क्लिक करने वाले दृश्य बटन/टेक्स्ट का नाम लिखें।"
+            return
+        }
         val risk = if (step.action in setOf(OperatorActionType.CLICK_TEXT, OperatorActionType.TYPE_TEXT)) Risk.SENSITIVE else Risk.READ_ONLY
         val engine = OperatorEngine(
             emit = { event -> runOnUiThread {

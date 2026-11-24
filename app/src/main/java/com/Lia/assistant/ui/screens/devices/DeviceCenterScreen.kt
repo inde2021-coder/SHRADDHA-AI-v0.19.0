@@ -1,8 +1,8 @@
 package com.Lia.assistant.ui.screens.devices
 
+import android.content.Context
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
@@ -31,6 +31,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.app.Activity
+import android.speech.RecognizerIntent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,9 +53,7 @@ import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.link.DeviceLinkManager
-import `in`.shraddha.ai.link.DeviceTransferActivity
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 
 private data class LinkedPeer(
     val id: String,
@@ -78,8 +80,8 @@ fun DeviceCenterScreen(navController: NavController) {
     var peers by remember { mutableStateOf(emptyList<LinkedPeer>()) }
     var selectedPeerId by remember { mutableStateOf("") }
     var pendingFingerprint by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var pendingRevoke by remember { mutableStateOf<LinkedPeer?>(null) }
     var showClearPairing by remember { mutableStateOf(false) }
+    var commandText by remember { mutableStateOf("") }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -146,6 +148,18 @@ fun DeviceCenterScreen(navController: NavController) {
         }
     }
 
+    val speechIntent = remember {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Shraddha AI को PC command बोलें")
+        }
+    }
+    val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            commandText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            if (commandText.isBlank()) status = "आवाज़ समझ नहीं आई। फिर से बोलें या लिखें।"
+        }
+    }
     val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }
     val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
 
@@ -156,7 +170,7 @@ fun DeviceCenterScreen(navController: NavController) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         NovaTopBar(
-            title = "DEVICE CENTER",
+            title = "PC CONTROL CENTER",
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
@@ -168,13 +182,13 @@ fun DeviceCenterScreen(navController: NavController) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Devices, contentDescription = null, tint = colors.accent)
                 Column(Modifier.padding(start = 10.dp)) {
-                    Text("$assistantName Device Fabric", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text("Secure phone ↔ Windows PC pairing", color = colors.textSecondary, fontSize = 10.sp)
+                    Text("$assistantName • PC Control", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Secure remote access • Internet से भी काम करेगा", color = colors.textSecondary, fontSize = 11.sp)
                 }
             }
             Text(status, color = if (connected) Color(0xFF58D6A5) else colors.textSecondary, fontSize = 12.sp)
             Text(
-                "Pairing uses the HTTPS/WSS relay. Remote control and file sharing still require peer fingerprint verification and the receiving device's approval.",
+                "पहले PC pair करें। PC पर Remote Control ON और हर action की local approval जरूरी है।",
                 color = colors.textSecondary, fontSize = 11.sp
             )
         }
@@ -288,79 +302,55 @@ fun DeviceCenterScreen(navController: NavController) {
         }
 
         selectedPeer?.let { peer ->
-            NovaGlassCard {
-                Text("PC / DEVICE ACTIONS", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Text("Selected: ${peer.name}", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            NovaGlassCard(cornerRadius = 22.dp, elevation = 6.dp) {
+                Text("CONNECTED DEVICE", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(peer.name, color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    if (peerTrusted) "E2E fingerprint mutually verified." else "E2E trust is not complete. Confirm the displayed fingerprint on this phone before sending protected actions.",
-                    color = if (peerTrusted) Color(0xFF58D6A5) else colors.textSecondary,
-                    fontSize = 11.sp
+                    if (peerTrusted) "Secure link verified" else "पहले दोनों devices पर एक जैसा security fingerprint verify करें।",
+                    color = if (peerTrusted) Color(0xFF58D6A5) else colors.textSecondary, fontSize = 11.sp
                 )
                 NovaButton(
-                    text = "Request Remote Control",
+                    text = "Request PC Control",
                     onClick = {
                         status = if (DeviceLinkManager.requestRemoteControl(peer.id, 5)) {
-                            "Remote-control request sent. The paired device must approve it."
-                        } else "Remote-control request could not be sent; check relay connection."
+                            "PC पर approval दें। Approval के बाद voice/text commands काम करेंगे।"
+                        } else "Request नहीं भेजा गया। Connection जाँचें।"
                     },
                     enabled = connected && peer.online && peerTrusted,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text("WINDOWS PC KEYBOARD", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text("Each shortcut is end-to-end encrypted and still requires local approval on the PC companion. Use only with a paired Windows PC.", color = colors.textSecondary, fontSize = 10.sp)
-                listOf(
-                    listOf("Enter" to "enter", "Esc" to "escape"),
-                    listOf("Ctrl+C" to "ctrl+c", "Ctrl+F" to "ctrl+f"),
-                    listOf("Ctrl+Z" to "ctrl+z", "Alt+Tab" to "alt+tab"),
-                    listOf("← Back" to "alt+left", "→ Forward" to "alt+right")
-                ).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { (label, chord) ->
-                            NovaButton(
-                                text = label,
-                                onClick = {
-                                    status = if (DeviceLinkManager.sendAction(
-                                        peer.id, JSONObject().put("kind", "key_press").put("chord", chord)
-                                    )) "Keyboard shortcut request sent. Confirm it on the PC." else "Shortcut could not be sent; verify pairing and remote-control approval."
-                                },
-                                modifier = Modifier.weight(1f),
-                                type = NovaButtonType.SECONDARY,
-                                enabled = connected && peer.online && peerTrusted
-                            )
-                        }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NovaButton(
-                        text = "Request PC OCR",
-                        onClick = { status = if (DeviceLinkManager.requestPcOcr(peer.id)) "PC OCR request sent." else "PC OCR request failed." },
-                        modifier = Modifier.weight(1f),
-                        type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted
-                    )
-                    NovaButton(
-                        text = "List PC Files",
-                        onClick = { status = if (DeviceLinkManager.requestPcFileList(peer.id)) "PC file-list request sent." else "PC file-list request failed." },
-                        modifier = Modifier.weight(1f),
-                        type = NovaButtonType.SECONDARY,
-                        enabled = connected && peer.online && peerTrusted
-                    )
-                }
-                NovaButton(
-                    text = "Open Encrypted File Transfer",
-                    onClick = {
-                        context.startActivity(Intent(context, DeviceTransferActivity::class.java).putExtra("peer", peer.id))
-                    },
+                NovaTextField(
+                    value = commandText,
+                    onValueChange = { commandText = it.take(500) },
                     modifier = Modifier.fillMaxWidth(),
-                    type = NovaButtonType.SECONDARY,
-                    enabled = connected && peer.online && peerTrusted
+                    placeholder = "जैसे: Open Notepad, volume 50, scroll down, type Hello"
                 )
-                NovaButton(
-                    text = "Revoke This Device",
-                    onClick = { pendingRevoke = peer },
-                    modifier = Modifier.fillMaxWidth(),
-                    type = NovaButtonType.TEXT,
-                    enabled = connected && peer.id != DeviceLinkManager.deviceId
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NovaButton(
+                        text = "🎙 बोलें",
+                        onClick = { speechLauncher.launch(speechIntent) },
+                        modifier = Modifier.weight(1f),
+                        type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted
+                    )
+                    NovaButton(
+                        text = if (busy) "Sending…" else "Send command",
+                        onClick = {
+                            PcCommandInterpreter.parse(commandText).onSuccess { action ->
+                                busy = true
+                                val sent = DeviceLinkManager.sendAction(peer.id, action)
+                                status = if (sent) "Command सुरक्षित रूप से भेजा गया। PC पर approval/परिणाम देखें।"
+                                    else "Command नहीं भेजा गया। PC online और remote approval जाँचें।"
+                                busy = false
+                            }.onFailure { status = it.message ?: "यह command समझ नहीं आया।" }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = connected && peer.online && peerTrusted && !busy && commandText.isNotBlank()
+                    )
+                }
+                Text(
+                    "एक ही जगह बोलकर या लिखकर PC चलाएँ। उदाहरण: “desktop दिखाओ”, “Notepad खोलो”, “ऊपर scroll करो”, “type नमस्ते”, “volume 40”. हर control PC पर आपकी अनुमति के बाद ही चलेगा।",
+                    color = colors.textSecondary, fontSize = 10.sp
                 )
             }
         }
@@ -412,20 +402,6 @@ fun DeviceCenterScreen(navController: NavController) {
         )
     }
 
-    pendingRevoke?.let { peer ->
-        AlertDialog(
-            onDismissRequest = { pendingRevoke = null },
-            title = { Text("Revoke paired device?") },
-            text = { Text("This revokes ‘${peer.name}’ from the relay session. The device will need to pair again to reconnect.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    status = if (DeviceLinkManager.revokePairedDevice(peer.id)) "Device revocation requested." else "Could not send device revocation request."
-                    pendingRevoke = null
-                }) { Text("Revoke device") }
-            },
-            dismissButton = { TextButton(onClick = { pendingRevoke = null }) { Text("Cancel") } }
-        )
-    }
 
     if (showClearPairing) {
         AlertDialog(

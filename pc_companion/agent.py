@@ -31,6 +31,7 @@ from protocol import valid_pairing_ids, validate_remote_action, validate_remote_
 from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
+from command_parser import parse_android_command
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -160,16 +161,13 @@ class PcCompanionApp:
         ttk.Combobox(monitor_row, textvariable=self.monitor_var, values=self.monitor_labels, state="readonly", width=28).pack(side="left", padx=8)
         monitor_row.winfo_children()[-1].bind("<<ComboboxSelected>>", lambda _event: self._save_monitor_selection())
         ttk.Separator(frame).pack(fill="x", pady=8)
-        ttk.Label(frame, text="CONTROL PAIRED ANDROID (phone approval required)").pack(anchor="w")
+        ttk.Label(frame, text="CONTROL PAIRED ANDROID").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
-        ttk.Label(frame, text="Android device ID").pack(anchor="w")
-        ttk.Combobox(frame, textvariable=self.remote_action_var,
-                     values=("home", "back", "scroll", "open_app", "type", "tap", "swipe"),
-                     state="readonly").pack(fill="x", pady=3)
+        ttk.Label(frame, text="Android device ID • approve control on your phone").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
-        ttk.Label(frame, text="Action value: app name / text / scroll amount").pack(anchor="w")
-        ttk.Button(frame, text="Request Phone Control (5 min)", command=self.request_phone_control).pack(anchor="w", pady=3)
-        ttk.Button(frame, text="Send approved action to Android", command=self.send_remote_action_to_phone).pack(anchor="w", pady=3)
+        ttk.Label(frame, text="Type a command: home, back, open Settings, scroll down, type Hello").pack(anchor="w")
+        ttk.Button(frame, text="Request Phone Control", command=self.request_phone_control).pack(anchor="w", pady=3)
+        ttk.Button(frame, text="Send command to Android", command=self.send_remote_action_to_phone).pack(anchor="w", pady=3)
         ttk.Label(frame, textvariable=self.status_var, foreground="#146c43", wraplength=510).pack(anchor="w", pady=(10, 4))
         ttk.Label(frame, text="Safety: every control request opens a local approval dialog. F12 or Disconnect stops access. Screen sharing is off by default.",
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
@@ -756,44 +754,22 @@ class PcCompanionApp:
     def send_remote_action_to_phone(self):
         peer_id = self.remote_target_var.get().strip()
         if peer_id != self.phone_control_peer or time.time() >= self.phone_control_grant_until:
-            self.status_var.set("First request Phone Control and approve the five-minute session on Android.")
+            self.status_var.set("First request Phone Control and approve the session on Android.")
             return
-        kind = self.remote_action_var.get()
-        value = self.remote_value_var.get().strip()
         if not peer_id or not self.is_e2e_trusted(peer_id):
             self.status_var.set("Select a paired Android device with a mutually verified fingerprint first.")
             return
-        action = {"kind": kind}
-        if kind == "open_app":
-            action["appName"] = value
-        elif kind == "type":
-            action["text"] = value
-        elif kind == "scroll":
-            try:
-                action["amount"] = int(value)
-            except ValueError:
-                self.status_var.set("Scroll amount must be an integer from -20 to 20.")
-                return
-        elif kind in ("set_volume", "set_brightness"):
-            try:
-                action["percent"] = int(value)
-            except ValueError:
-                self.status_var.set("Enter a percentage from 0 to 100.")
-                return
-        elif kind == "power":
-            action["operation"] = value.lower()
-        elif kind == "tap":
-            action.update(x=0.5, y=0.5)
-        elif kind == "swipe":
-            action.update(x1=0.5, y1=0.75, x2=0.5, y2=0.25)
-        if kind in ("open_app", "type") and not value:
-            self.status_var.set("Enter the app name or text for this action.")
+        try:
+            action = parse_android_command(self.remote_value_var.get())
+        except ValueError as exc:
+            self.status_var.set(str(exc))
             return
         import secrets
         action_id = secrets.token_urlsafe(18).replace("-", "_")
+        kind = action["kind"]
         sent = self._send_e2e_message(peer_id, "remote_action", action, action_id, kind)
-        self.status_var.set("Encrypted action sent. Android will show its own consent and per-action approval." if sent
-                            else "Could not send action. Check connection and peer verification.")
+        self.status_var.set("Encrypted command sent. Android will show its own consent and per-action approval." if sent
+                            else "Could not send command. Check connection and peer verification.")
 
     def _handle_phone_remote_action_result(self, msg, peer_id, action_id, action_kind):
         if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id):

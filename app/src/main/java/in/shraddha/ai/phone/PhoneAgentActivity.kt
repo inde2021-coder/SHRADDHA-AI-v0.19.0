@@ -52,42 +52,119 @@ class PhoneAgentActivity : AppCompatActivity() {
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { refreshStatus() }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun panel(title: String, subtitle: String = ""): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(15), dp(16), dp(15))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF172C43.toInt(), 0xFF0B1B2D.toInt())
+            ).apply {
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), 0xFF31536B.toInt())
+            }
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) }
+            addView(TextView(this@PhoneAgentActivity).apply {
+                text = title; textSize = 15f; setTextColor(-1)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            })
+            if (subtitle.isNotBlank()) addView(TextView(this@PhoneAgentActivity).apply {
+                text = subtitle; textSize = 11f; setTextColor(0xFF9CBBCB.toInt())
+                setPadding(0, dp(4), 0, dp(11))
+            })
+        }
+
+    private fun addActionPair(
+        parent: LinearLayout,
+        firstLabel: String,
+        first: () -> Unit,
+        secondLabel: String,
+        second: () -> Unit
+    ) {
+        val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        line.addView(actionButton(firstLabel, first), LinearLayout.LayoutParams(0, dp(54), 1f).apply { rightMargin = dp(6) })
+        line.addView(actionButton(secondLabel, second), LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(6) })
+        parent.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val assistantName = NovaPreferences.getString(
             this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
         ).trim().ifBlank { AssistantBrand.NAME }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-            setBackgroundColor(0xFF07131D.toInt())
+            setPadding(dp(16), dp(14), dp(16), dp(22))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF050B14.toInt(), 0xFF0A1B2A.toInt(), 0xFF07111D.toInt())
+            )
         }
-        root.addView(TextView(this).apply {
-            text = "$assistantName  /  PHONE AGENT"
-            textSize = 20f
+
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(15), dp(17), dp(15), dp(17))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF245A78.toInt(), 0xFF17365A.toInt(), 0xFF14233F.toInt())
+            ).apply { cornerRadius = dp(26).toFloat(); setStroke(dp(1), 0xFF5BBDD0.toInt()) }
+            elevation = dp(7).toFloat()
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) }
+        }
+        hero.addView(TextView(this).apply {
+            text = "☎"; textSize = 29f; gravity = android.view.Gravity.CENTER
             setTextColor(-1)
-            setTypeface(null, android.graphics.Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0x443DE0E2); setStroke(dp(1), 0x8878E8E8.toInt())
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(58), dp(58)).apply { rightMargin = dp(13) }
         })
-        root.addView(TextView(this).apply {
-            text = "Call controls, caller events and shareable call notes."
-            textSize = 14f
-            setTextColor(0xFFB6CDD2.toInt())
-            setPadding(0, 18, 0, 18)
-        })
+        hero.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@PhoneAgentActivity).apply {
+                text = "$assistantName"; textSize = 20f; setTextColor(-1)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            })
+            addView(TextView(this@PhoneAgentActivity).apply {
+                text = "AI PHONE AGENT"; textSize = 10f; letterSpacing = 0.16f
+                setTextColor(0xFF75E5E8.toInt())
+            })
+            addView(TextView(this@PhoneAgentActivity).apply {
+                text = "Voice-first calling • Call notes • Caller events"
+                textSize = 11f; setTextColor(0xFFD0E7F0.toInt())
+                setPadding(0, dp(5), 0, 0)
+            })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(hero)
+
+        val statusPanel = panel("PHONE STATUS", "यह डिवाइस की वास्तविक Android phone-role स्थिति दिखाता है")
         status = TextView(this).apply {
-            textSize = 13f
-            setTextColor(0xFF73E3D2.toInt())
-            setPadding(0, 12, 0, 20)
+            textSize = 13f; setTextColor(0xFF80E6C1.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
+            }
         }
-        root.addView(status)
+        statusPanel.addView(status)
+        addActionPair(statusPanel, "↻ Refresh status", { refreshStatus() }, "Set default phone app", { requestDialerRole() })
+        root.addView(statusPanel)
+
+        val voicePanel = panel("VOICE CALL COMMAND", "किसी Contact का नाम बोलें — कॉल से पहले पहचान और अनुमति जाँची जाएगी")
         voiceStatus = TextView(this).apply {
-            text = "बोलें: ‘श्रद्धा, अमित को फोन लगाओ’"
-            textSize = 14f
-            setTextColor(0xFFB6CDD2.toInt())
-            setPadding(0, 18, 0, 18)
+            text = "उदाहरण: ‘श्रद्धा, अमित को फोन लगाओ’"
+            textSize = 13f; setTextColor(0xFFD9EDF3.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
+            }
         }
-        root.addView(voiceStatus)
-        root.addView(actionButton("🎙  बोलकर Contact खोजें और Call करें") { startVoiceCall() })
+        voicePanel.addView(voiceStatus)
+        voicePanel.addView(actionButton("🎙  बोलकर Contact खोजें", { startVoiceCall() }))
         pendingDialButton = actionButton("Review and place dialed number") {
             pendingDialNumber?.let { number ->
                 pendingDialNumber = null
@@ -95,50 +172,50 @@ class PhoneAgentActivity : AppCompatActivity() {
                 placeCall(number)
             }
         }.apply { visibility = android.view.View.GONE }
-        root.addView(pendingDialButton)
-        root.addView(actionButton("Set Shraddha as default phone app") { requestDialerRole() })
-        root.addView(actionButton("Refresh phone status") { refreshStatus() })
-        root.addView(TextView(this).apply {
-            text = "CALL HISTORY"
-            textSize = 12f
-            setTextColor(0xFF73DDE7.toInt())
-            setPadding(0, 22, 0, 8)
-        })
+        voicePanel.addView(pendingDialButton)
+        root.addView(voicePanel)
+
+        val historyPanel = panel("CALL JOURNAL", "फोन पर रिकॉर्ड हुए कॉल इवेंट और शेयर करने योग्य नोट्स")
         history = TextView(this).apply {
-            textSize = 13f
-            setTextColor(0xFFE6F5F7.toInt())
-            setPadding(14, 14, 14, 14)
+            textSize = 12f; setTextColor(0xFFE3F1F5.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
             }
         }
-        root.addView(history)
-        root.addView(actionButton("Share phone call summary") { shareCallSummary() })
-        root.addView(TextView(this).apply {
-            text = "EDESY AI CALL HISTORY"
-            textSize = 12f
-            setTextColor(0xFF73DDE7.toInt())
-            setPadding(0, 24, 0, 8)
-        })
+        historyPanel.addView(history)
+        historyPanel.addView(actionButton("Share call summary", { shareCallSummary() }))
+        root.addView(historyPanel)
+
+        val aiPanel = panel("CLOUD AI CALLS", "Edesy inbound AI call history — backend configuration आवश्यक")
         edesyHistory = TextView(this).apply {
-            text = "Edesy status not checked yet."
-            textSize = 13f
-            setTextColor(0xFFE6F5F7.toInt())
-            setPadding(14, 14, 14, 14)
+            text = "Edesy status अभी जाँचा नहीं गया है।"
+            textSize = 12f; setTextColor(0xFFE3F1F5.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
+                setColor(0xFF091927.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF28556A.toInt())
             }
         }
-        root.addView(edesyHistory)
-        root.addView(actionButton("Refresh Edesy AI call history") { refreshEdesyHistory() })
-        root.addView(TextView(this).apply {
-            text = "IMPORTANT: Android InCallService cannot capture normal SIM-call audio. For the selected flow, the caller dials your existing SIM, the handset rings first, and the mobile operator forwards only unanswered calls to your configured Edesy DID. Shraddha AI can speak only after Edesy routing, OpenAI Live credentials and two-way audio are verified. Do not enable forwarding before a successful real test call."
-            textSize = 12f
-            setTextColor(0xFFFFC78A.toInt())
-            setPadding(0, 20, 0, 0)
+        aiPanel.addView(edesyHistory)
+        aiPanel.addView(actionButton("↻ Refresh Edesy AI call history", { refreshEdesyHistory() }))
+        root.addView(aiPanel)
+
+        val safety = panel("CALL SAFETY", "SIM कॉल का ऑडियो Android ऐप सीधे intercept नहीं कर सकता")
+        safety.addView(TextView(this).apply {
+            text = "पहले Edesy DID पर direct test call, दो-तरफ़ा audio और hang-up जाँचें। उसके बाद ही carrier की no-answer forwarding सेट करें। Unconditional forwarding बंद रखें। Contact match अस्पष्ट होने पर कॉल नहीं लगाई जाएगी।"
+            textSize = 12f; setTextColor(0xFFFFD09B.toInt())
         })
-        setContentView(ScrollView(this).apply { addView(root) })
-        tts = TextToSpeech(this) { result -> if (result == TextToSpeech.SUCCESS) tts?.language = Locale("hi", "IN") }
+        root.addView(safety)
+
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            setPadding(0, 0, 0, dp(8))
+            addView(root)
+        })
+        tts = TextToSpeech(this) { result ->
+            if (result == TextToSpeech.SUCCESS) tts?.language = Locale("hi", "IN")
+        }
         handleDialIntent(intent)
         handlePendingContactIntent(intent)
         refreshStatus()
@@ -287,13 +364,15 @@ class PhoneAgentActivity : AppCompatActivity() {
     private fun actionButton(label: String, action: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
-        setTextColor(0xFF04161C.toInt())
-        background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
-        }
-        elevation = 7f
-        setPadding(18, 12, 18, 12)
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+        textSize = 11f
+        setTextColor(0xFFE4FAFF.toInt())
+        background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF24516A.toInt(), 0xFF17354D.toInt())
+        ).apply { cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0xFF4B8BA2.toInt()) }
+        elevation = dp(3).toFloat()
+        setPadding(dp(8), dp(6), dp(8), dp(6))
+        layoutParams = LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) }
         setOnClickListener { action() }
     }
 

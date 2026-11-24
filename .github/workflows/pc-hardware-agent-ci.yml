@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/complete-pending-shraddha-features
+      - fix/live-app-operator-glass-ui-and-actions
     paths:
       - "pc_companion/**"
       - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
@@ -14,6 +15,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/shraddha-home-screen-polish
     paths:
       - "pc_companion/**"
       - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
@@ -50,7 +52,7 @@ jobs:
         run: python -m unittest discover -s pc_companion/tests -t . -v
 
       - name: Compile Windows companion source
-        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
+        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
 
       - name: Build Windows PC companion executable
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py

@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -254,7 +255,7 @@ private fun DrawScope.drawPlanetSphere(center: Offset, radius: Float, rotation: 
             }
         }
         NovaOrbStyle.MARS -> {
-            for (i in 0..5) drawArc(Color(0xFF5A2028).copy(alpha = 0.22f), 190f + i * 9f, 95f, false, Offset(center.x - radius * 0.72f, center.y - radius * 0.52f + i * radius * 0.16f), Size(radius * 1.44f, radius * 0.16f), Stroke(radius * 0.045f))
+            for (i in 0..5) drawArc(SolidColor(Color(0xFF5A2028).copy(alpha = 0.22f)), 190f + i * 9f, 95f, false, Offset(center.x - radius * 0.72f, center.y - radius * 0.52f + i * radius * 0.16f), Size(radius * 1.44f, radius * 0.16f), alpha = 1f, style = Stroke(radius * 0.045f))
             drawCircle(Color(0xFFFFC09A).copy(alpha = 0.25f), radius * 0.12f, center + Offset(radius * 0.28f, -radius * 0.18f))
         }
         NovaOrbStyle.MERCURY -> {
@@ -265,13 +266,13 @@ private fun DrawScope.drawPlanetSphere(center: Offset, radius: Float, rotation: 
             }
         }
         NovaOrbStyle.JUPITER -> {
-            for (i in 0..5) drawArc(if (i % 2 == 0) Color(0xFF8B5239).copy(alpha = 0.48f) else Color(0xFFFFE1B5).copy(alpha = 0.40f), 185f, 170f, false, Offset(center.x - radius * 0.78f, center.y - radius * 0.52f + i * radius * 0.17f), Size(radius * 1.56f, radius * 0.19f), Stroke(radius * 0.07f))
+            for (i in 0..5) drawArc(SolidColor(if (i % 2 == 0) Color(0xFF8B5239).copy(alpha = 0.48f) else Color(0xFFFFE1B5).copy(alpha = 0.40f)), 185f, 170f, false, Offset(center.x - radius * 0.78f, center.y - radius * 0.52f + i * radius * 0.17f), Size(radius * 1.56f, radius * 0.19f), alpha = 1f, style = Stroke(radius * 0.07f))
             drawOval(Color(0xFF9F4938).copy(alpha = 0.88f), Offset(center.x + radius * 0.18f, center.y + radius * 0.12f), Size(radius * 0.32f, radius * 0.16f))
         }
         NovaOrbStyle.VENUS -> {
             drawCircle(Color(0xFFFFD9B5).copy(alpha = 0.22f), radius * 0.66f, center)
             if (!reducedMotion) rotate(rotation * 0.12f, center) {
-                drawArc(Color(0xFFFFF0D9).copy(alpha = 0.48f), 205f, 130f, false, Offset(center.x - radius, center.y - radius * 0.38f), Size(radius * 2f, radius * 0.76f), Stroke(radius * 0.035f))
+                drawArc(SolidColor(Color(0xFFFFF0D9).copy(alpha = 0.48f)), 205f, 130f, false, Offset(center.x - radius, center.y - radius * 0.38f), Size(radius * 2f, radius * 0.76f), alpha = 1f, style = Stroke(radius * 0.035f))
             }
         }
         else -> Unit
