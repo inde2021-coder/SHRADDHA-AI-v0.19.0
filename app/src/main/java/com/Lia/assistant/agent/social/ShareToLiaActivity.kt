@@ -33,6 +33,8 @@ class ShareToLiaActivity : Activity() {
     }
 
     private fun importIncoming(inbox: File): List<File> {
+        val action = intent?.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) throw IllegalArgumentException("Unsupported share action")
         val uris = linkedSetOf<Uri>()
         intent?.data?.let(uris::add)
         intent?.clipData?.let { clip: ClipData ->
@@ -45,10 +47,17 @@ class ShareToLiaActivity : Activity() {
             (intent?.getParcelableExtra<android.os.Parcelable>(Intent.EXTRA_STREAM) as? Uri)
         }
         stream?.let(uris::add)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            intent?.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)?.forEach(uris::add)
+        } else {
+            @Suppress("DEPRECATION")
+            intent?.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.forEach(uris::add)
+        }
         if (uris.isEmpty()) throw IllegalArgumentException("No shared image or video was provided")
         if (uris.size > SharedMediaPolicy.MAX_ITEMS) throw IllegalArgumentException("Share up to ${SharedMediaPolicy.MAX_ITEMS} files at a time")
 
         val saved = mutableListOf<File>()
+        try {
         uris.forEach { uri ->
             val mime = contentResolver.getType(uri)?.lowercase().orEmpty()
             if (!SharedMediaPolicy.supports(mime)) {
@@ -77,6 +86,10 @@ class ShareToLiaActivity : Activity() {
                 destination.delete()
                 throw error
             }
+        }
+        } catch (error: Exception) {
+            saved.forEach { it.delete() }
+            throw error
         }
         return saved
     }
