@@ -1358,8 +1358,9 @@ wss.on('connection', (ws, ctx) => {
       const transferId = String(msg.transferId || '');
       const transfer = device.incomingTransfers?.get(transferId);
       if (!requester || !transfer || transfer.fromDeviceId !== targetId || requester === device) return;
-      const index = Number(msg.index);
-      if (Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount && msg.ok === true) transfer.chunks.set(index, true);
+      const rawIndex = msg.index;
+      const index = typeof rawIndex === 'number' && Number.isSafeInteger(rawIndex) ? rawIndex : -1;
+      if (index >= 0 && index < transfer.chunkCount && msg.ok === true) transfer.chunks.set(index, true);
       const complete = msg.complete === true && canCompleteFileTransfer(transfer, msg.ok === true);
       if (msg.complete === true && !complete) {
         // Tell the sender verification/completion was rejected; retain relay state
