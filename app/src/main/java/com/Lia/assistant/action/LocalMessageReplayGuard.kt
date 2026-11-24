@@ -56,7 +56,7 @@ object LocalMessageReplayGuard {
         synchronized(lock) {
             val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val key = PREFIX + sha256(requestId)
-            val stored = prefs.getString(key, null) ?: return false
+            val stored = prefs.all[key] as? String ?: return false
             if (stored.substringBefore('|') != fingerprint) return false
             return prefs.edit().remove(key).commit()
         }
