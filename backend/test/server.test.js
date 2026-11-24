@@ -1127,6 +1127,9 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
       requestId: shareRequest.requestId, transferId, fileName: 'resume-test.bin',
       sizeBytes: 100000, chunkCount: 3, sha256: 'a'.repeat(64)
     }));
+    const [startedMessage] = await startedPromise;
+    assert.equal(JSON.parse(startedMessage.toString()).transferId, transferId);
+
     // Simulate a stale ACK for chunk 1 from an earlier connection. The
     // receiver's persisted bitmap below says chunk 1 is actually missing.
     const staleAckPromise = nextWsMessage(ownerSocket, data => {
