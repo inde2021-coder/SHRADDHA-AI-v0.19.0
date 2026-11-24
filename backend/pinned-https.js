@@ -95,7 +95,6 @@ export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencie
     });
     // setTimeout is an inactivity timeout; this absolute deadline also stops slow-drip responses.
     deadline = setTimeout(() => req.destroy(new Error('Mastodon request exceeded its total time limit')), timeoutMs);
-    deadline.unref?.();
     req.setTimeout(timeoutMs, () => req.destroy(new Error('Mastodon request timed out')));
     req.on('error', fail);
     if (options.body !== undefined) req.write(options.body);
