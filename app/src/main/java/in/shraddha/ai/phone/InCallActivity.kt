@@ -13,6 +13,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
 
@@ -76,11 +77,10 @@ class InCallActivity : AppCompatActivity() {
         })
         setContentView(root)
         val filter = IntentFilter(ShraddhaInCallService.ACTION_CALL_STATE)
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(stateReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(stateReceiver, filter)
-        }
+        // This is an app-internal state broadcast; never expose the receiver to other apps.
+        ContextCompat.registerReceiver(
+            this, stateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         renderState()
     }
 
