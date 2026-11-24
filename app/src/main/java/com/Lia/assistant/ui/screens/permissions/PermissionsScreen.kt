@@ -170,10 +170,11 @@ fun PermissionsScreen(
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            when (row.state) {
-                                AccessState.GRANTED -> "Granted"
-                                AccessState.DENIED -> "Denied"
-                                AccessState.NOT_AVAILABLE -> "Not available"
+                            when {
+                                row.state == AccessState.GRANTED -> "Granted"
+                                row.state == AccessState.DENIED && row.runtimePermission != null -> "Allow"
+                                row.state == AccessState.DENIED -> "Enable"
+                                else -> "Not available"
                             },
                             color = when (row.state) {
                                 AccessState.GRANTED -> colors.lagoon
@@ -248,9 +249,10 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("selected_media", "Selected photos access", "Limited photo access on Android 14+", Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, 34))
         add(runtime("legacy_storage", "Legacy shared storage", "Legacy media access on Android 12 and earlier", Manifest.permission.READ_EXTERNAL_STORAGE, 1, 32))
         add(special("overlay", "Display over other apps", "Required only for floating assistant overlay", overlay, "overlay"))
-        add(special("accessibility", "Shraddha Device Control", "मुख्य on-screen control service; इसे Android Accessibility Settings में चालू करें", shraddhaAccessibility, "accessibility"))
-        add(special("lia_accessibility", "LIA Live App Operator", "Live App Operator के लिए स्क्रीन तत्व और gestures; जरूरत होने पर चालू करें", liaAccessibility, "accessibility"))
-        add(special("screen_reading", "Screen reading & capture", if (Build.VERSION.SDK_INT >= 30) "Android 11+ पर enabled Accessibility service से screen reading होती है; secure screens Android रोक सकता है" else "इस Android version पर Accessibility screen capture समर्थित नहीं है", Build.VERSION.SDK_INT >= 30 && anyAccessibility, "accessibility"))
+        val accessibilityHelp = if (Build.VERSION.SDK_INT >= 33) "Android 13+ पर switch grey हो तो App info > ⋮ > Allow restricted settings करें, फिर यहाँ लौटकर चालू करें।" else "इसे Android Accessibility Settings में चालू करें।"
+        add(special("accessibility", "Shraddha Device Control", "मुख्य on-screen control service. $accessibilityHelp", shraddhaAccessibility, "accessibility"))
+        add(special("lia_accessibility", "Live App Operator", "LIA screen interaction और gestures. $accessibilityHelp", liaAccessibility, "accessibility"))
+        add(special("screen_reading", "Screen reading & capture", if (Build.VERSION.SDK_INT >= 30) "Android 11+ पर Shraddha Device Control चालू होने पर उपलब्ध; secure screens Android रोक सकता है" else "इस Android version पर Accessibility screenshot API समर्थित नहीं है", Build.VERSION.SDK_INT >= 30 && shraddhaAccessibility, "accessibility"))
         add(special("notification_listener", "Notification access", "Reads notifications only after special access is enabled", listener, "notification_listener"))
         add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission", Build.VERSION.SDK_INT >= 28))
         add(declared("android.permission.FOREGROUND_SERVICE_MICROPHONE", "Microphone foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
