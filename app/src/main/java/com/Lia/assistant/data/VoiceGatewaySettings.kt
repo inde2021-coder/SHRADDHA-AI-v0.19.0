@@ -16,6 +16,9 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** HTTP failure from the secure voice/AI gateway, retaining status for retry policy. */
+class GatewayRequestException(val statusCode: Int, message: String) : IllegalStateException(message)
+
 /** Stores gateway URL and shared gateway credential encrypted with Android Keystore. */
 object VoiceGatewaySettings {
     data class AgentReply(val text: String, val provider: String, val model: String?, val inputTokens: Long?, val outputTokens: Long?)
@@ -148,7 +151,7 @@ object VoiceGatewaySettings {
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
-                throw IllegalStateException(message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
+                throw GatewayRequestException(response.code, message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
             }
             val flags = JSONObject(raw).optJSONObject("providers") ?: error("Gateway provider status is malformed.")
             val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
@@ -186,7 +189,7 @@ object VoiceGatewaySettings {
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
-                throw IllegalStateException(message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
+                throw GatewayRequestException(response.code, message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
             }
             val json = JSONObject(raw)
             require(json.optString("provider").equals(providerId, true)) {
