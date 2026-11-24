@@ -5,6 +5,7 @@ each control request requires a local approval dialog. No arbitrary shell comman
 """
 import json
 import base64
+import hashlib
 import struct
 import os
 import re
@@ -806,7 +807,7 @@ class PcCompanionApp:
                 part = Path(item["path"] + ".shraddha-part")
                 size = int(item.get("size", 0))
                 chunks = int(item.get("chunks", 0))
-                if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 20_000_000:
+                if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 100 * 1024 * 1024:
                     continue
                 if chunks != (size + 49151) // 49152:
                     continue
@@ -848,10 +849,14 @@ class PcCompanionApp:
         try:
             file_path = Path(path)
             size = file_path.stat().st_size
-            if size < 1 or size > 20_000_000:
-                raise ValueError("Relay currently permits files up to 20 MB per transfer.")
-            import hashlib, secrets
-            digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
+            if size < 1 or size > 100 * 1024 * 1024:
+                raise ValueError("Relay permits files up to 100 MiB per transfer.")
+            import secrets
+            digest_builder = hashlib.sha256()
+            with file_path.open("rb") as source:
+                for block in iter(lambda: source.read(1024 * 1024), b""):
+                    digest_builder.update(block)
+            digest = digest_builder.hexdigest()
             request_id = secrets.token_urlsafe(18).replace("-", "_")
             transfer_id = secrets.token_urlsafe(18).replace("-", "_")
             self.pending_pc_send = {
@@ -1016,7 +1021,11 @@ class PcCompanionApp:
                              "transferId": transfer_id, "index": index, "complete": False, "ok": True})
             if len(transfer["received"]) == transfer["chunks"]:
                 import hashlib
-                digest = hashlib.sha256(Path(transfer["path"] + ".shraddha-part").read_bytes()).hexdigest()
+                digest_builder = hashlib.sha256()
+                with open(transfer["path"] + ".shraddha-part", "rb") as source:
+                    for block in iter(lambda: source.read(1024 * 1024), b""):
+                        digest_builder.update(block)
+                digest = digest_builder.hexdigest()
                 if digest != transfer["sha256"]:
                     raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
                 os.replace(transfer["path"] + ".shraddha-part", transfer["path"])
