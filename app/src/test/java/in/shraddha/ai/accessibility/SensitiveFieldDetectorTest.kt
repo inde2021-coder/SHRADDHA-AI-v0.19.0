@@ -13,7 +13,7 @@ class SensitiveFieldDetectorTest {
     }
 
     @Test fun ignoresOrdinaryLabels() {
-        assertFalse(SensitiveFieldDetector.isSensitive(false, listOf("Search", "Message", "Name")))
+        assertFalse(SensitiveFieldDetector.isSensitive(false, listOf("Search", "Message", "Name", "Shipping address", "Shopping cart")))
         assertFalse(SensitiveFieldDetector.isSensitive(false, emptyList()))
     }
 
