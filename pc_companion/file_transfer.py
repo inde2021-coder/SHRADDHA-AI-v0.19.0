@@ -3,7 +3,7 @@ import re
 """Shared constants and validation for the Shraddha E2E file-transfer wire format."""
 
 FILE_CHUNK_BYTES = 48 * 1024  # Must match Android DeviceFileTransferProtocol.CHUNK_BYTES.
-MAX_PC_FILE_BYTES = 20_000_000
+MAX_PC_FILE_BYTES = 100 * 1024 * 1024
 
 
 def chunk_count_for_size(size_bytes):
