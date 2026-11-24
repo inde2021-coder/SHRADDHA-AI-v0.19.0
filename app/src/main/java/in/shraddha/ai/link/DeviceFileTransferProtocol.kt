@@ -6,6 +6,9 @@ internal object DeviceFileTransferProtocol {
     const val MAX_FILE_BYTES = 100L * 1024L * 1024L
     const val MAX_CHUNKS = ((MAX_FILE_BYTES + CHUNK_BYTES - 1) / CHUNK_BYTES).toInt()
 
+    fun isExpectedPeer(expectedPeerId: String, actualPeerId: String): Boolean =
+        expectedPeerId.isNotBlank() && actualPeerId.isNotBlank() && expectedPeerId == actualPeerId
+
     fun chunkCount(sizeBytes: Long): Int? {
         if (sizeBytes !in 1L..MAX_FILE_BYTES) return null
         return ((sizeBytes + CHUNK_BYTES - 1) / CHUNK_BYTES).toInt()
