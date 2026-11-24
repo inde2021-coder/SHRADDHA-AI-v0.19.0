@@ -429,6 +429,7 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun receiveChunk(msg: JSONObject) {
+        if (cancelled.get()) return
         if (paused.get()) {
             runOnUiThread { status.text = "Incoming transfer paused locally; resume to accept more chunks." }
             return
@@ -631,12 +632,28 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun cancelTransfer() {
-        cancelled.set(true); paused.set(false)
+        cancelled.set(true)
+        paused.set(false)
         synchronized(ackMonitor) { ackMonitor.notifyAll() }
         val target = if (sourcePeer.isNotBlank()) sourcePeer else peer.text.toString().trim()
-        if (transferId.isNotBlank() && target.isNotBlank()) DeviceLinkManager.cancelFileTransfer(target, transferId)
-        incomingOut?.close(); incomingOut = null; incomingFile?.delete(); incomingFile = null
-        clearTransferState()
-        status.text = "Transfer cancelled by user."
+        val activeTransferId = transferId
+        if (activeTransferId.isNotBlank() && target.isNotBlank()) {
+            DeviceLinkManager.cancelFileTransfer(target, activeTransferId)
+        }
+        // Serialize cancellation after any active disk write. Closing or deleting
+        // the partial file on the UI thread can race receiveChunk()/verifyIncoming().
+        try {
+            transferIo.execute {
+                runCatching { incomingOut?.fd?.sync() }
+                runCatching { incomingOut?.close() }
+                incomingOut = null
+                incomingFile?.delete()
+                incomingFile = null
+                clearTransferState()
+                runOnUiThread { status.text = "Transfer cancelled by user." }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            status.text = "Transfer worker is closing; partial data will remain private and can be discarded after reopening."
+        }
     }
 }
