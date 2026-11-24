@@ -85,11 +85,31 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         })
     }
 
+    private fun blocksSensitiveGesture(x1: Float, y1: Float, x2: Float, y2: Float): Boolean {
+        val root = rootInActiveWindow ?: return true
+        val sensitive = mutableListOf<SensitiveBounds>()
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < 500) {
+            val node = queue.removeFirst()
+            visited++
+            if (node.isVisibleToUser && isSensitiveNode(node)) {
+                val rect = Rect()
+                node.getBoundsInScreen(rect)
+                if (!rect.isEmpty) sensitive += SensitiveBounds(rect.left, rect.top, rect.right, rect.bottom)
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let(queue::addLast)
+        }
+        return SensitiveScreenGuard.blocksGesture(sensitive, x1, y1, x2, y2)
+    }
+
     private fun performRemoteTap(xNorm: Float, yNorm: Float): Boolean {
         if (Build.VERSION.SDK_INT < 24) return false
         val metrics = resources.displayMetrics
         val x = (xNorm.coerceIn(0f, 1f) * metrics.widthPixels)
         val y = (yNorm.coerceIn(0f, 1f) * metrics.heightPixels)
+        if (blocksSensitiveGesture(x, y, x, y)) return false
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 90)).build()
         return dispatchGesture(gesture, null, null)
@@ -98,9 +118,14 @@ class ShraddhaAccessibilityService : AccessibilityService() {
     private fun performRemoteSwipe(x1: Float, y1: Float, x2: Float, y2: Float): Boolean {
         if (Build.VERSION.SDK_INT < 24) return false
         val metrics = resources.displayMetrics
+        val startX = x1.coerceIn(0f, 1f) * metrics.widthPixels
+        val startY = y1.coerceIn(0f, 1f) * metrics.heightPixels
+        val endX = x2.coerceIn(0f, 1f) * metrics.widthPixels
+        val endY = y2.coerceIn(0f, 1f) * metrics.heightPixels
+        if (blocksSensitiveGesture(startX, startY, endX, endY)) return false
         val path = Path().apply {
-            moveTo(x1.coerceIn(0f, 1f) * metrics.widthPixels, y1.coerceIn(0f, 1f) * metrics.heightPixels)
-            lineTo(x2.coerceIn(0f, 1f) * metrics.widthPixels, y2.coerceIn(0f, 1f) * metrics.heightPixels)
+            moveTo(startX, startY)
+            lineTo(endX, endY)
         }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 350)).build()
         return dispatchGesture(gesture, null, null)
