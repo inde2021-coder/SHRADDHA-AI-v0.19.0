@@ -81,7 +81,6 @@ class DeviceTransferActivity : Activity() {
     override fun onDestroy() {
         cancelled.set(true)
         paused.set(false)
-        synchronized(ackMonitor) { ackMonitor.notifyAll() }
         runCatching {
             transferIo.execute {
                 runCatching { incomingOut?.fd?.sync() }
