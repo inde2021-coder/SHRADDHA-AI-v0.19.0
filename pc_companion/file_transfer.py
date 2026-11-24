@@ -44,3 +44,16 @@ def take_chunk_window(queue, in_flight, limit=MAX_IN_FLIGHT_CHUNKS):
         in_flight.add(index)
         batch.append(index)
     return batch
+
+
+def validate_resume_indexes(missing, declared_chunk_count, expected_chunk_count):
+    if (not isinstance(missing, list) or isinstance(declared_chunk_count, bool) or
+            not isinstance(declared_chunk_count, int) or declared_chunk_count != expected_chunk_count or
+            len(missing) > expected_chunk_count):
+        return None
+    if any(not isinstance(index, int) or isinstance(index, bool) or
+           not 0 <= index < expected_chunk_count for index in missing):
+        return None
+    if len(set(missing)) != len(missing):
+        return None
+    return list(missing)
