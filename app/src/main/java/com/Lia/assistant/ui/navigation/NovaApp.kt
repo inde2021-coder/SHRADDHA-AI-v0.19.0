@@ -47,6 +47,7 @@ import com.Lia.assistant.ui.screens.vision.VisualLensScreen
 import com.Lia.assistant.ui.screens.vision.ArMappingScreen
 import com.Lia.assistant.ui.screens.brain.OfflineModelScreen
 import com.Lia.assistant.ui.screens.smarthome.SmartHomeScreen
+import com.Lia.assistant.ui.theme.LiaReferenceTheme
 import com.Lia.assistant.ui.theme.LocalBottomBarInset
 import com.Lia.assistant.ui.theme.nightSky
 
@@ -72,6 +73,7 @@ fun NovaApp(appState: NovaAppState) {
         }
     }
 
+    LiaReferenceTheme {
     CompositionLocalProvider(LocalBottomBarInset provides if (showBottomBar) 80.dp else 0.dp) {
         Scaffold(
             modifier = Modifier
@@ -136,5 +138,6 @@ fun NovaApp(appState: NovaAppState) {
                 }
             }
         }
+    }
     }
 }
