@@ -1,6 +1,5 @@
 package com.Lia.assistant.ui.screens.home
 
-import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,12 +19,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,8 +38,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,34 +49,18 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
-import `in`.shraddha.ai.operator.OperatorActivity
 
-private val ShraddhaViolet = Color(0xFF7C3AED)
-private val ShraddhaLavender = Color(0xFFF1EAFE)
-private val ShraddhaBorder = Color(0xFFE3D7FA)
-
-private data class HomeAction(
-    val title: String,
-    val subtitle: String,
-    val symbol: String,
-    val onClick: () -> Unit
-)
+private val ShraddhaViolet = Color(0xFF8B5CF6)
+private val ShraddhaBorder = Color(0xFF4C3D70)
 
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
-    val context = LocalContext.current
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
+    var commandText by remember { mutableStateOf("") }
     val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
     val design = appState.homeDesign
-    val designTitle = when (design) {
-        "ROYAL_3D" -> "ROYAL 3D"
-        "COSMIC_ORB" -> "COSMIC ORB"
-        "AI_ROBOT" -> "AI ROBOT"
-        "EXECUTIVE" -> "EXECUTIVE COMMAND"
-        else -> "SHRADDHA SIGNATURE"
-    }
     val dailyOrbTheme = rememberDailyOrbTheme()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val avatarHeight = when (design) {
@@ -84,48 +71,36 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         else -> (screenHeight * 0.39f).coerceIn(250.dp, 330.dp)
     }
 
-    val dailyActions = listOf(
-        HomeAction("बात करें", "आवाज़ से निर्देश दें", "🎙") { navController.navigate("voice") },
-        HomeAction("AI Chat", "लिखकर सवाल पूछें", "✦") { navController.navigate("chat") },
-        HomeAction("Visual Lens", "कैमरे से समझें", "◉") { navController.navigate("visual_lens") },
-        HomeAction("PC Control", "फोन से PC जोड़ें", "▣") { navController.navigate("device_center") }
-    )
-    val workActions = listOf(
-        HomeAction("Live App Operator", "फोन ऐप पर काम करवाएँ", "⌘") {
-            context.startActivity(Intent(context, OperatorActivity::class.java))
-        },
-        HomeAction("Multi-Agent Workspace", "बड़े काम को बाँटें", "◎") { navController.navigate("agent_council") },
-        HomeAction("Expert Studio", "तकनीकी और विशेषज्ञ काम", "⚙") { navController.navigate("expert_studio") },
-        HomeAction("Project Lab", "प्रोजेक्ट और प्रगति", "◇") { navController.navigate("project_lab") }
-    )
-    val systemActions = listOf(
-        HomeAction("People Memory", "यादें और सुरक्षित बैकअप", "♥") { navController.navigate("data_vault") },
-        HomeAction("Privacy & Security", "अनुमति और सुरक्षा", "⛨") { navController.navigate("privacy") },
-        HomeAction("Plugins & Tools", "जुड़ी हुई सुविधाएँ", "⌘") { navController.navigate("plugins") },
-        HomeAction("Smart Home", "स्मार्ट डिवाइस", "⌂") { navController.navigate("smart_home") }
-    )
+    fun sendCommand() {
+        val prompt = commandText.trim()
+        if (prompt.isNotEmpty()) {
+            navController.currentBackStackEntry?.savedStateHandle?.set("home_prompt", prompt)
+            commandText = ""
+            navController.navigate("chat") { launchSingleTop = true }
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(bottom = 104.dp),
+            .padding(bottom = 100.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 14.dp),
+            Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
-                painter = painterResource(R.drawable.ic_launcher_foreground),
+                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_launcher_foreground),
                 contentDescription = "Shraddha AI logo",
-                modifier = Modifier.size(46.dp),
+                modifier = Modifier.size(44.dp),
                 contentScale = ContentScale.Fit
             )
             Column(Modifier.padding(start = 10.dp)) {
-                Text(assistantName, color = colors.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text(assistantName, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF218B62)))
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(colors.success))
                     Text(
                         when (orbState.name) {
                             "LISTENING" -> " सुन रही हूँ"
@@ -138,48 +113,43 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 }
             }
             Spacer(Modifier.weight(1f))
-            Box(
-                Modifier.size(42.dp).clip(CircleShape)
-                    .background(Color.White)
-                    .border(1.dp, ShraddhaBorder, CircleShape)
-                    .clickable { navController.navigate("settings") },
-                contentAlignment = Alignment.Center
-            ) {
+            IconButton(onClick = { navController.navigate("settings") { launchSingleTop = true } }) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings", tint = ShraddhaViolet)
             }
         }
 
         Box(
             Modifier.fillMaxWidth().height(avatarHeight)
-                .clip(RoundedCornerShape(when (design) { "COSMIC_ORB" -> 140.dp; "EXECUTIVE" -> 18.dp; "ROYAL_3D" -> 34.dp; else -> 28.dp }))
-                .background(Brush.verticalGradient(listOf(Color(0xFFEDE4FF), Color.White, Color(0xFFEAF4FF))))
-                .border(1.dp, ShraddhaBorder, RoundedCornerShape(28.dp)),
+                .clip(RoundedCornerShape(30.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF17142B), Color(0xFF222044), Color(0xFF111B32))))
+                .border(1.dp, ShraddhaBorder, RoundedCornerShape(30.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                "$designTitle  •  YOUR PERSONAL AI",
-                color = ShraddhaViolet,
+                "YOUR PERSONAL AI",
+                color = Color(0xFFC4B5FD),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.7.sp,
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 16.dp)
+                letterSpacing = 2.sp,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)
             )
             Image(
-                painter = painterResource(R.drawable.shraddha_ai_avatar),
+                painter = androidx.compose.ui.res.painterResource(R.drawable.shraddha_ai_avatar),
                 contentDescription = "$assistantName AI avatar",
-                modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 24.dp, bottom = 48.dp),
+                modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 30.dp, bottom = 46.dp),
                 contentScale = ContentScale.Fit
             )
             Box(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 9.dp)
-                    .size(70.dp).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(Color.White, Color(0xFFE3D3FF), Color(0xFFC5A5FF))))
-                    .border(1.dp, Color(0xFFD8C4FA), CircleShape),
+                    .size(72.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFFF5F0FF), Color(0xFFBDA4FF), Color(0xFF6044B8))))
+                    .border(1.dp, Color(0xFFD8C4FA), CircleShape)
+                    .clickable { navController.navigate("voice") },
                 contentAlignment = Alignment.Center
             ) {
                 LiaOrb3D(
                     state = orbState,
-                    size = 66.dp,
+                    size = 68.dp,
                     amplitude = amplitude,
                     style = dailyOrbTheme.style,
                     assistantName = assistantName
@@ -188,137 +158,38 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         }
 
         Text(
-            dailyOrbTheme.style.displayName,
-            color = ShraddhaViolet,
-            fontSize = 10.sp,
+            when (orbState.name) {
+                "LISTENING" -> "मैं सुन रही हूँ…"
+                "THINKING" -> "आपकी बात समझ रही हूँ…"
+                "SPEAKING" -> "आपको जवाब दे रही हूँ…"
+                else -> "बताइए, आज मैं क्या करूँ?"
+            },
+            color = colors.textPrimary,
+            fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.2.sp,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 20.dp, bottom = 12.dp)
         )
 
-        Row(
-            Modifier.fillMaxWidth().padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            HomePrimaryAction(
-                text = "बात शुरू करें",
-                modifier = Modifier.weight(1f),
-                onClick = { navController.navigate("voice") }
-            )
-            HomeSecondaryAction(
-                text = "Message",
-                modifier = Modifier.weight(1f),
-                onClick = { navController.navigate("chat") }
-            )
-        }
-
-        when (design) {
-            "COSMIC_ORB" -> {
-                HomeActionSection("COMMAND CENTER", "सभी काम के सिस्टम एक जगह", workActions)
-                HomeActionSection("DAILY ESSENTIALS", "रोज़ इस्तेमाल होने वाले मुख्य काम", dailyActions)
-                HomeActionSection("MEMORY & SYSTEM", "यादें, सुरक्षा और जुड़े हुए टूल", systemActions)
-            }
-            "AI_ROBOT" -> {
-                HomeActionSection("DAILY ESSENTIALS", "आपकी AI assistant के quick controls", dailyActions)
-                HomeActionSection("MEMORY & SYSTEM", "यादें और device intelligence", systemActions)
-                HomeActionSection("COMMAND CENTER", "Advanced assistant systems", workActions)
-            }
-            "EXECUTIVE" -> {
-                HomeActionSection("DAILY ESSENTIALS", "रोज़ के मुख्य काम", dailyActions)
-                HomeActionSection("COMMAND CENTER", "काम और automation", workActions)
-                HomeActionSection("MEMORY & SYSTEM", "सिस्टम स्थिति और सुरक्षा", systemActions)
-            }
-            else -> {
-                HomeActionSection("DAILY ESSENTIALS", "रोज़ इस्तेमाल होने वाले मुख्य काम", dailyActions)
-                HomeActionSection("COMMAND CENTER", "सभी काम के सिस्टम एक जगह", workActions)
-                HomeActionSection("MEMORY & SYSTEM", "यादें, सुरक्षा और जुड़े हुए टूल", systemActions)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeActionSection(
-    title: String,
-    subtitle: String,
-    actions: List<HomeAction>
-) {
-    Column(
-        Modifier.fillMaxWidth().padding(top = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
-        Text(title, color = ShraddhaViolet, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
-        Text(subtitle, color = Color(0xFF705D89), fontSize = 10.sp)
-        actions.chunked(2).forEach { rowActions ->
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                rowActions.forEach { action ->
-                    HomeActionTile(action, Modifier.weight(1f))
+        OutlinedTextField(
+            value = commandText,
+            onValueChange = { commandText = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Shraddha को लिखकर कमांड दें…") },
+            trailingIcon = {
+                IconButton(onClick = { sendCommand() }, enabled = commandText.isNotBlank()) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send command", tint = ShraddhaViolet)
                 }
-                if (rowActions.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeActionTile(action: HomeAction, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.height(94.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Brush.verticalGradient(listOf(Color.White, ShraddhaLavender)))
-            .border(1.dp, ShraddhaBorder, RoundedCornerShape(18.dp))
-            .clickable(onClick = action.onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(31.dp).clip(CircleShape).background(Color(0xFFEDE4FF)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(action.symbol, color = ShraddhaViolet, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            Text(
-                action.title,
-                color = Color(0xFF26133F),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 8.dp)
-            )
-        }
-        Text(
-            action.subtitle,
-            color = Color(0xFF705D89),
-            fontSize = 9.sp,
-            modifier = Modifier.padding(top = 7.dp)
+            },
+            shape = RoundedCornerShape(20.dp),
+            maxLines = 3,
+            singleLine = false
         )
-    }
-}
 
-@Composable
-private fun HomePrimaryAction(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier.height(48.dp).clip(RoundedCornerShape(16.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF7C3AED), Color(0xFFA855F7))))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun HomeSecondaryAction(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier.height(48.dp).clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .border(1.dp, ShraddhaBorder, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, color = ShraddhaViolet, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "वॉइस कमांड के लिए बीच वाले Orb को छुएँ • बाकी काम कमांड से",
+            color = colors.textSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 10.dp, bottom = 10.dp)
+        )
     }
 }
