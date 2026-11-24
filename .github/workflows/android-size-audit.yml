@@ -35,6 +35,18 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:lintRelease :app:assembleRelease :app:bundleRelease -PshraddhaAbi=arm64-v8a --no-daemon --stacktrace
+      - name: Upload release lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: shraddha-ai-release-lint-diagnostics
+          path: |
+            app/build/reports/lint-results-release.txt
+            app/build/reports/lint-results-release.html
+            app/build/intermediates/lint_intermediate_text_report/release/lintReportRelease/lint-results-release.txt
+            build/reports/problems/problems-report.html
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Generate APK and AAB size report
         shell: bash
         run: |
