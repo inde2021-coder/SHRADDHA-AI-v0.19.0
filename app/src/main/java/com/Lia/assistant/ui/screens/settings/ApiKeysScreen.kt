@@ -1,6 +1,8 @@
 package com.Lia.assistant.ui.screens.settings
 
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
+import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.GeminiTextClient
@@ -106,6 +109,40 @@ private fun testSavedProviderKey(context: android.content.Context, provider: Str
     }
 }
 
+private fun safeDiagnosticText(value: String): String {
+    return value
+        .replace(Regex("(?i)(authorization|api[-_ ]?key|gateway[-_ ]?token|x-goog-api-key)\\s*[:=]\\s*[^\\s,;]+"), "$1=[REDACTED]")
+        .replace(Regex("(?i)\\b(AIza[0-9A-Za-z_-]{12,}|sk-[0-9A-Za-z_-]{12,}|gsk_[0-9A-Za-z_-]{12,}|pplx-[0-9A-Za-z_-]{12,}|sk-ant-[0-9A-Za-z_-]{12,})\\b"), "[REDACTED_KEY]")
+        .take(700)
+}
+
+private fun buildApiDiagnosticReport(context: Context, configured: Map<String, Boolean>, testStatus: Map<String, String>): String {
+    val packageInfo = runCatching {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }.getOrNull()
+    val gateway = VoiceGatewaySettings.get(context)
+    val gatewayHost = runCatching { java.net.URI(gateway.baseUrl).host }.getOrNull().orEmpty()
+    return buildString {
+        appendLine("Shraddha AI — API Diagnostic Report")
+        appendLine("Generated: " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date()))
+        appendLine("App version: " + (packageInfo?.versionName ?: "unknown") + " (" + (packageInfo?.versionCode ?: 0) + ")")
+        appendLine("Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")")
+        appendLine("Device: " + Build.MANUFACTURER + " " + Build.MODEL)
+        appendLine()
+        appendLine("Provider checks (keys are never included):")
+        apiKeyProviders.forEach { provider ->
+            appendLine("- " + provider.id + ": keySaved=" + (configured[provider.id] == true) + "; lastTest=" + safeDiagnosticText(testStatus[provider.id].orEmpty().ifBlank { "Not tested in this session" }))
+        }
+        appendLine()
+        appendLine("Secure backend:")
+        appendLine("- configured=" + (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank() && gateway.readError == null))
+        appendLine("- host=" + gatewayHost.ifBlank { "not set" })
+        appendLine("- settingsReadError=" + (gateway.readError?.let { safeDiagnosticText(it) } ?: "none"))
+        appendLine()
+        appendLine("Privacy: API keys, gateway token, request prompts and response content are excluded.")
+    }
+}
 @Composable
 fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -135,6 +172,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val testStatus = remember { mutableStateMapOf<String, String>() }
     val testing = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
+    var diagnosticReport by mutableStateOf("")
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
@@ -297,6 +335,32 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                         fontSize = 11.sp
                     )
                 }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("API Diagnostic Report", color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text("Share a safe report with support. It includes provider test results, app/device details and backend configuration status — never API keys or gateway tokens.", color = colors.textSecondary, fontSize = 12.sp)
+                NovaButton(
+                    text = "Generate & Share Diagnostic Report",
+                    type = NovaButtonType.SECONDARY,
+                    onClick = {
+                        diagnosticReport = buildApiDiagnosticReport(context, configured.toMap(), testStatus.toMap())
+                        runCatching {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Shraddha AI API Diagnostic Report")
+                                putExtra(Intent.EXTRA_TEXT, diagnosticReport)
+                            }
+                            context.startActivity(Intent.createChooser(send, "Share diagnostic report"))
+                        }.onFailure {
+                            Toast.makeText(context, "Report generated, but share sheet could not open.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (diagnosticReport.isNotBlank()) Text("Report generated. Review it before sharing.", color = colors.success, fontSize = 11.sp)
             }
         }
         Spacer(Modifier.height(96.dp))
