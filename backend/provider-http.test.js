@@ -87,8 +87,10 @@ test('provider transport does not retry malformed or oversized response bodies',
   assert.equal(calls, 1);
 
   calls = 0;
+  const oversizedWithoutLength = response(200, 'x'.repeat(2 * 1024 * 1024 + 1));
+  oversizedWithoutLength.headers.get = () => null;
   await assert.rejects(() => requestProviderJson('https://provider.example/v1', {}, {
-    fetchImpl: async () => { calls++; return response(200, 'x'.repeat(2 * 1024 * 1024 + 1)); },
+    fetchImpl: async () => { calls++; return oversizedWithoutLength; },
     delay: async () => {}
   }), /2 MiB/);
   assert.equal(calls, 1);
