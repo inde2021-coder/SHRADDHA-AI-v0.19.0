@@ -57,22 +57,28 @@ fun SocialPublishingScreen(navController: NavController) {
     var mediaFileName by remember { mutableStateOf("") }
     var pendingAction by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var mediaPickerOpen by remember { mutableStateOf(false) }
+    var pickerPlatform by remember { mutableStateOf("telegram") }
+    var pickerMediaKind by remember { mutableStateOf("image") }
     var status by remember { mutableStateOf("Choose a platform, review the exact post, then publish now or schedule it.") }
     var scheduledPosts by remember { mutableStateOf<JSONArray?>(null) }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        mediaPickerOpen = false
+        val selectedPlatform = pickerPlatform
+        val selectedMediaKind = pickerMediaKind
         if (uri != null && !busy) {
             busy = true
             scope.launch {
                 val result = runCatching {
-                    if (platform == "instagram" || platform == "facebook") {
-                        val url = SocialPublishingClient.uploadMedia(context, uri, platform, mediaKind)
+                    if (selectedPlatform == "instagram" || selectedPlatform == "facebook") {
+                        val url = SocialPublishingClient.uploadMedia(context, uri, selectedPlatform, selectedMediaKind)
                         mediaUrl = url
                         mediaBase64 = ""
                         mediaMimeType = ""
                         mediaFileName = ""
                         status = "Media uploaded to your Firebase storage. Meta receives its URL only when you confirm publishing."
                     } else {
-                        val payload = SocialPublishingClient.encodeBinaryMedia(context, uri, platform, mediaKind)
+                        val payload = SocialPublishingClient.encodeBinaryMedia(context, uri, selectedPlatform, selectedMediaKind)
                         mediaBase64 = payload.getString("mediaBase64")
                         mediaMimeType = payload.getString("mimeType")
                         mediaFileName = payload.getString("fileName")
@@ -152,7 +158,7 @@ fun SocialPublishingScreen(navController: NavController) {
             platforms.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { item ->
-                        FilterChip(selected = platform == item, onClick = { platform = item; mediaUrl = ""; mediaBase64 = ""; mediaMimeType = ""; mediaFileName = ""; mediaKind = "image" }, label = { Text(item.replaceFirstChar { it.uppercase() }) })
+                        FilterChip(selected = platform == item, onClick = { platform = item; mediaUrl = ""; mediaBase64 = ""; mediaMimeType = ""; mediaFileName = ""; mediaKind = "image" }, enabled = !busy && !mediaPickerOpen, label = { Text(item.replaceFirstChar { it.uppercase() }) })
                     }
                 }
             }
@@ -179,7 +185,7 @@ fun SocialPublishingScreen(navController: NavController) {
                 Text("POST MEDIA", color = colors.accent)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("image", "video").forEach { kind ->
-                        FilterChip(selected = mediaKind == kind, onClick = {
+                        FilterChip(selected = mediaKind == kind, enabled = !busy && !mediaPickerOpen, onClick = {
                             mediaKind = kind
                             mediaBase64 = ""
                             mediaMimeType = ""
@@ -195,8 +201,15 @@ fun SocialPublishingScreen(navController: NavController) {
                     mediaBase64 = ""
                     mediaMimeType = ""
                     mediaFileName = ""
-                    mediaPicker.launch(types)
-                }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                    pickerPlatform = platform
+                    pickerMediaKind = mediaKind
+                    mediaPickerOpen = true
+                    runCatching { mediaPicker.launch(types) }
+                        .onFailure {
+                            mediaPickerOpen = false
+                            status = "Could not open media picker: ${it.message ?: "unknown error"}"
+                        }
+                }, enabled = !busy && !mediaPickerOpen, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
                 Text(
                     if (mediaBase64.isNotBlank()) "Attached: ${mediaFileName} • ${mediaMimeType}" else "Image/video is encoded on-device and uploaded only after you confirm the exact post.",
                     color = colors.textSecondary
