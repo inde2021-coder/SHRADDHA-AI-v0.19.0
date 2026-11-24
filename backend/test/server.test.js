@@ -1119,6 +1119,21 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     await approvedPromise;
 
     const transferId = 'resume_test_12345';
+    for (const [index, invalidFields] of [
+      [0, { sizeBytes: '100000' }],
+      [1, { sizeBytes: true }],
+      [2, { chunkCount: '3' }],
+      [3, { fileName: 42 }]
+    ]) {
+      const ignoredMalformedStart = assert.rejects(nextWsMessage(memberSocket, () => true, 120), /Timed out/);
+      ownerSocket.send(JSON.stringify({
+        type: 'file_transfer_start', targetDeviceId: member.deviceId,
+        requestId: shareRequest.requestId, transferId: `invalid_manifest_${index}123`,
+        fileName: 'resume-test.bin', sizeBytes: 100000, chunkCount: 3,
+        sha256: 'a'.repeat(64), ...invalidFields
+      }));
+      await ignoredMalformedStart;
+    }
     const startedPromise = nextWsMessage(memberSocket, data => {
       try { return JSON.parse(data.toString()).type === 'file_transfer_start'; } catch { return false; }
     });
