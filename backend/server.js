@@ -1324,17 +1324,23 @@ wss.on('connection', (ws, ctx) => {
       if (raw.length !== expected) return;
       send(targetId, JSON.stringify({ type: 'file_transfer_chunk', fromDeviceId: deviceId, transferId, index, payload: encoded }));
     } else if (msg.type === 'file_transfer_resume') {
+      // The receiving device is authoritative for its persisted chunk bitmap.
+      // Validate every identifier and manifest bound before returning a resume plan.
       const sourceId = String(msg.targetDeviceId || '');
       const source = session.devices.get(sourceId);
       const transferId = String(msg.transferId || '');
       const transfer = device.incomingTransfers?.get(transferId);
-      if (!source || sourceId === deviceId || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now()) return;
-      const missing = [];
-      for (let i = 0; i < transfer.chunkCount && missing.length < 2200; i++) if (!transfer.chunks.has(i)) missing.push(i);
-      if (!validMissingTransferIndexes(missing, transfer.chunkCount)) return;
+      const chunkCount = msg.chunkCount; // Require a JSON number; do not coerce strings or other values.
+      const missing = msg.missingIndexes;
+      // The receiver's persisted bitmap is authoritative. Never reconstruct it
+      // from relay ACK state: ACKs can be lost independently of saved chunks.
+      if (!source || sourceId === deviceId || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
+          !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
+          !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() ||
+          transfer.chunkCount !== chunkCount || !validMissingTransferIndexes(missing, chunkCount)) return;
       send(sourceId, JSON.stringify({
         type: 'file_transfer_resume', fromDeviceId: deviceId, transferId,
-        chunkCount: transfer.chunkCount, missingIndexes: missing
+        chunkCount, missingIndexes: missing
       }));
     } else if (msg.type === 'file_transfer_ack') {
       const targetId = String(msg.targetDeviceId || '');
