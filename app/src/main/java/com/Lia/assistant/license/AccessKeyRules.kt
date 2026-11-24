@@ -14,6 +14,7 @@ object AccessKeyRules {
         expiresAt: Long,
         isBlocked: Boolean,
         hasKey: Boolean,
+        isVerified: Boolean = false,
         currentTime: Long = System.currentTimeMillis()
     ): EvaluationResult {
         if (isBlocked) {
@@ -29,6 +30,17 @@ object AccessKeyRules {
             return EvaluationResult(
                 isActive = false,
                 statusText = "No Access Key Configured",
+                isBlocked = false,
+                isExpired = false
+            )
+        }
+
+        // A user-entered string is not proof of entitlement. Only a trusted
+        // server-side verifier may mark a key as verified.
+        if (!isVerified) {
+            return EvaluationResult(
+                isActive = false,
+                statusText = "License Key Not Verified",
                 isBlocked = false,
                 isExpired = false
             )

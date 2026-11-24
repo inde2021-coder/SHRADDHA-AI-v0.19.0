@@ -13,7 +13,8 @@ class AccessKeyRulesTest {
             plan = "Pro",
             expiresAt = System.currentTimeMillis() + 100000L,
             isBlocked = true,
-            hasKey = true
+            hasKey = true,
+            isVerified = true
         )
         assertFalse(res.isActive)
         assertTrue(res.isBlocked)
@@ -21,13 +22,14 @@ class AccessKeyRulesTest {
     }
 
     @Test
-    fun testExpiredKeyIsInactive() {
+    fun testExpiredVerifiedKeyIsInactive() {
         val now = 1_000_000L
         val res = AccessKeyRules.evaluate(
             plan = "Pro",
             expiresAt = 900_000L,
             isBlocked = false,
             hasKey = true,
+            isVerified = true,
             currentTime = now
         )
         assertFalse(res.isActive)
@@ -36,19 +38,33 @@ class AccessKeyRulesTest {
     }
 
     @Test
-    fun testValidKeyIsActive() {
+    fun testVerifiedKeyIsActive() {
         val now = 1_000_000L
         val res = AccessKeyRules.evaluate(
             plan = "Pro",
             expiresAt = 2_000_000L,
             isBlocked = false,
             hasKey = true,
+            isVerified = true,
             currentTime = now
         )
         assertTrue(res.isActive)
         assertFalse(res.isExpired)
         assertFalse(res.isBlocked)
         assertEquals("Pro Plan Active", res.statusText)
+    }
+
+    @Test
+    fun testUnverifiedNonEmptyKeyIsInactive() {
+        val res = AccessKeyRules.evaluate(
+            plan = "Pro",
+            expiresAt = System.currentTimeMillis() + 365L * 24 * 3600 * 1000,
+            isBlocked = false,
+            hasKey = true,
+            isVerified = false
+        )
+        assertFalse(res.isActive)
+        assertEquals("License Key Not Verified", res.statusText)
     }
 
     @Test
