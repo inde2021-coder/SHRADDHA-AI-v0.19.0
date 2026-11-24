@@ -31,6 +31,23 @@ export function validFileTransferManifest(sizeBytes, chunkCount, sha256, transfe
     typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId);
 }
 
+/** Resolve a cancellation only when the actor is the active sender or receiver. */
+export function resolveFileTransferCancellation(actor, target, actorId, targetId, transferId, now = Date.now()) {
+  if (!actor || !target || !(actor.incomingTransfers instanceof Map) ||
+      !(target.incomingTransfers instanceof Map) ||
+      typeof actorId !== 'string' || !actorId ||
+      typeof targetId !== 'string' || !targetId || actorId === targetId ||
+      typeof transferId !== 'string' || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
+      !Number.isFinite(now)) return null;
+  const targetRecord = target.incomingTransfers.get(transferId);
+  if (targetRecord?.fromDeviceId === actorId &&
+      Number.isFinite(targetRecord.expiresAt) && targetRecord.expiresAt > now) return 'sender';
+  const actorRecord = actor.incomingTransfers.get(transferId);
+  if (actorRecord?.fromDeviceId === targetId &&
+      Number.isFinite(actorRecord.expiresAt) && actorRecord.expiresAt > now) return 'receiver';
+  return null;
+}
+
 export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
   if (!Number.isSafeInteger(index) || !Number.isSafeInteger(chunkCount) || !Number.isSafeInteger(byteLength) ||
       !Number.isSafeInteger(totalBytes) || index < 0 || index >= chunkCount || chunkCount < 1 || totalBytes < 1 || totalBytes > 100 * 1024 * 1024) return false;

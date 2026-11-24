@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1366,8 +1366,11 @@ wss.on('connection', (ws, ctx) => {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const transferId = String(msg.transferId || '');
-      target?.incomingTransfers?.delete(transferId); device.incomingTransfers?.delete(transferId);
-      if (target && targetId !== deviceId) send(targetId, JSON.stringify({ type: 'file_transfer_cancel', fromDeviceId: deviceId, transferId, reason: String(msg.reason || 'cancelled').slice(0, 120) }));
+      const cancellationRole = target && resolveFileTransferCancellation(device, target, deviceId, targetId, transferId, Date.now());
+      if (!target || !cancellationRole) return;
+      if (cancellationRole === 'sender') target.incomingTransfers.delete(transferId);
+      else device.incomingTransfers.delete(transferId);
+      send(targetId, JSON.stringify({ type: 'file_transfer_cancel', fromDeviceId: deviceId, transferId, reason: String(msg.reason || 'cancelled').slice(0, 120) }));
     } else if (msg.type === 'task_handoff') {
       return; // Task offers must use the mutually verified E2E envelope.
       const targetId = String(msg.targetDeviceId || '');
