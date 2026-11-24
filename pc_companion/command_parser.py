@@ -31,7 +31,7 @@ def parse_android_command(raw):
         return {"kind": "type", "text": text}
     if lower in {"read screen", "read this screen", "screen ocr", "ocr", "स्क्रीन पढ़ो", "स्क्रीन का टेक्स्ट पढ़ो", "स्क्रीन से टेक्स्ट निकालो"}:
         return {"kind": "ocr"}
-    match = re.match(r"^(?:click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\\s+(.+)$", command, re.I)
+    match = re.match(r"^(?:click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\s+(.+)$", command, re.I)
     if match:
         label = match.group(1).strip()
         if not label or len(label) > 120:
