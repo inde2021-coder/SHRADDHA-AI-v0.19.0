@@ -16,6 +16,9 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** HTTP failure from the secure voice/AI gateway, retaining status for retry policy. */
+class GatewayRequestException(val statusCode: Int, message: String) : IllegalStateException(message)
+
 /** Stores gateway URL and shared gateway credential encrypted with Android Keystore. */
 object VoiceGatewaySettings {
     data class AgentReply(val text: String, val provider: String, val model: String?, val inputTokens: Long?, val outputTokens: Long?)
@@ -130,6 +133,41 @@ object VoiceGatewaySettings {
     }
 
 
+    /** Checks relay health and authenticates the saved token against provider status. */
+    fun testConnection(context: Context): String {
+        val config = get(context)
+        require(config.readError == null) { config.readError ?: "Saved backend settings could not be read." }
+        require(config.baseUrl.isNotBlank()) { "Backend URL is missing. Enter the HTTPS backend URL." }
+        require(config.gatewayToken.isNotBlank()) { "Gateway token is missing. Enter the server GATEWAY_TOKEN." }
+        val base = config.baseUrl.trimEnd('/')
+        val healthRequest = Request.Builder().url("$base/health").get().build()
+        http.newCall(healthRequest).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("Backend health check failed (HTTP ${response.code}). Check the URL and deployment.")
+            val health = JSONObject(response.body?.string().orEmpty())
+            if (!health.optBoolean("ok")) throw IllegalStateException("Backend responded, but its health status is not OK.")
+        }
+        val providerRequest = Request.Builder().url("$base/api/ai/providers")
+            .header("Authorization", "Bearer ${config.gatewayToken}").get().build()
+        http.newCall(providerRequest).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
+                val reason = when (response.code) {
+                    401 -> "Gateway token rejected (HTTP 401). The saved token must exactly match the server GATEWAY_TOKEN."
+                    404 -> "Provider status endpoint not found (HTTP 404). The deployed backend version is outdated."
+                    503 -> "Backend is reachable, but provider configuration is unavailable (HTTP 503). Add provider API keys to backend environment variables."
+                    else -> message.ifBlank { "Provider status check failed (HTTP ${response.code})." }
+                }
+                throw IllegalStateException(reason)
+            }
+            val providers = JSONObject(raw).optJSONObject("providers")
+                ?: throw IllegalStateException("Backend response is missing the providers object.")
+            val active = listOf("gemini", "openai", "groq", "anthropic", "perplexity").filter { providers.optBoolean(it) }
+            if (active.isEmpty()) return "Backend connected and token accepted, but no provider API keys are configured on the server."
+            return "Backend connected. Gateway token accepted. Server providers ready: ${active.joinToString(", ")}."
+        }
+    }
+
     /** Returns server-side provider keys configured on the HTTPS gateway; null means no gateway. */
     fun configuredProviders(context: Context): Set<String>? {
         val config = get(context)
@@ -148,7 +186,7 @@ object VoiceGatewaySettings {
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
-                throw IllegalStateException(message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
+                throw GatewayRequestException(response.code, message.ifBlank { "Cloud provider status failed (HTTP " + response.code + ")." })
             }
             val flags = JSONObject(raw).optJSONObject("providers") ?: error("Gateway provider status is malformed.")
             val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
@@ -186,7 +224,7 @@ object VoiceGatewaySettings {
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
-                throw IllegalStateException(message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
+                throw GatewayRequestException(response.code, message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
             }
             val json = JSONObject(raw)
             require(json.optString("provider").equals(providerId, true)) {
