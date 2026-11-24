@@ -219,12 +219,40 @@ class DeviceTransferActivity : Activity() {
                 if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
-                sourcePeer = msg.optString("fromDeviceId"); peerIdSnapshot = sourcePeer; transferId = msg.optString("transferId")
-                incomingName = msg.optString("fileName"); incomingSize = msg.optLong("sizeBytes")
-                incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
-                incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
+                val sender = msg.optString("fromDeviceId")
+                val offeredTransferId = msg.optString("transferId")
+                val offeredName = DeviceFileTransferProtocol.safeDisplayName(incomingName)
+                val offeredSize = msg.optLong("sizeBytes", -1L)
+                val offeredCount = msg.optInt("chunkCount", -1)
+                val offeredHash = msg.optString("sha256")
+                // Validate every untrusted manifest field before persisting state,
+                // allocating a file, or presenting a save dialog. In particular,
+                // transferId is used in a local filename and must never contain path
+                // separators or traversal components.
+                if (sender.isBlank() || !DeviceFileTransferProtocol.isValidManifest(
+                        offeredTransferId, offeredSize, offeredCount, offeredHash
+                    )) {
+                    status.text = "Rejected invalid incoming transfer manifest."
+                    if (sender.isNotBlank()) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "invalid_manifest")
+                    return
+                }
+                val expectedPeer = peer.text.toString().trim()
+                if (!DeviceFileTransferProtocol.isExpectedIncomingPeer(expectedPeer, sender)) {
+                    status.text = "Rejected file transfer from an unexpected paired device."
+                    DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "unexpected_peer")
+                    return
+                }
+                sourcePeer = sender
+                peerIdSnapshot = sender
+                transferId = offeredTransferId
+                incomingName = offeredName
+                incomingSize = offeredSize
+                incomingCount = offeredCount
+                incomingHash = offeredHash.lowercase()
+                incomingVerified = false
+                receivedChunkIndexes.clear()
+                incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || incomingCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
