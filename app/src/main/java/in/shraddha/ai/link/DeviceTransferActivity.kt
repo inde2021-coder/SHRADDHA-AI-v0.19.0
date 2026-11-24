@@ -159,12 +159,28 @@ class DeviceTransferActivity : Activity() {
                 return
             }
             if (incomingVerified) transferIo.execute { saveIncoming(uri) }
-            else if (DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)) {
-                status.text = "Save destination selected. Receiver ready; waiting for file chunks…"
-            } else {
-                status.text = "Save destination is ready, but the sender could not be notified. Reconnect and tap Resume / Retry."
+            else {
+                val missing = synchronized(receivedChunkIndexes) {
+                    (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
+                }
+                if (missing.isEmpty()) {
+                    transferIo.execute { verifyIncoming() }
+                } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+                    status.text = "Save destination selected. Requesting ${missing.size} missing chunks from sender…"
+                } else {
+                    status.text = "Save destination is ready, but resume request failed. Reconnect and tap Resume / Retry."
+                }
             }
         }
+    }
+
+    private fun launchIncomingSavePicker() {
+        startActivityForResult(
+            Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*")
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(Intent.EXTRA_TITLE, incomingName),
+            702
+        )
     }
 
     private fun requestReceiverPermission() {
@@ -269,12 +285,22 @@ class DeviceTransferActivity : Activity() {
                     .setMessage("$incomingName • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
                     .setPositiveButton("Choose save location") { _, _ ->
-                        val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
-                        incomingFile = File(inbox, "recv_$transferId.part")
-                        incomingOut = RandomAccessFile(incomingFile, "rw").apply { setLength(incomingSize) }
-                        persistTransferState()
-                        incomingChunks = 0
-                        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, incomingName), 702)
+                        try {
+                            val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
+                            incomingFile = File(inbox, "recv_$transferId.part")
+                            incomingOut = RandomAccessFile(incomingFile, "rw").apply {
+                                setLength(incomingSize)
+                                fd.sync()
+                            }
+                            incomingChunks = 0
+                            persistTransferState(synchronous = true)
+                            launchIncomingSavePicker()
+                        } catch (error: Exception) {
+                            status.text = "Could not prepare a safe receive file: ${error.message}"
+                            DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receive_storage_error")
+                            incomingFile?.delete()
+                            clearTransferState()
+                        }
                     }.show()
             }
             "file_transfer_chunk" -> runCatching { transferIo.execute { receiveChunk(msg) } }.onFailure {
@@ -436,10 +462,18 @@ class DeviceTransferActivity : Activity() {
         if (sourceUri != null && sourcePeer.isBlank()) {
             status.text = "Sender ready. The receiver must request resume to identify missing chunks."
         } else if (sourcePeer.isNotBlank() && incomingCount in 1..DeviceFileTransferProtocol.MAX_CHUNKS) {
+            if (incomingFile == null || !incomingFile!!.exists()) {
+                status.text = "The temporary receive file is missing. Cancel this transfer and request it again."
+                return
+            }
+            if (pendingSaveUri == null) {
+                launchIncomingSavePicker()
+                return
+            }
             val missing = synchronized(receivedChunkIndexes) { (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) } }
             if (missing.isEmpty()) {
-                if (incomingVerified && pendingSaveUri != null) transferIo.execute { saveIncoming(pendingSaveUri!!) }
-                else status.text = "All chunks are already present. Verify or choose a save destination."
+                if (incomingVerified) transferIo.execute { saveIncoming(pendingSaveUri!!) }
+                else transferIo.execute { verifyIncoming() }
             } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
                 status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
             } else status.text = "Could not send resume request. Verify the paired device and secure relay connection."
