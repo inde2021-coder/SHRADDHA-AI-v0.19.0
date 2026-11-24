@@ -310,8 +310,7 @@ class DeviceTransferActivity : Activity() {
         incomingOut = null
         thread(name = "ShraddhaFileVerify") {
             try {
-                output?.fd?.sync()
-                output?.close()
+                try { output?.fd?.sync() } finally { output?.close() }
                 val digest = MessageDigest.getInstance("SHA-256")
                 file.inputStream().use { input ->
                     val buffer = ByteArray(64 * 1024)
