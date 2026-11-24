@@ -1188,4 +1188,3 @@ test('short-lived device invitation can pair multiple unique devices within the 
   assert.notEqual(first.deviceId, second.deviceId);
   assert.notEqual(first.deviceToken, second.deviceToken);
 });
-
