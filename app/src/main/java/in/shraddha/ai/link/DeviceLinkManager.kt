@@ -581,8 +581,17 @@ object DeviceLinkManager {
         val payload = JSONObject().put("payload", Base64.encodeToString(bytes, Base64.NO_WRAP))
         return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_chunk", payload, transferId, index)
     }
-    fun requestFileTransferResume(sourceDeviceId: String, transferId: String): Boolean =
-        socket?.send(JSONObject().put("type", "file_transfer_resume").put("targetDeviceId", sourceDeviceId).put("transferId", transferId).toString()) == true
+    fun requestFileTransferResume(sourceDeviceId: String, transferId: String, chunkCount: Int, missingIndexes: List<Int>): Boolean {
+        if (sourceDeviceId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) ||
+            chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || missingIndexes.size > chunkCount ||
+            missingIndexes.size > DeviceFileTransferProtocol.MAX_CHUNKS ||
+            missingIndexes.any { it !in 0 until chunkCount } || missingIndexes.distinct().size != missingIndexes.size) return false
+        val indexes = JSONArray()
+        missingIndexes.forEach(indexes::put)
+        return socket?.send(JSONObject().put("type", "file_transfer_resume")
+            .put("targetDeviceId", sourceDeviceId).put("transferId", transferId)
+            .put("chunkCount", chunkCount).put("missingIndexes", indexes).toString()) == true
+    }
     fun acknowledgeFileTransfer(targetDeviceId: String, transferId: String, index: Int, complete: Boolean = false, ok: Boolean = true): Boolean =
         socket?.send(JSONObject().put("type", "file_transfer_ack").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("index", index).put("complete", complete).put("ok", ok).toString()) == true
     fun cancelFileTransfer(targetDeviceId: String, transferId: String, reason: String = "cancelled"): Boolean =
