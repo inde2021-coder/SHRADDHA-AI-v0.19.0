@@ -57,6 +57,16 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(validate_remote_action_envelope({"kind": "home"}, "tap"))
         self.assertIsNone(validate_remote_action_envelope({"kind": "exec"}, "exec"))
 
+    def test_ocr_is_allowlisted_without_client_supplied_payload(self):
+        self.assertEqual(validate_remote_action({"kind": "ocr"}), {"kind": "ocr"})
+        self.assertIsNone(validate_remote_action({"kind": "ocr", "script": "arbitrary"}))
+        self.assertEqual(validate_remote_action_envelope({"kind": "ocr"}, "ocr"), {"kind": "ocr"})
+
+    def test_click_text_requires_bounded_exact_label(self):
+        self.assertEqual(validate_remote_action({"kind": "click_text", "text": "Save"}), {"kind": "click_text", "text": "Save"})
+        self.assertIsNone(validate_remote_action({"kind": "click_text", "text": " "}))
+        self.assertIsNone(validate_remote_action({"kind": "click_text", "text": "x" * 121}))
+
     def test_hardware_status_is_allowlisted_without_parameters(self):
         self.assertEqual(validate_remote_action({"kind": "hardware_status"}), {"kind": "hardware_status"})
 
