@@ -2,6 +2,8 @@ package com.Lia.assistant.ui.screens.permissions
 
 import android.Manifest
 import android.content.Context
+import android.content.ComponentName
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -45,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
+import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -87,6 +91,16 @@ fun PermissionsScreen(
     val runtimeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { refresh() }
+    val smsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Toast.makeText(
+            context,
+            if (granted) "SMS अनुमति मिल गई।" else "SMS अनुमति अस्वीकृत है। Android/Play policy इसे रोक सकती है; Settings में उपलब्ध हो तो अनुमति बदलें या SMS ऐप से भेजें।",
+            Toast.LENGTH_LONG
+        ).show()
+        refresh()
+    }
 
     val rows = remember(context, refreshKey) { buildPermissionRows(context) }
 
@@ -134,6 +148,20 @@ fun PermissionsScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable {
                             when {
+                                row.runtimePermission == Manifest.permission.SEND_SMS -> {
+                                    val prefs = context.getSharedPreferences("permission_requests", Context.MODE_PRIVATE)
+                                    val alreadyAsked = prefs.getBoolean("sms_requested_before", false)
+                                    val activity = context as? Activity
+                                    val permanentlyDenied = alreadyAsked && activity != null &&
+                                        !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.SEND_SMS)
+                                    if (permanentlyDenied) {
+                                        Toast.makeText(context, "SMS permission पहले अस्वीकार हो चुकी है। App info > Permissions में जाकर उपलब्ध हो तो Allow करें।", Toast.LENGTH_LONG).show()
+                                        openSettings("app")
+                                    } else {
+                                        prefs.edit().putBoolean("sms_requested_before", true).apply()
+                                        smsLauncher.launch(Manifest.permission.SEND_SMS)
+                                    }
+                                }
                                 row.runtimePermission != null -> runtimeLauncher.launch(row.runtimePermission)
                                 row.settingsAction != null -> openSettings(row.settingsAction)
                             }
@@ -157,10 +185,11 @@ fun PermissionsScreen(
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            when (row.state) {
-                                AccessState.GRANTED -> "Granted"
-                                AccessState.DENIED -> "Denied"
-                                AccessState.NOT_AVAILABLE -> "Not available"
+                            when {
+                                row.state == AccessState.GRANTED -> "Granted"
+                                row.state == AccessState.DENIED && row.runtimePermission != null -> "Allow"
+                                row.state == AccessState.DENIED -> "Enable"
+                                else -> "Not available"
                             },
                             color = when (row.state) {
                                 AccessState.GRANTED -> colors.lagoon
@@ -200,11 +229,17 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         PermissionRow(id, name, detail, if (enabled) AccessState.GRANTED else AccessState.DENIED, settingsAction = action)
 
     val overlay = if (Build.VERSION.SDK_INT >= 23) Settings.canDrawOverlays(context) else true
-    val accessibility = runCatching {
-        val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
-        val expected = context.packageName + "/in.shraddha.ai.accessibility.ShraddhaAccessibilityService"
-        enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    val enabledAccessibilityServices = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+    ).orEmpty()
+    fun serviceEnabled(className: String): Boolean = runCatching {
+        enabledAccessibilityServices.split(':')
+            .mapNotNull { ComponentName.unflattenFromString(it) }
+            .any { it.packageName == context.packageName && it.className == className }
     }.getOrDefault(false)
+    val shraddhaAccessibility = serviceEnabled("in.shraddha.ai.accessibility.ShraddhaAccessibilityService")
+    val liaAccessibility = serviceEnabled("com.Lia.assistant.agent.NovaAccessibilityService")
     val listener = runCatching {
         val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
         enabled.split(':').any { it.startsWith(context.packageName + "/") }
@@ -228,12 +263,14 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("selected_media", "Selected photos access", "Limited photo access on Android 14+", Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, 34))
         add(runtime("legacy_storage", "Legacy shared storage", "Legacy media access on Android 12 and earlier", Manifest.permission.READ_EXTERNAL_STORAGE, 1, 32))
         add(special("overlay", "Display over other apps", "Required only for floating assistant overlay", overlay, "overlay"))
-        add(special("accessibility", "Accessibility service", "Allows approved on-screen interaction; enable only if needed", accessibility, "accessibility"))
+        val accessibilityHelp = if (Build.VERSION.SDK_INT >= 33) "Android 13+ पर switch grey हो तो App info > ⋮ > Allow restricted settings करें, फिर यहाँ लौटकर चालू करें।" else "इसे Android Accessibility Settings में चालू करें।"
+        add(special("accessibility", "Shraddha Device Control", "मुख्य on-screen control service. $accessibilityHelp", shraddhaAccessibility, "accessibility"))
+        add(special("lia_accessibility", "Live App Operator", "LIA screen interaction और gestures. $accessibilityHelp", liaAccessibility, "accessibility"))
+        add(special("screen_reading", "Screen reading & capture", if (Build.VERSION.SDK_INT >= 30) "Android 11+ पर Shraddha Device Control चालू होने पर उपलब्ध; secure screens Android रोक सकता है" else "इस Android version पर Accessibility screenshot API समर्थित नहीं है", Build.VERSION.SDK_INT >= 30 && shraddhaAccessibility, "accessibility"))
         add(special("notification_listener", "Notification access", "Reads notifications only after special access is enabled", listener, "notification_listener"))
         add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission", Build.VERSION.SDK_INT >= 28))
         add(declared("android.permission.FOREGROUND_SERVICE_MICROPHONE", "Microphone foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
         add(declared("android.permission.FOREGROUND_SERVICE_CAMERA", "Camera foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
-        add(PermissionRow("media_projection", "Screen capture", "Android grants screen capture per session; it is not a persistent permission", AccessState.NOT_AVAILABLE))
         add(PermissionRow("background_mic", "Background microphone", "No separate user-grantable permission; Android limits when microphone services can start", AccessState.NOT_AVAILABLE))
     }
 }
