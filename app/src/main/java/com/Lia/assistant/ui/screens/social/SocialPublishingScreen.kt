@@ -182,7 +182,8 @@ fun SocialPublishingScreen(navController: NavController) {
                     }
                 }
                 NovaButton(text = if (busy) "PREPARING…" else "SELECT IMAGE / VIDEO (MAX 8 MiB)", onClick = {
-                    val types = if (mediaKind == "image") arrayOf("image/jpeg", "image/png", "image/webp")
+                    val types = if (mediaKind == "image" && platform == "telegram") arrayOf("image/jpeg", "image/png")
+                        else if (mediaKind == "image") arrayOf("image/jpeg", "image/png", "image/webp")
                         else if (platform == "telegram") arrayOf("video/mp4") else arrayOf("video/mp4", "video/quicktime")
                     mediaPicker.launch(types)
                 }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
