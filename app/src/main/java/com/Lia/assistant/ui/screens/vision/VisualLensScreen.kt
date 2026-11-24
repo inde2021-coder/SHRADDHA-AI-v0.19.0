@@ -2,6 +2,7 @@ package com.Lia.assistant.ui.screens.vision
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
@@ -32,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.startForegroundService
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
@@ -56,6 +59,8 @@ import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.link.DeviceLinkManager
+import `in`.shraddha.ai.vision.LiveEyesCameraService
+import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.ExecutorService
@@ -78,6 +83,7 @@ fun VisualLensScreen(navController: NavController) {
     var question by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("कैमरे को किसी वस्तु, जगह, लिखावट या समस्या की ओर करें और Shraddha से पूछें।") }
     var busy by remember { mutableStateOf(false) }
+    var backgroundEyes by remember { mutableStateOf(LiveEyesCameraService.getState(context) == LiveEyesCameraService.STATE_ACTIVE) }
 
     val controller = remember(context) {
         LifecycleCameraController(context).apply {
@@ -98,6 +104,13 @@ fun VisualLensScreen(navController: NavController) {
     }
     DisposableEffect(cameraExecutor) {
         onDispose { cameraExecutor.shutdown() }
+    }
+    LaunchedEffect(context) {
+        while (true) {
+            backgroundEyes = LiveEyesCameraService.getState(context) == LiveEyesCameraService.STATE_ACTIVE ||
+                LiveEyesCameraService.getState(context) == LiveEyesCameraService.STATE_STARTING
+            delay(700)
+        }
     }
 
     fun captureAndAsk() {
@@ -238,6 +251,38 @@ fun VisualLensScreen(navController: NavController) {
             modifier = Modifier.fillMaxWidth().weight(0.55f, fill = true)
                 .clip(RoundedCornerShape(20.dp)).background(Color(0x661B2030)).padding(14.dp)
         )
+
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(Color(0x661B2030)).padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Live Eyes • Background", color = colors.textPrimary)
+                Text("स्क्रीन बंद होने पर भी दृश्य जागरूकता; Android notification और camera indicator चालू रहेंगे।", color = colors.textSecondary)
+            }
+            Switch(
+                checked = backgroundEyes,
+                onCheckedChange = { enabled ->
+                    if (enabled && !cameraGranted) {
+                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                    } else if (enabled) {
+                        val config = VoiceGatewaySettings.get(context)
+                        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
+                            answer = "Background Live Eyes के लिए पहले सुरक्षित HTTPS AI backend और gateway token सेट करें।"
+                        } else {
+                            runCatching {
+                                startForegroundService(context, Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_START))
+                            }.onFailure { answer = "Live Eyes शुरू नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
+                        }
+                    } else {
+                        runCatching {
+                            context.startService(Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_STOP))
+                        }.onFailure { answer = "Live Eyes बंद नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
+                    }
+                }
+            )
+        }
 
         if (!cameraGranted) {
             androidx.compose.material3.Button(
