@@ -103,7 +103,7 @@ const clientIp = req => {
   }
   return String(req.socket.remoteAddress || 'unknown').slice(0, 64);
 };
-const readBody = readJsonBody;
+const readBody = (req, limit = MAX_BODY) => readJsonBody(req, limit);
 
 async function askProviderDirect(provider, prompt) {
   if (provider === 'openai') {
