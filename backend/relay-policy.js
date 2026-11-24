@@ -53,7 +53,7 @@ export function canCompleteFileTransfer(transfer, ok) {
   return Boolean(transfer && ok === true && Number.isSafeInteger(transfer.chunkCount) &&
     transfer.chunkCount > 0 && transfer.chunks instanceof Map &&
     transfer.chunks.size === transfer.chunkCount &&
-    [...transfer.chunks.keys()].every(index => Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount));
+    [...transfer.chunks.entries()].every(([index, acknowledged]) => acknowledged === true && Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount));
 }
 
 export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
