@@ -126,7 +126,14 @@ fun SocialPublishingScreen(navController: NavController) {
                 }
             }
             status = result.fold(
-                { if (action == "publish") "Provider accepted the post: $it" else "Scheduled post saved: $it" },
+                {
+                    if (action == "publish") {
+                        mediaBase64 = ""
+                        mediaMimeType = ""
+                        mediaFileName = ""
+                        "Provider accepted the post: $it"
+                    } else "Scheduled post saved: $it"
+                },
                 { "Not submitted: ${it.message ?: "unknown error"}" }
             )
             busy = false
