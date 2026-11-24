@@ -195,7 +195,8 @@ export async function publishSocialPost(body, intent, env = process.env) {
     let upload;
     try {
       upload = await fetch(origin + '/api/v2/media', {
-        method: 'POST', headers: { authorization: 'Bearer ' + accessToken }, body: form, signal: AbortSignal.timeout(45000)
+        method: 'POST', headers: { authorization: 'Bearer ' + accessToken }, body: form,
+        redirect: 'error', signal: AbortSignal.timeout(45000)
       });
     } catch { fail(502, 'Mastodon media upload could not be reached'); }
     const uploaded = await upload.json().catch(() => ({}));
@@ -206,7 +207,7 @@ export async function publishSocialPost(body, intent, env = process.env) {
   try {
     upstream = await fetch(origin + '/api/v1/statuses', {
       method: 'POST', headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
-      signal: AbortSignal.timeout(20000),
+      redirect: 'error', signal: AbortSignal.timeout(20000),
       body: JSON.stringify({ status: intent.text, visibility, ...(mediaId ? { media_ids: [mediaId] } : {}) })
     });
   } catch { fail(502, 'Mastodon service could not be reached; check account before retrying'); }
