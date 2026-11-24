@@ -1,3 +1,5 @@
+import re
+
 """Shared constants and validation for the Shraddha E2E file-transfer wire format."""
 
 FILE_CHUNK_BYTES = 48 * 1024  # Must match Android DeviceFileTransferProtocol.CHUNK_BYTES.
@@ -57,3 +59,17 @@ def validate_resume_indexes(missing, declared_chunk_count, expected_chunk_count)
     if len(set(missing)) != len(missing):
         return None
     return list(missing)
+
+
+def valid_transfer_manifest(transfer_id, size_bytes, declared_chunk_count, sha256):
+    if (not isinstance(transfer_id, str) or
+            not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or
+            type(size_bytes) is not int or
+            type(declared_chunk_count) is not int or
+            not isinstance(sha256, str) or
+            not re.fullmatch(r"[a-f0-9]{64}", sha256)):
+        return False
+    try:
+        return declared_chunk_count == chunk_count_for_size(size_bytes)
+    except ValueError:
+        return False
