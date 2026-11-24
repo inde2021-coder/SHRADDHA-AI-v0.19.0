@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -140,4 +140,29 @@ test('resume chunk indexes must be bounded, unique and within the active manifes
   assert.equal(validMissingTransferIndexes(Array(2201).fill(0), 2201), false);
   assert.equal(validMissingTransferIndexes([0], 5), true);
   assert.equal(validMissingTransferIndexes('0', 5), false);
+});
+
+
+test('expired device grants and pending relay work are pruned by their expiresAt fields', () => {
+  const device = {
+    pendingControlRequests: new Map([['old-control', { expiresAt: 99 }], ['live-control', { expiresAt: 101 }]]),
+    pendingDataShares: new Map([['old-share', { expiresAt: 99 }]]),
+    pendingRemoteActions: new Map([['old-action', { requesterId: 'peer', expiresAt: 99 }], ['live-action', { expiresAt: 101 }]]),
+    incomingTransfers: new Map([['old-transfer', { expiresAt: 99 }]]),
+    pendingTaskHandoffs: new Map([['old-task', { expiresAt: 99 }]]),
+    controlGrants: new Map([['old-control-grant', 99], ['live-control-grant', 101]]),
+    grants: new Map([['old-data-grant', { requestId: 'r', expiresAt: 99 }], ['live-data-grant', { requestId: 'r2', expiresAt: 101 }]])
+  };
+  assert.equal(pruneExpiredDeviceState(device, 100), 6);
+  assert.deepEqual([...device.pendingControlRequests.keys()], ['live-control']);
+  assert.deepEqual([...device.pendingRemoteActions.keys()], ['live-action']);
+  assert.deepEqual([...device.controlGrants.keys()], ['live-control-grant']);
+  assert.deepEqual([...device.grants.keys()], ['live-data-grant']);
+});
+
+test('malformed expiry entries fail closed and do not poison future remote actions', () => {
+  const device = { pendingRemoteActions: new Map([['bad', {}], ['valid', { expiresAt: 200 }]]) };
+  assert.equal(pruneExpiredDeviceState(device, 100), 1);
+  assert.equal(device.pendingRemoteActions.has('bad'), false);
+  assert.equal(device.pendingRemoteActions.has('valid'), true);
 });
