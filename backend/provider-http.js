@@ -24,11 +24,14 @@ async function readBoundedJson(response) {
   const chunks = [];
   let total = 0;
   const append = chunk => {
-    const bytes = Buffer.from(chunk);
-    total += bytes.byteLength;
-    if (total > MAX_PROVIDER_RESPONSE_BYTES) {
+    const byteLength = typeof chunk === 'string'
+      ? Buffer.byteLength(chunk, 'utf8')
+      : Number(chunk?.byteLength ?? chunk?.length ?? 0);
+    if (!Number.isSafeInteger(byteLength) || byteLength < 0 || total + byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
       throw nonRetryableError('AI provider response exceeded the 2 MiB safety limit.');
     }
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += bytes.byteLength;
     chunks.push(bytes);
   };
 
