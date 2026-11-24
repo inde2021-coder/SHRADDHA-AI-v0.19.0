@@ -29,6 +29,17 @@ def valid_incoming_file_manifest(peer_id, transfer_id, size, chunks, digest, pee
     )
 
 
+def expected_file_chunk_bytes(size, chunks, index):
+    """Return the exact 48 KiB protocol chunk length, or None for an invalid manifest/index."""
+    if type(size) is not int or not 1 <= size <= 20_000_000:
+        return None
+    expected_chunks = (size + 49151) // 49152
+    if type(chunks) is not int or chunks != expected_chunks or type(index) is not int or not 0 <= index < chunks:
+        return None
+    remaining = size - index * 49152
+    return min(49152, remaining) if remaining > 0 else None
+
+
 def matches_transfer_peer(message, peer_id, transfer_id):
     """Require both the authenticated peer identity and exact transfer ID."""
     return (
