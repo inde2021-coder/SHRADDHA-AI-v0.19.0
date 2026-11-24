@@ -1420,6 +1420,7 @@ wss.on('connection', (ws, ctx) => {
       }
       if (index < 0 || index >= transfer.chunkCount || msg.complete === true) return;
       if (msg.ok === true) transfer.chunks.set(index, true);
+      else transfer.chunks.delete(index);
       send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index, complete: false, ok: msg.ok }));
     } else if (msg.type === 'file_transfer_cancel') {
       const targetId = String(msg.targetDeviceId || '');
