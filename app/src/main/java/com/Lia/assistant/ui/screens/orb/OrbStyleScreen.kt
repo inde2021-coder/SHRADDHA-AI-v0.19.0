@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,18 +34,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
-import com.Lia.assistant.ui.components.NovaGlassCard
+import com.Lia.assistant.ui.fx.DailyOrbThemeSchedule
 import com.Lia.assistant.ui.fx.LiaOrb3D
+import com.Lia.assistant.ui.fx.rememberDailyOrbTheme
 import com.Lia.assistant.ui.fx.NovaOrbStyle
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.NovaOrbState
+import java.util.Calendar
 
 @Composable
 fun OrbStyleScreen(
@@ -53,15 +55,16 @@ fun OrbStyleScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalNovaColors.current
-    val context = LocalContext.current
+    val dailyTheme = rememberDailyOrbTheme()
 
     var previewState by remember { mutableStateOf(NovaOrbState.IDLE) }
-    var selectedStyle by remember { mutableStateOf(NovaOrbStyle.fromString(appState.orbStyle)) }
+    var selectedStyle by remember(dailyTheme.style) { mutableStateOf(dailyTheme.style) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .nightSky()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -100,6 +103,10 @@ fun OrbStyleScreen(
             )
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("TODAY: ${dailyTheme.dayName.uppercase()} • ${dailyTheme.style.displayName.uppercase()}", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("The home orb changes automatically every day using your phone's local calendar.", color = colors.textPrimary, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+
         Spacer(modifier = Modifier.height(20.dp))
 
         // State toggle chips: Idle, Listening, Speaking
@@ -125,11 +132,30 @@ fun OrbStyleScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("SUNDAY TO SATURDAY AUTO CYCLE", fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = colors.accent, modifier = Modifier.align(Alignment.Start).padding(start = 8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+        (Calendar.SUNDAY..Calendar.SATURDAY).forEach { day ->
+            val theme = DailyOrbThemeSchedule.forCalendarDay(day)
+            val isToday = theme.dayName == dailyTheme.dayName
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if (isToday) colors.surfaceRaised else colors.surfaceGlass)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(theme.dayName, color = if (isToday) colors.accent else colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(theme.style.displayName, color = colors.textPrimary, fontSize = 12.sp)
+                if (isToday) Text("TODAY", color = colors.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
 
-        // 7 styles horizontal coverflow carousel
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Style carousel is a preview only; the home orb follows the automatic weekly cycle.
         Text(
-            text = "SELECT STYLE",
+            text = "PREVIEW ORB STYLES",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
@@ -161,7 +187,6 @@ fun OrbStyleScreen(
                         .background(if (isSelected) colors.surfaceRaised else colors.surfaceGlass)
                         .clickable {
                             selectedStyle = styleItem
-                            appState.applyOrbStyle(context, styleItem.name)
                         }
                         .padding(16.dp),
                     contentAlignment = Alignment.Center

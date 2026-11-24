@@ -37,7 +37,13 @@ enum class NovaOrbStyle(val displayName: String) {
     ENERGY("Energy Pulse"),
     MINIMAL("Minimal"),
     ARCHER("Golden Archer"),
-    SATURN("Saturn");
+    SATURN("Saturn"),
+    SUN("Sun"),
+    MOON("Moon"),
+    MARS("Mars"),
+    MERCURY("Mercury"),
+    JUPITER("Jupiter"),
+    VENUS("Venus");
 
     companion object {
         fun fromString(name: String): NovaOrbStyle {
@@ -152,6 +158,8 @@ fun NovaOrb(
             drawSaturnSphere(center, currentRadius, rotationProgress, amplitude, colors)
         } else if (style == NovaOrbStyle.ARCHER) {
             drawArcherSphere(center, currentRadius, rotationProgress, amplitude, colors)
+        } else if (style in setOf(NovaOrbStyle.SUN, NovaOrbStyle.MOON, NovaOrbStyle.MARS, NovaOrbStyle.MERCURY, NovaOrbStyle.JUPITER, NovaOrbStyle.VENUS)) {
+            drawPlanetSphere(center, currentRadius, rotationProgress, amplitude, style, reducedMotion)
         } else {
             // Radial gradient core
             drawCircle(
@@ -211,6 +219,62 @@ fun NovaOrb(
                 style = Stroke(width = 2.5.dp.toPx())
             )
         }
+    }
+}
+
+
+private fun DrawScope.drawPlanetSphere(center: Offset, radius: Float, rotation: Float, amplitude: Float, style: NovaOrbStyle, reducedMotion: Boolean) {
+    val palette = when (style) {
+        NovaOrbStyle.SUN -> listOf(Color(0xFFFFF6B0), Color(0xFFFFB52E), Color(0xFFE64A19))
+        NovaOrbStyle.MOON -> listOf(Color(0xFFF8FAFF), Color(0xFF9CA9BB), Color(0xFF3E485A))
+        NovaOrbStyle.MARS -> listOf(Color(0xFFFFB18B), Color(0xFFC14432), Color(0xFF541D25))
+        NovaOrbStyle.MERCURY -> listOf(Color(0xFFE7E5DF), Color(0xFF92969C), Color(0xFF414751))
+        NovaOrbStyle.JUPITER -> listOf(Color(0xFFFFE1B5), Color(0xFFC58A59), Color(0xFF684331))
+        NovaOrbStyle.VENUS -> listOf(Color(0xFFFFE8D2), Color(0xFFE6A77D), Color(0xFF98604F))
+        else -> listOf(Color.White, Color.Gray, Color.DarkGray)
+    }
+    drawCircle(brush = Brush.radialGradient(palette, center - Offset(radius * 0.24f, radius * 0.26f), radius * 1.25f), radius = radius * (0.88f + amplitude.coerceIn(0f, 1f) * 0.02f), center = center)
+    when (style) {
+        NovaOrbStyle.SUN -> {
+            if (!reducedMotion) rotate(rotation * 0.22f, center) {
+                for (i in 0 until 24) {
+                    val a = Math.toRadians(i * 15.0)
+                    val inner = radius * 0.98f
+                    val outer = radius * (1.12f + if (i % 2 == 0) 0.10f else 0.04f)
+                    drawLine(Color(0xFFFFD76A).copy(alpha = 0.85f), Offset(center.x + cos(a).toFloat() * inner, center.y + sin(a).toFloat() * inner), Offset(center.x + cos(a).toFloat() * outer, center.y + sin(a).toFloat() * outer), strokeWidth = radius * 0.035f)
+                }
+            }
+            drawCircle(Color(0xFFFFF4B0).copy(alpha = 0.28f), radius * 0.52f, center)
+        }
+        NovaOrbStyle.MOON -> {
+            val craters = listOf(Offset(-0.28f, -0.16f), Offset(0.24f, -0.30f), Offset(0.34f, 0.18f), Offset(-0.12f, 0.36f), Offset(-0.42f, 0.22f))
+            craters.forEachIndexed { i, p ->
+                drawCircle(Color(0xFF4C586A).copy(alpha = 0.22f), radius * (0.09f + (i % 2) * 0.035f), center + Offset(p.x * radius, p.y * radius))
+                drawCircle(Color.White.copy(alpha = 0.16f), radius * 0.045f, center + Offset((p.x - 0.025f) * radius, (p.y - 0.025f) * radius))
+            }
+        }
+        NovaOrbStyle.MARS -> {
+            for (i in 0..5) drawArc(Color(0xFF5A2028).copy(alpha = 0.22f), 190f + i * 9f, 95f, false, Offset(center.x - radius * 0.72f, center.y - radius * 0.52f + i * radius * 0.16f), Size(radius * 1.44f, radius * 0.16f), Stroke(radius * 0.045f))
+            drawCircle(Color(0xFFFFC09A).copy(alpha = 0.25f), radius * 0.12f, center + Offset(radius * 0.28f, -radius * 0.18f))
+        }
+        NovaOrbStyle.MERCURY -> {
+            for (i in 0..8) {
+                val a = i * 2.399
+                val d = radius * (0.18f + (i % 3) * 0.17f)
+                drawCircle(Color(0xFF303741).copy(alpha = 0.20f), radius * (0.035f + (i % 2) * 0.025f), center + Offset(cos(a).toFloat() * d, sin(a).toFloat() * d))
+            }
+        }
+        NovaOrbStyle.JUPITER -> {
+            for (i in 0..5) drawArc(if (i % 2 == 0) Color(0xFF8B5239).copy(alpha = 0.48f) else Color(0xFFFFE1B5).copy(alpha = 0.40f), 185f, 170f, false, Offset(center.x - radius * 0.78f, center.y - radius * 0.52f + i * radius * 0.17f), Size(radius * 1.56f, radius * 0.19f), Stroke(radius * 0.07f))
+            drawOval(Color(0xFF9F4938).copy(alpha = 0.88f), Offset(center.x + radius * 0.18f, center.y + radius * 0.12f), Size(radius * 0.32f, radius * 0.16f))
+        }
+        NovaOrbStyle.VENUS -> {
+            drawCircle(Color(0xFFFFD9B5).copy(alpha = 0.22f), radius * 0.66f, center)
+            if (!reducedMotion) rotate(rotation * 0.12f, center) {
+                drawArc(Color(0xFFFFF0D9).copy(alpha = 0.48f), 205f, 130f, false, Offset(center.x - radius, center.y - radius * 0.38f), Size(radius * 2f, radius * 0.76f), Stroke(radius * 0.035f))
+            }
+        }
+        else -> Unit
     }
 }
 
