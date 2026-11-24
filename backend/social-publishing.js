@@ -64,7 +64,7 @@ export function validateMastodonOrigin(value) {
   try { url = new URL(value); } catch { throw new Error('MASTODON_BASE_URL must be a valid HTTPS origin'); }
   const host = url.hostname.toLowerCase();
   const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(host);
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
+  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443') || url.search || url.hash ||
       host === 'localhost' || host.endsWith('.local') || !host.includes('.') || ipv4 ||
       url.pathname !== '' && url.pathname !== '/') {
     throw new Error('MASTODON_BASE_URL must be a public HTTPS origin without credentials, path, query or IP address');
