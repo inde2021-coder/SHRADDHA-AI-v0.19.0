@@ -43,7 +43,9 @@ class DeviceTransferActivity : Activity() {
     private var pendingIndexes: List<Int> = emptyList()
     private val paused = AtomicBoolean(false)
     private val cancelled = AtomicBoolean(false)
-    private var lastAck = -1
+    private val ackMonitor = Object()
+    private val acknowledgedChunks = mutableSetOf<Int>()
+    private var sendFailed = false
     private var sendThread: Thread? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,7 +62,12 @@ class DeviceTransferActivity : Activity() {
         }; root.addView(peer)
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
-        pauseButton = button("PAUSE TRANSFER") { paused.set(!paused.get()); pauseButton.text = if (paused.get()) "RESUME TRANSFER" else "PAUSE TRANSFER"; status.text = if (paused.get()) "Paused locally. Resume to continue." else "Resuming transfer…" }
+        pauseButton = button("PAUSE TRANSFER") {
+            paused.set(!paused.get())
+            synchronized(ackMonitor) { ackMonitor.notifyAll() }
+            pauseButton.text = if (paused.get()) "RESUME TRANSFER" else "PAUSE TRANSFER"
+            status.text = if (paused.get()) "Paused locally. Resume to continue." else "Resuming transfer…"
+        }
         root.addView(pauseButton)
         root.addView(button("CANCEL TRANSFER") { cancelTransfer() })
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -77,6 +84,7 @@ class DeviceTransferActivity : Activity() {
     override fun onDestroy() {
         cancelled.set(true)
         paused.set(false)
+        synchronized(ackMonitor) { ackMonitor.notifyAll() }
         runCatching { incomingOut?.fd?.sync() }
         runCatching { incomingOut?.close() }
         incomingOut = null
@@ -157,6 +165,7 @@ class DeviceTransferActivity : Activity() {
     private fun beginSend() {
         val target = peer.text.toString().trim(); val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
+        synchronized(ackMonitor) { acknowledgedChunks.clear(); sendFailed = false }
         persistTransferState()
         val chunks = DeviceFileTransferProtocol.chunkCount(sourceSize) ?: run { status.text = "Unsupported file size."; return }
         if (!DeviceLinkManager.startFileTransfer(target, requestId, transferId, sourceName, sourceSize, chunks, sourceHash)) { status.text = "Could not start transfer. Check relay and receiver permission."; return }
@@ -172,8 +181,13 @@ class DeviceTransferActivity : Activity() {
             val buffer = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES); var count = 0
             while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
             val bytes = buffer.copyOf(count)
-            require(bytes.isNotEmpty())
-            if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+            try {
+                require(bytes.isNotEmpty())
+                if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+            } finally {
+                bytes.fill(0)
+                buffer.fill(0)
+            }
         }
     }
 
@@ -182,16 +196,45 @@ class DeviceTransferActivity : Activity() {
         cancelled.set(false)
         sendThread = thread(name = "shraddha-file-send") {
             try {
-                val all = if (indexes.isEmpty()) (0 until (DeviceFileTransferProtocol.chunkCount(sourceSize) ?: 0)).toList() else indexes
-                for ((position, index) in all.withIndex()) {
-                    while (paused.get() && !cancelled.get()) Thread.sleep(200)
-                    if (cancelled.get()) break
-                    sendChunk(index)
-                    runOnUiThread { progress.progress = ((position + 1) * 100 / all.size); status.text = "Sending chunks: ${position + 1}/${all.size} (chunk $index)" }
-                    Thread.sleep(35)
+                val count = DeviceFileTransferProtocol.chunkCount(sourceSize)
+                    ?: throw IllegalStateException("Unsupported transfer size")
+                val all = if (indexes.isEmpty()) (0 until count).toList() else indexes
+                require(all.size <= count && all.distinct().size == all.size && all.all { it in 0 until count }) {
+                    "Invalid chunk send list"
                 }
-                if (!cancelled.get()) runOnUiThread { status.text = "All requested chunks sent. Waiting for receiver SHA-256 verification." }
-            } catch (e: Exception) { runOnUiThread { status.text = "Send failed: ${e.message}. Tap Resume / Retry after reconnect." } }
+                for ((batchNumber, batch) in all.chunked(8).withIndex()) {
+                    while (paused.get() && !cancelled.get()) {
+                        synchronized(ackMonitor) { ackMonitor.wait(250) }
+                    }
+                    if (cancelled.get()) break
+                    synchronized(ackMonitor) { sendFailed = false }
+                    for (index in batch) {
+                        if (cancelled.get()) break
+                        sendChunk(index)
+                    }
+                    if (cancelled.get()) break
+                    val deadline = System.currentTimeMillis() + 30_000L
+                    synchronized(ackMonitor) {
+                        while (!sendFailed && !cancelled.get() && !batch.all { it in acknowledgedChunks }) {
+                            val remaining = deadline - System.currentTimeMillis()
+                            if (remaining <= 0L) break
+                            ackMonitor.wait(remaining.coerceAtMost(1000L))
+                        }
+                        if (sendFailed) throw IllegalStateException("Receiver rejected a chunk")
+                        if (!cancelled.get() && !batch.all { it in acknowledgedChunks }) {
+                            throw IllegalStateException("Timed out waiting for receiver ACKs")
+                        }
+                    }
+                    val done = ((batchNumber * 8) + batch.size).coerceAtMost(all.size)
+                    runOnUiThread {
+                        progress.progress = done * 100 / all.size
+                        status.text = "Receiver acknowledged $done/${all.size} requested chunks."
+                    }
+                }
+                if (!cancelled.get()) runOnUiThread { status.text = "All requested chunks acknowledged. Waiting for receiver SHA-256 verification." }
+            } catch (e: Exception) {
+                runOnUiThread { status.text = "Send paused safely: ${e.message}. Reconnect and tap Resume / Retry." }
+            }
         }
     }
 
@@ -222,12 +265,31 @@ class DeviceTransferActivity : Activity() {
             }
             "file_transfer_chunk" -> receiveChunk(msg)
             "file_transfer_ack" -> {
-                val index = msg.optInt("index", -1)
+                val expectedPeer = peer.text.toString().trim()
+                if (msg.optString("fromDeviceId") != expectedPeer ||
+                    msg.optString("transferId") != transferId || transferId.isBlank()) {
+                    status.text = "Ignored file ACK from an unexpected peer or transfer."
+                    return
+                }
+                val rawIndex = msg.opt("index")
+                if (rawIndex !is Number || rawIndex.toDouble() != rawIndex.toLong().toDouble()) return
+                val index = rawIndex.toInt()
+                val count = DeviceFileTransferProtocol.chunkCount(sourceSize)
                 if (index == -1 && !msg.optBoolean("complete") && msg.optBoolean("ok") && sourceUri != null) {
-                    status.text = "Receiver selected a destination. Sending file chunks…"
+                    status.text = "Receiver selected a destination. Sending file chunks with bounded ACK window…"
                     startSending(emptyList())
-                } else if (index >= 0) { lastAck = maxOf(lastAck, index); status.text = "Receiver acknowledged chunk ${index + 1}." }
-                if (msg.optBoolean("complete")) { status.text = "Receiver verified and saved file successfully."; clearTransferState() }
+                } else if (index >= 0 && count != null && index < count) {
+                    synchronized(ackMonitor) {
+                        if (msg.optBoolean("ok")) acknowledgedChunks.add(index) else sendFailed = true
+                        ackMonitor.notifyAll()
+                    }
+                    status.text = if (msg.optBoolean("ok")) "Receiver acknowledged chunk ${index + 1}." else "Receiver rejected chunk ${index + 1}."
+                } else if (msg.optBoolean("complete")) {
+                    if (msg.optBoolean("ok")) {
+                        status.text = "Receiver verified and saved file successfully."
+                        clearTransferState()
+                    } else status.text = "Receiver could not verify the file; resume after checking the destination."
+                }
             }
             "file_transfer_resume" -> {
                 // Only the sender may act on a resume request, and only for the
@@ -235,7 +297,7 @@ class DeviceTransferActivity : Activity() {
                 val expectedCount = DeviceFileTransferProtocol.chunkCount(sourceSize)
                 if (sourceUri == null || msg.optString("fromDeviceId") != peer.text.toString().trim() ||
                     msg.optString("transferId") != transferId || expectedCount == null ||
-                    msg.optInt("chunkCount", -1) != expectedCount) {
+                    (msg.opt("chunkCount") as? Number)?.let { it.toDouble() == it.toLong().toDouble() && it.toInt() == expectedCount } != true) {
                     status.text = "Rejected resume request: peer or transfer manifest mismatch."
                     return
                 }
@@ -244,8 +306,12 @@ class DeviceTransferActivity : Activity() {
                     status.text = "Rejected resume request: too many chunk indexes."
                     return
                 }
-                val indexes = (0 until array.length()).map { array.optInt(it, -1) }
-                if (indexes.any { it !in 0 until expectedCount } || indexes.distinct().size != indexes.size) {
+                val indexes = (0 until array.length()).mapNotNull { position ->
+                    val raw = array.opt(position)
+                    if (raw !is Number || raw.toDouble() != raw.toLong().toDouble()) null else raw.toInt()
+                }
+                if (indexes.size != array.length() || indexes.any { it !in 0 until expectedCount } ||
+                    indexes.distinct().size != indexes.size) {
                     status.text = "Rejected resume request: invalid or duplicate chunk indexes."
                     return
                 }
@@ -384,6 +450,7 @@ class DeviceTransferActivity : Activity() {
         pendingSaveUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
         getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE).edit().clear().apply()
         receivedChunkIndexes.clear()
+        synchronized(ackMonitor) { acknowledgedChunks.clear(); sendFailed = false; ackMonitor.notifyAll() }
         incomingChunks = 0
         incomingVerified = false
         pendingSaveUri = null
@@ -402,6 +469,7 @@ class DeviceTransferActivity : Activity() {
 
     private fun cancelTransfer() {
         cancelled.set(true); paused.set(false)
+        synchronized(ackMonitor) { ackMonitor.notifyAll() }
         val target = if (sourcePeer.isNotBlank()) sourcePeer else peer.text.toString().trim()
         if (transferId.isNotBlank() && target.isNotBlank()) DeviceLinkManager.cancelFileTransfer(target, transferId)
         incomingOut?.close(); incomingOut = null; incomingFile?.delete(); incomingFile = null
