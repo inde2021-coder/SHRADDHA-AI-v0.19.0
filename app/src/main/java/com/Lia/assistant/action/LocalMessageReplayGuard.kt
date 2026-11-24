@@ -33,7 +33,7 @@ object LocalMessageReplayGuard {
                 val expiry = parts.substringAfter('|', "").toLongOrNull() ?: 0L
                 expiry > now
             }
-            prefs.all.keys.filter { it.startsWith(PREFIX) && it !in live.keys }.forEach(editor::remove)
+            prefs.all.keys.filter { it.startsWith(PREFIX) && it !in live.keys }.forEach { key -> editor.remove(key) }
             if (live.size >= MAX_RECORDS) {
                 if (!editor.commit()) return Claim(false, "storage_unavailable")
                 return Claim(false, "replay_store_full")
