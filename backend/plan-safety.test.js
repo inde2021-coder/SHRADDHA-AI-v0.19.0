@@ -69,3 +69,12 @@ test('AI operator plans are capped to twelve steps and reject oversized content'
   const raw = Array.from({ length: 15 }, (_, i) => ({ id: `s${i}`, title: 'Open app', action: 'OPEN_APP', target: 'A'.repeat(140) }));
   assert.equal(normalizeOperatorActions(raw).length, 0);
 });
+
+
+test('operator expected-visible-text cannot carry secret field labels', () => {
+  const actions = normalizeOperatorActions([{
+    id: 'safe-expected-text', title: 'Wait for prompt', action: 'CLICK_TEXT',
+    target: 'Continue', expectedVisibleText: 'Enter OTP to continue'
+  }]);
+  assert.deepEqual(actions, []);
+});

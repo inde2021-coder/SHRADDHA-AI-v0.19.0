@@ -48,7 +48,7 @@ export function normalizeOperatorActions(rawSteps) {
     if (!/^[A-Za-z0-9_-]{1,48}$/.test(id) || seen.has(id)) continue;
     if (!OPERATOR_ACTIONS.has(action) || !title || title.length > 100) continue;
     if (target.length > 120 || value.length > 500 || expectedVisibleText.length > 120) continue;
-    if (SECRET_INPUT.test(`${title} ${target} ${value}`)) continue;
+    if (SECRET_INPUT.test(`${title} ${target} ${value} ${expectedVisibleText}`)) continue;
     if (action === 'OPEN_APP' && (!target || value)) continue;
     if (action === 'CLICK_TEXT' && (!target || value)) continue;
     if (action === 'TYPE_TEXT' && (!value.trim() || target)) continue;
