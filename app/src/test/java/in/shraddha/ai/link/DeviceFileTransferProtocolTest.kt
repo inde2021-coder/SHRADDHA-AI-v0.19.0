@@ -2,6 +2,8 @@ package `in`.shraddha.ai.link
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class DeviceFileTransferProtocolTest {
@@ -36,3 +38,20 @@ class DeviceFileTransferProtocolTest {
         assertNull(DeviceFileTransferProtocol.chunkCount(DeviceFileTransferProtocol.MAX_FILE_BYTES + 1L))
     }
 }
+
+
+    @Test fun validatesIncomingManifestAndPeerIdentity() {
+        val size = DeviceFileTransferProtocol.CHUNK_BYTES.toLong() + 1L
+        val count = DeviceFileTransferProtocol.chunkCount(size)!!
+        val hash = "a".repeat(64)
+        assertTrue(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, hash))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("../escape12345", size, count, hash))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count + 1, hash))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", 0L, 1, hash))
+        assertEquals("name.txt", DeviceFileTransferProtocol.safeDisplayName("../evil/name.txt"))
+        assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName(String(charArrayOf(0))))
+        assertTrue(DeviceFileTransferProtocol.isExpectedIncomingPeer("peer-A", "peer-A"))
+        assertFalse(DeviceFileTransferProtocol.isExpectedIncomingPeer("peer-A", "peer-B"))
+        assertTrue(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-A", "transfer_123456", "transfer_123456"))
+        assertFalse(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-B", "transfer_123456", "transfer_123456"))
+    }
