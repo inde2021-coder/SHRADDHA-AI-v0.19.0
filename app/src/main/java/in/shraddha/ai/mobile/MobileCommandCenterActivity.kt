@@ -61,88 +61,107 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
         ).trim().ifBlank { AssistantBrand.NAME }
 
+        // One command surface: voice, text, and a single settings entry for pairing/permissions.
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(24))
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(20), dp(18), dp(20), dp(22))
             setBackgroundColor(Color.rgb(7, 13, 24))
         }
-        root.addView(TextView(this).apply {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(TextView(this).apply {
             text = assistantName
             textSize = 25f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            setPadding(0, dp(8), 0, dp(3))
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(action("⚙") { showCommandSettings() }.apply {
+            contentDescription = "Settings: PC pairing, voice and permissions"
+            textSize = 19f
+            minWidth = dp(48)
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(46))
         })
+        root.addView(header)
         root.addView(TextView(this).apply {
-            text = "MOBILE COMMAND CENTER"
-            textSize = 11f
-            letterSpacing = .12f
+            text = "आप बोलिए या लिखिए — बाकी Shraddha करेगी"
+            textSize = 13f
             gravity = Gravity.CENTER
-            setTextColor(0xFF77DCEB.toInt())
-            setPadding(0, 0, 0, dp(18))
+            setTextColor(0xFF9BB7CE.toInt())
+            setPadding(0, dp(8), 0, dp(26))
         })
 
-        root.addView(sectionTitle("आप क्या करना चाहते हैं?"))
         command = EditText(this).apply {
-            hint = "श्रद्धा को कमांड लिखें…"
+            hint = "Shraddha को कमांड लिखें…"
             setTextColor(Color.WHITE)
             setHintTextColor(0xFF91A5BC.toInt())
-            textSize = 15f
+            textSize = 16f
             minLines = 1
             maxLines = 3
-            setPadding(dp(14), dp(12), dp(14), dp(12))
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+            setPadding(dp(15), dp(14), dp(15), dp(14))
             background = panelBackground(0xFF101E31.toInt(), 0xFF31516D.toInt())
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                    runCommand(text.toString())
+                    true
+                } else false
+            }
         }
-        root.addView(command, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+        root.addView(command, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
 
-        val primaryRow = LinearLayout(this).apply {
+        val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        primaryRow.addView(action("🎙 बोलें") { captureVoice() }, LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginEnd = dp(5) })
-        primaryRow.addView(action("कमांड चलाएँ") { runCommand(command.text.toString()) }, LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginStart = dp(5) })
-        root.addView(primaryRow)
-
-        root.addView(sectionTitle("आपके डिवाइस"))
-        root.addView(action("🖥  PC से कनेक्ट करें  ·  Pairing और Remote Control") {
-            openMainPage("devices")
-        })
-        root.addView(TextView(this).apply {
-            text = "एक बार PC pair करें। फिर इंटरनेट के जरिए कहीं से भी Shraddha को PC पर काम करने की कमांड दें। PC चालू और ऑनलाइन होना चाहिए।"
-            textSize = 12f
-            setTextColor(0xFF9AAFC5.toInt())
-            setPadding(dp(4), dp(2), dp(4), dp(10))
-        })
-
-        root.addView(sectionTitle("मुख्य सुविधाएँ"))
-        root.addView(action("AI Work Agent") { startActivity(Intent(this, WorkAgentActivity::class.java)) })
-        root.addView(action("फोन कॉल, WhatsApp और SMS") {
-            startActivity(Intent(this, `in`.shraddha.ai.phone.PhoneAgentActivity::class.java))
-        })
-        root.addView(action("बाकी सभी टूल और सेटिंग") { showMoreTools() })
+        controls.addView(action("🎙") { captureVoice() }.apply {
+            contentDescription = "Voice command"
+            textSize = 21f
+        }, LinearLayout.LayoutParams(dp(58), dp(52)).apply { marginEnd = dp(8) })
+        controls.addView(action("कमांड भेजें") { runCommand(command.text.toString()) },
+            LinearLayout.LayoutParams(0, dp(52), 1f))
+        root.addView(controls)
 
         status = TextView(this).apply {
-            text = "तैयार • हिंदी और English कमांड उपलब्ध"
+            text = "तैयार • हिंदी और English"
             textSize = 13f
             setTextColor(0xFFE4F2FF.toInt())
-            setPadding(dp(13), dp(13), dp(13), dp(13))
+            setPadding(dp(14), dp(13), dp(14), dp(13))
             background = panelBackground(0xFF101E31.toInt(), 0xFF29445F.toInt())
         }
-        root.addView(sectionTitle("Shraddha का जवाब"))
-        root.addView(status)
-        root.addView(action("← वापस") { finish() })
+        root.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(18) })
 
-        val scroll = ScrollView(this).apply {
+        setContentView(ScrollView(this).apply {
             isFillViewport = true
-            clipToPadding = false
-            setPadding(0, 0, 0, dp(8))
             addView(root)
-        }
-        setContentView(scroll)
+        })
         intent.getStringExtra("mobile_control_command")?.takeIf { it.isNotBlank() }?.let { pending ->
             command.post { runCommand(pending) }
         }
+    }
+
+    private fun showCommandSettings() {
+        val choices = arrayOf(
+            "PC Pairing और Remote Connection",
+            "Voice Language",
+            "AI Settings और Providers",
+            "Android Permissions"
+        )
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Shraddha Settings")
+            .setItems(choices) { _, which ->
+                when (which) {
+                    0 -> openMainPage("devices")
+                    1 -> chooseVoiceLanguage()
+                    2 -> openAiWorkspace()
+                    3 -> startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:$packageName")))
+                }
+            }
+            .setNegativeButton("बंद करें", null)
+            .show()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
