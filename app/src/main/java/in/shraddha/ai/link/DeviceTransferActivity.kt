@@ -291,7 +291,17 @@ class DeviceTransferActivity : Activity() {
                 if (indexes.isNotEmpty()) startSending(indexes)
                 else status.text = "Receiver reports no missing chunks."
             }
-            "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
+            "file_transfer_cancel" -> {
+                val expectedPeer = sourcePeer.ifBlank { peer.text.toString().trim() }
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        expectedPeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored cancellation from an unexpected peer or transfer."
+                    return
+                }
+                status.text = "Transfer cancelled: ${msg.optString("reason").take(120)}"
+                clearTransferState()
+            }
         }
     }
 
