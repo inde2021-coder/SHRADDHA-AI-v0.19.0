@@ -73,3 +73,15 @@ def valid_transfer_manifest(transfer_id, size_bytes, declared_chunk_count, sha25
         return declared_chunk_count == chunk_count_for_size(size_bytes)
     except ValueError:
         return False
+
+
+def requeue_rejected_chunk(queue, in_flight, index):
+    """Return a negatively acknowledged chunk to the front of the retry queue."""
+    if (not isinstance(queue, list) or not isinstance(in_flight, set) or
+            not isinstance(index, int) or isinstance(index, bool) or
+            index not in in_flight):
+        return False
+    in_flight.remove(index)
+    if index not in queue:
+        queue.insert(0, index)
+    return True
