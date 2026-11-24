@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1307,7 +1307,11 @@ wss.on('connection', (ws, ctx) => {
       if (!source || sourceId === deviceId || !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now()) return;
       const missing = [];
       for (let i = 0; i < transfer.chunkCount && missing.length < 2200; i++) if (!transfer.chunks.has(i)) missing.push(i);
-      send(sourceId, JSON.stringify({ type: 'file_transfer_resume', fromDeviceId: deviceId, transferId, missingIndexes: missing }));
+      if (!validMissingTransferIndexes(missing, transfer.chunkCount)) return;
+      send(sourceId, JSON.stringify({
+        type: 'file_transfer_resume', fromDeviceId: deviceId, transferId,
+        chunkCount: transfer.chunkCount, missingIndexes: missing
+      }));
     } else if (msg.type === 'file_transfer_ack') {
       const targetId = String(msg.targetDeviceId || '');
       const requester = session.devices.get(targetId);
