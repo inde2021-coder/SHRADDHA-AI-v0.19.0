@@ -225,7 +225,7 @@ class DeviceTransferActivity : Activity() {
                     return
                 }
                 val expectedPeer = peer.text.toString().trim()
-                if (expectedPeer.isNotBlank() && expectedPeer != sender) {
+                if (!DeviceFileTransferProtocol.isExpectedIncomingPeer(expectedPeer, sender)) {
                     status.text = "Rejected file transfer from an unexpected paired device."
                     DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "unexpected_peer")
                     return
