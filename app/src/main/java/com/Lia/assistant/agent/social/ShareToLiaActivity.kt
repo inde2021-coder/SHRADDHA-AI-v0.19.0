@@ -38,7 +38,10 @@ class ShareToLiaActivity : Activity() {
         val uris = linkedSetOf<Uri>()
         intent?.data?.let(uris::add)
         intent?.clipData?.let { clip: ClipData ->
-            for (i in 0 until minOf(clip.itemCount, SharedMediaPolicy.MAX_ITEMS.toInt())) clip.getItemAt(i).uri?.let(uris::add)
+            if (clip.itemCount > SharedMediaPolicy.MAX_ITEMS) {
+                throw IllegalArgumentException("Share up to ${SharedMediaPolicy.MAX_ITEMS} files at a time")
+            }
+            for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let(uris::add)
         }
         val stream = if (android.os.Build.VERSION.SDK_INT >= 33) {
             intent?.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
@@ -132,7 +135,13 @@ class ShareToLiaActivity : Activity() {
             }
             val isImage = file.extension in setOf("jpg", "png", "webp", "gif", "img")
             if (isImage) {
-                runCatching { BitmapFactory.decodeFile(file.absolutePath) }.getOrNull()?.let { bitmap ->
+                runCatching {
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, bounds)
+                    var sample = 1
+                    while (bounds.outWidth / sample > 720 || bounds.outHeight / sample > 720) sample *= 2
+                    BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+                }.getOrNull()?.let { bitmap ->
                     card.addView(ImageView(this).apply {
                         setImageBitmap(bitmap)
                         adjustViewBounds = true
