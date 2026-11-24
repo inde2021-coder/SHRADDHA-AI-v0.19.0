@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, canQueueRelayPayload } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1024,7 +1024,25 @@ wss.on('connection', (ws, ctx) => {
   const { session, deviceId } = ctx; const device = session.devices.get(deviceId);
   if (device.socket && device.socket.readyState === WebSocket.OPEN) device.socket.close(4001, 'Reconnected elsewhere');
   device.socket = ws;
-  const send = (target, payload, binary = false) => { const peer = session.devices.get(target); if (peer?.socket?.readyState === WebSocket.OPEN) peer.socket.send(payload, { binary }); };
+  const send = (target, payload, binary = false) => {
+    const peerSocket = session.devices.get(target)?.socket;
+    if (peerSocket?.readyState !== WebSocket.OPEN) return false;
+    const payloadBytes = typeof payload === 'string' ? Buffer.byteLength(payload) : payload.byteLength;
+    if (!canQueueRelayPayload(peerSocket.bufferedAmount, payloadBytes)) {
+      // Disconnect a slow consumer before the relay accumulates unbounded queued frames.
+      try { peerSocket.close(1013, 'Relay receiver is too slow; reconnect and retry'); } catch {}
+      return false;
+    }
+    try {
+      peerSocket.send(payload, { binary }, error => {
+        if (error) { try { peerSocket.terminate(); } catch {} }
+      });
+      return true;
+    } catch {
+      try { peerSocket.terminate(); } catch {}
+      return false;
+    }
+  };
   ws.send(JSON.stringify({ type: 'connected', deviceId, role: device.role, controlMode: session.controlMode, devices: [...session.devices.entries()].filter(([id]) => id !== deviceId).map(([id, d]) => ({ id, name: d.name, role: d.role, online: d.socket?.readyState === WebSocket.OPEN })) }));
   for (const [id, peer] of session.devices) if (id !== deviceId && peer.socket?.readyState === WebSocket.OPEN) peer.socket.send(JSON.stringify({ type: 'peer_status', deviceId, name: device.name, online: true }));
   ws.on('message', (data, isBinary) => {
