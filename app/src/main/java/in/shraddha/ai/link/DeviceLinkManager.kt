@@ -513,10 +513,15 @@ object DeviceLinkManager {
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return }
-        val normalizedProvider = provider.trim().uppercase()
-        if (normalizedProvider !in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
-            done(Result.failure(IllegalArgumentException("Unsupported AI provider.")))
-            return
+        // The vision gateway currently supports Gemini, OpenAI and Anthropic,
+        // plus automatic failover. Route other configured chat providers through
+        // auto rather than silently sending an unsupported provider name.
+        val normalizedProvider = when (provider.trim().uppercase()) {
+            "GEMINI" -> "gemini"
+            "OPENAI" -> "openai"
+            "CLAUDE", "ANTHROPIC" -> "anthropic"
+            "AUTO", "GROQ", "PERPLEXITY" -> "auto"
+            else -> "auto"
         }
         if (prompt.isBlank() || jpeg.isEmpty()) {
             done(Result.failure(IllegalArgumentException("A prompt and image are required.")))
