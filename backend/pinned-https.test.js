@@ -86,3 +86,14 @@ test('pinned transport enforces an absolute deadline against slow or stalled res
   }), /total time limit/);
   assert.equal(destroyed, true);
 });
+
+test('pinned transport bounds DNS resolution before opening a socket', async () => {
+  let socketCreated = false;
+  await assert.rejects(() => pinnedHttpsJsonRequest('https://mastodon.example/api/v1/statuses', {
+    timeoutMs: 15
+  }, {
+    resolve4: () => new Promise(() => {}),
+    request: () => { socketCreated = true; throw new Error('socket must not be created'); }
+  }), /DNS resolution exceeded its time limit/);
+  assert.equal(socketCreated, false);
+});
