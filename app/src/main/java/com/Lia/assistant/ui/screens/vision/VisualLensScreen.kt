@@ -11,7 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
@@ -29,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -232,11 +230,6 @@ fun VisualLensScreen(navController: NavController) {
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
             placeholder = { Text("पूछें: यह क्या है? इसे कैसे ठीक करूँ?") },
-            trailingIcon = {
-                IconButton(onClick = { captureAndAsk() }, enabled = !busy) {
-                    Icon(Icons.Default.Send, contentDescription = "Ask Shraddha", tint = Color(0xFFBDA4FF))
-                }
-            }
         )
 
         Text(
