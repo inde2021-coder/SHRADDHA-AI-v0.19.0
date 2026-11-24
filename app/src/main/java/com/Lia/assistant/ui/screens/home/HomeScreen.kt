@@ -143,8 +143,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 9.dp)
                     .size(72.dp).clip(CircleShape)
                     .background(Brush.radialGradient(listOf(Color(0xFFF5F0FF), Color(0xFFBDA4FF), Color(0xFF6044B8))))
-                    .border(1.dp, Color(0xFFD8C4FA), CircleShape)
-                    .clickable { navController.navigate("voice") },
+                    .border(1.dp, Color(0xFFD8C4FA), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 LiaOrb3D(
