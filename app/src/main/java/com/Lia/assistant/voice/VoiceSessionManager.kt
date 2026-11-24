@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.Lia.assistant.action.InstalledAppLabelCache
 import com.Lia.assistant.data.AssistantBrand
+import com.Lia.assistant.data.GatewayRequestException
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.Personality
 import com.Lia.assistant.data.PersonalityRepository
@@ -191,10 +192,23 @@ object VoiceSessionManager {
             if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
             val message = error.localizedMessage ?: "Secure Gemini Live connection unavailable"
             _lastError.value = message
-            _state.value = NovaOrbState.CONNECTING
-            _statusText.value = "Voice connection unavailable; retrying automatically"
             audioIO?.stopRecording()
-            retryAfterCurrentAttempt()
+            val permanentGatewayFailure =
+                (error is GatewayRequestException && error.statusCode in 400..499 && error.statusCode != 429) ||
+                    message.contains("not configured", ignoreCase = true) ||
+                    message.contains("gateway authentication is required", ignoreCase = true) ||
+                    message.contains("Set the secure HTTPS backend URL", ignoreCase = true) ||
+                    message.contains("could not be read", ignoreCase = true)
+            if (permanentGatewayFailure) {
+                // Invalid credentials/configuration cannot be repaired by retrying every few seconds.
+                // Keep the user-started session in ERROR until they correct Settings and restart.
+                _state.value = NovaOrbState.ERROR
+                _statusText.value = "Voice setup failed • check Secure Backend settings"
+            } else {
+                _state.value = NovaOrbState.CONNECTING
+                _statusText.value = "Voice connection unavailable; retrying automatically"
+                retryAfterCurrentAttempt()
+            }
             return
         }
 
