@@ -254,6 +254,13 @@ class DeviceTransferActivity : Activity() {
             }
             "file_transfer_chunk" -> receiveChunk(msg)
             "file_transfer_ack" -> {
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        peer.text.toString().trim(), msg.optString("fromDeviceId"),
+                        transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored file-transfer acknowledgement from an unexpected peer or transfer."
+                    return
+                }
                 val index = msg.optInt("index", -1)
                 if (index == -1 && !msg.optBoolean("complete") && msg.optBoolean("ok") && sourceUri != null) {
                     status.text = "Receiver selected a destination. Sending file chunks…"
@@ -292,7 +299,9 @@ class DeviceTransferActivity : Activity() {
         if (paused.get()) { status.text = "Incoming transfer paused locally; resume to accept more chunks."; return }
         var decodedBytes: ByteArray? = null
         try {
-            require(msg.optString("transferId") == transferId && incomingOut != null)
+            require(DeviceFileTransferProtocol.isExpectedPeerMessage(
+                sourcePeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
+            ) && incomingOut != null) { "Chunk sender or transfer ID mismatch" }
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
             decodedBytes = bytes
