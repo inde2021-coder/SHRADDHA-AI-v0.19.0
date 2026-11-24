@@ -38,7 +38,7 @@ export async function resolvePinnedPublicIpv4(hostname, resolve4 = host => dns.r
 /** HTTPS transport with pinned DNS, TLS hostname verification, bounded response and no redirects. */
 export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencies = {}) {
   const url = new URL(urlValue);
-  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Pinned transport accepts HTTPS URLs only');
+  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) throw new Error('Pinned transport accepts HTTPS on port 443 only');
   const resolve4 = dependencies.resolve4 || (host => dns.resolve4(host));
   const request = dependencies.request || https.request;
   const pinnedAddress = await resolvePinnedPublicIpv4(url.hostname, resolve4);
