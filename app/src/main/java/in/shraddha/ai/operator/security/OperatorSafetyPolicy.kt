@@ -9,7 +9,9 @@ object OperatorSafetyPolicy {
     private val secretPattern = Regex(
         "(?i)(?:^|[^a-z0-9])(?:password|passcode|otp|code|one[\\s-]*time[\\s-]*(?:password|code)|onetime(?:password|code)|pin|cvv|security[\\s-]*code|verification[\\s-]*code|recovery[\\s-]*phrase|account[\\s-]*number|card[\\s-]*number|upi)(?:$|[^a-z0-9])|पासवर्ड|ओटीपी|पिन|खाता[\\s-]*संख्या|कार्ड[\\s-]*नंबर|यूपीआई"
     )
-    // Keep this independent of the composite pattern: generic UI labels such as "Code" are sensitive too.\n    private val genericCodePattern = Regex("(?i)\\\\bcode\\\\b")\n    private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
+    // Keep this independent of the composite pattern: generic UI labels such as "Code" are sensitive too.
+    private val genericCodePattern = Regex("(?i)\\\\bcode\\\\b")
+    private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
     private val finalButtonLabels = setOf(
         "send", "send message", "submit", "pay", "pay now", "confirm", "delete", "remove", "publish", "post",
         "भेजें", "भेजो", "सबमिट", "भुगतान", "अभी भुगतान करें", "पुष्टि करें", "हटाएं", "मिटाएं", "प्रकाशित करें"
