@@ -66,6 +66,14 @@ class ActionTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("Namaste Shraddha", message)
 
+    def test_ocr_language_selection_falls_back_to_installed_packs(self):
+        from pc_companion.actions import select_ocr_languages
+        self.assertEqual(select_ocr_languages(["eng", "hin"]), (["eng", "hin"], []))
+        self.assertEqual(select_ocr_languages(["eng"]), (["eng"], ["hin"]))
+        self.assertEqual(select_ocr_languages(["hin"]), (["hin"], ["eng"]))
+        self.assertEqual(select_ocr_languages(["osd"]), ([], ["eng", "hin"]))
+        self.assertEqual(select_ocr_languages(["ENG", "hin"]), (["eng", "hin"], []))
+
     def test_ocr_redacts_secret_lines_and_long_numbers(self):
         safe = redact_ocr_text("Invoice total 42\\nOTP: 123456\\n654321\\nAmount 900")
         self.assertIn("Invoice total 42", safe)
