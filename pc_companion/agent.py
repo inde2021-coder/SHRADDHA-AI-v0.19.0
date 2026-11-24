@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -907,33 +907,68 @@ class PcCompanionApp:
 
     def _handle_file_ack(self, msg):
         pending = self.pending_pc_send
-        if not pending or msg.get("transferId") not in (None, "", pending["transferId"]):
+        if (not pending or msg.get("transferId") != pending["transferId"] or
+                msg.get("fromDeviceId") != pending["peer"]):
             return
-        index = int(msg.get("index", -2))
-        if index == -1 and msg.get("ok") and not msg.get("complete"):
+        index = msg.get("index", -2)
+        if not isinstance(index, int) or isinstance(index, bool):
+            return
+        if index == -1 and msg.get("ok") is True and msg.get("complete") is not True:
             self._send_pc_file_chunks(list(all_chunk_indexes(pending["size"])))
-        elif msg.get("complete") and msg.get("ok"):
-            self.pending_pc_send = None
-            self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
+        elif msg.get("complete") is True:
+            if msg.get("ok") is True:
+                self.pending_pc_send = None
+                self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
+            else:
+                self.status_var.set("Receiver could not verify the transfer. Resume only after checking the destination.")
         elif index >= 0:
+            if msg.get("ok") is not True:
+                self.status_var.set(f"Receiver rejected file chunk {index + 1}; transfer paused.")
+                return
+            in_flight = pending.setdefault("in_flight", set())
+            if index in in_flight:
+                in_flight.remove(index)
+                self._pump_pc_file_chunks()
             self.status_var.set(f"Android acknowledged file chunk {index + 1}.")
+
 
     def _send_pc_file_chunks(self, indexes):
         pending = self.pending_pc_send
         if not pending or not self.is_e2e_trusted(pending["peer"]):
             self.status_var.set("File send blocked: verify the Android peer fingerprint on both devices first.")
             return
+        pending["send_queue"] = list(indexes)
+        pending["in_flight"] = set()
+        self._pump_pc_file_chunks()
+
+    def _pump_pc_file_chunks(self):
+        pending = self.pending_pc_send
+        if not pending or not self.is_e2e_trusted(pending["peer"]):
+            return
+        queue = pending.setdefault("send_queue", [])
+        in_flight = pending.setdefault("in_flight", set())
         try:
+            batch = take_chunk_window(queue, in_flight)
+            if not batch:
+                if not queue and not in_flight:
+                    self.status_var.set("All chunks acknowledged by receiver. Waiting for final SHA-256 completion.")
+                return
             with Path(pending["path"]).open("rb") as source:
-                for index in indexes:
+                for index in batch:
                     source.seek(index * FILE_CHUNK_BYTES)
                     data = source.read(FILE_CHUNK_BYTES)
+                    expected = expected_chunk_bytes(pending["size"], chunk_count_for_size(pending["size"]), index)
+                    if len(data) != expected:
+                        raise ValueError(f"Unexpected file length for chunk {index}")
                     if not data:
                         raise ValueError(f"Missing file bytes for chunk {index}")
                     self._send_encrypted_file_chunk(pending["peer"], pending["transferId"], index, data)
-            self.status_var.set(f"Sent {len(indexes)} file chunks. Waiting for receiver SHA-256 verification.")
+            self.status_var.set(f"Sent {len(batch)} chunks; {len(in_flight)} awaiting receiver acknowledgement.")
         except Exception as exc:
+            for index in batch if "batch" in locals() else []:
+                in_flight.discard(index)
             self.status_var.set(f"File transfer paused: {str(exc)[:160]}")
+
 
     def _send_encrypted_file_chunk(self, peer_id, transfer_id, index, data):
         with self.e2e_lock:
