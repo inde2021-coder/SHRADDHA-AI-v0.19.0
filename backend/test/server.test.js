@@ -1144,6 +1144,46 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     assert.equal(resume.chunkCount, 3);
     assert.deepEqual(resume.missingIndexes, [1, 2]);
 
+    // A receiver cannot close relay state until every chunk has a positive ACK.
+    const prematureCompletionPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [prematureCompletionMessage] = await prematureCompletionPromise;
+    assert.equal(JSON.parse(prematureCompletionMessage.toString()).ok, false);
+
+    for (const index of [0, 1, 2]) {
+      const chunkAckPromise = nextWsMessage(ownerSocket, data => {
+        try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === index && msg.complete === false; } catch { return false; }
+      });
+      memberSocket.send(JSON.stringify({
+        type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+        transferId, index, complete: false, ok: true
+      }));
+      const [chunkAckMessage] = await chunkAckPromise;
+      assert.equal(JSON.parse(chunkAckMessage.toString()).ok, true);
+    }
+
+    const verifiedCompletionPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [verifiedCompletionMessage] = await verifiedCompletionPromise;
+    assert.equal(JSON.parse(verifiedCompletionMessage.toString()).ok, true);
+
+    const duplicateCompletion = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    await duplicateCompletion;
+
     for (const invalid of [
       { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1, 1] },
       { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [3] },
