@@ -19,6 +19,13 @@ import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+private class WipingByteArrayOutputStream : ByteArrayOutputStream() {
+    fun wipe() {
+        buf.fill(0)
+        reset()
+    }
+}
+
 object SocialPublishingClient {
     private val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS).build()
@@ -54,15 +61,20 @@ object SocialPublishingClient {
         val declaredSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
         require(declaredSize <= 8L * 1024L * 1024L) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
-            val output = ByteArrayOutputStream()
+            val output = WipingByteArrayOutputStream()
             val buffer = ByteArray(8192)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                require(output.size() + count <= 8 * 1024 * 1024) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
-                output.write(buffer, 0, count)
+            try {
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    require(output.size() + count <= 8 * 1024 * 1024) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            } finally {
+                buffer.fill(0)
+                output.wipe()
             }
-            output.toByteArray()
         } ?: error("The selected media file could not be read.")
         require(bytes.isNotEmpty()) { "The selected media file is empty." }
         val extension = when (mime) {
@@ -73,8 +85,9 @@ object SocialPublishingClient {
             "video/quicktime" -> "mov"
             else -> error("Unsupported media type.")
         }
+        val encoded = try { Base64.encodeToString(bytes, Base64.NO_WRAP) } finally { bytes.fill(0) }
         JSONObject()
-            .put("mediaBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            .put("mediaBase64", encoded)
             .put("mimeType", mime)
             .put("fileName", "shraddha-upload.$extension")
     }
