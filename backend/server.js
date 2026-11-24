@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, canStartFileTransfer } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1306,7 +1306,12 @@ wss.on('connection', (ws, ctx) => {
       const size = Number(msg.sizeBytes), chunks = Number(msg.chunkCount);
       const digest = String(msg.sha256 || '').toLowerCase();
       const grant = target && target.grants.get(deviceId + ':documents');
-      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true || !matchesOneTimeShareGrant(grant, requestId) || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) || !name || !Number.isSafeInteger(size) || size < 1 || size > 100 * 1024 * 1024 || !Number.isSafeInteger(chunks) || chunks < 1 || chunks > 2200 || !/^[a-f0-9]{64}$/.test(digest) || chunks !== Math.ceil(size / (48 * 1024))) return;
+      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
+          !canStartFileTransfer(target, transferId) || !name || !Number.isSafeInteger(size) ||
+          size < 1 || size > 100 * 1024 * 1024 || !Number.isSafeInteger(chunks) ||
+          chunks < 1 || chunks > 2200 || !/^[a-f0-9]{64}$/.test(digest) ||
+          chunks !== Math.ceil(size / (48 * 1024))) return;
       target.grants.delete(deviceId + ':documents');
       target.incomingTransfers.set(transferId, { fromDeviceId: deviceId, requestId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunks: new Map(), expiresAt: Date.now() + 30 * 60_000 });
       send(targetId, JSON.stringify({ type: 'file_transfer_start', fromDeviceId: deviceId, transferId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunkBytes: 48 * 1024 }));
