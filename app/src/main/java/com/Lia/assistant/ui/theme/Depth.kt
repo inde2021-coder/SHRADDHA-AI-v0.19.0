@@ -1,6 +1,5 @@
 package com.Lia.assistant.ui.theme
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
@@ -12,7 +11,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import java.util.Random
 
 val LocalBottomBarInset = compositionLocalOf { 80.dp }
 
