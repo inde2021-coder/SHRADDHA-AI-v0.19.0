@@ -203,7 +203,9 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun beginSend() {
-        val target = peer.text.toString().trim(); val uri = sourceUri ?: return
+        val target = peerIdSnapshot.ifBlank { peer.text.toString().trim() }
+        peerIdSnapshot = target
+        val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
         synchronized(ackMonitor) { acknowledgedChunks.clear(); inFlightChunks.clear(); sendFailed = false }
         persistTransferState()
@@ -223,7 +225,7 @@ class DeviceTransferActivity : Activity() {
             val bytes = buffer.copyOf(count)
             try {
                 require(bytes.isNotEmpty())
-                if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+                if (!DeviceLinkManager.sendFileTransferChunk(peerIdSnapshot, transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
             } finally {
                 bytes.fill(0)
                 buffer.fill(0)
@@ -374,7 +376,7 @@ class DeviceTransferActivity : Activity() {
             }
             "file_transfer_ack" -> {
                 if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
-                        peer.text.toString().trim(), msg.optString("fromDeviceId"),
+                        peerIdSnapshot, msg.optString("fromDeviceId"),
                         transferId, msg.optString("transferId")
                     )) {
                     status.text = "Ignored file-transfer acknowledgement from an unexpected peer or transfer."
@@ -432,7 +434,7 @@ class DeviceTransferActivity : Activity() {
                 else status.text = "Receiver reports no missing chunks; waiting for final verification."
             }
             "file_transfer_cancel" -> {
-                val expectedPeer = sourcePeer.ifBlank { peer.text.toString().trim() }
+                val expectedPeer = sourcePeer.ifBlank { peerIdSnapshot }
                 if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
                         expectedPeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
                     )) {
@@ -660,7 +662,7 @@ class DeviceTransferActivity : Activity() {
         cancelled.set(true)
         paused.set(false)
         synchronized(ackMonitor) { ackMonitor.notifyAll() }
-        val target = if (sourcePeer.isNotBlank()) sourcePeer else peer.text.toString().trim()
+        val target = if (sourcePeer.isNotBlank()) sourcePeer else peerIdSnapshot
         val activeTransferId = transferId
         if (activeTransferId.isNotBlank() && target.isNotBlank()) {
             DeviceLinkManager.cancelFileTransfer(target, activeTransferId)
