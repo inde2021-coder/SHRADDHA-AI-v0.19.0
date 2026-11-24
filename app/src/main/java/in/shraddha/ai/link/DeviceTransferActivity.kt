@@ -319,11 +319,11 @@ class DeviceTransferActivity : Activity() {
     }
 
     /** Persists only transfer metadata and chunk indexes; file bytes stay in app-private storage. */
-    private fun persistTransferState() {
+    private fun persistTransferState(synchronous: Boolean = false) {
         if (!::peer.isInitialized) return
         val prefs = getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE)
-        prefs.edit()
-            .putString("peer", peer.text.toString().trim())
+        val editor = prefs.edit()
+            .putString("peer", sourcePeer.ifBlank { peerIdSnapshot })
             .putString("sourceUri", sourceUri?.toString().orEmpty())
             .putString("sourceName", sourceName)
             .putLong("sourceSize", sourceSize)
@@ -339,7 +339,7 @@ class DeviceTransferActivity : Activity() {
             .putString("receivedIndexes", android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP))
             .putBoolean("incomingVerified", incomingVerified)
             .putString("pendingSaveUri", pendingSaveUri?.toString().orEmpty())
-            .apply()
+        if (synchronous) editor.commit() else editor.apply()
     }
 
     private fun restoreTransferState() {
