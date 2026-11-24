@@ -114,6 +114,10 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
                    text_clicker=None, ocr_reader=None):
     kind = action["kind"]
     try:
+        # Every remote action that can alter the focused desktop must fail closed
+        # when the foreground window is unknown or matches a sensitive title.
+        if kind in {"tap", "swipe", "key_press", "scroll", "type", "home", "back"}:
+            _active_window()
         width, height = pyautogui.size()
         left, top = 0, 0
         if monitor_bounds:
