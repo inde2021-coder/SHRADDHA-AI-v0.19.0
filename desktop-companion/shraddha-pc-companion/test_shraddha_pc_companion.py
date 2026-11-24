@@ -138,6 +138,13 @@ class PcCompanionPolicyTests(unittest.TestCase):
             self.assertEqual(len(read_file_chunk(str(path), 0)), 48 * 1024)
             with self.assertRaises(ValueError): read_file_chunk(str(path), 2)
 
+    def test_resume_manifest_requires_unique_bounded_indexes(self):
+        self.assertEqual(validate_missing_transfer_indexes([0, 2, 4], 5), [0, 2, 4])
+        self.assertEqual(validate_missing_transfer_indexes([], 5), [])
+        for indexes, total in [([0, 0], 5), ([-1], 5), ([5], 5), ([True], 5), (list(range(2201)), 2201)]:
+            with self.assertRaises(ValueError):
+                validate_missing_transfer_indexes(indexes, total)
+
     def test_file_write_is_atomic_requires_overwrite_and_keeps_backup(self):
         import tempfile
         from pathlib import Path
