@@ -1308,7 +1308,7 @@ wss.on('connection', (ws, ctx) => {
       const grant = target && target.grants.get(deviceId + ':documents');
       if (!target || targetId === deviceId || target.sharePermissions?.documents !== true ||
           !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
-          !canStartFileTransfer(target, transferId) || !name || !Number.isSafeInteger(size) ||
+          !canStartFileTransfer(target, transferId, 1) || !name || !Number.isSafeInteger(size) ||
           size < 1 || size > 100 * 1024 * 1024 || !Number.isSafeInteger(chunks) ||
           chunks < 1 || chunks > 2200 || !/^[a-f0-9]{64}$/.test(digest) ||
           chunks !== Math.ceil(size / (48 * 1024))) return;
