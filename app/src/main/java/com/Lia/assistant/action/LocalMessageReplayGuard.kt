@@ -51,7 +51,7 @@ object LocalMessageReplayGuard {
     }
 
     fun release(context: Context, requestId: String, fingerprint: String): Boolean {
-        if (!requestId.matches(Regex("^[A-Za-z0-9_-]{16,80}$")) ||
+        if (!isValidRequestId(requestId) ||
             !fingerprint.matches(Regex("^[a-f0-9]{64}$"))) return false
         synchronized(lock) {
             val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
