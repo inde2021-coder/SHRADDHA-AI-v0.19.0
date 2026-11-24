@@ -1330,7 +1330,7 @@ wss.on('connection', (ws, ctx) => {
       const source = session.devices.get(sourceId);
       const transferId = String(msg.transferId || '');
       const transfer = device.incomingTransfers?.get(transferId);
-      const chunkCount = Number(msg.chunkCount);
+      const chunkCount = msg.chunkCount; // Require a JSON number; do not coerce strings or other values.
       const missing = msg.missingIndexes;
       // The receiver's persisted bitmap is authoritative. Never reconstruct it
       // from relay ACK state: ACKs can be lost independently of saved chunks.
