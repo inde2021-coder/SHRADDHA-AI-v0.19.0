@@ -16,6 +16,29 @@ def valid_pairing_ids(session_id, device_id):
         isinstance(device_id, str) and _DEVICE_ID.fullmatch(device_id) is not None
 
 
+def valid_incoming_file_manifest(peer_id, transfer_id, size, chunks, digest, peer_trusted, active_transfers, max_size=20_000_000):
+    """Validate untrusted Windows inbound transfer metadata before prompting or creating files."""
+    return (
+        isinstance(peer_id, str) and re.fullmatch(r"[a-f0-9]{24}", peer_id) is not None and
+        isinstance(transfer_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) is not None and
+        type(size) is int and 1 <= size <= max_size and
+        type(chunks) is int and chunks == (size + 47999) // 48000 and
+        isinstance(digest, str) and re.fullmatch(r"[a-f0-9]{64}", digest) is not None and
+        peer_trusted is True and isinstance(active_transfers, dict) and
+        transfer_id not in active_transfers and len(active_transfers) == 0
+    )
+
+
+def matches_transfer_peer(message, peer_id, transfer_id):
+    """Require both the authenticated peer identity and exact transfer ID."""
+    return (
+        isinstance(message, dict) and isinstance(peer_id, str) and bool(peer_id) and
+        message.get("fromDeviceId") == peer_id and
+        isinstance(transfer_id, str) and bool(transfer_id) and
+        message.get("transferId") == transfer_id
+    )
+
+
 def _number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
