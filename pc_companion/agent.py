@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -1089,12 +1089,10 @@ class PcCompanionApp:
         pending = self.pending_pc_send
         if not pending or transfer_id != pending["transferId"]:
             return
-        missing = msg.get("missingIndexes", [])
-        expected_count = chunk_count_for_size(pending["size"])
-        if (not isinstance(missing, list) or msg.get("chunkCount") != expected_count or
-                len(missing) > expected_count or
-                any(not isinstance(i, int) or isinstance(i, bool) or not 0 <= i < expected_count for i in missing) or
-                len(set(missing)) != len(missing)):
+        missing = validate_resume_indexes(
+            msg.get("missingIndexes"), msg.get("chunkCount"), chunk_count_for_size(pending["size"])
+        )
+        if missing is None:
             self.status_var.set("Rejected invalid file-transfer resume manifest.")
             return
         self._send_pc_file_chunks(missing)
