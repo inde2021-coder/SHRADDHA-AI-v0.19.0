@@ -545,7 +545,7 @@ class OperatorActivity : Activity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("🎙") { captureVoiceCommand() },
             LinearLayout.LayoutParams(dp(58), dp(50)).apply { rightMargin = dp(8) })
-        actions.addView(action("कमांड चलाएँ", true) { routeNaturalCommand() },
+        actions.addView(action("कमांड चलाएँ") { routeNaturalCommand() },
             LinearLayout.LayoutParams(0, dp(50), 1f))
         root.addView(actions)
         log = TextView(this).apply {
