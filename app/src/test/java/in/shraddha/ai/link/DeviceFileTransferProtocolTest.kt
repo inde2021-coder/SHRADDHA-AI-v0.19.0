@@ -37,8 +37,6 @@ class DeviceFileTransferProtocolTest {
         assertNull(DeviceFileTransferProtocol.chunkCount(0L))
         assertNull(DeviceFileTransferProtocol.chunkCount(DeviceFileTransferProtocol.MAX_FILE_BYTES + 1L))
     }
-}
-
 
     @Test fun validatesIncomingManifestAndPeerIdentity() {
         val size = DeviceFileTransferProtocol.CHUNK_BYTES.toLong() + 1L
@@ -55,3 +53,4 @@ class DeviceFileTransferProtocolTest {
         assertTrue(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-A", "transfer_123456", "transfer_123456"))
         assertFalse(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-B", "transfer_123456", "transfer_123456"))
     }
+}
