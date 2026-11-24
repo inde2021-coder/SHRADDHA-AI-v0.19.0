@@ -401,8 +401,9 @@ class DeviceTransferActivity : Activity() {
                 }
                 if (msg.optBoolean("complete")) {
                     if (msg.optBoolean("ok")) {
-                        status.text = "Receiver verified and saved file successfully."
-                        clearTransferState()
+                        cancelled.set(true)
+                        synchronized(ackMonitor) { ackMonitor.notifyAll() }
+                        enqueueTransferCleanup("Receiver verified and saved file successfully.", deletePartial = true)
                     } else status.text = "Receiver could not verify the file; resume after checking the destination."
                 }
             }
@@ -442,8 +443,10 @@ class DeviceTransferActivity : Activity() {
                     status.text = "Ignored cancellation from an unexpected peer or transfer."
                     return
                 }
-                status.text = "Transfer cancelled: ${msg.optString("reason").take(120)}"
-                clearTransferState()
+                cancelled.set(true)
+                paused.set(false)
+                synchronized(ackMonitor) { ackMonitor.notifyAll() }
+                enqueueTransferCleanup("Transfer cancelled by paired device: ${msg.optString("reason").take(120)}", deletePartial = true)
             }
         }
     }
@@ -659,6 +662,40 @@ class DeviceTransferActivity : Activity() {
         incomingHash = ""
     }
 
+    private fun enqueueTransferCleanup(message: String, deletePartial: Boolean) {
+        val senderThread = sendThread
+        Thread({
+            // Stop any in-flight source read before clearing transfer identifiers or URIs.
+            try { senderThread?.join() } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+            val cleanup = Runnable {
+                if (deletePartial) {
+                    runCatching { incomingOut?.fd?.sync() }
+                    runCatching { incomingOut?.close() }
+                    incomingOut = null
+                    incomingFile?.delete()
+                    incomingFile = null
+                }
+                clearTransferState()
+                runOnUiThread { status.text = message }
+            }
+            while (!transferIo.isShutdown) {
+                try {
+                    transferIo.execute(cleanup)
+                    return@Thread
+                } catch (_: java.util.concurrent.RejectedExecutionException) {
+                    try { Thread.sleep(25) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return@Thread }
+                }
+            }
+            // If Activity teardown already shut the worker down, wait for all queued
+            // writes to finish before touching the partial file or saved state.
+            while (!transferIo.isTerminated) {
+                try { transferIo.awaitTermination(1, TimeUnit.MINUTES) }
+                catch (_: InterruptedException) { Thread.currentThread().interrupt(); return@Thread }
+            }
+            cleanup.run()
+        }, "ShraddhaTransferCancel").apply { isDaemon = true; start() }
+    }
+
     private fun cancelTransfer() {
         cancelled.set(true)
         paused.set(false)
@@ -668,20 +705,6 @@ class DeviceTransferActivity : Activity() {
         if (activeTransferId.isNotBlank() && target.isNotBlank()) {
             DeviceLinkManager.cancelFileTransfer(target, activeTransferId)
         }
-        // Serialize cancellation after any active disk write. Closing or deleting
-        // the partial file on the UI thread can race receiveChunk()/verifyIncoming().
-        try {
-            transferIo.execute {
-                runCatching { incomingOut?.fd?.sync() }
-                runCatching { incomingOut?.close() }
-                incomingOut = null
-                incomingFile?.delete()
-                incomingFile = null
-                clearTransferState()
-                runOnUiThread { status.text = "Transfer cancelled by user." }
-            }
-        } catch (_: java.util.concurrent.RejectedExecutionException) {
-            status.text = "Transfer worker is closing; partial data will remain private and can be discarded after reopening."
-        }
+        enqueueTransferCleanup("Transfer cancelled by user.", deletePartial = true)
     }
 }
