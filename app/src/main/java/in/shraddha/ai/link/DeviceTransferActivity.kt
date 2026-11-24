@@ -317,8 +317,8 @@ class DeviceTransferActivity : Activity() {
             DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)
             file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
             clearTransferState()
-            status.text = "Saved $savedName • SHA-256 verified • transfer complete."
-        } catch (e: Exception) { status.text = "Save failed: ${e.message}" }
+            runOnUiThread { status.text = "Saved $savedName • SHA-256 verified • transfer complete." }
+        } catch (e: Exception) { runOnUiThread { status.text = "Save failed: ${e.message}" } }
     }
 
     private fun verifyIncoming() {
@@ -327,10 +327,16 @@ class DeviceTransferActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); clearTransferState(); return }
+        if (actual != incomingHash) {
+            runOnUiThread { status.text = "SHA-256 mismatch. File rejected." }
+            DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch")
+            file.delete()
+            clearTransferState()
+            return
+        }
         incomingVerified = true
-        persistTransferState()
-        status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
+        persistTransferState(synchronous = true)
+        runOnUiThread { status.text = "All chunks received. SHA-256 verified. Saving to selected destination…" }
         pendingSaveUri?.let { saveIncoming(it) }
     }
 
