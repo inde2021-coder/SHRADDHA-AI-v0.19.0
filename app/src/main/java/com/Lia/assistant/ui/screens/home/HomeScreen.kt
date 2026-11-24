@@ -147,7 +147,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
                 color = LiaPurple,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.8.sp,
+                letterSpacing = 1.7.sp,
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 16.dp)
             )
             Image(
