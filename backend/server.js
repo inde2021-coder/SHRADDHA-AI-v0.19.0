@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validEncryptedTransferChunkEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1379,7 +1379,8 @@ wss.on('connection', (ws, ctx) => {
       if (!source || sourceId === deviceId || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
           !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
           !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() ||
-          transfer.chunkCount !== chunkCount || !validMissingTransferIndexes(missing, chunkCount)) return;
+          transfer.chunkCount !== chunkCount || !validMissingTransferIndexes(missing, chunkCount) ||
+          !recordPersistedFileTransferChunks(transfer, missing)) return;
       send(sourceId, JSON.stringify({
         type: 'file_transfer_resume', fromDeviceId: deviceId, transferId,
         chunkCount, missingIndexes: missing
