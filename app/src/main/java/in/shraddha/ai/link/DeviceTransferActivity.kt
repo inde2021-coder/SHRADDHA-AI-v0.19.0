@@ -268,19 +268,44 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun receiveChunk(msg: JSONObject) {
-        if (paused.get()) { status.text = "Incoming transfer paused locally; resume to accept more chunks."; return }
+        if (paused.get()) {
+            runOnUiThread { status.text = "Incoming transfer paused locally; resume to accept more chunks." }
+            return
+        }
         try {
-            require(msg.optString("transferId") == transferId && incomingOut != null)
-            val index = msg.getInt("index"); require(index in 0 until incomingCount)
+            require(msg.optString("fromDeviceId") == sourcePeer && sourcePeer.isNotBlank())
+            require(msg.optString("transferId") == transferId && transferId.isNotBlank() && incomingOut != null)
+            val index = msg.getInt("index")
+            require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
-            require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
-            progress.progress = (incomingChunks * 100 / incomingCount)
-            status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
-            if (incomingChunks >= incomingCount) verifyIncoming()
-        } catch (e: Exception) { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
+            try {
+                val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index)
+                    ?: throw IllegalArgumentException("Invalid chunk index or manifest")
+                require(bytes.size == expected)
+                if (!receivedChunkIndexes.get(index)) {
+                    incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES)
+                    incomingOut!!.write(bytes)
+                    incomingOut!!.fd.sync()
+                    receivedChunkIndexes.set(index)
+                    incomingChunks++
+                    // The durable bitmap must be committed before the relay ACK.
+                    persistTransferState(synchronous = true)
+                }
+                require(DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)) {
+                    "Could not send receiver acknowledgement"
+                }
+                val current = incomingChunks
+                runOnUiThread {
+                    progress.progress = current * 100 / incomingCount
+                    status.text = "Receiving $current/$incomingCount chunks • ${progress.progress}%"
+                }
+                if (incomingChunks >= incomingCount) verifyIncoming()
+            } finally {
+                bytes.fill(0)
+            }
+        } catch (e: Exception) {
+            runOnUiThread { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
+        }
     }
 
     private fun saveIncoming(destination: Uri) {
