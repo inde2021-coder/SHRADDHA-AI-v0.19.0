@@ -1076,8 +1076,8 @@ class PcCompanionApp:
         transfer_id = str(msg.get("transferId", ""))
         incoming = self.pc_incoming.get(transfer_id)
         if incoming:
-            peer_id = str(msg.get("fromDeviceId", incoming["peer"]))
-            if peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
+            peer_id = str(msg.get("fromDeviceId", ""))
+            if not peer_id or peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
                 return
             missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
             self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
@@ -1086,7 +1086,8 @@ class PcCompanionApp:
             self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
             return
         pending = self.pending_pc_send
-        if not pending or transfer_id != pending["transferId"]:
+        if (not pending or transfer_id != pending["transferId"] or
+                msg.get("fromDeviceId") != pending["peer"] or not self.is_e2e_trusted(pending["peer"])):
             return
         missing = validate_resume_indexes(
             msg.get("missingIndexes"), msg.get("chunkCount"), chunk_count_for_size(pending["size"])
@@ -1098,12 +1099,21 @@ class PcCompanionApp:
 
     def _handle_file_cancel(self, msg):
         transfer_id = str(msg.get("transferId", ""))
-        if self.pending_pc_send and self.pending_pc_send.get("transferId") == transfer_id:
+        sender = str(msg.get("fromDeviceId", ""))
+        pending = self.pending_pc_send
+        incoming = self.pc_incoming.get(transfer_id)
+        if pending and pending.get("transferId") == transfer_id:
+            if sender != pending.get("peer") or not self.is_e2e_trusted(pending["peer"]):
+                return
             self.pending_pc_send = None
-        incoming = self.pc_incoming.pop(transfer_id, None)
-        if incoming:
+        elif incoming:
+            if sender != incoming.get("peer") or not self.is_e2e_trusted(incoming["peer"]):
+                return
+            self.pc_incoming.pop(transfer_id, None)
             Path(incoming["path"] + ".shraddha-part").unlink(missing_ok=True)
             self._persist_pc_incoming()
+        else:
+            return
         self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
 
     def _send_e2e_key_offer(self, peer_id):
