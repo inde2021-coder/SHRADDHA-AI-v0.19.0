@@ -415,15 +415,28 @@ object ActionExecutor {
                         result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. No local fallback was attempted, to avoid accidental duplicate delivery.")
                     }
                 } else {
+                    val localFingerprint = LocalMessageReplayGuard.fingerprint(channel, phoneNumber, messageText)
                     val sendStatus = if (isWhatsApp) {
                         val service = NovaAccessibilityService.instance
                         if (service == null) "whatsapp_accessibility_required" else {
                             val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
-                            if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
-                            else opened
+                            if (opened != "whatsapp_chat_opened") opened else {
+                                val claim = LocalMessageReplayGuard.claim(context, requestId, localFingerprint)
+                                if (!claim.accepted) "message_duplicate_blocked"
+                                else {
+                                    val sent = service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
+                                    if (sent != "whatsapp_sent") LocalMessageReplayGuard.release(context, requestId, localFingerprint)
+                                    sent
+                                }
+                            }
                         }
                     } else {
-                        CommIntents.sendSms(context, phoneNumber, messageText)
+                        val claim = LocalMessageReplayGuard.claim(context, requestId, localFingerprint)
+                        if (!claim.accepted) "message_duplicate_blocked" else {
+                            val sent = CommIntents.sendSms(context, phoneNumber, messageText)
+                            if (sent == "sms_permission_required") LocalMessageReplayGuard.release(context, requestId, localFingerprint)
+                            sent
+                        }
                     }
                     result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "accepted" else "error")
                     result.put("action", sendStatus)
@@ -434,6 +447,7 @@ object ActionExecutor {
                         "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
                         "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
                         "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
+                        "message_duplicate_blocked" -> "This approved message request was already attempted or its outcome is unknown. It was blocked to prevent duplicate delivery; check the messaging app before creating a new request."
                         else -> "Message was not sent: $sendStatus"
                     })
                 }
@@ -812,11 +826,23 @@ object ActionExecutor {
                                 } else {
                                     val service = NovaAccessibilityService.instance
                                     val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
-                                    val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
+                                    val localFingerprint = LocalMessageReplayGuard.fingerprint("whatsapp", number, message)
+                                    val sent = if (opened != "whatsapp_chat_opened") opened else {
+                                        val claim = LocalMessageReplayGuard.claim(context, requestId, localFingerprint)
+                                        if (!claim.accepted) "message_duplicate_blocked" else {
+                                            val outcome = service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message)
+                                            if (outcome != "whatsapp_sent") LocalMessageReplayGuard.release(context, requestId, localFingerprint)
+                                            outcome
+                                        }
+                                    }
                                     result.put("status", if (sent == "whatsapp_sent") "accepted" else "error")
                                     result.put("action", sent)
                                     result.put("recipient", number)
-                                    result.put("message", if (sent == "whatsapp_sent") "WhatsApp message submitted through the verified foreground chat." else "Message not sent: $sent")
+                                    result.put("message", when (sent) {
+                                        "whatsapp_sent" -> "WhatsApp message submitted through the verified foreground chat."
+                                        "message_duplicate_blocked" -> "This approved message request was already attempted or its outcome is unknown. It was blocked to prevent duplicate delivery; check WhatsApp before creating a new request."
+                                        else -> "Message not sent: $sent"
+                                    })
                                 }
                             }
                         }
