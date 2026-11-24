@@ -66,9 +66,23 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
+    val design = appState.homeDesign
+    val designTitle = when (design) {
+        "ROYAL_3D" -> "ROYAL 3D"
+        "COSMIC_ORB" -> "COSMIC ORB"
+        "AI_ROBOT" -> "AI ROBOT"
+        "EXECUTIVE" -> "EXECUTIVE COMMAND"
+        else -> "LIA GLASS"
+    }
     val dailyOrbTheme = rememberDailyOrbTheme()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val avatarHeight = (screenHeight * 0.39f).coerceIn(250.dp, 330.dp)
+    val avatarHeight = when (design) {
+        "ROYAL_3D" -> (screenHeight * 0.44f).coerceIn(280.dp, 360.dp)
+        "COSMIC_ORB" -> (screenHeight * 0.32f).coerceIn(220.dp, 290.dp)
+        "AI_ROBOT" -> (screenHeight * 0.48f).coerceIn(300.dp, 390.dp)
+        "EXECUTIVE" -> (screenHeight * 0.25f).coerceIn(180.dp, 230.dp)
+        else -> (screenHeight * 0.39f).coerceIn(250.dp, 330.dp)
+    }
 
     val dailyActions = listOf(
         HomeAction("बात करें", "आवाज़ से निर्देश दें", "🎙") { navController.navigate("voice") },
@@ -137,13 +151,13 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
         Box(
             Modifier.fillMaxWidth().height(avatarHeight)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(when (design) { "COSMIC_ORB" -> 140.dp; "EXECUTIVE" -> 18.dp; "ROYAL_3D" -> 34.dp; else -> 28.dp }))
                 .background(Brush.verticalGradient(listOf(Color(0xFFEDE4FF), Color.White, Color(0xFFEAF4FF))))
                 .border(1.dp, LiaBorder, RoundedCornerShape(28.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                "YOUR PERSONAL AI",
+                "$designTitle  •  YOUR PERSONAL AI",
                 color = LiaPurple,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -198,9 +212,28 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             )
         }
 
-        HomeActionSection("DAILY ESSENTIALS", "रोज़ इस्तेमाल होने वाले मुख्य काम", dailyActions)
-        HomeActionSection("COMMAND CENTER", "सभी काम के सिस्टम एक जगह", workActions)
-        HomeActionSection("MEMORY & SYSTEM", "यादें, सुरक्षा और जुड़े हुए टूल", systemActions)
+        when (design) {
+            "COSMIC_ORB" -> {
+                HomeActionSection("COMMAND CENTER", "सभी काम के सिस्टम एक जगह", workActions)
+                HomeActionSection("DAILY ESSENTIALS", "रोज़ इस्तेमाल होने वाले मुख्य काम", dailyActions)
+                HomeActionSection("MEMORY & SYSTEM", "यादें, सुरक्षा और जुड़े हुए टूल", systemActions)
+            }
+            "AI_ROBOT" -> {
+                HomeActionSection("DAILY ESSENTIALS", "आपकी AI assistant के quick controls", dailyActions)
+                HomeActionSection("MEMORY & SYSTEM", "यादें और device intelligence", systemActions)
+                HomeActionSection("COMMAND CENTER", "Advanced assistant systems", workActions)
+            }
+            "EXECUTIVE" -> {
+                HomeActionSection("DAILY ESSENTIALS", "रोज़ के मुख्य काम", dailyActions)
+                HomeActionSection("COMMAND CENTER", "काम और automation", workActions)
+                HomeActionSection("MEMORY & SYSTEM", "सिस्टम स्थिति और सुरक्षा", systemActions)
+            }
+            else -> {
+                HomeActionSection("DAILY ESSENTIALS", "रोज़ इस्तेमाल होने वाले मुख्य काम", dailyActions)
+                HomeActionSection("COMMAND CENTER", "सभी काम के सिस्टम एक जगह", workActions)
+                HomeActionSection("MEMORY & SYSTEM", "यादें, सुरक्षा और जुड़े हुए टूल", systemActions)
+            }
+        }
     }
 }
 
