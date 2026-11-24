@@ -1,6 +1,6 @@
 import unittest
 
-from file_transfer import (
+from pc_companion.file_transfer import (
     FILE_CHUNK_BYTES,
     MAX_PC_FILE_BYTES,
     all_chunk_indexes,
