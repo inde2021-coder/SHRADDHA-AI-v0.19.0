@@ -42,3 +42,14 @@ test('failed message attempt remains briefly blocked against immediate duplicate
   now += 5 * 60 * 1000 + 1;
   assert.deepEqual(guard.claim(intent.requestId, intent.fingerprint), { ok: true });
 });
+test('message replay guard fails closed at capacity without reopening prior request IDs', () => {
+  let now = 1000;
+  const guard = createMessageReplayGuard({ now: () => now, ttlMs: 10000, maxEntries: 1 });
+  const first = validateMessageSendIntent(valid);
+  const second = validateMessageSendIntent({ ...valid, requestId: 'request_abcdefghijkl' });
+  assert.deepEqual(guard.claim(first.requestId, first.fingerprint), { ok: true });
+  assert.deepEqual(guard.claim(second.requestId, second.fingerprint), { ok: false, reason: 'capacity_full' });
+  assert.deepEqual(guard.claim(first.requestId, first.fingerprint), { ok: false, reason: 'in_progress' });
+  now += 10001;
+  assert.deepEqual(guard.claim(second.requestId, second.fingerprint), { ok: true });
+});
