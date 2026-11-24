@@ -187,5 +187,6 @@ test('file transfer completion requires positive ACK for every chunk index', () 
   assert.equal(canCompleteFileTransfer(transfer, true), true);
   assert.equal(canCompleteFileTransfer(transfer, false), false);
   assert.equal(canCompleteFileTransfer({ chunkCount: 3, chunks: new Map([[0, true], [3, true], [1, true]]) }, true), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 2, chunks: new Map([[0, true], [1, false]]) }, true), false);
   assert.equal(canCompleteFileTransfer(null, true), false);
 });
