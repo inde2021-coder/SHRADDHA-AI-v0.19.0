@@ -32,7 +32,7 @@ private class WipingByteArrayOutputStream : ByteArrayOutputStream() {
 private const val MAX_SOCIAL_MEDIA_BYTES = 100L * 1024L * 1024L
 
 /** Enforces the media cap even for SAF providers that report an unknown descriptor length. */
-private class BoundedMediaInputStream(input: InputStream, private val maxBytes: Long) : FilterInputStream(input) {
+internal class BoundedMediaInputStream(input: InputStream, private val maxBytes: Long) : FilterInputStream(input) {
     private var consumed = 0L
 
     override fun read(): Int {
