@@ -850,7 +850,7 @@ class PcCompanionApp:
             file_path = Path(path)
             size = file_path.stat().st_size
             if size < 1 or size > MAX_PC_FILE_BYTES:
-                raise ValueError("Relay currently permits files up to 20 MB per transfer.")
+                raise ValueError(f"File size must be between 1 byte and {MAX_PC_FILE_BYTES // (1024 * 1024)} MiB.")
             import hashlib, secrets
             digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
             request_id = secrets.token_urlsafe(18).replace("-", "_")
