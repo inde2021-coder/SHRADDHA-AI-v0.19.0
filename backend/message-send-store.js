@@ -41,7 +41,7 @@ export function createDurableMessageReplayGuard({ collection, now = () => Date.n
           state: 'pending',
           createdAt: now(),
           updatedAt: now(),
-          expiresAt: now() + ttlMs
+          expiresAt: new Date(now() + ttlMs)
         });
         return { ok: true };
       });
@@ -64,7 +64,7 @@ export function createDurableMessageReplayGuard({ collection, now = () => Date.n
       return collection.firestore.runTransaction(async tx => {
         const snapshot = await tx.get(ref);
         if (!snapshot.exists || snapshot.data()?.fingerprint !== fingerprint) return false;
-        tx.update(ref, { state, updatedAt: now(), expiresAt: now() + retentionMs });
+        tx.update(ref, { state, updatedAt: now(), expiresAt: new Date(now() + retentionMs) });
         return true;
       });
     }
