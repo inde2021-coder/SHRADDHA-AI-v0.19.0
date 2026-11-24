@@ -37,6 +37,7 @@ class LiveEyesCameraService : Service() {
     @Volatile private var previousObservation = ""
     @Volatile private var stopped = false
     @Volatile private var lastAnnouncedAt = 0L
+    private var lastCloudAnalysisAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -71,6 +72,7 @@ class LiveEyesCameraService : Service() {
         closeCamera()
         previousObservation = ""
         lastAnnouncedAt = 0L
+        lastCloudAnalysisAt = 0L
         openHeadlessCamera(config.baseUrl, config.gatewayToken)
         return START_NOT_STICKY
     }
@@ -133,41 +135,52 @@ class LiveEyesCameraService : Service() {
                         jpeg.fill(0); requestInFlight.set(false); return@setOnImageAvailableListener
                     }
                     lastAnalysisAt = now
-                    // Run local OCR + streaming object tracking alongside cloud scene analysis.
-                    // Only concise derived observations are forwarded; raw frames are never stored here.
+                    // Local OCR/object tracking stays on-device; cloud scene understanding is rate-limited.
+                    // The camera frame is held only for this request and zeroed after dispatch.
                     LiveFrameIntelligence.analyzeJpeg(jpeg) { localResult ->
                         if (!stopped) localResult.onSuccess { local ->
                             val localContext = local.toContext()
                             if (localContext.isNotBlank()) {
                                 VoiceSessionManager.updateLiveVisualContext(localContext)
                                 getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(PREF_OBSERVATION, localContext).apply()
-                                val subtitlePreview = local.subtitles.replace('\n', ' ').take(90)
-                                updateNotification(
-                                    if (subtitlePreview.isNotBlank()) "Live text: $subtitlePreview"
-                                    else "Objects: " + local.objects.take(4).joinToString().take(80)
-                                )
+                                updateNotification("Live environment awareness active • local objects/text detected")
                             }
                         }
                     }
-                    val context = previousObservation.takeLast(900)
-                    val prompt = buildString {
-                        append("You are " + assistantName() + "'s live visual eyes. Describe only what is clearly visible in this current camera view. ")
-                        append("Identify useful objects, people only by visible non-sensitive context, text/signs, surroundings and safety-relevant changes. ")
-                        append("Compare with the previous observation when useful; do not invent movement or details. ")
-                        if (context.isNotBlank()) append("Previous observation: ").append(context).append(". ")
-                        append("Give a concise natural Hindi response, 1-3 sentences. Current user request: बताओ अभी सामने क्या दिख रहा है और क्या बदला है?")
+                    if (!AmbientIntelligencePolicy.shouldAnalyzeCloudFrame(now, lastCloudAnalysisAt)) {
+                        jpeg.fill(0)
+                        requestInFlight.set(false)
+                        return@setOnImageAvailableListener
                     }
+                    lastCloudAnalysisAt = now
+                    val prompt = AmbientIntelligencePolicy.buildScenePrompt(
+                        assistantName(),
+                        previousObservation.takeLast(900)
+                    )
                     DeviceLinkManager.analyzeScreen(baseUrl, token, visionProvider(), prompt, jpeg, "general") { result ->
                         jpeg.fill(0)
                         if (!stopped) result.onSuccess { raw ->
-                            val observation = raw.take(1200)
-                            val changed = previousObservation.isBlank() || previousObservation != observation
-                            previousObservation = observation
-                            updateNotification("दृश्य समझ लिया: " + observation.take(110))
-                            val now = android.os.SystemClock.elapsedRealtime()
-                            if (changed && now - lastAnnouncedAt >= 12_000L) {
-                                lastAnnouncedAt = now
+                            val observation = AmbientIntelligencePolicy.cleanObservation(raw)
+                            val previous = previousObservation
+                            val changed = observation.isNotBlank() && observation != previous
+                            if (changed) {
+                                previousObservation = observation
                                 VoiceSessionManager.updateLiveVisualContext(observation)
+                            }
+                            updateNotification("Ambient scene understanding active • latest context refreshed")
+                            val completedAt = android.os.SystemClock.elapsedRealtime()
+                            val companionEnabled = getSharedPreferences(AMBIENT_PREFS, Context.MODE_PRIVATE)
+                                .getBoolean(PREF_PROACTIVE_COMPANION, true)
+                            if (companionEnabled && AmbientIntelligencePolicy.shouldAnnounce(
+                                    observation, previous, completedAt, lastAnnouncedAt
+                                )) {
+                                lastAnnouncedAt = completedAt
+                                // Speech is only emitted into an already user-started voice session.
+                                // This camera service never starts or activates the microphone.
+                                VoiceSessionManager.announceVisualObservation(
+                                    this@LiveEyesCameraService,
+                                    observation
+                                )
                             }
                         }.onFailure { error ->
                             updateNotification("दृश्य विश्लेषण उपलब्ध नहीं: " + (error.message ?: "नेटवर्क त्रुटि").take(90))
@@ -234,6 +247,8 @@ class LiveEyesCameraService : Service() {
 
     companion object {
         private const val PREFS_NAME = "shraddha_live_eyes_state"
+        const val AMBIENT_PREFS = "shraddha_ambient_settings"
+        const val PREF_PROACTIVE_COMPANION = "proactive_companion_enabled"
         private const val PREF_STATE = "state"
         private const val PREF_PID = "pid"
         private const val PREF_OBSERVATION = "latest_observation"
