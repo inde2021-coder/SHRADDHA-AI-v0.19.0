@@ -8,6 +8,7 @@ from pc_companion.file_transfer import (
     expected_chunk_bytes,
     take_chunk_window,
     validate_resume_indexes,
+    valid_transfer_manifest,
 )
 
 
@@ -73,6 +74,23 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
             ([3], 3, 3), ([0], 2, 3), ("0,1", 3, 3), ([0, 1, 2, 3], 3, 3)
         ):
             self.assertIsNone(validate_resume_indexes(missing, declared, expected))
+
+
+    def test_incoming_manifest_requires_exact_integer_fields_and_safe_identifiers(self):
+        transfer_id = "transfer_123456"
+        digest = "a" * 64
+        chunks = chunk_count_for_size(49153)
+        self.assertTrue(valid_transfer_manifest(transfer_id, 49153, chunks, digest))
+        for values in (
+            (transfer_id, True, 1, digest),
+            (transfer_id, 49153.0, chunks, digest),
+            (transfer_id, "49153", chunks, digest),
+            (transfer_id, 49153, True, digest),
+            (transfer_id, 49153, "2", digest),
+            ("../escape12345", 49153, chunks, digest),
+            (transfer_id, 49153, chunks, "bad"),
+        ):
+            self.assertFalse(valid_transfer_manifest(*values))
 
 
 if __name__ == "__main__":
