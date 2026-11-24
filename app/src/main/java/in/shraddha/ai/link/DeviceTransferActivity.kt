@@ -178,16 +178,16 @@ class DeviceTransferActivity : Activity() {
         input.use {
             var skip = index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES
             while (skip > 0) { val n = it.skip(skip); if (n <= 0) throw IllegalStateException("Could not seek source file"); skip -= n }
-            val buffer = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES); var count = 0
-            while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
-            val bytes = buffer.copyOf(count)
+            val buffer = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES)
             try {
-                require(bytes.isNotEmpty())
-                if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
-            } finally {
-                bytes.fill(0)
-                buffer.fill(0)
-            }
+                var count = 0
+                while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
+                val bytes = buffer.copyOf(count)
+                try {
+                    require(bytes.isNotEmpty())
+                    if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+                } finally { bytes.fill(0) }
+            } finally { buffer.fill(0) }
         }
     }
 
@@ -245,12 +245,33 @@ class DeviceTransferActivity : Activity() {
                 if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
-                sourcePeer = msg.optString("fromDeviceId"); transferId = msg.optString("transferId")
-                incomingName = msg.optString("fileName"); incomingSize = msg.optLong("sizeBytes")
-                incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
-                incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
+                val sender = msg.optString("fromDeviceId")
+                val offeredTransferId = msg.optString("transferId")
+                val offeredName = DeviceFileTransferProtocol.safeDisplayName(msg.optString("fileName"))
+                val offeredSize = msg.optLong("sizeBytes", -1L)
+                val offeredCount = msg.optInt("chunkCount", -1)
+                val offeredHash = msg.optString("sha256")
+                if (sender.isBlank() || !DeviceFileTransferProtocol.isValidManifest(offeredTransferId, offeredSize, offeredCount, offeredHash)) {
+                    status.text = "Rejected invalid incoming transfer manifest."
+                    if (sender.isNotBlank()) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "invalid_manifest")
+                    return
+                }
+                val expectedPeer = peer.text.toString().trim()
+                if (!DeviceFileTransferProtocol.isExpectedPeer(expectedPeer, sender)) {
+                    status.text = "Rejected file transfer from an unexpected paired device."
+                    DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "unexpected_peer")
+                    return
+                }
+                sourcePeer = sender
+                transferId = offeredTransferId
+                incomingName = offeredName
+                incomingSize = offeredSize
+                incomingCount = offeredCount
+                incomingHash = offeredHash.lowercase()
+                incomingVerified = false
+                receivedChunkIndexes.clear()
+                incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || incomingCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
@@ -265,6 +286,13 @@ class DeviceTransferActivity : Activity() {
             }
             "file_transfer_chunk" -> receiveChunk(msg)
             "file_transfer_ack" -> {
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        peer.text.toString().trim(), msg.optString("fromDeviceId"),
+                        transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored file-transfer acknowledgement from an unexpected peer or transfer."
+                    return
+                }
                 val expectedPeer = peer.text.toString().trim()
                 if (msg.optString("fromDeviceId") != expectedPeer ||
                     msg.optString("transferId") != transferId || transferId.isBlank()) {
@@ -318,26 +346,37 @@ class DeviceTransferActivity : Activity() {
                 if (indexes.isNotEmpty()) startSending(indexes)
                 else status.text = "Receiver reports no missing chunks."
             }
-            "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
+            "file_transfer_cancel" -> {
+                val expectedPeer = sourcePeer.ifBlank { peer.text.toString().trim() }
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        expectedPeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored cancellation from an unexpected peer or transfer."
+                    return
+                }
+                status.text = "Transfer cancelled: ${msg.optString("reason").take(120)}"
+                clearTransferState()
+            }
         }
     }
 
     private fun receiveChunk(msg: JSONObject) {
         if (paused.get()) { status.text = "Incoming transfer paused locally; resume to accept more chunks."; return }
         try {
-            require(DeviceFileTransferProtocol.isExpectedPeer(sourcePeer, msg.optString("fromDeviceId"))) {
-                "Chunk sender does not match the approved transfer peer"
-            }
-            require(msg.optString("transferId") == transferId && incomingOut != null)
+            require(DeviceFileTransferProtocol.isExpectedPeerMessage(
+                sourcePeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
+            ) && incomingOut != null) { "Chunk sender or transfer ID mismatch" }
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
-            require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
-            progress.progress = (incomingChunks * 100 / incomingCount)
-            status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
-            if (incomingChunks >= incomingCount) verifyIncoming()
+            try {
+                val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
+                require(bytes.size == expected)
+                if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
+                DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
+                progress.progress = (incomingChunks * 100 / incomingCount)
+                status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
+                if (incomingChunks >= incomingCount) verifyIncoming()
+            } finally { bytes.fill(0) }
         } catch (e: Exception) { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
     }
 
