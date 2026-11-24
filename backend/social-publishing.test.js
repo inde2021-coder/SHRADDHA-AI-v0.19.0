@@ -90,3 +90,12 @@ test('Facebook text posts and Instagram media posts can be scheduled safely', ()
   assert.equal(fb.platform, 'facebook');
   assert.equal(fb.mediaKind, 'image');
 });
+
+
+test('shared social publisher credentials are restricted to one configured Firebase owner', async () => {
+  const { assertSocialPublisherOwner } = await import('./social-publishing.js');
+  assert.equal(assertSocialPublisherOwner('firebase-owner-123', 'firebase-owner-123'), 'firebase-owner-123');
+  assert.throws(() => assertSocialPublisherOwner('other-user', 'firebase-owner-123'), error => error.statusCode === 403);
+  assert.throws(() => assertSocialPublisherOwner('firebase-owner-123', ''), error => error.statusCode === 503);
+  assert.throws(() => assertSocialPublisherOwner('', 'firebase-owner-123'), error => error.statusCode === 403);
+});
