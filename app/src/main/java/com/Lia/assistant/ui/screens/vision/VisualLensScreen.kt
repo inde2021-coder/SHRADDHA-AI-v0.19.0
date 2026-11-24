@@ -89,7 +89,7 @@ fun VisualLensScreen(navController: NavController) {
         LifecycleCameraController(context).apply {
             cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
             imageCaptureMode = ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-            setEnabledUseCases(CameraController.PREVIEW or CameraController.IMAGE_CAPTURE)
+            setEnabledUseCases(CameraController.IMAGE_CAPTURE)
         }
     }
 
