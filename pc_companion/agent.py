@@ -913,7 +913,9 @@ class PcCompanionApp:
         pending = self.pending_pc_send
         if not pending or not matches_transfer_peer(msg, pending["peer"], pending["transferId"]):
             return
-        index = int(msg.get("index", -2))
+        index = msg.get("index", -2)
+        if type(index) is not int:
+            return
         if index == -1 and msg.get("ok") and not msg.get("complete"):
             self._send_pc_file_chunks(list(range((pending["size"] + 49151) // 49152)))
         elif msg.get("complete") and msg.get("ok"):
@@ -995,8 +997,8 @@ class PcCompanionApp:
         transfer = self.pc_incoming.get(transfer_id)
         if not transfer or transfer["peer"] != peer_id or not self.is_e2e_trusted(peer_id):
             return
-        index = int(msg.get("index", -1))
-        if not 0 <= index < transfer["chunks"]:
+        index = msg.get("index", -1)
+        if type(index) is not int or not 0 <= index < transfer["chunks"]:
             return
         try:
             with self.e2e_lock:
@@ -1008,7 +1010,7 @@ class PcCompanionApp:
             plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
             payload = json.loads(plain.decode("utf-8"))
             data = base64.b64decode(payload["payload"], validate=True)
-            expected = expected_file_chunk_bytes(transfer["size"], transfer["chunks"], index)
+            expected = expected_file_chunk_bytes, valid_missing_file_indexes(transfer["size"], transfer["chunks"], index)
             if expected is None or len(data) != expected:
                 raise ValueError("Chunk length mismatch")
             if index not in transfer["received"]:
@@ -1058,8 +1060,12 @@ class PcCompanionApp:
         if not pending or not matches_transfer_peer(msg, pending["peer"], pending["transferId"]):
             return
         missing = msg.get("missingIndexes", [])
-        if isinstance(missing, list):
-            self._send_pc_file_chunks([i for i in missing if isinstance(i, int) and 0 <= i < (pending["size"] + 49151) // 49152])
+        chunk_count = (pending["size"] + 49151) // 49152
+        if not valid_missing_file_indexes(missing, chunk_count):
+            self.status_var.set("Rejected malformed file-transfer resume indexes.")
+            return
+        if missing:
+            self._send_pc_file_chunks(missing)
 
     def _handle_file_cancel(self, msg):
         transfer_id = str(msg.get("transferId", ""))
