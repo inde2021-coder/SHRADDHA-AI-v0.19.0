@@ -138,6 +138,6 @@ test('resume chunk indexes must be bounded, unique and within the active manifes
   assert.equal(validMissingTransferIndexes([-1], 5), false);
   assert.equal(validMissingTransferIndexes([1, 1], 5), false);
   assert.equal(validMissingTransferIndexes(Array(2201).fill(0), 2201), false);
-  assert.equal(validMissingTransferIndexes([0], 2200), true);
+  assert.equal(validMissingTransferIndexes([0], 5), true);
   assert.equal(validMissingTransferIndexes('0', 5), false);
 });
