@@ -30,6 +30,26 @@ def validate_remote_action(action):
     kind = action.get("kind")
     if kind not in _ALLOWED:
         return None
+    # Reject unknown fields rather than silently accepting client-supplied scripts,
+    # commands, paths or future protocol fields that this version does not understand.
+    allowed_fields = {
+        "tap": {"kind", "x", "y"},
+        "swipe": {"kind", "x1", "y1", "x2", "y2"},
+        "type": {"kind", "text"},
+        "click_text": {"kind", "text"},
+        "open_app": {"kind", "appName"},
+        "home": {"kind"},
+        "back": {"kind"},
+        "scroll": {"kind", "amount"},
+        "key_press": {"kind", "chord"},
+        "hardware_status": {"kind"},
+        "set_volume": {"kind", "percent"},
+        "set_brightness": {"kind", "percent"},
+        "power": {"kind", "operation"},
+        "ocr": {"kind"},
+    }
+    if set(action) - allowed_fields[kind]:
+        return None
     clean = {"kind": kind}
     if kind == "tap":
         if not _normalized(action.get("x")) or not _normalized(action.get("y")):
