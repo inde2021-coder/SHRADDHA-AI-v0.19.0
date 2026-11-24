@@ -32,13 +32,26 @@ test('message replay guard blocks duplicate and conflicting request IDs', () => 
   assert.deepEqual(guard.claim(first.requestId, first.fingerprint), { ok: true });
 });
 
-test('failed message attempt remains briefly blocked against immediate duplicate delivery', () => {
+test('definite pre-send failure is briefly blocked and can be retried after cooldown', () => {
   let now = 1000;
-  const guard = createMessageReplayGuard({ now: () => now, ttlMs: 60000 });
+  const guard = createMessageReplayGuard({ now: () => now, ttlMs: 24 * 60 * 60 * 1000 });
   const intent = validateMessageSendIntent(valid);
   guard.claim(intent.requestId, intent.fingerprint);
   guard.markFailed(intent.requestId);
   assert.deepEqual(guard.claim(intent.requestId, intent.fingerprint), { ok: false, reason: 'in_progress' });
   now += 5 * 60 * 1000 + 1;
+  assert.deepEqual(guard.claim(intent.requestId, intent.fingerprint), { ok: true });
+});
+
+test('unknown provider outcome stays locked for the full idempotency window', () => {
+  let now = 1000;
+  const guard = createMessageReplayGuard({ now: () => now, ttlMs: 24 * 60 * 60 * 1000 });
+  const intent = validateMessageSendIntent(valid);
+  guard.claim(intent.requestId, intent.fingerprint);
+  guard.markUnknown(intent.requestId);
+  assert.deepEqual(guard.claim(intent.requestId, intent.fingerprint), { ok: false, reason: 'in_progress' });
+  now += 23 * 60 * 60 * 1000;
+  assert.deepEqual(guard.claim(intent.requestId, intent.fingerprint), { ok: false, reason: 'in_progress' });
+  now += 60 * 60 * 1000 + 1;
   assert.deepEqual(guard.claim(intent.requestId, intent.fingerprint), { ok: true });
 });
