@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import `in`.shraddha.ai.future.CouncilCostBudget
 import com.Lia.assistant.voice.ConversationMemory
 import `in`.shraddha.ai.operator.VoiceToolActionJournal
@@ -98,6 +102,9 @@ private fun SettingsScreenContent(
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
     var gatewaySaveError by remember { mutableStateOf(savedGateway.readError) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
+    var gatewayTesting by remember { mutableStateOf(false) }
+    var gatewayTestStatus by remember { mutableStateOf<String?>(null) }
+    val settingsScope = rememberCoroutineScope()
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
     var voiceMemoryError by remember { mutableStateOf(ConversationMemory.persistenceError()) }
     val voiceActionJournal = remember { VoiceToolActionJournal(context) }
@@ -604,22 +611,67 @@ private fun SettingsScreenContent(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(gatewaySaveError!!, color = colors.error, fontSize = 12.sp)
                     }
+                    gatewayTestStatus?.let { status ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            status,
+                            color = if (status.startsWith("Backend connected")) colors.success else colors.error,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             },
             confirmButton = {
-                NovaButton(
-                    text = "Save Secure Backend",
-                    onClick = {
-                        val result = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
-                        result.onSuccess {
-                            gatewayConfigured = true
-                            gatewaySaveError = null
-                            showGatewayDialog = false
-                        }.onFailure {
-                            gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(
+                        text = if (gatewayTesting) "Testing…" else "Test Backend",
+                        type = NovaButtonType.SECONDARY,
+                        enabled = !gatewayTesting,
+                        onClick = {
+                            val saved = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
+                            saved.onFailure {
+                                gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                            }.onSuccess {
+                                gatewayConfigured = true
+                                gatewaySaveError = null
+                                gatewayTesting = true
+                                gatewayTestStatus = "Checking HTTPS backend, gateway token and server-side Gemini API configuration…"
+                                settingsScope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            val providers = VoiceGatewaySettings.configuredProviders(context).orEmpty()
+                                            check("GEMINI" in providers) {
+                                                "Backend is reachable, but GEMINI_API_KEY is not configured on the server."
+                                            }
+                                            providers
+                                        }
+                                    }
+                                    gatewayTestStatus = result.fold(
+                                        onSuccess = { providers ->
+                                            "Backend connected. Gemini Live is configured. Server providers: ${providers.joinToString()}"
+                                        },
+                                        onFailure = { "Backend connection failed: ${it.localizedMessage ?: "Unknown error"}" }
+                                    )
+                                    gatewayTesting = false
+                                }
+                            }
                         }
-                    }
-                )
+                    )
+                    NovaButton(
+                        text = "Save",
+                        onClick = {
+                            val result = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
+                            result.onSuccess {
+                                gatewayConfigured = true
+                                gatewaySaveError = null
+                                gatewayTestStatus = null
+                                showGatewayDialog = false
+                            }.onFailure {
+                                gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                            }
+                        }
+                    )
+                }
             },
             dismissButton = {
                 NovaButton(
