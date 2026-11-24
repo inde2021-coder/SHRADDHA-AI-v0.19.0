@@ -66,6 +66,10 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
             take_chunk_window([1], set(), 0)
         with self.assertRaises(ValueError):
             take_chunk_window([1, 1], set(), 8)
+        with self.assertRaises(ValueError):
+            take_chunk_window([-1], set())
+        with self.assertRaises(ValueError):
+            take_chunk_window([3], set(), max_index=3)
 
 
     def test_resume_manifest_requires_exact_count_unique_integer_indexes(self):
