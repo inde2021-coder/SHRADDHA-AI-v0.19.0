@@ -113,8 +113,10 @@ private fun testSavedProviderKey(context: android.content.Context, provider: Str
     }
 }
 
-private fun safeDiagnosticText(value: String): String {
-    return value
+private fun safeDiagnosticText(value: String, secrets: List<String> = emptyList()): String {
+    var sanitized = value
+    secrets.filter { it.isNotBlank() }.forEach { secret -> sanitized = sanitized.replace(secret, "[REDACTED_SECRET]") }
+    return sanitized
         .replace(Regex("(?i)(authorization|api[-_ ]?key|gateway[-_ ]?token|x-goog-api-key)\\s*[:=]\\s*[^\\s,;]+"), "$1=[REDACTED]")
         .replace(Regex("(?i)\\b(AIza[0-9A-Za-z_-]{12,}|sk-[0-9A-Za-z_-]{12,}|gsk_[0-9A-Za-z_-]{12,}|pplx-[0-9A-Za-z_-]{12,}|sk-ant-[0-9A-Za-z_-]{12,})\\b"), "[REDACTED_KEY]")
         .take(700)
@@ -127,6 +129,9 @@ private fun buildApiDiagnosticReport(context: Context, configured: Map<String, B
     }.getOrNull()
     val gateway = VoiceGatewaySettings.get(context)
     val gatewayHost = runCatching { java.net.URI(gateway.baseUrl).host }.getOrNull().orEmpty()
+    val savedSecrets = apiKeyProviders.mapNotNull { provider ->
+        runCatching { if (provider.id == "GEMINI") ApiKeyStore.getKey(context) else ProviderKeyStore.get(context, provider.id) }.getOrNull()
+    } + listOf(gateway.gatewayToken)
     return buildString {
         appendLine("Shraddha AI — API Diagnostic Report")
         appendLine("Generated: " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date()))
@@ -136,13 +141,13 @@ private fun buildApiDiagnosticReport(context: Context, configured: Map<String, B
         appendLine()
         appendLine("Provider checks (keys are never included):")
         apiKeyProviders.forEach { provider ->
-            appendLine("- " + provider.id + ": keySaved=" + (configured[provider.id] == true) + "; lastTest=" + safeDiagnosticText(testStatus[provider.id].orEmpty().ifBlank { "Not tested in this session" }))
+            appendLine("- " + provider.id + ": keySaved=" + (configured[provider.id] == true) + "; lastTest=" + safeDiagnosticText(testStatus[provider.id].orEmpty().ifBlank { "Not tested in this session" }, savedSecrets))
         }
         appendLine()
         appendLine("Secure backend:")
         appendLine("- configured=" + (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank() && gateway.readError == null))
         appendLine("- host=" + gatewayHost.ifBlank { "not set" })
-        appendLine("- settingsReadError=" + (gateway.readError?.let { safeDiagnosticText(it) } ?: "none"))
+        appendLine("- settingsReadError=" + (gateway.readError?.let { safeDiagnosticText(it, savedSecrets) } ?: "none"))
         appendLine()
         appendLine("Privacy: API keys, gateway token, request prompts and response content are excluded.")
     }
