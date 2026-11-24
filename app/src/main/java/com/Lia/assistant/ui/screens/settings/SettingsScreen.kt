@@ -118,6 +118,7 @@ private fun SettingsScreenContent(
     }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
+    var showHomeDesignDialog by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
 
@@ -325,6 +326,18 @@ private fun SettingsScreenContent(
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
+                    title = "Home Screen Design",
+                    subtitle = when (appState.homeDesign) {
+                        "ROYAL_3D" -> "Royal 3D • layered premium dashboard"
+                        "COSMIC_ORB" -> "Cosmic Orb • immersive orb-first layout"
+                        "AI_ROBOT" -> "AI Robot • avatar and assistant controls"
+                        "EXECUTIVE" -> "Executive • compact command dashboard"
+                        else -> "LIA Glass • elegant glass layout"
+                    },
+                    icon = Icons.Default.ColorLens,
+                    onClick = { showHomeDesignDialog = true }
+                )
+                NovaSettingsRow(
                     title = "Assistant Picture & Profile",
                     subtitle = "Change the ${appState.assistantName} avatar and profile details",
                     icon = Icons.Default.Person,
@@ -457,6 +470,43 @@ private fun SettingsScreenContent(
                 )
             }
         }
+    }
+
+    if (showHomeDesignDialog) {
+        val designs = listOf(
+            "LIA_GLASS" to ("LIA Glass" to "Elegant layered glass cards and spacious hero"),
+            "ROYAL_3D" to ("Royal 3D" to "Deep 3D panels, raised controls and premium depth"),
+            "COSMIC_ORB" to ("Cosmic Orb" to "Large animated orb with immersive assistant focus"),
+            "AI_ROBOT" to ("AI Robot" to "Avatar-led assistant layout with quick control dock"),
+            "EXECUTIVE" to ("Executive" to "Compact command dashboard with grouped tools")
+        )
+        AlertDialog(
+            onDismissRequest = { showHomeDesignDialog = false },
+            title = { Text("Choose Home Screen Design", color = colors.textPrimary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("These options change the screen layout and component arrangement—not just its colors.", color = colors.textSecondary, fontSize = 12.sp)
+                    designs.forEach { (id, details) ->
+                        NovaGlassCard(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                appState.applyHomeDesign(context, id)
+                                showHomeDesignDialog = false
+                                android.widget.Toast.makeText(context, "${details.first} design applied", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(details.first, color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(details.second, color = colors.textSecondary, fontSize = 11.sp)
+                                }
+                                if (appState.homeDesign == id) Text("✓ ACTIVE", color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { NovaButton(text = "Done", onClick = { showHomeDesignDialog = false }) }
+        )
     }
 
     // Secure Voice Gateway Dialog
