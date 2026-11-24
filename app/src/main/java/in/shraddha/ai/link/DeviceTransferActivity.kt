@@ -167,13 +167,13 @@ class DeviceTransferActivity : Activity() {
                 status.text = "Could not persist the save destination; transfer was not acknowledged."
                 return
             }
-            if (incomingVerified) enqueueTransferIo("save", uri) { saveIncoming(uri) }
+            if (incomingVerified) enqueueTransferIo("save") { saveIncoming(uri) }
             else {
                 val missing = synchronized(receivedChunkIndexes) {
                     (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
                 }
                 if (missing.isEmpty()) {
-                    enqueueTransferIo("verify", uri) { verifyIncoming() }
+                    enqueueTransferIo("verify") { verifyIncoming() }
                 } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
                     status.text = "Save destination selected. Requesting ${missing.size} missing chunks from sender…"
                 } else {
@@ -549,15 +549,15 @@ class DeviceTransferActivity : Activity() {
             }
             val missing = synchronized(receivedChunkIndexes) { (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) } }
             if (missing.isEmpty()) {
-                if (incomingVerified) enqueueTransferIo("save", pendingSaveUri!!) { saveIncoming(pendingSaveUri!!) }
-                else enqueueTransferIo("verify", null) { verifyIncoming() }
+                if (incomingVerified) enqueueTransferIo("save") { saveIncoming(pendingSaveUri!!) }
+                else enqueueTransferIo("verify") { verifyIncoming() }
             } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
                 status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
             } else status.text = "Could not send resume request. Verify the paired device and secure relay connection."
         } else status.text = "Reconnect to relay first, then retry."
     }
 
-    private fun enqueueTransferIo(operation: String, destination: Uri?, task: () -> Unit) {
+    private fun enqueueTransferIo(operation: String, task: () -> Unit) {
         try {
             transferIo.execute(task)
         } catch (_: java.util.concurrent.RejectedExecutionException) {
