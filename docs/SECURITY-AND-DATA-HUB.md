@@ -15,6 +15,15 @@
 - Screen/camera binary frames use the authenticated visual-frame v2 envelope: source/target identity, frame type, monotonic sequence, nonce and ciphertext. Plain JPEG frames are rejected by the relay and desktop companion. Replay and malformed-frame checks are applied at the receiving endpoint.
 - Some routing metadata (device IDs, message kinds, action kinds, transfer IDs, file names/sizes and timing) remains visible to the relay; E2E encryption does not hide metadata.
 
+## Resumable file transfer
+
+- Android uses the Storage Access Framework: the sender chooses a source file and the receiver chooses the final save destination.
+- Files are split into bounded 48 KiB chunks (maximum 100 MiB / 2,134 chunks). Each chunk is protected by the mutually fingerprint-verified, session-bound E2E AES-GCM peer channel; the relay forwards ciphertext only.
+- The receiver persists its partial transfer state and missing-chunk bitmap in app-private storage, validates exact chunk lengths, and verifies the completed file with SHA-256 before acknowledging completion.
+- Resume requests are accepted only for a live, approved transfer from the paired source device. The sender checks the requester device ID, transfer ID, expected chunk count, uniqueness and bounds of each missing index before retransmission.
+- Relay-side transfer manifests are short-lived and in-memory. Resume after a relay restart or expired session is not guaranteed; clients must start a new approved transfer.
+- File names, sizes, device IDs, transfer IDs and timing remain routing metadata visible to the relay; file contents remain end-to-end encrypted.
+
 ## Consent and remote control
 
 - Screen and camera sharing are separate opt-in permissions. Android screen capture also requires the operating-system MediaProjection consent flow; camera use requires Android camera permission and a visible user-started session.
