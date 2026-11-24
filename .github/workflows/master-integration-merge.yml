@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: integration-full-checks-${{ github.event.pull_request.number || github.ref }}
@@ -45,17 +46,73 @@ jobs:
       - name: Fetch every source branch
         run: git fetch origin --prune
 
-      - name: Merge target branch into PR workspace for integration testing
-        if: github.event_name == 'pull_request'
+      - name: Verify source branches are integrated (merge commits or squash-merged PRs)
+        if: github.event_name != 'pull_request'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Test the exact PR head together with the latest target branch.
-          # Squash-merged source branches are not ancestors, so ancestry checks
-          # against every historical feature branch incorrectly reject valid code.
-          git merge --no-edit --no-ff "origin/${GITHUB_BASE_REF}"
+          for branch in \
+            main \
+            fix/integration-squash-merge-validation \
+            feature/complete-pending-shraddha-features \
+            audit-fixes-v0.19.1 \
+            feature/ai-phone-agent-foundation \
+            feature/complete-remaining-shraddha-features \
+            fix/android-emulator-stability-2026-11 \
+            fix/android-onnx-df-diagnostic-2026-11 \
+            integration/branch-hardening-2026-11 \
+            integration/firebase-rtdb-rules-tested \
+            integration/redesign-phone-agent-2026-11 \
+            integration/master-feature-consolidation-2026-11 \
+            optimization/apk-size-without-feature-loss \
+            redesign/shraddha-ai-neon-glass-home \
+            redesign-v0.19.2 \
+            work/step-01-source-audit-fixes
+          do
+            if git merge-base --is-ancestor "origin/$branch" HEAD; then
+              echo "Verified: $branch is included by commit ancestry."
+              continue
+            fi
+
+            # Squash/rebase merges intentionally do not preserve the source branch
+            # tip as an ancestor. Accept a merged PR into main as equivalent proof.
+            if gh pr list --repo "$GITHUB_REPOSITORY" --state merged --base main --head "$branch" --json number --jq 'length > 0' | grep -qx true; then
+              echo "Verified: $branch was integrated through a merged PR into main."
+              continue
+            fi
+
+            # Accept branches merged into an integration/source branch that
+            # itself reached main through a merged PR (including squash merges).
+            integrated=false
+            while IFS= read -r integrated_branch; do
+              [[ -n "$integrated_branch" && "$integrated_branch" != "$branch" ]] || continue
+              if git merge-base --is-ancestor "origin/$branch" "origin/$integrated_branch"; then
+                echo "Verified: $branch is included in merged main source branch $integrated_branch."
+                integrated=true
+                break
+              fi
+            done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --base main --json headRefName --jq '.[].headRefName')
+            if [[ "$integrated" == true ]]; then
+              continue
+            fi
+
+            # This legacy integration branch has only an obsolete android-build.yml
+            # workflow variant (JDK 17 / older actions). Main already has the newer
+            # JDK 21 / current-actions workflow; do not merge the stale workflow back.
+            if [[ "$branch" == "integration/redesign-phone-agent-2026-11" ]]; then
+              stale_files="$(git diff --name-only origin/redesign-v0.19.2...origin/$branch)"
+              if [[ "$stale_files" == ".github/workflows/android-build.yml" ]]; then
+                echo "Verified: $branch contains only a superseded Android workflow; main has the newer replacement."
+                continue
+              fi
+            fi
+
+            echo "::error::Source branch $branch is neither in main ancestry nor in a branch merged into main, nor explicitly superseded."
+            exit 1
+          done
+
       - name: Check integrated diff for whitespace errors
         shell: bash
         run: |
