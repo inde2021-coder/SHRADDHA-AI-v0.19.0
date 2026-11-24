@@ -37,7 +37,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import android.content.Intent
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +51,7 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
+import `in`.shraddha.ai.mobile.MobileCommandCenterActivity
 
 private val ShraddhaViolet = Color(0xFF8B5CF6)
 private val ShraddhaBorder = Color(0xFF4C3D70)
@@ -56,6 +59,7 @@ private val ShraddhaBorder = Color(0xFF4C3D70)
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
     val colors = LocalNovaColors.current
+    val context = LocalContext.current
     val orbState by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     var commandText by remember { mutableStateOf("") }
@@ -74,9 +78,12 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
     fun sendCommand() {
         val prompt = commandText.trim()
         if (prompt.isNotEmpty()) {
-            navController.currentBackStackEntry?.savedStateHandle?.set("home_prompt", prompt)
             commandText = ""
-            navController.navigate("chat") { launchSingleTop = true }
+            context.startActivity(
+                Intent(context, MobileCommandCenterActivity::class.java)
+                    .putExtra("mobile_control_command", prompt)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            )
         }
     }
 
