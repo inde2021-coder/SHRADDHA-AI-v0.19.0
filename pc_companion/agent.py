@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk, prepare_retry_queue
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -148,6 +148,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
         ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
         ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Retry Pending File Chunks", command=self.retry_pc_file_transfer).pack(side="left", padx=6)
         ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
@@ -869,6 +870,37 @@ class PcCompanionApp:
             self.status_var.set("File selected. Waiting for the Android user to approve Documents access.")
         except Exception as exc:
             self.status_var.set(f"Could not prepare file: {str(exc)[:160]}")
+
+    def retry_pc_file_transfer(self):
+        pending = self.pending_pc_send
+        if not pending:
+            self.status_var.set("No pending PC-to-Android file transfer to retry.")
+            return
+        peer_id = pending.get("peer")
+        if not peer_id or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("Retry blocked: verify the paired Android device fingerprint on both devices first.")
+            return
+        path = Path(pending.get("path", ""))
+        try:
+            if not path.is_file() or path.stat().st_size != pending.get("size"):
+                raise ValueError("The selected source file is missing or its size has changed.")
+            import hashlib
+            digest = hashlib.sha256()
+            with path.open("rb") as source:
+                for block in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(block)
+            if digest.hexdigest() != pending.get("sha256"):
+                raise ValueError("The selected source file changed after the transfer began; select it again.")
+            queue = pending.setdefault("send_queue", [])
+            in_flight = pending.setdefault("in_flight", set())
+            retry_count = prepare_retry_queue(queue, in_flight)
+            if retry_count == 0:
+                self.status_var.set("No unacknowledged chunks remain. Ask the Android receiver to tap Resume / Retry to reconcile its saved bitmap.")
+                return
+            self.status_var.set(f"Retrying {retry_count} pending chunk(s) to the verified paired device…")
+            self._pump_pc_file_chunks()
+        except Exception as exc:
+            self.status_var.set(f"Could not retry file transfer: {str(exc)[:160]}")
 
     def _handle_data_share_request(self, msg):
         peer_id = str(msg.get("fromDeviceId", ""))[:80]
