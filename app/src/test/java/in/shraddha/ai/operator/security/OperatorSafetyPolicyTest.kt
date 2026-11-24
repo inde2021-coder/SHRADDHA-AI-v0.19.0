@@ -36,7 +36,6 @@ class OperatorSafetyPolicyTest {
         assertEquals(OperatorSafetyPolicy.Risk.LOW,
             OperatorSafetyPolicy.assess("scroll", "message list", "").risk)
     }
-}
 
 
     @Test fun blocksAlternateOneTimeCodeLabelsAndSensitivePostconditions() {
@@ -45,3 +44,5 @@ class OperatorSafetyPolicyTest {
         assertEquals(OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("CLICK", "Continue", "", "Verification code"))
         assertEquals(OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Field", "", "UPI account number"))
     }
+
+}
