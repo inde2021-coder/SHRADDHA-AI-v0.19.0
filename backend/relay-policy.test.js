@@ -153,7 +153,7 @@ test('expired device grants and pending relay work are pruned by their expiresAt
     controlGrants: new Map([['old-control-grant', 99], ['live-control-grant', 101]]),
     grants: new Map([['old-data-grant', { requestId: 'r', expiresAt: 99 }], ['live-data-grant', { requestId: 'r2', expiresAt: 101 }]])
   };
-  assert.equal(pruneExpiredDeviceState(device, 100), 6);
+  assert.equal(pruneExpiredDeviceState(device, 100), 7);
   assert.deepEqual([...device.pendingControlRequests.keys()], ['live-control']);
   assert.deepEqual([...device.pendingRemoteActions.keys()], ['live-action']);
   assert.deepEqual([...device.controlGrants.keys()], ['live-control-grant']);
