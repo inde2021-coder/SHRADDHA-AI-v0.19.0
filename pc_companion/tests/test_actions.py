@@ -1,6 +1,6 @@
 import unittest
 
-from pc_companion.actions import execute_action
+from pc_companion.actions import execute_action, redact_ocr_text
 
 
 class FakeGui:
@@ -48,10 +48,30 @@ class ActionTests(unittest.TestCase):
         ok, _ = execute_action({"kind": "open_app", "appName": "Notepad"}, self.gui, self.clipboard, lambda name: name == "Notepad")
         self.assertTrue(ok)
 
-    def test_text_click_is_explicitly_unsupported(self):
-        ok, message = execute_action({"kind": "click_text", "text": "Save"}, self.gui, self.clipboard, lambda _name: False)
-        self.assertFalse(ok)
-        self.assertIn("not supported", message)
+    def test_text_click_uses_the_exact_text_targeter(self):
+        calls = []
+        ok, message = execute_action(
+            {"kind": "click_text", "text": "Save"}, self.gui, self.clipboard,
+            lambda _name: False, text_clicker=lambda label: calls.append(label) or "Clicked Save"
+        )
+        self.assertTrue(ok)
+        self.assertEqual(calls, ["Save"])
+        self.assertEqual(message, "Clicked Save")
+
+    def test_ocr_action_returns_local_reader_result(self):
+        ok, message = execute_action(
+            {"kind": "ocr"}, self.gui, self.clipboard, lambda _name: False,
+            ocr_reader=lambda: "OCR • Notepad\\nNamaste Shraddha"
+        )
+        self.assertTrue(ok)
+        self.assertIn("Namaste Shraddha", message)
+
+    def test_ocr_redacts_secret_lines_and_long_numbers(self):
+        safe = redact_ocr_text("Invoice total 42\\nOTP: 123456\\n654321\\nAmount 900")
+        self.assertIn("Invoice total 42", safe)
+        self.assertIn("[संवेदनशील OCR पंक्ति छिपाई गई]", safe)
+        self.assertIn("[संवेदनशील जानकारी छिपाई गई]", safe)
+        self.assertNotIn("654321", safe)
 
 
 if __name__ == "__main__":
