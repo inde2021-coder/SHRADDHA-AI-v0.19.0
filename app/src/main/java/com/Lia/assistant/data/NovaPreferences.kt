@@ -8,6 +8,7 @@ object NovaPreferences {
 
     object Keys {
         const val THEME_MODE = "theme_mode"
+        const val HOME_DESIGN = "home_design"
         const val REDUCED_MOTION = "reduced_motion"
         const val ORB_STYLE = "orb_style"
         const val PERSONALITY = "personality"
