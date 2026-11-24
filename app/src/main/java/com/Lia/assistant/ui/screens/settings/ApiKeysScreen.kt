@@ -92,6 +92,7 @@ private fun clearProviderKey(context: android.content.Context, provider: String)
 
 
 private fun testSavedProviderKey(context: android.content.Context, provider: String): String {
+    val startedAt = System.currentTimeMillis()
     val instruction = "You are a provider connectivity check. Reply with exactly the word OK."
     val prompt = "Reply with exactly the word OK."
     val history = listOf(ChatTurn(isUser = true, text = prompt))
@@ -103,8 +104,11 @@ private fun testSavedProviderKey(context: android.content.Context, provider: Str
         MultiProviderChatClient.reply(context, provider, instruction, history)
     }
     return when (result) {
-        is ChatReplyResult.Success -> result.text.takeIf { it.isNotBlank() }
-            ?: error("$provider returned an empty connection-test reply.")
+        is ChatReplyResult.Success -> {
+            if (result.text.isBlank()) error("$provider returned an empty connection-test reply.")
+            val model = result.tokenUsage?.model ?: "not reported by provider response"
+            "HTTP=2xx; model=$model; response=received; durationMs=${System.currentTimeMillis() - startedAt}"
+        }
         is ChatReplyResult.Error -> error(result.message)
     }
 }
@@ -297,10 +301,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                     }
                                 }
                                 testStatus[provider.id] = result.fold(
-                                    onSuccess = { reply ->
-                                        if (reply.isNotBlank()) "Connection successful: provider returned a response."
-                                        else "Provider responded, but the test reply was unexpected."
-                                    },
+                                    onSuccess = { details -> "Connection successful: $details" },
                                     onFailure = { error -> "Connection failed: ${error.message ?: "Unknown provider error"}" }
                                 )
                                 testing[provider.id] = false
