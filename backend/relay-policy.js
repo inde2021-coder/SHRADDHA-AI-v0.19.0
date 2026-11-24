@@ -164,6 +164,20 @@ export function validMissingTransferIndexes(indexes, chunkCount) {
  * Some entries carry numeric expiries; request/transfer records carry
  * an object with an expiresAt field. Invalid expiry data fails closed.
  */
+
+/** Synchronize relay ACK state with the receiver's persisted missing-chunk bitmap. */
+export function recordPersistedFileTransferChunks(transfer, missingIndexes) {
+  if (!transfer || !Number.isSafeInteger(transfer.chunkCount) ||
+      !(transfer.chunks instanceof Map) ||
+      !validMissingTransferIndexes(missingIndexes, transfer.chunkCount)) return false;
+  const missing = new Set(missingIndexes);
+  for (let index = 0; index < transfer.chunkCount; index += 1) {
+    if (missing.has(index)) transfer.chunks.delete(index);
+    else transfer.chunks.set(index, true);
+  }
+  return true;
+}
+
 export function pruneExpiredDeviceState(device, now = Date.now()) {
   if (!device || typeof device !== 'object' || !Number.isFinite(now)) return 0;
   let removed = 0;
