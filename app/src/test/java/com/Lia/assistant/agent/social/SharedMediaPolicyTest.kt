@@ -29,3 +29,11 @@ class SharedMediaPolicyTest {
         assertTrue(SharedMediaPolicy.extensionFor("video/mp4") == ".mp4")
     }
 }
+
+
+    @Test fun enforcesTotalBatchStorageLimit() {
+        assertTrue(SharedMediaPolicy.isAllowedBatchSize(1))
+        assertTrue(SharedMediaPolicy.isAllowedBatchSize(SharedMediaPolicy.MAX_BATCH_BYTES))
+        assertFalse(SharedMediaPolicy.isAllowedBatchSize(0))
+        assertFalse(SharedMediaPolicy.isAllowedBatchSize(SharedMediaPolicy.MAX_BATCH_BYTES + 1))
+    }
