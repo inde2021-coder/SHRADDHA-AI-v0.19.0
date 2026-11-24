@@ -833,6 +833,62 @@ test('task handoffs and responses are relayed only as E2E ciphertext', async () 
   }
 });
 
+test('task handoffs and responses are relayed only as E2E ciphertext', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.211' },
+    body: JSON.stringify({ deviceName: 'Task Sender' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.212' },
+    body: JSON.stringify({ deviceName: 'Task Receiver', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner), memberSocket = connect(member);
+  const waitEncrypted = (socket, kind) => nextWsMessage(socket, data => {
+    try { const msg = JSON.parse(data.toString()); return msg.type === 'e2e_message' && msg.messageKind === kind; }
+    catch { return false; }
+  });
+  try {
+    await Promise.all([once(ownerSocket, 'open'), once(memberSocket, 'open')]);
+    const taskId = 'task_handoff_123456';
+    const title = 'Private plan title';
+    const ciphertext = Buffer.alloc(32, 9).toString('base64').replace(/=+$/, '');
+    const offerPromise = waitEncrypted(memberSocket, 'task_handoff');
+    ownerSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: member.deviceId, messageKind: 'task_handoff',
+      requestId: taskId, nonce: Buffer.alloc(12, 9).toString('base64').replace(/=+$/, ''), ciphertext
+    }));
+    const [offer] = await offerPromise;
+    const forwardedOffer = JSON.parse(offer.toString());
+    assert.equal(forwardedOffer.requestId, taskId);
+    assert.equal(forwardedOffer.fromDeviceName, 'Task Sender');
+    assert.equal(forwardedOffer.ciphertext, ciphertext);
+    assert.equal(JSON.stringify(forwardedOffer).includes(title), false);
+
+    const responsePromise = waitEncrypted(ownerSocket, 'task_handoff_response');
+    memberSocket.send(JSON.stringify({
+      type: 'e2e_message', targetDeviceId: owner.deviceId, messageKind: 'task_handoff_response',
+      requestId: taskId, nonce: Buffer.alloc(12, 10).toString('base64').replace(/=+$/, ''), ciphertext
+    }));
+    const [response] = await responsePromise;
+    assert.equal(JSON.parse(response.toString()).requestId, taskId);
+
+    const noPlaintext = waitEncrypted(memberSocket, 'task_handoff');
+    ownerSocket.send(JSON.stringify({ type: 'task_handoff', targetDeviceId: member.deviceId, task: { title } }));
+    await assert.rejects(noPlaintext, /Timed out waiting/);
+  } finally {
+    const closes = [ownerSocket, memberSocket].map(socket =>
+      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
+        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
+
 test('screen frames are blocked until the sending device explicitly enables screen sharing', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.81' },
