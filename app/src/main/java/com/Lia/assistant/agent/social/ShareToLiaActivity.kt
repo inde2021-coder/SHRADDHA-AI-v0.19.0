@@ -21,8 +21,6 @@ import java.util.UUID
  * No external storage permission is required and untrusted URI names are never used as paths.
  */
 class ShareToLiaActivity : Activity() {
-    private val maxFileBytes = 50L * 1024L * 1024L
-    private val maxItems = 10
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +36,7 @@ class ShareToLiaActivity : Activity() {
         val uris = linkedSetOf<Uri>()
         intent?.data?.let(uris::add)
         intent?.clipData?.let { clip: ClipData ->
-            for (i in 0 until minOf(clip.itemCount, maxItems)) clip.getItemAt(i).uri?.let(uris::add)
+            for (i in 0 until minOf(clip.itemCount, SharedMediaPolicy.MAX_ITEMS.toInt())) clip.getItemAt(i).uri?.let(uris::add)
         }
         val stream = if (android.os.Build.VERSION.SDK_INT >= 33) {
             intent?.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
@@ -48,24 +46,15 @@ class ShareToLiaActivity : Activity() {
         }
         stream?.let(uris::add)
         if (uris.isEmpty()) throw IllegalArgumentException("No shared image or video was provided")
-        if (uris.size > maxItems) throw IllegalArgumentException("Share up to $maxItems files at a time")
+        if (uris.size > SharedMediaPolicy.MAX_ITEMS) throw IllegalArgumentException("Share up to ${SharedMediaPolicy.MAX_ITEMS} files at a time")
 
         val saved = mutableListOf<File>()
         uris.forEach { uri ->
             val mime = contentResolver.getType(uri)?.lowercase().orEmpty()
-            if (!mime.startsWith("image/") && !mime.startsWith("video/")) {
+            if (!SharedMediaPolicy.supports(mime)) {
                 throw IllegalArgumentException("Only image and video files are supported")
             }
-            val extension = when {
-                mime == "image/jpeg" -> ".jpg"
-                mime == "image/png" -> ".png"
-                mime == "image/webp" -> ".webp"
-                mime == "image/gif" -> ".gif"
-                mime == "video/mp4" -> ".mp4"
-                mime == "video/webm" -> ".webm"
-                mime == "video/quicktime" -> ".mov"
-                else -> if (mime.startsWith("image/")) ".img" else ".video"
-            }
+            val extension = SharedMediaPolicy.extensionFor(mime)
             val destination = File(inbox, "share_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}$extension")
             var copied = 0L
             try {
@@ -77,12 +66,12 @@ class ShareToLiaActivity : Activity() {
                             val count = source.read(buffer)
                             if (count < 0) break
                             copied += count
-                            if (copied > maxFileBytes) throw IllegalArgumentException("Each shared file must be 50 MB or smaller")
+                            if (copied > SharedMediaPolicy.MAX_FILE_BYTES) throw IllegalArgumentException("Each shared file must be 50 MB or smaller")
                             output.write(buffer, 0, count)
                         }
                     }
                 }
-                if (copied == 0L) throw IllegalArgumentException("Shared file is empty")
+                if (!SharedMediaPolicy.isAllowedSize(copied)) throw IllegalArgumentException("Shared file is empty or exceeds the size limit")
                 saved += destination
             } catch (error: Exception) {
                 destination.delete()
