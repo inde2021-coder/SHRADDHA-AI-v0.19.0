@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -116,4 +116,16 @@ test('remote control authorization rechecks target opt-in, expiry, identity and 
   assert.equal(canUseRemoteControl(session, 'member', 'target', 100), false);
   session.controlMode = 'unknown';
   assert.equal(canUseRemoteControl(session, 'owner', 'target', 100), false);
+});
+
+
+test('receiver-owned resume index manifests are bounded, unique and in range', () => {
+  assert.equal(validMissingTransferIndexes([0, 2, 4], 5), true);
+  assert.equal(validMissingTransferIndexes([], 5), true);
+  assert.equal(validMissingTransferIndexes([0, 0], 5), false);
+  assert.equal(validMissingTransferIndexes([-1], 5), false);
+  assert.equal(validMissingTransferIndexes([5], 5), false);
+  assert.equal(validMissingTransferIndexes(Array(2201).fill(0).map((_, i) => i), 2201), false);
+  assert.equal(validMissingTransferIndexes('0,1', 2), false);
+  assert.equal(validMissingTransferIndexes([0], 0), false);
 });
