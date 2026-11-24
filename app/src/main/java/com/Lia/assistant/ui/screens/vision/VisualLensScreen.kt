@@ -274,7 +274,9 @@ fun VisualLensScreen(navController: NavController) {
                         if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
                             answer = "Background Live Eyes के लिए पहले सुरक्षित HTTPS AI backend और gateway token सेट करें।"
                         } else {
-                            // Trigger unbind/release of PreviewView before starting the headless camera service.
+                            // Release CameraX synchronously; Compose effects run after this click handler.
+                            // Starting Camera2 before this unbind completes can fail with CAMERA_IN_USE.
+                            controller.unbind()
                             backgroundEyes = true
                             runCatching {
                                 startForegroundService(context, Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_START))
