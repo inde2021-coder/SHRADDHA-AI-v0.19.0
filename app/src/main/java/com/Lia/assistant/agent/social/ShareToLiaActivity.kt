@@ -60,6 +60,7 @@ class ShareToLiaActivity : Activity() {
         if (uris.size > SharedMediaPolicy.MAX_ITEMS) throw IllegalArgumentException("Share up to ${SharedMediaPolicy.MAX_ITEMS} files at a time")
 
         val saved = mutableListOf<File>()
+        var batchCopied = 0L
         try {
         uris.forEach { uri ->
             val mime = contentResolver.getType(uri)?.lowercase().orEmpty()
@@ -78,7 +79,9 @@ class ShareToLiaActivity : Activity() {
                             val count = source.read(buffer)
                             if (count < 0) break
                             copied += count
+                            batchCopied += count
                             if (copied > SharedMediaPolicy.MAX_FILE_BYTES) throw IllegalArgumentException("Each shared file must be 50 MB or smaller")
+                            if (batchCopied > SharedMediaPolicy.MAX_BATCH_BYTES) throw IllegalArgumentException("The total share batch must be 100 MB or smaller")
                             output.write(buffer, 0, count)
                         }
                     }
