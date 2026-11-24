@@ -99,3 +99,8 @@ test('shared social publisher credentials are restricted to one configured Fireb
   assert.throws(() => assertSocialPublisherOwner('firebase-owner-123', ''), error => error.statusCode === 503);
   assert.throws(() => assertSocialPublisherOwner('', 'firebase-owner-123'), error => error.statusCode === 403);
 });
+
+
+test('Mastodon origin rejects nonstandard HTTPS ports', () => {
+  assert.throws(() => validateMastodonOrigin('https://mastodon.example:8443'), /HTTPS origin/);
+});
