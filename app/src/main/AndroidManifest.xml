@@ -110,10 +110,6 @@
         <service android:name=".cloud.ShraddhaFirebaseMessagingService" android:exported="false">
             <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
         </service>
-        <service android:name="com.Lia.assistant.agent.NovaAccessibilityService" android:label="Shraddha AI — Live App Operator" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
-            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
-            <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
-        </service>
         <activity android:name="com.Lia.assistant.agent.social.ShareToLiaActivity" android:exported="true" android:label="Share to Shraddha AI" android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter><action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="image/*" /><data android:mimeType="video/*" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.SEND_MULTIPLE" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="image/*" /><data android:mimeType="video/*" /></intent-filter>
