@@ -204,6 +204,7 @@ class WorkAgentActivity : AppCompatActivity() {
                 handler?.cancel()
                 pageStatus.text = "SSL certificate error वाला पेज सुरक्षा कारण से रोका गया।"
             }
+            @androidx.annotation.RequiresApi(27)
             override fun onSafeBrowsingHit(view: WebView?, request: WebResourceRequest?, threatType: Int, callback: SafeBrowsingResponse?) {
                 callback?.backToSafety(true)
                 pageStatus.text = "Android Safe Browsing ने संभावित खतरनाक पेज रोका।"
