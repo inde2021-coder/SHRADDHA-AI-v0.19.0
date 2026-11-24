@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validEncryptedTransferChunkEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload } from './relay-policy.js';
+import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1351,7 +1351,12 @@ wss.on('connection', (ws, ctx) => {
       const size = Number(msg.sizeBytes), chunks = Number(msg.chunkCount);
       const digest = String(msg.sha256 || '').toLowerCase();
       const grant = target && target.grants.get(deviceId + ':documents');
-      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true || !matchesOneTimeShareGrant(grant, requestId) || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) || !name || !Number.isSafeInteger(size) || size < 1 || size > 100 * 1024 * 1024 || !Number.isSafeInteger(chunks) || chunks < 1 || chunks > 2200 || !/^[a-f0-9]{64}$/.test(digest) || chunks !== Math.ceil(size / (48 * 1024))) return;
+      if (!target || targetId === deviceId || target.sharePermissions?.documents !== true ||
+          !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
+          !canStartFileTransfer(target, transferId, 1) || !name || !Number.isSafeInteger(size) ||
+          size < 1 || size > 100 * 1024 * 1024 || !Number.isSafeInteger(chunks) ||
+          chunks < 1 || chunks > 2200 || !/^[a-f0-9]{64}$/.test(digest) ||
+          chunks !== Math.ceil(size / (48 * 1024))) return;
       target.grants.delete(deviceId + ':documents');
       target.incomingTransfers.set(transferId, { fromDeviceId: deviceId, requestId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunks: new Map(), expiresAt: Date.now() + 30 * 60_000 });
       send(targetId, JSON.stringify({ type: 'file_transfer_start', fromDeviceId: deviceId, transferId, fileName: name, sizeBytes: size, chunkCount: chunks, sha256: digest, chunkBytes: 48 * 1024 }));
@@ -1383,7 +1388,8 @@ wss.on('connection', (ws, ctx) => {
       if (!source || sourceId === deviceId || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
           !Number.isSafeInteger(chunkCount) || chunkCount < 1 || chunkCount > 2200 ||
           !transfer || transfer.fromDeviceId !== sourceId || transfer.expiresAt <= Date.now() ||
-          transfer.chunkCount !== chunkCount || !validMissingTransferIndexes(missing, chunkCount)) return;
+          transfer.chunkCount !== chunkCount || !validMissingTransferIndexes(missing, chunkCount) ||
+          !recordPersistedFileTransferChunks(transfer, missing)) return;
       send(sourceId, JSON.stringify({
         type: 'file_transfer_resume', fromDeviceId: deviceId, transferId,
         chunkCount, missingIndexes: missing
@@ -1394,10 +1400,29 @@ wss.on('connection', (ws, ctx) => {
       const transferId = String(msg.transferId || '');
       const transfer = device.incomingTransfers?.get(transferId);
       if (!requester || !transfer || transfer.fromDeviceId !== targetId || requester === device) return;
-      const index = Number(msg.index);
-      if (Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount) transfer.chunks.set(index, true);
-      if (msg.complete === true) device.incomingTransfers.delete(transferId);
-      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: Number.isSafeInteger(index) ? index : -1, complete: msg.complete === true, ok: msg.ok === true }));
+      const rawIndex = msg.index;
+      // Never coerce malformed indexes to -1: that value is also the legacy
+      // receiver-ready sentinel and must be explicitly supplied by the receiver.
+      if (typeof rawIndex !== 'number' || !Number.isSafeInteger(rawIndex) || typeof msg.ok !== 'boolean') return;
+      const index = rawIndex;
+      if (index === -1) {
+        if (msg.complete === true) {
+          const complete = canCompleteFileTransfer(transfer, msg.ok === true);
+          if (!complete) {
+            send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: true, ok: false }));
+            return;
+          }
+          device.incomingTransfers.delete(transferId);
+          send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: true, ok: true }));
+          return;
+        }
+        if (msg.complete !== false || msg.ok !== true) return;
+        send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: false, ok: true }));
+        return;
+      }
+      if (index < 0 || index >= transfer.chunkCount || msg.complete === true) return;
+      if (msg.ok === true) transfer.chunks.set(index, true);
+      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index, complete: false, ok: msg.ok }));
     } else if (msg.type === 'file_transfer_cancel') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
