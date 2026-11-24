@@ -274,7 +274,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                     testStatus[provider.id]?.takeIf { it.isNotBlank() }?.let { message ->
                         Text(
                             message,
-                            color = if (message.startsWith("Connection successful")) colors.accent else colors.textSecondary,
+                            color = when { message.startsWith("Connection successful") -> colors.success; message.startsWith("Connection failed") -> colors.error; else -> colors.textSecondary },
                             fontSize = 10.sp
                         )
                     }
