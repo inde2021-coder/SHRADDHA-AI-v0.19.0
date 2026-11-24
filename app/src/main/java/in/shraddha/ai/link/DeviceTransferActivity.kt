@@ -319,7 +319,7 @@ class DeviceTransferActivity : Activity() {
                     if (sender.isNotBlank()) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "invalid_manifest")
                     return
                 }
-                val expectedPeer = peer.text.toString().trim()
+                val expectedPeer = peerIdSnapshot
                 if (!DeviceFileTransferProtocol.isExpectedIncomingPeer(expectedPeer, sender)) {
                     status.text = "Rejected file transfer from an unexpected paired device."
                     DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "unexpected_peer")
@@ -410,7 +410,7 @@ class DeviceTransferActivity : Activity() {
                 // currently selected peer and the exact active transfer manifest.
                 val expectedCount = DeviceFileTransferProtocol.chunkCount(sourceSize)
                 if (sourceUri == null || !DeviceFileTransferProtocol.isExpectedPeerMessage(
-                        peer.text.toString().trim(), msg.optString("fromDeviceId"),
+                        peerIdSnapshot, msg.optString("fromDeviceId"),
                         transferId, msg.optString("transferId")
                     ) || expectedCount == null ||
                     (msg.opt("chunkCount") as? Number)?.let { it.toDouble() == it.toLong().toDouble() && it.toInt() == expectedCount } != true) {
