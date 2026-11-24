@@ -169,11 +169,16 @@ class DeviceTransferActivity : Activity() {
         input.use {
             var skip = index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES
             while (skip > 0) { val n = it.skip(skip); if (n <= 0) throw IllegalStateException("Could not seek source file"); skip -= n }
-            val buffer = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES); var count = 0
-            while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
-            val bytes = buffer.copyOf(count)
-            require(bytes.isNotEmpty())
-            if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+            val buffer = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES)
+            try {
+                var count = 0
+                while (count < buffer.size) { val n = it.read(buffer, count, buffer.size - count); if (n < 0) break; count += n }
+                val bytes = buffer.copyOf(count)
+                try {
+                    require(bytes.isNotEmpty())
+                    if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+                } finally { bytes.fill(0) }
+            } finally { buffer.fill(0) }
         }
     }
 
@@ -285,10 +290,12 @@ class DeviceTransferActivity : Activity() {
 
     private fun receiveChunk(msg: JSONObject) {
         if (paused.get()) { status.text = "Incoming transfer paused locally; resume to accept more chunks."; return }
+        var decodedBytes: ByteArray? = null
         try {
             require(msg.optString("transferId") == transferId && incomingOut != null)
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
+            decodedBytes = bytes
             val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
             require(bytes.size == expected)
             if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
@@ -297,6 +304,7 @@ class DeviceTransferActivity : Activity() {
             status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
             if (incomingChunks >= incomingCount) verifyIncoming()
         } catch (e: Exception) { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
+        finally { decodedBytes?.fill(0) }
     }
 
     private fun saveIncoming(destination: Uri) {
