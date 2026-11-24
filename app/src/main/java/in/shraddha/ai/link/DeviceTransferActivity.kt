@@ -222,8 +222,14 @@ class DeviceTransferActivity : Activity() {
                 val sender = msg.optString("fromDeviceId")
                 val offeredTransferId = msg.optString("transferId")
                 val offeredName = DeviceFileTransferProtocol.safeDisplayName(msg.optString("fileName"))
-                val offeredSize = msg.optLong("sizeBytes", -1L)
-                val offeredCount = msg.optInt("chunkCount", -1)
+                val rawSize = msg.opt("sizeBytes")
+                val rawCount = msg.opt("chunkCount")
+                val offeredSize = (rawSize as? Number)?.let {
+                    if (it.toDouble() == it.toLong().toDouble()) it.toLong() else -1L
+                } ?: -1L
+                val offeredCount = (rawCount as? Number)?.let {
+                    if (it.toDouble() == it.toLong().toDouble()) it.toInt() else -1
+                } ?: -1
                 val offeredHash = msg.optString("sha256")
                 // Validate every untrusted manifest field before persisting state,
                 // allocating a file, or presenting a save dialog. In particular,
@@ -339,10 +345,14 @@ class DeviceTransferActivity : Activity() {
         try {
             require(msg.optString("fromDeviceId") == sourcePeer && sourcePeer.isNotBlank())
             require(msg.optString("transferId") == transferId && transferId.isNotBlank() && incomingOut != null)
-            val index = msg.getInt("index")
+            val rawIndex = msg.opt("index")
+            require(rawIndex is Number && rawIndex.toDouble() == rawIndex.toLong().toDouble())
+            val index = rawIndex.toInt()
             require(index in 0 until incomingCount)
-            val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
+            val encodedPayload = msg.getString("payload")
+            val bytes = android.util.Base64.decode(encodedPayload, android.util.Base64.NO_WRAP)
             try {
+                require(android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP) == encodedPayload)
                 val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index)
                     ?: throw IllegalArgumentException("Invalid chunk index or manifest")
                 require(bytes.size == expected)
@@ -353,8 +363,14 @@ class DeviceTransferActivity : Activity() {
                         incomingOut!!.fd.sync()
                         receivedChunkIndexes.set(index)
                         incomingChunks++
-                        // The durable bitmap must be committed before the relay ACK.
-                        persistTransferState(synchronous = true)
+                        // Roll back the in-memory bitmap if durable state cannot be committed.
+                        try {
+                            persistTransferState(synchronous = true)
+                        } catch (error: Exception) {
+                            receivedChunkIndexes.clear(index)
+                            incomingChunks--
+                            throw error
+                        }
                     }
                 }
                 require(DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)) {
@@ -445,7 +461,7 @@ class DeviceTransferActivity : Activity() {
             .putString("receivedIndexes", synchronized(receivedChunkIndexes) { android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP) })
             .putBoolean("incomingVerified", incomingVerified)
             .putString("pendingSaveUri", pendingSaveUri?.toString().orEmpty())
-        if (synchronous) editor.commit() else editor.apply()
+        if (synchronous) check(editor.commit()) { "Could not persist file-transfer state" } else editor.apply()
     }
 
     private fun restoreTransferState() {
