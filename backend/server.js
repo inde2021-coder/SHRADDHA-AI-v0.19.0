@@ -1397,16 +1397,30 @@ wss.on('connection', (ws, ctx) => {
       const transfer = device.incomingTransfers?.get(transferId);
       if (!requester || !transfer || transfer.fromDeviceId !== targetId || requester === device) return;
       const rawIndex = msg.index;
-      const index = typeof rawIndex === 'number' && Number.isSafeInteger(rawIndex) ? rawIndex : -1;
-      if (index >= 0 && index < transfer.chunkCount && msg.ok === true) transfer.chunks.set(index, true);
-      const complete = msg.complete === true && canCompleteFileTransfer(transfer, msg.ok === true);
-      if (msg.complete === true && !complete) {
-        // Reject premature completion but retain relay state so the transfer can resume.
-        send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: true, ok: false }));
+      // Never coerce malformed indexes to -1: that value is also the legacy
+      // receiver-ready sentinel and must be explicitly supplied by the receiver.
+      if (typeof rawIndex !== 'number' || !Number.isSafeInteger(rawIndex) || typeof msg.ok !== 'boolean') return;
+      const index = rawIndex;
+      if (index === -1) {
+        if (msg.complete === true) {
+          const complete = canCompleteFileTransfer(transfer, msg.ok === true);
+          if (!complete) {
+            // Reject premature completion but retain relay state so the transfer can resume.
+            send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: true, ok: false }));
+            return;
+          }
+          device.incomingTransfers.delete(transferId);
+          send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: true, ok: true }));
+          return;
+        }
+        // Legacy receiver-ready handshake is accepted only as an explicit success.
+        if (msg.complete !== false || msg.ok !== true) return;
+        send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: false, ok: true }));
         return;
       }
-      if (complete) device.incomingTransfers.delete(transferId);
-      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index, complete, ok: msg.ok === true }));
+      if (index < 0 || index >= transfer.chunkCount || msg.complete === true) return;
+      if (msg.ok === true) transfer.chunks.set(index, true);
+      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index, complete: false, ok: msg.ok }));
     } else if (msg.type === 'file_transfer_cancel') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
