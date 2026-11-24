@@ -333,6 +333,8 @@ class DeviceTransferActivity : Activity() {
                     if (!sameTransfer) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "receiver_busy")
                     return
                 }
+                cancelled.set(false)
+                paused.set(false)
                 sourcePeer = sender
                 peerIdSnapshot = sender
                 transferId = offeredTransferId
