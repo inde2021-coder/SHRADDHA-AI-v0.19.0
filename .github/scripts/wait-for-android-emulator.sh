@@ -18,7 +18,7 @@ echo "Waiting for an online Android emulator; no shell probes will run until ADB
 
 # A missing emulator must not trigger repeated failing shell/getprop calls.
 # Discover the actual emulator serial from ADB instead of assuming 5554.
-deadline=$((SECONDS + 180))
+deadline=$((SECONDS + 600))
 last_state=""
 last_report=0
 ready_streak=0
@@ -77,6 +77,10 @@ while (( SECONDS < deadline )); do
       fi
     else
       ready_streak=0
+      if (( SECONDS - last_report >= 15 )); then
+        echo "Emulator readiness probes: package='$package_service' activity='$activity_service' window='$window_service' pm='$package_probe' user='$activity_probe'."
+        last_report=$SECONDS
+      fi
     fi
   else
     ready_streak=0
@@ -90,7 +94,7 @@ while (( SECONDS < deadline )); do
   sleep 2
 done
 
-echo "ERROR: no fully ready Android emulator became available within 3 minutes."
+echo "ERROR: no fully ready Android emulator became available within 10 minutes."
 "$ADB" devices -l || true
 if [[ -n "$SERIAL" ]] && "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; then
   "$ADB" -s "$SERIAL" logcat -d -t 1200 || true
