@@ -22,7 +22,7 @@ def valid_incoming_file_manifest(peer_id, transfer_id, size, chunks, digest, pee
         isinstance(peer_id, str) and re.fullmatch(r"[a-f0-9]{24}", peer_id) is not None and
         isinstance(transfer_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) is not None and
         type(size) is int and 1 <= size <= max_size and
-        type(chunks) is int and chunks == (size + 47999) // 48000 and
+        type(chunks) is int and chunks == (size + 49151) // 49152 and
         isinstance(digest, str) and re.fullmatch(r"[a-f0-9]{64}", digest) is not None and
         peer_trusted is True and isinstance(active_transfers, dict) and
         transfer_id not in active_transfers and len(active_transfers) == 0
