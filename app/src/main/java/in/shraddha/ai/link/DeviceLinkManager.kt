@@ -17,7 +17,14 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
+    // Keep the long-lived WebSocket separate from bounded REST calls.
     private val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
+    private val requestClient = client.newBuilder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(45, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
+        .build()
     // Bound Visual Lens calls: a stalled HTTP response must not keep the camera analysis gate locked for OkHttp's default 10-minute read timeout.
     private val visionClient = buildVisionHttpClient(client)
     private val reconnectHandler = Handler(Looper.getMainLooper())
@@ -382,7 +389,7 @@ object DeviceLinkManager {
     private fun post(base: String, path: String, body: JSONObject, callback: (Result<JSONObject>) -> Unit) {
         val url = base.trim().trimEnd('/') + path
         val request = Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType())).build()
-        client.newCall(request).enqueue(object : Callback {
+        requestClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { callback(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
                 response.use { val raw = it.body?.string().orEmpty(); if (!it.isSuccessful) callback(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")))) else callback(runCatching { JSONObject(raw) }) }
@@ -461,7 +468,7 @@ object DeviceLinkManager {
             .getOrElse { done(Result.failure(it)); return }
         val builder = Request.Builder().url("$safeBaseUrl/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        client.newCall(builder.build()).enqueue(object : Callback {
+        requestClient.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) { response.use { val raw = it.body?.string().orEmpty(); if (!it.isSuccessful) done(Result.failure(IllegalStateException("HTTP ${it.code}"))) else done(Result.success(raw)) } }
         })
@@ -502,7 +509,7 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl$path")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        val call = client.newCall(builder.build())
+        val call = requestClient.newCall(builder.build())
         onCall?.invoke(call)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
