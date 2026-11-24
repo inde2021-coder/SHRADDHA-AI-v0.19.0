@@ -3,6 +3,8 @@ package com.Lia.assistant.action
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalMessageReplayGuardTest {
@@ -15,7 +17,10 @@ class LocalMessageReplayGuardTest {
         assertEquals(64, a.length)
     }
 
-    @Test fun invalidRequestIdentifiersAreRejected() {
-        assertFalse(LocalMessageReplayGuard.claim(android.test.mock.MockContext(), "short", "a".repeat(64)).accepted)
+    @Test fun requestIdsMustBeBoundedAndUnambiguous() {
+        assertFalse(LocalMessageReplayGuard.isValidRequestId("short"))
+        assertFalse(LocalMessageReplayGuard.isValidRequestId("bad id with spaces"))
+        assertFalse(LocalMessageReplayGuard.isValidRequestId("x".repeat(81)))
+        assertTrue(LocalMessageReplayGuard.isValidRequestId("request_123456789012"))
     }
 }
