@@ -165,6 +165,16 @@ export function validMissingTransferIndexes(indexes, chunkCount) {
  * an object with an expiresAt field. Invalid expiry data fails closed.
  */
 
+
+/** Admit one active inbound file transfer per receiver and reject duplicate IDs. */
+export function canStartFileTransfer(device, transferId, maxActive = 1) {
+  const transfers = device?.incomingTransfers;
+  return transfers instanceof Map &&
+    typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId) &&
+    Number.isSafeInteger(maxActive) && maxActive >= 1 && maxActive <= 16 &&
+    transfers.size < maxActive && !transfers.has(transferId);
+}
+
 /** Synchronize relay ACK state with the receiver's persisted missing-chunk bitmap. */
 export function recordPersistedFileTransferChunks(transfer, missingIndexes) {
   if (!transfer || !Number.isSafeInteger(transfer.chunkCount) ||
