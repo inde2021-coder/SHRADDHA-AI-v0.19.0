@@ -55,108 +55,166 @@ class MobileCommandCenterActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        speechLanguage = getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE).getString("speech_language", "hi-IN") ?: "hi-IN"
+        speechLanguage = getSharedPreferences("mobile_command_center", Context.MODE_PRIVATE)
+            .getString("speech_language", "hi-IN") ?: "hi-IN"
         assistantName = NovaPreferences.getString(
             this, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.NAME
         ).trim().ifBlank { AssistantBrand.NAME }
+
+        // One command surface: voice, text, and a single settings entry for pairing/permissions.
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 20, 20, 20)
-            setBackgroundColor(Color.rgb(7, 15, 25))
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(20), dp(18), dp(20), dp(22))
+            setBackgroundColor(Color.rgb(7, 13, 24))
         }
-        root.addView(TextView(this).apply {
-            text = "$assistantName • MOBILE COMMAND CENTER"
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(TextView(this).apply {
+            text = assistantName
+            textSize = 25f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(action("⚙") { showCommandSettings() }.apply {
+            contentDescription = "Settings: PC pairing, voice and permissions"
             textSize = 19f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setPadding(0, 8, 0, 16)
+            minWidth = dp(48)
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(46))
         })
+        root.addView(header)
         root.addView(TextView(this).apply {
-            text = "Android पर PC जैसे tools • Hindi + English • User permission required"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(0xFF73DDE7.toInt())
-            setPadding(0, 0, 0, 14)
-        })
-        command = EditText(this).apply {
-            hint = "जैसे: आवाज बढ़ाओ, Chrome खोलो, वेब पर खोजो मौसम"
-            setTextColor(Color.WHITE)
-            setHintTextColor(0xFF8BAFB8.toInt())
-            setPadding(14, 12, 14, 12)
-            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt()) }
-        }
-        root.addView(command)
-        root.addView(action("🎙️ Voice Control • बोलकर command दें") { captureVoice() })
-        root.addView(action("🤖 AI Work Agent • Chat + Web + App tasks") { startActivity(Intent(this, WorkAgentActivity::class.java)) })
-        root.addView(action("Voice Language • Hindi / English") { chooseVoiceLanguage() })
-        root.addView(action("▶ Command चलाएँ") { runCommand(command.text.toString()) })
-        root.addView(action("Task Automation + App Control") { openOperator() })
-        root.addView(action("Calls by Voice • WhatsApp & SMS") { startActivity(Intent(this, `in`.shraddha.ai.phone.PhoneAgentActivity::class.java)) })
-        root.addView(action("Visual Lens • Camera / paired-device workspace") { openMainPage("devices") })
-        root.addView(action("AI Memory • Personality • Provider settings") { openAiWorkspace() })
-        root.addView(action("App Launcher • installed apps") { showAppLauncher() })
-        root.addView(action("File Manager • search / folders") { startActivity(Intent(this, FileAccessActivity::class.java)) })
-        root.addView(action("Screenshot AI • current screen पढ़ें") { readCurrentScreen() })
-        root.addView(action("Web Search • browser में खोजें") { webSearch(command.text.toString().removePrefix("वेब पर खोजो ").removePrefix("search web ").trim()) })
-        root.addView(action("Code Assistant • AI workspace") { openAiWorkspace() })
-        root.addView(action("Media Control • Play / Pause") { media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) })
-        root.addView(action("Clipboard AI • Transform selected text") { openClipboardTools() })
-        root.addView(action("Media Control • Next / Previous") {
-            android.app.AlertDialog.Builder(this).setTitle("Media action")
-                .setItems(arrayOf("Next track", "Previous track")) { _, which ->
-                    media(if (which == 0) KeyEvent.KEYCODE_MEDIA_NEXT else KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                }.show()
-        })
-        root.addView(action("System Control • Volume up / down") {
-            android.app.AlertDialog.Builder(this).setTitle("Volume")
-                .setItems(arrayOf("Volume up", "Volume down", "Mute / unmute")) { _, which ->
-                    val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    val direction = when (which) {
-                        0 -> AudioManager.ADJUST_RAISE
-                        1 -> AudioManager.ADJUST_LOWER
-                        else -> AudioManager.ADJUST_TOGGLE_MUTE
-                    }
-                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
-                    status.text = "Android media volume control भेजा गया।"
-                }.show()
-        })
-        root.addView(action("System Settings • display / sound / permissions") {
-            startActivity(Intent(Settings.ACTION_SETTINGS))
-        })
-        root.addView(action("📱 Mobile Hardware • Battery / RAM / Storage / Network") { showMobileHardwareStatus() })
-        root.addView(action("🔆 Phone Brightness • Set 0–100%") { askMobilePercent("brightness") })
-        root.addView(action("🔊 Phone Volume • Set 0–100%") { askMobilePercent("volume") })
-        root.addView(action("🔦 Flashlight • ON / OFF") { togglePhoneTorch() })
-        root.addView(action("📶 Wi-Fi / Bluetooth / Internet / NFC") { showConnectivityControls() })
-        root.addView(action("⚙️ Display / Sound / Battery / Location / Permissions") { showSystemControls() })
-        root.addView(action("Notes + Hindi / English OCR") { startActivity(Intent(this, NoteOcrActivity::class.java)) })
-        status = TextView(this).apply {
-            text = "तैयार। कुछ controls के लिए Accessibility service चालू करें। Android protected settings को सीधे बदलने के बजाय system settings खोलेगा।"
+            text = "आप बोलिए या लिखिए — बाकी Shraddha करेगी"
             textSize = 13f
-            setTextColor(0xFFE6F5F7.toInt())
-            setPadding(12, 16, 12, 16)
+            gravity = Gravity.CENTER
+            setTextColor(0xFF9BB7CE.toInt())
+            setPadding(0, dp(8), 0, dp(26))
+        })
+
+        command = EditText(this).apply {
+            hint = "Shraddha को कमांड लिखें…"
+            setTextColor(Color.WHITE)
+            setHintTextColor(0xFF91A5BC.toInt())
+            textSize = 16f
+            minLines = 1
+            maxLines = 3
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+            background = panelBackground(0xFF101E31.toInt(), 0xFF31516D.toInt())
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                    runCommand(text.toString())
+                    true
+                } else false
+            }
         }
-        root.addView(status)
-        root.addView(action("← वापस") { finish() })
-        val scroll = ScrollView(this)
-        scroll.addView(root)
-        setContentView(scroll)
+        root.addView(command, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        controls.addView(action("🎙") { captureVoice() }.apply {
+            contentDescription = "Voice command"
+            textSize = 21f
+        }, LinearLayout.LayoutParams(dp(58), dp(52)).apply { marginEnd = dp(8) })
+        controls.addView(action("कमांड भेजें") { runCommand(command.text.toString()) },
+            LinearLayout.LayoutParams(0, dp(52), 1f))
+        root.addView(controls)
+
+        status = TextView(this).apply {
+            text = "तैयार • हिंदी और English"
+            textSize = 13f
+            setTextColor(0xFFE4F2FF.toInt())
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = panelBackground(0xFF101E31.toInt(), 0xFF29445F.toInt())
+        }
+        root.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(18) })
+
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        })
         intent.getStringExtra("mobile_control_command")?.takeIf { it.isNotBlank() }?.let { pending ->
             command.post { runCommand(pending) }
         }
     }
 
+    private fun showCommandSettings() {
+        val choices = arrayOf(
+            "PC Pairing और Remote Connection",
+            "Voice Language",
+            "AI Settings और Providers",
+            "Android Permissions"
+        )
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Shraddha Settings")
+            .setItems(choices) { _, which ->
+                when (which) {
+                    0 -> openMainPage("devices")
+                    1 -> chooseVoiceLanguage()
+                    2 -> openAiWorkspace()
+                    3 -> startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:$packageName")))
+                }
+            }
+            .setNegativeButton("बंद करें", null)
+            .show()
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun panelBackground(fill: Int, stroke: Int) =
+        android.graphics.drawable.GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(16).toFloat()
+            setStroke(dp(1), stroke)
+        }
+
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
-        setTextColor(0xFF04161C.toInt())
-        background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(0xFF38C7D2.toInt()); cornerRadius = 18f; setStroke(1, 0xFF8AF1F1.toInt())
-        }
-        elevation = 7f
-        setPadding(18, 10, 18, 10)
+        maxLines = 2
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        textSize = 13f
+        gravity = Gravity.CENTER
+        setTextColor(0xFFEAF7FF.toInt())
+        background = panelBackground(0xFF172A42.toInt(), 0xFF315878.toInt())
+        elevation = dp(2).toFloat()
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        minHeight = dp(48)
         setOnClickListener { run() }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
+    }
+
+    private fun showPhoneLevelControls() {
+        android.app.AlertDialog.Builder(this).setTitle("फोन कंट्रोल")
+            .setItems(arrayOf("Brightness सेट करें", "Volume सेट करें")) { _, which ->
+                askMobilePercent(if (which == 0) "brightness" else "volume")
+            }.show()
+    }
+
+    private fun showMediaControls() {
+        android.app.AlertDialog.Builder(this).setTitle("Media Control")
+            .setItems(arrayOf("Play / Pause", "Next track", "Previous track", "Volume up", "Volume down", "Mute / unmute")) { _, which ->
+                when (which) {
+                    0 -> media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                    1 -> media(KeyEvent.KEYCODE_MEDIA_NEXT)
+                    2 -> media(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                    else -> {
+                        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                        val direction = when (which) {
+                            3 -> AudioManager.ADJUST_RAISE
+                            4 -> AudioManager.ADJUST_LOWER
+                            else -> AudioManager.ADJUST_TOGGLE_MUTE
+                        }
+                        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
+                        status.text = "फोन का media volume command भेजा गया।"
+                    }
+                }
+            }.show()
     }
 
     private fun chooseVoiceLanguage() {
@@ -209,6 +267,12 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                     .onFailure { status.text = "Flashlight failed: ${it.message}" }
             }
             lower in listOf("mobile hardware status", "phone status", "फोन की जानकारी बताओ", "मोबाइल का स्टेटस बताओ") -> showMobileHardwareStatus()
+            lower in listOf("phone controls", "फोन कंट्रोल खोलो", "brightness volume controls") -> showPhoneLevelControls()
+            lower in listOf("media controls", "मीडिया कंट्रोल खोलो") -> showMediaControls()
+            lower in listOf("toggle flashlight", "टॉर्च टॉगल करो") -> togglePhoneTorch()
+            lower in listOf("connectivity controls", "कनेक्टिविटी कंट्रोल खोलो") -> showConnectivityControls()
+            lower in listOf("clipboard tools", "clipboard text tools", "क्लिपबोर्ड टूल खोलो") -> openClipboardTools()
+            lower in listOf("app launcher", "फोन के ऐप दिखाओ", "apps list") -> showAppLauncher()
             lower in listOf("wifi settings", "वाईफाई सेटिंग खोलो") -> openMobileSetting("wifi")
             lower in listOf("bluetooth settings", "ब्लूटूथ सेटिंग खोलो") -> openMobileSetting("bluetooth")
             lower in listOf("internet settings", "इंटरनेट सेटिंग खोलो") -> openMobileSetting("internet")
@@ -302,13 +366,6 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
     }
 
-    private fun showSystemControls() {
-        val labels = arrayOf("Display / Auto-rotate / Screen timeout", "Sound", "Battery saver", "Location", "Do Not Disturb", "Accessibility", "Notification access", "Apps", "Storage", "Date & time", "Language", "Security")
-        val keys = arrayOf("display", "sound", "battery", "location", "dnd", "accessibility", "notifications", "apps", "storage", "date", "language", "security")
-        android.app.AlertDialog.Builder(this).setTitle("Phone system controls")
-            .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
-    }
-
     private fun openMainPage(page: String) {
         startActivity(Intent(this, `in`.shraddha.ai.MainActivity::class.java).putExtra("initial_page", page))
     }
@@ -359,7 +416,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     }
 
     private fun openOperator() {
-        startActivity(Intent(this, OperatorActivity::class.java))
+        startActivity(Intent(this, OperatorActivity::class.java).putExtra("mobile_voice_command", ""))
     }
 
     private fun openAiWorkspace() {

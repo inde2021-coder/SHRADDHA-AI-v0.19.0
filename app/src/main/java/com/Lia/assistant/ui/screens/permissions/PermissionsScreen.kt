@@ -108,6 +108,14 @@ fun PermissionsScreen(
         val intent = when (action) {
             "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
             "accessibility" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            "accessibility_restricted" -> {
+                Toast.makeText(
+                    context,
+                    "Android 13+ पर App info खोलें → ऊपर ⋮ → Allow restricted settings चुनें। फिर वापस आकर Accessibility में Shraddha Device Control चालू करें।",
+                    Toast.LENGTH_LONG
+                ).show()
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+            }
             "notification_listener" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             "app" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
             else -> return
@@ -203,6 +211,19 @@ fun PermissionsScreen(
                 }
             }
             item {
+                NovaGlassCard(modifier = Modifier.fillMaxWidth().clickable {
+                    if (Build.VERSION.SDK_INT >= 33) openSettings("accessibility_restricted")
+                    else openSettings("accessibility")
+                }) {
+                    Text(
+                        if (Build.VERSION.SDK_INT >= 33) "Accessibility blocked? Open app info → ⋮ → Allow restricted settings"
+                        else "Accessibility help",
+                        color = colors.accent,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            item {
                 NovaGlassCard(modifier = Modifier.fillMaxWidth().clickable { openSettings("app") }) {
                     Text("Open app settings", color = colors.accent, fontWeight = FontWeight.Bold)
                 }
@@ -239,7 +260,6 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
             .any { it.packageName == context.packageName && it.className == className }
     }.getOrDefault(false)
     val shraddhaAccessibility = serviceEnabled("in.shraddha.ai.accessibility.ShraddhaAccessibilityService")
-    val liaAccessibility = serviceEnabled("com.Lia.assistant.agent.NovaAccessibilityService")
     val listener = runCatching {
         val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
         enabled.split(':').any { it.startsWith(context.packageName + "/") }
@@ -251,7 +271,12 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("camera", "Camera", "Visual Lens and biometric capture", Manifest.permission.CAMERA))
         add(runtime("contacts", "Contacts", "Resolve people by name", Manifest.permission.READ_CONTACTS))
         add(runtime("call", "Direct phone calls", "Place calls after user confirmation", Manifest.permission.CALL_PHONE))
-        add(runtime("sms", "Send SMS", "Send text messages after user confirmation", Manifest.permission.SEND_SMS))
+        add(runtime(
+            "sms",
+            "Send SMS directly",
+            "Direct sending needs Android SMS permission and may be restricted by device/store policy. If unavailable, Shraddha should open the SMS app with the message ready for you to send.",
+            Manifest.permission.SEND_SMS
+        ))
         add(PermissionRow("notifications", "App notifications", "Android notification display permission",
             if (Build.VERSION.SDK_INT >= 33) {
                 if (granted(Manifest.permission.POST_NOTIFICATIONS) && notificationsEnabled) AccessState.GRANTED else AccessState.DENIED
@@ -263,9 +288,8 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("selected_media", "Selected photos access", "Limited photo access on Android 14+", Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, 34))
         add(runtime("legacy_storage", "Legacy shared storage", "Legacy media access on Android 12 and earlier", Manifest.permission.READ_EXTERNAL_STORAGE, 1, 32))
         add(special("overlay", "Display over other apps", "Required only for floating assistant overlay", overlay, "overlay"))
-        val accessibilityHelp = if (Build.VERSION.SDK_INT >= 33) "Android 13+ पर switch grey हो तो App info > ⋮ > Allow restricted settings करें, फिर यहाँ लौटकर चालू करें।" else "इसे Android Accessibility Settings में चालू करें।"
+        val accessibilityHelp = if (Build.VERSION.SDK_INT >= 33) "अगर switch grey/blocked है: नीचे ‘Accessibility help’ खोलें → App info → ⋮ → Allow restricted settings → वापस आकर Android Accessibility Settings में Shraddha Device Control चालू करें।" else "Android Accessibility Settings में Shraddha Device Control चालू करें।"
         add(special("accessibility", "Shraddha Device Control", "मुख्य on-screen control service. $accessibilityHelp", shraddhaAccessibility, "accessibility"))
-        add(special("lia_accessibility", "Live App Operator", "LIA screen interaction और gestures. $accessibilityHelp", liaAccessibility, "accessibility"))
         add(special("screen_reading", "Screen reading & capture", if (Build.VERSION.SDK_INT >= 30) "Android 11+ पर Shraddha Device Control चालू होने पर उपलब्ध; secure screens Android रोक सकता है" else "इस Android version पर Accessibility screenshot API समर्थित नहीं है", Build.VERSION.SDK_INT >= 30 && shraddhaAccessibility, "accessibility"))
         add(special("notification_listener", "Notification access", "Reads notifications only after special access is enabled", listener, "notification_listener"))
         add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission", Build.VERSION.SDK_INT >= 28))

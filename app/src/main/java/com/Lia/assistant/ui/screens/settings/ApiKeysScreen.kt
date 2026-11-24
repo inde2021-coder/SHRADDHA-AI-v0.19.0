@@ -1,6 +1,8 @@
 package com.Lia.assistant.ui.screens.settings
 
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +47,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
-import `in`.shraddha.ai.future.MainBrainProviderGateway
+import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.voice.ChatReplyResult
+import com.Lia.assistant.voice.ChatTurn
+import com.Lia.assistant.voice.GeminiTextClient
+import com.Lia.assistant.voice.MultiProviderChatClient
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaGlassCard
@@ -84,6 +90,68 @@ private fun clearProviderKey(context: android.content.Context, provider: String)
     saveProviderKey(context, provider, "")
 }
 
+
+private fun testSavedProviderKey(context: android.content.Context, provider: String): String {
+    val startedAt = System.currentTimeMillis()
+    val instruction = "You are a provider connectivity check. Reply with exactly the word OK."
+    val prompt = "Reply with exactly the word OK."
+    val history = listOf(ChatTurn(isUser = true, text = prompt))
+    val result = if (provider == "GEMINI") {
+        val key = ApiKeyStore.getKey(context)
+        if (key.isBlank()) return "GEMINI API key is missing."
+        GeminiTextClient.reply(key, instruction, history)
+    } else {
+        MultiProviderChatClient.reply(context, provider, instruction, history)
+    }
+    return when (result) {
+        is ChatReplyResult.Success -> {
+            if (result.text.isBlank()) error("$provider returned an empty connection-test reply.")
+            val model = result.tokenUsage?.model ?: "not reported by provider response"
+            "HTTP=2xx; model=$model; response=received; durationMs=${System.currentTimeMillis() - startedAt}"
+        }
+        is ChatReplyResult.Error -> error(result.message)
+    }
+}
+
+private fun safeDiagnosticText(value: String, secrets: List<String> = emptyList()): String {
+    var sanitized = value
+    secrets.filter { it.isNotBlank() }.forEach { secret -> sanitized = sanitized.replace(secret, "[REDACTED_SECRET]") }
+    return sanitized
+        .replace(Regex("(?i)(authorization|api[-_ ]?key|gateway[-_ ]?token|x-goog-api-key)\\s*[:=]\\s*[^\\s,;]+"), "$1=[REDACTED]")
+        .replace(Regex("(?i)\\b(AIza[0-9A-Za-z_-]{12,}|sk-[0-9A-Za-z_-]{12,}|gsk_[0-9A-Za-z_-]{12,}|pplx-[0-9A-Za-z_-]{12,}|sk-ant-[0-9A-Za-z_-]{12,})\\b"), "[REDACTED_KEY]")
+        .take(700)
+}
+
+private fun buildApiDiagnosticReport(context: Context, configured: Map<String, Boolean>, testStatus: Map<String, String>): String {
+    val packageInfo = runCatching {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }.getOrNull()
+    val gateway = VoiceGatewaySettings.get(context)
+    val gatewayHost = runCatching { java.net.URI(gateway.baseUrl).host }.getOrNull().orEmpty()
+    val savedSecrets = apiKeyProviders.mapNotNull { provider ->
+        runCatching { if (provider.id == "GEMINI") ApiKeyStore.getKey(context) else ProviderKeyStore.get(context, provider.id) }.getOrNull()
+    } + listOf(gateway.gatewayToken)
+    return buildString {
+        appendLine("Shraddha AI — API Diagnostic Report")
+        appendLine("Generated: " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date()))
+        appendLine("App version: " + (packageInfo?.versionName ?: "unknown") + " (" + (packageInfo?.versionCode ?: 0) + ")")
+        appendLine("Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")")
+        appendLine("Device: " + Build.MANUFACTURER + " " + Build.MODEL)
+        appendLine()
+        appendLine("Provider checks (keys are never included):")
+        apiKeyProviders.forEach { provider ->
+            appendLine("- " + provider.id + ": keySaved=" + (configured[provider.id] == true) + "; lastTest=" + safeDiagnosticText(testStatus[provider.id].orEmpty().ifBlank { "Not tested in this session" }, savedSecrets))
+        }
+        appendLine()
+        appendLine("Secure backend:")
+        appendLine("- configured=" + (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank() && gateway.readError == null))
+        appendLine("- host=" + gatewayHost.ifBlank { "not set" })
+        appendLine("- settingsReadError=" + (gateway.readError?.let { safeDiagnosticText(it, savedSecrets) } ?: "none"))
+        appendLine()
+        appendLine("Privacy: API keys, gateway token, request prompts and response content are excluded.")
+    }
+}
 @Composable
 fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -113,6 +181,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val testStatus = remember { mutableStateMapOf<String, String>() }
     val testing = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
+    var diagnosticReport by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
@@ -131,7 +200,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
             Text(
-                "API keys are saved in the phone's encrypted Android Keystore-backed storage. Never share your key or add it to screenshots.",
+                "API keys are saved in encrypted phone storage. Test Connection checks this provider key directly. Live microphone voice uses the separate Secure Backend settings below; a provider key alone does not configure the voice gateway. Never share your key or add it to screenshots.",
                 color = colors.textSecondary,
                 fontSize = 13.sp
             )
@@ -233,19 +302,11 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) {
                                     runCatching {
-                                        MainBrainProviderGateway.complete(
-                                            context,
-                                            provider.id,
-                                            "You are a provider connectivity check. Reply with exactly the word OK.",
-                                            "Reply with exactly the word OK."
-                                        )
+                                        testSavedProviderKey(context, provider.id)
                                     }
                                 }
                                 testStatus[provider.id] = result.fold(
-                                    onSuccess = { reply ->
-                                        if (reply.isNotBlank()) "Connection successful: provider returned a response."
-                                        else "Provider responded, but the test reply was unexpected."
-                                    },
+                                    onSuccess = { details -> "Connection successful: $details" },
                                     onFailure = { error -> "Connection failed: ${error.message ?: "Unknown provider error"}" }
                                 )
                                 testing[provider.id] = false
@@ -257,7 +318,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                     testStatus[provider.id]?.takeIf { it.isNotBlank() }?.let { message ->
                         Text(
                             message,
-                            color = if (message.startsWith("Connection successful")) colors.accent else colors.textSecondary,
+                            color = when { message.startsWith("Connection successful") -> colors.success; message.startsWith("Connection failed") -> colors.error; else -> colors.textSecondary },
                             fontSize = 10.sp
                         )
                     }
@@ -280,6 +341,32 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                         fontSize = 11.sp
                     )
                 }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("API Diagnostic Report", color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text("Share a safe report with support. It includes provider test results, app/device details and backend configuration status — never API keys or gateway tokens.", color = colors.textSecondary, fontSize = 12.sp)
+                NovaButton(
+                    text = "Generate & Share Diagnostic Report",
+                    type = NovaButtonType.SECONDARY,
+                    onClick = {
+                        diagnosticReport = buildApiDiagnosticReport(context, configured.toMap(), testStatus.toMap())
+                        runCatching {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Shraddha AI API Diagnostic Report")
+                                putExtra(Intent.EXTRA_TEXT, diagnosticReport)
+                            }
+                            context.startActivity(Intent.createChooser(send, "Share diagnostic report"))
+                        }.onFailure {
+                            Toast.makeText(context, "Report generated, but share sheet could not open.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (diagnosticReport.isNotBlank()) Text("Report generated. Review it before sharing.", color = colors.success, fontSize = 11.sp)
             }
         }
         Spacer(Modifier.height(96.dp))

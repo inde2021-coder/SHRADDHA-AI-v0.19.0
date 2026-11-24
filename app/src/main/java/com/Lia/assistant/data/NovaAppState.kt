@@ -26,8 +26,9 @@ class NovaAppState(context: Context) {
         private set
 
     var homeDesign by mutableStateOf(
-        NovaPreferences.getString(context, NovaPreferences.Keys.HOME_DESIGN, "LIA_GLASS")
-            .takeIf { it in setOf("LIA_GLASS", "ROYAL_3D", "COSMIC_ORB", "AI_ROBOT", "EXECUTIVE") } ?: "LIA_GLASS"
+        NovaPreferences.getString(context, NovaPreferences.Keys.HOME_DESIGN, "SHRADDHA_SIGNATURE")
+            .let { if (it == "LIA_GLASS") "SHRADDHA_SIGNATURE" else it }
+            .takeIf { it in setOf("SHRADDHA_SIGNATURE", "ROYAL_3D", "COSMIC_ORB", "AI_ROBOT", "EXECUTIVE") } ?: "SHRADDHA_SIGNATURE"
     )
         private set
 
@@ -140,7 +141,7 @@ class NovaAppState(context: Context) {
     }
 
     fun applyHomeDesign(context: Context, design: String) {
-        val supported = setOf("LIA_GLASS", "ROYAL_3D", "COSMIC_ORB", "AI_ROBOT", "EXECUTIVE")
+        val supported = setOf("SHRADDHA_SIGNATURE", "ROYAL_3D", "COSMIC_ORB", "AI_ROBOT", "EXECUTIVE")
         require(design in supported)
         homeDesign = design
         NovaPreferences.putString(context, NovaPreferences.Keys.HOME_DESIGN, design)

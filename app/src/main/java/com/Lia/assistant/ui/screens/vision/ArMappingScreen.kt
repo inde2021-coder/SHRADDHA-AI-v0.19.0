@@ -51,6 +51,7 @@ import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.vision.ArWorldMappingEngine
+import `in`.shraddha.ai.vision.VisualEngineCapability
 import java.util.concurrent.atomic.AtomicReference
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -78,13 +79,23 @@ fun ArMappingScreen(navController: NavController) {
     }
 
     LaunchedEffect(context) {
-        status = runCatching { ArCoreApk.getInstance().checkAvailability(context).toString() }.getOrElse { "ARCore unavailable: ${it.message}" }
+        status = runCatching {
+            VisualEngineCapability.fromArCoreStatus(ArCoreApk.getInstance().checkAvailability(context).toString()).userMessage
+        }.getOrElse { "AR mapping status unavailable. Visual Lens camera + AI remains available without ARCore." }
     }
 
     fun startMapping() {
         val host = activity ?: run { status = "AR mapping requires an Android Activity."; return }
         if (!cameraGranted) { permissionLauncher.launch(Manifest.permission.CAMERA); return }
         try {
+            val capability = VisualEngineCapability.fromArCoreStatus(
+                ArCoreApk.getInstance().checkAvailability(context).toString()
+            )
+            if (!capability.arMappingAvailable) {
+                status = capability.userMessage
+                running = false
+                return
+            }
             when (ArCoreApk.getInstance().requestInstall(host, !installRequested)) {
                 ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
                     installRequested = true
@@ -144,10 +155,10 @@ fun ArMappingScreen(navController: NavController) {
         })
         NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("ARCore world tracking + depth survey", color = colors.textPrimary)
+                Text("Optional AR world mapping", color = colors.textPrimary)
                 Text(status, color = colors.textSecondary)
                 Text(stats, color = colors.textSecondary)
-                Text("Depth is enabled only when this device supports ARCore Depth. Move slowly and keep textured surfaces in view.", color = colors.textSecondary)
+                Text("ARCore is optional and only used for 3D world mapping. Shraddha Visual Lens camera, OCR and AI scene understanding work independently without ARCore.", color = colors.textSecondary)
             }
         }
         if (running) {
