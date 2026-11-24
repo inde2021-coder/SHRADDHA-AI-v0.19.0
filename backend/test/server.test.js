@@ -1127,7 +1127,122 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
       requestId: shareRequest.requestId, transferId, fileName: 'resume-test.bin',
       sizeBytes: 100000, chunkCount: 3, sha256: 'a'.repeat(64)
     }));
-    const [startedMessage] = await startedPromise;
+    // Simulate a stale ACK for chunk 1 from an earlier connection. The
+    // receiver's persisted bitmap below says chunk 1 is actually missing.
+    const staleAckPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 1; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 1, complete: false, ok: true
+    }));
+    await staleAckPromise;
+
+    const resumePromise = nextWsMessage(ownerSocket, data => {
+      try { return JSON.parse(data.toString()).type === 'file_transfer_resume'; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_resume', targetDeviceId: owner.deviceId,
+      transferId, chunkCount: 3, missingIndexes: [1, 2]
+    }));
+    const [resumeMessage] = await resumePromise;
+    const resume = JSON.parse(resumeMessage.toString());
+    assert.equal(resume.fromDeviceId, member.deviceId);
+    assert.equal(resume.transferId, transferId);
+    assert.equal(resume.chunkCount, 3);
+    assert.deepEqual(resume.missingIndexes, [1, 2]);
+
+    // A receiver cannot close relay state until every chunk has a positive ACK.
+    // Malformed indexes must not be rewritten to the legacy -1 ready sentinel.
+    for (const malformed of [
+      { index: 'bad', complete: false, ok: true },
+      { index: -2, complete: false, ok: true },
+      { index: 0, complete: true, ok: true },
+      { index: -1, complete: false, ok: 'true' }
+    ]) {
+      const ignoredMalformedAck = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+      memberSocket.send(JSON.stringify({
+        type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+        transferId, ...malformed
+      }));
+      await ignoredMalformedAck;
+    }
+
+    const prematureCompletionPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [prematureCompletionMessage] = await prematureCompletionPromise;
+    assert.equal(JSON.parse(prematureCompletionMessage.toString()).ok, false);
+
+    // ACKing chunk 2 alone must not pass: stale chunk-1 ACK was cleared
+    // by the receiver's persisted resume bitmap; chunk 0 is restored from it.
+    const chunk2AckPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 2 && msg.complete === false; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 2, complete: false, ok: true
+    }));
+    await chunk2AckPromise;
+
+    const stillIncompletePromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [stillIncompleteMessage] = await stillIncompletePromise;
+    assert.equal(JSON.parse(stillIncompleteMessage.toString()).ok, false);
+
+    const chunk1AckPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 1 && msg.complete === false; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 1, complete: false, ok: true
+    }));
+    await chunk1AckPromise;
+
+    const verifiedCompletionPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [verifiedCompletionMessage] = await verifiedCompletionPromise;
+    assert.equal(JSON.parse(verifiedCompletionMessage.toString()).ok, true);
+
+    const duplicateCompletion = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    await duplicateCompletion;
+
+    for (const invalid of [
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1, 1] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [3] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1.5] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 2, missingIndexes: [1] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: '3', missingIndexes: [1] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId: 'invalid transfer id', chunkCount: 3, missingIndexes: [1] },
+      { type: 'file_transfer_resume', targetDeviceId: 'unknown-device', transferId, chunkCount: 3, missingIndexes: [1] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3 }
+    ]) {
+      const noForward = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+      memberSocket.send(JSON.stringify(invalid));
+      await noForward;
+    }
+  } finally {
+    await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
+  }
+});    const [startedMessage] = await startedPromise;
     assert.equal(JSON.parse(startedMessage.toString()).transferId, transferId);
 
     const resumePromise = nextWsMessage(ownerSocket, data => {
