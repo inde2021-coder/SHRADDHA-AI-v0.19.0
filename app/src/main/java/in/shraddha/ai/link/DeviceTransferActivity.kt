@@ -624,10 +624,10 @@ class DeviceTransferActivity : Activity() {
         }
         status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
         if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
-            enqueueTransferIo("verify", null) { verifyIncoming() }
+            enqueueTransferIo("verify") { verifyIncoming() }
         }
         if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
-            enqueueTransferIo("save", pendingSaveUri!!) {
+            enqueueTransferIo("save") {
                 runCatching { saveIncoming(pendingSaveUri!!) }
                     .onFailure { runOnUiThread { status.text = "Verified file restored. Re-select the save destination to finish." } }
             }
