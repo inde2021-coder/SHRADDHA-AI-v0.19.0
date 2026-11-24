@@ -48,9 +48,9 @@ import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
 import `in`.shraddha.ai.operator.OperatorActivity
 
-private val LiaPurple = Color(0xFF7C3AED)
-private val LiaLavender = Color(0xFFF1EAFE)
-private val LiaBorder = Color(0xFFE3D7FA)
+private val ShraddhaViolet = Color(0xFF7C3AED)
+private val ShraddhaLavender = Color(0xFFF1EAFE)
+private val ShraddhaBorder = Color(0xFFE3D7FA)
 
 private data class HomeAction(
     val title: String,
@@ -72,7 +72,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
         "COSMIC_ORB" -> "COSMIC ORB"
         "AI_ROBOT" -> "AI ROBOT"
         "EXECUTIVE" -> "EXECUTIVE COMMAND"
-        else -> "LIA GLASS"
+        else -> "SHRADDHA SIGNATURE"
     }
     val dailyOrbTheme = rememberDailyOrbTheme()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
