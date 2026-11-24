@@ -14,8 +14,9 @@ class AmbientIntelligencePolicyTest {
         val first = "A person is sitting at a desk"
         assertTrue(AmbientIntelligencePolicy.shouldAnnounce(first, "", 45_000L, 0L))
         assertFalse(AmbientIntelligencePolicy.shouldAnnounce(first, first, 90_000L, 0L))
-        assertFalse(AmbientIntelligencePolicy.shouldAnnounce("A new object is visible", first, 44_999L, 0L))
-        assertTrue(AmbientIntelligencePolicy.shouldAnnounce("A new object is visible", first, 45_000L, 0L))
+        assertFalse(AmbientIntelligencePolicy.shouldAnnounce("A new object is visible", first, 54_999L, 10_000L))
+        assertTrue(AmbientIntelligencePolicy.shouldAnnounce("A new object is visible", first, 55_000L, 10_000L))
+        assertTrue(AmbientIntelligencePolicy.shouldAnnounce("First scene", "", 1_000L, 0L))
     }
 
     @Test fun observationIsNormalizedAndBounded() {
