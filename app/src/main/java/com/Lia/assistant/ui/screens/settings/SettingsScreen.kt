@@ -538,7 +538,7 @@ private fun SettingsScreenContent(
 
     if (showHomeDesignDialog) {
         val designs = listOf(
-            "LIA_GLASS" to ("Shraddha Signature" to "Elegant layered glass cards and spacious hero"),
+            "SHRADDHA_SIGNATURE" to ("Shraddha Signature" to "Elegant layered glass cards and spacious hero"),
             "ROYAL_3D" to ("Royal 3D" to "Deep 3D panels, raised controls and premium depth"),
             "COSMIC_ORB" to ("Cosmic Orb" to "Large animated orb with immersive assistant focus"),
             "AI_ROBOT" to ("AI Robot" to "Avatar-led assistant layout with quick control dock"),
