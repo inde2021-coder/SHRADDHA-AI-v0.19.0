@@ -1361,7 +1361,12 @@ wss.on('connection', (ws, ctx) => {
       const index = Number(msg.index);
       if (Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount && msg.ok === true) transfer.chunks.set(index, true);
       const complete = msg.complete === true && canCompleteFileTransfer(transfer, msg.ok === true);
-      if (msg.complete === true && !complete) return;
+      if (msg.complete === true && !complete) {
+        // Tell the sender verification/completion was rejected; retain relay state
+        // so the pair can resume rather than leaving the sender waiting forever.
+        send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: -1, complete: true, ok: false }));
+        return;
+      }
       if (complete) device.incomingTransfers.delete(transferId);
       send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: Number.isSafeInteger(index) ? index : -1, complete, ok: msg.ok === true }));
     } else if (msg.type === 'file_transfer_cancel') {
