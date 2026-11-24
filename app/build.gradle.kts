@@ -105,6 +105,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.biometric:biometric:1.1.0")
     // Camera and on-device face analysis used by the consent-gated People Memory capture flow.
     val cameraXVersion = "1.4.1"
     implementation("com.google.guava:guava:33.3.1-android")
