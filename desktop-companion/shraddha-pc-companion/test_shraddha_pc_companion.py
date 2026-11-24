@@ -200,6 +200,14 @@ class PcCompanionPolicyTests(unittest.TestCase):
             self.assertTrue(claim_remote_action_id(seen, "peer", f"action_{index:08d}", limit=8))
         self.assertLessEqual(len(seen), 8)
 
+    def test_ocr_language_selection_uses_available_english_and_hindi_packs(self):
+        from shraddha_pc_companion import select_ocr_languages
+        self.assertEqual(select_ocr_languages(["eng", "hin"]), (["eng", "hin"], []))
+        self.assertEqual(select_ocr_languages(["eng"]), (["eng"], ["hin"]))
+        self.assertEqual(select_ocr_languages(["hin"]), (["hin"], ["eng"]))
+        self.assertEqual(select_ocr_languages(["osd"]), ([], ["eng", "hin"]))
+        self.assertEqual(select_ocr_languages(["ENG", "hin", "fra"]), (["eng", "hin"], []))
+
     def test_reconnect_backoff_is_bounded(self):
         self.assertEqual(reconnect_delay(0), 1.0)
         self.assertEqual(reconnect_delay(6), 60.0)
