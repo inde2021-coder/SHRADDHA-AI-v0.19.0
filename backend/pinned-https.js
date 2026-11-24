@@ -52,7 +52,10 @@ export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencie
       agent: false,
       servername: url.hostname,
       rejectUnauthorized: true,
-      lookup: (_hostname, _lookupOptions, callback) => callback(null, pinnedAddress, 4)
+      lookup: (_hostname, lookupOptions, callback) => {
+        if (lookupOptions?.all) callback(null, [{ address: pinnedAddress, family: 4 }]);
+        else callback(null, pinnedAddress, 4);
+      }
     }, response => {
       const chunks = [];
       let total = 0;
