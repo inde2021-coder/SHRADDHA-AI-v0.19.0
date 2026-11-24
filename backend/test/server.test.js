@@ -1230,6 +1230,15 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     }));
     await chunk1AckPromise;
 
+    const retriedChunk2Ack = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 2 && msg.complete === false && msg.ok === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 2, complete: false, ok: true
+    }));
+    await retriedChunk2Ack;
+
     const verifiedCompletionPromise = nextWsMessage(ownerSocket, data => {
       try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
     });
