@@ -109,8 +109,13 @@ class ScreenShareService : Service() {
                     val frame = out.toByteArray()
                     try {
                         if (frame.isNotEmpty() && frame.size <= 2_500_000) {
-                            DeviceLinkManager.sendFrame(frame, 1, targetDeviceId)
-                            lastFrameAt = now
+                            if (!DeviceLinkManager.sendFrame(frame, 1, targetDeviceId)) {
+                                // Do not keep capturing a private screen after its
+                                // explicitly selected sharing route has failed.
+                                stopSelf()
+                            } else {
+                                lastFrameAt = now
+                            }
                         }
                     } finally {
                         frame.fill(0)
