@@ -6,6 +6,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import android.net.Uri
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -39,10 +40,28 @@ object SocialPublishingClient {
         ref.downloadUrl.await().toString()
     }
 
-    suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null): JSONObject =
+    /** Encodes bounded Telegram/Mastodon media for the backend's validated 8 MiB upload path. */
+    suspend fun encodeBinaryMedia(context: Context, uri: Uri, mediaKind: String): JSONObject = withContext(Dispatchers.IO) {
+        val mime = context.contentResolver.getType(uri)?.lowercase() ?: error("The selected file has no recognized MIME type.")
+        val allowed = if (mediaKind == "image") setOf("image/jpeg", "image/png", "image/webp")
+            else if (mediaKind == "video") setOf("video/mp4", "video/quicktime") else emptySet()
+        require(mime in allowed) { "Choose a supported image or video file." }
+        val declaredSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+        require(declaredSize <= 8L * 1024L * 1024L) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: error("The selected media file could not be read.")
+        require(bytes.isNotEmpty() && bytes.size <= 8 * 1024 * 1024) { "Media must be between 1 byte and 8 MiB." }
+        JSONObject()
+            .put("mediaBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            .put("mimeType", mime)
+            .put("fileName", if (mediaKind == "video") "shraddha-upload.mp4" else "shraddha-upload.jpg")
+    }
+
+    suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null, mediaBase64: String? = null, mimeType: String? = null, fileName: String? = null): JSONObject =
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("platform", platform).put("text", text).put("preview", text).put("confirmed", true)
             if (platform == "instagram" || platform == "facebook") body.put("mediaKind", mediaKind).put("mediaUrl", mediaUrl)
+            if (!mediaBase64.isNullOrBlank()) body.put("mediaKind", mediaKind).put("mediaBase64", mediaBase64).put("mimeType", mimeType).put("fileName", fileName)
             request(context, "/api/social/publish", body)
         }
 
