@@ -45,7 +45,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
-import `in`.shraddha.ai.future.MainBrainProviderGateway
+import com.Lia.assistant.voice.ChatReplyResult
+import com.Lia.assistant.voice.ChatTurn
+import com.Lia.assistant.voice.GeminiTextClient
+import com.Lia.assistant.voice.MultiProviderChatClient
 import com.Lia.assistant.ui.components.NovaButton
 import com.Lia.assistant.ui.components.NovaButtonType
 import com.Lia.assistant.ui.components.NovaGlassCard
@@ -82,6 +85,25 @@ private fun saveProviderKey(context: android.content.Context, provider: String, 
 
 private fun clearProviderKey(context: android.content.Context, provider: String) {
     saveProviderKey(context, provider, "")
+}
+
+
+private fun testSavedProviderKey(context: android.content.Context, provider: String): String {
+    val instruction = "You are a provider connectivity check. Reply with exactly the word OK."
+    val prompt = "Reply with exactly the word OK."
+    val history = listOf(ChatTurn(isUser = true, text = prompt))
+    val result = if (provider == "GEMINI") {
+        val key = ApiKeyStore.getKey(context)
+        if (key.isBlank()) return "GEMINI API key is missing."
+        GeminiTextClient.reply(key, instruction, history)
+    } else {
+        MultiProviderChatClient.reply(context, provider, instruction, history)
+    }
+    return when (result) {
+        is ChatReplyResult.Success -> result.text.takeIf { it.isNotBlank() }
+            ?: error("$provider returned an empty connection-test reply.")
+        is ChatReplyResult.Error -> error(result.message)
+    }
 }
 
 @Composable
@@ -131,7 +153,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
             Text(
-                "API keys are saved in the phone's encrypted Android Keystore-backed storage. Never share your key or add it to screenshots.",
+                "API keys are saved in encrypted phone storage. Test Connection checks this provider key directly. Live microphone voice uses the separate Secure Backend settings below; a provider key alone does not configure the voice gateway. Never share your key or add it to screenshots.",
                 color = colors.textSecondary,
                 fontSize = 13.sp
             )
@@ -233,12 +255,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) {
                                     runCatching {
-                                        MainBrainProviderGateway.complete(
-                                            context,
-                                            provider.id,
-                                            "You are a provider connectivity check. Reply with exactly the word OK.",
-                                            "Reply with exactly the word OK."
-                                        )
+                                        testSavedProviderKey(context, provider.id)
                                     }
                                 }
                                 testStatus[provider.id] = result.fold(
