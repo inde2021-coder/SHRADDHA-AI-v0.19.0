@@ -16,11 +16,14 @@ object LocalMessageReplayGuard {
 
     data class Claim(val accepted: Boolean, val reason: String = "")
 
+    internal fun isValidRequestId(requestId: String): Boolean =
+        requestId.matches(Regex("^[A-Za-z0-9_-]{16,80}$"))
+
     fun fingerprint(channel: String, recipient: String, message: String): String =
         sha256("$channel|$recipient|$message")
 
     fun claim(context: Context, requestId: String, fingerprint: String, now: Long = System.currentTimeMillis()): Claim {
-        if (!requestId.matches(Regex("^[A-Za-z0-9_-]{16,80}$")) ||
+        if (!isValidRequestId(requestId) ||
             !fingerprint.matches(Regex("^[a-f0-9]{64}$"))) return Claim(false, "invalid_request")
         synchronized(lock) {
             val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
