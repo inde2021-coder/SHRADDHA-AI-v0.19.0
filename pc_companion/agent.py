@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk, prepare_retry_queue
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -851,12 +851,8 @@ class PcCompanionApp:
             size = file_path.stat().st_size
             if size < 1 or size > MAX_PC_FILE_BYTES:
                 raise ValueError(f"File size must be between 1 byte and {MAX_PC_FILE_BYTES // (1024 * 1024)} MiB.")
-            import hashlib, secrets
-            digest_state = hashlib.sha256()
-            with file_path.open("rb") as source:
-                for block in iter(lambda: source.read(1024 * 1024), b""):
-                    digest_state.update(block)
-            digest = digest_state.hexdigest()
+            import secrets
+            digest = sha256_file(file_path)
             request_id = secrets.token_urlsafe(18).replace("-", "_")
             transfer_id = secrets.token_urlsafe(18).replace("-", "_")
             self.pending_pc_send = {
@@ -888,12 +884,7 @@ class PcCompanionApp:
         try:
             if not path.is_file() or path.stat().st_size != pending.get("size"):
                 raise ValueError("The selected source file is missing or its size has changed.")
-            import hashlib
-            digest = hashlib.sha256()
-            with path.open("rb") as source:
-                for block in iter(lambda: source.read(1024 * 1024), b""):
-                    digest.update(block)
-            if digest.hexdigest() != pending.get("sha256"):
+            if sha256_file(path) != pending.get("sha256"):
                 raise ValueError("The selected source file changed after the transfer began; select it again.")
             queue = pending.setdefault("send_queue", [])
             in_flight = pending.setdefault("in_flight", set())
@@ -1126,12 +1117,12 @@ class PcCompanionApp:
                     os.fsync(output.fileno())
                 transfer["received"].add(index)
                 if not self._persist_pc_incoming():
-                    raise RuntimeError("Could not persist the received-chunk bitmap; refusing to acknowledge this chunk.")
+                    transfer["received"].discard(index)
+                    raise TransferPersistenceError("Could not persist the received-chunk bitmap; chunk acknowledgement withheld.")
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": True})
             if len(transfer["received"]) == transfer["chunks"]:
-                import hashlib
-                digest = hashlib.sha256(Path(transfer["path"] + ".shraddha-part").read_bytes()).hexdigest()
+                digest = sha256_file(transfer["path"] + ".shraddha-part")
                 if digest != transfer["sha256"]:
                     raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
                 os.replace(transfer["path"] + ".shraddha-part", transfer["path"])
@@ -1140,6 +1131,10 @@ class PcCompanionApp:
                 self.pc_incoming.pop(transfer_id, None)
                 self._persist_pc_incoming()
                 self.status_var.set("Incoming file saved and SHA-256 verified.")
+        except TransferPersistenceError as exc:
+            self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
+            self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "index": index, "complete": False, "ok": False})
         except Exception as exc:
             self.status_var.set(f"Incoming file rejected: {str(exc)[:140]}")
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
