@@ -221,7 +221,7 @@ class DeviceTransferActivity : Activity() {
             "file_transfer_start" -> {
                 val sender = msg.optString("fromDeviceId")
                 val offeredTransferId = msg.optString("transferId")
-                val offeredName = DeviceFileTransferProtocol.safeDisplayName(incomingName)
+                val offeredName = DeviceFileTransferProtocol.safeDisplayName(msg.optString("fileName"))
                 val offeredSize = msg.optLong("sizeBytes", -1L)
                 val offeredCount = msg.optInt("chunkCount", -1)
                 val offeredHash = msg.optString("sha256")
@@ -254,7 +254,7 @@ class DeviceTransferActivity : Activity() {
                 incomingChunks = 0
                 persistTransferState()
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
-                    .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
+                    .setMessage("$incomingName • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
                     .setPositiveButton("Choose save location") { _, _ ->
                         val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
