@@ -8,7 +8,7 @@ import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
 import { requestProviderJson } from './provider-http.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
-import { validatePublishIntent } from './social-publishing.js';
+import { validatePublishIntent, assertSocialPublisherOwner } from './social-publishing.js';
 import { createMessageReplayGuard, validateMessageSendIntent } from './message-send-policy.js';
 import { publishSocialPost } from './social-publisher.js';
 import { createSocialScheduler } from './social-scheduler.js';
@@ -65,6 +65,11 @@ async function authenticatedFirebaseUid(req) {
   const { auth } = getSocialAdmin();
   const decoded = await auth.verifyIdToken(idToken);
   return decoded.uid;
+}
+
+async function authorizedSocialPublisherUid(req) {
+  const uid = await authenticatedFirebaseUid(req);
+  return assertSocialPublisherOwner(uid, process.env.SOCIAL_PUBLISHER_OWNER_UID || '');
 }
 
 
