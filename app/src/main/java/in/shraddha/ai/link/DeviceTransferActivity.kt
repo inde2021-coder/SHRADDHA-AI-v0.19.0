@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.widget.*
 import android.graphics.Color
 import android.provider.OpenableColumns
+import android.provider.DocumentsContract
 import android.content.ContentValues
 import org.json.JSONObject
 import java.io.File
@@ -509,8 +510,15 @@ class DeviceTransferActivity : Activity() {
         val file = incomingFile ?: return
         val savedName = incomingName
         try {
-            contentResolver.openOutputStream(destination, "w")?.use { output -> file.inputStream().use { it.copyTo(output) } }
-                ?: throw IllegalStateException("Could not open selected destination")
+            check(!cancelled.get()) { "Transfer was cancelled before saving." }
+            contentResolver.openOutputStream(destination, "w")?.use { output ->
+                file.inputStream().use { input -> input.copyTo(output) }
+                output.flush()
+            } ?: throw IllegalStateException("Could not open selected destination")
+            if (cancelled.get()) {
+                runCatching { DocumentsContract.deleteDocument(contentResolver, destination) }
+                throw IllegalStateException("Transfer was cancelled while saving.")
+            }
             if (!DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)) {
                 runOnUiThread { status.text = "Saved $savedName and verified, but completion acknowledgement could not be sent. Reconnect and tap Resume / Retry." }
                 return
@@ -522,10 +530,22 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun verifyIncoming() {
+        if (cancelled.get()) return
         incomingOut?.fd?.sync(); incomingOut?.close(); incomingOut = null
         val file = incomingFile ?: return
         val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            try {
+                while (true) {
+                    if (cancelled.get()) return
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    digest.update(buffer, 0, n)
+                }
+            } finally { buffer.fill(0) }
+        }
+        if (cancelled.get()) return
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
         if (actual != incomingHash) {
             runOnUiThread { status.text = "SHA-256 mismatch. File rejected." }
