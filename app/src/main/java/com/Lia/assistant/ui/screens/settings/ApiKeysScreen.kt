@@ -172,7 +172,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val testStatus = remember { mutableStateMapOf<String, String>() }
     val testing = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
-    var diagnosticReport by mutableStateOf("")
+    var diagnosticReport by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier.fillMaxSize().nightSky()
