@@ -99,10 +99,14 @@ class LiveEyesCameraService : Service() {
     private fun visionProvider(): String {
         val selected = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
             .trim().uppercase()
-        return if (selected in setOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")) {
-            selected.lowercase()
-        } else {
-            "gemini"
+        return when (selected) {
+            "GEMINI" -> "gemini"
+            "OPENAI" -> "openai"
+            "CLAUDE", "ANTHROPIC" -> "anthropic"
+            // Groq and Perplexity are not currently exposed by /api/vision.
+            // Use the backend's configured automatic failover instead of silently misrouting.
+            "AUTO", "GROQ", "PERPLEXITY" -> "auto"
+            else -> "auto"
         }
     }
 
