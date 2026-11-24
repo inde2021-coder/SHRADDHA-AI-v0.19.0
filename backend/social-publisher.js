@@ -1,3 +1,6 @@
+import { randomBytes } from 'node:crypto';
+import { pinnedHttpsJsonRequest } from './pinned-https.js';
+
 import {
   validateBlueskyCredentials, validateLinkedInAuthor, validateLinkedInVersion,
   validateMastodonOrigin, mastodonVisibility, validateMediaAttachment
@@ -11,7 +14,7 @@ function fail(status, message, extra = {}) {
 }
 
 /** Provider publisher shared by immediate and scheduled posts. */
-export async function publishSocialPost(body, intent, env = process.env) {
+export async function publishSocialPost(body, intent, env = process.env, dependencies = {}) {
   if (body.mediaBase64 !== undefined && !['telegram', 'mastodon'].includes(intent.platform)) {
     fail(400, 'Media publishing is not enabled for this platform.');
   }
@@ -186,28 +189,35 @@ export async function publishSocialPost(body, intent, env = process.env) {
   let origin, visibility;
   try { origin = validateMastodonOrigin(base); visibility = mastodonVisibility(env.MASTODON_VISIBILITY); }
   catch (error) { fail(503, error.message); }
+  const mastodonRequest = dependencies.mastodonRequest || pinnedHttpsJsonRequest;
   let mediaId;
   let mediaKind;
   if (body.mediaBase64 !== undefined) {
     const media = validateMediaAttachment(body, 'mastodon');
-    const form = new FormData();
-    form.set('file', new Blob([media.bytes], { type: media.mimeType }), media.fileName);
+    const boundary = 'shraddha-' + randomBytes(18).toString('hex');
+    const prefix = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${media.fileName}"\r\nContent-Type: ${media.mimeType}\r\n\r\n`);
+    const suffix = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const uploadBody = Buffer.concat([prefix, media.bytes, suffix]);
     let upload;
     try {
-      upload = await fetch(origin + '/api/v2/media', {
-        method: 'POST', headers: { authorization: 'Bearer ' + accessToken }, body: form, signal: AbortSignal.timeout(45000)
+      upload = await mastodonRequest(origin + '/api/v2/media', {
+        method: 'POST',
+        headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'multipart/form-data; boundary=' + boundary, 'content-length': String(uploadBody.length) },
+        body: uploadBody,
+        timeoutMs: 45000
       });
-    } catch { fail(502, 'Mastodon media upload could not be reached'); }
+    } catch { fail(502, 'Mastodon media upload could not be reached; check account before retrying'); }
     const uploaded = await upload.json().catch(() => ({}));
     if (!upload.ok || typeof uploaded.id !== 'string') fail(502, 'Mastodon did not accept the media upload');
     mediaId = uploaded.id; mediaKind = media.kind;
   }
   let upstream;
   try {
-    upstream = await fetch(origin + '/api/v1/statuses', {
-      method: 'POST', headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
-      signal: AbortSignal.timeout(20000),
-      body: JSON.stringify({ status: intent.text, visibility, ...(mediaId ? { media_ids: [mediaId] } : {}) })
+    upstream = await mastodonRequest(origin + '/api/v1/statuses', {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: intent.text, visibility, ...(mediaId ? { media_ids: [mediaId] } : {}) }),
+      timeoutMs: 20000
     });
   } catch { fail(502, 'Mastodon service could not be reached; check account before retrying'); }
   const result = await upstream.json().catch(() => ({}));
