@@ -85,3 +85,16 @@ def requeue_rejected_chunk(queue, in_flight, index):
     if index not in queue:
         queue.insert(0, index)
     return True
+
+
+def prepare_retry_queue(queue, in_flight):
+    """Move all queued/in-flight chunks into a deterministic retry batch."""
+    if not isinstance(queue, list) or not isinstance(in_flight, set):
+        raise ValueError("Invalid retry queue state")
+    indexes = queue + list(in_flight)
+    if any(not isinstance(index, int) or isinstance(index, bool) or index < 0 for index in indexes):
+        raise ValueError("Invalid chunk index in retry state")
+    retry = sorted(set(indexes))
+    queue[:] = retry
+    in_flight.clear()
+    return len(retry)
