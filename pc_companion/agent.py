@@ -1023,7 +1023,10 @@ class PcCompanionApp:
         transfer = self.pc_incoming.get(transfer_id)
         if not transfer or transfer["peer"] != peer_id or not self.is_e2e_trusted(peer_id):
             return
-        index = int(msg.get("index", -1))
+        raw_index = msg.get("index", -1)
+        if not isinstance(raw_index, int) or isinstance(raw_index, bool):
+            return
+        index = raw_index
         if not 0 <= index < transfer["chunks"]:
             return
         try:
@@ -1043,6 +1046,9 @@ class PcCompanionApp:
                 with open(transfer["path"] + ".shraddha-part", "r+b") as output:
                     output.seek(index * FILE_CHUNK_BYTES)
                     output.write(data)
+                    output.flush()
+                    # Persist chunk bytes before persisting the received bitmap or ACKing.
+                    os.fsync(output.fileno())
                 transfer["received"].add(index)
                 self._persist_pc_incoming()
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
