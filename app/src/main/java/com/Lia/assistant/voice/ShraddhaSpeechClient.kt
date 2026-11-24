@@ -112,7 +112,7 @@ object ShraddhaSpeechClient {
         }
         val body = JSONObject()
             .put("text", clean)
-            .put("language", if (language.equals("HI", true) || language.equals("hi-IN", true)) "hi" else "en")
+            .put("language", LanguageDetector.toVoiceModelLanguage(language))
             .toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
