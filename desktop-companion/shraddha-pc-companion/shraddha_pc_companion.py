@@ -174,6 +174,11 @@ def is_sensitive_window(title: str) -> bool:
     return bool(SENSITIVE_WINDOW.search(title or ""))
 
 
+def active_window_allows_remote_input(title: str) -> bool:
+    """Fail closed when remote input has no known active window or a sensitive one."""
+    return isinstance(title, str) and bool(title.strip()) and not is_sensitive_window(title)
+
+
 def validate_action(action: dict, allow_typing: bool = False, allow_ocr: bool = False, file_root: str = "", offline_model=None) -> bool:
     kind = action.get("kind")
     if kind not in SUPPORTED_ACTIONS:
@@ -883,6 +888,15 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
     import pyautogui
 
     kind = action["kind"]
+    if kind in {"tap", "swipe", "scroll", "key_press"}:
+        try:
+            import pygetwindow
+            active = pygetwindow.getActiveWindow()
+            title = active.title if active else ""
+        except Exception:
+            title = ""
+        if not active_window_allows_remote_input(title):
+            return "blocked_unknown_or_sensitive_window"
     width, height = pyautogui.size()
     if kind == "tap":
         pyautogui.click(round(normalize_point(action["x"]) * (width - 1)), round(normalize_point(action["y"]) * (height - 1)))
