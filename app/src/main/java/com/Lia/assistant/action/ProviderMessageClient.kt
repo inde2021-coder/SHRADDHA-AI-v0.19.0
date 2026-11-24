@@ -9,12 +9,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /** Server-side Twilio relay. Provider credentials never leave the backend. */
 object ProviderMessageClient {
     data class Receipt(val provider: String, val messageId: String, val status: String)
+    data class SendFailure(
+        val httpStatus: Int,
+        val duplicate: Boolean,
+        val reason: String,
+        override val message: String
+    ) : Exception(message)
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -27,7 +32,7 @@ object ProviderMessageClient {
         channel: String,
         recipientE164: String,
         exactMessage: String,
-        requestId: String = UUID.randomUUID().toString().replace("-", "")
+        requestId: String
     ): Result<Receipt> = withContext(Dispatchers.IO) {
         runCatching {
             require(channel == "sms" || channel == "whatsapp") { "Unsupported message channel." }
@@ -59,7 +64,12 @@ object ProviderMessageClient {
                 val raw = response.body?.string().orEmpty()
                 val body = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
                 if (!response.isSuccessful || !body.optBoolean("ok")) {
-                    throw IllegalStateException(body.optString("error").ifBlank { "Provider send failed (HTTP ${response.code})." })
+                    throw SendFailure(
+                        httpStatus = response.code,
+                        duplicate = body.optBoolean("duplicate"),
+                        reason = body.optString("reason"),
+                        message = body.optString("error").ifBlank { "Provider send failed (HTTP ${response.code})." }
+                    )
                 }
                 require(body.optString("recipient") == recipientE164 && body.optString("channel") == channel) {
                     "Provider receipt does not match the approved recipient and channel."
