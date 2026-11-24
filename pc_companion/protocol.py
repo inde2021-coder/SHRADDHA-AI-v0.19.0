@@ -16,6 +16,25 @@ def valid_pairing_ids(session_id, device_id):
         isinstance(device_id, str) and _DEVICE_ID.fullmatch(device_id) is not None
 
 
+def claim_remote_action_id(seen_actions, peer_id, action_id, now, ttl_seconds=600, max_entries=4096):
+    """Claim an action ID without evicting any still-live replay receipt."""
+    if not isinstance(seen_actions, dict) or not isinstance(peer_id, str) or not peer_id.strip() or len(peer_id) > 80:
+        return False
+    if not isinstance(action_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{12,64}", action_id) is None:
+        return False
+    if not _number(now) or not _number(ttl_seconds) or ttl_seconds <= 0 or not isinstance(max_entries, int) or isinstance(max_entries, bool) or max_entries < 1:
+        return False
+    now = float(now)
+    for key, seen_at in list(seen_actions.items()):
+        if not _number(seen_at) or now - float(seen_at) > ttl_seconds:
+            seen_actions.pop(key, None)
+    key = (peer_id, action_id)
+    if key in seen_actions or len(seen_actions) >= max_entries:
+        return False
+    seen_actions[key] = now
+    return True
+
+
 def _number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
