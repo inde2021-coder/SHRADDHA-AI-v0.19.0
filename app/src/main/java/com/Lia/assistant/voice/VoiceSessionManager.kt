@@ -201,9 +201,12 @@ object VoiceSessionManager {
                     message.contains("could not be read", ignoreCase = true)
             if (permanentGatewayFailure) {
                 // Invalid credentials/configuration cannot be repaired by retrying every few seconds.
-                // Keep the user-started session in ERROR until they correct Settings and restart.
+                // Preserve the visible error, but stop the foreground service: no microphone
+                // session is running while setup is blocked, and Start must be available after
+                // the user corrects Settings.
                 _state.value = NovaOrbState.ERROR
                 _statusText.value = "Voice setup failed • check Secure Backend settings"
+                VoiceForegroundService.stop(currentContext, currentEpoch)
             } else {
                 _state.value = NovaOrbState.CONNECTING
                 _statusText.value = "Voice connection unavailable; retrying automatically"
