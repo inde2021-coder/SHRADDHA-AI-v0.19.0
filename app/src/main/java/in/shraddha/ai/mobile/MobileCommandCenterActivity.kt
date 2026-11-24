@@ -267,6 +267,12 @@ class MobileCommandCenterActivity : AppCompatActivity() {
                     .onFailure { status.text = "Flashlight failed: ${it.message}" }
             }
             lower in listOf("mobile hardware status", "phone status", "फोन की जानकारी बताओ", "मोबाइल का स्टेटस बताओ") -> showMobileHardwareStatus()
+            lower in listOf("phone controls", "फोन कंट्रोल खोलो", "brightness volume controls") -> showPhoneLevelControls()
+            lower in listOf("media controls", "मीडिया कंट्रोल खोलो") -> showMediaControls()
+            lower in listOf("toggle flashlight", "टॉर्च टॉगल करो") -> togglePhoneTorch()
+            lower in listOf("connectivity controls", "कनेक्टिविटी कंट्रोल खोलो") -> showConnectivityControls()
+            lower in listOf("clipboard tools", "clipboard text tools", "क्लिपबोर्ड टूल खोलो") -> openClipboardTools()
+            lower in listOf("app launcher", "फोन के ऐप दिखाओ", "apps list") -> showAppLauncher()
             lower in listOf("wifi settings", "वाईफाई सेटिंग खोलो") -> openMobileSetting("wifi")
             lower in listOf("bluetooth settings", "ब्लूटूथ सेटिंग खोलो") -> openMobileSetting("bluetooth")
             lower in listOf("internet settings", "इंटरनेट सेटिंग खोलो") -> openMobileSetting("internet")
