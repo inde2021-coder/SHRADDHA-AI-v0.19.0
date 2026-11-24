@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validateTransferChunk, MAX_TRANSFER_CHUNK_BYTES, MAX_TRANSFER_BYTES, MAX_TRANSFER_CHUNKS } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validateTransferChunk, validEncryptedTransferChunkEnvelope, MAX_TRANSFER_CHUNK_BYTES, MAX_TRANSFER_BYTES, MAX_TRANSFER_CHUNKS } from './relay-file-validation.js';
 
 test('accepts a bounded base64 file with the correct SHA-256', () => {
   const bytes = Buffer.from('Shraddha secure file transfer');
@@ -71,4 +71,18 @@ test('transfer protocol uses 48 KiB chunks and supports the full 100 MiB file ca
   const tooLarge = Buffer.alloc(MAX_TRANSFER_CHUNK_BYTES + 1, 7);
   assert.equal(validateTransferChunk(tooLarge.toString('base64'), 'transfer_123456', 0, MAX_TRANSFER_CHUNKS, tooLarge.length,
     createHash('sha256').update(tooLarge).digest('hex')), false);
+});
+
+
+test('E2E file chunk envelopes must match the approved manifest and AES-GCM overhead', () => {
+  const nonce = Buffer.alloc(12, 9).toString('base64').replace(/=+$/g, '');
+  const fullChunk = Buffer.alloc(48 * 1024 + 16, 7).toString('base64').replace(/=+$/g, '');
+  const finalChunk = Buffer.alloc(1000 + 16, 8).toString('base64').replace(/=+$/g, '');
+  const total = 48 * 1024 + 1000;
+  assert.equal(validEncryptedTransferChunkEnvelope(nonce, fullChunk, total, 2, 0), true);
+  assert.equal(validEncryptedTransferChunkEnvelope(nonce, finalChunk, total, 2, 1), true);
+  assert.equal(validEncryptedTransferChunkEnvelope(nonce, fullChunk + 'AAAA', total, 2, 0), false);
+  assert.equal(validEncryptedTransferChunkEnvelope(nonce, finalChunk, total, 2, 0), false);
+  assert.equal(validEncryptedTransferChunkEnvelope('bad', finalChunk, total, 2, 1), false);
+  assert.equal(validEncryptedTransferChunkEnvelope(nonce, finalChunk, total, 3, 1), false);
 });
