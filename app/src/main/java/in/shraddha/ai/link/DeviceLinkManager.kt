@@ -551,7 +551,7 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        client.newCall(builder.build()).enqueue(object : Callback {
+        requestClient.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
                 response.use {
