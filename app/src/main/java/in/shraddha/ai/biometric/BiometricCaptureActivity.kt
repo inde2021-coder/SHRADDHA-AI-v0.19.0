@@ -483,6 +483,12 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun startSpeakerChallenge() {
+        // Keep the API 31-only on-device recognizer call behind a local SDK guard;
+        // callers may also check availability, but lint must see the method-level guard.
+        if (android.os.Build.VERSION.SDK_INT < 31) {
+            finishWith("On-device speech recognition requires Android 12 or newer.")
+            return
+        }
         if (busy) return
         busy = true
         action.isEnabled = false
