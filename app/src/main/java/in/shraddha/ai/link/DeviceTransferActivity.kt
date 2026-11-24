@@ -165,6 +165,7 @@ class DeviceTransferActivity : Activity() {
     private fun beginSend() {
         val target = peer.text.toString().trim(); val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
+        synchronized(ackMonitor) { acknowledgedChunks.clear(); sendFailed = false }
         persistTransferState()
         val chunks = DeviceFileTransferProtocol.chunkCount(sourceSize) ?: run { status.text = "Unsupported file size."; return }
         if (!DeviceLinkManager.startFileTransfer(target, requestId, transferId, sourceName, sourceSize, chunks, sourceHash)) { status.text = "Could not start transfer. Check relay and receiver permission."; return }
@@ -270,7 +271,9 @@ class DeviceTransferActivity : Activity() {
                     status.text = "Ignored file ACK from an unexpected peer or transfer."
                     return
                 }
-                val index = msg.optInt("index", -2)
+                val rawIndex = msg.opt("index")
+                if (rawIndex !is Number || rawIndex.toDouble() != rawIndex.toLong().toDouble()) return
+                val index = rawIndex.toInt()
                 val count = DeviceFileTransferProtocol.chunkCount(sourceSize)
                 if (index == -1 && !msg.optBoolean("complete") && msg.optBoolean("ok") && sourceUri != null) {
                     status.text = "Receiver selected a destination. Sending file chunks with bounded ACK window…"
@@ -294,7 +297,7 @@ class DeviceTransferActivity : Activity() {
                 val expectedCount = DeviceFileTransferProtocol.chunkCount(sourceSize)
                 if (sourceUri == null || msg.optString("fromDeviceId") != peer.text.toString().trim() ||
                     msg.optString("transferId") != transferId || expectedCount == null ||
-                    msg.optInt("chunkCount", -1) != expectedCount) {
+                    (msg.opt("chunkCount") as? Number)?.let { it.toDouble() == it.toLong().toDouble() && it.toInt() == expectedCount } != true) {
                     status.text = "Rejected resume request: peer or transfer manifest mismatch."
                     return
                 }
@@ -447,6 +450,7 @@ class DeviceTransferActivity : Activity() {
         pendingSaveUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
         getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE).edit().clear().apply()
         receivedChunkIndexes.clear()
+        synchronized(ackMonitor) { acknowledgedChunks.clear(); sendFailed = false; ackMonitor.notifyAll() }
         incomingChunks = 0
         incomingVerified = false
         pendingSaveUri = null
@@ -465,6 +469,7 @@ class DeviceTransferActivity : Activity() {
 
     private fun cancelTransfer() {
         cancelled.set(true); paused.set(false)
+        synchronized(ackMonitor) { ackMonitor.notifyAll() }
         val target = if (sourcePeer.isNotBlank()) sourcePeer else peer.text.toString().trim()
         if (transferId.isNotBlank() && target.isNotBlank()) DeviceLinkManager.cancelFileTransfer(target, transferId)
         incomingOut?.close(); incomingOut = null; incomingFile?.delete(); incomingFile = null
