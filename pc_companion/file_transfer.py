@@ -35,13 +35,16 @@ def all_chunk_indexes(size_bytes):
 MAX_IN_FLIGHT_CHUNKS = 8
 
 
-def take_chunk_window(queue, in_flight, limit=MAX_IN_FLIGHT_CHUNKS):
+def take_chunk_window(queue, in_flight, limit=MAX_IN_FLIGHT_CHUNKS, max_index=None):
     if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 64:
         raise ValueError("Chunk window must be between 1 and 64.")
+    if max_index is not None and (not isinstance(max_index, int) or isinstance(max_index, bool) or max_index < 1):
+        raise ValueError("Maximum chunk count must be a positive integer.")
     batch = []
     while queue and len(in_flight) < limit:
         index = queue.pop(0)
-        if not isinstance(index, int) or isinstance(index, bool) or index in in_flight:
+        if (not isinstance(index, int) or isinstance(index, bool) or index < 0 or
+                (max_index is not None and index >= max_index) or index in in_flight):
             raise ValueError("Invalid or duplicate queued chunk index.")
         in_flight.add(index)
         batch.append(index)
