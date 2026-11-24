@@ -98,8 +98,11 @@ fun VisualLensScreen(navController: NavController) {
         if (!granted) answer = "कैमरा अनुमति नहीं मिली। Android Settings में Shraddha AI के लिए Camera अनुमति दें।"
     }
 
-    DisposableEffect(cameraGranted, lifecycleOwner, controller) {
-        if (cameraGranted) controller.bindToLifecycle(lifecycleOwner)
+    DisposableEffect(cameraGranted, backgroundEyes, lifecycleOwner, controller) {
+        // Camera2 is exclusive on many devices: release the in-app preview before
+        // the headless Live Eyes service opens the same physical camera.
+        if (cameraGranted && !backgroundEyes) controller.bindToLifecycle(lifecycleOwner)
+        else controller.unbind()
         onDispose { controller.unbind() }
     }
     DisposableEffect(cameraExecutor) {
@@ -271,11 +274,17 @@ fun VisualLensScreen(navController: NavController) {
                         if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
                             answer = "Background Live Eyes के लिए पहले सुरक्षित HTTPS AI backend और gateway token सेट करें।"
                         } else {
+                            // Trigger unbind/release of PreviewView before starting the headless camera service.
+                            backgroundEyes = true
                             runCatching {
                                 startForegroundService(context, Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_START))
-                            }.onFailure { answer = "Live Eyes शुरू नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
+                            }.onFailure {
+                                backgroundEyes = false
+                                answer = "Live Eyes शुरू नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि")
+                            }
                         }
                     } else {
+                        backgroundEyes = false
                         runCatching {
                             context.startService(Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_STOP))
                         }.onFailure { answer = "Live Eyes बंद नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
