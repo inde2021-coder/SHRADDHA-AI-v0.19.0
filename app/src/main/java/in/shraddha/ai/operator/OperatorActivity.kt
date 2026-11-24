@@ -76,6 +76,11 @@ class OperatorActivity : Activity() {
             parent.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
 
+        if (intent.getStringExtra("mobile_voice_command")?.isNotBlank() == true) {
+            showCompactMobileCommandMode(assistantName)
+            return
+        }
+
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(22))
@@ -507,6 +512,57 @@ class OperatorActivity : Activity() {
                 .show()
         }
     }
+    /** Minimal command-only surface used when a request is handed off from the mobile AI home. */
+    private fun showCompactMobileCommandMode(assistantName: String) {
+        fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(24))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF050B14.toInt(), 0xFF0A1726.toInt())
+            )
+        }
+        root.addView(TextView(this).apply {
+            text = assistantName
+            textSize = 24f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        })
+        root.addView(TextView(this).apply {
+            text = "कमांड को स्पष्ट करें या नई कमांड दें"
+            textSize = 13f
+            setTextColor(0xFF9BC8D5.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(20))
+        })
+        commandInput = field("Shraddha को क्या काम करना है?")
+        commandInput.setSingleLine(false)
+        commandInput.maxLines = 4
+        commandInput.setText(intent.getStringExtra("mobile_voice_command").orEmpty())
+        root.addView(commandInput)
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions.addView(action("🎙") { captureVoiceCommand() },
+            LinearLayout.LayoutParams(dp(58), dp(50)).apply { rightMargin = dp(8) })
+        actions.addView(action("कमांड चलाएँ", true) { routeNaturalCommand() },
+            LinearLayout.LayoutParams(0, dp(50), 1f))
+        root.addView(actions)
+        log = TextView(this).apply {
+            text = "कमांड तैयार है। संवेदनशील काम से पहले अनुमति माँगी जाएगी।"
+            textSize = 13f
+            setTextColor(0xFFD9EAF2.toInt())
+            setPadding(dp(13), dp(13), dp(13), dp(13))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF091522.toInt())
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), 0xFF31566B.toInt())
+            }
+        }
+        root.addView(log, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
+    }
+
     private fun captureVoiceCommand() {
         val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
