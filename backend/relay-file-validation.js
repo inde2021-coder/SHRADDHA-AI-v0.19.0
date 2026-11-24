@@ -48,3 +48,28 @@ export function validateTransferChunk(payload, transferId, index, totalChunks, s
   if (bytes.length !== sizeBytes || bytes.toString('base64') !== payload) return false;
   return createHash('sha256').update(bytes).digest('hex') === sha256.toLowerCase();
 }
+
+
+/**
+ * Validate the opaque E2E envelope for one file chunk. The relay cannot decrypt
+ * it, but it can enforce the exact nonce and ciphertext size implied by the
+ * approved transfer manifest before forwarding bytes to another paired device.
+ * Android encodes these values as canonical, unpadded standard Base64.
+ */
+export function validEncryptedTransferChunkEnvelope(nonce, ciphertext, totalBytes, totalChunks, index) {
+  const CHUNK_BYTES = 48 * 1024;
+  if (!Number.isSafeInteger(totalBytes) || totalBytes < 1 || totalBytes > MAX_TRANSFER_BYTES ||
+      !Number.isSafeInteger(totalChunks) || totalChunks !== Math.ceil(totalBytes / CHUNK_BYTES) ||
+      !Number.isSafeInteger(index) || index < 0 || index >= totalChunks) return false;
+  if (typeof nonce !== 'string' || !/^[A-Za-z0-9+/]{16}$/.test(nonce) ||
+      typeof ciphertext !== 'string' || !/^[A-Za-z0-9+/]+$/.test(ciphertext)) return false;
+  const nonceBytes = Buffer.from(nonce, 'base64');
+  if (nonceBytes.length !== 12 || nonceBytes.toString('base64').replace(/=+$/g, '') !== nonce) return false;
+  const expectedPlaintextBytes = Math.min(CHUNK_BYTES, totalBytes - index * CHUNK_BYTES);
+  const expectedCiphertextBytes = expectedPlaintextBytes + 16; // AES-GCM authentication tag
+  const expectedBase64Length = Math.ceil(expectedCiphertextBytes * 4 / 3);
+  if (ciphertext.length !== expectedBase64Length) return false;
+  const encryptedBytes = Buffer.from(ciphertext, 'base64');
+  return encryptedBytes.length === expectedCiphertextBytes &&
+    encryptedBytes.toString('base64').replace(/=+$/g, '') === ciphertext;
+}
