@@ -61,6 +61,7 @@ class DeviceTransferActivity : Activity() {
                 setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
             }
         }; root.addView(peer)
+        peerIdSnapshot = peer.text.toString().trim()
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
         pauseButton = button("PAUSE TRANSFER") { paused.set(!paused.get()); pauseButton.text = if (paused.get()) "RESUME TRANSFER" else "PAUSE TRANSFER"; status.text = if (paused.get()) "Paused locally. Resume to continue." else "Resuming transfer…" }
@@ -140,7 +141,7 @@ class DeviceTransferActivity : Activity() {
             runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             pendingSaveUri = uri
             persistTransferState()
-            if (incomingVerified) saveIncoming(uri)
+            if (incomingVerified) transferIo.execute { saveIncoming(uri) }
             else {
                 DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)
                 status.text = "Save destination selected. Receiver ready; waiting for file chunks…"
@@ -150,6 +151,7 @@ class DeviceTransferActivity : Activity() {
 
     private fun requestReceiverPermission() {
         val target = peer.text.toString().trim()
+        peerIdSnapshot = target
         if (target.isBlank() || sourceUri == null) { status.text = "Select target device and file first."; return }
         requestId = UUID.randomUUID().toString().replace("-", "")
         persistTransferState()
@@ -205,7 +207,7 @@ class DeviceTransferActivity : Activity() {
                 if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
-                sourcePeer = msg.optString("fromDeviceId"); transferId = msg.optString("transferId")
+                sourcePeer = msg.optString("fromDeviceId"); peerIdSnapshot = sourcePeer; transferId = msg.optString("transferId")
                 incomingName = msg.optString("fileName"); incomingSize = msg.optLong("sizeBytes")
                 incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
                 incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
@@ -223,7 +225,7 @@ class DeviceTransferActivity : Activity() {
                         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, incomingName), 702)
                     }.show()
             }
-            "file_transfer_chunk" -> receiveChunk(msg)
+            "file_transfer_chunk" -> runCatching { transferIo.execute { receiveChunk(msg) } }.onFailure { status.text = "Receive worker is unavailable." }
             "file_transfer_ack" -> {
                 val index = msg.optInt("index", -1)
                 if (index == -1 && !msg.optBoolean("complete") && msg.optBoolean("ok") && sourceUri != null) {
