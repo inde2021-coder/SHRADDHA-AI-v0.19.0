@@ -22,6 +22,7 @@ import { resamplePcm16 } from './telephony-audio.js';
 import { hasExplicitTranscriptConsent } from './telephony-consent.js';
 import { appendCallTranscript } from './call-transcript.js';
 import { decodeCallHistoryKey, persistEncryptedCallRecord, listEncryptedCallRecords } from './call-history-store.js';
+import { readJsonBody } from './request-body.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY = 64 * 1024;
@@ -102,7 +103,7 @@ const clientIp = req => {
   }
   return String(req.socket.remoteAddress || 'unknown').slice(0, 64);
 };
-async function readBody(req, limit = MAX_BODY) { let raw = ''; for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > limit) { const e = new Error('Request too large'); e.statusCode = 413; throw e; } } try { return JSON.parse(raw || '{}'); } catch { const e = new Error('Request body must be valid JSON'); e.statusCode = 400; throw e; } }
+const readBody = readJsonBody;
 
 async function askProviderDirect(provider, prompt) {
   if (provider === 'openai') {
