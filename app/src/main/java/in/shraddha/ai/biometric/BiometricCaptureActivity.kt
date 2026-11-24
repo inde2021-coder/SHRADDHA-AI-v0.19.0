@@ -247,6 +247,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
 
+    @OptIn(androidx.camera.core.ExperimentalGetImage::class)
     @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run {
