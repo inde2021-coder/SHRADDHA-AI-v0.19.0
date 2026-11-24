@@ -35,4 +35,17 @@ class DeviceFileTransferProtocolTest {
         assertNull(DeviceFileTransferProtocol.chunkCount(0L))
         assertNull(DeviceFileTransferProtocol.chunkCount(DeviceFileTransferProtocol.MAX_FILE_BYTES + 1L))
     }
+    @Test fun validatesIncomingManifestBeforeAcceptingIt() {
+        val size = DeviceFileTransferProtocol.CHUNK_BYTES.toLong() + 1L
+        val count = DeviceFileTransferProtocol.chunkCount(size)!!
+        val hash = "a".repeat(64)
+        assertTrue(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, hash))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("../escape12345", size, count, hash))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count + 1, hash))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, "bad"))
+        assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", 0L, 1, hash))
+        assertEquals("evil_name.txt", DeviceFileTransferProtocol.safeDisplayName("../evil/name.txt"))
+        assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName("\u0000"))
+    }
+
 }
