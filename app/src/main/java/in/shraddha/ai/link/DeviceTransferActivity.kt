@@ -167,13 +167,13 @@ class DeviceTransferActivity : Activity() {
                 status.text = "Could not persist the save destination; transfer was not acknowledged."
                 return
             }
-            if (incomingVerified) transferIo.execute { saveIncoming(uri) }
+            if (incomingVerified) enqueueTransferIo("save", uri) { saveIncoming(uri) }
             else {
                 val missing = synchronized(receivedChunkIndexes) {
                     (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
                 }
                 if (missing.isEmpty()) {
-                    transferIo.execute { verifyIncoming() }
+                    enqueueTransferIo("verify", uri) { verifyIncoming() }
                 } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
                     status.text = "Save destination selected. Requesting ${missing.size} missing chunks from sender…"
                 } else {
@@ -549,12 +549,20 @@ class DeviceTransferActivity : Activity() {
             }
             val missing = synchronized(receivedChunkIndexes) { (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) } }
             if (missing.isEmpty()) {
-                if (incomingVerified) transferIo.execute { saveIncoming(pendingSaveUri!!) }
-                else transferIo.execute { verifyIncoming() }
+                if (incomingVerified) enqueueTransferIo("save", pendingSaveUri!!) { saveIncoming(pendingSaveUri!!) }
+                else enqueueTransferIo("verify", null) { verifyIncoming() }
             } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
                 status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
             } else status.text = "Could not send resume request. Verify the paired device and secure relay connection."
         } else status.text = "Reconnect to relay first, then retry."
+    }
+
+    private fun enqueueTransferIo(operation: String, destination: Uri?, task: () -> Unit) {
+        try {
+            transferIo.execute(task)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            status.text = "Transfer worker is busy; $operation was not queued. Wait briefly and tap Resume / Retry."
+        }
     }
 
     /** Persists only transfer metadata and chunk indexes; file bytes stay in app-private storage. */
@@ -616,10 +624,10 @@ class DeviceTransferActivity : Activity() {
         }
         status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
         if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
-            transferIo.execute { verifyIncoming() }
+            enqueueTransferIo("verify", null) { verifyIncoming() }
         }
         if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
-            transferIo.execute {
+            enqueueTransferIo("save", pendingSaveUri!!) {
                 runCatching { saveIncoming(pendingSaveUri!!) }
                     .onFailure { runOnUiThread { status.text = "Verified file restored. Re-select the save destination to finish." } }
             }
