@@ -114,3 +114,19 @@ export function validateScheduleIntent(body, now = Date.now()) {
   }
   return { ...intent, idempotencyKey, scheduledAt: new Date(scheduledAtMs).toISOString(), scheduledAtMs };
 }
+
+
+export function assertSocialPublisherOwner(uid, configuredOwnerUid) {
+  const ownerUid = typeof configuredOwnerUid === 'string' ? configuredOwnerUid.trim() : '';
+  if (!ownerUid || ownerUid.length > 128) {
+    const error = new Error('SOCIAL_PUBLISHER_OWNER_UID must be configured before social publishing is enabled');
+    error.statusCode = 503;
+    throw error;
+  }
+  if (typeof uid !== 'string' || !uid || uid !== ownerUid) {
+    const error = new Error('This Firebase account is not authorized to publish to the configured social accounts');
+    error.statusCode = 403;
+    throw error;
+  }
+  return uid;
+}
