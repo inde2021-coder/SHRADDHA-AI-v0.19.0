@@ -13,14 +13,15 @@ export async function readJsonBody(req, limit = 64 * 1024) {
   const chunks = [];
   let total = 0;
   for await (const chunk of req) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    if (bytes.byteLength > maxBytes - total) {
+    const chunkBytes = Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(String(chunk));
+    if (chunkBytes > maxBytes - total) {
       req.resume?.();
       const error = new Error('Request too large');
       error.statusCode = 413;
       throw error;
     }
-    total += bytes.byteLength;
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += chunkBytes;
     chunks.push(bytes);
   }
 
