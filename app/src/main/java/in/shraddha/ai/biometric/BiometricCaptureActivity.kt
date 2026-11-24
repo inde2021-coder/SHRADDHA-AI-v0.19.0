@@ -247,6 +247,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
 
+    @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run {
             livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
