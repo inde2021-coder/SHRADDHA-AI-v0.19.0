@@ -375,12 +375,13 @@ const server = http.createServer(async (req, res) => {
           signal: AbortSignal.timeout(20000)
         });
       } catch {
-        messageReplayGuard.markFailed(intent.requestId);
-        return json(res, 502, { error: 'Messaging provider outcome is unknown; check provider status before retrying with a new request.' });
+        messageReplayGuard.markUnknown(intent.requestId);
+        return json(res, 502, { error: 'Messaging provider outcome is unknown; this request ID is locked. Check provider status before creating a new send request.' });
       }
       const response = await upstream.json().catch(() => ({}));
       if (!upstream.ok || !response.sid) {
-        messageReplayGuard.markFailed(intent.requestId);
+        if (upstream.status >= 500 || upstream.ok) messageReplayGuard.markUnknown(intent.requestId);
+        else messageReplayGuard.markFailed(intent.requestId);
         return json(res, 502, { error: String(response.message || 'Messaging provider rejected the message').slice(0, 240) });
       }
       messageReplayGuard.markSent(intent.requestId);
