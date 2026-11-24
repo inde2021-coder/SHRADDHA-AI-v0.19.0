@@ -373,6 +373,15 @@ def write_safe_text_file(root: str, relative: str, content: str, overwrite: bool
             "backup": backup_relative, "status": "file_written"}
 
 
+def select_ocr_languages(available: list[str]) -> tuple[list[str], list[str]]:
+    """Choose installed English/Hindi Tesseract packs and report missing languages."""
+    installed = {str(item).strip().casefold() for item in available if isinstance(item, str)}
+    requested = ["eng", "hin"]
+    selected = [language for language in requested if language in installed]
+    missing = [language for language in requested if language not in installed]
+    return selected, missing
+
+
 def redact_ocr_text(raw: str) -> str:
     """Redact likely credentials and long identifiers before OCR leaves the PC."""
     if not isinstance(raw, str):
@@ -1124,9 +1133,25 @@ async def execute_action(action: dict, allow_typing: bool, allow_ocr: bool = Fal
                 import pytesseract
                 from PIL import Image
                 image = Image.open(io.BytesIO(jpeg))
-                text = await asyncio.to_thread(pytesseract.image_to_string, image, lang="eng+hin")
+                try:
+                    installed_languages = await asyncio.to_thread(pytesseract.get_languages, config="")
+                except Exception as exc:
+                    return "ocr_unavailable_install_tesseract_and_pytesseract: " + str(exc)[:180]
+                selected_languages, missing_languages = select_ocr_languages(installed_languages)
+                if not selected_languages:
+                    return "ocr_unavailable_install_tesseract_language_data: install eng and/or hin traineddata"
+                text = await asyncio.to_thread(
+                    pytesseract.image_to_string, image, lang="+".join(selected_languages)
+                )
                 safe_text = redact_ocr_text(text)
-                return json.dumps({"status": "ocr_complete", "window": title[:120], "text": safe_text}, ensure_ascii=False)
+                status = "ocr_complete" if not missing_languages else "ocr_partial_language_support"
+                return json.dumps({
+                    "status": status,
+                    "window": title[:120],
+                    "languagesUsed": selected_languages,
+                    "languagesMissing": missing_languages,
+                    "text": safe_text
+                }, ensure_ascii=False)
             except Exception as exc:
                 return "ocr_unavailable_install_tesseract_and_pytesseract: " + str(exc)[:180]
         if not await asyncio.to_thread(confirm, f"Allow {kind} within approved folder {file_root!r}?"):
