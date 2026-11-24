@@ -42,6 +42,8 @@ object DeviceLinkManager {
     private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
+    // Reject duplicate authenticated actions for the same peer within this process/session.
+    private val remoteActionReplayGuard = RemoteActionReplayGuard()
 
     data class PairedDeviceSnapshot(val id: String, val name: String, val online: Boolean, val platform: String)
     private val pairedDeviceSnapshots = ConcurrentHashMap<String, PairedDeviceSnapshot>()
@@ -186,8 +188,12 @@ object DeviceLinkManager {
                             }
                             when (kind) {
                                 "remote_action" -> {
-                                    if (actionId.matches(Regex("[A-Za-z0-9_-]{12,64}")) && payload.optString("kind").isNotBlank())
+                                    if (payload.optString("kind").isNotBlank() &&
+                                        remoteActionReplayGuard.claim(peerId, actionId)) {
                                         onRemoteActionWithId?.invoke(peerId, actionId, payload)
+                                    } else {
+                                        onStatus?.invoke("Duplicate or invalid remote action blocked.")
+                                    }
                                 }
                                 "remote_action_result" -> {
                                     onRemoteActionResult?.invoke(peerId, msg.optString("actionKind"), payload.optString("result"))
