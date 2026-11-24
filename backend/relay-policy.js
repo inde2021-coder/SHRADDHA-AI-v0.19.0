@@ -174,3 +174,13 @@ export function pruneExpiredDeviceState(device, now = Date.now()) {
   prune(device.grants);
   return removed;
 }
+
+
+/** Admit only one active inbound transfer per receiver and reject transfer-ID replacement. */
+export function canStartFileTransfer(device, transferId, maxActive = 1) {
+  const transfers = device?.incomingTransfers;
+  return transfers instanceof Map &&
+    typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId) &&
+    Number.isSafeInteger(maxActive) && maxActive >= 1 && maxActive <= 16 &&
+    transfers.size < maxActive && !transfers.has(transferId);
+}
