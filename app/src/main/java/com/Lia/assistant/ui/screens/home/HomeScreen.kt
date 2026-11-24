@@ -141,11 +141,11 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             Box(
                 Modifier.size(42.dp).clip(CircleShape)
                     .background(Color.White)
-                    .border(1.dp, LiaBorder, CircleShape)
+                    .border(1.dp, ShraddhaBorder, CircleShape)
                     .clickable { navController.navigate("settings") },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = LiaPurple)
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = ShraddhaViolet)
             }
         }
 
@@ -153,12 +153,12 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
             Modifier.fillMaxWidth().height(avatarHeight)
                 .clip(RoundedCornerShape(when (design) { "COSMIC_ORB" -> 140.dp; "EXECUTIVE" -> 18.dp; "ROYAL_3D" -> 34.dp; else -> 28.dp }))
                 .background(Brush.verticalGradient(listOf(Color(0xFFEDE4FF), Color.White, Color(0xFFEAF4FF))))
-                .border(1.dp, LiaBorder, RoundedCornerShape(28.dp)),
+                .border(1.dp, ShraddhaBorder, RoundedCornerShape(28.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 "$designTitle  •  YOUR PERSONAL AI",
-                color = LiaPurple,
+                color = ShraddhaViolet,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.7.sp,
@@ -189,7 +189,7 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
 
         Text(
             dailyOrbTheme.style.displayName,
-            color = LiaPurple,
+            color = ShraddhaViolet,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.2.sp,
@@ -247,7 +247,7 @@ private fun HomeActionSection(
         Modifier.fillMaxWidth().padding(top = 20.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        Text(title, color = LiaPurple, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+        Text(title, color = ShraddhaViolet, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
         Text(subtitle, color = Color(0xFF705D89), fontSize = 10.sp)
         actions.chunked(2).forEach { rowActions ->
             Row(
@@ -268,8 +268,8 @@ private fun HomeActionTile(action: HomeAction, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.height(94.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Brush.verticalGradient(listOf(Color.White, LiaLavender)))
-            .border(1.dp, LiaBorder, RoundedCornerShape(18.dp))
+            .background(Brush.verticalGradient(listOf(Color.White, ShraddhaLavender)))
+            .border(1.dp, ShraddhaBorder, RoundedCornerShape(18.dp))
             .clickable(onClick = action.onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.Center
@@ -279,7 +279,7 @@ private fun HomeActionTile(action: HomeAction, modifier: Modifier = Modifier) {
                 Modifier.size(31.dp).clip(CircleShape).background(Color(0xFFEDE4FF)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(action.symbol, color = LiaPurple, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(action.symbol, color = ShraddhaViolet, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             Text(
                 action.title,
@@ -315,10 +315,10 @@ private fun HomeSecondaryAction(text: String, modifier: Modifier = Modifier, onC
     Box(
         modifier.height(48.dp).clip(RoundedCornerShape(16.dp))
             .background(Color.White)
-            .border(1.dp, LiaBorder, RoundedCornerShape(16.dp))
+            .border(1.dp, ShraddhaBorder, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = LiaPurple, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(text, color = ShraddhaViolet, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
