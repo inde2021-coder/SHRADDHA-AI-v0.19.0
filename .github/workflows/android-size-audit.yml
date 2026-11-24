@@ -1,4 +1,5 @@
 name: Android APK Size Audit
+# Run on the current main-compatible Android source after each PR update.
 
 on:
   pull_request:
