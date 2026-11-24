@@ -17,8 +17,11 @@ internal object DeviceFileTransferProtocol {
             sha256.matches(Regex("^[a-fA-F0-9]{64}$"))
 
     fun safeDisplayName(value: String): String = value
-        .replace(Regex("[\\\\/\\u0000-\\u001f\\u007f]"), "_")
+        .substringAfterLast('/')
+        .substringAfterLast('\\\\')
+        .replace(Regex("[\\u0000-\\u001f\\u007f]"), "_")
         .trim()
+        .trimStart('.')
         .take(120)
         .ifBlank { "shared-file" }
 
