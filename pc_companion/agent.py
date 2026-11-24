@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -798,13 +798,14 @@ class PcCompanionApp:
                         not re.fullmatch(r"[a-f0-9]{64}", str(item.get("sha256", "")))):
                     continue
                 part = Path(item["path"] + ".shraddha-part")
-                size = int(item.get("size", 0))
-                chunks = int(item.get("chunks", 0))
-                if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 20_000_000:
+                size = item.get("size")
+                chunks = item.get("chunks")
+                if type(size) is not int or type(chunks) is not int or not valid_transfer_manifest(
+                        transfer_id, size, chunks, item.get("sha256", "")):
                     continue
-                if chunks != chunk_count_for_size(size):
+                if not part.is_file() or part.stat().st_size != size:
                     continue
-                received = {int(i) for i in item.get("received", []) if isinstance(i, int) and 0 <= i < chunks}
+                received = {i for i in item.get("received", []) if type(i) is int and 0 <= i < chunks}
                 restored[transfer_id] = {
                     "peer": item["peer"], "path": item["path"], "size": size,
                     "chunks": chunks, "sha256": item["sha256"], "received": received
@@ -988,15 +989,14 @@ class PcCompanionApp:
     def _handle_incoming_file_start(self, msg):
         peer_id = str(msg.get("fromDeviceId", ""))
         transfer_id = str(msg.get("transferId", ""))
-        size = int(msg.get("sizeBytes", 0))
-        chunks = int(msg.get("chunkCount", 0))
-        digest = str(msg.get("sha256", ""))
+        size = msg.get("sizeBytes")
+        chunks = msg.get("chunkCount")
+        digest = msg.get("sha256", "")
         if not self.is_e2e_trusted(peer_id):
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "reason": "peer_not_verified"})
             return
-        if (not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or size < 1 or size > 20_000_000
-                or chunks != chunk_count_for_size(size) or not re.fullmatch(r"[a-f0-9]{64}", digest)):
+        if not valid_transfer_manifest(transfer_id, size, chunks, digest):
             self.status_var.set("Rejected invalid incoming file manifest.")
             return
         destination = filedialog.asksaveasfilename(
