@@ -7,6 +7,7 @@ import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import android.net.Uri
 import android.util.Base64
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -48,9 +49,18 @@ object SocialPublishingClient {
         require(mime in allowed) { "Choose a supported image or video file." }
         val declaredSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
         require(declaredSize <= 8L * 1024L * 1024L) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("The selected media file could not be read.")
-        require(bytes.isNotEmpty() && bytes.size <= 8 * 1024 * 1024) { "Media must be between 1 byte and 8 MiB." }
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= 8 * 1024 * 1024) { "Telegram and Mastodon media uploads are limited to 8 MiB." }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        } ?: error("The selected media file could not be read.")
+        require(bytes.isNotEmpty()) { "The selected media file is empty." }
         JSONObject()
             .put("mediaBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
             .put("mimeType", mime)
