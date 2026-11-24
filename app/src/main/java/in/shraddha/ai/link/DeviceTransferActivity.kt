@@ -265,7 +265,10 @@ class DeviceTransferActivity : Activity() {
                         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, incomingName), 702)
                     }.show()
             }
-            "file_transfer_chunk" -> runCatching { transferIo.execute { receiveChunk(msg) } }.onFailure { status.text = "Receive worker is unavailable." }
+            "file_transfer_chunk" -> runCatching { transferIo.execute { receiveChunk(msg) } }.onFailure {
+                status.text = "Receive queue is full; sender must retry this chunk."
+                DeviceLinkManager.acknowledgeFileTransfer(msg.optString("fromDeviceId"), msg.optString("transferId"), msg.optInt("index", -1), ok = false)
+            }
             "file_transfer_ack" -> {
                 if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
                         peer.text.toString().trim(), msg.optString("fromDeviceId"),
@@ -377,7 +380,10 @@ class DeviceTransferActivity : Activity() {
         try {
             contentResolver.openOutputStream(destination, "w")?.use { output -> file.inputStream().use { it.copyTo(output) } }
                 ?: throw IllegalStateException("Could not open selected destination")
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)
+            if (!DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)) {
+                runOnUiThread { status.text = "Saved $savedName and verified, but completion acknowledgement could not be sent. Reconnect and tap Resume / Retry." }
+                return
+            }
             file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
             clearTransferState()
             runOnUiThread { status.text = "Saved $savedName • SHA-256 verified • transfer complete." }
