@@ -551,7 +551,11 @@ class DeviceTransferActivity : Activity() {
         } catch (e: Exception) {
             if (!copiedCompletely) runCatching { DocumentsContract.deleteDocument(contentResolver, destination) }
             // A revoked or unavailable Documents URI must not trap the transfer in an endless retry loop.
+            val failedDestination = pendingSaveUri
             pendingSaveUri = null
+            failedDestination?.let { uri ->
+                runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            }
             runCatching { persistTransferState(synchronous = true) }
             runOnUiThread { status.text = "Save failed: ${e.message}. Tap Resume / Retry to choose another save location." }
         }
