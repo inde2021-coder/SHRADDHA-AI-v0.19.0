@@ -111,7 +111,7 @@ fun PermissionsScreen(
             "accessibility_restricted" -> {
                 Toast.makeText(
                     context,
-                    "Android 13+ पर App info खोलें → ऊपर ⋮ → Allow restricted settings चुनें। फिर वापस आकर Accessibility में Shraddha की दोनों सेवाएँ चालू करें।",
+                    "Android 13+ पर App info खोलें → ऊपर ⋮ → Allow restricted settings चुनें। फिर वापस आकर Accessibility में Shraddha Device Control चालू करें।",
                     Toast.LENGTH_LONG
                 ).show()
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
@@ -260,7 +260,6 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
             .any { it.packageName == context.packageName && it.className == className }
     }.getOrDefault(false)
     val shraddhaAccessibility = serviceEnabled("in.shraddha.ai.accessibility.ShraddhaAccessibilityService")
-    val liaAccessibility = serviceEnabled("com.Lia.assistant.agent.NovaAccessibilityService")
     val listener = runCatching {
         val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
         enabled.split(':').any { it.startsWith(context.packageName + "/") }
@@ -289,9 +288,8 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("selected_media", "Selected photos access", "Limited photo access on Android 14+", Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, 34))
         add(runtime("legacy_storage", "Legacy shared storage", "Legacy media access on Android 12 and earlier", Manifest.permission.READ_EXTERNAL_STORAGE, 1, 32))
         add(special("overlay", "Display over other apps", "Required only for floating assistant overlay", overlay, "overlay"))
-        val accessibilityHelp = if (Build.VERSION.SDK_INT >= 33) "अगर switch grey/blocked है: नीचे ‘Accessibility help’ खोलें → App info → ⋮ → Allow restricted settings → वापस आकर Android Accessibility Settings में Shraddha की दोनों सेवाएँ चालू करें।" else "Android Accessibility Settings में दोनों Shraddha सेवाएँ अलग-अलग चालू करें।"
+        val accessibilityHelp = if (Build.VERSION.SDK_INT >= 33) "अगर switch grey/blocked है: नीचे ‘Accessibility help’ खोलें → App info → ⋮ → Allow restricted settings → वापस आकर Android Accessibility Settings में Shraddha Device Control चालू करें।" else "Android Accessibility Settings में Shraddha Device Control चालू करें।"
         add(special("accessibility", "Shraddha Device Control", "मुख्य on-screen control service. $accessibilityHelp", shraddhaAccessibility, "accessibility"))
-        add(special("lia_accessibility", "Live App Operator", "LIA screen interaction और gestures. $accessibilityHelp", liaAccessibility, "accessibility"))
         add(special("screen_reading", "Screen reading & capture", if (Build.VERSION.SDK_INT >= 30) "Android 11+ पर Shraddha Device Control चालू होने पर उपलब्ध; secure screens Android रोक सकता है" else "इस Android version पर Accessibility screenshot API समर्थित नहीं है", Build.VERSION.SDK_INT >= 30 && shraddhaAccessibility, "accessibility"))
         add(special("notification_listener", "Notification access", "Reads notifications only after special access is enabled", listener, "notification_listener"))
         add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission", Build.VERSION.SDK_INT >= 28))
