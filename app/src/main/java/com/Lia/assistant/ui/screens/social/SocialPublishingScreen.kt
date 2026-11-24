@@ -72,7 +72,7 @@ fun SocialPublishingScreen(navController: NavController) {
                         mediaFileName = ""
                         status = "Media uploaded to your Firebase storage. Meta receives its URL only when you confirm publishing."
                     } else {
-                        val payload = SocialPublishingClient.encodeBinaryMedia(context, uri, mediaKind)
+                        val payload = SocialPublishingClient.encodeBinaryMedia(context, uri, platform, mediaKind)
                         mediaBase64 = payload.getString("mediaBase64")
                         mediaMimeType = payload.getString("mimeType")
                         mediaFileName = payload.getString("fileName")
