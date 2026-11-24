@@ -106,7 +106,9 @@ class RemoteCameraService : Service() {
                     }
                     lastFrameAt = now
                 } catch (_: Exception) {
-                    runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "frame_not_sent") }
+                    runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "camera_stopped_on_exception") }
+                    // Any capture, encoding, encryption, or relay exception fails closed.
+                    stopSelf()
                 }
                 finally { image.close() }
             }, handler)
