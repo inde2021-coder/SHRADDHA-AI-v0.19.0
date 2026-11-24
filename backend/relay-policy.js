@@ -48,6 +48,39 @@ export function resolveFileTransferCancellation(actor, target, actorId, targetId
   return null;
 }
 
+/** Completion ACKs are valid only after every chunk was positively acknowledged. */
+export function canCompleteFileTransfer(transfer, ok) {
+  if (!transfer || ok !== true || !Number.isSafeInteger(transfer.chunkCount) ||
+      transfer.chunkCount < 1 || transfer.chunkCount > 2200 ||
+      !(transfer.chunks instanceof Map) || transfer.chunks.size !== transfer.chunkCount) return false;
+  for (let index = 0; index < transfer.chunkCount; index += 1) {
+    if (transfer.chunks.get(index) !== true) return false;
+  }
+  return true;
+}
+
+/** Admit one active inbound file transfer per receiver and reject duplicate IDs. */
+export function canStartFileTransfer(device, transferId, maxActive = 1) {
+  const transfers = device?.incomingTransfers;
+  return transfers instanceof Map &&
+    typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId) &&
+    Number.isSafeInteger(maxActive) && maxActive >= 1 && maxActive <= 16 &&
+    transfers.size < maxActive && !transfers.has(transferId);
+}
+
+/** Synchronize relay ACK state with the receiver's persisted missing-chunk bitmap. */
+export function recordPersistedFileTransferChunks(transfer, missingIndexes) {
+  if (!transfer || !Number.isSafeInteger(transfer.chunkCount) ||
+      !(transfer.chunks instanceof Map) ||
+      !validMissingTransferIndexes(missingIndexes, transfer.chunkCount)) return false;
+  const missing = new Set(missingIndexes);
+  transfer.chunks.clear();
+  for (let index = 0; index < transfer.chunkCount; index += 1) {
+    if (!missing.has(index)) transfer.chunks.set(index, true);
+  }
+  return true;
+}
+
 export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
   if (!Number.isSafeInteger(index) || !Number.isSafeInteger(chunkCount) || !Number.isSafeInteger(byteLength) ||
       !Number.isSafeInteger(totalBytes) || index < 0 || index >= chunkCount || chunkCount < 1 || totalBytes < 1 || totalBytes > 100 * 1024 * 1024) return false;
