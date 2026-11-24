@@ -48,6 +48,22 @@ test('LinkedIn author URN and API version are validated', () => {
   assert.throws(() => validateLinkedInAuthor('https://linkedin.com/in/user'));
   assert.throws(() => validateLinkedInVersion('202613'));
 });
+test('Telegram and Mastodon binary publishing intents accept only explicit image/video attachments', () => {
+  for (const platform of ['telegram', 'mastodon']) {
+    const base = { platform, text: 'caption', preview: 'caption', confirmed: true, mediaBase64: Buffer.from('fake-media-bytes').toString('base64'), mimeType: 'image/jpeg', fileName: 'upload.jpg', mediaKind: 'image' };
+    assert.deepEqual(validatePublishIntent(base), { platform, text: 'caption', mediaKind: 'image' });
+    assert.throws(() => validatePublishIntent({ ...base, mediaKind: 'unknown' }), /image or video/);
+    assert.throws(() => validatePublishIntent({ ...base, mediaUrl: 'https://cdn.example.com/x.jpg' }), /cannot include a public media URL/);
+  }
+  assert.throws(() => validatePublishIntent({
+    platform: 'bluesky', text: 'caption', preview: 'caption', confirmed: true,
+    mediaBase64: Buffer.from('fake-media-bytes').toString('base64'), mimeType: 'image/jpeg', mediaKind: 'image'
+  }), /only for Telegram and Mastodon/);
+  assert.throws(() => validatePublishIntent({
+    platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, mediaKind: 'image'
+  }), /Public media URLs/);
+});
+
 test('media publishing accepts only bounded image/video attachments for supported providers', () => {
   const bytes = Buffer.from('fake-media-bytes').toString('base64');
   assert.equal(validateMediaAttachment({ mediaKind: 'image', mimeType: 'image/jpeg', mediaBase64: bytes }, 'telegram').kind, 'image');
