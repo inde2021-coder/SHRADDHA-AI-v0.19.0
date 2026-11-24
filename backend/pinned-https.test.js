@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { pinnedHttpsJsonRequest } from './pinned-https.js';
 import { resolvePinnedPublicIpv4 } from './pinned-https.js';
 
 test('pinned resolver accepts globally routable IPv4', async () => {
@@ -18,4 +20,40 @@ test('pinned resolver rejects mixed public and private DNS answers', async () =>
 
 test('pinned resolver rejects empty DNS answers', async () => {
   await assert.rejects(() => resolvePinnedPublicIpv4('mastodon.example', async () => []), /public IPv4/);
+});
+
+test('HTTPS socket lookup is pinned to the validated address and preserves TLS hostname', async () => {
+  let captured;
+  const response = new EventEmitter();
+  response.statusCode = 200;
+  const request = new EventEmitter();
+  request.setTimeout = () => {};
+  request.write = () => {};
+  request.end = () => {
+    queueMicrotask(() => {
+      response.emit('data', Buffer.from('{"id":"post-1"}'));
+      response.emit('end');
+    });
+  };
+  const resultPromise = pinnedHttpsJsonRequest('https://mastodon.example/api/v1/statuses', {
+    method: 'POST', body: '{}', headers: { 'content-type': 'application/json' }
+  }, {
+    resolve4: async () => ['8.8.4.4'],
+    request: (url, options, callback) => {
+      captured = { url: String(url), options };
+      queueMicrotask(() => callback(response));
+      return request;
+    }
+  });
+  const result = await resultPromise;
+  assert.equal(captured.url, 'https://mastodon.example/api/v1/statuses');
+  assert.equal(captured.options.servername, 'mastodon.example');
+  assert.equal(captured.options.rejectUnauthorized, true);
+  await new Promise((resolve, reject) => captured.options.lookup('mastodon.example', {}, (error, address, family) => {
+    if (error) return reject(error);
+    assert.equal(address, '8.8.4.4');
+    assert.equal(family, 4);
+    resolve();
+  }));
+  assert.deepEqual(await result.json(), { id: 'post-1' });
 });
