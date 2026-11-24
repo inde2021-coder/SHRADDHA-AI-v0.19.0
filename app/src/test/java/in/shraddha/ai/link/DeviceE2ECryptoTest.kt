@@ -5,6 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.security.KeyPairGenerator
+import java.security.spec.ECGenParameterSpec
 
 class DeviceE2ECryptoTest {
     @Test fun p256PeersDeriveSameKeyAndFingerprint() {
@@ -84,4 +86,23 @@ class DeviceE2ECryptoTest {
         val (ac, _) = a.derivePeerKey(c.publicKeyBase64(), "session-123456789012", "a", "c")
         assertNotEquals(ab.toList(), ac.toList())
     }
+    @Test fun rejectsNonP256PeerKeysAndNonCanonicalBase64() {
+        val local = DeviceE2ECrypto.create()
+        val wrongCurveGenerator = KeyPairGenerator.getInstance("EC").apply {
+            initialize(ECGenParameterSpec("secp384r1"))
+        }
+        val wrongCurveKey = wrongCurveGenerator.generateKeyPair().public.encoded
+        val wrongCurveBase64 = java.util.Base64.getEncoder().encodeToString(wrongCurveKey)
+        assertThrows(IllegalArgumentException::class.java) {
+            local.derivePeerKey(wrongCurveBase64, "session-123456789012", "local", "peer")
+        }
+        val peer = DeviceE2ECrypto.create()
+        assertThrows(IllegalArgumentException::class.java) {
+            local.derivePeerKey(peer.publicKeyBase64().trimEnd('='), "session-123456789012", "local", "peer")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            local.derivePeerKey("A".repeat(10000), "session-123456789012", "local", "peer")
+        }
+    }
+
 }
