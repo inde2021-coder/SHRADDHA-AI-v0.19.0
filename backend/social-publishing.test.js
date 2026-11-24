@@ -99,3 +99,21 @@ test('shared social publisher credentials are restricted to one configured Fireb
   assert.throws(() => assertSocialPublisherOwner('firebase-owner-123', ''), error => error.statusCode === 503);
   assert.throws(() => assertSocialPublisherOwner('', 'firebase-owner-123'), error => error.statusCode === 403);
 });
+
+
+test('Telegram and Mastodon binary publishing intents accept only explicit image/video attachments', () => {
+  for (const platform of ['telegram', 'mastodon']) {
+    const base = { platform, text: 'caption', preview: 'caption', confirmed: true, mediaBase64: Buffer.from('fake-media-bytes').toString('base64'), mimeType: 'image/jpeg', fileName: 'upload.jpg', mediaKind: 'image' };
+    assert.deepEqual(validatePublishIntent(base), { platform, text: 'caption', mediaKind: 'image' });
+    assert.throws(() => validatePublishIntent({ ...base, mediaKind: 'unknown' }), /image or video/);
+    assert.throws(() => validatePublishIntent({ ...base, mediaUrl: 'https://cdn.example.com/x.jpg' }), /cannot include a public media URL/);
+  }
+  assert.throws(() => validatePublishIntent({
+    platform: 'bluesky', text: 'caption', preview: 'caption', confirmed: true,
+    mediaBase64: Buffer.from('fake-media-bytes').toString('base64'), mimeType: 'image/jpeg', mediaKind: 'image'
+  }), /only for Telegram and Mastodon/);
+  assert.throws(() => validatePublishIntent({
+    platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, mediaKind: 'image'
+  }), /Public media URLs/);
+});
+
