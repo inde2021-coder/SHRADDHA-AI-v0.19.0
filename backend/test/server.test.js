@@ -146,18 +146,18 @@ test('SMS and WhatsApp relay requires exact preview, E.164 recipient and a uniqu
   assert.equal(invalidNumber.status, 400);
   assert.match((await invalidNumber.json()).error, /E.164/i);
 
-  const missingProvider = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
-  assert.equal(missingProvider.status, 503);
-  const duplicate = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
-  assert.equal(duplicate.status, 409);
-  assert.equal((await duplicate.json()).duplicate, true);
+  const missingDurableStore = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
+  assert.equal(missingDurableStore.status, 503);
+  assert.match((await missingDurableStore.json()).error, /Durable message-send protection/);
+  const repeatedWithoutStore = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(base) });
+  assert.equal(repeatedWithoutStore.status, 503);
+  assert.match((await repeatedWithoutStore.json()).error, /Durable message-send protection/);
 
-  const conflictingId = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, text: 'different message', preview: 'different message' }) });
-  assert.equal(conflictingId.status, 409);
-  assert.match((await conflictingId.json()).error, /different message/);
+  const conflictingIdWithoutStore = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, text: 'different message', preview: 'different message' }) });
+  assert.equal(conflictingIdWithoutStore.status, 503);
 
-  const sms = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, channel: 'sms', requestId: 'message_request_123458' }) });
-  assert.equal(sms.status, 503);
+  const smsWithoutStore = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, channel: 'sms', requestId: 'message_request_123458' }) });
+  assert.equal(smsWithoutStore.status, 503);
 
   const previewMismatch = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ ...base, requestId: 'message_request_123459', preview: 'edited preview' }) });
   assert.equal(previewMismatch.status, 400);
