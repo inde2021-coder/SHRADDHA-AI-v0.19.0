@@ -57,3 +57,13 @@ test('HTTPS socket lookup is pinned to the validated address and preserves TLS h
   }));
   assert.deepEqual(await result.json(), { id: 'post-1' });
 });
+
+
+test('pinned transport rejects nonstandard HTTPS ports before DNS or socket creation', async () => {
+  let resolved = false;
+  await assert.rejects(() => pinnedHttpsJsonRequest('https://mastodon.example:8443/api/v1/statuses', {}, {
+    resolve4: async () => { resolved = true; return ['8.8.8.8']; },
+    request: () => { throw new Error('socket must not be created'); }
+  }), /port 443/);
+  assert.equal(resolved, false);
+});
