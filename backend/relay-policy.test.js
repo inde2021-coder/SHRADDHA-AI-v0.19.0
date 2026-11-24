@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -205,4 +205,15 @@ test('file-transfer completion requires positive acknowledgement for every chunk
   assert.equal(canCompleteFileTransfer({ chunkCount: 3, chunks: new Map([[0, true], [1, true], [2, true], [3, true]]) }, true), false);
   assert.equal(canCompleteFileTransfer({ chunkCount: 0, chunks: new Map() }, true), false);
   assert.equal(canCompleteFileTransfer({ chunkCount: 2201, chunks: new Map() }, true), false);
+});
+
+
+test('resume bitmap overwrites relay ACKs and restores only receiver-persisted chunks', () => {
+  const transfer = { chunkCount: 3, chunks: new Map([[0, true], [1, true], [2, true]]) };
+  assert.equal(recordPersistedFileTransferChunks(transfer, [1, 2]), true);
+  assert.deepEqual([...transfer.chunks.entries()], [[0, true]]);
+  assert.equal(recordPersistedFileTransferChunks(transfer, [2]), true);
+  assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
+  assert.equal(recordPersistedFileTransferChunks(transfer, [1, 1]), false);
+  assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
 });
