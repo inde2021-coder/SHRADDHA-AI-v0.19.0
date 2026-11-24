@@ -192,6 +192,9 @@ fun SocialPublishingScreen(navController: NavController) {
                     val types = if (mediaKind == "image" && platform == "telegram") arrayOf("image/jpeg", "image/png")
                         else if (mediaKind == "image") arrayOf("image/jpeg", "image/png", "image/webp")
                         else if (platform == "telegram") arrayOf("video/mp4") else arrayOf("video/mp4", "video/quicktime")
+                    mediaBase64 = ""
+                    mediaMimeType = ""
+                    mediaFileName = ""
                     mediaPicker.launch(types)
                 }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
                 Text(
