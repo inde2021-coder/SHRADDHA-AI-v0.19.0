@@ -341,15 +341,6 @@ const server = http.createServer(async (req, res) => {
       let intent;
       try { intent = validateMessageSendIntent(body); }
       catch (error) { return json(res, 400, { error: error.message }); }
-      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-        messageReplayGuard.markFailed(intent.requestId);
-        return json(res, 503, { error: 'Twilio credentials are not configured on the server' });
-      }
-      const from = intent.channel === 'whatsapp' ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
-      if (!from || from.length > 40) {
-        messageReplayGuard.markFailed(intent.requestId);
-        return json(res, 503, { error: intent.channel === 'whatsapp' ? 'TWILIO_WHATSAPP_FROM is not configured' : 'TWILIO_SMS_FROM is not configured' });
-      }
       let messageReplayGuard;
       try {
         const { db } = getSocialAdmin();
@@ -371,6 +362,15 @@ const server = http.createServer(async (req, res) => {
         duplicate: true,
         reason: claim.reason
       });
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+        await messageReplayGuard.markFailed(intent.requestId, intent.fingerprint);
+        return json(res, 503, { error: 'Twilio credentials are not configured on the server' });
+      }
+      const from = intent.channel === 'whatsapp' ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
+      if (!from || from.length > 40) {
+        await messageReplayGuard.markFailed(intent.requestId, intent.fingerprint);
+        return json(res, 503, { error: intent.channel === 'whatsapp' ? 'TWILIO_WHATSAPP_FROM is not configured' : 'TWILIO_SMS_FROM is not configured' });
+      }
       const destination = intent.channel === 'whatsapp' ? `whatsapp:${intent.to}` : intent.to;
       const source = intent.channel === 'whatsapp' ? (from.startsWith('whatsapp:') ? from : `whatsapp:${from}`) : from;
       const form = new URLSearchParams({ To: destination, From: source, Body: intent.text });
