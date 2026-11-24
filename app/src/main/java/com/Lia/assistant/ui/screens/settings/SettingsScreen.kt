@@ -94,7 +94,7 @@ private fun SettingsScreenContent(
     var modelPricesInput by remember { mutableStateOf(initialCostSettings.pricesJson) }
     var costBudgetError by remember { mutableStateOf<String?>(null) }
     val savedGateway = remember { VoiceGatewaySettings.get(context) }
-    var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl) }
+    var gatewayUrlInput by remember { mutableStateOf(savedGateway.baseUrl.ifBlank { VoiceGatewaySettings.DEFAULT_BASE_URL }) }
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
     var gatewaySaveError by remember { mutableStateOf(savedGateway.readError) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
@@ -475,7 +475,7 @@ private fun SettingsScreenContent(
                     NovaTextField(
                         value = gatewayUrlInput,
                         onValueChange = { gatewayUrlInput = it },
-                        placeholder = "https://your-backend.example"
+                        placeholder = VoiceGatewaySettings.DEFAULT_BASE_URL
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(

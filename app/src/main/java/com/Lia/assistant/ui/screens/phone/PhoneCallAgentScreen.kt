@@ -140,7 +140,7 @@ fun PhoneCallAgentScreen(navController: NavController) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("01  •  SECURE GATEWAY", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                 NovaTextField(value = backendUrl, onValueChange = { backendUrl = it },
-                    modifier = Modifier.fillMaxWidth(), placeholder = "https://your-backend.example.com")
+                    modifier = Modifier.fillMaxWidth(), placeholder = TelephonyGatewayStore.get(context).baseUrl.ifBlank { com.Lia.assistant.data.VoiceGatewaySettings.DEFAULT_BASE_URL })
                 NovaTextField(value = gatewayToken, onValueChange = { gatewayToken = it },
                     modifier = Modifier.fillMaxWidth(), placeholder = "Backend GATEWAY_TOKEN", secret = true)
                 Text(

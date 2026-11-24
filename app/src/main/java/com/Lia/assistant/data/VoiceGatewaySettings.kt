@@ -20,6 +20,8 @@ import javax.crypto.spec.GCMParameterSpec
 object VoiceGatewaySettings {
     data class AgentReply(val text: String, val provider: String, val model: String?, val inputTokens: Long?, val outputTokens: Long?)
     data class Config(val baseUrl: String, val gatewayToken: String, val readError: String? = null)
+    /** Public Render origin declared by render.yaml; users only need to supply the private gateway token. */
+    const val DEFAULT_BASE_URL = "https://shraddha-ai-secure-relay.onrender.com"
     private const val PREFS = "shraddha_voice_gateway"
     private const val PAYLOAD = "config_ciphertext"
     private const val IV = "config_iv"

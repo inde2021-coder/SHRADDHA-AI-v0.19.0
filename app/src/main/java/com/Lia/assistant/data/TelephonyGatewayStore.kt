@@ -15,8 +15,10 @@ object TelephonyGatewayStore {
         val store = EncryptedFeatureStore(context.applicationContext)
         return runCatching {
             Config(
-                baseUrl = store.get(BASE_URL).getOrThrow().trim(),
+                baseUrl = store.get(BASE_URL).getOrThrow().trim()
+                    .ifBlank { VoiceGatewaySettings.get(context).baseUrl.ifBlank { VoiceGatewaySettings.DEFAULT_BASE_URL } },
                 token = store.get(TOKEN).getOrThrow().trim()
+                    .ifBlank { VoiceGatewaySettings.get(context).gatewayToken }
             )
         }.getOrElse { error ->
             Config("", "", "Could not decrypt the saved telephony backend settings: ${error.localizedMessage ?: "secure storage unavailable"}. Existing encrypted data was preserved.")
