@@ -1,7 +1,8 @@
 import math
 import unittest
 
-from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, valid_incoming_file_manifest, matches_transfer_peer, expected_file_chunk_bytes
+
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, valid_incoming_file_manifest, matches_transfer_peer, expected_file_chunk_bytes, CHUNK_BYTES, MAX_FILE_BYTES
 
 
 class ProtocolTests(unittest.TestCase):
@@ -25,6 +26,9 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(expected_file_chunk_bytes(49152, 1, 0), 49152)
         self.assertEqual(expected_file_chunk_bytes(49153, 2, 0), 49152)
         self.assertEqual(expected_file_chunk_bytes(49153, 2, 1), 1)
+        max_chunks = (MAX_FILE_BYTES + CHUNK_BYTES - 1) // CHUNK_BYTES
+        self.assertEqual(max_chunks, 2134)
+        self.assertEqual(expected_file_chunk_bytes(MAX_FILE_BYTES, max_chunks, max_chunks - 1), MAX_FILE_BYTES - (max_chunks - 1) * CHUNK_BYTES)
         self.assertIsNone(expected_file_chunk_bytes(49153, 1, 0))
         self.assertIsNone(expected_file_chunk_bytes(49153, 2, 2))
 
