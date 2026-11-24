@@ -5,6 +5,13 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DeviceFileTransferProtocolTest {
+    @Test fun incomingChunksMustMatchTheApprovedPeer() {
+        assertEquals(true, DeviceFileTransferProtocol.isExpectedPeer("paired-device-1234", "paired-device-1234"))
+        assertEquals(false, DeviceFileTransferProtocol.isExpectedPeer("paired-device-1234", "other-device-5678"))
+        assertEquals(false, DeviceFileTransferProtocol.isExpectedPeer("", "paired-device-1234"))
+        assertEquals(false, DeviceFileTransferProtocol.isExpectedPeer("paired-device-1234", ""))
+    }
+
     @Test fun chunkCountMatchesRelay48KiBBoundaries() {
         assertEquals(1, DeviceFileTransferProtocol.chunkCount(1L))
         assertEquals(1, DeviceFileTransferProtocol.chunkCount(48L * 1024L))
