@@ -9,7 +9,8 @@ import { resolveProviderOrder, configuredProviderMap } from './provider-routing.
 import { requestProviderJson } from './provider-http.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent } from './social-publishing.js';
-import { createMessageReplayGuard, validateMessageSendIntent } from './message-send-policy.js';
+import { validateMessageSendIntent } from './message-send-policy.js';
+import { createDurableMessageReplayGuard } from './message-send-store.js';
 import { publishSocialPost } from './social-publisher.js';
 import { createSocialScheduler } from './social-scheduler.js';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
@@ -34,7 +35,6 @@ const sessionCreateAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
 const edesyCalls = new Map();
-const messageReplayGuard = createMessageReplayGuard();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
 const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/social/schedule','/api/social/schedule/list','/api/social/schedule/cancel','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
@@ -341,7 +341,18 @@ const server = http.createServer(async (req, res) => {
       let intent;
       try { intent = validateMessageSendIntent(body); }
       catch (error) { return json(res, 400, { error: error.message }); }
-      const claim = messageReplayGuard.claim(intent.requestId, intent.fingerprint);
+      let messageReplayGuard;
+      try {
+        const { db } = getSocialAdmin();
+        messageReplayGuard = createDurableMessageReplayGuard({ collection: db.collection('messageSendRequests') });
+      } catch {
+        return json(res, 503, { error: 'Durable message-send protection is unavailable; messaging is disabled until Firebase service credentials are configured.' });
+      }
+      let claim;
+      try { claim = await messageReplayGuard.claim(intent.requestId, intent.fingerprint); }
+      catch {
+        return json(res, 503, { error: 'Could not verify message-send history; no message was sent. Retry after service recovery.' });
+      }
       if (!claim.ok) return json(res, 409, {
         error: claim.reason === 'already_submitted'
           ? 'This message request was already submitted; check provider status before sending again.'
@@ -375,15 +386,19 @@ const server = http.createServer(async (req, res) => {
           signal: AbortSignal.timeout(20000)
         });
       } catch {
-        messageReplayGuard.markFailed(intent.requestId);
-        return json(res, 502, { error: 'Messaging provider outcome is unknown; check provider status before retrying with a new request.' });
+        await messageReplayGuard.markUnknown(intent.requestId, intent.fingerprint);
+        return json(res, 502, { error: 'Messaging provider outcome is unknown; check provider status before retrying with the same request.' });
       }
       const response = await upstream.json().catch(() => ({}));
       if (!upstream.ok || !response.sid) {
-        messageReplayGuard.markFailed(intent.requestId);
+        if (upstream.status >= 500 || upstream.ok) {
+          await messageReplayGuard.markUnknown(intent.requestId, intent.fingerprint);
+        } else {
+          await messageReplayGuard.markFailed(intent.requestId, intent.fingerprint);
+        }
         return json(res, 502, { error: String(response.message || 'Messaging provider rejected the message').slice(0, 240) });
       }
-      messageReplayGuard.markSent(intent.requestId);
+      await messageReplayGuard.markSent(intent.requestId, intent.fingerprint);
       return json(res, 200, {
         ok: true, channel: intent.channel, provider: 'twilio', messageId: response.sid,
         providerStatus: response.status || 'accepted', recipient: intent.to,
