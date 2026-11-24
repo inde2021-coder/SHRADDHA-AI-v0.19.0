@@ -1,5 +1,10 @@
 # Shraddha AI — Communications and social publishing
 
+## Social account ownership
+
+The backend uses shared social-provider credentials. Set `SOCIAL_PUBLISHER_OWNER_UID` to the Firebase Authentication UID of the one account authorized to publish and manage scheduled posts. Immediate publish, schedule, list and cancel routes require both the gateway bearer token and a valid Firebase ID token for this exact UID. If the owner UID is missing, social publishing is disabled (HTTP 503); other signed-in accounts receive HTTP 403. Obtain the UID from Firebase Authentication for the intended owner account; do not use an email address.
+
+
 ## SMS and WhatsApp messaging
 
 The Android voice tool `message_contact` resolves a contact and shows the exact E.164 recipient, message body and a one-time request ID before sending. It will not send until the user confirms that exact recipient and exact text. The follow-up tool call must echo `user_confirmed=yes`, `confirmed_recipient`, `confirmed_message` byte-for-byte and the same `request_id`.
