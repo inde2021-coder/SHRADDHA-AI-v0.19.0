@@ -9,6 +9,7 @@ import { resolveProviderOrder, configuredProviderMap } from './provider-routing.
 import { requestProviderJson } from './provider-http.js';
 import { normalizePlanSteps, normalizeOperatorActions } from './plan-safety.js';
 import { validatePublishIntent } from './social-publishing.js';
+import { createMessageReplayGuard, validateMessageSendIntent } from './message-send-policy.js';
 import { publishSocialPost } from './social-publisher.js';
 import { createSocialScheduler } from './social-scheduler.js';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
@@ -32,6 +33,7 @@ const sessionCreateAttempts = new Map();
 const councilAttempts = new Map();
 const apiAttempts = new Map();
 const edesyCalls = new Map();
+const messageReplayGuard = createMessageReplayGuard();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
 const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/social/schedule','/api/social/schedule/list','/api/social/schedule/cancel','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
@@ -335,20 +337,31 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/messages/send') {
       const body = await readBody(req, 16 * 1024);
-      const channel = String(body.channel || '').toLowerCase();
-      const to = String(body.to || '').trim();
-      const text = String(body.text || '');
-      const requestId = String(body.requestId || '');
-      if (!['sms', 'whatsapp'].includes(channel)) return json(res, 400, { error: 'channel must be sms or whatsapp' });
-      if (!/^\\+[1-9]\\d{7,14}$/.test(to)) return json(res, 400, { error: 'Recipient must be a verified E.164 number' });
-      if (!text.trim() || text.length > 4000 || /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(text)) return json(res, 400, { error: 'Message must contain 1-4000 safe characters' });
-      if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestId)) return json(res, 400, { error: 'A unique requestId is required' });
-      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return json(res, 503, { error: 'Twilio credentials are not configured on the server' });
-      const from = channel === 'whatsapp' ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
-      if (!from || from.length > 40) return json(res, 503, { error: channel === 'whatsapp' ? 'TWILIO_WHATSAPP_FROM is not configured' : 'TWILIO_SMS_FROM is not configured' });
-      const destination = channel === 'whatsapp' ? `whatsapp:${to}` : to;
-      const source = channel === 'whatsapp' ? (from.startsWith('whatsapp:') ? from : `whatsapp:${from}`) : from;
-      const form = new URLSearchParams({ To: destination, From: source, Body: text });
+      let intent;
+      try { intent = validateMessageSendIntent(body); }
+      catch (error) { return json(res, 400, { error: error.message }); }
+      const claim = messageReplayGuard.claim(intent.requestId, intent.fingerprint);
+      if (!claim.ok) return json(res, 409, {
+        error: claim.reason === 'already_submitted'
+          ? 'This message request was already submitted; check provider status before sending again.'
+          : claim.reason === 'request_id_conflict'
+            ? 'requestId was already used for a different message.'
+            : 'This message request is already being processed; do not retry it yet.',
+        duplicate: true,
+        reason: claim.reason
+      });
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+        messageReplayGuard.markFailed(intent.requestId);
+        return json(res, 503, { error: 'Twilio credentials are not configured on the server' });
+      }
+      const from = intent.channel === 'whatsapp' ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
+      if (!from || from.length > 40) {
+        messageReplayGuard.markFailed(intent.requestId);
+        return json(res, 503, { error: intent.channel === 'whatsapp' ? 'TWILIO_WHATSAPP_FROM is not configured' : 'TWILIO_SMS_FROM is not configured' });
+      }
+      const destination = intent.channel === 'whatsapp' ? `whatsapp:${intent.to}` : intent.to;
+      const source = intent.channel === 'whatsapp' ? (from.startsWith('whatsapp:') ? from : `whatsapp:${from}`) : from;
+      const form = new URLSearchParams({ To: destination, From: source, Body: intent.text });
       let upstream;
       try {
         upstream = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(process.env.TWILIO_ACCOUNT_SID)}/Messages.json`, {
@@ -360,10 +373,21 @@ const server = http.createServer(async (req, res) => {
           body: form,
           signal: AbortSignal.timeout(20000)
         });
-      } catch { return json(res, 502, { error: 'Messaging provider could not be reached; check provider status before retrying.' }); }
+      } catch {
+        messageReplayGuard.markFailed(intent.requestId);
+        return json(res, 502, { error: 'Messaging provider outcome is unknown; check provider status before retrying with a new request.' });
+      }
       const response = await upstream.json().catch(() => ({}));
-      if (!upstream.ok || !response.sid) return json(res, 502, { error: String(response.message || 'Messaging provider rejected the message').slice(0, 240) });
-      return json(res, 200, { ok: true, channel, provider: 'twilio', messageId: response.sid, providerStatus: response.status || 'accepted', recipient: to });
+      if (!upstream.ok || !response.sid) {
+        messageReplayGuard.markFailed(intent.requestId);
+        return json(res, 502, { error: String(response.message || 'Messaging provider rejected the message').slice(0, 240) });
+      }
+      messageReplayGuard.markSent(intent.requestId);
+      return json(res, 200, {
+        ok: true, channel: intent.channel, provider: 'twilio', messageId: response.sid,
+        providerStatus: response.status || 'accepted', recipient: intent.to,
+        deliveryConfirmed: ['delivered', 'read'].includes(String(response.status || '').toLowerCase())
+      });
     }
     if (req.method === 'POST' && req.url === '/api/plugins/verify') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
