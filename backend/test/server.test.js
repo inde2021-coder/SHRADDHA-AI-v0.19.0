@@ -1048,12 +1048,12 @@ test('remote action schema rejects malformed and out-of-range commands', () => {
 
 test('file transfer resume uses only the receiver persisted missing-index bitmap', async () => {
   const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.221' },
     body: JSON.stringify({ deviceName: 'Transfer Sender' })
   });
   const owner = await ownerResponse.json();
   const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.222' },
     body: JSON.stringify({ deviceName: 'Transfer Receiver', pairingCode: owner.pairingCode })
   });
   const member = await memberResponse.json();
