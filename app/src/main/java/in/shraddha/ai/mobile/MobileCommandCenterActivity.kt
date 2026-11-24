@@ -173,14 +173,6 @@ class MobileCommandCenterActivity : AppCompatActivity() {
             setStroke(dp(1), stroke)
         }
 
-    private fun sectionTitle(label: String) = TextView(this).apply {
-        text = label
-        textSize = 14f
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setTextColor(0xFFE8F2FF.toInt())
-        setPadding(dp(3), dp(18), dp(3), dp(8))
-    }
-
     private fun action(label: String, run: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
@@ -195,53 +187,6 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         minHeight = dp(48)
         setOnClickListener { run() }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
-    }
-
-    private fun showMoreTools() {
-        val labels = arrayOf(
-            "Visual Lens और paired devices",
-            "Task Automation और App Control",
-            "AI Memory, Personality और Providers",
-            "फोन के ऐप खोलें",
-            "फाइल मैनेजर",
-            "स्क्रीन पढ़ें (Screenshot AI)",
-            "वेब पर खोजें",
-            "Clipboard Text Tools",
-            "फोन के Hardware और Battery की जानकारी",
-            "फोन की Brightness / Volume",
-            "Flashlight",
-            "Wi-Fi / Bluetooth / Internet",
-            "System Settings",
-            "Notes और Hindi / English OCR",
-            "Voice Language चुनें",
-            "Media Play / Pause / Next"
-        )
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Shraddha Tools")
-            .setItems(labels) { _, which ->
-                when (which) {
-                    0 -> openMainPage("devices")
-                    1 -> openOperator()
-                    2 -> openAiWorkspace()
-                    3 -> showAppLauncher()
-                    4 -> startActivity(Intent(this, FileAccessActivity::class.java))
-                    5 -> readCurrentScreen()
-                    6 -> {
-                        val query = command.text.toString().removePrefix("वेब पर खोजो ")
-                            .removePrefix("search web ").trim()
-                        webSearch(query)
-                    }
-                    7 -> openClipboardTools()
-                    8 -> showMobileHardwareStatus()
-                    9 -> showPhoneLevelControls()
-                    10 -> togglePhoneTorch()
-                    11 -> showConnectivityControls()
-                    12 -> startActivity(Intent(Settings.ACTION_SETTINGS))
-                    13 -> startActivity(Intent(this, NoteOcrActivity::class.java))
-                    14 -> chooseVoiceLanguage()
-                    15 -> showMediaControls()
-                }
-            }.show()
     }
 
     private fun showPhoneLevelControls() {
@@ -412,13 +357,6 @@ class MobileCommandCenterActivity : AppCompatActivity() {
         val labels = arrayOf("Wi-Fi", "Bluetooth", "Internet / SIM", "NFC")
         val keys = arrayOf("wifi", "bluetooth", "internet", "nfc")
         android.app.AlertDialog.Builder(this).setTitle("Connectivity controls")
-            .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
-    }
-
-    private fun showSystemControls() {
-        val labels = arrayOf("Display / Auto-rotate / Screen timeout", "Sound", "Battery saver", "Location", "Do Not Disturb", "Accessibility", "Notification access", "Apps", "Storage", "Date & time", "Language", "Security")
-        val keys = arrayOf("display", "sound", "battery", "location", "dnd", "accessibility", "notifications", "apps", "storage", "date", "language", "security")
-        android.app.AlertDialog.Builder(this).setTitle("Phone system controls")
             .setItems(labels) { _, which -> openMobileSetting(keys[which]) }.show()
     }
 
