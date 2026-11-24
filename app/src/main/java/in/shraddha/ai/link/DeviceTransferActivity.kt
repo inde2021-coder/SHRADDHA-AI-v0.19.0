@@ -328,13 +328,17 @@ class DeviceTransferActivity : Activity() {
             require(msg.optString("transferId") == transferId && incomingOut != null)
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
-            require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
-            progress.progress = (incomingChunks * 100 / incomingCount)
-            status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
-            if (incomingChunks >= incomingCount) verifyIncoming()
+            try {
+                val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
+                require(bytes.size == expected)
+                if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
+                DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
+                progress.progress = (incomingChunks * 100 / incomingCount)
+                status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
+                if (incomingChunks >= incomingCount) verifyIncoming()
+            } finally {
+                bytes.fill(0)
+            }
         } catch (e: Exception) { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
     }
 
