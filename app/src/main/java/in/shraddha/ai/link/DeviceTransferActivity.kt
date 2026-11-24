@@ -267,20 +267,37 @@ class DeviceTransferActivity : Activity() {
             }
             "file_transfer_chunk" -> runCatching { transferIo.execute { receiveChunk(msg) } }.onFailure { status.text = "Receive worker is unavailable." }
             "file_transfer_ack" -> {
-                val index = msg.optInt("index", -1)
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        peer.text.toString().trim(), msg.optString("fromDeviceId"),
+                        transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored file-transfer acknowledgement from an unexpected peer or transfer."
+                    return
+                }
+                val rawIndex = msg.opt("index")
+                if (rawIndex !is Number || rawIndex.toDouble() != rawIndex.toLong().toDouble()) return
+                val index = rawIndex.toInt()
+                val count = DeviceFileTransferProtocol.chunkCount(sourceSize)
                 if (index == -1 && !msg.optBoolean("complete") && msg.optBoolean("ok") && sourceUri != null) {
                     status.text = "Receiver selected a destination. Sending file chunks…"
                     startSending(emptyList())
-                } else if (index >= 0) { lastAck = maxOf(lastAck, index); status.text = "Receiver acknowledged chunk ${index + 1}." }
-                if (msg.optBoolean("complete")) { status.text = "Receiver verified and saved file successfully."; clearTransferState() }
+                } else if (index >= 0 && count != null && index < count) {
+                    status.text = if (msg.optBoolean("ok")) "Receiver acknowledged chunk ${index + 1}." else "Receiver rejected chunk ${index + 1}."
+                }
+                if (msg.optBoolean("complete") && msg.optBoolean("ok")) {
+                    status.text = "Receiver verified and saved file successfully."
+                    clearTransferState()
+                }
             }
             "file_transfer_resume" -> {
                 // Only the sender may act on a resume request, and only for the
                 // currently selected peer and the exact active transfer manifest.
                 val expectedCount = DeviceFileTransferProtocol.chunkCount(sourceSize)
-                if (sourceUri == null || msg.optString("fromDeviceId") != peer.text.toString().trim() ||
-                    msg.optString("transferId") != transferId || expectedCount == null ||
-                    msg.optInt("chunkCount", -1) != expectedCount) {
+                if (sourceUri == null || !DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        peer.text.toString().trim(), msg.optString("fromDeviceId"),
+                        transferId, msg.optString("transferId")
+                    ) || expectedCount == null ||
+                    (msg.opt("chunkCount") as? Number)?.let { it.toDouble() == it.toLong().toDouble() && it.toInt() == expectedCount } != true) {
                     status.text = "Rejected resume request: peer or transfer manifest mismatch."
                     return
                 }
@@ -297,7 +314,17 @@ class DeviceTransferActivity : Activity() {
                 if (indexes.isNotEmpty()) startSending(indexes)
                 else status.text = "Receiver reports no missing chunks."
             }
-            "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
+            "file_transfer_cancel" -> {
+                val expectedPeer = sourcePeer.ifBlank { peer.text.toString().trim() }
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        expectedPeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored cancellation from an unexpected peer or transfer."
+                    return
+                }
+                status.text = "Transfer cancelled: ${msg.optString("reason").take(120)}"
+                clearTransferState()
+            }
         }
     }
 
