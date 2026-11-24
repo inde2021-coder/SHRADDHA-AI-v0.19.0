@@ -1154,9 +1154,6 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
       await noForward;
     }
   } finally {
-    const closes = [ownerSocket, memberSocket].map(socket =>
-      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
-        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
-    await Promise.all(closes);
+    await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
   }
 });
