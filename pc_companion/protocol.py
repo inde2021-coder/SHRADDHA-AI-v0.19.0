@@ -3,7 +3,7 @@ import json
 import math
 import re
 
-_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power"}
+_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -70,7 +70,7 @@ def validate_remote_action(action):
         if operation not in {"shutdown", "restart", "sleep"}:
             return None
         clean["operation"] = operation
-    elif kind == "hardware_status":
+    elif kind in {"hardware_status", "ocr"}:
         pass
     elif kind == "scroll":
         amount = action.get("amount", 5)
