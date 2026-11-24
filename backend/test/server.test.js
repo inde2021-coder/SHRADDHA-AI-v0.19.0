@@ -1162,3 +1162,30 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
   }
 });
+
+
+
+test('short-lived device invitation can pair multiple unique devices within the session limit', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.31' },
+    body: JSON.stringify({ deviceName: 'Multi Device Owner' })
+  });
+  const owner = await ownerResponse.json();
+  assert.equal(ownerResponse.status, 201);
+
+  const join = (deviceName, ip) => fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+    body: JSON.stringify({ deviceName, pairingCode: owner.pairingCode })
+  });
+  const firstResponse = await join('First Companion', '203.0.113.32');
+  const secondResponse = await join('Second Companion', '203.0.113.33');
+  assert.equal(firstResponse.status, 200);
+  assert.equal(secondResponse.status, 200);
+  const first = await firstResponse.json();
+  const second = await secondResponse.json();
+  assert.equal(first.sessionId, owner.sessionId);
+  assert.equal(second.sessionId, owner.sessionId);
+  assert.notEqual(first.deviceId, second.deviceId);
+  assert.notEqual(first.deviceToken, second.deviceToken);
+});
