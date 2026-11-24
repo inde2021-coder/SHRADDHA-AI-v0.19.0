@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -165,4 +165,16 @@ test('malformed expiry entries fail closed and do not poison future remote actio
   assert.equal(pruneExpiredDeviceState(device, 100), 1);
   assert.equal(device.pendingRemoteActions.has('bad'), false);
   assert.equal(device.pendingRemoteActions.has('valid'), true);
+});
+
+
+test('file transfer cancellation is limited to the active sender or receiver', () => {
+  const transferId = 'transfer_12345678';
+  const sender = { incomingTransfers: new Map() };
+  const receiver = { incomingTransfers: new Map([[transferId, { fromDeviceId: 'sender', expiresAt: 500 }]]) };
+  assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', transferId, 100), 'sender');
+  assert.equal(resolveFileTransferCancellation(receiver, sender, 'receiver', 'sender', transferId, 100), 'receiver');
+  assert.equal(resolveFileTransferCancellation({ incomingTransfers: new Map() }, receiver, 'other', 'receiver', transferId, 100), null);
+  assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', transferId, 500), null);
+  assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', '../escape', 100), null);
 });
