@@ -46,6 +46,7 @@ class FileAccessActivity : Activity() {
         root.addView(button("बंद करें") { finish() })
         val outer = ScrollView(this); outer.addView(root); setContentView(outer)
     }
+    @android.annotation.SuppressLint("WrongConstant")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
         if (resultCode != RESULT_OK || data == null) return
