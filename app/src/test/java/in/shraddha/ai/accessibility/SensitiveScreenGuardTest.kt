@@ -14,6 +14,7 @@ class SensitiveScreenGuardTest {
     @Test fun blocksSwipeThatCrossesSensitiveFieldEvenWhenEndpointsAreOutside() {
         val bounds = listOf(SensitiveBounds(100, 200, 300, 260))
         assertTrue(SensitiveScreenGuard.blocksGesture(bounds, 20f, 230f, 380f, 230f))
+        assertTrue(SensitiveScreenGuard.blocksGesture(listOf(SensitiveBounds(100, 200, 101, 260)), 20f, 230f, 380f, 230f))
         assertFalse(SensitiveScreenGuard.blocksGesture(bounds, 20f, 100f, 380f, 100f))
     }
 
