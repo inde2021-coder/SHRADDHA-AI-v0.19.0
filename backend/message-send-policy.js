@@ -47,6 +47,12 @@ export function createMessageReplayGuard({ now = () => Date.now(), ttlMs = 24 * 
     markFailed(requestId) {
       const entry = entries.get(requestId);
       if (entry) { entry.state = 'failed'; entry.expiresAt = now() + Math.min(ttlMs, 5 * 60 * 1000); }
+    },
+    markUnknown(requestId) {
+      const entry = entries.get(requestId);
+      // Provider may have accepted the message even if the response was lost.
+      // Keep this request ID locked for the full idempotency window.
+      if (entry) { entry.state = 'unknown'; entry.expiresAt = now() + ttlMs; }
     }
   };
 }
