@@ -72,6 +72,7 @@ test('storage records contain only a fingerprint and lifecycle metadata', async 
   await guard.claim('request_123456789012', fingerprint);
   const record = [...records.values()][0];
   assert.deepEqual(Object.keys(record).sort(), ['createdAt', 'expiresAt', 'fingerprint', 'state', 'updatedAt']);
+  assert.ok(record.expiresAt instanceof Date);
   assert.equal(JSON.stringify(record).includes('+919876543210'), false);
   assert.equal(JSON.stringify(record).includes('secret message body'), false);
 });
