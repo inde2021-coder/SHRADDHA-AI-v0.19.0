@@ -906,7 +906,7 @@ class PcCompanionApp:
 
     def _handle_file_ack(self, msg):
         pending = self.pending_pc_send
-        if not pending or msg.get("transferId") not in (None, "", pending["transferId"]):
+        if not pending or not matches_transfer_peer(msg, pending["peer"], pending["transferId"]):
             return
         index = int(msg.get("index", -2))
         if index == -1 and msg.get("ok") and not msg.get("complete"):
@@ -953,18 +953,18 @@ class PcCompanionApp:
             raise RuntimeError(f"Relay send failed at chunk {index}")
 
     def _handle_incoming_file_start(self, msg):
-        peer_id = str(msg.get("fromDeviceId", ""))
-        transfer_id = str(msg.get("transferId", ""))
-        size = int(msg.get("sizeBytes", 0))
-        chunks = int(msg.get("chunkCount", 0))
-        digest = str(msg.get("sha256", ""))
-        if not self.is_e2e_trusted(peer_id):
-            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
-                             "transferId": transfer_id, "reason": "peer_not_verified"})
-            return
-        if (not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or size < 1 or size > 20_000_000
-                or chunks != (size + 49151) // 48000 or not re.fullmatch(r"[a-f0-9]{64}", digest)):
-            self.status_var.set("Rejected invalid incoming file manifest.")
+        peer_id = msg.get("fromDeviceId")
+        transfer_id = msg.get("transferId")
+        size = msg.get("sizeBytes")
+        chunks = msg.get("chunkCount")
+        digest = msg.get("sha256")
+        trusted = isinstance(peer_id, str) and self.is_e2e_trusted(peer_id)
+        if not valid_incoming_file_manifest(
+                peer_id, transfer_id, size, chunks, digest, trusted, self.pc_incoming):
+            self.status_var.set("Rejected invalid, untrusted, duplicate, or concurrent incoming file transfer.")
+            if isinstance(peer_id, str) and re.fullmatch(r"[a-f0-9]{24}", peer_id) and isinstance(transfer_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id):
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "invalid_or_untrusted_manifest"})
             return
         destination = filedialog.asksaveasfilename(
             title="Choose where to save incoming file",
@@ -1046,7 +1046,7 @@ class PcCompanionApp:
             self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
             return
         pending = self.pending_pc_send
-        if not pending or transfer_id != pending["transferId"]:
+        if not pending or not matches_transfer_peer(msg, pending["peer"], pending["transferId"]):
             return
         missing = msg.get("missingIndexes", [])
         if isinstance(missing, list):
@@ -1054,13 +1054,19 @@ class PcCompanionApp:
 
     def _handle_file_cancel(self, msg):
         transfer_id = str(msg.get("transferId", ""))
-        if self.pending_pc_send and self.pending_pc_send.get("transferId") == transfer_id:
+        pending = self.pending_pc_send
+        if pending and matches_transfer_peer(msg, pending["peer"], pending["transferId"]):
             self.pending_pc_send = None
-        incoming = self.pc_incoming.pop(transfer_id, None)
-        if incoming:
+            self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
+            return
+        incoming = self.pc_incoming.get(transfer_id)
+        if incoming and matches_transfer_peer(msg, incoming["peer"], transfer_id):
+            self.pc_incoming.pop(transfer_id, None)
             Path(incoming["path"] + ".shraddha-part").unlink(missing_ok=True)
             self._persist_pc_incoming()
-        self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
+            self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
+            return
+        self.status_var.set("Ignored file-transfer cancellation from an unexpected peer or transfer.")
 
     def _send_e2e_key_offer(self, peer_id):
         if not peer_id or peer_id == self.config.get("deviceId"):
