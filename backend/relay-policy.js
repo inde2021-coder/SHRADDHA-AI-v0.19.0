@@ -48,6 +48,14 @@ export function resolveFileTransferCancellation(actor, target, actorId, targetId
   return null;
 }
 
+/** Completion ACKs are valid only after every chunk was positively acknowledged. */
+export function canCompleteFileTransfer(transfer, ok) {
+  return Boolean(transfer && ok === true && Number.isSafeInteger(transfer.chunkCount) &&
+    transfer.chunkCount > 0 && transfer.chunks instanceof Map &&
+    transfer.chunks.size === transfer.chunkCount &&
+    [...transfer.chunks.keys()].every(index => Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount));
+}
+
 export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
   if (!Number.isSafeInteger(index) || !Number.isSafeInteger(chunkCount) || !Number.isSafeInteger(byteLength) ||
       !Number.isSafeInteger(totalBytes) || index < 0 || index >= chunkCount || chunkCount < 1 || totalBytes < 1 || totalBytes > 100 * 1024 * 1024) return false;
