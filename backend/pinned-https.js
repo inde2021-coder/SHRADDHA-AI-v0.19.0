@@ -41,8 +41,17 @@ export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencie
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) throw new Error('Pinned transport accepts HTTPS on port 443 only');
   const resolve4 = dependencies.resolve4 || (host => dns.resolve4(host));
   const request = dependencies.request || https.request;
-  const pinnedAddress = await resolvePinnedPublicIpv4(url.hostname, resolve4);
-  const timeoutMs = options.timeoutMs || 20000;
+  const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+    ? Math.min(options.timeoutMs, 120000) : 20000;
+  const startedAt = Date.now();
+  let dnsTimer;
+  const pinnedAddress = await Promise.race([
+    resolvePinnedPublicIpv4(url.hostname, resolve4),
+    new Promise((_, reject) => {
+      dnsTimer = setTimeout(() => reject(new Error('Mastodon DNS resolution exceeded its time limit')), timeoutMs);
+    })
+  ]).finally(() => clearTimeout(dnsTimer));
+  const remainingMs = Math.max(1, timeoutMs - (Date.now() - startedAt));
   const maxResponseBytes = options.maxResponseBytes || 1024 * 1024;
 
   return new Promise((resolve, reject) => {
@@ -94,8 +103,8 @@ export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencie
       response.on('error', fail);
     });
     // setTimeout is an inactivity timeout; this absolute deadline also stops slow-drip responses.
-    deadline = setTimeout(() => req.destroy(new Error('Mastodon request exceeded its total time limit')), timeoutMs);
-    req.setTimeout(timeoutMs, () => req.destroy(new Error('Mastodon request timed out')));
+    deadline = setTimeout(() => req.destroy(new Error('Mastodon request exceeded its total time limit')), remainingMs);
+    req.setTimeout(remainingMs, () => req.destroy(new Error('Mastodon request timed out')));
     req.on('error', fail);
     if (options.body !== undefined) req.write(options.body);
     req.end();
