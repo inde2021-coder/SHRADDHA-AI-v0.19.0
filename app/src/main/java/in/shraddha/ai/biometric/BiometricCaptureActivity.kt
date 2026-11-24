@@ -188,6 +188,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun challengeText(): String = livenessGate.prompt()
 
+    @OptIn(androidx.camera.core.ExperimentalGetImage::class)
     private fun startCamera() {
         if (cameraStarting) return
         val view = previewView ?: return
