@@ -1,4 +1,5 @@
 import re
+import hashlib
 
 """Shared constants and validation for the Shraddha E2E file-transfer wire format."""
 
@@ -101,3 +102,16 @@ def prepare_retry_queue(queue, in_flight):
     queue[:] = retry
     in_flight.clear()
     return len(retry)
+
+
+def sha256_file(path):
+    """Hash a file in bounded memory, independent of its total size."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+class TransferPersistenceError(Exception):
+    """A durable chunk write succeeded but its recovery bitmap was not committed."""
