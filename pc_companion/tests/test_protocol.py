@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, claim_remote_action_id
 
 
 class ProtocolTests(unittest.TestCase):
@@ -11,6 +11,14 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(valid_pairing_ids("short", "b" * 24))
         self.assertFalse(valid_pairing_ids("a" * 24, "not-a-device-id"))
         self.assertFalse(valid_pairing_ids(None, "b" * 24))
+
+    def test_remote_action_replay_guard_fails_closed_at_capacity(self):
+        receipts = {("peer", f"action_{index:06d}"): 100.0 for index in range(3)}
+        self.assertTrue(claim_remote_action_id(receipts, "peer", "action_fresh_01", 101.0, ttl_seconds=600, max_entries=4))
+        self.assertFalse(claim_remote_action_id(receipts, "peer", "action_new_0002", 102.0, ttl_seconds=600, max_entries=4))
+        self.assertIn(("peer", "action_000000"), receipts)
+        self.assertFalse(claim_remote_action_id(receipts, "peer", "action_fresh_01", 103.0, ttl_seconds=600, max_entries=4))
+        self.assertTrue(claim_remote_action_id(receipts, "peer", "action_new_0002", 701.0, ttl_seconds=600, max_entries=4))
 
     def test_valid_normalized_tap(self):
         self.assertEqual(validate_remote_action({"kind": "tap", "x": 0.5, "y": 1}), {"kind": "tap", "x": 0.5, "y": 1.0})
