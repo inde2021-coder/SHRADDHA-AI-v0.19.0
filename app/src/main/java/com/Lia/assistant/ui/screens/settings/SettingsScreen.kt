@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import `in`.shraddha.ai.future.CouncilCostBudget
 import com.Lia.assistant.voice.ConversationMemory
 import `in`.shraddha.ai.operator.VoiceToolActionJournal
@@ -98,6 +102,9 @@ private fun SettingsScreenContent(
     var gatewayTokenInput by remember { mutableStateOf(savedGateway.gatewayToken) }
     var gatewaySaveError by remember { mutableStateOf(savedGateway.readError) }
     var gatewayConfigured by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
+    var gatewayTesting by remember { mutableStateOf(false) }
+    var gatewayTestStatus by remember { mutableStateOf<String?>(null) }
+    val settingsScope = rememberCoroutineScope()
     var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
     var voiceMemoryError by remember { mutableStateOf(ConversationMemory.persistenceError()) }
     val voiceActionJournal = remember { VoiceToolActionJournal(context) }
@@ -118,6 +125,7 @@ private fun SettingsScreenContent(
     }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
+    var expandedSettingsGroup by remember { mutableStateOf<String?>(null) }
     var showHomeDesignDialog by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -191,7 +199,12 @@ private fun SettingsScreenContent(
         }
 
         // Shraddha AI settings, grouped around its own design system and capabilities.
-        NovaSectionHeader(title = "Personality")
+        SettingsGroupHeader(
+            title = "Personality",
+            expanded = expandedSettingsGroup == "Personality",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Personality") null else "Personality" }
+        )
+        if (expandedSettingsGroup == "Personality") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -213,7 +226,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Voice & Language")
+        }
+
+        SettingsGroupHeader(
+            title = "Voice & Language",
+            expanded = expandedSettingsGroup == "Voice & Language",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Voice & Language") null else "Voice & Language" }
+        )
+        if (expandedSettingsGroup == "Voice & Language") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -257,7 +277,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Chats & Memory")
+        }
+
+        SettingsGroupHeader(
+            title = "Chats & Memory",
+            expanded = expandedSettingsGroup == "Chats & Memory",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Chats & Memory") null else "Chats & Memory" }
+        )
+        if (expandedSettingsGroup == "Chats & Memory") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -287,6 +314,8 @@ private fun SettingsScreenContent(
                     onClick = { navController.navigate("history") }
                 )
             }
+        }
+
         }
 
         if (voiceActionError != null || voiceActionEntry?.state in setOf("EXECUTING", "FAILED")) {
@@ -322,7 +351,12 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Look & Feel")
+        SettingsGroupHeader(
+            title = "Look & Feel",
+            expanded = expandedSettingsGroup == "Look & Feel",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Look & Feel") null else "Look & Feel" }
+        )
+        if (expandedSettingsGroup == "Look & Feel") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -372,7 +406,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Connections")
+        }
+
+        SettingsGroupHeader(
+            title = "Connections",
+            expanded = expandedSettingsGroup == "Connections",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Connections") null else "Connections" }
+        )
+        if (expandedSettingsGroup == "Connections") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -404,7 +445,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Main Brain • API Cost Control")
+        }
+
+        SettingsGroupHeader(
+            title = "Main Brain • API Cost Control",
+            expanded = expandedSettingsGroup == "Main Brain • API Cost Control",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Main Brain • API Cost Control") null else "Main Brain • API Cost Control" }
+        )
+        if (expandedSettingsGroup == "Main Brain • API Cost Control") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -424,7 +472,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Privacy & Security")
+        }
+
+        SettingsGroupHeader(
+            title = "Privacy & Security",
+            expanded = expandedSettingsGroup == "Privacy & Security",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Privacy & Security") null else "Privacy & Security" }
+        )
+        if (expandedSettingsGroup == "Privacy & Security") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -447,7 +502,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Broadcast & Voice Rooms")
+        }
+
+        SettingsGroupHeader(
+            title = "Broadcast & Voice Rooms",
+            expanded = expandedSettingsGroup == "Broadcast & Voice Rooms",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Broadcast & Voice Rooms") null else "Broadcast & Voice Rooms" }
+        )
+        if (expandedSettingsGroup == "Broadcast & Voice Rooms") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -459,7 +521,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "About & Support")
+        }
+
+        SettingsGroupHeader(
+            title = "About & Support",
+            expanded = expandedSettingsGroup == "About & Support",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "About & Support") null else "About & Support" }
+        )
+        if (expandedSettingsGroup == "About & Support") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -470,11 +539,13 @@ private fun SettingsScreenContent(
                 )
             }
         }
+        }
+
     }
 
     if (showHomeDesignDialog) {
         val designs = listOf(
-            "LIA_GLASS" to ("Shraddha Signature" to "Elegant layered glass cards and spacious hero"),
+            "SHRADDHA_SIGNATURE" to ("Shraddha Signature" to "Elegant layered glass cards and spacious hero"),
             "ROYAL_3D" to ("Royal 3D" to "Deep 3D panels, raised controls and premium depth"),
             "COSMIC_ORB" to ("Cosmic Orb" to "Large animated orb with immersive assistant focus"),
             "AI_ROBOT" to ("AI Robot" to "Avatar-led assistant layout with quick control dock"),
@@ -540,22 +611,68 @@ private fun SettingsScreenContent(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(gatewaySaveError!!, color = colors.error, fontSize = 12.sp)
                     }
+                    gatewayTestStatus?.let { status ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            status,
+                            color = if (status.startsWith("Backend connected")) colors.success else colors.error,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             },
             confirmButton = {
-                NovaButton(
-                    text = "Save Secure Backend",
-                    onClick = {
-                        val result = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
-                        result.onSuccess {
-                            gatewayConfigured = true
-                            gatewaySaveError = null
-                            showGatewayDialog = false
-                        }.onFailure {
-                            gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(
+                        text = if (gatewayTesting) "Testing…" else "Test Backend",
+                        type = NovaButtonType.SECONDARY,
+                        enabled = !gatewayTesting,
+                        onClick = {
+                            val saved = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
+                            saved.onFailure {
+                                gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                            }.onSuccess {
+                                gatewayConfigured = true
+                                gatewaySaveError = null
+                                gatewayTesting = true
+                                gatewayTestStatus = "Checking HTTPS backend, gateway token and server-side Gemini API configuration…"
+                                settingsScope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            val diagnostic = VoiceGatewaySettings.testConnection(context)
+                                            val providers = VoiceGatewaySettings.configuredProviders(context).orEmpty()
+                                            check("GEMINI" in providers) {
+                                                "Backend/token OK, but GEMINI_API_KEY is not configured on the server. " + diagnostic
+                                            }
+                                            diagnostic
+                                        }
+                                    }
+                                    gatewayTestStatus = result.fold(
+                                        onSuccess = { diagnostic ->
+                                            "Backend connected. Gemini Live is configured. $diagnostic"
+                                        },
+                                        onFailure = { "Backend connection failed: ${it.localizedMessage ?: "Unknown error"}" }
+                                    )
+                                    gatewayTesting = false
+                                }
+                            }
                         }
-                    }
-                )
+                    )
+                    NovaButton(
+                        text = "Save",
+                        onClick = {
+                            val result = VoiceGatewaySettings.save(context, gatewayUrlInput, gatewayTokenInput)
+                            result.onSuccess {
+                                gatewayConfigured = true
+                                gatewaySaveError = null
+                                gatewayTestStatus = null
+                                showGatewayDialog = false
+                            }.onFailure {
+                                gatewaySaveError = it.localizedMessage ?: "Could not save backend settings"
+                            }
+                        }
+                    )
+                }
             },
             dismissButton = {
                 NovaButton(
@@ -697,5 +814,24 @@ private fun SettingsScreenContent(
             },
             containerColor = colors.surfaceRaised
         )
+    }
+}
+
+@Composable
+private fun SettingsGroupHeader(title: String, expanded: Boolean, onClick: () -> Unit) {
+    val colors = LocalNovaColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfaceRaised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Spacer(Modifier.weight(1f))
+        Text(if (expanded) "−" else "+", color = colors.accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
