@@ -1147,6 +1147,10 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     for (const invalid of [
       { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1, 1] },
       { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [3] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1.5] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 2, missingIndexes: [1] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId: 'invalid transfer id', chunkCount: 3, missingIndexes: [1] },
+      { type: 'file_transfer_resume', targetDeviceId: 'unknown-device', transferId, chunkCount: 3, missingIndexes: [1] },
       { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3 }
     ]) {
       const noForward = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
