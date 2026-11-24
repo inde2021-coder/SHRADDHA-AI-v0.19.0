@@ -81,9 +81,15 @@ class DeviceTransferActivity : Activity() {
     override fun onDestroy() {
         cancelled.set(true)
         paused.set(false)
-        runCatching { incomingOut?.fd?.sync() }
-        runCatching { incomingOut?.close() }
-        incomingOut = null
+        synchronized(ackMonitor) { ackMonitor.notifyAll() }
+        runCatching {
+            transferIo.execute {
+                runCatching { incomingOut?.fd?.sync() }
+                runCatching { incomingOut?.close() }
+                incomingOut = null
+            }
+            transferIo.shutdown()
+        }
         if (DeviceLinkManager.onFileTransferMessage != null) DeviceLinkManager.onFileTransferMessage = null
         super.onDestroy()
     }
