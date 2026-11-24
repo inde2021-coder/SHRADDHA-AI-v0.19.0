@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicLong
 /** Authenticated relay client. Deploy behind HTTPS/WSS; never use an untrusted relay. */
 object DeviceLinkManager {
     private val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
+    // Bound Visual Lens calls: a stalled HTTP response must not keep the camera analysis gate locked for OkHttp's default 10-minute read timeout.
+    private val visionClient = buildVisionHttpClient(client)
     private val reconnectHandler = Handler(Looper.getMainLooper())
     @Volatile private var appContext: Context? = null
     @Volatile private var lastBaseUrl: String? = null
@@ -400,7 +402,7 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/chat")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        client.newCall(builder.build()).enqueue(object : Callback {
+        visionClient.newCall(builder.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
                 response.use {
