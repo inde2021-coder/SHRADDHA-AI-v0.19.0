@@ -31,6 +31,13 @@ export function validFileTransferManifest(sizeBytes, chunkCount, sha256, transfe
     typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId);
 }
 
+/** Completion ACKs are valid only after every chunk was acknowledged by the receiver. */
+export function canCompleteFileTransfer(transfer, ok) {
+  return Boolean(transfer && ok === true && Number.isSafeInteger(transfer.chunkCount) &&
+    transfer.chunkCount > 0 && transfer.chunks instanceof Map &&
+    transfer.chunks.size === transfer.chunkCount);
+}
+
 export function validFileTransferChunk(index, chunkCount, byteLength, totalBytes) {
   if (!Number.isSafeInteger(index) || !Number.isSafeInteger(chunkCount) || !Number.isSafeInteger(byteLength) ||
       !Number.isSafeInteger(totalBytes) || index < 0 || index >= chunkCount || chunkCount < 1 || totalBytes < 1 || totalBytes > 100 * 1024 * 1024) return false;
