@@ -9,6 +9,9 @@ import { ref as databaseRef, set as databaseSet, get as databaseGet } from "fire
 const projectId = "demo-shraddha-ai";
 const format = "AES-256-GCM/PBKDF2-SHA256-v1";
 const readRules = relativePath => fs.readFileSync(new URL(relativePath, import.meta.url), "utf8");
+const deployedFirestoreRules = readRules("../firestore.rules");
+const deployedStorageRules = readRules("../storage.rules");
+
 let env;
 
 before(async () => {
@@ -22,6 +25,11 @@ before(async () => {
 
 after(async () => {
   await env?.cleanup();
+});
+
+test("root Firebase rule copies stay identical to firebase.json deployment targets", async () => {
+  assert.equal(fs.readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8"), deployedFirestoreRules);
+  assert.equal(fs.readFileSync(new URL("../../storage.rules", import.meta.url), "utf8"), deployedStorageRules);
 });
 
 test("Firestore vault is owner-only and rejects malformed payloads", async () => {
