@@ -168,14 +168,21 @@ fun SocialPublishingScreen(navController: NavController) {
                 Text(if (platform == "instagram") "Instagram media type" else "Facebook Page media type", color = colors.accent)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     (if (platform == "instagram") listOf("image", "reel", "story_image", "story_video") else listOf("image", "video")).forEach { kind ->
-                        FilterChip(selected = mediaKind == kind, onClick = { mediaKind = kind }, label = { Text(kind.replace('_', ' ').replaceFirstChar { it.uppercase() }) })
+                        FilterChip(selected = mediaKind == kind, enabled = !busy && !mediaPickerOpen, onClick = { mediaKind = kind }, label = { Text(kind.replace('_', ' ').replaceFirstChar { it.uppercase() }) })
                     }
                 }
                 OutlinedTextField(value = mediaUrl, onValueChange = { mediaUrl = it.take(2048) }, label = { Text("Public HTTPS media URL") }, modifier = Modifier.fillMaxWidth())
                 NovaButton(text = if (busy) "UPLOADING…" else "SELECT & UPLOAD MEDIA", onClick = {
                     val types = if (mediaKind in setOf("image", "story_image")) arrayOf("image/jpeg", "image/png", "image/webp") else arrayOf("video/mp4")
-                    mediaPicker.launch(types)
-                }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                    pickerPlatform = platform
+                    pickerMediaKind = mediaKind
+                    mediaPickerOpen = true
+                    runCatching { mediaPicker.launch(types) }
+                        .onFailure {
+                            mediaPickerOpen = false
+                            status = "Could not open media picker: ${it.message ?: "unknown error"}"
+                        }
+                }, enabled = !busy && !mediaPickerOpen, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
                 Text("Maximum 100 MiB. Files are stored under your Firebase account; the download URL is shared with the selected social provider only when you publish or schedule.", color = colors.textSecondary)
                 Text("Meta must be able to fetch this public HTTPS URL. Instagram supports Feed, Reel and Story; Facebook Pages support image and video posts. Credentials stay on the backend.", color = colors.textSecondary)
             }
