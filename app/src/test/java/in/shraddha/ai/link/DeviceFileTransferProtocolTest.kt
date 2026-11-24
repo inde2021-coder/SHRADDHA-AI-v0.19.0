@@ -48,4 +48,11 @@ class DeviceFileTransferProtocolTest {
         assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName("\u0000"))
     }
 
+    @Test fun bindsChunksAndAcknowledgementsToExpectedPeerAndTransfer() {
+        assertTrue(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-A", "transfer_123456", "transfer_123456"))
+        assertFalse(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-B", "transfer_123456", "transfer_123456"))
+        assertFalse(DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-A", "transfer_123456", "transfer_654321"))
+        assertFalse(DeviceFileTransferProtocol.isExpectedPeerMessage("", "peer-A", "transfer_123456", "transfer_123456"))
+    }
+
 }
