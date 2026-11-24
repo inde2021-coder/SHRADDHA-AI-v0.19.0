@@ -52,17 +52,41 @@ fun SocialPublishingScreen(navController: NavController) {
     var scheduledAt by remember { mutableStateOf(Instant.now().plusSeconds(3600).toString()) }
     var mediaKind by remember { mutableStateOf("image") }
     var mediaUrl by remember { mutableStateOf("") }
+    var mediaBase64 by remember { mutableStateOf("") }
+    var mediaMimeType by remember { mutableStateOf("") }
+    var mediaFileName by remember { mutableStateOf("") }
     var pendingAction by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var mediaPickerOpen by remember { mutableStateOf(false) }
+    var pickerPlatform by remember { mutableStateOf("telegram") }
+    var pickerMediaKind by remember { mutableStateOf("image") }
     var status by remember { mutableStateOf("Choose a platform, review the exact post, then publish now or schedule it.") }
     var scheduledPosts by remember { mutableStateOf<JSONArray?>(null) }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        mediaPickerOpen = false
+        val selectedPlatform = pickerPlatform
+        val selectedMediaKind = pickerMediaKind
         if (uri != null && !busy) {
             busy = true
             scope.launch {
-                val result = runCatching { SocialPublishingClient.uploadMedia(context, uri, platform, mediaKind) }
-                result.onSuccess { mediaUrl = it; status = "Media uploaded securely. Meta can fetch it using the protected download URL." }
-                    .onFailure { status = "Media upload failed: " + (it.message ?: "unknown error") }
+                val result = runCatching {
+                    if (selectedPlatform == "instagram" || selectedPlatform == "facebook") {
+                        val url = SocialPublishingClient.uploadMedia(context, uri, selectedPlatform, selectedMediaKind)
+                        mediaUrl = url
+                        mediaBase64 = ""
+                        mediaMimeType = ""
+                        mediaFileName = ""
+                        status = "Media uploaded to your Firebase storage. Meta receives its URL only when you confirm publishing."
+                    } else {
+                        val payload = SocialPublishingClient.encodeBinaryMedia(context, uri, selectedPlatform, selectedMediaKind)
+                        mediaBase64 = payload.getString("mediaBase64")
+                        mediaMimeType = payload.getString("mimeType")
+                        mediaFileName = payload.getString("fileName")
+                        mediaUrl = ""
+                        status = "Media prepared locally (${(mediaBase64.length * 3L / 4L / 1024L)} KiB). It is sent to the selected provider only after final confirmation."
+                    }
+                }
+                result.onFailure { status = "Media preparation failed: " + (it.message ?: "unknown error") }
                 busy = false
             }
         }
@@ -96,12 +120,26 @@ fun SocialPublishingScreen(navController: NavController) {
         scope.launch {
             val result = runCatching {
                 when (action) {
-                    "publish" -> SocialPublishingClient.publish(context, platform, text.trim(), mediaKind.takeIf { platform == "instagram" || platform == "facebook" }, mediaUrl.trim().takeIf { platform == "instagram" || platform == "facebook" }).toString()
+                    "publish" -> SocialPublishingClient.publish(
+                        context, platform, text.trim(),
+                        mediaKind.takeIf { platform in setOf("instagram", "facebook") || (platform in setOf("telegram", "mastodon") && mediaBase64.isNotBlank()) },
+                        mediaUrl.trim().takeIf { platform == "instagram" || platform == "facebook" },
+                        mediaBase64.takeIf { it.isNotBlank() },
+                        mediaMimeType.takeIf { it.isNotBlank() },
+                        mediaFileName.takeIf { it.isNotBlank() }
+                    ).toString()
                     else -> SocialPublishingClient.schedule(context, platform, text.trim(), scheduledAt.trim(), mediaKind = mediaKind.takeIf { platform == "instagram" || platform == "facebook" }, mediaUrl = mediaUrl.trim().takeIf { platform == "instagram" || platform == "facebook" }).toString()
                 }
             }
             status = result.fold(
-                { if (action == "publish") "Provider accepted the post: $it" else "Scheduled post saved: $it" },
+                {
+                    if (action == "publish") {
+                        mediaBase64 = ""
+                        mediaMimeType = ""
+                        mediaFileName = ""
+                        "Provider accepted the post: $it"
+                    } else "Scheduled post saved: $it"
+                },
                 { "Not submitted: ${it.message ?: "unknown error"}" }
             )
             busy = false
@@ -120,7 +158,7 @@ fun SocialPublishingScreen(navController: NavController) {
             platforms.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { item ->
-                        FilterChip(selected = platform == item, onClick = { platform = item }, label = { Text(item.replaceFirstChar { it.uppercase() }) })
+                        FilterChip(selected = platform == item, onClick = { platform = item; mediaUrl = ""; mediaBase64 = ""; mediaMimeType = ""; mediaFileName = ""; mediaKind = "image" }, enabled = !busy && !mediaPickerOpen, label = { Text(item.replaceFirstChar { it.uppercase() }) })
                     }
                 }
             }
@@ -130,22 +168,67 @@ fun SocialPublishingScreen(navController: NavController) {
                 Text(if (platform == "instagram") "Instagram media type" else "Facebook Page media type", color = colors.accent)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     (if (platform == "instagram") listOf("image", "reel", "story_image", "story_video") else listOf("image", "video")).forEach { kind ->
-                        FilterChip(selected = mediaKind == kind, onClick = { mediaKind = kind }, label = { Text(kind.replace('_', ' ').replaceFirstChar { it.uppercase() }) })
+                        FilterChip(selected = mediaKind == kind, enabled = !busy && !mediaPickerOpen, onClick = { mediaKind = kind }, label = { Text(kind.replace('_', ' ').replaceFirstChar { it.uppercase() }) })
                     }
                 }
                 OutlinedTextField(value = mediaUrl, onValueChange = { mediaUrl = it.take(2048) }, label = { Text("Public HTTPS media URL") }, modifier = Modifier.fillMaxWidth())
                 NovaButton(text = if (busy) "UPLOADING…" else "SELECT & UPLOAD MEDIA", onClick = {
                     val types = if (mediaKind in setOf("image", "story_image")) arrayOf("image/jpeg", "image/png", "image/webp") else arrayOf("video/mp4")
-                    mediaPicker.launch(types)
-                }, enabled = !busy, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                    pickerPlatform = platform
+                    pickerMediaKind = mediaKind
+                    mediaPickerOpen = true
+                    runCatching { mediaPicker.launch(types) }
+                        .onFailure {
+                            mediaPickerOpen = false
+                            status = "Could not open media picker: ${it.message ?: "unknown error"}"
+                        }
+                }, enabled = !busy && !mediaPickerOpen, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
                 Text("Maximum 100 MiB. Files are stored under your Firebase account; the download URL is shared with the selected social provider only when you publish or schedule.", color = colors.textSecondary)
                 Text("Meta must be able to fetch this public HTTPS URL. Instagram supports Feed, Reel and Story; Facebook Pages support image and video posts. Credentials stay on the backend.", color = colors.textSecondary)
             }
         }
+        if (platform == "telegram" || platform == "mastodon") {
+            NovaGlassCard {
+                Text("POST MEDIA", color = colors.accent)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("image", "video").forEach { kind ->
+                        FilterChip(selected = mediaKind == kind, enabled = !busy && !mediaPickerOpen, onClick = {
+                            mediaKind = kind
+                            mediaBase64 = ""
+                            mediaMimeType = ""
+                            mediaFileName = ""
+                            status = "Choose a new ${kind} file to attach."
+                        }, label = { Text(kind.replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+                NovaButton(text = if (busy) "PREPARING…" else "SELECT IMAGE / VIDEO (MAX 8 MiB)", onClick = {
+                    val types = if (mediaKind == "image" && platform == "telegram") arrayOf("image/jpeg", "image/png")
+                        else if (mediaKind == "image") arrayOf("image/jpeg", "image/png", "image/webp")
+                        else if (platform == "telegram") arrayOf("video/mp4") else arrayOf("video/mp4", "video/quicktime")
+                    mediaBase64 = ""
+                    mediaMimeType = ""
+                    mediaFileName = ""
+                    pickerPlatform = platform
+                    pickerMediaKind = mediaKind
+                    mediaPickerOpen = true
+                    runCatching { mediaPicker.launch(types) }
+                        .onFailure {
+                            mediaPickerOpen = false
+                            status = "Could not open media picker: ${it.message ?: "unknown error"}"
+                        }
+                }, enabled = !busy && !mediaPickerOpen, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                Text(
+                    if (mediaBase64.isNotBlank()) "Attached: ${mediaFileName} • ${mediaMimeType}" else "Image/video is encoded on-device and uploaded only after you confirm the exact post.",
+                    color = colors.textSecondary
+                )
+                Text("Binary media is limited to 8 MiB for Telegram and Mastodon. Scheduled binary-media posts are not supported yet.", color = colors.textSecondary)
+            }
+        }
+
         NovaGlassCard {
             Text("DURABLE SCHEDULE", color = colors.accent)
             OutlinedTextField(value = scheduledAt, onValueChange = { scheduledAt = it.take(48) }, label = { Text("ISO-8601 date/time with timezone") }, modifier = Modifier.fillMaxWidth())
-            Text("Use ISO-8601 with a timezone. Instagram Feed/Reel/Story and Facebook Page image/video scheduling use the selected media type and a public HTTPS media URL. Other platforms schedule text posts. Scheduling requires Firebase sign-in and backend Firebase Admin credentials. Ambiguous provider outcomes are not blindly retried.", color = colors.textSecondary)
+            Text("Use ISO-8601 with a timezone. Instagram Feed/Reel/Story and Facebook Page image/video scheduling use the selected media type and a public HTTPS media URL. Telegram and Mastodon currently schedule text-only posts; attached binary media must be published immediately. Scheduling requires Firebase sign-in and backend Firebase Admin credentials. Ambiguous provider outcomes are not blindly retried.", color = colors.textSecondary)
         }
         NovaGlassCard {
             Text(status, color = colors.textSecondary)
@@ -168,7 +251,7 @@ fun SocialPublishingScreen(navController: NavController) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NovaButton(text = "PUBLISH NOW", onClick = { pendingAction = "publish" }, enabled = !busy && text.isNotBlank() && ( platform !in setOf("instagram", "facebook") || mediaUrl.startsWith("https://") && mediaKind in if (platform == "instagram") setOf("image", "reel", "story_image", "story_video") else setOf("image", "video")), modifier = Modifier.weight(1f))
-                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && (platform !in setOf("instagram", "facebook") || mediaUrl.startsWith("https://") && mediaKind in if (platform == "instagram") setOf("image", "reel", "story_image", "story_video") else setOf("image", "video")), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                NovaButton(text = "SCHEDULE", onClick = { pendingAction = "schedule" }, enabled = !busy && text.isNotBlank() && mediaBase64.isBlank() && (platform !in setOf("instagram", "facebook") || mediaUrl.startsWith("https://") && mediaKind in if (platform == "instagram") setOf("image", "reel", "story_image", "story_video") else setOf("image", "video")), modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
             }
         }
     }
@@ -179,7 +262,7 @@ fun SocialPublishingScreen(navController: NavController) {
             title = { Text(if (pendingAction == "publish") "Confirm exact post" else "Confirm scheduled post") },
             text = { Text(
                 "Platform: ${platform.uppercase()}\n" +
-                    (if (platform == "instagram" || platform == "facebook") "Media: $mediaKind\nURL: $mediaUrl\n" else "") +
+                    (if (platform == "instagram" || platform == "facebook") "Media: $mediaKind\nURL: $mediaUrl\n" else if (mediaBase64.isNotBlank()) "Attachment: $mediaKind • $mediaFileName • $mediaMimeType\n" else "") +
                     "\n${text.trim()}\n\n" +
                     (if (pendingAction == "schedule") "Scheduled at: $scheduledAt" else "Publish immediately")
             ) },

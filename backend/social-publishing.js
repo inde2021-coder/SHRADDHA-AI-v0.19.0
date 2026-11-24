@@ -24,6 +24,13 @@ export function validatePublishIntent(body) {
     if (!['image', 'video'].includes(mediaKind)) throw new Error('Choose a Facebook Page image or video post');
     return { platform, text, mediaKind, mediaUrl: validateInstagramMediaUrl(body.mediaUrl) };
   }
+  if (body.mediaBase64 !== undefined) {
+    if (!['telegram', 'mastodon'].includes(platform)) throw new Error('Binary media uploads are supported only for Telegram and Mastodon');
+    if (body.mediaUrl !== undefined) throw new Error('Binary media uploads cannot include a public media URL');
+    const mediaKind = String(body.mediaKind || '').toLowerCase();
+    if (!['image', 'video'].includes(mediaKind)) throw new Error('Choose an image or video attachment');
+    return { platform, text, mediaKind };
+  }
   if (body.mediaUrl !== undefined || body.mediaKind !== undefined) throw new Error('Public media URLs are only supported for Facebook and Instagram');
   return { platform, text };
 }
@@ -84,7 +91,7 @@ export function validateMediaAttachment(body, platform) {
   const mimeType = String(body.mimeType || '').toLowerCase();
   const kind = String(body.mediaKind || '').toLowerCase();
   const allowed = kind === 'image'
-    ? new Set(['image/jpeg', 'image/png', 'image/webp'])
+    ? (platform === 'telegram' ? new Set(['image/jpeg', 'image/png']) : new Set(['image/jpeg', 'image/png', 'image/webp']))
     : kind === 'video'
       ? (platform === 'telegram' ? new Set(['video/mp4']) : new Set(['video/mp4', 'video/quicktime']))
       : new Set();
