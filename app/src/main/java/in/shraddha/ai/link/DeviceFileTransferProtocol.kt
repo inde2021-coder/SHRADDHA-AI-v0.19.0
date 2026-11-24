@@ -11,6 +11,17 @@ internal object DeviceFileTransferProtocol {
         return ((sizeBytes + CHUNK_BYTES - 1) / CHUNK_BYTES).toInt()
     }
 
+    fun isValidManifest(transferId: String, sizeBytes: Long, declaredChunkCount: Int, sha256: String): Boolean =
+        transferId.matches(Regex("^[A-Za-z0-9_-]{12,64}$")) &&
+            chunkCount(sizeBytes) == declaredChunkCount &&
+            sha256.matches(Regex("^[a-fA-F0-9]{64}$"))
+
+    fun safeDisplayName(value: String): String = value
+        .replace(Regex("[\\\\/\\u0000-\\u001f\\u007f]"), "_")
+        .trim()
+        .take(120)
+        .ifBlank { "shared-file" }
+
     fun expectedChunkBytes(sizeBytes: Long, declaredChunkCount: Int, index: Int): Int? {
         val expectedCount = chunkCount(sizeBytes) ?: return null
         if (declaredChunkCount != expectedCount || index !in 0 until declaredChunkCount) return null
