@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -188,4 +188,21 @@ test('relay output backpressure rejects payloads that exceed the bounded peer qu
   assert.equal(canQueueRelayPayload(0, limit + 1), false);
   assert.equal(canQueueRelayPayload(-1, 1), false);
   assert.equal(canQueueRelayPayload(1, -1), false);
+});
+
+
+test('file-transfer completion requires positive acknowledgement for every chunk', () => {
+  const transfer = { chunkCount: 3, chunks: new Map() };
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(0, true);
+  transfer.chunks.set(1, true);
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(2, false);
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(2, true);
+  assert.equal(canCompleteFileTransfer(transfer, true), true);
+  assert.equal(canCompleteFileTransfer(transfer, false), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 3, chunks: new Map([[0, true], [1, true], [2, true], [3, true]]) }, true), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 0, chunks: new Map() }, true), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 2201, chunks: new Map() }, true), false);
 });
