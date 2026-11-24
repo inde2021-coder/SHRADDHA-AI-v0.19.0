@@ -157,3 +157,12 @@ export function pruneExpiredDeviceState(device, now = Date.now()) {
   prune(device.grants);
   return removed;
 }
+
+
+/** Bound queued relay output so a slow paired device cannot grow server memory without limit. */
+export function canQueueRelayPayload(bufferedAmount, payloadBytes, maxBufferedBytes = 8 * 1024 * 1024) {
+  return Number.isSafeInteger(bufferedAmount) && bufferedAmount >= 0 &&
+    Number.isSafeInteger(payloadBytes) && payloadBytes >= 0 &&
+    Number.isSafeInteger(maxBufferedBytes) && maxBufferedBytes > 0 &&
+    payloadBytes <= maxBufferedBytes && bufferedAmount <= maxBufferedBytes - payloadBytes;
+}
