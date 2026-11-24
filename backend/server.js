@@ -67,6 +67,8 @@ async function authenticatedFirebaseUid(req) {
   return decoded.uid;
 }
 
+
+
 function socialScheduler() {
   const { db } = getSocialAdmin();
   return createSocialScheduler({
@@ -417,6 +419,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/social/publish') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
+      try { await authorizedSocialPublisherUid(req); }
+      catch (error) { return json(res, error.statusCode || 401, { error: String(error.message || 'Social publisher authorization failed').slice(0, 240) }); }
       const body = await readBody(req, 12 * 1024 * 1024);
       let intent;
       try { intent = validatePublishIntent(body); }
@@ -428,7 +432,7 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const body = await readBody(req, 24 * 1024);
       try {
-        const uid = await authenticatedFirebaseUid(req);
+        const uid = await authorizedSocialPublisherUid(req);
         const scheduled = await socialScheduler().schedule(uid, body);
         return json(res, scheduled.idempotent ? 200 : 201, { ok: true, ...scheduled });
       } catch (error) {
@@ -438,7 +442,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/api/social/schedule/list') {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       try {
-        const uid = await authenticatedFirebaseUid(req);
+        const uid = await authorizedSocialPublisherUid(req);
         return json(res, 200, { ok: true, posts: await socialScheduler().list(uid, 50) });
       } catch (error) {
         return json(res, error.statusCode || 400, { error: String(error.message || 'Schedule list request failed').slice(0, 240) });
@@ -448,7 +452,7 @@ const server = http.createServer(async (req, res) => {
       if (!gatewayAuthorized(req)) return json(res, 401, { error: 'Gateway authentication is required' });
       const body = await readBody(req, 8 * 1024);
       try {
-        const uid = await authenticatedFirebaseUid(req);
+        const uid = await authorizedSocialPublisherUid(req);
         const cancelled = await socialScheduler().cancel(uid, body.id);
         return json(res, 200, { ok: true, ...cancelled });
       } catch (error) {
