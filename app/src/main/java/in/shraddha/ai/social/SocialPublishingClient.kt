@@ -92,13 +92,16 @@ object SocialPublishingClient {
             .put("fileName", "shraddha-upload.$extension")
     }
 
-    suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null, mediaBase64: String? = null, mimeType: String? = null, fileName: String? = null): JSONObject =
-        withContext(Dispatchers.IO) {
+    suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null, mediaBase64: String? = null, mimeType: String? = null, fileName: String? = null): JSONObject {
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in with the authorized Firebase owner account before publishing.")
+        val idToken = user.getIdToken(false).await().token ?: error("Could not obtain Firebase user token.")
+        return withContext(Dispatchers.IO) {
             val body = JSONObject().put("platform", platform).put("text", text).put("preview", text).put("confirmed", true)
             if (platform == "instagram" || platform == "facebook") body.put("mediaKind", mediaKind).put("mediaUrl", mediaUrl)
             if (!mediaBase64.isNullOrBlank()) body.put("mediaKind", mediaKind).put("mediaBase64", mediaBase64).put("mimeType", mimeType).put("fileName", fileName)
-            request(context, "/api/social/publish", body)
+            request(context, "/api/social/publish", body, idToken)
         }
+    }
 
     suspend fun schedule(
         context: Context, platform: String, text: String, scheduledAt: String,
