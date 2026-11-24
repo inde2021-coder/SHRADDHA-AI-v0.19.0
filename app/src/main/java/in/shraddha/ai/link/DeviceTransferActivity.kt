@@ -16,6 +16,7 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import java.util.concurrent.Executors
 
 /** SAF-based, consent-gated 100 MiB file transfer workspace. */
 class DeviceTransferActivity : Activity() {
@@ -45,6 +46,8 @@ class DeviceTransferActivity : Activity() {
     private val cancelled = AtomicBoolean(false)
     private var lastAck = -1
     private var sendThread: Thread? = null
+    private val transferIo = Executors.newSingleThreadExecutor()
+    private var peerIdSnapshot = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
