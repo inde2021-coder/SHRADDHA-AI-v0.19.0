@@ -30,12 +30,9 @@ class RemoteActionReplayGuard(
 
             val key = "$peerId|$actionId"
             if (seen.containsKey(key)) return false
-            while (seen.size >= capacity) {
-                val oldest = seen.entries.iterator()
-                if (!oldest.hasNext()) break
-                oldest.next()
-                oldest.remove()
-            }
+            // Fail closed at capacity. Evicting a prior action ID would make a
+            // still-valid captured ciphertext executable again within the TTL.
+            if (seen.size >= capacity) return false
             seen[key] = now
             return true
         }
