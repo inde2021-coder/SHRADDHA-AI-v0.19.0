@@ -17,31 +17,27 @@ import java.util.Random
 val LocalBottomBarInset = compositionLocalOf { 80.dp }
 
 fun Modifier.nightSky(): Modifier = this.drawBehind {
-    val gradient = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF172541),
-            Color(0xFF0D1829),
-            Color(0xFF070C16)
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFF9F6FF),
+                Color(0xFFF0E9FF),
+                Color(0xFFF7F4FF)
+            )
         )
     )
-    drawRect(brush = gradient)
-
-    // Deterministic sparse star field
-    val random = Random(42)
-    val width = size.width
-    val height = size.height
-
-    for (i in 0 until 40) {
-        val x = random.nextFloat() * width
-        val y = random.nextFloat() * height
-        val radius = 0.8f + random.nextFloat() * 1.4f
-        val alpha = 0.15f + random.nextFloat() * 0.45f
-        drawCircle(
-            color = Color(0xFFD8EEFF).copy(alpha = alpha),
-            radius = radius,
-            center = Offset(x, y)
-        )
-    }
+    // Soft lavender light blooms echo the LIA reference interface without
+    // adding noisy stars or reducing contrast behind screen content.
+    drawCircle(
+        color = Color(0x167C3AED),
+        radius = size.minDimension * 0.42f,
+        center = Offset(size.width * 0.98f, size.height * 0.04f)
+    )
+    drawCircle(
+        color = Color(0x108B5CF6),
+        radius = size.minDimension * 0.34f,
+        center = Offset(size.width * 0.02f, size.height * 0.62f)
+    )
 }
 
 fun Modifier.depthSurface(
