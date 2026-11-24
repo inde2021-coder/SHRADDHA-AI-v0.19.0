@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1439,11 +1439,8 @@ setInterval(() => {
   for (const [ip, a] of apiAttempts) if (a.resetAt < now) apiAttempts.delete(ip);
   for (const [ip, a] of councilAttempts) if (a.resetAt < now) councilAttempts.delete(ip);
   for (const [ip, a] of sessionCreateAttempts) if (a.resetAt < now) sessionCreateAttempts.delete(ip);
-  for (const session of sessions.values()) for (const device of session.devices.values()) {
-    for (const [id, expiry] of device.pendingControlRequests) if (expiry < now) device.pendingControlRequests.delete(id);
-    for (const [key, pending] of device.pendingDataShares) if (pending.expiresAt < now) device.pendingDataShares.delete(key);
-    for (const [id, expiry] of device.controlGrants) if (expiry < now) device.controlGrants.delete(id);
-    for (const [key, expiry] of device.grants) if (expiry < now) device.grants.delete(key);
+  for (const session of sessions.values()) {
+    for (const device of session.devices.values()) pruneExpiredDeviceState(device, now);
   }
   for (const [id, session] of sessions) if ([...session.devices.values()].every(d => !d.socket || d.socket.readyState !== WebSocket.OPEN) && now - session.createdAt > 24 * 60 * 60 * 1000) sessions.delete(id);
 }, 60_000).unref();
