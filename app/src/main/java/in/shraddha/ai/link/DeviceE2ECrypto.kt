@@ -32,9 +32,24 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
         require(localDeviceId.length in 1..64 && peerDeviceId.length in 1..64 && localDeviceId != peerDeviceId) {
             "Invalid E2E peer identity"
         }
+        require(peerPublicKeyBase64.length in 108..344) { "Invalid ECDH public key encoding size" }
         val encoded = Base64.getDecoder().decode(peerPublicKeyBase64)
-        require(encoded.size in 80..256) { "Invalid ECDH public key size" }
+        require(encoded.size in 80..256 && Base64.getEncoder().encodeToString(encoded) == peerPublicKeyBase64) {
+            "Invalid or non-canonical ECDH public key encoding"
+        }
         val publicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded))
+        val peerEcKey = publicKey as? java.security.interfaces.ECPublicKey
+            ?: throw IllegalArgumentException("Peer key must be an EC public key")
+        val localEcKey = pair.public as java.security.interfaces.ECPublicKey
+        val peerParams = peerEcKey.params
+        val localParams = localEcKey.params
+        require(peerParams.curve == localParams.curve &&
+            peerParams.generator == localParams.generator &&
+            peerParams.order == localParams.order &&
+            peerParams.cofactor == localParams.cofactor &&
+            peerEcKey.w != java.security.spec.ECPoint.POINT_INFINITY) {
+            "Peer key must use the same P-256 curve parameters"
+        }
         val agreement = KeyAgreement.getInstance("ECDH")
         agreement.init(pair.private)
         agreement.doPhase(publicKey, true)
