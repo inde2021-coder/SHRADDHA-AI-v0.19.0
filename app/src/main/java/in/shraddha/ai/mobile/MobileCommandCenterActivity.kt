@@ -472,7 +472,7 @@ class MobileCommandCenterActivity : AppCompatActivity() {
     }
 
     private fun openOperator() {
-        startActivity(Intent(this, OperatorActivity::class.java))
+        startActivity(Intent(this, OperatorActivity::class.java).putExtra("mobile_voice_command", ""))
     }
 
     private fun openAiWorkspace() {
