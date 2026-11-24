@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from pc_companion.actions import execute_action, redact_ocr_text
 
