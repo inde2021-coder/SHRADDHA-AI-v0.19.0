@@ -46,6 +46,21 @@ export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencie
   const maxResponseBytes = options.maxResponseBytes || 1024 * 1024;
 
   return new Promise((resolve, reject) => {
+    let deadline;
+    let settled = false;
+    const clearDeadline = () => { if (deadline) clearTimeout(deadline); };
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      clearDeadline();
+      reject(error);
+    };
+    const succeed = value => {
+      if (settled) return;
+      settled = true;
+      clearDeadline();
+      resolve(value);
+    };
     const req = request(url, {
       method: options.method || 'GET',
       headers: options.headers || {},
@@ -69,17 +84,20 @@ export async function pinnedHttpsJsonRequest(urlValue, options = {}, dependencie
       });
       response.on('end', () => {
         const raw = Buffer.concat(chunks).toString('utf8');
-        resolve({
+        succeed({
           ok: response.statusCode >= 200 && response.statusCode < 300,
           status: response.statusCode || 0,
           headers: response.headers,
           json: async () => { try { return JSON.parse(raw); } catch { return {}; } }
         });
       });
-      response.on('error', reject);
+      response.on('error', fail);
     });
+    // setTimeout is an inactivity timeout; this absolute deadline also stops slow-drip responses.
+    deadline = setTimeout(() => req.destroy(new Error('Mastodon request exceeded its total time limit')), timeoutMs);
+    deadline.unref?.();
     req.setTimeout(timeoutMs, () => req.destroy(new Error('Mastodon request timed out')));
-    req.on('error', reject);
+    req.on('error', fail);
     if (options.body !== undefined) req.write(options.body);
     req.end();
   });
