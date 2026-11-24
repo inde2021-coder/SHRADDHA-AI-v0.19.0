@@ -134,7 +134,7 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
             activeIndex = index
             if (stopped) return false
             val resolvedInput = values[step.inputTemplate] ?: step.inputTemplate
-            val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, resolvedInput)
+            val risk = OperatorSafetyPolicy.assess(step.action, step.targetLabel, resolvedInput, step.expectedText)
             if (risk.risk == OperatorSafetyPolicy.Risk.BLOCK) {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
                 return fail(risk.reason)
