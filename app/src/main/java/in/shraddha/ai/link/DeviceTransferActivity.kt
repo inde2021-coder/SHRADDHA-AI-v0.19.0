@@ -323,6 +323,16 @@ class DeviceTransferActivity : Activity() {
                     DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "unexpected_peer")
                     return
                 }
+                if (transferId.isNotBlank()) {
+                    val sameTransfer = transferId == offeredTransferId && sourcePeer == sender
+                    status.text = if (sameTransfer) {
+                        "This transfer is already active. Resume it instead of resetting received chunks."
+                    } else {
+                        "Another transfer is already active. Finish or cancel it before accepting a new file."
+                    }
+                    if (!sameTransfer) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "receiver_busy")
+                    return
+                }
                 sourcePeer = sender
                 peerIdSnapshot = sender
                 transferId = offeredTransferId
