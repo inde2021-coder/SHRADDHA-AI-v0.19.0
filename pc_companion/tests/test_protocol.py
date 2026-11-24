@@ -2,7 +2,7 @@ import math
 import unittest
 
 
-from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, valid_incoming_file_manifest, matches_transfer_peer, expected_file_chunk_bytes, CHUNK_BYTES, MAX_FILE_BYTES
+from pc_companion.protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, valid_incoming_file_manifest, matches_transfer_peer, expected_file_chunk_bytes, CHUNK_BYTES, MAX_FILE_BYTES, valid_missing_file_indexes
 
 
 class ProtocolTests(unittest.TestCase):
@@ -31,6 +31,14 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(expected_file_chunk_bytes(MAX_FILE_BYTES, max_chunks, max_chunks - 1), MAX_FILE_BYTES - (max_chunks - 1) * CHUNK_BYTES)
         self.assertIsNone(expected_file_chunk_bytes(49153, 1, 0))
         self.assertIsNone(expected_file_chunk_bytes(49153, 2, 2))
+
+    def test_windows_resume_indexes_are_strict_and_unique(self):
+        self.assertTrue(valid_missing_file_indexes([0, 2], 3))
+        self.assertTrue(valid_missing_file_indexes([], 3))
+        self.assertFalse(valid_missing_file_indexes([0, 0], 3))
+        self.assertFalse(valid_missing_file_indexes([True], 3))
+        self.assertFalse(valid_missing_file_indexes([3], 3))
+        self.assertFalse(valid_missing_file_indexes("0,1", 3))
 
     def test_file_transfer_messages_require_exact_peer_and_transfer_identity(self):
         message = {"fromDeviceId": "a" * 24, "transferId": "transfer_123456"}
