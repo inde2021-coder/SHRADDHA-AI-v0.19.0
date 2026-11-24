@@ -1192,6 +1192,25 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     }));
     await chunk2AckPromise;
 
+    // A later negative ACK must revoke any earlier positive ACK for that chunk.
+    const rejectedChunkPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 2 && msg.complete === false && msg.ok === false; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 2, complete: false, ok: false
+    }));
+    await rejectedChunkPromise;
+    const rejectedChunkCompletion = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [rejectedCompletionMessage] = await rejectedChunkCompletion;
+    assert.equal(JSON.parse(rejectedCompletionMessage.toString()).ok, false);
+
     const stillIncompletePromise = nextWsMessage(ownerSocket, data => {
       try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
     });
