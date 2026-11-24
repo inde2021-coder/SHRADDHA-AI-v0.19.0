@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -177,4 +177,15 @@ test('file transfer cancellation is limited to the active sender or receiver', (
   assert.equal(resolveFileTransferCancellation({ incomingTransfers: new Map() }, receiver, 'other', 'receiver', transferId, 100), null);
   assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', transferId, 500), null);
   assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', '../escape', 100), null);
+});
+
+
+test('relay output backpressure rejects payloads that exceed the bounded peer queue', () => {
+  const limit = 8 * 1024 * 1024;
+  assert.equal(canQueueRelayPayload(0, 2 * 1024 * 1024), true);
+  assert.equal(canQueueRelayPayload(limit - 1024, 1024), true);
+  assert.equal(canQueueRelayPayload(limit - 1023, 1024), false);
+  assert.equal(canQueueRelayPayload(0, limit + 1), false);
+  assert.equal(canQueueRelayPayload(-1, 1), false);
+  assert.equal(canQueueRelayPayload(1, -1), false);
 });
