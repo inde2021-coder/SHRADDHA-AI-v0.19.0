@@ -128,3 +128,32 @@ export function validMissingTransferIndexes(indexes, chunkCount) {
   }
   return true;
 }
+
+
+/**
+ * Remove expired or malformed per-device grants and in-flight work.
+ * Some entries carry numeric expiries; request/transfer records carry
+ * an object with an expiresAt field. Invalid expiry data fails closed.
+ */
+export function pruneExpiredDeviceState(device, now = Date.now()) {
+  if (!device || typeof device !== 'object' || !Number.isFinite(now)) return 0;
+  let removed = 0;
+  const prune = (map, numeric = false) => {
+    if (!(map instanceof Map)) return;
+    for (const [key, value] of map) {
+      const expiresAt = numeric ? value : (typeof value === 'number' ? value : value?.expiresAt);
+      if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+        map.delete(key);
+        removed += 1;
+      }
+    }
+  };
+  prune(device.pendingControlRequests);
+  prune(device.pendingDataShares);
+  prune(device.pendingRemoteActions);
+  prune(device.incomingTransfers);
+  prune(device.pendingTaskHandoffs);
+  prune(device.controlGrants, true);
+  prune(device.grants);
+  return removed;
+}
