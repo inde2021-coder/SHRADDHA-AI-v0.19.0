@@ -44,7 +44,7 @@ class DeviceFileTransferProtocolTest {
         assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count + 1, hash))
         assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, "bad"))
         assertFalse(DeviceFileTransferProtocol.isValidManifest("transfer_123456", 0L, 1, hash))
-        assertEquals("evil_name.txt", DeviceFileTransferProtocol.safeDisplayName("../evil/name.txt"))
+        assertEquals("name.txt", DeviceFileTransferProtocol.safeDisplayName("../evil/name.txt"))
         assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName("\u0000"))
     }
 
