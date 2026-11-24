@@ -76,7 +76,7 @@ class OperatorActivity : Activity() {
             parent.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
 
-        if (intent.getStringExtra("mobile_voice_command")?.isNotBlank() == true) {
+        if (intent.hasExtra("mobile_voice_command")) {
             showCompactMobileCommandMode(assistantName)
             return
         }
