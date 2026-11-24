@@ -248,6 +248,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun challengeText(): String = livenessGate.prompt()
 
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     private fun startCamera() {
         if (cameraStarting) return
         val view = previewView ?: return
@@ -307,6 +308,8 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
 
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
+    @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run {
             livenessGate.observe(0, Float.NaN, Float.NaN, Float.NaN)
@@ -543,6 +546,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun startSpeakerChallenge() {
+        if (android.os.Build.VERSION.SDK_INT < 31) {
+            finishWith("On-device speech recognition requires Android 12 or newer.")
+            return
+        }
         if (busy) return
         busy = true
         action.isEnabled = false
@@ -596,6 +603,10 @@ class BiometricCaptureActivity : AppCompatActivity() {
     }
 
     private fun recordSpeaker() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            finishWith("Microphone permission is required for the speaker sample.")
+            return
+        }
         message.text = "Phrase verified locally. अब अलग 5-second voice sample में वही phrase दोहराएँ; यह handoff/replay-proof नहीं है…"
         captureThread = Thread({
             var recorder: AudioRecord? = null
