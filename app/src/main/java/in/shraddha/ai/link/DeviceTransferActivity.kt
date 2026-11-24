@@ -152,11 +152,17 @@ class DeviceTransferActivity : Activity() {
         } else if (requestCode == 702) {
             runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             pendingSaveUri = uri
-            persistTransferState()
+            try {
+                persistTransferState(synchronous = true)
+            } catch (error: Exception) {
+                status.text = "Could not persist the save destination; transfer was not acknowledged."
+                return
+            }
             if (incomingVerified) transferIo.execute { saveIncoming(uri) }
-            else {
-                DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)
+            else if (DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)) {
                 status.text = "Save destination selected. Receiver ready; waiting for file chunks…"
+            } else {
+                status.text = "Save destination is ready, but the sender could not be notified. Reconnect and tap Resume / Retry."
             }
         }
     }
