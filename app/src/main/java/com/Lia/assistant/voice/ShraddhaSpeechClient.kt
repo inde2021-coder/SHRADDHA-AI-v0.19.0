@@ -1,6 +1,9 @@
 package com.Lia.assistant.voice
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -19,6 +22,68 @@ import java.util.concurrent.TimeUnit
  * or Android system-TTS fallback.
  */
 object ShraddhaSpeechClient {
+    @Volatile private var playbackTrack: AudioTrack? = null
+
+    /** Plays the configured custom Shraddha PCM voice. No Android or Google TTS is used. */
+    fun speak(context: Context, text: String, language: String, done: (Result<Unit>) -> Unit = {}) {
+        synthesize(context, text, language) { result ->
+            result.fold(
+                onSuccess = { pcm ->
+                    runCatching {
+                        stopPlayback()
+                        val track = AudioTrack.Builder()
+                            .setAudioAttributes(
+                                AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                    .build()
+                            )
+                            .setAudioFormat(
+                                AudioFormat.Builder()
+                                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                    .setSampleRate(24_000)
+                                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                    .build()
+                            )
+                            .setBufferSizeInBytes(pcm.size)
+                            .setTransferMode(AudioTrack.MODE_STATIC)
+                            .build()
+                        check(track.state == AudioTrack.STATE_INITIALIZED) { "Shraddha audio output could not be initialized" }
+                        val written = track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
+                        check(written == pcm.size) { "Shraddha audio output was incomplete" }
+                        playbackTrack = track
+                        track.setNotificationMarkerPosition(pcm.size / 2)
+                        track.setPlaybackPositionUpdateListener(object : AudioTrack.OnPlaybackPositionUpdateListener {
+                            override fun onMarkerReached(audioTrack: AudioTrack) {
+                                if (playbackTrack === audioTrack) playbackTrack = null
+                                runCatching { audioTrack.stop() }
+                                audioTrack.release()
+                            }
+                            override fun onPeriodicNotification(audioTrack: AudioTrack) = Unit
+                        })
+                        track.play()
+                    }.fold(
+                        onSuccess = { done(Result.success(Unit)) },
+                        onFailure = { error ->
+                            stopPlayback()
+                            done(Result.failure(error))
+                        }
+                    )
+                },
+                onFailure = { done(Result.failure(it)) }
+            )
+        }
+    }
+
+    fun stopPlayback() {
+        val current = playbackTrack
+        playbackTrack = null
+        if (current != null) {
+            runCatching { current.stop() }
+            runCatching { current.release() }
+        }
+    }
+
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(35, TimeUnit.SECONDS)
@@ -47,7 +112,7 @@ object ShraddhaSpeechClient {
         }
         val body = JSONObject()
             .put("text", clean)
-            .put("language", if (language.equals("HI", true) || language.equals("hi-IN", true)) "hi" else "en")
+            .put("language", LanguageDetector.toVoiceModelLanguage(language))
             .toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()

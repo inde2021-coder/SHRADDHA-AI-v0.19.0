@@ -12,6 +12,10 @@ object LanguageDetector {
         "kahan", "bhi", "toh", "aur", "pe", "se", "ko", "ne", "ka", "ki", "ke"
     )
 
+    /** Maps detected text language to the installed custom voice model language. */
+    fun toVoiceModelLanguage(language: String): String =
+        if (language.equals("HI", true) || language.equals("HINDI", true) || language.equals("hi-IN", true)) "hi" else "en"
+
     fun detect(text: String): String {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return "UNKNOWN"

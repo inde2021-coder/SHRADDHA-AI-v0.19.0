@@ -25,6 +25,14 @@ class LanguageDetectorTest {
     }
 
     @Test
+    fun detectedLanguagesSelectMatchingVoiceModel() {
+        assertEquals("hi", LanguageDetector.toVoiceModelLanguage("HINDI"))
+        assertEquals("hi", LanguageDetector.toVoiceModelLanguage("hi-IN"))
+        assertEquals("en", LanguageDetector.toVoiceModelLanguage("HINGLISH"))
+        assertEquals("en", LanguageDetector.toVoiceModelLanguage("ENGLISH"))
+    }
+
+    @Test
     fun testEnglish() {
         assertEquals("ENGLISH", LanguageDetector.detect("what's the weather"))
         assertEquals("ENGLISH", LanguageDetector.detect("Can you open YouTube for me please?"))
