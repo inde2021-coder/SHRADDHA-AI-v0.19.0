@@ -852,7 +852,11 @@ class PcCompanionApp:
             if size < 1 or size > MAX_PC_FILE_BYTES:
                 raise ValueError(f"File size must be between 1 byte and {MAX_PC_FILE_BYTES // (1024 * 1024)} MiB.")
             import hashlib, secrets
-            digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
+            digest_state = hashlib.sha256()
+            with file_path.open("rb") as source:
+                for block in iter(lambda: source.read(1024 * 1024), b""):
+                    digest_state.update(block)
+            digest = digest_state.hexdigest()
             request_id = secrets.token_urlsafe(18).replace("-", "_")
             transfer_id = secrets.token_urlsafe(18).replace("-", "_")
             self.pending_pc_send = {
@@ -981,7 +985,7 @@ class PcCompanionApp:
         queue = pending.setdefault("send_queue", [])
         in_flight = pending.setdefault("in_flight", set())
         try:
-            batch = take_chunk_window(queue, in_flight)
+            batch = take_chunk_window(queue, in_flight, max_index=chunk_count_for_size(pending["size"]))
             if not batch:
                 if not queue and not in_flight:
                     self.status_var.set("All chunks acknowledged by receiver. Waiting for final SHA-256 completion.")
