@@ -43,6 +43,13 @@ object PcCommandInterpreter {
                 require(value in 0..100) { "Brightness 0 से 100 के बीच रखें।" }
                 JSONObject().put("kind", "set_brightness").put("percent", value)
             }
+            lower in setOf("read screen", "screen ocr", "ocr", "स्क्रीन पढ़ो", "स्क्रीन का टेक्स्ट पढ़ो", "स्क्रीन से टेक्स्ट निकालो") ->
+                JSONObject().put("kind", "ocr")
+            Regex("^(click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
+                val label = Regex("^(click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!.groupValues[2].trim()
+                require(label.isNotBlank() && label.length <= 120) { "Button text 1 से 120 characters तक होना चाहिए।" }
+                JSONObject().put("kind", "click_text").put("text", label)
+            }
             lower in setOf("enter", "press enter", "एंटर") ->
                 JSONObject().put("kind", "key_press").put("chord", "enter")
             lower in setOf("escape", "esc", "press escape") ->

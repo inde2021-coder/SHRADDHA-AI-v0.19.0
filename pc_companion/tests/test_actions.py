@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from pc_companion.actions import execute_action
+from pc_companion.actions import execute_action, redact_ocr_text
 
 
 class FakeGui:
@@ -44,14 +45,62 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(self.clipboard.value, "नमस्ते")
         self.assertIn(("hotkey", ("ctrl", "v")), self.gui.calls)
 
+    def test_remote_input_fails_closed_for_unknown_and_sensitive_windows(self):
+        actions = [
+            {"kind": "tap", "x": 0.5, "y": 0.5},
+            {"kind": "swipe", "x1": 0.2, "y1": 0.2, "x2": 0.8, "y2": 0.8},
+            {"kind": "key_press", "chord": "enter"},
+            {"kind": "scroll", "amount": 3},
+            {"kind": "type", "text": "hello"},
+            {"kind": "home"},
+            {"kind": "back"},
+        ]
+        for title in ("", "Bank - secure payment", "Enter OTP", "Password Manager"):
+            with self.subTest(window=title):
+                with patch("pc_companion.actions._active_window", side_effect=RuntimeError("blocked window")):
+                    for action in actions:
+                        ok, message = execute_action(action, self.gui, self.clipboard, lambda _name: False)
+                        self.assertFalse(ok)
+                        self.assertIn("blocked window", message)
+                self.assertEqual(self.gui.calls, [])
+                self.assertIsNone(self.clipboard.value)
+
     def test_open_app_uses_only_resolver(self):
         ok, _ = execute_action({"kind": "open_app", "appName": "Notepad"}, self.gui, self.clipboard, lambda name: name == "Notepad")
         self.assertTrue(ok)
 
-    def test_text_click_is_explicitly_unsupported(self):
-        ok, message = execute_action({"kind": "click_text", "text": "Save"}, self.gui, self.clipboard, lambda _name: False)
-        self.assertFalse(ok)
-        self.assertIn("not supported", message)
+    def test_text_click_uses_the_exact_text_targeter(self):
+        calls = []
+        ok, message = execute_action(
+            {"kind": "click_text", "text": "Save"}, self.gui, self.clipboard,
+            lambda _name: False, text_clicker=lambda label: calls.append(label) or "Clicked Save"
+        )
+        self.assertTrue(ok)
+        self.assertEqual(calls, ["Save"])
+        self.assertEqual(message, "Clicked Save")
+
+    def test_ocr_action_returns_local_reader_result(self):
+        ok, message = execute_action(
+            {"kind": "ocr"}, self.gui, self.clipboard, lambda _name: False,
+            ocr_reader=lambda: "OCR • Notepad\\nNamaste Shraddha"
+        )
+        self.assertTrue(ok)
+        self.assertIn("Namaste Shraddha", message)
+
+    def test_ocr_language_selection_falls_back_to_installed_packs(self):
+        from pc_companion.actions import select_ocr_languages
+        self.assertEqual(select_ocr_languages(["eng", "hin"]), (["eng", "hin"], []))
+        self.assertEqual(select_ocr_languages(["eng"]), (["eng"], ["hin"]))
+        self.assertEqual(select_ocr_languages(["hin"]), (["hin"], ["eng"]))
+        self.assertEqual(select_ocr_languages(["osd"]), ([], ["eng", "hin"]))
+        self.assertEqual(select_ocr_languages(["ENG", "hin"]), (["eng", "hin"], []))
+
+    def test_ocr_redacts_secret_lines_and_long_numbers(self):
+        safe = redact_ocr_text("Invoice total 42\nOTP: 123456\n654321\nAmount 900")
+        self.assertIn("Invoice total 42", safe)
+        self.assertIn("[संवेदनशील OCR पंक्ति छिपाई गई]", safe)
+        self.assertIn("[संवेदनशील जानकारी छिपाई गई]", safe)
+        self.assertNotIn("654321", safe)
 
 
 if __name__ == "__main__":

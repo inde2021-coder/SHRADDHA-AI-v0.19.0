@@ -29,8 +29,16 @@ def parse_android_command(raw):
         if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase)\b|पासवर्ड|ओटीपी|पिन", text):
             raise ValueError("Sensitive password, OTP or PIN text cannot be typed remotely.")
         return {"kind": "type", "text": text}
+    if lower in {"read screen", "read this screen", "screen ocr", "ocr", "स्क्रीन पढ़ो", "स्क्रीन का टेक्स्ट पढ़ो", "स्क्रीन से टेक्स्ट निकालो"}:
+        return {"kind": "ocr"}
+    match = re.match(r"^(?:click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\s+(.+)$", command, re.I)
+    if match:
+        label = match.group(1).strip()
+        if not label or len(label) > 120:
+            raise ValueError("Button text must contain 1-120 characters.")
+        return {"kind": "click_text", "text": label}
     if lower in {"tap center", "tap", "बीच में टैप"}:
         return {"kind": "tap", "x": 0.5, "y": 0.5}
     if lower in {"swipe up", "ऊपर swipe"}:
         return {"kind": "swipe", "x1": 0.5, "y1": 0.75, "x2": 0.5, "y2": 0.25}
-    raise ValueError("Command not understood. Try: home, back, open Settings, scroll down, type Hello.")
+    raise ValueError("Command not understood. Try: home, back, open Settings, read screen, click text Save, scroll down, type Hello.")

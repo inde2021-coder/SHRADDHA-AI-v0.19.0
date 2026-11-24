@@ -9,6 +9,10 @@ class AndroidCommandParserTests(unittest.TestCase):
         self.assertEqual(parse_android_command("scroll down"), {"kind": "scroll", "amount": -5})
         self.assertEqual(parse_android_command("open Settings"), {"kind": "open_app", "appName": "Settings"})
         self.assertEqual(parse_android_command("type नमस्ते"), {"kind": "type", "text": "नमस्ते"})
+        self.assertEqual(parse_android_command("read screen"), {"kind": "ocr"})
+        self.assertEqual(parse_android_command("स्क्रीन पढ़ो"), {"kind": "ocr"})
+        self.assertEqual(parse_android_command("click text Save"), {"kind": "click_text", "text": "Save"})
+        self.assertEqual(parse_android_command("बटन दबाओ Submit"), {"kind": "click_text", "text": "Submit"})
 
     def test_rejects_sensitive_and_unknown(self):
         with self.assertRaises(ValueError):

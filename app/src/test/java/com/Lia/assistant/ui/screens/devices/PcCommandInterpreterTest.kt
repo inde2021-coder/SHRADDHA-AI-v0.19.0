@@ -20,6 +20,15 @@ class PcCommandInterpreterTest {
         assertEquals("hardware_status", PcCommandInterpreter.parse("PC status").getOrThrow().getString("kind"))
     }
 
+    @Test fun parsesScreenOcrAndExactTextClickCommands() {
+        assertEquals("ocr", PcCommandInterpreter.parse("read screen").getOrThrow().getString("kind"))
+        assertEquals("ocr", PcCommandInterpreter.parse("स्क्रीन पढ़ो").getOrThrow().getString("kind"))
+        val click = PcCommandInterpreter.parse("click text Save").getOrThrow()
+        assertEquals("click_text", click.getString("kind"))
+        assertEquals("Save", click.getString("text"))
+        assertEquals("Submit", PcCommandInterpreter.parse("बटन दबाओ Submit").getOrThrow().getString("text"))
+    }
+
     @Test fun rejectsUnknownAndSensitiveCommands() {
         assertFalse(PcCommandInterpreter.parse("do anything").isSuccess)
         assertFalse(PcCommandInterpreter.parse("type my password 123").isSuccess)

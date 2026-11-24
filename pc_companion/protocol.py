@@ -3,7 +3,7 @@ import json
 import math
 import re
 
-_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power"}
+_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -49,6 +49,26 @@ def validate_remote_action(action):
     kind = action.get("kind")
     if kind not in _ALLOWED:
         return None
+    # Reject unknown fields rather than silently accepting client-supplied scripts,
+    # commands, paths or future protocol fields that this version does not understand.
+    allowed_fields = {
+        "tap": {"kind", "x", "y"},
+        "swipe": {"kind", "x1", "y1", "x2", "y2"},
+        "type": {"kind", "text"},
+        "click_text": {"kind", "text"},
+        "open_app": {"kind", "appName"},
+        "home": {"kind"},
+        "back": {"kind"},
+        "scroll": {"kind", "amount"},
+        "key_press": {"kind", "chord"},
+        "hardware_status": {"kind"},
+        "set_volume": {"kind", "percent"},
+        "set_brightness": {"kind", "percent"},
+        "power": {"kind", "operation"},
+        "ocr": {"kind"},
+    }
+    if set(action) - allowed_fields[kind]:
+        return None
     clean = {"kind": kind}
     if kind == "tap":
         if not _normalized(action.get("x")) or not _normalized(action.get("y")):
@@ -89,7 +109,7 @@ def validate_remote_action(action):
         if operation not in {"shutdown", "restart", "sleep"}:
             return None
         clean["operation"] = operation
-    elif kind == "hardware_status":
+    elif kind in {"hardware_status", "ocr"}:
         pass
     elif kind == "scroll":
         amount = action.get("amount", 5)
