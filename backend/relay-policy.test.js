@@ -176,7 +176,9 @@ test('file transfer admission rejects duplicate active IDs and caps concurrent i
   assert.equal(canStartFileTransfer(device, 'transfer_654321'), true);
   device.incomingTransfers.set('transfer_222222', {});
   device.incomingTransfers.set('transfer_333333', {});
-  assert.equal(canStartFileTransfer(device, 'transfer_444444'), false);
+  assert.equal(canStartFileTransfer(device, 'transfer_444444'), true);
+  device.incomingTransfers.set('transfer_444444', {});
+  assert.equal(canStartFileTransfer(device, 'transfer_555555'), false);
   assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'bad'), false);
   assert.equal(canStartFileTransfer({}, 'transfer_123456'), false);
 });
