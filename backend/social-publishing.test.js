@@ -117,3 +117,14 @@ test('Telegram and Mastodon binary publishing intents accept only explicit image
   }), /Public media URLs/);
 });
 
+
+
+test('Telegram media validation rejects WebP while Mastodon accepts it', () => {
+  const base64 = Buffer.from('image-bytes').toString('base64');
+  assert.throws(() => validateMediaAttachment({
+    mediaBase64: base64, mediaKind: 'image', mimeType: 'image/webp', fileName: 'photo.webp'
+  }, 'telegram'), /not supported/);
+  assert.equal(validateMediaAttachment({
+    mediaBase64: base64, mediaKind: 'image', mimeType: 'image/webp', fileName: 'photo.webp'
+  }, 'mastodon').mimeType, 'image/webp');
+});
