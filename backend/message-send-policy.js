@@ -33,10 +33,9 @@ export function createMessageReplayGuard({ now = () => Date.now(), ttlMs = 24 * 
         if (existing.fingerprint !== fingerprint) return { ok: false, reason: 'request_id_conflict' };
         return { ok: false, reason: existing.state === 'sent' ? 'already_submitted' : 'in_progress' };
       }
-      if (entries.size >= maxEntries) {
-        const oldest = entries.keys().next().value;
-        if (oldest) entries.delete(oldest);
-      }
+      // Never evict an unexpired send claim: doing so would reopen its
+      // duplicate-delivery window. Expired entries were pruned above.
+      if (entries.size >= maxEntries) return { ok: false, reason: 'capacity_full' };
       entries.set(requestId, { fingerprint, state: 'pending', expiresAt: now() + ttlMs });
       return { ok: true };
     },
