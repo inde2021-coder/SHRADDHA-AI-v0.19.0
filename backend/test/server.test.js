@@ -20,6 +20,35 @@ async function freePort() {
 }
 
 
+function waitForWebSocketOpen(socket) {
+  if (socket.readyState === WebSocket.OPEN) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onOpen = () => { cleanup(); resolve(); };
+    const onError = error => { cleanup(); reject(error); };
+    const onClose = () => { cleanup(); reject(new Error('WebSocket closed before opening')); };
+    const cleanup = () => {
+      socket.off('open', onOpen);
+      socket.off('error', onError);
+      socket.off('close', onClose);
+    };
+    socket.once('open', onOpen);
+    socket.once('error', onError);
+    socket.once('close', onClose);
+  });
+}
+
+function closeWebSocket(socket) {
+  if (socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+  if (socket.readyState === WebSocket.CONNECTING) {
+    socket.terminate();
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    socket.once('close', resolve);
+    socket.close();
+  });
+}
+
 function nextWsMessage(socket, predicate, timeoutMs = 5_000) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for WebSocket message')); }, timeoutMs);
@@ -926,10 +955,7 @@ test('task handoffs and responses are relayed only as E2E ciphertext', async () 
     ownerSocket.send(JSON.stringify({ type: 'task_handoff', targetDeviceId: member.deviceId, task: { title } }));
     await assert.rejects(noPlaintext, /Timed out waiting/);
   } finally {
-    const closes = [ownerSocket, memberSocket].map(socket =>
-      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
-        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
-    await Promise.all(closes);
+    await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
   }
 });
 
@@ -1069,8 +1095,8 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     const memberConnected = nextWsMessage(memberSocket, data => {
       try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
     });
-    await once(ownerSocket, 'open'); await ownerConnected;
-    await once(memberSocket, 'open'); await memberConnected;
+    await Promise.all([waitForWebSocketOpen(ownerSocket), waitForWebSocketOpen(memberSocket)]);
+    await Promise.all([ownerConnected, memberConnected]);
 
     memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { documents: true } }));
     const shareRequestPromise = nextWsMessage(memberSocket, data => {
