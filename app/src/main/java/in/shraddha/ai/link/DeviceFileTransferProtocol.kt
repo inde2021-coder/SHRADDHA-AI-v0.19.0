@@ -16,6 +16,9 @@ internal object DeviceFileTransferProtocol {
             chunkCount(sizeBytes) == declaredChunkCount &&
             sha256.matches(Regex("^[a-fA-F0-9]{64}$"))
 
+    fun isExpectedIncomingPeer(expectedPeer: String, actualPeer: String): Boolean =
+        expectedPeer.isNotBlank() && actualPeer.isNotBlank() && actualPeer == expectedPeer
+
     fun isExpectedPeerMessage(expectedPeer: String, actualPeer: String, expectedTransferId: String, actualTransferId: String): Boolean =
         expectedPeer.isNotBlank() && actualPeer == expectedPeer &&
             expectedTransferId.isNotBlank() && actualTransferId == expectedTransferId
