@@ -170,3 +170,41 @@ This report records source-level checks performed on the `audit-fixes-v0.19.1` b
 
 - Voice session shutdown now invalidates stale connection epochs, prevents a delayed token response from reconnecting after Stop, cancels in-flight tool jobs on stop/reconnect, and serializes WebSocket/microphone release. LiveAudioIO uses an atomic idempotent start gate, serializes recorder lifecycle, and zeroes each temporary PCM chunk after handoff.
 - Voice service stop intents now carry the failed session epoch; an old network failure cannot stop a newer user-started microphone session. Voice tool jobs are canceled on stop/reconnect, and stale tool results are not sent to a later session.
+
+## 2026-11-24 — Main-branch deep audit after CI verification
+
+### CI evidence
+- Main commit `cdec20d7cddf9411d8c68e547805ab4e05c4ac3f` completed Android build/tests (workflow run 45385322228) and integration/full verification (workflow run 45385322239) with `success`.
+- The Android run completed unit tests, debug APK build, arm64 release APK build, biometric ONNX emulator smoke test, and Windows companion policy checks.
+- The integration run completed backend tests, Firebase emulator rules tests, Android unit tests/build, emulator instrumentation + app-launch checks, ONNX checks, and Windows companion tests/EXE packaging.
+- These are CI/emulator results, not physical OPPO Android 15 validation.
+
+### Deep-audit finding fixed in PR #65
+- On permanent Gemini Live token/configuration failure, the voice manager stopped recording and showed an error but left the session marked active and its foreground notification present.
+- PR #65 stops the foreground service using the failing session epoch while preserving the visible error. The epoch check prevents an old failure from stopping a newer session.
+- PR #65 must pass its own CI before merge.
+
+### Release artifact handling
+- The ordinary Android build workflow creates a CI release APK without wiring the signing secrets used by the dedicated signed-release workflow. Do not distribute the ordinary CI release APK as a production install package unless its signature is independently verified.
+- The dedicated `.github/workflows/android-release.yml` requires the four Android signing secrets, verifies APK/AAB signatures, and uploads checksums. It is manually dispatched from `main`.
+- The debug APK is suitable for test installation but is debug-signed, not a production release.
+
+### Feature-state audit
+The current `CapabilityCatalog` explicitly classifies configuration/permission/companion dependencies and roadmap items. Do not report these as fully shipped merely because a menu/catalog entry exists. Confirmed roadmap/incomplete items include:
+- Advanced social media media uploads, Reels, Stories and scheduled publishing.
+- Full app-builder pipeline, rendered AI video export, CAD/3D geometry/export, dedicated business ERP, device-farm test execution, signed plugin sandboxing and autonomous code modification.
+- Full voice natural-language action planning still requires App Operator permission; OCR cannot reliably control arbitrary non-text canvas controls.
+- Cross-device task handoff is online-only and accepted plans do not auto-execute.
+- Windows companion remains locally approval-gated; arbitrary execution, delete/move and full multi-monitor remote desktop remain disabled.
+- Smart-home MQTT/Matter transports are not shipped; Home Assistant REST requires configuration.
+- Continuous camera translation overlay is incomplete; face/speaker spoof resistance is heuristic and not certified.
+- Custom Shraddha bilingual voice requires licensed Hindi/English models and a configured deployed TTS service.
+- Firebase cloud backup, provider features, offline models and social publishing require the stated user configuration/credentials.
+
+### Device and platform validation still required
+- Install and exercise the debug or signed release APK on the target OPPO Android 15 phone.
+- Verify Accessibility enablement, SMS permission policy behavior, microphone foreground-service start/stop, camera privacy indicators/consent, notification access, app backgrounding/process death, keyboard overlays and OEM battery restrictions.
+- ARCore SDK is a dependency, but supported devices still rely on Google Play Services for AR; it is not a standalone bundled replacement for that platform service.
+
+### Scope
+Feature freeze remains in force: no new features are being added. Only defects, incorrect status/permission flows, security, stability and build/release verification are in scope.
