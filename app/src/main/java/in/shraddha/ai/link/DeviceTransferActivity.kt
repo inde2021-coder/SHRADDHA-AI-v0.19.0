@@ -325,6 +325,9 @@ class DeviceTransferActivity : Activity() {
     private fun receiveChunk(msg: JSONObject) {
         if (paused.get()) { status.text = "Incoming transfer paused locally; resume to accept more chunks."; return }
         try {
+            require(DeviceFileTransferProtocol.isExpectedPeer(sourcePeer, msg.optString("fromDeviceId"))) {
+                "Chunk sender does not match the approved transfer peer"
+            }
             require(msg.optString("transferId") == transferId && incomingOut != null)
             val index = msg.getInt("index"); require(index in 0 until incomingCount)
             val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
