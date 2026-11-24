@@ -11,6 +11,7 @@ from pc_companion.file_transfer import (
     valid_transfer_manifest,
     requeue_rejected_chunk,
     prepare_retry_queue,
+    sha256_file,
 )
 
 
@@ -131,3 +132,16 @@ class FileTransferRetryQueueTests(unittest.TestCase):
             prepare_retry_queue([-1], set())
         with self.assertRaises(ValueError):
             prepare_retry_queue([], [1])
+
+
+class FileTransferStreamingHashTests(unittest.TestCase):
+    def test_sha256_file_matches_standard_digest_without_loading_file_at_once(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+
+        payload = (b"Shraddha-transfer-test-" * 10000) + b"end"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.bin"
+            path.write_bytes(payload)
+            self.assertEqual(sha256_file(path), hashlib.sha256(payload).hexdigest())
