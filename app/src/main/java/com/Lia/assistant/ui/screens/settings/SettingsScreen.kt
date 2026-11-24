@@ -118,6 +118,7 @@ private fun SettingsScreenContent(
     }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
 
+    var expandedSettingsGroup by remember { mutableStateOf<String?>(null) }
     var showHomeDesignDialog by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf(appState.assistantName) }
@@ -191,7 +192,12 @@ private fun SettingsScreenContent(
         }
 
         // Shraddha AI settings, grouped around its own design system and capabilities.
-        NovaSectionHeader(title = "Personality")
+        SettingsGroupHeader(
+            title = "Personality",
+            expanded = expandedSettingsGroup == "Personality",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Personality") null else "Personality" }
+        )
+        if (expandedSettingsGroup == "Personality") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -213,7 +219,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Voice & Language")
+        }
+
+        SettingsGroupHeader(
+            title = "Voice & Language",
+            expanded = expandedSettingsGroup == "Voice & Language",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Voice & Language") null else "Voice & Language" }
+        )
+        if (expandedSettingsGroup == "Voice & Language") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -257,7 +270,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Chats & Memory")
+        }
+
+        SettingsGroupHeader(
+            title = "Chats & Memory",
+            expanded = expandedSettingsGroup == "Chats & Memory",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Chats & Memory") null else "Chats & Memory" }
+        )
+        if (expandedSettingsGroup == "Chats & Memory") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -287,6 +307,8 @@ private fun SettingsScreenContent(
                     onClick = { navController.navigate("history") }
                 )
             }
+        }
+
         }
 
         if (voiceActionError != null || voiceActionEntry?.state in setOf("EXECUTING", "FAILED")) {
@@ -322,7 +344,12 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Look & Feel")
+        SettingsGroupHeader(
+            title = "Look & Feel",
+            expanded = expandedSettingsGroup == "Look & Feel",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Look & Feel") null else "Look & Feel" }
+        )
+        if (expandedSettingsGroup == "Look & Feel") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -372,7 +399,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Connections")
+        }
+
+        SettingsGroupHeader(
+            title = "Connections",
+            expanded = expandedSettingsGroup == "Connections",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Connections") null else "Connections" }
+        )
+        if (expandedSettingsGroup == "Connections") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -404,7 +438,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Main Brain • API Cost Control")
+        }
+
+        SettingsGroupHeader(
+            title = "Main Brain • API Cost Control",
+            expanded = expandedSettingsGroup == "Main Brain • API Cost Control",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Main Brain • API Cost Control") null else "Main Brain • API Cost Control" }
+        )
+        if (expandedSettingsGroup == "Main Brain • API Cost Control") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -424,7 +465,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Privacy & Security")
+        }
+
+        SettingsGroupHeader(
+            title = "Privacy & Security",
+            expanded = expandedSettingsGroup == "Privacy & Security",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Privacy & Security") null else "Privacy & Security" }
+        )
+        if (expandedSettingsGroup == "Privacy & Security") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -447,7 +495,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "Broadcast & Voice Rooms")
+        }
+
+        SettingsGroupHeader(
+            title = "Broadcast & Voice Rooms",
+            expanded = expandedSettingsGroup == "Broadcast & Voice Rooms",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Broadcast & Voice Rooms") null else "Broadcast & Voice Rooms" }
+        )
+        if (expandedSettingsGroup == "Broadcast & Voice Rooms") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -459,7 +514,14 @@ private fun SettingsScreenContent(
             }
         }
 
-        NovaSectionHeader(title = "About & Support")
+        }
+
+        SettingsGroupHeader(
+            title = "About & Support",
+            expanded = expandedSettingsGroup == "About & Support",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "About & Support") null else "About & Support" }
+        )
+        if (expandedSettingsGroup == "About & Support") {
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
                 NovaSettingsRow(
@@ -470,6 +532,8 @@ private fun SettingsScreenContent(
                 )
             }
         }
+        }
+
     }
 
     if (showHomeDesignDialog) {
@@ -697,5 +761,24 @@ private fun SettingsScreenContent(
             },
             containerColor = colors.surfaceRaised
         )
+    }
+}
+
+@Composable
+private fun SettingsGroupHeader(title: String, expanded: Boolean, onClick: () -> Unit) {
+    val colors = LocalNovaColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfaceRaised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Spacer(Modifier.weight(1f))
+        Text(if (expanded) "−" else "+", color = colors.accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
