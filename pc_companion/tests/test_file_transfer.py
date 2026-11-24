@@ -7,6 +7,7 @@ from pc_companion.file_transfer import (
     chunk_count_for_size,
     expected_chunk_bytes,
     take_chunk_window,
+    validate_resume_indexes,
 )
 
 
@@ -62,6 +63,16 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
             take_chunk_window([1], set(), 0)
         with self.assertRaises(ValueError):
             take_chunk_window([1, 1], set(), 8)
+
+
+    def test_resume_manifest_requires_exact_count_unique_integer_indexes(self):
+        self.assertEqual(validate_resume_indexes([0, 2], 3, 3), [0, 2])
+        self.assertEqual(validate_resume_indexes([], 3, 3), [])
+        for missing, declared, expected in (
+            ([0, 0], 3, 3), ([True], 3, 3), ([-1], 3, 3),
+            ([3], 3, 3), ([0], 2, 3), ("0,1", 3, 3), ([0, 1, 2, 3], 3, 3)
+        ):
+            self.assertIsNone(validate_resume_indexes(missing, declared, expected))
 
 
 if __name__ == "__main__":
