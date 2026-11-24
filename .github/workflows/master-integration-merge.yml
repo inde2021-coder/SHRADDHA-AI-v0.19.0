@@ -45,35 +45,17 @@ jobs:
       - name: Fetch every source branch
         run: git fetch origin --prune
 
-      - name: Verify every source branch is already included in this commit
+      - name: Merge target branch into PR workspace for integration testing
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
-          for branch in \
-            main \
-            feature/complete-pending-shraddha-features \
-            audit-fixes-v0.19.1 \
-            feature/ai-phone-agent-foundation \
-            feature/complete-remaining-shraddha-features \
-            fix/android-emulator-stability-2026-11 \
-            fix/android-onnx-df-diagnostic-2026-11 \
-            integration/branch-hardening-2026-11 \
-            integration/firebase-rtdb-rules-tested \
-            integration/redesign-phone-agent-2026-11 \
-            integration/master-feature-consolidation-2026-11 \
-            optimization/apk-size-without-feature-loss \
-            redesign/shraddha-ai-neon-glass-home \
-            redesign-v0.19.2 \
-            work/step-01-source-audit-fixes
-          do
-            if ! git merge-base --is-ancestor "origin/$branch" HEAD; then
-              echo "::error::Source branch $branch is not fully merged into the current integration commit."
-              echo "Merge $branch into integration and push before running the full suite."
-              exit 1
-            fi
-            echo "Verified: $branch is included in $(git rev-parse --short HEAD)"
-          done
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Test the exact PR head together with the latest target branch.
+          # Squash-merged source branches are not ancestors, so ancestry checks
+          # against every historical feature branch incorrectly reject valid code.
+          git merge --no-edit --no-ff "origin/${GITHUB_BASE_REF}"
       - name: Check integrated diff for whitespace errors
         shell: bash
         run: |
