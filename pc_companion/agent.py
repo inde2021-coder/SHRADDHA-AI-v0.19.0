@@ -808,7 +808,7 @@ class PcCompanionApp:
                 chunks = int(item.get("chunks", 0))
                 if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 20_000_000:
                     continue
-                if chunks != (size + 47999) // 48000:
+                if chunks != (size + 49151) // 49152:
                     continue
                 received = {int(i) for i in item.get("received", []) if isinstance(i, int) and 0 <= i < chunks}
                 restored[transfer_id] = {
@@ -894,7 +894,7 @@ class PcCompanionApp:
             self.pending_pc_send = None
             self.status_var.set("Android user denied file transfer.")
             return
-        chunks = (pending["size"] + 49151) // 48000
+        chunks = (pending["size"] + 49151) // 49152
         sent = self._send_json({
             "type": "file_transfer_start", "targetDeviceId": pending["peer"],
             "requestId": pending["requestId"], "transferId": pending["transferId"],
@@ -910,7 +910,7 @@ class PcCompanionApp:
             return
         index = int(msg.get("index", -2))
         if index == -1 and msg.get("ok") and not msg.get("complete"):
-            self._send_pc_file_chunks(list(range((pending["size"] + 49151) // 48000)))
+            self._send_pc_file_chunks(list(range((pending["size"] + 49151) // 49152)))
         elif msg.get("complete") and msg.get("ok"):
             self.pending_pc_send = None
             self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
@@ -925,8 +925,8 @@ class PcCompanionApp:
         try:
             with Path(pending["path"]).open("rb") as source:
                 for index in indexes:
-                    source.seek(index * 48000)
-                    data = source.read(48000)
+                    source.seek(index * 49152)
+                    data = source.read(49152)
                     if not data:
                         raise ValueError(f"Missing file bytes for chunk {index}")
                     self._send_encrypted_file_chunk(pending["peer"], pending["transferId"], index, data)
@@ -1003,12 +1003,12 @@ class PcCompanionApp:
             plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
             payload = json.loads(plain.decode("utf-8"))
             data = base64.b64decode(payload["payload"], validate=True)
-            expected = transfer["size"] - index * 48000 if index == transfer["chunks"] - 1 else 48000
+            expected = transfer["size"] - index * 49152 if index == transfer["chunks"] - 1 else 49152
             if len(data) != expected:
                 raise ValueError("Chunk length mismatch")
             if index not in transfer["received"]:
                 with open(transfer["path"] + ".shraddha-part", "r+b") as output:
-                    output.seek(index * 48000)
+                    output.seek(index * 49152)
                     output.write(data)
                 transfer["received"].add(index)
                 self._persist_pc_incoming()
@@ -1050,7 +1050,7 @@ class PcCompanionApp:
             return
         missing = msg.get("missingIndexes", [])
         if isinstance(missing, list):
-            self._send_pc_file_chunks([i for i in missing if isinstance(i, int) and 0 <= i < (pending["size"] + 49151) // 48000])
+            self._send_pc_file_chunks([i for i in missing if isinstance(i, int) and 0 <= i < (pending["size"] + 49151) // 49152])
 
     def _handle_file_cancel(self, msg):
         transfer_id = str(msg.get("transferId", ""))
