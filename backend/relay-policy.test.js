@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canStartFileTransfer } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -177,4 +177,15 @@ test('file transfer cancellation is limited to the active sender or receiver', (
   assert.equal(resolveFileTransferCancellation({ incomingTransfers: new Map() }, receiver, 'other', 'receiver', transferId, 100), null);
   assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', transferId, 500), null);
   assert.equal(resolveFileTransferCancellation(sender, receiver, 'sender', 'receiver', '../escape', 100), null);
+});
+
+
+test('file transfer admission rejects duplicate IDs and caps active receiver transfers', () => {
+  const device = { incomingTransfers: new Map() };
+  assert.equal(canStartFileTransfer(device, 'transfer_123456'), true);
+  device.incomingTransfers.set('transfer_123456', { expiresAt: Date.now() + 60000 });
+  assert.equal(canStartFileTransfer(device, 'transfer_123456'), false);
+  assert.equal(canStartFileTransfer(device, 'transfer_654321'), false);
+  assert.equal(canStartFileTransfer({}, 'transfer_123456'), false);
+  assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'bad'), false);
 });
