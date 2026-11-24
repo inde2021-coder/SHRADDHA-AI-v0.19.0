@@ -1,21 +1,39 @@
 package com.Lia.assistant.ui.screens.vision
 
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Text
-import androidx.compose.material3.Switch
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.CameraController
+import androidx.camera.view.LifecycleCameraController
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,32 +41,35 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.startForegroundService
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.VoiceGatewaySettings
-import com.Lia.assistant.ui.components.NovaButton
-import com.Lia.assistant.ui.components.NovaButtonType
-import com.Lia.assistant.ui.components.NovaGlassCard
 import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
-import `in`.shraddha.ai.vision.LiveEyesCameraService
-import kotlinx.coroutines.delay
+import `in`.shraddha.ai.link.DeviceLinkManager
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 @Composable
 fun VisualLensScreen(navController: NavController) {
     val context = LocalContext.current
-    val colors = LocalNovaColors.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val colors = LocalNovaColors.current
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
     val assistantName = NovaPreferences.getString(
         context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME
     ).trim().ifBlank { AssistantBrand.FULL_NAME }
@@ -56,183 +77,189 @@ fun VisualLensScreen(navController: NavController) {
     var cameraGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
-    var serviceState by remember { mutableStateOf(LiveEyesCameraService.getState(context)) }
-    var liveObservation by remember { mutableStateOf(LiveEyesCameraService.getLatestObservation(context)) }
-    var proactiveCompanion by remember {
-        mutableStateOf(
-            context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, 0)
-                .getBoolean(LiveEyesCameraService.PREF_PROACTIVE_COMPANION, true)
-        )
-    }
-    var status by remember { mutableStateOf("कैमरा बंद है। Start दबाने पर Android permission और foreground notification दिखाई देंगे।") }
+    var question by remember { mutableStateOf("") }
+    var answer by remember { mutableStateOf("कैमरे को किसी वस्तु, जगह, लिखावट या समस्या की ओर करें और Shraddha से पूछें।") }
+    var busy by remember { mutableStateOf(false) }
 
-    fun startEyes() {
-        val config = VoiceGatewaySettings.get(context)
-        if (config.readError != null) {
-            status = "Saved AI backend settings could not be read: " + config.readError
-            return
-        }
-        if (!config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
-            status = "पहले Settings में सुरक्षित HTTPS AI backend URL और gateway token सेट करें।"
-            return
-        }
-        try {
-            startForegroundService(
-                context,
-                Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_START)
-            )
-            status = "Live Eyes शुरू हो रही हैं। कैमरा service की वास्तविक स्थिति की प्रतीक्षा करें।"
-            serviceState = LiveEyesCameraService.getState(context)
-        } catch (error: Exception) {
-            status = "कैमरा शुरू नहीं हो पाया: " + (error.localizedMessage ?: "अनजान त्रुटि")
-        }
-    }
-
-    fun stopEyes() {
-        try {
-            context.startService(Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_STOP))
-            status = "Live Eyes बंद करने का अनुरोध भेजा गया।"
-        } catch (error: Exception) {
-            status = "कैमरा बंद नहीं हो पाया: " + (error.localizedMessage ?: "अनजान त्रुटि")
+    val controller = remember(context) {
+        LifecycleCameraController(context).apply {
+            cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            imageCaptureMode = ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+            setEnabledUseCases(CameraController.IMAGE_CAPTURE)
         }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         cameraGranted = granted
-        if (granted) startEyes()
-        else status = "कैमरा अनुमति नहीं मिली। बिना अनुमति कैमरा शुरू नहीं होगा।"
+        if (!granted) answer = "कैमरा अनुमति नहीं मिली। Android Settings में Shraddha AI के लिए Camera अनुमति दें।"
     }
 
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                cameraGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                serviceState = LiveEyesCameraService.getState(context)
+    DisposableEffect(cameraGranted, lifecycleOwner, controller) {
+        if (cameraGranted) controller.bindToLifecycle(lifecycleOwner)
+        onDispose { controller.unbind() }
+    }
+    DisposableEffect(cameraExecutor) {
+        onDispose { cameraExecutor.shutdown() }
+    }
+
+    fun captureAndAsk() {
+        if (!cameraGranted) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+            return
+        }
+        val prompt = question.trim().ifBlank { "इस तस्वीर में क्या दिखाई दे रहा है? महत्वपूर्ण वस्तुएँ, लिखावट और उपयोगी जानकारी हिंदी में बताओ।" }
+        val config = VoiceGatewaySettings.get(context)
+        if (config.readError != null) {
+            answer = "AI कनेक्शन सेटिंग पढ़ने में समस्या: " + config.readError
+            return
+        }
+        if (!config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
+            answer = "पहले Settings में सुरक्षित HTTPS AI backend URL और gateway token सेट करें।"
+            return
+        }
+        if (busy) return
+        busy = true
+        answer = "कैमरा तस्वीर ले रहा है…"
+        val file = File(context.cacheDir, "shraddha-visual-lens-${System.currentTimeMillis()}.jpg")
+        val output = ImageCapture.OutputFileOptions.Builder(file).build()
+        controller.takePicture(output, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
+            override fun onImageSaved(result: ImageCapture.OutputFileResults) {
+                var sourceBytes: ByteArray? = null
+                var bitmap: Bitmap? = null
+                try {
+                    sourceBytes = file.readBytes()
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(sourceBytes, 0, sourceBytes.size, bounds)
+                    val sample = maxOf(1, maxOf(bounds.outWidth / 1280, bounds.outHeight / 1280))
+                    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                    bitmap = BitmapFactory.decodeByteArray(sourceBytes, 0, sourceBytes.size, options)
+                        ?: throw IllegalStateException("तस्वीर पढ़ी नहीं जा सकी")
+                    val compressed = ByteArrayOutputStream().use { stream ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 78, stream)
+                        stream.toByteArray()
+                    }
+                    bitmap.recycle()
+                    bitmap = null
+                    sourceBytes.fill(0)
+                    sourceBytes = null
+                    if (compressed.size > 2_500_000) {
+                        compressed.fill(0)
+                        throw IllegalStateException("तस्वीर का आकार सुरक्षित सीमा से बड़ा है।")
+                    }
+                    val provider = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
+                    DeviceLinkManager.analyzeScreen(
+                        config.baseUrl, config.gatewayToken, provider, prompt, compressed, "general"
+                    ) { result ->
+                        compressed.fill(0)
+                        mainHandler.post {
+                            answer = result.fold(
+                                onSuccess = { it },
+                                onFailure = { "AI से दृश्य समझने में समस्या: ${it.message ?: "नेटवर्क या provider त्रुटि"}" }
+                            )
+                            busy = false
+                        }
+                    }
+                } catch (error: Exception) {
+                    sourceBytes?.fill(0)
+                    bitmap?.recycle()
+                    mainHandler.post {
+                        answer = "तस्वीर का विश्लेषण शुरू नहीं हो पाया: ${error.message ?: "अनजान त्रुटि"}"
+                        busy = false
+                    }
+                } finally {
+                    file.delete()
+                }
             }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
-    LaunchedEffect(context) {
-        while (true) {
-            serviceState = LiveEyesCameraService.getState(context)
-            liveObservation = LiveEyesCameraService.getLatestObservation(context)
-            delay(500)
-        }
-    }
-
-    val active = serviceState == LiveEyesCameraService.STATE_ACTIVE
-    val starting = serviceState == LiveEyesCameraService.STATE_STARTING
-    val stateText = when {
-        active -> "दृश्य जागरूकता सक्रिय"
-        starting -> "कैमरा service शुरू हो रही है"
-        else -> "कैमरा बंद है"
+            override fun onError(exception: ImageCaptureException) {
+                file.delete()
+                mainHandler.post {
+                    answer = "कैमरा तस्वीर नहीं ले पाया: ${exception.message ?: "कैमरा त्रुटि"}"
+                    busy = false
+                }
+            }
+        })
     }
 
     Column(
-        Modifier.fillMaxSize().nightSky().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        Modifier.fillMaxSize().nightSky().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        NovaTopBar(title = "VISUAL LENS", navigationIcon = {
-            androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
-                androidx.compose.material3.Icon(
-                    androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = colors.textPrimary
-                )
+        NovaTopBar(title = "SHRADDHA VISUAL LENS", navigationIcon = {
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
             }
         })
 
-        NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 24.dp, elevation = 7.dp) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stateText, color = if (active) colors.success else if (starting) colors.accent else colors.textPrimary)
-                Text(
-                    "$assistantName की Live Eyes camera preview नहीं दिखातीं। यह camera frames लेकर आसपास की वस्तुएँ, जगह, लिखावट और स्पष्ट दृश्य बदलाव समझने के लिए configured HTTPS AI backend को भेजती हैं।",
-                    color = colors.textPrimary
+        Box(
+            Modifier.fillMaxWidth().weight(0.9f, fill = true)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color(0xFF101522)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (cameraGranted) {
+                AndroidView(
+                    factory = { viewContext ->
+                        PreviewView(viewContext).apply {
+                            this.controller = controller
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
+                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                        }
+                    },
+                    update = { it.controller = controller },
+                    modifier = Modifier.fillMaxSize()
                 )
                 Text(
-                    "Camera permission: " + if (cameraGranted) "granted" else "not granted",
-                    color = colors.textSecondary
+                    "LIVE CAMERA • AR NOT REQUIRED",
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.TopStart).padding(14.dp)
+                        .clip(RoundedCornerShape(10.dp)).background(Color(0x99090D16)).padding(horizontal = 10.dp, vertical = 6.dp)
                 )
-                Text(
-                    "Service status: " + serviceState,
-                    color = colors.textSecondary
-                )
-                Text(status, color = colors.textSecondary)
-                if (liveObservation.isNotBlank()) {
-                    Text("LIVE SUBTITLES + OBJECT TRACKING", color = colors.accent)
-                    Text(liveObservation, color = colors.textPrimary)
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color(0xFFBDA4FF))
+                    Text("Visual Lens को कैमरा अनुमति चाहिए", color = Color.White)
+                    Text("यह सामान्य कैमरा + AI पर चलता है। ARCore जरूरी नहीं है।", color = Color(0xFFB8C0D0))
                 }
             }
         }
 
-        NovaGlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Privacy & control", color = colors.textPrimary)
-                Text(
-                    "कैमरा चालू होने पर Android का privacy indicator और foreground notification दिखाई देगा। कोई camera preview इस स्क्रीन पर नहीं दिखेगा। Stop दबाने पर नए frames भेजना बंद होगा।",
-                    color = colors.textSecondary
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Proactive Companion", color = colors.textPrimary)
-                        Text(
-                            "दृश्य में महत्वपूर्ण बदलाव होने पर Shraddha खुद छोटी बातचीत शुरू करेगी। बोलने के लिए पहले से चालू Voice Session जरूरी है; कैमरा अपने-आप माइक्रोफोन चालू नहीं करेगा।",
-                            color = colors.textSecondary
-                        )
-                    }
-                    Switch(
-                        checked = proactiveCompanion,
-                        onCheckedChange = { enabled ->
-                            proactiveCompanion = enabled
-                            context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, 0)
-                                .edit()
-                                .putBoolean(LiveEyesCameraService.PREF_PROACTIVE_COMPANION, enabled)
-                                .apply()
-                        }
-                    )
+        OutlinedTextField(
+            value = question,
+            onValueChange = { question = it },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+            placeholder = { Text("पूछें: यह क्या है? इसे कैसे ठीक करूँ?") },
+            trailingIcon = {
+                IconButton(onClick = { captureAndAsk() }, enabled = !busy) {
+                    Icon(Icons.Default.Send, contentDescription = "Ask Shraddha", tint = Color(0xFFBDA4FF))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NovaButton(
-                        text = when {
-                            active || starting -> "STOP EYES"
-                            cameraGranted -> "START EYES"
-                            else -> "ALLOW CAMERA"
-                        },
-                        onClick = {
-                            if (active || starting) stopEyes()
-                            else if (!cameraGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
-                            else startEyes()
-                        },
-                        modifier = Modifier.weight(1f),
-                        type = if (active || starting) NovaButtonType.SECONDARY else NovaButtonType.PRIMARY
-                    )
-                    NovaButton(
-                        text = "Settings",
-                        onClick = { navController.navigate("settings") },
-                        modifier = Modifier.weight(1f),
-                        type = NovaButtonType.SECONDARY
-                    )
-                }
-                NovaButton(
-                    text = "OPEN AR WORLD MAPPING",
-                    onClick = { navController.navigate("ar_mapping") },
-                    modifier = Modifier.fillMaxWidth(),
-                    type = NovaButtonType.SECONDARY
-                )
-                NovaButton(
-                    text = "Ask ${assistantName} about this view",
-                    onClick = { navController.navigate("voice") },
-                    modifier = Modifier.fillMaxWidth(),
-                    type = NovaButtonType.SECONDARY,
-                    enabled = active
-                )
+            }
+        )
+
+        Text(
+            answer,
+            color = colors.textPrimary,
+            modifier = Modifier.fillMaxWidth().weight(0.55f, fill = true)
+                .clip(RoundedCornerShape(20.dp)).background(Color(0x661B2030)).padding(14.dp)
+        )
+
+        if (!cameraGranted) {
+            androidx.compose.material3.Button(
+                onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("कैमरा अनुमति दें") }
+        } else {
+            androidx.compose.material3.Button(
+                onClick = { captureAndAsk() },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (busy) "विश्लेषण हो रहा है…" else "तस्वीर लेकर Shraddha से पूछें")
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
     }
 }
