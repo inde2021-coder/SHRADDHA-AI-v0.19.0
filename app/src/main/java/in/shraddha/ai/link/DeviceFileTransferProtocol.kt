@@ -18,7 +18,7 @@ internal object DeviceFileTransferProtocol {
 
     fun safeDisplayName(value: String): String = value
         .substringAfterLast('/')
-        .substringAfterLast('\\\\')
+        .substringAfterLast(92.toChar())
         .replace(Regex("[\\u0000-\\u001f\\u007f]"), "_")
         .trim()
         .trimStart('.')
