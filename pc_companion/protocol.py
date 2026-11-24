@@ -43,6 +43,12 @@ def expected_file_chunk_bytes(size, chunks, index):
     return min(CHUNK_BYTES, remaining) if remaining > 0 else None
 
 
+def valid_missing_file_indexes(indexes, chunks):
+    if not isinstance(indexes, list) or type(chunks) is not int or not 1 <= chunks <= 2134 or len(indexes) > chunks:
+        return False
+    return all(type(index) is int and 0 <= index < chunks for index in indexes) and len(set(indexes)) == len(indexes)
+
+
 def matches_transfer_peer(message, peer_id, transfer_id):
     """Require both the authenticated peer identity and exact transfer ID."""
     return (
