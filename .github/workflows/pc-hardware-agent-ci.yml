@@ -11,8 +11,6 @@ on:
       - "app/src/main/java/com/Lia/assistant/action/ActionExecutor.kt"
       - "app/src/main/java/com/Lia/assistant/ui/screens/devices/PcCommandInterpreter.kt"
       - "app/src/test/java/com/Lia/assistant/ui/screens/devices/PcCommandInterpreterTest.kt"
-      - "app/src/main/java/com/Lia/assistant/ui/screens/devices/PcCommandInterpreter.kt"
-      - "app/src/test/java/com/Lia/assistant/ui/screens/devices/PcCommandInterpreterTest.kt"
       - "app/src/main/java/com/Lia/assistant/voice/LiaToolCatalog.kt"
       - "app/src/main/java/in/shraddha/ai/MainActivity.kt"
       - ".github/workflows/pc-hardware-agent-ci.yml"
