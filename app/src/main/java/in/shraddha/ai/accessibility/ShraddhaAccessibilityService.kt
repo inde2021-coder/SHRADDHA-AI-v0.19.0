@@ -101,6 +101,7 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let(queue::addLast)
         }
+        if (queue.isNotEmpty()) return true // Node limit reached: do not risk an uninspected sensitive field.
         return SensitiveScreenGuard.blocksGesture(sensitive, x1, y1, x2, y2)
     }
 
