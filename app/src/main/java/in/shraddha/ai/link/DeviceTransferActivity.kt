@@ -202,12 +202,31 @@ class DeviceTransferActivity : Activity() {
                 if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
-                sourcePeer = msg.optString("fromDeviceId"); transferId = msg.optString("transferId")
-                incomingName = msg.optString("fileName"); incomingSize = msg.optLong("sizeBytes")
-                incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
+                val incomingPeer = msg.optString("fromDeviceId")
+                val incomingTransferId = msg.optString("transferId")
+                // This Activity persists exactly one transfer. Never overwrite an
+                // unfinished transfer when a second manifest arrives.
+                if (transferId.isNotBlank() && incomingTransferId != transferId) {
+                    DeviceLinkManager.cancelFileTransfer(incomingPeer, incomingTransferId, "receiver_busy")
+                    status.text = "Another transfer is already active. Finish or cancel it before accepting a new file."
+                    return
+                }
+                val newSize = msg.optLong("sizeBytes")
+                val newCount = msg.optInt("chunkCount")
+                if (!incomingTransferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) ||
+                    newSize !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES ||
+                    DeviceFileTransferProtocol.chunkCount(newSize) != newCount ||
+                    !msg.optString("sha256").matches(Regex("[a-f0-9]{64}")) ||
+                    msg.optString("fileName").isBlank() || msg.optString("fileName").length > 180) {
+                    DeviceLinkManager.cancelFileTransfer(incomingPeer, incomingTransferId, "invalid_manifest")
+                    status.text = "Rejected invalid incoming manifest."
+                    return
+                }
+                sourcePeer = incomingPeer; transferId = incomingTransferId
+                incomingName = msg.optString("fileName"); incomingSize = newSize
+                incomingCount = newCount; incomingHash = msg.optString("sha256")
                 incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || incomingCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
                     .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
