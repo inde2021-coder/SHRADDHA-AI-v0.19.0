@@ -28,21 +28,27 @@ class ShraddhaAccessibilityService : AccessibilityService() {
 
     private fun isSensitiveNode(node: AccessibilityNodeInfo): Boolean {
         if (node.isPassword) return true
-        // Labels are often attached to a TextInputLayout/container rather than the EditText.
-        // Inspect a short ancestor chain so the value cannot leak when only the child is captured.
-        val labels = mutableListOf<String>()
+        // Sensitive labels can be siblings of the EditText inside TextInputLayout.
+        // Inspect a bounded ancestor chain and each ancestor's direct children.
+        val nearbyLabels = mutableListOf<String>()
         var current: AccessibilityNodeInfo? = node
         repeat(4) {
-            val item = current ?: return@repeat
-            if (item.isPassword) return true
-            labels += listOfNotNull(
-                item.text?.toString(), item.contentDescription?.toString(), item.hintText?.toString(),
-                item.viewIdResourceName
+            val ancestor = current ?: return@repeat
+            if (ancestor.isPassword) return true
+            nearbyLabels += listOfNotNull(
+                ancestor.text?.toString(), ancestor.contentDescription?.toString(),
+                ancestor.hintText?.toString(), ancestor.viewIdResourceName
             )
-            current = item.parent
+            for (index in 0 until ancestor.childCount) {
+                val sibling = ancestor.getChild(index) ?: continue
+                nearbyLabels += listOfNotNull(
+                    sibling.text?.toString(), sibling.contentDescription?.toString(),
+                    sibling.hintText?.toString(), sibling.viewIdResourceName
+                )
+            }
+            current = ancestor.parent
         }
-        val combined = labels.joinToString(" ").lowercase()
-        return Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|\bupi\b|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड""").containsMatchIn(combined)
+        return SensitiveFieldDetector.isSensitive(false, nearbyLabels)
     }
 
     private fun captureOcrTargetsInternal(done: (Result<List<ScreenOcrEngine.OcrLine>>) -> Unit) {
