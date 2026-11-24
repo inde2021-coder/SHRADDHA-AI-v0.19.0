@@ -29,10 +29,11 @@ class RemoteActionReplayGuardTest {
         assertFalse(guard.claim("peer-a", "short"))
     }
 
-    @Test fun evictsOldestClaimWhenCapacityIsReached() {
+    @Test fun failsClosedAtCapacityWithoutReopeningAnOldReplayWindow() {
         val guard = RemoteActionReplayGuard(maxEntries = 1, ttlMs = 10_000L, nowMs = { 100L })
         assertTrue(guard.claim("peer-a", "action_12345678"))
-        assertTrue(guard.claim("peer-b", "action_87654321"))
-        assertTrue(guard.claim("peer-a", "action_12345678"))
+        assertFalse(guard.claim("peer-b", "action_87654321"))
+        assertFalse(guard.claim("peer-a", "action_12345678"))
+        assertEquals(1, guard.size())
     }
 }
