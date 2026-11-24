@@ -51,6 +51,8 @@ class DeviceE2ECrypto:
         encoded = base64.b64decode(peer_public_key_base64, validate=True)
         if not 80 <= len(encoded) <= 256:
             raise ValueError("Invalid ECDH public key size")
+        if base64.b64encode(encoded).decode("ascii") != peer_public_key_base64:
+            raise ValueError("ECDH public key must use canonical padded Base64")
         peer = serialization.load_der_public_key(encoded)
         if not isinstance(peer, ec.EllipticCurvePublicKey) or not isinstance(peer.curve, ec.SECP256R1):
             raise ValueError("Peer key must use P-256")

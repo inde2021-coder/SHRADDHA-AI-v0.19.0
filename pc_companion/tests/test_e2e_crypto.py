@@ -70,6 +70,11 @@ class DeviceE2ECryptoTests(unittest.TestCase):
             DeviceE2ECrypto.encrypt(b"k" * 32, b"x", b"a" * 1025)
         with self.assertRaises(ValueError):
             DeviceE2ECrypto().derive_peer_key("not-base64", "session", "a" * 24, "b" * 24)
+        peer = DeviceE2ECrypto().public_key_base64()
+        with self.assertRaises(ValueError):
+            DeviceE2ECrypto().derive_peer_key(peer.rstrip("="), "session", "a" * 24, "b" * 24)
+        with self.assertRaises(ValueError):
+            DeviceE2ECrypto().derive_peer_key(peer + "=", "session", "a" * 24, "b" * 24)
 
 
 if __name__ == "__main__":
