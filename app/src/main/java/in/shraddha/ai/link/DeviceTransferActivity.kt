@@ -43,6 +43,8 @@ class DeviceTransferActivity : Activity() {
     private var pendingIndexes: List<Int> = emptyList()
     private val paused = AtomicBoolean(false)
     private val cancelled = AtomicBoolean(false)
+    private val verifyingIncoming = AtomicBoolean(false)
+    private val savingIncoming = AtomicBoolean(false)
     private var lastAck = -1
     private var sendThread: Thread? = null
 
@@ -274,28 +276,68 @@ class DeviceTransferActivity : Activity() {
 
     private fun saveIncoming(destination: Uri) {
         val file = incomingFile ?: return
+        if (!savingIncoming.compareAndSet(false, true)) return
         val savedName = incomingName
-        try {
-            contentResolver.openOutputStream(destination, "w")?.use { output -> file.inputStream().use { it.copyTo(output) } }
-                ?: throw IllegalStateException("Could not open selected destination")
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)
-            file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
-            clearTransferState()
-            status.text = "Saved $savedName • SHA-256 verified • transfer complete."
-        } catch (e: Exception) { status.text = "Save failed: ${e.message}" }
+        val targetPeer = sourcePeer
+        val activeTransferId = transferId
+        thread(name = "ShraddhaFileSave") {
+            try {
+                contentResolver.openOutputStream(destination, "w")?.use { output ->
+                    file.inputStream().use { input -> input.copyTo(output, 64 * 1024) }
+                } ?: throw IllegalStateException("Could not open selected destination")
+                runOnUiThread {
+                    savingIncoming.set(false)
+                    DeviceLinkManager.acknowledgeFileTransfer(targetPeer, activeTransferId, -1, complete = true, ok = true)
+                    file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
+                    clearTransferState()
+                    status.text = "Saved $savedName • SHA-256 verified • transfer complete."
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    savingIncoming.set(false)
+                    status.text = "Save failed: ${e.message}"
+                }
+            }
+        }
     }
 
     private fun verifyIncoming() {
-        incomingOut?.fd?.sync(); incomingOut?.close(); incomingOut = null
-        val file = incomingFile ?: return
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); clearTransferState(); return }
-        incomingVerified = true
-        persistTransferState()
-        status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
-        pendingSaveUri?.let { saveIncoming(it) }
+        if (!verifyingIncoming.compareAndSet(false, true)) return
+        val file = incomingFile ?: run { verifyingIncoming.set(false); return }
+        val expectedHash = incomingHash
+        // Detach the writer before hashing; all received chunks have been written at this point.
+        val output = incomingOut
+        incomingOut = null
+        thread(name = "ShraddhaFileVerify") {
+            try {
+                output?.fd?.sync()
+                output?.close()
+                val digest = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
+                }
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                runOnUiThread {
+                    verifyingIncoming.set(false)
+                    if (actual != expectedHash) {
+                        status.text = "SHA-256 mismatch. File rejected."
+                        DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch")
+                        file.delete(); clearTransferState()
+                        return@runOnUiThread
+                    }
+                    incomingVerified = true
+                    persistTransferState()
+                    status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
+                    pendingSaveUri?.let { saveIncoming(it) }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    verifyingIncoming.set(false)
+                    status.text = "File verification failed: ${e.message}. Resume / retry is available."
+                }
+            }
+        }
     }
 
     private fun resumeTransfer() {
