@@ -86,10 +86,24 @@ class RemoteCameraService : Service() {
                     }
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()); buffer.get(bytes)
-                    if (!DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)) {
-                        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "frame_not_sent") }
+                    val sent = try {
+                        DeviceLinkManager.sendFrame(bytes, 2, targetDeviceId)
+                    } finally {
+                        // Camera frames are sensitive. Wipe the temporary copy even if
+                        // encryption/relay dispatch throws unexpectedly.
+                        bytes.fill(0)
                     }
-                    bytes.fill(0)
+                    if (!RemoteCameraPolicy.shouldContinueAfterFrame(
+                            sent,
+                            cameraGranted,
+                            consentEnabled,
+                            targetDeviceId,
+                            facing
+                        )) {
+                        runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "camera_stopped_fail_closed") }
+                        stopSelf()
+                        return@setOnImageAvailableListener
+                    }
                     lastFrameAt = now
                 } catch (_: Exception) {
                     runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "frame_not_sent") }
