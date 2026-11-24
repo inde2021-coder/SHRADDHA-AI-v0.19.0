@@ -865,9 +865,14 @@ test('task handoffs and responses are relayed only as E2E ciphertext', async () 
     ownerSocket.send(JSON.stringify({ type: 'task_handoff', targetDeviceId: member.deviceId, task: { title } }));
     await assert.rejects(noPlaintext, /Timed out waiting/);
   } finally {
-    const closes = [ownerSocket, memberSocket].map(socket =>
-      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
-        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    const closes = [ownerSocket, memberSocket].map(socket => {
+      if (socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.terminate();
+        return Promise.resolve();
+      }
+      return new Promise(resolve => { socket.once('close', resolve); socket.close(); });
+    });
     await Promise.all(closes);
   }
 });
