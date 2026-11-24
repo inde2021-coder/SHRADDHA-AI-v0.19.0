@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -921,10 +921,12 @@ class PcCompanionApp:
             else:
                 self.status_var.set("Receiver could not verify the transfer. Resume only after checking the destination.")
         elif index >= 0:
-            if msg.get("ok") is not True:
-                self.status_var.set(f"Receiver rejected file chunk {index + 1}; transfer paused.")
-                return
             in_flight = pending.setdefault("in_flight", set())
+            if msg.get("ok") is not True:
+                # Release the window slot and retain this chunk for explicit retry.
+                requeue_rejected_chunk(pending.setdefault("send_queue", []), in_flight, index)
+                self.status_var.set(f"Receiver rejected file chunk {index + 1}; transfer paused. Tap Resume / Retry after checking receiver storage.")
+                return
             if index in in_flight:
                 in_flight.remove(index)
                 self._pump_pc_file_chunks()
