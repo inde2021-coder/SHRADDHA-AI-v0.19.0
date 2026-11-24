@@ -30,6 +30,13 @@ test('Mastodon text publishing validates origin and returns accepted post id', a
   try {
     const result = await publishSocialPost({}, { platform: 'mastodon', text: 'approved status' }, {
       MASTODON_BASE_URL: 'https://mastodon.example', MASTODON_ACCESS_TOKEN: 'server-token', MASTODON_VISIBILITY: 'unlisted'
+    }, {
+      mastodonRequest: async (url, options) => {
+        assert.equal(url, 'https://mastodon.example/api/v1/statuses');
+        assert.equal(options.headers.authorization, 'Bearer server-token');
+        assert.equal(options.redirect, undefined);
+        return new Response(JSON.stringify({ id: '123', url: 'https://mastodon.example/@user/123' }), { status: 200 });
+      }
     });
     assert.equal(result.postId, '123');
     assert.equal(result.visibility, 'unlisted');
