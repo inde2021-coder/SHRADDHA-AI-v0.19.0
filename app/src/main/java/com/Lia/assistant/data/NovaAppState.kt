@@ -25,6 +25,12 @@ class NovaAppState(context: Context) {
     )
         private set
 
+    var homeDesign by mutableStateOf(
+        NovaPreferences.getString(context, NovaPreferences.Keys.HOME_DESIGN, "LIA_GLASS")
+            .takeIf { it in setOf("LIA_GLASS", "ROYAL_3D", "COSMIC_ORB", "AI_ROBOT", "EXECUTIVE") } ?: "LIA_GLASS"
+    )
+        private set
+
     var reducedMotion by mutableStateOf(
         NovaPreferences.getBoolean(context, NovaPreferences.Keys.REDUCED_MOTION, false)
     )
@@ -131,6 +137,13 @@ class NovaAppState(context: Context) {
     fun applyThemeMode(context: Context, mode: String) {
         themeMode = mode
         NovaPreferences.putString(context, NovaPreferences.Keys.THEME_MODE, mode)
+    }
+
+    fun applyHomeDesign(context: Context, design: String) {
+        val supported = setOf("LIA_GLASS", "ROYAL_3D", "COSMIC_ORB", "AI_ROBOT", "EXECUTIVE")
+        require(design in supported)
+        homeDesign = design
+        NovaPreferences.putString(context, NovaPreferences.Keys.HOME_DESIGN, design)
     }
 
     fun applyReducedMotion(context: Context, enabled: Boolean) {
