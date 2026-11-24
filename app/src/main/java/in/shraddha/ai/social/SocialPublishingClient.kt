@@ -61,10 +61,18 @@ object SocialPublishingClient {
             output.toByteArray()
         } ?: error("The selected media file could not be read.")
         require(bytes.isNotEmpty()) { "The selected media file is empty." }
+        val extension = when (mime) {
+            "image/jpeg" -> "jpg"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "video/mp4" -> "mp4"
+            "video/quicktime" -> "mov"
+            else -> error("Unsupported media type.")
+        }
         JSONObject()
             .put("mediaBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
             .put("mimeType", mime)
-            .put("fileName", if (mediaKind == "video") "shraddha-upload.mp4" else "shraddha-upload.jpg")
+            .put("fileName", "shraddha-upload.$extension")
     }
 
     suspend fun publish(context: Context, platform: String, text: String, mediaKind: String? = null, mediaUrl: String? = null, mediaBase64: String? = null, mimeType: String? = null, fileName: String? = null): JSONObject =
