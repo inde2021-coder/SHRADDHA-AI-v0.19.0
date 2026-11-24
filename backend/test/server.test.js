@@ -804,9 +804,14 @@ test('switching to master-only immediately revokes old member grants and blocks 
     }));
     await assert.rejects(unexpectedAction, /Timed out waiting/);
   } finally {
-    const closes = [ownerSocket, memberSocket].map(socket =>
-      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
-        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    const closes = [ownerSocket, memberSocket].map(socket => {
+      if (socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.terminate();
+        return Promise.resolve();
+      }
+      return new Promise(resolve => { socket.once('close', resolve); socket.close(); });
+    });
     await Promise.all(closes);
   }
 });
