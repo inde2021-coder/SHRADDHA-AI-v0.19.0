@@ -272,9 +272,13 @@ const server = http.createServer(async (req, res) => {
       if (!name || name.length > 48) return json(res, 400, { error: 'deviceName must be 1-48 characters' });
       const session = sessions.get(pair.sessionId);
       if (!session || session.devices.size >= 8) return json(res, 409, { error: 'Session unavailable or device limit reached' });
-      // Consume only after all validation succeeds; a QR/code invitation cannot be replayed.
-      const consumed = consumePairingCode(pairCodes, code);
-      if (!consumed || consumed.sessionId !== session.id) return json(res, 400, { error: 'Pairing code invalid, expired, or already used' });
+      // Keep this short-lived invitation reusable so the owner can pair multiple
+      // devices (up to the session limit) during the five-minute window.
+      // Every join still receives a unique device ID/token and is IP-rate-limited.
+      if (!pair || pair.sessionId !== session.id || !Number.isFinite(pair.expiresAt) || pair.expiresAt <= Date.now()) {
+        pairCodes.delete(code);
+        return json(res, 400, { error: 'Pairing code invalid or expired' });
+      }
       const deviceId = randomBytes(12).toString('hex'); const deviceToken = token();
       session.devices.set(deviceId, { name, token: deviceToken, role: 'member', socket: null, sharePermissions: {}, grants: new Map(), controlGrants: new Map(), pendingControlRequests: new Map(), pendingRemoteActions: new Map(), pendingDataShares: new Map(), pendingTaskHandoffs: new Map(), incomingTransfers: new Map() });
       // The invitation remains valid until expiry so the owner can pair several phones.
