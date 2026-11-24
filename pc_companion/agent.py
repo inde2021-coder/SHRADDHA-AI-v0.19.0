@@ -965,9 +965,13 @@ class PcCompanionApp:
                     self._send_encrypted_file_chunk(pending["peer"], pending["transferId"], index, data)
             self.status_var.set(f"Sent {len(batch)} chunks; {len(in_flight)} awaiting receiver acknowledgement.")
         except Exception as exc:
-            for index in batch if "batch" in locals() else []:
+            failed_batch = batch if "batch" in locals() else []
+            for index in failed_batch:
                 in_flight.discard(index)
-            self.status_var.set(f"File transfer paused: {str(exc)[:160]}")
+            # Requeue unsent and ambiguously sent chunks. The receiver deduplicates
+            # indexes and validates SHA-256, so retrying this bounded batch is safe.
+            queue[:0] = [index for index in failed_batch if index not in queue]
+            self.status_var.set(f"File transfer paused; {len(queue)} chunks queued for retry: {str(exc)[:120]}")
 
 
     def _send_encrypted_file_chunk(self, peer_id, transfer_id, index, data):
@@ -1078,15 +1082,22 @@ class PcCompanionApp:
                 return
             missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
             self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
-                             "transferId": transfer_id, "missingIndexes": missing})
+                             "transferId": transfer_id, "chunkCount": incoming["chunks"],
+                             "missingIndexes": missing})
             self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
             return
         pending = self.pending_pc_send
         if not pending or transfer_id != pending["transferId"]:
             return
         missing = msg.get("missingIndexes", [])
-        if isinstance(missing, list):
-            self._send_pc_file_chunks([i for i in missing if isinstance(i, int) and 0 <= i < chunk_count_for_size(pending["size"])])
+        expected_count = chunk_count_for_size(pending["size"])
+        if (not isinstance(missing, list) or msg.get("chunkCount") != expected_count or
+                len(missing) > expected_count or
+                any(not isinstance(i, int) or isinstance(i, bool) or not 0 <= i < expected_count for i in missing) or
+                len(set(missing)) != len(missing)):
+            self.status_var.set("Rejected invalid file-transfer resume manifest.")
+            return
+        self._send_pc_file_chunks(missing)
 
     def _handle_file_cancel(self, msg):
         transfer_id = str(msg.get("transferId", ""))
