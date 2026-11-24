@@ -16,3 +16,10 @@ The Android **AI Work Agent** is available from the Mobile Command Center. It co
 - Hindi/English voice input is available through Android speech recognition when the device provides it.
 
 **Limitations:** This is not unrestricted remote browser automation. Login challenges, CAPTCHA, payment, purchases, sending, deletion, publishing and account changes may require the user to complete or explicitly approve steps. Browser tabs, arbitrary JavaScript execution, background browsing, and automatic multi-site workflows are not implemented by this work surface. Upload/download behavior depends on the target website exposing a compatible file control or download response. Website controls that are not visible or do not expose a unique accessible label cannot be safely targeted. Physical-device and real-site testing is required before treating a workflow as production-ready.
+
+## Visual Lens and Live Eyes
+
+- Visual Lens uses the in-app CameraX preview and captures a frame only after the user requests analysis.
+- Starting the separately user-enabled Live Eyes foreground service releases the in-app preview camera first; stopping Live Eyes returns the preview to the screen.
+- Live Eyes is not a hidden camera feature: Android camera privacy indicators and its persistent foreground notification remain visible, with a Stop action.
+- Core Visual Lens does not require ARCore or Google Play Services for AR.
