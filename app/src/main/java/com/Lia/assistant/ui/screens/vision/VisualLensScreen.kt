@@ -2,6 +2,7 @@ package com.Lia.assistant.ui.screens.vision
 
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -57,6 +58,12 @@ fun VisualLensScreen(navController: NavController) {
     }
     var serviceState by remember { mutableStateOf(LiveEyesCameraService.getState(context)) }
     var liveObservation by remember { mutableStateOf(LiveEyesCameraService.getLatestObservation(context)) }
+    var proactiveCompanion by remember {
+        mutableStateOf(
+            context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, 0)
+                .getBoolean(LiveEyesCameraService.PREF_PROACTIVE_COMPANION, true)
+        )
+    }
     var status by remember { mutableStateOf("कैमरा बंद है। Start दबाने पर Android permission और foreground notification दिखाई देंगे।") }
 
     fun startEyes() {
@@ -167,6 +174,28 @@ fun VisualLensScreen(navController: NavController) {
                     "कैमरा चालू होने पर Android का privacy indicator और foreground notification दिखाई देगा। कोई camera preview इस स्क्रीन पर नहीं दिखेगा। Stop दबाने पर नए frames भेजना बंद होगा।",
                     color = colors.textSecondary
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Proactive Companion", color = colors.textPrimary)
+                        Text(
+                            "दृश्य में महत्वपूर्ण बदलाव होने पर Shraddha खुद छोटी बातचीत शुरू करेगी। बोलने के लिए पहले से चालू Voice Session जरूरी है; कैमरा अपने-आप माइक्रोफोन चालू नहीं करेगा।",
+                            color = colors.textSecondary
+                        )
+                    }
+                    Switch(
+                        checked = proactiveCompanion,
+                        onCheckedChange = { enabled ->
+                            proactiveCompanion = enabled
+                            context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, 0)
+                                .edit()
+                                .putBoolean(LiveEyesCameraService.PREF_PROACTIVE_COMPANION, enabled)
+                                .apply()
+                        }
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     NovaButton(
                         text = when {
