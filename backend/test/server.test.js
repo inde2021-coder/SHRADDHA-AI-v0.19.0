@@ -1034,3 +1034,93 @@ test('remote action schema rejects malformed and out-of-range commands', () => {
   assert.equal(validRemoteAction({ kind: 'shell', command: 'rm -rf /' }), false);
   assert.equal(validRemoteAction(null), false);
 });
+
+
+test('file transfer resume uses only the receiver persisted missing-index bitmap', async () => {
+  const ownerResponse = await fetch(`${baseUrl}/api/device/session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Transfer Sender' })
+  });
+  const owner = await ownerResponse.json();
+  const memberResponse = await fetch(`${baseUrl}/api/device/join`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ deviceName: 'Transfer Receiver', pairingCode: owner.pairingCode })
+  });
+  const member = await memberResponse.json();
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const connect = pair => new WebSocket(`${wsBase}/ws?sessionId=${encodeURIComponent(pair.sessionId)}&deviceId=${encodeURIComponent(pair.deviceId)}`, {
+    headers: { authorization: `Bearer ${pair.deviceToken}` }
+  });
+  const ownerSocket = connect(owner), memberSocket = connect(member);
+  try {
+    const ownerConnected = nextWsMessage(ownerSocket, data => {
+      try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+    });
+    const memberConnected = nextWsMessage(memberSocket, data => {
+      try { return JSON.parse(data.toString()).type === 'connected'; } catch { return false; }
+    });
+    await once(ownerSocket, 'open'); await ownerConnected;
+    await once(memberSocket, 'open'); await memberConnected;
+
+    memberSocket.send(JSON.stringify({ type: 'permission_update', permissions: { documents: true } }));
+    const shareRequestPromise = nextWsMessage(memberSocket, data => {
+      try { return JSON.parse(data.toString()).type === 'data_share_request'; } catch { return false; }
+    });
+    ownerSocket.send(JSON.stringify({
+      type: 'data_share_request', targetDeviceId: member.deviceId,
+      category: 'documents', itemLabel: 'resume-test.bin'
+    }));
+    const [shareRequestMessage] = await shareRequestPromise;
+    const shareRequest = JSON.parse(shareRequestMessage.toString());
+
+    const approvedPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'data_share_result' && msg.approved === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'data_share_response', requesterDeviceId: owner.deviceId,
+      category: 'documents', requestId: shareRequest.requestId, approved: true, minutes: 5
+    }));
+    await approvedPromise;
+
+    const transferId = 'resume_test_12345';
+    const startedPromise = nextWsMessage(memberSocket, data => {
+      try { return JSON.parse(data.toString()).type === 'file_transfer_start'; } catch { return false; }
+    });
+    ownerSocket.send(JSON.stringify({
+      type: 'file_transfer_start', targetDeviceId: member.deviceId,
+      requestId: shareRequest.requestId, transferId, fileName: 'resume-test.bin',
+      sizeBytes: 100000, chunkCount: 3, sha256: 'a'.repeat(64)
+    }));
+    const [startedMessage] = await startedPromise;
+    assert.equal(JSON.parse(startedMessage.toString()).transferId, transferId);
+
+    const resumePromise = nextWsMessage(ownerSocket, data => {
+      try { return JSON.parse(data.toString()).type === 'file_transfer_resume'; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_resume', targetDeviceId: owner.deviceId,
+      transferId, chunkCount: 3, missingIndexes: [1, 2]
+    }));
+    const [resumeMessage] = await resumePromise;
+    const resume = JSON.parse(resumeMessage.toString());
+    assert.equal(resume.fromDeviceId, member.deviceId);
+    assert.equal(resume.transferId, transferId);
+    assert.equal(resume.chunkCount, 3);
+    assert.deepEqual(resume.missingIndexes, [1, 2]);
+
+    for (const invalid of [
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1, 1] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [3] },
+      { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3 }
+    ]) {
+      const noForward = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+      memberSocket.send(JSON.stringify(invalid));
+      await noForward;
+    }
+  } finally {
+    const closes = [ownerSocket, memberSocket].map(socket =>
+      socket.readyState === WebSocket.CLOSED ? Promise.resolve() :
+        new Promise(resolve => { socket.once('close', resolve); socket.close(); }));
+    await Promise.all(closes);
+  }
+});
