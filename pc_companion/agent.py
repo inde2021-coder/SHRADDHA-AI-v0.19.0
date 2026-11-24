@@ -27,7 +27,7 @@ import websocket
 from PIL import Image, ImageTk
 
 from actions import execute_action
-from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary
+from protocol import valid_pairing_ids, validate_remote_action, validate_remote_action_envelope, remote_action_approval_summary, claim_remote_action_id
 from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
@@ -230,16 +230,9 @@ class PcCompanionApp:
 
     def _claim_remote_action(self, peer_id, action_id):
         now = time.time()
-        for key, seen_at in list(self.seen_remote_actions.items()):
-            if now - seen_at > 600:
-                self.seen_remote_actions.pop(key, None)
         key = (peer_id, action_id)
-        if key in self.seen_remote_actions:
+        if not claim_remote_action_id(self.seen_remote_actions, peer_id, action_id, now, ttl_seconds=600, max_entries=4096):
             return False
-        if len(self.seen_remote_actions) >= 4096:
-            oldest = min(self.seen_remote_actions, key=self.seen_remote_actions.get)
-            self.seen_remote_actions.pop(oldest, None)
-        self.seen_remote_actions[key] = now
         # Persist bounded replay receipts so restarting the Windows companion does not
         # reopen the ten-minute replay window for an already accepted remote command.
         self.config["remoteActionReceipts"] = [
