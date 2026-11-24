@@ -168,18 +168,18 @@ class DeviceTransferActivity : Activity() {
                 status.text = "Could not persist the save destination; transfer was not acknowledged."
                 return
             }
-            if (incomingVerified) enqueueTransferIo("save") { saveIncoming(uri) }
-            else {
-                val missing = synchronized(receivedChunkIndexes) {
-                    (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
-                }
-                if (missing.isEmpty()) {
-                    enqueueTransferIo("verify") { verifyIncoming() }
-                } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
-                    status.text = "Save destination selected. Requesting ${missing.size} missing chunks from sender…"
-                } else {
-                    status.text = "Save destination is ready, but resume request failed. Reconnect and tap Resume / Retry."
-                }
+            val missing = synchronized(receivedChunkIndexes) {
+                (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
+            }
+            // Always send the persisted bitmap, including an empty missing list.
+            // The relay reconstructs its positive-ACK map from this receiver-owned state.
+            if (!DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+                status.text = "Save destination is ready, but resume request failed. Reconnect and tap Resume / Retry."
+            } else if (missing.isEmpty()) {
+                if (incomingVerified) enqueueTransferIo("save") { saveIncoming(uri) }
+                else enqueueTransferIo("verify") { verifyIncoming() }
+            } else {
+                status.text = "Save destination selected. Requesting ${missing.size} missing chunks from sender…"
             }
         }
     }
@@ -602,12 +602,14 @@ class DeviceTransferActivity : Activity() {
                 return
             }
             val missing = synchronized(receivedChunkIndexes) { (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) } }
-            if (missing.isEmpty()) {
+            if (!DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+                status.text = "Could not send resume request. Verify the paired device and secure relay connection."
+            } else if (missing.isEmpty()) {
                 if (incomingVerified) enqueueTransferIo("save") { saveIncoming(pendingSaveUri!!) }
                 else enqueueTransferIo("verify") { verifyIncoming() }
-            } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+            } else {
                 status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
-            } else status.text = "Could not send resume request. Verify the paired device and secure relay connection."
+            }
         } else status.text = "Reconnect to relay first, then retry."
     }
 
@@ -688,15 +690,8 @@ class DeviceTransferActivity : Activity() {
             }
         }
         status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
-        if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
-            enqueueTransferIo("verify") { verifyIncoming() }
-        }
-        if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
-            enqueueTransferIo("save") {
-                runCatching { saveIncoming(pendingSaveUri!!) }
-                    .onFailure { runOnUiThread { status.text = "Verified file restored. Re-select the save destination to finish." } }
-            }
-        }
+        // Do not verify/save until Resume / Retry sends the persisted bitmap to the relay.
+        // This reconciles lost positive ACKs before a final completion request is sent.
     }
 
     private fun clearTransferState() {
