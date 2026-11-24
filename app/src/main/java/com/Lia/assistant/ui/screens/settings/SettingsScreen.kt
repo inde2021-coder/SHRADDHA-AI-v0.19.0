@@ -639,16 +639,17 @@ private fun SettingsScreenContent(
                                 settingsScope.launch {
                                     val result = withContext(Dispatchers.IO) {
                                         runCatching {
+                                            val diagnostic = VoiceGatewaySettings.testConnection(context)
                                             val providers = VoiceGatewaySettings.configuredProviders(context).orEmpty()
                                             check("GEMINI" in providers) {
-                                                "Backend is reachable, but GEMINI_API_KEY is not configured on the server."
+                                                "Backend/token OK, but GEMINI_API_KEY is not configured on the server. " + diagnostic
                                             }
-                                            providers
+                                            diagnostic
                                         }
                                     }
                                     gatewayTestStatus = result.fold(
-                                        onSuccess = { providers ->
-                                            "Backend connected. Gemini Live is configured. Server providers: ${providers.joinToString()}"
+                                        onSuccess = { diagnostic ->
+                                            "Backend connected. Gemini Live is configured. $diagnostic"
                                         },
                                         onFailure = { "Backend connection failed: ${it.localizedMessage ?: "Unknown error"}" }
                                     )
