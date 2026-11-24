@@ -8,6 +8,9 @@ import com.google.firebase.storage.StorageMetadata
 import android.net.Uri
 import android.util.Base64
 import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
+import java.io.IOException
+import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -26,6 +29,34 @@ private class WipingByteArrayOutputStream : ByteArrayOutputStream() {
     }
 }
 
+private const val MAX_SOCIAL_MEDIA_BYTES = 100L * 1024L * 1024L
+
+/** Enforces the media cap even for SAF providers that report an unknown descriptor length. */
+private class BoundedMediaInputStream(input: InputStream, private val maxBytes: Long) : FilterInputStream(input) {
+    private var consumed = 0L
+
+    override fun read(): Int {
+        val value = super.read()
+        if (value >= 0) {
+            consumed++
+            if (consumed > maxBytes) throw IOException("Social media uploads are limited to 100 MiB.")
+        }
+        return value
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (length == 0) return 0
+        val allowed = minOf(length.toLong(), maxBytes - consumed + 1L).coerceAtLeast(1L).toInt()
+        val count = super.read(buffer, offset, allowed)
+        if (count > 0) {
+            consumed += count
+            if (consumed > maxBytes) throw IOException("Social media uploads are limited to 100 MiB.")
+        }
+        return count
+    }
+}
+
+
 object SocialPublishingClient {
     private val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS).callTimeout(75, TimeUnit.SECONDS).build()
@@ -39,12 +70,15 @@ object SocialPublishingClient {
         val allowed = if (video) setOf("video/mp4") else setOf("image/jpeg", "image/png", "image/webp")
         require(mime in allowed) { if (video) "Choose an MP4 video for this post." else "Choose a JPEG, PNG or WebP image for this post." }
         val measuredSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
-        require(measuredSize <= 100L * 1024L * 1024L) { "Social media uploads are limited to 100 MiB." }
+        require(measuredSize == -1L || measuredSize in 1L..MAX_SOCIAL_MEDIA_BYTES) {
+            "Social media uploads must be between 1 byte and 100 MiB."
+        }
         val mediaId = UUID.randomUUID().toString().replace("-", "")
         val metadata = StorageMetadata.Builder().setContentType(mime)
             .setCustomMetadata("ownerUid", user.uid).setCustomMetadata("purpose", "social-publishing").build()
         val ref = FirebaseStorage.getInstance().reference.child("social-media/${user.uid}/$mediaId")
-        ref.putFile(uri, metadata).await()
+        val input = context.contentResolver.openInputStream(uri) ?: error("The selected media file could not be opened.")
+        input.use { source -> ref.putStream(BoundedMediaInputStream(source, MAX_SOCIAL_MEDIA_BYTES), metadata).await() }
         ref.downloadUrl.await().toString()
     }
 
