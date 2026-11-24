@@ -409,21 +409,39 @@ object ActionExecutor {
                         result.put("recipient", phoneNumber)
                         result.put("message", "Message accepted by the configured provider. Provider status: ${receipt.status}. This is not proof of handset delivery.")
                     }.onFailure { error ->
+                        val failure = error as? ProviderMessageClient.SendFailure
                         result.put("status", "error")
                         result.put("action", "provider_message_failed")
                         result.put("recipient", phoneNumber)
-                        result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. No local fallback was attempted, to avoid accidental duplicate delivery.")
+                        result.put("request_id", requestId)
+                        result.put("retry_request_id", requestId)
+                        result.put("do_not_create_new_request_id", true)
+                        result.put("provider_outcome_unknown", failure == null || failure.duplicate || failure.httpStatus >= 500)
+                        if (failure?.duplicate == true) result.put("duplicate_request", true)
+                        result.put("message", "Provider did not confirm acceptance: ${error.message ?: "unknown error"}. If retrying, reuse this exact request_id; never create a new ID automatically. No local fallback was attempted.")
                     }
                 } else {
+                    val localFingerprint = LocalMessageReplayGuard.fingerprint(channel, phoneNumber, messageText)
                     val sendStatus = if (isWhatsApp) {
                         val service = NovaAccessibilityService.instance
                         if (service == null) "whatsapp_accessibility_required" else {
                             val opened = CommIntents.openWhatsAppComposer(context, phoneNumber, messageText)
-                            if (opened == "whatsapp_chat_opened") service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
-                            else opened
+                            if (opened != "whatsapp_chat_opened") opened else {
+                                val claim = LocalMessageReplayGuard.claim(context, requestId, localFingerprint)
+                                if (!claim.accepted) "message_duplicate_blocked" else {
+                                    val sent = service.sendWhatsAppMessage(lookupName = contactName, expectedNumber = phoneNumber, message = messageText)
+                                    if (sent != "whatsapp_sent") LocalMessageReplayGuard.release(context, requestId, localFingerprint)
+                                    sent
+                                }
+                            }
                         }
                     } else {
-                        CommIntents.sendSms(context, phoneNumber, messageText)
+                        val claim = LocalMessageReplayGuard.claim(context, requestId, localFingerprint)
+                        if (!claim.accepted) "message_duplicate_blocked" else {
+                            val sent = CommIntents.sendSms(context, phoneNumber, messageText)
+                            if (sent == "sms_permission_required") LocalMessageReplayGuard.release(context, requestId, localFingerprint)
+                            sent
+                        }
                     }
                     result.put("status", if (sendStatus == "sms_sent_to_carrier" || sendStatus == "whatsapp_sent") "accepted" else "error")
                     result.put("action", sendStatus)
@@ -431,6 +449,7 @@ object ActionExecutor {
                     result.put("message", when (sendStatus) {
                         "sms_sent_to_carrier" -> "SMS handed to Android's messaging service; handset delivery is not confirmed."
                         "whatsapp_sent" -> "WhatsApp message submitted through the verified foreground chat."
+                        "message_duplicate_blocked" -> "This approved message request was already attempted or its outcome is unknown. It was blocked to prevent duplicate delivery; check the messaging app before creating a new request."
                         "sms_permission_required" -> "Shraddha AI → Permissions → Enable Contacts + SMS दबाएँ, फिर SMS command दोहराएँ।"
                         "whatsapp_accessibility_required" -> "Enable Shraddha AI Accessibility permission to send WhatsApp messages by voice."
                         "whatsapp_recipient_not_verified" -> "WhatsApp recipient could not be verified on screen; message was not sent."
@@ -806,17 +825,33 @@ object ActionExecutor {
                                                 .put("provider_status", receipt.status).put("recipient", number)
                                                 .put("message", "WhatsApp message accepted by provider. Handset delivery is not confirmed.")
                                         }.onFailure { error ->
+                                            val failure = error as? ProviderMessageClient.SendFailure
                                             result.put("status", "error").put("action", "provider_message_failed")
-                                                .put("recipient", number).put("message", error.message ?: "Provider send failed.")
+                                                .put("recipient", number).put("request_id", requestId)
+                                                .put("retry_request_id", requestId).put("do_not_create_new_request_id", true)
+                                                .put("provider_outcome_unknown", failure == null || failure.duplicate || failure.httpStatus >= 500)
+                                                .put("message", "${error.message ?: "Provider send failed."} Reuse the same request_id if checking or retrying; do not create a new ID.")
                                         }
                                 } else {
                                     val service = NovaAccessibilityService.instance
                                     val opened = if (service == null) "whatsapp_accessibility_required" else CommIntents.openWhatsAppComposer(context, number, message)
-                                    val sent = if (opened == "whatsapp_chat_opened") service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message) else opened
+                                    val localFingerprint = LocalMessageReplayGuard.fingerprint("whatsapp", number, message)
+                                    val sent = if (opened != "whatsapp_chat_opened") opened else {
+                                        val claim = LocalMessageReplayGuard.claim(context, requestId, localFingerprint)
+                                        if (!claim.accepted) "message_duplicate_blocked" else {
+                                            val outcome = service!!.sendWhatsAppMessage(args.optString("contact_name", recipient), number, message)
+                                            if (outcome != "whatsapp_sent") LocalMessageReplayGuard.release(context, requestId, localFingerprint)
+                                            outcome
+                                        }
+                                    }
                                     result.put("status", if (sent == "whatsapp_sent") "accepted" else "error")
                                     result.put("action", sent)
                                     result.put("recipient", number)
-                                    result.put("message", if (sent == "whatsapp_sent") "WhatsApp message submitted through the verified foreground chat." else "Message not sent: $sent")
+                                    result.put("message", when (sent) {
+                                        "whatsapp_sent" -> "WhatsApp message submitted through the verified foreground chat."
+                                        "message_duplicate_blocked" -> "This approved message request was already attempted or its outcome is unknown. It was blocked to prevent duplicate delivery; check WhatsApp before creating a new request."
+                                        else -> "Message not sent: $sent"
+                                    })
                                 }
                             }
                         }

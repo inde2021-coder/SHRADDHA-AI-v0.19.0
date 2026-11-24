@@ -73,3 +73,13 @@ The authenticated `POST /api/messages/send` route can submit SMS or WhatsApp mes
 - `TWILIO_WHATSAPP_FROM` (Twilio WhatsApp sender, normally `whatsapp:+...`)
 
 The Android app uses the existing HTTPS Voice Gateway URL and gateway token. The route accepts only E.164 recipients, an explicit channel, message text and a request ID. App-side recipient/message confirmation remains mandatory. A provider acceptance response is not proof of handset delivery. WhatsApp templates, opt-in, approved sender setup, country rules and Twilio account approval remain subject to Twilio requirements. If the provider route is configured but rejects a request, the app does not silently fall back to local sending (to avoid duplicate messages).
+
+
+### Durable SMS/WhatsApp idempotency retention
+
+The message-send replay guard stores only a SHA-256 request fingerprint, state and timestamps in the server-only Firestore collection `messageSendRequests`. It does not store recipient numbers or message text. The `expiresAt` field is written as a Firestore timestamp:
+- sent and ambiguous provider outcomes are retained for 24 hours;
+- definite provider rejections use a five-minute retry cooldown;
+- request IDs are hashed before being used as Firestore document IDs.
+
+Enable Firestore TTL for collection group `messageSendRequests` on field `expiresAt` in the production Firebase project. The API checks the timestamp in every transaction, so TTL cleanup is storage hygiene rather than the correctness boundary; Firestore TTL deletion itself is asynchronous. The collection is server-admin-only and is intentionally not exposed by client Firestore rules.
