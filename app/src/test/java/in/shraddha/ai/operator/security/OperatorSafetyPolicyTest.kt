@@ -39,10 +39,10 @@ class OperatorSafetyPolicyTest {
 
 
     @Test fun blocksAlternateOneTimeCodeLabelsAndSensitivePostconditions() {
-        assertEquals(OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Code", "123456", "Enter one time code"))
-        assertEquals(OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("CLICK", "Continue", "", "Enter one-time password"))
-        assertEquals(OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("CLICK", "Continue", "", "Verification code"))
-        assertEquals(OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Field", "", "UPI account number"))
+        assertEquals("generic Code label", OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Code", "123456", "Enter one time code").risk)
+        assertEquals("one-time password postcondition", OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("CLICK", "Continue", "", "Enter one-time password").risk)
+        assertEquals("verification code postcondition", OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("CLICK", "Continue", "", "Verification code").risk)
+        assertEquals("UPI account number postcondition", OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Field", "", "UPI account number").risk)
     }
 
 }
