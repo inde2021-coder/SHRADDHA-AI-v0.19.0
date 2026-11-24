@@ -1345,11 +1345,12 @@ wss.on('connection', (ws, ctx) => {
     } else if (msg.type === 'file_transfer_start') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
-      const requestId = String(msg.requestId || '');
-      const transferId = String(msg.transferId || '');
-      const name = String(msg.fileName || '').replace(/[\\/\x00-\x1f]/g, '_').slice(0, 120);
-      const size = Number(msg.sizeBytes), chunks = Number(msg.chunkCount);
-      const digest = String(msg.sha256 || '').toLowerCase();
+      const requestId = typeof msg.requestId === 'string' ? msg.requestId : '';
+      const transferId = typeof msg.transferId === 'string' ? msg.transferId : '';
+      const name = typeof msg.fileName === 'string' ? msg.fileName.replace(/[\\/\x00-\x1f]/g, '_').slice(0, 120) : '';
+      // Preserve JSON types; do not coerce strings or booleans into valid numeric manifests.
+      const size = msg.sizeBytes, chunks = msg.chunkCount;
+      const digest = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
       const grant = target && target.grants.get(deviceId + ':documents');
       if (!target || targetId === deviceId || target.sharePermissions?.documents !== true ||
           !/^[A-Za-z0-9_-]{12,64}$/.test(requestId) || !matchesOneTimeShareGrant(grant, requestId) ||
