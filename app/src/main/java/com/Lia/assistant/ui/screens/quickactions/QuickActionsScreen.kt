@@ -123,8 +123,8 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
             Column(
                 Modifier.fillMaxWidth().animateContentSize()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xCC171F35))
-                    .border(1.dp, Color(0x557D72C8), RoundedCornerShape(20.dp))
+                    .background(Color(0xFFF1EAFE))
+                    .border(1.dp, Color(0xFFE3D7FA), RoundedCornerShape(20.dp))
                     .clickable { showMore = !showMore }.padding(15.dp)
             ) {
                 Text(if (showMore) "कम उपयोग होने वाले टूल छिपाएँ  ▲" else "अन्य सुविधाएँ  ▼",
@@ -145,16 +145,16 @@ fun QuickActionsScreen(navController: NavController, modifier: Modifier = Modifi
 private fun ActionCard(item: ActionItem, titleColor: Color, detailColor: Color) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .background(Color(0xCC202B45))
-            .border(1.dp, Color(0x557D72C8), RoundedCornerShape(18.dp))
+            .background(Color(0xFFFFFFFF))
+            .border(1.dp, Color(0xFFE3D7FA), RoundedCornerShape(18.dp))
             .clickable(onClick = item.action).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(item.icon, contentDescription = null, tint = Color(0xFFB58BFF))
+        Icon(item.icon, contentDescription = null, tint = Color(0xFF7C3AED))
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(item.title, color = titleColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(item.explanation, color = detailColor, fontSize = 10.sp)
         }
-        Text("›", color = Color(0xFF78E4D6), fontSize = 22.sp)
+        Text("›", color = Color(0xFF8B5CF6), fontSize = 22.sp)
     }
 }
