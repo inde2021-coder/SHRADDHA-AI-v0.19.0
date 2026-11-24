@@ -3,6 +3,7 @@ package com.Lia.assistant.ui.screens.permissions
 import android.Manifest
 import android.content.Context
 import android.content.ComponentName
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
 import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -146,7 +148,20 @@ fun PermissionsScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable {
                             when {
-                                row.runtimePermission == Manifest.permission.SEND_SMS -> smsLauncher.launch(Manifest.permission.SEND_SMS)
+                                row.runtimePermission == Manifest.permission.SEND_SMS -> {
+                                    val prefs = context.getSharedPreferences("permission_requests", Context.MODE_PRIVATE)
+                                    val alreadyAsked = prefs.getBoolean("sms_requested_before", false)
+                                    val activity = context as? Activity
+                                    val permanentlyDenied = alreadyAsked && activity != null &&
+                                        !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.SEND_SMS)
+                                    if (permanentlyDenied) {
+                                        Toast.makeText(context, "SMS permission पहले अस्वीकार हो चुकी है। App info > Permissions में जाकर उपलब्ध हो तो Allow करें।", Toast.LENGTH_LONG).show()
+                                        openSettings("app")
+                                    } else {
+                                        prefs.edit().putBoolean("sms_requested_before", true).apply()
+                                        smsLauncher.launch(Manifest.permission.SEND_SMS)
+                                    }
+                                }
                                 row.runtimePermission != null -> runtimeLauncher.launch(row.runtimePermission)
                                 row.settingsAction != null -> openSettings(row.settingsAction)
                             }
@@ -225,7 +240,6 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
     }.getOrDefault(false)
     val shraddhaAccessibility = serviceEnabled("in.shraddha.ai.accessibility.ShraddhaAccessibilityService")
     val liaAccessibility = serviceEnabled("com.Lia.assistant.agent.NovaAccessibilityService")
-    val anyAccessibility = shraddhaAccessibility || liaAccessibility
     val listener = runCatching {
         val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
         enabled.split(':').any { it.startsWith(context.packageName + "/") }
