@@ -827,10 +827,15 @@ class PcCompanionApp:
                 for transfer_id, item in self.pc_incoming.items()
             }
             temp = path.with_suffix(".tmp")
-            temp.write_text(json.dumps(payload), encoding="utf-8")
+            with temp.open("w", encoding="utf-8") as output:
+                output.write(json.dumps(payload))
+                output.flush()
+                os.fsync(output.fileno())
             temp.replace(path)
+            return True
         except Exception as exc:
             self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
+            return False
 
     def choose_file_for_phone(self):
         peer_id = __import__("tkinter.simpledialog", fromlist=["askstring"]).askstring(
@@ -987,8 +992,11 @@ class PcCompanionApp:
             raise RuntimeError(f"Relay send failed at chunk {index}")
 
     def _handle_incoming_file_start(self, msg):
-        peer_id = str(msg.get("fromDeviceId", ""))
-        transfer_id = str(msg.get("transferId", ""))
+        peer_id = msg.get("fromDeviceId")
+        transfer_id = msg.get("transferId")
+        if not isinstance(peer_id, str) or not isinstance(transfer_id, str):
+            self.status_var.set("Rejected malformed incoming file identifiers.")
+            return
         size = msg.get("sizeBytes")
         chunks = msg.get("chunkCount")
         digest = msg.get("sha256", "")
@@ -1013,7 +1021,12 @@ class PcCompanionApp:
         }
         with open(destination + ".shraddha-part", "wb") as output:
             output.truncate(size)
-        self._persist_pc_incoming()
+        if not self._persist_pc_incoming():
+            self.pc_incoming.pop(transfer_id, None)
+            Path(destination + ".shraddha-part").unlink(missing_ok=True)
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "recovery_state_unavailable"})
+            return
         self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                          "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
         self.status_var.set(f"Receiving {Path(destination).name} from paired Android device…")
@@ -1050,7 +1063,8 @@ class PcCompanionApp:
                     # Persist chunk bytes before persisting the received bitmap or ACKing.
                     os.fsync(output.fileno())
                 transfer["received"].add(index)
-                self._persist_pc_incoming()
+                if not self._persist_pc_incoming():
+                    raise RuntimeError("Could not persist the received-chunk bitmap; refusing to acknowledge this chunk.")
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": True})
             if len(transfer["received"]) == transfer["chunks"]:
