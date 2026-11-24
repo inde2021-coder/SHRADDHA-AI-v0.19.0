@@ -9,6 +9,7 @@ from pc_companion.file_transfer import (
     take_chunk_window,
     validate_resume_indexes,
     valid_transfer_manifest,
+    requeue_rejected_chunk,
 )
 
 
@@ -95,3 +96,15 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FileTransferNegativeAckTests(unittest.TestCase):
+    def test_negative_ack_requeues_chunk_and_releases_window_slot(self):
+        queue = [3, 4]
+        in_flight = {1, 2}
+        self.assertTrue(requeue_rejected_chunk(queue, in_flight, 2))
+        self.assertEqual(queue, [2, 3, 4])
+        self.assertEqual(in_flight, {1})
+        self.assertFalse(requeue_rejected_chunk(queue, in_flight, 2))
+        self.assertEqual(queue, [2, 3, 4])
+        self.assertFalse(requeue_rejected_chunk(queue, in_flight, True))
