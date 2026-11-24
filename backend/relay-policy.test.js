@@ -166,3 +166,14 @@ test('malformed expiry entries fail closed and do not poison future remote actio
   assert.equal(device.pendingRemoteActions.has('bad'), false);
   assert.equal(device.pendingRemoteActions.has('valid'), true);
 });
+
+
+test('file transfer completion requires positive result and every chunk acknowledged', () => {
+  const transfer = { chunkCount: 3, chunks: new Map([[0, true], [1, true]]) };
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(2, true);
+  assert.equal(canCompleteFileTransfer(transfer, true), true);
+  assert.equal(canCompleteFileTransfer(transfer, false), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 3, chunks: new Map([[0, true]]) }, true), false);
+  assert.equal(canCompleteFileTransfer(null, true), false);
+});
