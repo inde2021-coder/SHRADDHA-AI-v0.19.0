@@ -5,6 +5,25 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DeviceFileTransferProtocolTest {
+    @Test fun validatesIncomingManifestAndSanitizesDisplayName() {
+        val size = DeviceFileTransferProtocol.CHUNK_BYTES.toLong() + 1L
+        val count = DeviceFileTransferProtocol.chunkCount(size)!!
+        val hash = "a".repeat(64)
+        assertEquals(true, DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, hash))
+        assertEquals(false, DeviceFileTransferProtocol.isValidManifest("../escape12345", size, count, hash))
+        assertEquals(false, DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count + 1, hash))
+        assertEquals(false, DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, "bad"))
+        assertEquals("name.txt", DeviceFileTransferProtocol.safeDisplayName("../evil/name.txt"))
+        assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName("\\u0000"))
+    }
+
+    @Test fun bindsChunkAcksAndCancellationToExpectedPeerAndTransfer() {
+        assertEquals(true, DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-A", "transfer_123456", "transfer_123456"))
+        assertEquals(false, DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-B", "transfer_123456", "transfer_123456"))
+        assertEquals(false, DeviceFileTransferProtocol.isExpectedPeerMessage("peer-A", "peer-A", "transfer_123456", "transfer_654321"))
+        assertEquals(false, DeviceFileTransferProtocol.isExpectedPeerMessage("", "peer-A", "transfer_123456", "transfer_123456"))
+    }
+
     @Test fun incomingChunksMustMatchTheApprovedPeer() {
         assertEquals(true, DeviceFileTransferProtocol.isExpectedPeer("paired-device-1234", "paired-device-1234"))
         assertEquals(false, DeviceFileTransferProtocol.isExpectedPeer("paired-device-1234", "other-device-5678"))
