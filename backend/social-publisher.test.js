@@ -20,6 +20,22 @@ test('Telegram text publishing uses only configured server credentials', async (
   } finally { globalThis.fetch = previous; }
 });
 
+test('Mastodon requests refuse redirects so bearer credentials cannot be forwarded to redirect targets', async () => {
+  const previous = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), redirect: options.redirect });
+    return new Response(JSON.stringify({ id: 'redirect-safe-123', url: 'https://mastodon.example/@user/123' }), { status: 200 });
+  };
+  try {
+    await publishSocialPost({}, { platform: 'mastodon', text: 'approved status' }, {
+      MASTODON_BASE_URL: 'https://mastodon.example', MASTODON_ACCESS_TOKEN: 'server-token'
+    });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].redirect, 'error');
+  } finally { globalThis.fetch = previous; }
+});
+
 test('Mastodon text publishing validates origin and returns accepted post id', async () => {
   const previous = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
