@@ -24,6 +24,7 @@ object AmbientIntelligencePolicy {
         val current = cleanObservation(currentObservation)
         val previous = cleanObservation(previousObservation)
         if (current.isBlank() || current == previous) return false
+        if (lastAnnouncementMs <= 0L) return true
         if (nowMs < lastAnnouncementMs) return false
         return nowMs - lastAnnouncementMs >= ANNOUNCEMENT_COOLDOWN_MS
     }
