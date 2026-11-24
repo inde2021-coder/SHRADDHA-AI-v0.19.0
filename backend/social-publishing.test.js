@@ -104,7 +104,12 @@ test('shared social publisher credentials are restricted to one configured Fireb
 test('Mastodon origin rejects nonstandard HTTPS ports', () => {
   assert.throws(() => validateMastodonOrigin('https://mastodon.example:8443'), /HTTPS origin/);
 });
-  const base = { platform, text: 'caption', preview: 'caption', confirmed: true, mediaBase64: Buffer.from('fake-media-bytes').toString('base64'), mimeType: 'image/jpeg', fileName: 'upload.jpg', mediaKind: 'image' };
+
+
+
+test('Telegram and Mastodon binary publishing intents accept only explicit image/video attachments', () => {
+  for (const platform of ['telegram', 'mastodon']) {
+    const base = { platform, text: 'caption', preview: 'caption', confirmed: true, mediaBase64: Buffer.from('fake-media-bytes').toString('base64'), mimeType: 'image/jpeg', fileName: 'upload.jpg', mediaKind: 'image' };
     assert.deepEqual(validatePublishIntent(base), { platform, text: 'caption', mediaKind: 'image' });
     assert.throws(() => validatePublishIntent({ ...base, mediaKind: 'unknown' }), /image or video/);
     assert.throws(() => validatePublishIntent({ ...base, mediaUrl: 'https://cdn.example.com/x.jpg' }), /cannot include a public media URL/);
@@ -117,7 +122,6 @@ test('Mastodon origin rejects nonstandard HTTPS ports', () => {
     platform: 'telegram', text: 'caption', preview: 'caption', confirmed: true, mediaKind: 'image'
   }), /Public media URLs/);
 });
-
 
 
 test('Telegram media validation rejects WebP while Mastodon accepts it', () => {
