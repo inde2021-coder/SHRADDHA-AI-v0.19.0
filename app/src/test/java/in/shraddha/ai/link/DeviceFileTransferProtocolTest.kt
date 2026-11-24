@@ -14,7 +14,7 @@ class DeviceFileTransferProtocolTest {
         assertEquals(false, DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count + 1, hash))
         assertEquals(false, DeviceFileTransferProtocol.isValidManifest("transfer_123456", size, count, "bad"))
         assertEquals("name.txt", DeviceFileTransferProtocol.safeDisplayName("../evil/name.txt"))
-        assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName("\\u0000"))
+        assertEquals("shared-file", DeviceFileTransferProtocol.safeDisplayName("\u0000"))
     }
 
     @Test fun bindsChunkAcksAndCancellationToExpectedPeerAndTransfer() {
