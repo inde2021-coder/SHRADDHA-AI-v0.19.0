@@ -2,7 +2,7 @@ import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canCompleteFileTransfer } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1359,9 +1359,11 @@ wss.on('connection', (ws, ctx) => {
       const transfer = device.incomingTransfers?.get(transferId);
       if (!requester || !transfer || transfer.fromDeviceId !== targetId || requester === device) return;
       const index = Number(msg.index);
-      if (Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount) transfer.chunks.set(index, true);
-      if (msg.complete === true) device.incomingTransfers.delete(transferId);
-      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: Number.isSafeInteger(index) ? index : -1, complete: msg.complete === true, ok: msg.ok === true }));
+      if (Number.isSafeInteger(index) && index >= 0 && index < transfer.chunkCount && msg.ok === true) transfer.chunks.set(index, true);
+      const complete = msg.complete === true && canCompleteFileTransfer(transfer, msg.ok === true);
+      if (msg.complete === true && !complete) return;
+      if (complete) device.incomingTransfers.delete(transferId);
+      send(targetId, JSON.stringify({ type: 'file_transfer_ack', fromDeviceId: deviceId, transferId, index: Number.isSafeInteger(index) ? index : -1, complete, ok: msg.ok === true }));
     } else if (msg.type === 'file_transfer_cancel') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
