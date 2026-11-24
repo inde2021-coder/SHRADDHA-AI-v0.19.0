@@ -152,6 +152,38 @@ export function validMissingTransferIndexes(indexes, chunkCount) {
  * Some entries carry numeric expiries; request/transfer records carry
  * an object with an expiresAt field. Invalid expiry data fails closed.
  */
+export function canCompleteFileTransfer(transfer, ok) {
+  if (!transfer || ok !== true || !Number.isSafeInteger(transfer.chunkCount) ||
+      transfer.chunkCount < 1 || transfer.chunkCount > 2200 ||
+      !(transfer.chunks instanceof Map) || transfer.chunks.size !== transfer.chunkCount) return false;
+  for (let index = 0; index < transfer.chunkCount; index += 1) {
+    if (transfer.chunks.get(index) !== true) return false;
+  }
+  return true;
+}
+
+export function canStartFileTransfer(device, transferId, maxActive = 1) {
+  const transfers = device?.incomingTransfers;
+  return transfers instanceof Map &&
+    typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId) &&
+    Number.isSafeInteger(maxActive) && maxActive >= 1 && maxActive <= 16 &&
+    transfers.size < maxActive && !transfers.has(transferId);
+}
+
+/** Synchronize relay ACK state with the receiver's persisted missing-chunk bitmap. */
+
+export function recordPersistedFileTransferChunks(transfer, missingIndexes) {
+  if (!transfer || !Number.isSafeInteger(transfer.chunkCount) ||
+      !(transfer.chunks instanceof Map) ||
+      !validMissingTransferIndexes(missingIndexes, transfer.chunkCount)) return false;
+  const missing = new Set(missingIndexes);
+  for (let index = 0; index < transfer.chunkCount; index += 1) {
+    if (missing.has(index)) transfer.chunks.delete(index);
+    else transfer.chunks.set(index, true);
+  }
+  return true;
+}
+
 export function pruneExpiredDeviceState(device, now = Date.now()) {
   if (!device || typeof device !== 'object' || !Number.isFinite(now)) return 0;
   let removed = 0;
