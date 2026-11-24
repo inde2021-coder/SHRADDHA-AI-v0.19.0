@@ -188,7 +188,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
 
     private fun challengeText(): String = livenessGate.prompt()
 
-    @OptIn(androidx.camera.core.ExperimentalGetImage::class)
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     private fun startCamera() {
         if (cameraStarting) return
         val view = previewView ?: return
@@ -248,7 +248,7 @@ class BiometricCaptureActivity : AppCompatActivity() {
         }
     }
 
-    @OptIn(androidx.camera.core.ExperimentalGetImage::class)
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     @androidx.camera.core.ExperimentalGetImage
     private fun analyzeChallengeFrame(proxy: ImageProxy) {
         val media = proxy.image ?: run {
