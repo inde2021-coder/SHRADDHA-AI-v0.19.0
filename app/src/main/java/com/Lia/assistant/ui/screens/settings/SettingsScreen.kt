@@ -190,7 +190,7 @@ private fun SettingsScreenContent(
             }
         }
 
-        // LIA-inspired settings categories, mapped to Shraddha's existing working controls.
+        // Shraddha AI settings, grouped around its own design system and capabilities.
         NovaSectionHeader(title = "Personality")
         NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Column {
@@ -332,7 +332,7 @@ private fun SettingsScreenContent(
                         "COSMIC_ORB" -> "Cosmic Orb • immersive orb-first layout"
                         "AI_ROBOT" -> "AI Robot • avatar and assistant controls"
                         "EXECUTIVE" -> "Executive • compact command dashboard"
-                        else -> "LIA Glass • elegant glass layout"
+                        else -> "Shraddha Signature • elegant glass layout"
                     },
                     icon = Icons.Default.ColorLens,
                     onClick = { showHomeDesignDialog = true }
@@ -474,7 +474,7 @@ private fun SettingsScreenContent(
 
     if (showHomeDesignDialog) {
         val designs = listOf(
-            "LIA_GLASS" to ("LIA Glass" to "Elegant layered glass cards and spacious hero"),
+            "LIA_GLASS" to ("Shraddha Signature" to "Elegant layered glass cards and spacious hero"),
             "ROYAL_3D" to ("Royal 3D" to "Deep 3D panels, raised controls and premium depth"),
             "COSMIC_ORB" to ("Cosmic Orb" to "Large animated orb with immersive assistant focus"),
             "AI_ROBOT" to ("AI Robot" to "Avatar-led assistant layout with quick control dock"),
