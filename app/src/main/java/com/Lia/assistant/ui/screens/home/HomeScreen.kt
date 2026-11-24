@@ -22,9 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,9 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.navigation.NavController
 import com.Lia.assistant.data.NovaAppState
 import com.Lia.assistant.ui.fx.LiaOrb3D
@@ -50,10 +48,8 @@ import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.R
 
-private val NeonBlue = Color(0xFFB58BFF)
-private val NeonPurple = Color(0xFFDA8CFF)
-private val NeonMint = Color(0xFF78E4D6)
-private val GlassPanel = Color(0xCC21183A)
+private val Accent = Color(0xFFB58BFF)
+private val Mint = Color(0xFF78E4D6)
 
 @Composable
 fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: Modifier = Modifier) {
@@ -62,148 +58,158 @@ fun HomeScreen(navController: NavController, appState: NovaAppState, modifier: M
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val assistantName = appState.assistantName.ifBlank { "Shraddha AI" }
     val dailyOrbTheme = rememberDailyOrbTheme()
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val avatarHeight = (screenHeight * 0.44f).coerceIn(250.dp, 390.dp)
 
     Column(
-        modifier = modifier.fillMaxSize().nightSky().verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp).padding(bottom = 108.dp),
+        modifier = modifier.fillMaxSize().nightSky()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp)
+            .padding(bottom = 100.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(NeonBlue, NeonPurple))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.SmartToy, null, tint = Color(0xFF171027), modifier = Modifier.size(24.dp))
-            }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = "Shraddha AI logo",
+                modifier = Modifier.size(44.dp),
+                contentScale = ContentScale.Fit
+            )
             Column(Modifier.padding(start = 10.dp)) {
-                Text(assistantName, color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("PERSONAL AI COMPANION", color = NeonBlue, fontSize = 8.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Text(assistantName, color = colors.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    when (orbState.name) {
+                        "LISTENING" -> "Listening"
+                        "THINKING" -> "Thinking"
+                        "SPEAKING" -> "Speaking"
+                        else -> "Ready"
+                    },
+                    color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Medium
+                )
             }
             Spacer(Modifier.weight(1f))
-            GlassIcon(Icons.Default.Settings, "Settings") { navController.navigate("settings") }
-            Spacer(Modifier.width(8.dp))
-            GlassIcon(Icons.Default.Person, "Profile") { navController.navigate("profile") }
+            Box(
+                Modifier.size(42.dp).clip(CircleShape)
+                    .background(Color(0xCC19243B))
+                    .border(1.dp, Color(0x667D52D8), CircleShape)
+                    .clickable { navController.navigate("settings") },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+            }
         }
+
         Box(
-            Modifier.fillMaxWidth().height(360.dp).clip(RoundedCornerShape(30.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF251444), Color(0xFF100D20), Color(0xFF080A14))))
-                .border(1.dp, Color(0x557D52D8), RoundedCornerShape(30.dp)),
+            Modifier.fillMaxWidth().height(avatarHeight)
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF21143D), Color(0xFF111426), Color(0xFF080A14))
+                    )
+                )
+                .border(1.dp, Color(0x557D52D8), RoundedCornerShape(28.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Image(painter = painterResource(R.drawable.shraddha_ai_avatar), contentDescription = "$assistantName avatar", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.align(Alignment.TopCenter).padding(top = 15.dp).clip(CircleShape).background(Color(0xAA130D23)).border(1.dp, Color(0x668F62E8), CircleShape).padding(horizontal = 13.dp, vertical = 7.dp)) {
-                Text("$assistantName • AI ONLINE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            }
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).size(104.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFB78BFF), Color(0xFF6B39C8), Color(0xCC210F46)))).border(2.dp, Color(0xCCDCBCFF), CircleShape), contentAlignment = Alignment.Center) {
-                LiaOrb3D(state = orbState, size = 98.dp, amplitude = amplitude, style = dailyOrbTheme.style, assistantName = assistantName)
+            Image(
+                painter = painterResource(R.drawable.shraddha_ai_avatar),
+                contentDescription = "$assistantName AI avatar",
+                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 5.dp),
+                contentScale = ContentScale.Fit
+            )
+            Box(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)
+                    .size(76.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFFE2C9FF), Color(0xFF8147D6), Color(0xCC210F46))))
+                    .border(1.5.dp, Color(0xCCDCBCFF), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                LiaOrb3D(
+                    state = orbState,
+                    size = 72.dp,
+                    amplitude = amplitude,
+                    style = dailyOrbTheme.style,
+                    assistantName = assistantName
+                )
             }
         }
-        Text("${dailyOrbTheme.dayName.uppercase()} • ${dailyOrbTheme.style.displayName.uppercase()}", color = NeonMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.clip(CircleShape).background(Color(0xCC1A1430)).border(1.dp, Color(0x557D52D8), CircleShape).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Icon(Icons.Default.GraphicEq, null, tint = NeonMint, modifier = Modifier.size(14.dp))
-            Text(when (orbState.name) { "LISTENING" -> "LISTENING"; "THINKING" -> "THINKING"; "SPEAKING" -> "SPEAKING"; else -> "READY WHEN YOU ARE" }, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            dailyOrbTheme.style.displayName,
+            color = Accent,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.2.sp
+        )
         Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            HomeActionButton("🎙", "Talk to AI", Modifier.weight(1f)) { navController.navigate("voice") }
-            HomeActionButton("✦", "Quick actions", Modifier.weight(1f)) { navController.navigate("quick_actions") }
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            PrimaryAction(
+                title = "Talk",
+                icon = "🎙",
+                modifier = Modifier.weight(1f)
+            ) { navController.navigate("voice") }
+            SecondaryAction(
+                title = "Visual Lens",
+                icon = "◉",
+                modifier = Modifier.weight(1f)
+            ) { navController.navigate("visual_lens") }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xCC17152B)).border(1.dp, Color(0x447D52D8), RoundedCornerShape(18.dp)).clickable { navController.navigate("chat") }.padding(horizontal = 15.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Ask me anything…", color = Color(0xFFB8A9D4), fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Text("➤", color = NeonPurple, fontSize = 19.sp)
-        }
-        SectionHeading("SHRADDHA AI COMMAND CENTER", "All integrated features in one LIA-designed workspace")
-        FeatureRow(FeatureInfo("💬", "AI Chat", "Ask anything", NeonPurple) { navController.navigate("chat") }, FeatureInfo("👁️", "Visual Lens", "Camera intelligence", NeonMint) { navController.navigate("visual_lens") })
-        FeatureRow(FeatureInfo("🖥️", "PC Companion", "Connect Windows", NeonBlue) { navController.navigate("device_center") }, FeatureInfo("🧠", "Multi-agent Team", "Delegate and verify", NeonPurple) { navController.navigate("agent_council") })
-        FeatureRow(FeatureInfo("🛠️", "Expert Studio", "Engineering tools", NeonMint) { navController.navigate("expert_studio") }, FeatureInfo("🔐", "Memory Vault", "Private knowledge", NeonBlue) { navController.navigate("data_vault") })
-        SectionHeading("VOICE & COMMUNICATION", "Talk, call and stay connected")
-        FeatureRow(FeatureInfo("🎙️", "Voice Agent", "Hands-free assistant", NeonMint) { navController.navigate("voice") }, FeatureInfo("📞", "Call Agent", "Voice call tools", NeonBlue) { navController.navigate("phone_call_agent") })
-        FeatureRow(FeatureInfo("🕘", "Chat History", "Past conversations", NeonPurple) { navController.navigate("history") }, FeatureInfo("⚡", "Quick Actions", "Device shortcuts", NeonMint) { navController.navigate("quick_actions") })
-        SectionHeading("INTELLIGENCE & CREATION", "Build, reason and extend")
-        FeatureRow(FeatureInfo("🤖", "Expert Council", "Multi-agent reasoning", NeonPurple) { navController.navigate("agent_council") }, FeatureInfo("🧪", "Engineering", "Advanced workbench", NeonBlue) { navController.navigate("engineering_workbench") })
-        FeatureRow(FeatureInfo("🚀", "Project Lab", "Manage projects", NeonMint) { navController.navigate("project_lab") }, FeatureInfo("🌐", "Website Forge", "Create websites", NeonPurple) { navController.navigate("forge") })
-        FeatureRow(FeatureInfo("🧩", "Plugins", "Connected tools", NeonBlue) { navController.navigate("plugins") }, FeatureInfo("📣", "Social Publisher", "Approved publishing", NeonMint) { navController.navigate("social_publisher") })
-        SectionHeading("DEVICES & PERSONALIZATION", "Control and customize your assistant")
-        FeatureRow(FeatureInfo("🏠", "Smart Home", "Connected devices", NeonPurple) { navController.navigate("smart_home") }, FeatureInfo("🧭", "AR Mapping", "Spatial visual tools", NeonBlue) { navController.navigate("ar_mapping") })
-        FeatureRow(FeatureInfo("🧠", "Offline AI", "On-device models", NeonMint) { navController.navigate("offline_model") }, FeatureInfo("🎨", "Orb & Themes", "Appearance controls", NeonPurple) { navController.navigate("orb_style") })
-        FeatureRow(FeatureInfo("🔑", "AI Providers", "API keys & connection", NeonBlue) { navController.navigate("api_keys") }, FeatureInfo("👤", "Personality", "Name and behavior", NeonMint) { navController.navigate("personality") })
-        FeatureRow(FeatureInfo("⚙️", "Settings", "App preferences", NeonPurple) { navController.navigate("settings") }, FeatureInfo("🛡️", "Privacy & Access", "Permissions and safety", NeonBlue) { navController.navigate("privacy") })
-        FeatureRow(FeatureInfo("🪪", "Profile", "Your assistant profile", NeonMint) { navController.navigate("profile") }, FeatureInfo("ℹ️", "About", "App and version info", NeonPurple) { navController.navigate("about") })
         Spacer(Modifier.height(10.dp))
-    }
-}
+        SecondaryAction(
+            title = "Connect PC",
+            icon = "⌘",
+            modifier = Modifier.fillMaxWidth()
+        ) { navController.navigate("device_center") }
 
-private data class FeatureInfo(val emoji: String, val title: String, val subtitle: String, val accent: Color, val action: () -> Unit)
-
-@Composable
-private fun FeatureRow(left: FeatureInfo, right: FeatureInfo) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-        FeatureCard(left, Modifier.weight(1f))
-        FeatureCard(right, Modifier.weight(1f))
-    }
-    Spacer(Modifier.height(9.dp))
-}
-
-@Composable
-private fun FeatureCard(info: FeatureInfo, modifier: Modifier = Modifier) {
-    Row(
-        modifier.clip(RoundedCornerShape(17.dp))
-            .background(Brush.linearGradient(listOf(Color(0xE61B3151), Color(0xE6171838))))
-            .border(1.dp, info.accent.copy(alpha = 0.62f), RoundedCornerShape(17.dp))
-            .clickable(onClick = info.action).padding(horizontal = 10.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(info.emoji, fontSize = 22.sp)
-        Column(Modifier.padding(start = 8.dp)) {
-            Text(info.title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(info.subtitle, color = Color(0xFFB4C6E0), fontSize = 9.sp, maxLines = 1)
+        Spacer(Modifier.height(14.dp))
+        Row(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xCC17152B))
+                .border(1.dp, Color(0x447D52D8), RoundedCornerShape(18.dp))
+                .clickable { navController.navigate("chat") }
+                .padding(horizontal = 16.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Message Shraddha…", color = Color(0xFFB8A9D4), fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Icon(Icons.Default.GraphicEq, contentDescription = "Open chat", tint = Mint, modifier = Modifier.size(20.dp))
         }
     }
 }
 
 @Composable
-private fun SectionHeading(title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 10.dp)) {
-        Text(title, color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.7.sp)
-        Text(subtitle, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 3.dp))
-    }
-}
-
-@Composable
-private fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color(0xCC142944))
-            .border(1.dp, Color(0x6676DFFF), CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, description, tint = Color.White, modifier = Modifier.size(19.dp))
-    }
-}
-
-@Composable
-private fun HomeActionButton(emoji: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun PrimaryAction(title: String, icon: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        modifier.clip(RoundedCornerShape(16.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF5931A5), Color(0xFF8A3FAD))))
-            .border(1.dp, Color(0xAA7DEBFF), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 12.dp),
+        modifier.height(54.dp).clip(RoundedCornerShape(17.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF6337B2), Color(0xFF8B48B7))))
+            .border(1.dp, Color(0x887DEBFF), RoundedCornerShape(17.dp))
+            .clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Text(emoji, fontSize = 18.sp)
-        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 7.dp))
+        Text(icon, fontSize = 18.sp)
+        Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
 @Composable
-private fun MiniFeature(emoji: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun SecondaryAction(title: String, icon: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        modifier.clip(RoundedCornerShape(15.dp)).background(Color(0xCC132641))
-            .border(1.dp, Color(0x5576CFFF), RoundedCornerShape(15.dp))
-            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 12.dp),
+        modifier.height(54.dp).clip(RoundedCornerShape(17.dp))
+            .background(Color(0xCC19243B))
+            .border(1.dp, Color(0x667D52D8), RoundedCornerShape(17.dp))
+            .clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Text(emoji, fontSize = 16.sp)
-        Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 5.dp))
+        Text(icon, fontSize = 17.sp)
+        Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
     }
 }
