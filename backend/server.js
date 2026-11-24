@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory } from './relay-file-validation.js';
+import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validEncryptedTransferChunkEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame, consumePairingCode, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
@@ -1099,7 +1099,7 @@ wss.on('connection', (ws, ctx) => {
         const transfer = target.incomingTransfers?.get(String(msg.transferId || ''));
         const index = Number(msg.index);
         if (!transfer || transfer.fromDeviceId !== deviceId || transfer.expiresAt < Date.now() ||
-            !Number.isSafeInteger(index) || index < 0 || index >= transfer.chunkCount) return;
+            !validEncryptedTransferChunkEnvelope(nonce, ciphertext, transfer.sizeBytes, transfer.chunkCount, index)) return;
       } else if (messageKind === 'clipboard_payload') {
         const category = 'clipboard';
         const grant = target.grants?.get(deviceId + ':' + category);
