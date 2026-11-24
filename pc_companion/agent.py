@@ -1006,6 +1006,30 @@ class PcCompanionApp:
             return
         if not valid_transfer_manifest(transfer_id, size, chunks, digest):
             self.status_var.set("Rejected invalid incoming file manifest.")
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "invalid_manifest"})
+            return
+        existing = self.pc_incoming.get(transfer_id)
+        if existing:
+            part_path = Path(existing["path"] + ".shraddha-part")
+            if (existing["peer"] != peer_id or existing["size"] != size or
+                    existing["chunks"] != chunks or existing["sha256"] != digest):
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "transfer_manifest_changed"})
+                return
+            if not part_path.is_file() or part_path.stat().st_size != size:
+                self.pc_incoming.pop(transfer_id, None)
+                self._persist_pc_incoming()
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "resume_state_unavailable"})
+                return
+            if not self._persist_pc_incoming():
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "recovery_state_unavailable"})
+                return
+            self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
+            self.status_var.set(f"Resuming {Path(existing['path']).name}; saved chunks are retained.")
             return
         destination = filedialog.asksaveasfilename(
             title="Choose where to save incoming file",
