@@ -163,15 +163,15 @@ object PasswordProtectedApiKeyVault {
                     clear.fill(0)
                 }
             }
-            val check = encrypt(newKey, CHECK_TEXT.toByteArray(Charsets.UTF_8), "vault-check")
+            val checkRecord = encrypt(newKey, CHECK_TEXT.toByteArray(Charsets.UTF_8), "vault-check")
             editor.putString(SALT, encode(newSalt))
-                .putString(CHECK, encode(check.first))
-                .putString(CHECK_IV, encode(check.second))
+                .putString(CHECK, encode(checkRecord.first))
+                .putString(CHECK_IV, encode(checkRecord.second))
             check(check(editor.commit())) { "Could not update the vault password." }
             sessionKey?.fill(0)
             sessionKey = newKey.copyOf()
-            check.first.fill(0)
-            check.second.fill(0)
+            checkRecord.first.fill(0)
+            checkRecord.second.fill(0)
         } finally {
             oldKey.fill(0)
             newKey.fill(0)
