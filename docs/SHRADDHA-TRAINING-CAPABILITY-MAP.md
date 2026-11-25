@@ -178,3 +178,7 @@ Automatic learning means **automatic discovery and preparation**, not blind acti
 - Added `docs/SKILL-FACTORY-ARCHITECTURE.md`.
 - The policy rejects malformed metadata and queues candidates for review unless every independent activation gate passes and automatic learning is enabled.
 - The policy is not a crawler, signature-verification implementation, fact-checker, downloader, model trainer or skill executor. Production adapters, persistent pack state, quarantine, WorkManager scheduling, review/rollback UI and full tests remain follow-up work.
+
+
+## Firebase memory architecture decision (2026-11-26)
+Firebase may be the durable cloud memory store, but the current implementation is not cloud-only. `UnifiedMemoryRepository` already uses `EncryptedFeatureStore` plus `FirebaseCloudVault`, with local-first writes and explicit cloud consent. The target is Firebase-backed durable memory plus a small encrypted local hot cache for offline continuity. Keep large model weights and binary files out of Realtime Database; use separately downloadable assets/object storage. Require Firebase Auth, strict per-user rules, encryption/key recovery, sync queue/conflict handling, deletion/export and offline tests before enabling cloud-first defaults. See `docs/SKILL-FACTORY-ARCHITECTURE.md`.
