@@ -40,7 +40,16 @@ object AkkpsRunnerRouteCatalog {
     fun match(rawPathOrUrl: String): AkkpsRunnerRouteMatch? {
         if (rawPathOrUrl.isBlank() || rawPathOrUrl.length > 2048) return null
         val path = runCatching {
-            val parsed = if (rawPathOrUrl.contains("://")) URI(rawPathOrUrl) else URI(null, null, rawPathOrUrl, null)
+            val isAbsoluteUrl = rawPathOrUrl.contains("://")
+            val parsed = if (isAbsoluteUrl) URI(rawPathOrUrl) else URI(null, null, rawPathOrUrl, null)
+            if (isAbsoluteUrl) {
+                val host = parsed.host?.lowercase(Locale.ROOT) ?: return null
+                if (!parsed.scheme.equals("https", true) ||
+                    host !in setOf("akkps.ngo", "www.akkps.ngo") ||
+                    parsed.userInfo != null ||
+                    (parsed.port != -1 && parsed.port != 443)
+                ) return null
+            }
             parsed.path.orEmpty().trimEnd('/').ifBlank { "/" }
         }.getOrNull() ?: return null
         if (!path.startsWith("/runner/") && path != "/runner") return null
