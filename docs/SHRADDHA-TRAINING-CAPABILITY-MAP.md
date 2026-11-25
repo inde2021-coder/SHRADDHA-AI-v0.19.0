@@ -196,3 +196,7 @@ The detailed curriculum specification is now maintained in `docs/SHRADDHA-CURRIC
 - Additional parenting, cooking, health/first-aid literacy, finance, agriculture, retail/business, repair, creativity, travel, accessibility and environment domains.
 
 **Status distinction:** the catalogue and syllabus outline are added to this branch; they are not all executable lessons in the APK yet. The existing policies and knowledge-store foundations are present, but authored lesson packs, curriculum UI/loader, child-mode integration and tests remain. See the catalogue's implementation-status section; do not claim the app is fully trained until packs are loaded and verified.
+
+
+## Authored lesson library update (2026-11-26)
+Five substantive curriculum files were added under `docs/curriculum/`: Baby Care 0–2, Kids Foundation 3–10, Abacus eight-level course, Core ten domains practical lessons, and all 18 Mind Activities. These include lesson objectives, examples, practice, answer keys/rubrics, safety constraints and source/review gates. They are content in GitHub documentation, not yet bundled or loaded by the Android app. See the curriculum catalogue for exact paths and remaining integration work.
