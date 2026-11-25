@@ -53,181 +53,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/shraddha-release.jks"
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/shraddha-release.keystore"
           echo "ANDROID_KEYSTORE_PATH=$ANDROID_KEYSTORE_PATH" >> "$GITHUB_ENV"
-          # Secrets copied from text files may carry a final CR/LF. Remove only
-          # line-ending characters; preserve all meaningful password characters.
+
+          # Remove only trailing CR/LF characters from copied text secrets.
           for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             value="${!name}"
-            while [[ "$value" == *
-          echo "ANDROID_KEYSTORE_TYPE=$store_type" >> "$GITHUB_ENV"
-          echo "Detected keystore format: $store_type"
-          echo "Checking private-key password..."
-          if ! keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
-            echo "::error::Private-key password validation failed. ANDROID_KEY_PASSWORD does not unlock the selected alias."
-            exit 1
-          fi
-          rm -f "$RUNNER_TEMP/signing-key-check.csr"
-          echo "Signing keystore, alias, and private-key password validated."
-          chmod +x ./gradlew
-
-      - name: Validate Google Play publishing configuration
-        if: ${{ inputs.publish_to_play }}
-        env:
-          PLAY_STORE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
-            echo "::error::Google Play publishing is allowed only from main."
-            exit 1
-          fi
-          if [[ -z "$PLAY_STORE_SERVICE_ACCOUNT_JSON" ]]; then
-            echo "::error::Missing PLAY_STORE_SERVICE_ACCOUNT_JSON GitHub Actions secret."
-            exit 1
-          fi
-          printf '%s' "$PLAY_STORE_SERVICE_ACCOUNT_JSON" | python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("type") == "service_account"; assert d.get("client_email"); assert d.get("private_key")'
-
-      - name: Run unit tests and release lint
-        run: ./gradlew :app:testDebugUnitTest :app:lintRelease --stacktrace
-
-      - name: Build signed APK and AAB
-        run: ./gradlew :app:assembleRelease :app:bundleRelease --stacktrace
-
-      - name: Verify signatures, package identity, and outputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          aab="app/build/outputs/bundle/release/app-release.aab"
-          test -n "$apk"
-          test -s "$aab"
-          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          test -x "$build_tools/apksigner"
-          "$build_tools/apksigner" verify --verbose --print-certs "$apk"
-          # Upload keys are normally self-signed; -strict treats the expected
-          # untrusted-chain warning as a fatal error. Verify the JAR signature
-          # cryptographically without requiring a public CA trust chain.
-          jarsigner -verify -verbose -certs "$aab"
-          if ! unzip -p "$aab" base/manifest/AndroidManifest.xml >/dev/null 2>&1; then
-            echo "::error::AAB base manifest missing or unreadable."
-            exit 1
-          fi
-          mkdir -p release-artifacts
-          cp "$apk" release-artifacts/
-          cp "$aab" release-artifacts/
-          cd release-artifacts
-          sha256sum *.apk *.aab > SHA256SUMS.txt
-          cd ..
-          {
-            echo "### Signed Android release verification"
-            echo "- APK signature: verified by apksigner"
-            echo "- AAB signature: verified by jarsigner"
-            echo "- R8 minification/resource shrinking: enabled by app/build.gradle.kts"
-            echo "- SHA-256 checksums: generated"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload signed APK, AAB and checksums
-        uses: actions/upload-artifact@v6
-        with:
-          name: shraddha-ai-signed-release
-          path: release-artifacts/*
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Publish AAB to Google Play
-        if: ${{ inputs.publish_to_play }}
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
-          packageName: in.shraddha.ai
-          releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: ${{ inputs.play_track }}
-          status: completed
-\\n' || "$value" == *
-          echo "ANDROID_KEYSTORE_TYPE=$store_type" >> "$GITHUB_ENV"
-          echo "Detected keystore format: $store_type"
-          echo "Checking private-key password..."
-          if ! keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
-            echo "::error::Private-key password validation failed. ANDROID_KEY_PASSWORD does not unlock the selected alias."
-            exit 1
-          fi
-          rm -f "$RUNNER_TEMP/signing-key-check.csr"
-          echo "Signing keystore, alias, and private-key password validated."
-          chmod +x ./gradlew
-
-      - name: Validate Google Play publishing configuration
-        if: ${{ inputs.publish_to_play }}
-        env:
-          PLAY_STORE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
-            echo "::error::Google Play publishing is allowed only from main."
-            exit 1
-          fi
-          if [[ -z "$PLAY_STORE_SERVICE_ACCOUNT_JSON" ]]; then
-            echo "::error::Missing PLAY_STORE_SERVICE_ACCOUNT_JSON GitHub Actions secret."
-            exit 1
-          fi
-          printf '%s' "$PLAY_STORE_SERVICE_ACCOUNT_JSON" | python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("type") == "service_account"; assert d.get("client_email"); assert d.get("private_key")'
-
-      - name: Run unit tests and release lint
-        run: ./gradlew :app:testDebugUnitTest :app:lintRelease --stacktrace
-
-      - name: Build signed APK and AAB
-        run: ./gradlew :app:assembleRelease :app:bundleRelease --stacktrace
-
-      - name: Verify signatures, package identity, and outputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          aab="app/build/outputs/bundle/release/app-release.aab"
-          test -n "$apk"
-          test -s "$aab"
-          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          test -x "$build_tools/apksigner"
-          "$build_tools/apksigner" verify --verbose --print-certs "$apk"
-          # Upload keys are normally self-signed; -strict treats the expected
-          # untrusted-chain warning as a fatal error. Verify the JAR signature
-          # cryptographically without requiring a public CA trust chain.
-          jarsigner -verify -verbose -certs "$aab"
-          if ! unzip -p "$aab" base/manifest/AndroidManifest.xml >/dev/null 2>&1; then
-            echo "::error::AAB base manifest missing or unreadable."
-            exit 1
-          fi
-          mkdir -p release-artifacts
-          cp "$apk" release-artifacts/
-          cp "$aab" release-artifacts/
-          cd release-artifacts
-          sha256sum *.apk *.aab > SHA256SUMS.txt
-          cd ..
-          {
-            echo "### Signed Android release verification"
-            echo "- APK signature: verified by apksigner"
-            echo "- AAB signature: verified by jarsigner"
-            echo "- R8 minification/resource shrinking: enabled by app/build.gradle.kts"
-            echo "- SHA-256 checksums: generated"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload signed APK, AAB and checksums
-        uses: actions/upload-artifact@v6
-        with:
-          name: shraddha-ai-signed-release
-          path: release-artifacts/*
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Publish AAB to Google Play
-        if: ${{ inputs.publish_to_play }}
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
-          packageName: in.shraddha.ai
-          releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: ${{ inputs.play_track }}
-          status: completed
-\\r' ]]; do value="${value%?}"; done
+            value="${value%%$'\\r'}"
+            value="${value%%$'\\n'}"
             printf -v "$name" '%s' "$value"
             export "$name"
             if [[ -z "$value" ]]; then
@@ -235,37 +68,35 @@ jobs:
               exit 1
             fi
           done
+
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$ANDROID_KEYSTORE_PATH"
           test -s "$ANDROID_KEYSTORE_PATH"
           chmod 600 "$ANDROID_KEYSTORE_PATH"
+
           echo "Detecting keystore format and validating alias (credential values are never printed)..."
           store_type=""
-          keytool_output=""
-          # Try both supported Java keystore formats explicitly. This avoids
-          # relying on the JDK default keystore type or provider auto-detection.
           for candidate in PKCS12 JKS; do
-            if output="$(keytool -list -storetype "$candidate" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1)"; then
+            if keytool -list -storetype "$candidate" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
               store_type="$candidate"
-              keytool_output="$output"
               break
             fi
           done
+
           if [[ -z "$store_type" ]]; then
-            echo "::error::Keystore validation failed for both PKCS12 and JKS after trimming only trailing CR/LF from copied secrets."
-            echo "The decoded file is present (size: $(wc -c < "$ANDROID_KEYSTORE_PATH") bytes); credential values are not printed."
-            echo "PKCS12 diagnostic:"
+            echo "::error::Keystore could not be opened using PKCS12 or JKS. No credential values were printed."
+            echo "Decoded keystore size: $(wc -c < "$ANDROID_KEYSTORE_PATH") bytes"
+            echo "PKCS12 check:"
             keytool -list -storetype PKCS12 -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1 || true
-            echo "JKS diagnostic:"
+            echo "JKS check:"
             keytool -list -storetype JKS -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1 || true
             exit 1
           fi
-          printf '%s\\n' "$keytool_output"
-          echo "Detected keystore format: $store_type"
+
           echo "ANDROID_KEYSTORE_TYPE=$store_type" >> "$GITHUB_ENV"
           echo "Detected keystore format: $store_type"
           echo "Checking private-key password..."
-          if ! keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
-            echo "::error::Private-key password validation failed. ANDROID_KEY_PASSWORD does not unlock the selected alias."
+          if ! keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null 2>&1; then
+            echo "::error::Private-key password validation failed for the selected alias."
             exit 1
           fi
           rm -f "$RUNNER_TEMP/signing-key-check.csr"
@@ -305,14 +136,8 @@ jobs:
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
           test -x "$build_tools/apksigner"
           "$build_tools/apksigner" verify --verbose --print-certs "$apk"
-          # Upload keys are normally self-signed; -strict treats the expected
-          # untrusted-chain warning as a fatal error. Verify the JAR signature
-          # cryptographically without requiring a public CA trust chain.
           jarsigner -verify -verbose -certs "$aab"
-          if ! unzip -p "$aab" base/manifest/AndroidManifest.xml >/dev/null 2>&1; then
-            echo "::error::AAB base manifest missing or unreadable."
-            exit 1
-          fi
+          unzip -p "$aab" base/manifest/AndroidManifest.xml >/dev/null
           mkdir -p release-artifacts
           cp "$apk" release-artifacts/
           cp "$aab" release-artifacts/
@@ -323,7 +148,6 @@ jobs:
             echo "### Signed Android release verification"
             echo "- APK signature: verified by apksigner"
             echo "- AAB signature: verified by jarsigner"
-            echo "- R8 minification/resource shrinking: enabled by app/build.gradle.kts"
             echo "- SHA-256 checksums: generated"
           } >> "$GITHUB_STEP_SUMMARY"
 
