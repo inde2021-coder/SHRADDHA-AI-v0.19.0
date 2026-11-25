@@ -102,7 +102,6 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
 
 
 
-
 class IncomingTransferAdmissionTests(unittest.TestCase):
     def test_only_one_new_incoming_transfer_is_admitted(self):
         self.assertTrue(can_accept_incoming_transfer({}, "transfer_123456"))
@@ -152,5 +151,7 @@ class FileTransferStreamingHashTests(unittest.TestCase):
             path = Path(directory) / "sample.bin"
             path.write_bytes(payload)
             self.assertEqual(sha256_file(path), hashlib.sha256(payload).hexdigest())
+
+
 if __name__ == "__main__":
     unittest.main()
