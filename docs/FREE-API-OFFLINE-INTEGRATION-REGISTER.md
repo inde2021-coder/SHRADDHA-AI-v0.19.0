@@ -95,3 +95,12 @@ Status: implementation register; this file does not claim that every adapter is 
 - User-selected imports require explicit consent. Private conversations, child data, audio, camera frames, contacts and personal documents are not silently reused for training.
 - Preserve version history and rollback; show source, licence, verification date, provider/model and download size.
 - See `docs/SKILL-FACTORY-ARCHITECTURE.md` for the canonical lifecycle and delivery phases.
+
+
+## Offline-first routing and API cost controls
+- Route ordinary chat, tutoring, arithmetic, personal memory and document questions to deterministic local skills, local model, or local knowledge first.
+- Do not call a cloud API merely because the device is online.
+- Use an eligible Free API only for live/current data, external service actions, or genuinely online-only specialist tasks, when the user enabled online use and free quota is available.
+- When offline, online use is disabled, or free quota is exhausted, explain the limitation or use an available local capability. Never silently fall back to paid.
+- The routing policy foundation and tests are `OfflineFirstRoutingPolicy.kt` and `OfflineFirstRoutingPolicyTest.kt`.
+- Adding facts/content to the local encrypted knowledge store is the normal low-cost learning path. Model fine-tuning is optional and separate; never silently train on private conversations, child data, voice recordings, camera frames, contacts or personal documents.
