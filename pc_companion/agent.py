@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -1059,6 +1059,11 @@ class PcCompanionApp:
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
             self.status_var.set(f"Resuming {Path(existing['path']).name}; saved chunks are retained.")
+            return
+        if not can_accept_incoming_transfer(self.pc_incoming, transfer_id):
+            self.status_var.set("Rejected concurrent incoming file transfer; finish or cancel the active transfer first.")
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "receiver_busy"})
             return
         destination = filedialog.asksaveasfilename(
             title="Choose where to save incoming file",
