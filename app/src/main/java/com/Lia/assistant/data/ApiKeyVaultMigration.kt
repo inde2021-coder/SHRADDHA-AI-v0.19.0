@@ -3,9 +3,8 @@ package com.Lia.assistant.data
 import android.content.Context
 
 /**
- * Moves existing encrypted provider entries into the password-derived vault.
- * The old Android Keystore-backed copies are removed only after every value is
- * successfully encrypted and verified in the new vault.
+ * Safely migrates provider keys between the optional password vault and the
+ * app's normal Android Keystore-backed stores.
  */
 object ApiKeyVaultMigration {
     private val providers = listOf("OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
@@ -32,7 +31,6 @@ object ApiKeyVaultMigration {
             throw IllegalStateException("Could not migrate existing provider keys. Your previous encrypted keys were left unchanged.", error)
         }
 
-        // Remove old encrypted copies only after all new records are committed and verified.
         try {
             ApiKeyStore.clearLegacyKey(context)
             providers.forEach { ProviderKeyStore.clearLegacy(context, it) }
@@ -44,10 +42,47 @@ object ApiKeyVaultMigration {
         }
     }
 
+    /**
+     * Removes the password layer without losing credentials. The vault must be
+     * unlocked once so every key can be decrypted and copied back to the
+     * Android Keystore-backed stores. Old vault data is cleared only after
+     * every non-empty key has been written and verified.
+     */
+    @Synchronized
+    fun disable(context: Context) {
+        require(PasswordProtectedApiKeyVault.isConfigured(context)) { "Password protection is not enabled." }
+        require(PasswordProtectedApiKeyVault.isUnlocked()) {
+            "Unlock the existing vault once to safely remove its password protection."
+        }
+
+        val values = linkedMapOf<String, String>()
+        values["GEMINI"] = PasswordProtectedApiKeyVault.get(context, "GEMINI")
+        providers.forEach { provider ->
+            values[provider] = PasswordProtectedApiKeyVault.get(context, provider)
+        }
+
+        // Write and verify all replacement copies before touching the old vault.
+        ApiKeyStore.saveLegacyKey(context, values.getValue("GEMINI"))
+        providers.forEach { provider ->
+            ProviderKeyStore.saveLegacy(context, provider, values.getValue(provider))
+        }
+
+        check(ApiKeyStore.getLegacyKey(context) == values.getValue("GEMINI")) {
+            "Could not verify the restored GEMINI API key. Password protection was kept."
+        }
+        providers.forEach { provider ->
+            check(ProviderKeyStore.getLegacy(context, provider) == values.getValue(provider)) {
+                "Could not verify the restored $provider API key. Password protection was kept."
+            }
+        }
+
+        // This is now safe: verified Android Keystore copies exist for every provider.
+        PasswordProtectedApiKeyVault.resetAndDeleteAllKeys(context)
+    }
+
     @Synchronized
     fun resetAndDeleteAll(context: Context) {
         PasswordProtectedApiKeyVault.resetAndDeleteAllKeys(context)
-        // Remove any pre-migration leftovers as part of an explicit destructive reset.
         ApiKeyStore.clearLegacyKey(context)
         providers.forEach { ProviderKeyStore.clearLegacy(context, it) }
     }
