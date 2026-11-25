@@ -70,8 +70,11 @@ object PasswordProtectedApiKeyVault {
         val saltText = store.getString(SALT, null) ?: return false
         val checkText = store.getString(CHECK, null) ?: return false
         val ivText = store.getString(CHECK_IV, null) ?: return false
-        val salt = decode(saltText)
-        val key = derive(password, salt)
+        val salt = try { decode(saltText) } catch (_: Exception) { return false }
+        val key = try { derive(password, salt) } catch (_: Exception) {
+            salt.fill(0)
+            return false
+        }
         return try {
             val clear = decrypt(key, decode(checkText), decode(ivText), "vault-check")
             try {
@@ -123,6 +126,40 @@ object PasswordProtectedApiKeyVault {
             }
         } finally {
             clear.fill(0)
+        }
+    }
+
+    /** Persist a set of migrated keys in one preferences transaction. */
+    @Synchronized
+    fun saveAll(context: Context, values: Map<String, String>) {
+        val key = requireUnlocked()
+        val editor = prefs(context).edit()
+        val encryptedRecords = mutableListOf<Pair<ByteArray, ByteArray>>()
+        try {
+            values.forEach { (provider, rawValue) ->
+                val id = providerId(provider)
+                val value = rawValue.trim()
+                require(value.length <= 2048) { "API key is too long." }
+                if (value.isEmpty()) {
+                    editor.remove("key_$id").remove("iv_$id")
+                } else {
+                    val clear = value.toByteArray(Charsets.UTF_8)
+                    try {
+                        val encrypted = encrypt(key, clear, id)
+                        encryptedRecords += encrypted
+                        editor.putString("key_$id", encode(encrypted.first))
+                            .putString("iv_$id", encode(encrypted.second))
+                    } finally {
+                        clear.fill(0)
+                    }
+                }
+            }
+            check(editor.commit()) { "Could not migrate provider API keys." }
+        } finally {
+            encryptedRecords.forEach { (cipherText, iv) ->
+                cipherText.fill(0)
+                iv.fill(0)
+            }
         }
     }
 
