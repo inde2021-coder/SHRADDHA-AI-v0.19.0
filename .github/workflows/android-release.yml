@@ -85,10 +85,13 @@ jobs:
           if [[ -z "$store_type" ]]; then
             echo "::error::Keystore could not be opened using PKCS12 or JKS. No credential values were printed."
             echo "Decoded keystore size: $(wc -c < "$ANDROID_KEYSTORE_PATH") bytes"
-            echo "PKCS12 check:"
-            keytool -list -storetype PKCS12 -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1 || true
-            echo "JKS check:"
-            keytool -list -storetype JKS -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1 || true
+            echo "File identification:"
+            file "$ANDROID_KEYSTORE_PATH" || true
+            printf 'First 8 bytes (hex only): '
+            od -An -tx1 -N8 "$ANDROID_KEYSTORE_PATH" | tr -d '\\n'
+            printf '\\n'
+            echo "Base64 payload length (whitespace removed): $(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | wc -c)"
+            echo "This distinguishes an invalid/wrong file payload from a password issue without exposing the key or any credential."
             exit 1
           fi
 
