@@ -128,3 +128,103 @@ Include these conversational abilities:
 - Test family/relationship terms only when explicitly provided by the user, including respectful language for elders and appropriate boundaries for peers and children.
 - Test moral questions with balanced reasoning, evidence, empathy, and acknowledgement of uncertainty.
 - Verify no emotional manipulation, false claims of sentience, possessive behaviour, or fabricated relationship knowledge.
+
+## Expanded training curriculum — all ten domains
+
+This curriculum is a product and content plan. It does not claim that the app already contains a complete trained model or a complete verified corpus. Deliver it as small, versioned, licensed knowledge packs plus tested local skills. Reuse existing app modules before adding any new store, screen, service, or command.
+
+### 1. Human behaviour and everyday interaction
+- Build on the existing everyday-conversation and emotional-intelligence sections above.
+- Add pragmatic intent, conversational repair, humour boundaries, politeness, turn-taking, respectful disagreement, and context-sensitive forms of address.
+- Treat emotion and intent as uncertain inferences; ask rather than label a person when confidence is low.
+- Preserve the existing transparency and emotional-boundary requirements.
+
+### 2. General knowledge and education
+- Curate age-appropriate, level-tagged explainers for mathematics, science, history, geography, computing, language learning, and digital literacy.
+- Include worked examples, definitions, glossaries, misconception checks, and short quizzes where useful.
+- Attach publisher/source, licence, verification date, language, education level, and confidence to every reusable content item.
+- Keep current affairs, changing facts, exam dates, prices, and official notices out of timeless packs; retrieve current sources when online access is enabled.
+
+### 3. India, culture, civic information, and practical life
+- Cover Indian geography, constitutional basics, public institutions, culture, festivals, regional terminology, agriculture, animal husbandry, and rural/digital services.
+- Explain government schemes and legal/civic processes using official sources, eligibility caveats, jurisdiction, and last-verified dates.
+- Never infer a user's religion, caste, language, region, or family structure from their name, accent, location, or appearance.
+- Do not turn cultural examples into stereotypes or legal/financial advice.
+
+### 4. Personal assistant and personal organisation
+- Reuse the existing PersonalKnowledgeStore, PersistentChatMemory, SecureMemoryVault, UnifiedMemoryRepository, and routine proposal mechanisms after a behaviour-level audit.
+- Add opt-in preference memory, editable relationship/context notes, tasks, reminders, goals, and recurring routine templates only where a working feature is not already present.
+- Every memory category must have clear consent, view/edit/delete controls, retention rules, and local-first behaviour. Cloud sync remains separately opt-in.
+- A proposed routine is not an executed automation; display status and ask permission at consequential action checkpoints.
+
+### 5. Reasoning, problem solving, and decision support
+- Train structured decomposition, arithmetic, comparison, planning, dependency ordering, evidence checking, uncertainty statements, and correction after feedback.
+- Reuse the existing local multi-role planning tool and command engine; verify whether each tool only plans or actually executes before describing it.
+- Show assumptions, options, costs, risks, and reversible next steps for consequential decisions.
+- Do not present unsupported model confidence as proof; use deterministic calculators/validators for exact operations.
+
+### 6. Technical, Android, Windows, and computer literacy
+- Curate Android, Windows, networking, file handling, accessibility, privacy, troubleshooting, coding, web development, and device setup help.
+- Reuse the existing OfflineCommandEngine, Android accessibility/OCR paths, and the canonical desktop-companion implementation.
+- Keep phone-only actions on Android and PC-only actions on the Windows companion; route through the existing paired-device relay and permissions.
+- Do not create another PC agent or command catalog if an existing tool already covers the action.
+
+### 7. Languages, speech, and communication
+- Hindi, English, and Hinglish are the first text/voice quality targets; add the other major Indian languages in tested batches.
+- Include script and transliteration variants, spelling variation, code-switching, idioms, dialect/context labels, and speech-friendly TTS phrasing.
+- The current LanguageDetector is a simple Hindi/English/Hinglish heuristic; it is not a validated 22-language detector. Keep this limitation explicit until replaced/tested.
+- Speech recognition, translation, and speech synthesis are separate capabilities. A text pack does not prove offline ASR/TTS support.
+
+### 8. Professional and productivity skills
+- Add verified local skills for document summarisation, note organisation, OCR correction, tables, calculations, CSV/Excel-style data preparation, reports, email drafts, and PDF workflows.
+- Reuse the current PDF/OCR import, notes, document store, and file-preview paths. Add a new integration only after confirming no existing end-to-end implementation.
+- Preview extracted or generated content and let the user correct it. Require explicit approval before submitting forms, sending messages, publishing, or overwriting files.
+- Do not claim an exported file or completed external submission until the operation returns success.
+
+### 9. Safety, security, privacy, and responsible use
+- Teach phishing/scam awareness, permission literacy, safe file/link handling, credential hygiene, privacy, consent, and secure device practices.
+- Reuse existing safety gates, sensitive-screen OCR filtering, encrypted memory stores, action journals, and PC consent controls; audit their coverage and failure modes.
+- Never put API keys, passwords, OTPs, private documents, or personal memory into training packs, prompts, analytics, or logs unless a feature explicitly needs a user-approved item.
+- Medical, legal, financial, emergency, and other high-impact answers must state limits, use authoritative/current sources where needed, and direct users to qualified help when appropriate.
+
+### 10. Domain-specific practical knowledge and skills
+- Maintain optional packs for small business, retail, inventory, billing, accounting basics, customer support, agriculture, education, and household planning.
+- Each pack must declare intended users, prerequisites, jurisdiction/currency, supported operations, source/licence, last verification date, and known limitations.
+- Keep calculators and business rules deterministic and testable; never mix illustrative examples with a user's actual financial records.
+- Load domain packs on demand so the APK does not bundle every dataset or model.
+
+## Five additional intelligence capabilities
+
+### A. Context and communication-style awareness
+Use the active conversation and explicitly approved preferences to adapt detail, tone, and language. Do not build hidden personality profiles or infer sensitive traits. Provide a way to reset learned preferences.
+
+### B. Continually extendable learning library
+Provide an authenticated/consented import and review pipeline for notes, PDFs, approved documents, and skill examples. New material starts as untrusted/pending review, retains provenance/licence metadata, is indexed locally, and can be edited or deleted. User feedback may create a proposed correction; it must not silently rewrite trusted facts or retrain model weights.
+
+### C. Multimodal understanding
+Unify text, user-selected images, PDFs, OCR, and consented camera/screen context behind capability checks. Reuse LocalKnowledgeDocumentStore, ScreenOcrEngine, Visual Lens, and PC screen/OCR modules. Preserve source boundaries, show uncertain OCR for correction, and never upload media without feature-level consent.
+
+### D. Permissioned task execution
+Use the existing tool catalog, action journal, Android controls, and paired Windows companion. Separate explain, plan, preview, execute, and verify states. Require fresh confirmation for messages, calls, publishing, payments, destructive actions, file writes, and remote control. Report the actual tool result, not the model's intention.
+
+### E. Quality improvement and self-evaluation
+Build a versioned test suite for factual grounding, language quality, emotional tone, command correctness, privacy, and safety. Record only redacted, consented failure telemetry; allow local test cases without uploading conversations. A proposed fix must pass regression tests before it changes a trusted pack or skill.
+
+## Delivery order and measurable gates
+1. **Inventory and reuse audit:** map each curriculum item to existing code, tests, and real UI entry points. Mark each as implemented, partial, planned, broken, or absent. Exclude archive/reference folders from runtime feature counts.
+2. **Capability registry:** one canonical registry for Android, Windows, local-model, and cloud capabilities; declare task, platform, permissions, network requirement, model/data size, consent, and fallback.
+3. **Knowledge-pack pipeline:** stable schemas, provenance/licence validation, review state, language/topic tags, versioning, incremental updates, rollback, and deletion.
+4. **Local retrieval and memory:** integrate with the existing document/RAG and encrypted-memory implementation instead of introducing a second database or retrieval engine. Measure local answer hit rate and false-positive rate.
+5. **Skill execution:** map existing tools to verified actions; add only missing skills with deterministic validation, idempotency, permission checks, and confirmation checkpoints.
+6. **Quality gates:** add tests for every enabled language/domain and every destructive/consequential action; include airplane mode, low memory, missing optional dependencies, revoked permission, invalid credentials, quota exhaustion, and provider outage.
+7. **Release gates:** verify Android APK/AAB and Windows companion separately. Model weights and optional language packs stay separate downloads. No merge to main until CI, static audit, device tests, and user-approved release checks pass.
+
+## Curriculum completion metrics
+- Every pack entry has a source, licence, language, version, and verification status.
+- Every capability has one canonical implementation owner and a tested platform boundary.
+- Local-first routing is measured; cloud calls are not made for high-confidence local hits.
+- No paid endpoint is selected in Free mode.
+- Every personal-memory feature is opt-in and supports user correction/deletion.
+- Every consequential skill has preview, fresh confirmation, result verification, and audit coverage.
+- No language, modality, or automation is advertised beyond the tested device/runtime coverage.
+
