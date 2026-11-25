@@ -175,7 +175,7 @@ object PasswordProtectedApiKeyVault {
             editor.putString(SALT, encode(newSalt))
                 .putString(CHECK, encode(checkRecord.first))
                 .putString(CHECK_IV, encode(checkRecord.second))
-            check(check(editor.commit())) { "Could not update the vault password." }
+            check(editor.commit()) { "Could not update the vault password." }
             sessionKey?.fill(0)
             sessionKey = newKey.copyOf()
             checkRecord.first.fill(0)
