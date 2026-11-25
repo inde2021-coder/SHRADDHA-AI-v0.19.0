@@ -1,7 +1,7 @@
 # Shraddha AI Baby Care — Age 0–2 Lesson Library (Hindi-first)
 
-**Pack ID:** `baby-care-hi-en-0-2` · **Version:** 1.0.0 · **Status:** authored starter lessons; clinical review required before production advice  
-**Audience:** parents and caregivers · **Languages:** Hindi-first, English support  
+**Pack ID:** `baby-care-hi-en-0-2` · **Version:** 1.0.0 · **Status:** authored starter lessons; clinical review required before production advice
+**Audience:** parents and caregivers · **Languages:** Hindi-first, English support
 **Purpose:** caregiver education, responsive interaction, play ideas and safe referral—not diagnosis, treatment or replacement for a paediatrician.
 
 ## Non-negotiable safety envelope
@@ -115,21 +115,21 @@
 These are original short verses for Shraddha AI; use gentle, low-volume playback with a timer and caregiver control. Do not claim traditional/public-domain provenance.
 
 **Lullaby 1 — चंदा की किरण**
-चंदा धीरे मुस्काए,  
-मीठी हवा गीत सुनाए।  
-नन्ही आँखें आराम करें,  
+चंदा धीरे मुस्काए,
+मीठी हवा गीत सुनाए।
+नन्ही आँखें आराम करें,
 सपनों में फूलों के घर बनें।
 
 **Lullaby 2 — तारे गिनें**
-एक तारा, दो तारे,  
-आसमान में चमके प्यारे।  
-माँ की गोदी, प्यार भरी,  
+एक तारा, दो तारे,
+आसमान में चमके प्यारे।
+माँ की गोदी, प्यार भरी,
 नींद आए धीरे-धीरे।
 
 **Lullaby 3 — नन्ही कली**
-नन्ही कली मुस्काती है,  
-सुबह नई खुशियाँ लाती है।  
-प्यार भरी आवाज़ सुनो,  
+नन्ही कली मुस्काती है,
+सुबह नई खुशियाँ लाती है।
+प्यार भरी आवाज़ सुनो,
 आराम करो, सपने बुनो।
 
 **Responsive conversation prompts**
