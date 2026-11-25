@@ -191,7 +191,7 @@ object PasswordProtectedApiKeyVault {
 
     private fun validatePassword(password: CharArray) {
         require(password.size >= 10) { "Use a vault password with at least 10 characters." }
-        require(password.any(Char::isLetter) && password.any(Char::isDigit)) {
+        require(password.any { it.isLetter() } && password.any { it.isDigit() }) {
             "Vault password must include at least one letter and one number."
         }
     }
