@@ -288,3 +288,17 @@ The goal is to detect a crying-like sound, estimate possible reasons, and notify
 - Test guardian number verification, SMS preview/consent, call confirmation, rate limits, cooldowns, delivery failure, no network, no SIM, denied permissions, and OS policy restrictions.
 - Test that no raw audio leaves the device by default and no audio/child data is retained unexpectedly.
 - Test urgent-symptom messaging, false positives, and that the system never substitutes for in-person care.
+
+
+### Unattended-baby scenario: no adult visible / no caregiver nearby
+
+This is the specific parent-alert use case: when the guardian has enabled Baby Safety Mode and the baby is crying while no responsible adult is visible in the monitored camera area, Shraddha should automatically escalate to the guardian contacts rather than relying only on a local notification.
+
+- Run the crying-event detector and, only when separately enabled, check the configured Visual Lens camera view for whether an adult is visible in that camera's field of view. The system may say “no adult detected in the monitored view”; it must never claim that nobody is anywhere in the home. Camera blind spots, occlusion, lighting, and a person outside frame make absence uncertain.
+- Use a guardian-configured sustained-cry threshold and short confirmation window to reduce false alarms. If crying persists and no adult is detected in the monitored view, trigger the pre-authorised parent escalation: call the primary guardian, then call the backup guardian if the first call is unanswered after the configured timeout; send an SMS alert as a parallel or fallback channel according to the guardian's setup.
+- If an adult is visible, do not assume the baby is safe or that the adult heard the baby. Send a lower-level notification or follow the guardian's chosen rule if crying continues.
+- Allow the guardian to choose the primary/backup order, ring duration, retry limit, SMS wording, quiet-hour behaviour, and cooldown. For a sustained cry while no adult is visible, quiet hours must not silently suppress a safety alert.
+- The call/SMS rule must be explicitly enabled and pre-authorised by the adult during setup. If Android, device manufacturer, carrier, regional law, or app-store policy blocks automatic calls/SMS, use the permitted system dialer/SMS composer fallback and clearly show that a human tap is required.
+- Keep monitoring visibly active on the device, show camera/microphone status, provide a physical/large in-app stop control, and notify the guardian if either sensor becomes unavailable, the device goes offline, battery is critically low, or the app is stopped. Do not imply the alert system is working when it is not.
+- The phone/camera must be positioned to cover the baby's safe area, powered reliably, secured against falls/overheating, and not placed in the crib or within the baby's reach. This is not a certified baby monitor; an adult caregiver remains responsible for supervision and should not intentionally leave an infant unattended.
+
