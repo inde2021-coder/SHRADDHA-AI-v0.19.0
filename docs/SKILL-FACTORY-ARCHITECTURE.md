@@ -162,3 +162,7 @@ Moving durable memory and large content packs off-device can reduce installed AP
 7. Measure APK/AAB size and device storage before/after. Do not claim savings until measured.
 
 **Important:** this is the target design. The existing repository remains local-first and opt-in; no cloud-only switch or automatic migration has been enabled by this documentation update.
+
+
+## Authored curriculum content delivery
+Five lesson libraries have been authored under `docs/curriculum/` and indexed in `SHRADDHA-CURRICULUM-CATALOG.md`. They are not yet installed in the Android knowledge store. Ingestion must reuse `LocalKnowledgeDocumentStore` and `LocalKnowledgeBase`, preserve pack provenance/licence/version, and add retrieval tests. Do not create a parallel RAG store. Baby-care and health-related content requires specialist review before being exposed as advice. The Skill Factory must keep these packs in review/quarantine until trust, licence, safety and validation gates pass.
