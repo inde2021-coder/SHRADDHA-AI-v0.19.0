@@ -242,7 +242,7 @@ fun SocialPublishingScreen(navController: NavController) {
                         Text("${post.optString("platform").uppercase()} • ${post.optString("status").uppercase()}", color = colors.accent)
                         Text(post.optString("scheduledAt"), color = colors.textSecondary)
                         if (post.optString("status") == "needs_review" && post.optString("lastError").isNotBlank()) {
-                            Text("MANUAL REVIEW REQUIRED: ${post.optString(\"lastError\")}", color = colors.warning)
+                            Text("MANUAL REVIEW REQUIRED: ${post.optString(\"lastError\")}", color = colors.textSecondary)
                         }
                         if (post.optString("mediaKind").isNotBlank()) Text("Media: ${post.optString("mediaKind")} • ${post.optString("mediaUrl")}", color = colors.textSecondary)
                         Text(post.optString("text"), color = colors.textPrimary)
