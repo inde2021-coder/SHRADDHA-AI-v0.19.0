@@ -59,6 +59,7 @@ test('Facebook Page text publishing uses the configured Graph API token', async 
   globalThis.fetch = async (url, options) => {
     assert.match(String(url), /\/123456789\/feed$/);
     assert.match(String(options.body), /message=Page\+announcement/);
+    assert.equal(options.redirect, 'error');
     return new Response(JSON.stringify({ id: '123456789_987654321' }), { status: 200 });
   };
   try {
