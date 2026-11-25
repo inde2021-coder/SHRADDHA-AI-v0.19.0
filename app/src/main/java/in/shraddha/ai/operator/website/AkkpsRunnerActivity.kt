@@ -257,11 +257,14 @@ class AkkpsRunnerActivity : Activity() {
             val fields = page.optJSONArray("fields") ?: JSONArray()
             val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
                 .trim().uppercase().ifBlank { "GEMINI" }
-            val system = "You map a user's AKKPS Runner data-entry command to the currently visible form. Return JSON only: {\\"assignments\\":[{\\"field\\":\\"exact visible label, name, id or placeholder\\",\\"value\\":\\"literal user-provided value\\"}],\\"missing\\":[\\"required information not supplied\\"],\\"submit\\":false}. Never invent or infer personal data, never modify a value, never map a field unless the command explicitly supplies it. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."
-            val prompt = "User command:\\n" + raw.take(3000) +
-                "\\nAKKPS page: " + page.optString("title") +
-                "\\nVisible form fields (JSON): " + fields.toString().take(8000) +
-                "\\nReturn exact JSON only. Do not include prose or markdown."
+            val system = """You map a user's AKKPS Runner data-entry command to the currently visible form.
+Return JSON only: {"assignments":[{"field":"exact visible label, name, id or placeholder","value":"literal user-provided value"}],"missing":["required information not supplied"],"submit":false}.
+Never invent or infer personal data, never modify a value, never map a field unless the command explicitly supplies it. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."""
+            val prompt = """User command:
+""" + raw.take(3000) + """
+AKKPS page: """ + page.optString("title") + """
+Visible form fields (JSON): """ + fields.toString().take(8000) + """
+Return exact JSON only. Do not include prose or markdown."""
             status.text = "AI कमांड समझ रहा है…"
             Thread {
                 val response = runCatching {
