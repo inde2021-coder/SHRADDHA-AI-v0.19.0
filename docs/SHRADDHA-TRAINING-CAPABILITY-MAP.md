@@ -1,7 +1,7 @@
 # Shraddha AI — Training Capability Map and Duplicate-Avoidance Audit
 
-Date: 2026-11-26  
-Branch: `feat/free-api-offline-integration`  
+Date: 2026-11-26
+Branch: `feat/free-api-offline-integration`
 Scope: static repository inventory of the active Android source tree and canonical Windows companion. This is not a runtime test report or a claim that every feature is complete.
 
 ## Audit rules
