@@ -132,3 +132,26 @@ These paths must not be treated as additional active Shraddha features. Before a
 - Camera uncertainty or an adult visible in the configured frame fails closed. This means only “no adult visible in this camera frame”; it does not prove the entire home is empty.
 - **Still not implemented or verified:** the cry-audio model, adult-in-frame classifier, guardian setup UI, persistent incident state, Android call/SMS execution adapters, lullaby/story UI, baby-care content packs, background lifecycle integration, and end-to-end device tests. The policy emits decisions only; it does not itself place calls or send messages.
 - No audio/video is recorded or uploaded by this policy. Do not advertise the feature as an operating baby monitor until the missing components and real-device tests are complete.
+
+## Child Learning Tutor (ages 3–10)
+
+### Learning experience
+- Add a guardian-configured child profile with age band only (3–5, 6–8, 9–10), preferred language, learning level, accessibility preferences, and optional curriculum/board. Avoid collecting a child's full identity or unnecessary personal details.
+- Teach like a patient, encouraging tutor: explain one small concept, ask a short question, wait for the child's answer, assess it, and respond at the learner's level.
+- If the answer is incorrect or missing: give a gentle hint first, then a simpler explanation, then a worked example, and ask a fresh practice question. Never shame, scold, compare, or pressure a child.
+- If the child answers correctly: explain briefly why, praise effort specifically, and offer a slightly harder follow-up or spaced review.
+- Teach with pictures/objects, counting, stories, songs, phonics, drawing prompts, everyday examples, and short activities. Keep sessions age-appropriate with breaks and no manipulative engagement loops.
+- Subjects: early language and literacy, Hindi/English phonics and vocabulary, numbers and arithmetic, shapes/patterns, science/nature, environment, general knowledge, creativity, reasoning, and social-emotional skills. Curriculum/board-specific lessons must be mapped to verified official syllabus sources before claiming alignment.
+- For ages 3–5: mostly play, listening, speaking, matching, stories, shapes, colours and counting; no exam pressure or long text.
+- For ages 6–8: foundational reading, writing, arithmetic, simple science and guided problem-solving.
+- For ages 9–10: comprehension, multi-step arithmetic, basic science concepts, reasoning, projects and revision.
+- Support Hindi, English and Romanized Hindi initially; only claim additional languages after content and speech quality tests.
+- Include parent dashboard for progress summaries, topics practiced, strengths, concepts needing help, session limits and content controls. Guardian can review/delete child profile and learning history.
+
+### Implementation reuse and safety
+- Reuse the existing LocalKnowledgeDocumentStore / local knowledge retrieval, voice session, speech recognition, TTS/audio playback, memory controls and current quiz/question rendering where available. Do not add a second chat engine, speech stack, content database or audio player.
+- Added `app/src/main/java/in/shraddha/ai/learning/ChildLearningPolicy.kt`: a pure Kotlin age-band and scaffold-step policy (ask → hint → simple explanation → worked example → retry; correct answer → encouragement/review). It does not generate curriculum content or evaluate answer correctness itself.
+- Added unit tests in `app/src/test/java/in/shraddha/ai/learning/ChildLearningPolicyTest.kt`. Tests are authored but have not been run in this environment.
+- Still required before claiming a working tutor: guardian profile/settings UI, vetted age-banded curriculum/content packs, child-safe answer evaluation and grounding, actual conversation/voice integration, progress storage with parent controls, session/break limits, accessibility checks, and end-to-end testing with adult supervision.
+- Child mode must be guardian-enabled, transparent and easy to exit. No targeted advertising, purchases, external links, open social chat, public sharing, or collection of precise location/biometrics. Minimize retention; do not create voiceprints or face profiles. Avoid unsupervised web browsing and never ask a child for passwords, addresses, school name, phone number or other sensitive details.
+- The tutor is educational support, not a replacement for a parent, teacher, special educator or professional assessment. Do not label/diagnose learning disabilities or mental-health conditions.
