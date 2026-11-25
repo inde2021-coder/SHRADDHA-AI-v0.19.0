@@ -213,7 +213,7 @@ class AkkpsRunnerActivity : Activity() {
     private fun submitForm() {
         val js = """
             (function(){
-              const forms=[...document.forms].filter(f=>f.querySelector('input,textarea,select'));
+              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               const b=f.querySelector('button[type=submit],input[type=submit]');
