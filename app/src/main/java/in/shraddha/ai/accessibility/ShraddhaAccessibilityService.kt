@@ -48,7 +48,8 @@ class ShraddhaAccessibilityService : AccessibilityService() {
             }
             current = ancestor.parent
         }
-        return SensitiveFieldDetector.isSensitive(false, nearbyLabels)
+        return SensitiveFieldDetector.isSensitive(false, nearbyLabels) ||
+            nearbyLabels.any(SensitiveFieldDetector::containsPrivateIdentifier)
     }
 
     private fun captureOcrTargetsInternal(done: (Result<List<ScreenOcrEngine.OcrLine>>) -> Unit) {
