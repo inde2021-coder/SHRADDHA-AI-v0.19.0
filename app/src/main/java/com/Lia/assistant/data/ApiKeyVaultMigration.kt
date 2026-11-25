@@ -19,9 +19,7 @@ object ApiKeyVaultMigration {
 
         PasswordProtectedApiKeyVault.create(context, password)
         try {
-            existing.forEach { (provider, value) ->
-                if (value.isNotBlank()) PasswordProtectedApiKeyVault.save(context, provider, value)
-            }
+            PasswordProtectedApiKeyVault.saveAll(context, existing)
             existing.forEach { (provider, value) ->
                 if (value.isNotBlank()) {
                     check(PasswordProtectedApiKeyVault.get(context, provider) == value) {
@@ -29,18 +27,20 @@ object ApiKeyVaultMigration {
                     }
                 }
             }
-            // Remove old encrypted copies after the new vault has been verified.
+        } catch (error: Exception) {
+            PasswordProtectedApiKeyVault.resetAndDeleteAllKeys(context)
+            throw IllegalStateException("Could not migrate existing provider keys. Your previous encrypted keys were left unchanged.", error)
+        }
+
+        // Remove old encrypted copies only after all new records are committed and verified.
+        try {
             ApiKeyStore.clearLegacyKey(context)
             providers.forEach { ProviderKeyStore.clearLegacy(context, it) }
         } catch (error: Exception) {
-            // Keep the newly-created vault intact if legacy cleanup failed: the new
-            // verified copy is the authoritative copy and remains protected.
             throw IllegalStateException(
-                "Vault created, but migration cleanup needs attention. Keep this password and do not reset the vault.",
+                "Vault is enabled and verified, but an old encrypted copy could not be cleaned up. Keep this password and contact support before resetting.",
                 error
             )
-        } finally {
-            existing.keys.forEach { /* String values cannot be zeroed; references are released on return. */ }
         }
     }
 
