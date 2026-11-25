@@ -27,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -37,9 +36,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -51,7 +47,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
-import com.Lia.assistant.data.PasswordProtectedApiKeyVault
 import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
@@ -161,31 +156,6 @@ private fun buildApiDiagnosticReport(context: Context, configured: Map<String, B
 fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var vaultAccess by remember { mutableStateOf(!PasswordProtectedApiKeyVault.isConfigured(context) || PasswordProtectedApiKeyVault.isUnlocked()) }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) {
-                vaultAccess = !PasswordProtectedApiKeyVault.isConfigured(context) || PasswordProtectedApiKeyVault.isUnlocked()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    if (!vaultAccess) {
-        Column(modifier = modifier.fillMaxSize().nightSky().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
-                }
-                Text("Unlock AI API Keys", color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-            ApiKeyVaultPanel(context) { vaultAccess = it }
-        }
-        return
-    }
     val keyReadWarnings = remember { mutableStateMapOf<String, String>() }
     val configured = remember {
         mutableStateMapOf<String, Boolean>().apply {
@@ -193,7 +163,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                 val result = runCatching { readProviderKey(context, provider.id) }
                 put(provider.id, result.getOrDefault(false))
                 result.exceptionOrNull()?.let {
-                    keyReadWarnings[provider.id] = "Saved key could not be decrypted. Re-enter the key if this device's Keystore was reset."
+                    keyReadWarnings[provider.id] = "Saved API key could not be read. Remove it and enter it again."
                 }
             }
         }
@@ -224,15 +194,14 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
             }
             Column {
                 Text("AI API Keys", color = colors.textPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Text("Create a key on provider website, then add it securely here.", color = colors.textSecondary, fontSize = 12.sp)
+                Text("Create a key on provider website, then add it here.", color = colors.textSecondary, fontSize = 12.sp)
             }
         }
         Spacer(Modifier.height(12.dp))
-        ApiKeyVaultPanel(context) { vaultAccess = it }
         Spacer(Modifier.height(12.dp))
         NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
             Text(
-                "API keys are saved in encrypted phone storage. Test Connection checks this provider key directly. Live microphone voice uses the separate Secure Backend settings below; a provider key alone does not configure the voice gateway. Never share your key or add it to screenshots.",
+                "API keys are saved as plain text in this app's private storage (not encrypted). This removes the API-key vault lock. Anyone with privileged/root access or an exposed device backup may be able to access them. Test Connection sends a provider request and may incur charges. Live microphone voice uses the separate Secure Backend settings below.",
                 color = colors.textSecondary,
                 fontSize = 13.sp
             )
@@ -278,7 +247,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                     )
                     Text(
                         text = savedKeyHints[provider.id]
-                            ?: if (configured[provider.id] == true) "Key saved securely on this phone. Enter a new key to replace it."
+                            ?: if (configured[provider.id] == true) "Key saved on this phone. Enter a new key to replace it."
                             else "Key is hidden while typing. Tap the eye icon to view it.",
                         color = colors.textSecondary,
                         fontSize = 11.sp
@@ -298,7 +267,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                                             keyReadWarnings.remove(provider.id)
                                             inputs[provider.id] = ""
                                             revealed[provider.id] = false
-                                            Toast.makeText(context, "${provider.title} API key securely saved.", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "${provider.title} API key saved.", Toast.LENGTH_SHORT).show()
                                         }
                                         .onFailure {
                                             Toast.makeText(context, "Key save nahi hui: ${it.localizedMessage ?: "Unknown error"}", Toast.LENGTH_LONG).show()
@@ -368,7 +337,7 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        if (configured[provider.id] == true) "Status: Key saved securely on this device • full key stays hidden" else "Status: API key not added",
+                        if (configured[provider.id] == true) "Status: Key saved on this device • full key stays hidden" else "Status: API key not added",
                         color = colors.textSecondary,
                         fontSize = 11.sp
                     )
