@@ -65,12 +65,12 @@ jobs:
           test -s "$ANDROID_KEYSTORE_PATH"
           chmod 600 "$ANDROID_KEYSTORE_PATH"
           echo "Checking keystore container and alias (credential values are never printed)..."
-          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"; then
+          if ! keytool -list -storetype JKS -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"; then
             echo "::error::Keystore validation failed. Check that ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, and ANDROID_KEY_ALIAS all come from the same signing kit."
             exit 1
           fi
           echo "Checking private-key password..."
-          if ! keytool -certreq -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
+          if ! keytool -certreq -storetype JKS -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
             echo "::error::Private-key password validation failed. ANDROID_KEY_PASSWORD does not unlock the selected alias."
             exit 1
           fi
