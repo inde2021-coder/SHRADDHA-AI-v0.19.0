@@ -149,10 +149,11 @@ class AkkpsRunnerActivity : Activity() {
         if (raw.isBlank() || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
-        val wantsSubmit = Regex("(^|[;,\\n])\\s*submit\\s*$", RegexOption.IGNORE_CASE).containsMatchIn(raw)
-        val values = parseAssignments(raw)
+        val parsed = AkkpsRunnerCommandParser.parse(raw)
+        val wantsSubmit = parsed.submit
+        val values = parsed.assignments
         if (values.isEmpty()) {
-            status.text = "कोई field=value नहीं मिला। उदाहरण: farmer name=Ram; village=Rampur; submit"; return
+            status.text = "कोई field=value नहीं मिला। उदाहरण: Farmer Name=Ram; Village=Rampur; submit"; return
         }
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
@@ -250,15 +251,6 @@ class AkkpsRunnerActivity : Activity() {
                 else -> "स्पष्ट सफलता प्रमाण नहीं मिला। Submit को सफल नहीं माना गया।"
             }
         }
-    }
-
-    private fun parseAssignments(raw: String): List<Pair<String,String>> {
-        val cleaned = raw.replace(Regex("(^|[;,\\n])\\s*submit\\s*$", RegexOption.IGNORE_CASE), "")
-        val re = Regex("([^=:\\n;,]{1,70})\\s*[:=]\\s*([^;\\n,]{1,500})")
-        return re.findAll(cleaned).mapNotNull {
-            val k=it.groupValues[1].trim(); val v=it.groupValues[2].trim()
-            if(k.isBlank()||v.isBlank()) null else k to v
-        }.toList()
     }
 
     private fun decode(raw: String?): String =
