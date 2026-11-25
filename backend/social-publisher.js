@@ -35,7 +35,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
       let upstream;
       try {
         upstream = await fetch(`https://api.telegram.org/bot${botToken}/${media.kind === 'video' ? 'sendVideo' : 'sendPhoto'}`, {
-        redirect: 'error',
+          redirect: 'error',
           method: 'POST', body: form, signal: AbortSignal.timeout(45000)
         });
       } catch { fail(502, 'Telegram media upload could not be reached'); }
@@ -118,7 +118,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
         let poll;
         try {
           poll = await fetch(`https://graph.facebook.com/${version}/${container.id}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`, {
-        redirect: 'error',
+            redirect: 'error',
             signal: AbortSignal.timeout(15000)
           });
         } catch { fail(502, 'Instagram video processing status could not be checked; do not blindly retry this container'); }
