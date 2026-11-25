@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { validateScheduleIntent } from './social-publishing.js';
 
+const DISPATCH_LEASE_MS = 5 * 60 * 1000;
+
 /** Firestore-backed queue. A claimed post is never blindly replayed after an ambiguous crash. */
 export function createSocialScheduler({ collection, publish, now = () => Date.now() }) {
   if (!collection || typeof publish !== 'function') throw new Error('A durable collection and publisher are required');
@@ -42,7 +44,7 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
         id: doc.id, platform: row.platform, text: row.text, mediaKind: row.mediaKind || null, mediaUrl: row.mediaUrl || null,
         scheduledAt: row.scheduledAt, status: row.status,
         result: row.status === 'published' ? row.result : null,
-        lastError: row.status === 'failed' ? row.lastError : null
+        lastError: ['failed', 'needs_review'].includes(row.status) ? row.lastError : null
       };
     });
   }
@@ -60,11 +62,39 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
     });
   }
 
+  async function reconcileStaleDispatches() {
+    // Never replay an ambiguous provider call: mark expired claims for explicit human review.
+    const cutoff = now() - DISPATCH_LEASE_MS;
+    const snapshot = await collection.where('status', '==', 'dispatching').limit(100).get();
+    let needsReview = 0;
+    for (const candidate of snapshot.docs) {
+      const candidateData = candidate.data();
+      if (!Number.isFinite(candidateData.dispatchStartedAtMs) || candidateData.dispatchStartedAtMs > cutoff) continue;
+      const ref = collection.doc(candidate.id);
+      const updated = await collection.firestore.runTransaction(async tx => {
+        const current = await tx.get(ref);
+        if (!current.exists || current.data().status !== 'dispatching' ||
+            current.data().claimToken !== candidateData.claimToken ||
+            current.data().dispatchStartedAtMs > cutoff) return false;
+        tx.update(ref, {
+          status: 'needs_review',
+          claimToken: null,
+          reviewRequiredAtMs: now(),
+          lastError: 'Publishing outcome is unknown after a worker interruption. Verify the provider account before manually retrying.'
+        });
+        return true;
+      });
+      if (updated) needsReview++;
+    }
+    return needsReview;
+  }
+
   async function dispatchDue(limit = 10) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 25) throw new Error('Dispatch limit must be 1-25');
+    const needsReview = await reconcileStaleDispatches();
     const due = await collection.where('status', '==', 'pending')
       .where('scheduledAtMs', '<=', now()).orderBy('scheduledAtMs', 'asc').limit(limit).get();
-    const summary = { scanned: due.size, published: 0, failed: 0, skipped: 0 };
+    const summary = { scanned: due.size, published: 0, failed: 0, skipped: 0, needsReview };
     for (const candidate of due.docs) {
       const ref = collection.doc(candidate.id);
       const claimToken = randomUUID();
@@ -97,5 +127,5 @@ export function createSocialScheduler({ collection, publish, now = () => Date.no
     return summary;
   }
 
-  return { schedule, list, cancel, dispatchDue };
+  return { schedule, list, cancel, dispatchDue, reconcileStaleDispatches };
 }
