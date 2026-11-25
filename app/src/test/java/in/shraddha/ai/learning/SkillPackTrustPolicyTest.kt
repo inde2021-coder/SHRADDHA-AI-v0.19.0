@@ -49,7 +49,7 @@ class SkillPackTrustPolicyTest {
         )
         assertEquals(
             SkillPackTrustPolicy.Decision.AUTO_ACTIVATE,
-            SkillPackTrustPolicy.evaluate(imported.copy(userImportConsent = true), true).decision
+            SkillPackTrustPolicy.evaluate(imported.copy(userImportConsent = true, signedManifestVerified = false), true).decision
         )
     }
 
