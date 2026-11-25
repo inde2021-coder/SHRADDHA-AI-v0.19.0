@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +40,7 @@ fun ApiKeyVaultPanel(context: Context, onAccessChanged: (Boolean) -> Unit) {
     var confirmNewPassword by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -118,6 +121,12 @@ fun ApiKeyVaultPanel(context: Context, onAccessChanged: (Boolean) -> Unit) {
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
+                NovaButton(
+                    text = "Forgot password? Reset vault",
+                    type = NovaButtonType.SECONDARY,
+                    onClick = { showResetConfirm = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Text("Vault unlocked for this foreground session.", color = colors.success)
                 NovaButton(
@@ -187,5 +196,29 @@ fun ApiKeyVaultPanel(context: Context, onAccessChanged: (Boolean) -> Unit) {
                 color = colors.textSecondary
             )
         }
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Permanently delete API keys?") },
+            text = { Text("The vault password cannot be recovered. Resetting deletes all saved Gemini, OpenAI, Groq, Claude and Perplexity keys from this phone. You will need to enter them again. This does not change Backend Mode.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    val result = runCatching { ApiKeyVaultMigration.resetAndDeleteAll(context) }
+                    result.onSuccess {
+                        configured = false
+                        unlocked = false
+                        password = ""
+                        message = "Vault reset. All saved API keys were deleted; add them again."
+                        onAccessChanged(true)
+                    }.onFailure {
+                        message = it.message ?: "Could not reset the vault."
+                    }
+                }) { Text("Delete keys and reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) { Text("Cancel") }
+            }
+        )
     }
 }
