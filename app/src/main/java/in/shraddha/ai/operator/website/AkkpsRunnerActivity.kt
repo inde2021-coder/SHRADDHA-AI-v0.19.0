@@ -18,6 +18,7 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import java.net.URI
 
 /** On-device AKKPS Runner workspace. Login stays directly between the user and AKKPS. */
 class AkkpsRunnerActivity : Activity() {
@@ -70,8 +71,11 @@ class AkkpsRunnerActivity : Activity() {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    if (!AkkpsWebsiteProfile.acceptsUrl(request.url.toString())) {
-                        runOnUiThread { status.text = "सुरक्षा: AKKPS के बाहर का URL रोका गया।" }
+                    val targetUrl = request.url.toString()
+                    val path = runCatching { URI(targetUrl).path.orEmpty().lowercase() }.getOrDefault("")
+                    if (!AkkpsWebsiteProfile.acceptsUrl(targetUrl) ||
+                        path.startsWith("/admin") || path.startsWith("/coordinator")) {
+                        runOnUiThread { status.text = "सुरक्षा: केवल AKKPS Runner कार्यों की अनुमति है।" }
                         return true
                     }
                     return false
