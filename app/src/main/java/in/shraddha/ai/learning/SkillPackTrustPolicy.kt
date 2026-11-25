@@ -42,7 +42,7 @@ object SkillPackTrustPolicy {
             if (!automaticLearningEnabled) add("Automatic learning is disabled")
             if (candidate.sourceKind == SourceKind.UNKNOWN) add("Source is not allow-listed")
             if (candidate.sourceKind == SourceKind.USER_IMPORT && !candidate.userImportConsent) add("User import consent is missing")
-            if (!candidate.signedManifestVerified) add("Trusted manifest signature was not verified")
+            if (candidate.sourceKind != SourceKind.USER_IMPORT && !candidate.signedManifestVerified) add("Trusted manifest signature was not verified")
             if (!candidate.contentSafetyPassed) add("Content safety validation has not passed")
             if (!candidate.factualValidationPassed) add("Independent factual validation has not passed")
             if (!candidate.regressionTestsPassed) add("Skill regression tests have not passed")
