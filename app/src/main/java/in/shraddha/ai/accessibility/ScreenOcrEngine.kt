@@ -17,8 +17,6 @@ object ScreenOcrEngine {
         val sensitive: Boolean = false
     )
 
-    private val privateIdentifiers = Regex("""(?<!\d)\d{12}(?!\d)|\b[A-Z]{5}\d{4}[A-Z]\b""")
-
     fun recognize(bitmap: Bitmap, done: (Result<List<OcrLine>>) -> Unit) {
         val image = InputImage.fromBitmap(bitmap, 0)
         val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
