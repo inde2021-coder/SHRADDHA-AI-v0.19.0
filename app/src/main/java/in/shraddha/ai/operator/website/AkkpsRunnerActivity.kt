@@ -118,7 +118,7 @@ class AkkpsRunnerActivity : Activity() {
         }
         val js = """
             (function(){
-              const n=s=>(s||'').replace(/\\s+/g,' ').trim();
+              const n=s=>(s||'').replace(/\s+/g,' ').trim();
               const fields=[...document.querySelectorAll('input,textarea,select')].map((e,i)=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
@@ -158,7 +158,7 @@ class AkkpsRunnerActivity : Activity() {
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
-              const norm=s=>(s||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
@@ -236,7 +236,7 @@ class AkkpsRunnerActivity : Activity() {
     private fun verifySubmit(beforeUrl: String) {
         val js = """
             (function(){
-              const t=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+              const t=(document.body?.innerText||'').replace(/\s+/g,' ').trim();
               return JSON.stringify({success:/success|submitted|saved successfully|created successfully|record saved|सफलतापूर्वक|जमा हो गया/i.test(t),
                 error:/failed|error|invalid|unable to|try again|त्रुटि|असफल/i.test(t)});
             })()
