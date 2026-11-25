@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.operator.website
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -18,6 +19,8 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.VoiceGatewaySettings
 import java.net.URI
 
 /** On-device AKKPS Runner workspace. Login stays directly between the user and AKKPS. */
@@ -127,7 +130,7 @@ class AkkpsRunnerActivity : Activity() {
         text = label; isAllCaps = false; setTextColor(Color.WHITE); setOnClickListener { click() }
     }
 
-    private fun inspectPage() {
+    private fun inspectPage(onReady: ((JSONObject) -> Unit)? = null) {
         if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS के सुरक्षित पेज पर जाएँ।"; return
         }
@@ -156,6 +159,7 @@ class AkkpsRunnerActivity : Activity() {
                 label + if (f.optBoolean("required")) " *" else ""
             }
             status.text = "पेज: " + obj.optString("title") + "\nFields: " + labels.take(22).joinToString(" • ")
+            onReady?.invoke(obj)
         }
     }
 
@@ -168,8 +172,13 @@ class AkkpsRunnerActivity : Activity() {
         val wantsSubmit = parsed.submit
         val values = parsed.assignments
         if (values.isEmpty()) {
-            status.text = "कोई field=value नहीं मिला। उदाहरण: Farmer Name=Ram; Village=Rampur; submit"; return
+            requestAiMapping(raw)
+            return
         }
+        fillValues(values, wantsSubmit)
+    }
+
+    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean) {
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
@@ -223,6 +232,78 @@ class AkkpsRunnerActivity : Activity() {
                 return@evaluateJavascript
             }
             submitForm()
+        }
+    }
+
+    /** Uses the configured AI only after explicit consent because farmer data may be personal. */
+    private fun requestAiMapping(raw: String) {
+        val prefs = getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE)
+        if (!prefs.getBoolean("cloud_command_consent", false)) {
+            AlertDialog.Builder(this)
+                .setTitle("AKKPS कमांड समझने के लिए Cloud AI")
+                .setMessage("इस सुविधा में आपका कमांड और AKKPS फॉर्म के फील्ड नाम चुने हुए AI provider को भेजे जाएँगे। Farmer की निजी जानकारी भी कमांड में हो सकती है। अनुमति के बिना कुछ भी नहीं भेजा जाएगा।")
+                .setNegativeButton("नहीं") { _, _ -> status.text = "Cloud AI अनुमति नहीं दी गई। field=value कमांड स्थानीय रूप से इस्तेमाल कर सकते हैं।" }
+                .setPositiveButton("अनुमति दें") { _, _ ->
+                    prefs.edit().putBoolean("cloud_command_consent", true).apply()
+                    runAiMapping(raw)
+                }.show()
+            return
+        }
+        runAiMapping(raw)
+    }
+
+    private fun runAiMapping(raw: String) {
+        inspectPage { page ->
+            val fields = page.optJSONArray("fields") ?: JSONArray()
+            val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
+                .trim().uppercase().ifBlank { "GEMINI" }
+            val system = "You map a user's AKKPS Runner data-entry command to the currently visible form. Return JSON only: {\\"assignments\\":[{\\"field\\":\\"exact visible label, name, id or placeholder\\",\\"value\\":\\"literal user-provided value\\"}],\\"missing\\":[\\"required information not supplied\\"],\\"submit\\":false}. Never invent or infer personal data, never modify a value, never map a field unless the command explicitly supplies it. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."
+            val prompt = "User command:\\n" + raw.take(3000) +
+                "\\nAKKPS page: " + page.optString("title") +
+                "\\nVisible form fields (JSON): " + fields.toString().take(8000) +
+                "\\nReturn exact JSON only. Do not include prose or markdown."
+            status.text = "AI कमांड समझ रहा है…"
+            Thread {
+                val response = runCatching {
+                    VoiceGatewaySettings.executeAgent(this, provider, "AKKPS Runner Form Mapper", system, prompt)
+                }
+                runOnUiThread {
+                    val reply = response.getOrNull()
+                    if (reply == null) {
+                        status.text = "AI mapping उपलब्ध नहीं: " + (response.exceptionOrNull()?.localizedMessage ?: "Gateway/provider configured नहीं है।")
+                        return@runOnUiThread
+                    }
+                    val jsonText = reply.text.substringAfter("{", "").let { "{" + it.substringBeforeLast("}", "") + "}" }
+                    val mapped = runCatching { JSONObject(jsonText) }.getOrNull()
+                    if (mapped == null) {
+                        status.text = "AI ने मान्य structured data नहीं दिया। कोई फील्ड नहीं भरी गई।"
+                        return@runOnUiThread
+                    }
+                    val items = mapped.optJSONArray("assignments") ?: JSONArray()
+                    val values = (0 until items.length()).mapNotNull { i ->
+                        val item = items.optJSONObject(i) ?: return@mapNotNull null
+                        val key = item.optString("field").ifBlank { item.optString("key") }.trim()
+                        val value = item.optString("value").trim()
+                        if (key.isBlank() || value.isBlank() || value.length > 500) null else key to value
+                    }
+                    if (values.isEmpty()) {
+                        val missing = mapped.optJSONArray("missing") ?: JSONArray()
+                        status.text = if (missing.length() > 0)
+                            "जानकारी अधूरी है: " + (0 until missing.length()).joinToString { missing.optString(it) }
+                        else "कमांड से कोई स्पष्ट फॉर्म मान नहीं मिला। कोई डेटा नहीं भरा गया।"
+                        return@runOnUiThread
+                    }
+                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit
+                    fillValues(values, shouldSubmit)
+                    val missing = mapped.optJSONArray("missing") ?: JSONArray()
+                    if (missing.length() > 0) {
+                        status.text = "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
+                            (0 until missing.length()).joinToString { missing.optString(it) } +
+                            if (shouldSubmit) "। Submit रोका गया।" else ""
+                    }
+                }
+            }.start()
         }
     }
 
