@@ -182,3 +182,7 @@ Use WHO/UNICEF/MoHFW/NHM for baby-care education; NCERT/DIKSHA/Ministry of Educa
 
 ### Current completion boundary
 Five authored starter libraries now exist. This does **not** mean all 20 domains have exhaustive textbooks, that the APK has imported these files, or that every lesson is available offline. Further subject-by-subject lesson packs, translations, reviewed exercises, pack manifests, ingestion into the existing knowledge store, curriculum UI and integration tests remain required.
+
+
+## J. Five-language learning and communication specification
+A detailed five-language specification has been added at `docs/curriculum/FIVE-LANGUAGE-CAPABILITY-AND-LESSON-SPEC.md`. It covers Hindi, English, Sanskrit, Marathi and community-reviewed Pawari; native and Roman-script input; grammar, vocabulary, reading, writing, conversation, translation, transliteration, speech/OCR capability separation, offline packs, Firebase opt-in sync, quality gates and truthful per-language release claims. Pawari is explicitly treated as regionally variable and community-owned; unverified forms must not be invented. This is a specification and starter content, not proof that all speech/translation features are already shipped.
