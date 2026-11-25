@@ -46,6 +46,12 @@ object ApiKeyStore {
 
     @Synchronized
     fun getKey(context: Context): String {
+        if (PasswordProtectedApiKeyVault.isConfigured(context)) return PasswordProtectedApiKeyVault.get(context, "GEMINI")
+        return getLegacyKey(context)
+    }
+
+    @Synchronized
+    internal fun getLegacyKey(context: Context): String {
         val prefs = getPrefs(context)
         val ciphertext = prefs.getString(ENCRYPTED_KEY, null)
         val ivText = prefs.getString(IV_KEY, null)
@@ -95,6 +101,15 @@ object ApiKeyStore {
 
     @Synchronized
     fun saveKey(context: Context, key: String) {
+        if (PasswordProtectedApiKeyVault.isConfigured(context)) {
+            PasswordProtectedApiKeyVault.save(context, "GEMINI", key)
+            return
+        }
+        saveLegacyKey(context, key)
+    }
+
+    @Synchronized
+    internal fun saveLegacyKey(context: Context, key: String) {
         val prefs = getPrefs(context)
         val trimmed = key.trim()
         require(trimmed.length <= 512) { "GEMINI API key is too long." }
@@ -127,4 +142,6 @@ object ApiKeyStore {
     }
 
     fun hasKey(context: Context): Boolean = getKey(context).isNotEmpty()
+
+    internal fun clearLegacyKey(context: Context) = saveLegacyKey(context, "")
 }

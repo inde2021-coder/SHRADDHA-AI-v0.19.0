@@ -27,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -47,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.Lia.assistant.data.ApiKeyStore
 import com.Lia.assistant.data.ProviderKeyStore
+import com.Lia.assistant.data.PasswordProtectedApiKeyVault
 import com.Lia.assistant.data.VoiceGatewaySettings
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
@@ -156,6 +161,31 @@ private fun buildApiDiagnosticReport(context: Context, configured: Map<String, B
 fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var vaultAccess by remember { mutableStateOf(!PasswordProtectedApiKeyVault.isConfigured(context) || PasswordProtectedApiKeyVault.isUnlocked()) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                vaultAccess = !PasswordProtectedApiKeyVault.isConfigured(context) || PasswordProtectedApiKeyVault.isUnlocked()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (!vaultAccess) {
+        Column(modifier = modifier.fillMaxSize().nightSky().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
+                }
+                Text("Unlock AI API Keys", color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            ApiKeyVaultPanel(context) { vaultAccess = it }
+        }
+        return
+    }
     val keyReadWarnings = remember { mutableStateMapOf<String, String>() }
     val configured = remember {
         mutableStateMapOf<String, Boolean>().apply {
@@ -197,6 +227,8 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
                 Text("Create a key on provider website, then add it securely here.", color = colors.textSecondary, fontSize = 12.sp)
             }
         }
+        Spacer(Modifier.height(12.dp))
+        ApiKeyVaultPanel(context) { vaultAccess = it }
         Spacer(Modifier.height(12.dp))
         NovaGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp, elevation = 5.dp) {
             Text(
