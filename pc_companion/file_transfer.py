@@ -79,6 +79,16 @@ def valid_transfer_manifest(transfer_id, size_bytes, declared_chunk_count, sha25
         return False
 
 
+
+def can_accept_incoming_transfer(active_transfers, transfer_id):
+    """Allow only one new inbound transfer; existing IDs are handled by resume logic."""
+    return (
+        isinstance(active_transfers, dict) and not active_transfers and
+        isinstance(transfer_id, str) and
+        re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) is not None
+    )
+
+
 def requeue_rejected_chunk(queue, in_flight, index):
     """Return a negatively acknowledged chunk to the front of the retry queue."""
     if (not isinstance(queue, list) or not isinstance(in_flight, set) or
