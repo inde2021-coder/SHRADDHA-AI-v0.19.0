@@ -17,6 +17,7 @@ test('Telegram text publishing uses only configured server credentials', async (
     assert.equal(result.messageId, 77);
     assert.equal(captured.body.text, 'approved exact text');
     assert.equal(captured.redirect, 'error');
+    assert.equal(captured.redirect, 'error');
     assert.match(captured.url, /sendMessage$/);
   } finally { globalThis.fetch = previous; }
 });
@@ -87,6 +88,7 @@ test('Instagram feed image creates and publishes a verified container', async ()
     });
     assert.equal(result.postId, 'igpost123');
     assert.equal(calls.length, 2);
+    assert.ok(calls.every(call => call.redirect === 'error'));
     assert.ok(calls.every(call => call.redirect === 'error'));
     assert.match(calls[0].body, /image_url=https%3A%2F%2Fcdn/);
   } finally { globalThis.fetch = previous; }
