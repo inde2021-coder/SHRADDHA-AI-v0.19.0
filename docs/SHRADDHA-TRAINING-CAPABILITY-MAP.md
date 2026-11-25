@@ -122,3 +122,13 @@ These paths must not be treated as additional active Shraddha features. Before a
 - Add a visible monitoring health state for microphone, camera, network, battery, call/SMS permission, and last successful check. Alert the guardian when monitoring is unavailable; never show a false “protected” status.
 - Automatic call/SMS implementation is conditional on Android OS/app-store policy, runtime permissions, carrier and regional requirements. If prohibited, provide a dialer/SMS composer fallback and disclose that automatic escalation cannot run on that device.
 - Test sustained-cry thresholds, adult-in-view vs adult-not-detected paths, false positives, primary unanswered/backup call, SMS fallback, quiet hours, cooldowns, network loss, device shutdown, camera obstruction, and permission revocation.
+
+### Implementation update — Smart Baby Safety policy foundation
+
+- Added `app/src/main/java/in/shraddha/ai/baby/BabySafetyEscalationPolicy.kt`.
+- Added unit tests in `app/src/test/java/in/shraddha/ai/baby/BabySafetyEscalationPolicyTest.kt`.
+- The pure Kotlin policy requires guardian opt-in, verified contacts, healthy monitoring, a sustained high-confidence cry event, and the explicit camera result `NO_ADULT_IN_FRAME` before requesting a primary guardian call and SMS.
+- If the primary call is reported unanswered, the policy permits a backup call only after the configured grace period. Cooldown prevents repeated new incidents but does not suppress an in-progress backup escalation.
+- Camera uncertainty or an adult visible in the configured frame fails closed. This means only “no adult visible in this camera frame”; it does not prove the entire home is empty.
+- **Still not implemented or verified:** the cry-audio model, adult-in-frame classifier, guardian setup UI, persistent incident state, Android call/SMS execution adapters, lullaby/story UI, baby-care content packs, background lifecycle integration, and end-to-end device tests. The policy emits decisions only; it does not itself place calls or send messages.
+- No audio/video is recorded or uploaded by this policy. Do not advertise the feature as an operating baby monitor until the missing components and real-device tests are complete.
