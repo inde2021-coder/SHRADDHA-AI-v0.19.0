@@ -20,7 +20,7 @@ import org.json.JSONObject
 
 /**
  * The sole provider dispatch boundary for Main Brain orchestrated work.
- * Provider credentials remain in their existing encrypted stores; this class never logs them.
+ * Provider credentials are read from the configured local stores; this class never logs them.
  */
 object MainBrainProviderGateway {
     private val providerOrder = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
@@ -124,7 +124,7 @@ object MainBrainProviderGateway {
         // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
         return if (provider == "GEMINI") {
             val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
-                return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
+                return ChatReplyResult.Error("Could not read the GEMINI API key: " + it.message)
             }
             if (key.isBlank()) ChatReplyResult.Error("GEMINI API key is missing.")
             else GeminiTextClient.reply(key, systemInstruction.take(8_000), boundedHistory)
