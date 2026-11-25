@@ -109,13 +109,21 @@ object PasswordProtectedApiKeyVault {
             }
             return
         }
-        val encrypted = encrypt(key, value.toByteArray(Charsets.UTF_8), id)
-        check(store.edit()
-            .putString("key_$id", encode(encrypted.first))
-            .putString("iv_$id", encode(encrypted.second))
-            .commit()) { "Could not save the encrypted API key." }
-        encrypted.first.fill(0)
-        encrypted.second.fill(0)
+        val clear = value.toByteArray(Charsets.UTF_8)
+        try {
+            val encrypted = encrypt(key, clear, id)
+            try {
+                check(store.edit()
+                    .putString("key_$id", encode(encrypted.first))
+                    .putString("iv_$id", encode(encrypted.second))
+                    .commit()) { "Could not save the encrypted API key." }
+            } finally {
+                encrypted.first.fill(0)
+                encrypted.second.fill(0)
+            }
+        } finally {
+            clear.fill(0)
+        }
     }
 
     @Synchronized
@@ -187,7 +195,7 @@ object PasswordProtectedApiKeyVault {
     }
 
     private fun requireUnlocked(): ByteArray =
-        sessionKey?.copyOf() ?: error("API-key vault is locked. Unlock it in AI API Key settings.")
+        sessionKey ?: error("API-key vault is locked. Unlock it in AI API Key settings.")
 
     private fun validatePassword(password: CharArray) {
         require(password.size >= 10) { "Use a vault password with at least 10 characters." }
