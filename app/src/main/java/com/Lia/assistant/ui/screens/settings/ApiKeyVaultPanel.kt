@@ -192,10 +192,11 @@ fun ApiKeyVaultPanel(context: Context, onAccessChanged: (Boolean) -> Unit) {
             }
             if (message.isNotBlank()) Text(message, color = if (message.contains("not") || message.contains("Incorrect") || message.contains("Could not")) colors.error else colors.textSecondary)
             Text(
-                "Important: if you forget this password, the protected keys cannot be recovered. Remove/re-enter keys only after understanding that reset or app-data loss can permanently erase them.",
+                "Important: if you forget this password, the protected keys cannot be recovered. Use the explicit reset action only if you accept permanent key deletion.",
                 color = colors.textSecondary
             )
         }
+    }
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
