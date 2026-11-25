@@ -1,0 +1,121 @@
+# Shraddha AI Skill Factory and Verified Learning Architecture
+
+Status: architecture + first fail-closed policy foundation. This is not a claim that a live crawler, curriculum, model trainer, or production skill marketplace exists.
+
+## User decision
+- Include all training domains and intelligence capabilities already mapped in `SHRADDHA-TRAINING-CAPABILITY-MAP.md`.
+- Add a future-extensible Skill Factory.
+- Automatically discover and prepare updates, but activate knowledge only after independent verification gates pass.
+- Prefer Free APIs and on-device/offline runtimes. No paid endpoint or paid fallback in Free mode.
+
+## One canonical owner per concern
+| Concern | Existing owner to reuse | Rule |
+|---|---|---|
+| Knowledge documents and retrieval | `LocalKnowledgeDocumentStore`, `LocalKnowledgeBase` | Extend existing encrypted store and index; do not add a second RAG database. |
+| Personal facts/preferences | `UnifiedMemoryRepository`, `PersistentChatMemory`, `PersonalKnowledgeStore`, `SecureMemoryVault` | Keep personal memory separate from public curriculum; explicit opt-in and edit/delete. |
+| Tool execution | `LiaToolCatalog`, `OfflineCommandEngine`, `VoiceToolActionJournal` | One registry and action journal; add only missing handlers. Keep user-visible branding Shraddha AI. |
+| Offline text inference | `LocalOfflineLlm`, `OfflineModelScreen` | Model weights are optional downloads, not APK assets. |
+| Voice, OCR and vision | Existing voice clients, `ScreenOcrEngine`, Visual Lens and Windows companion | Capability adapters reuse current platform owners; no duplicate microphone, camera, OCR, or speech engines. |
+| Quality gates | Existing Android/companion tests and CI | Every pack and skill ships with tests and a rollback version. |
+
+## Training curriculum catalogue
+Every domain is a versioned content pack or a tested deterministic skill. A category in this list is a target, not evidence that its feature is already implemented.
+
+1. Human behaviour, conversation and emotional communication.
+2. General knowledge, school learning, mathematics, science, history and geography.
+3. India, culture, civic literacy, public services and practical local life.
+4. Personal assistant, organisation, goals, tasks and reminders.
+5. Reasoning, decision support, planning and problem solving.
+6. Android, Windows, computer, networking and technical literacy.
+7. Hindi, English, Hinglish and staged Indian-language speech/translation.
+8. Productivity: documents, notes, OCR, tables, CSV/Excel, reports and PDFs.
+9. Safety, privacy, cybersecurity, scams and emergency awareness.
+10. Domain skills: business, accounting basics, agriculture, retail and household operations.
+11. Parenting, infant care education, child development, original lullabies and stories.
+12. Child Learning Tutor ages 3–10 with guardian-managed age bands and curriculum.
+13. Food, cooking, nutrition education and kitchen planning.
+14. Health literacy and first-aid awareness with authoritative sources and no diagnosis.
+15. Financial literacy, budgeting, banking and digital-payment safety.
+16. Technical repair literacy for common devices and household equipment.
+17. Creativity: writing, design, presentation and media workflows.
+18. Travel, planning, time management and everyday life skills.
+19. Accessibility, inclusive communication and assistive workflows.
+20. Environmental awareness, climate, energy and sustainability.
+
+## Intelligence capability catalogue
+- Context-aware conversation without hidden sensitive profiling.
+- Structured reasoning and deterministic calculation/validation.
+- Feedback-based correction with source tracking.
+- Multilingual text, speech recognition and speech synthesis as separately tested capabilities.
+- User-selected image, document, OCR, screen and camera understanding with consent.
+- Plan → preview → confirm → execute → verify for external/device actions.
+- Personalisation from explicitly approved preferences only.
+- Self-evaluation and regression tests before trusted knowledge changes.
+- Offline-first routing and graceful degradation.
+- Skill discovery, installation, versioning, rollback and capability reporting.
+
+## Skill Factory lifecycle
+1. **Discover:** check allow-listed official/open-source catalogues or user-selected imports. No unrestricted crawling.
+2. **Fetch:** download only over HTTPS, enforce size/type limits, and store in quarantine. Do not execute downloaded code.
+3. **Verify provenance:** validate source allow-list, publisher signature, manifest identity, version, content digest and licence. A digest alone is not proof of publisher authenticity.
+4. **Safety and privacy scan:** reject secrets, credentials, personal data, malware-like payloads, unsafe instructions and content outside the declared domain.
+5. **Fact-check:** compare factual claims with independent authoritative sources; preserve jurisdiction, date, uncertainty and citations. LLM agreement alone is not verification.
+6. **Duplicate/conflict check:** compare pack IDs, versions, content fingerprints and existing canonical skills. Extend current owners rather than creating parallel engines.
+7. **Test:** run schema validation, deterministic unit tests, age/safety/domain tests, offline tests and regression tests in a sandbox.
+8. **Activate:** only a verified, signed, licensed, safe, tested and non-duplicate pack from an approved source may auto-activate when the user has enabled automatic learning.
+9. **Observe:** record pack version, source, licence, verification time, test result and activation decision. Do not store raw private conversations as training data.
+10. **Rollback/delete:** keep the prior known-good version; support user review, disable, rollback and deletion. Never overwrite the only good version.
+
+## First code foundation
+Added `SkillPackTrustPolicy.kt` and unit tests. It is a pure Kotlin fail-closed activation gate. It rejects malformed metadata and queues a candidate for review unless automatic learning is enabled and the source, publisher signature, safety scan, independent fact validation, regression tests and duplicate check all pass. User-imported material also requires explicit import consent.
+
+Important: this policy does not fetch or verify content itself, does not train model weights, and does not make external actions. Production adapters and independent validators remain to be implemented and tested.
+
+## Data contract for every knowledge pack
+Required metadata: stable pack ID, semantic version, title, supported language(s), domain, source URL, publisher identity, signature, SHA-256 digest, licence identifier, jurisdiction where relevant, published/updated date, verification date, expiry/recheck policy, content format, declared dependencies, minimum app version, test-suite version and rollback target.
+
+Personal/child/health/legal/financial data must not be silently imported into shared training packs. Child profiles, voice, photos, contacts and personal documents are excluded from automatic learning by default.
+
+## Free API and offline routing
+- Local retrieval and deterministic local skills first.
+- Local LLM/ASR/TTS/OCR only when the device has the model/runtime and language pack; show capability availability accurately.
+- Optional Free API providers only when the provider currently offers a genuine free quota and the user has enabled online use. Re-check quotas, terms and privacy before release.
+- Quota exhaustion, timeout, invalid credentials or outage must fall back to another eligible free provider or local engine; never route to paid in Free mode.
+- Never upload personal documents, camera frames, screen content, contacts or child data without separate feature-level consent.
+- Keep model weights and large language/domain packs as separately downloadable assets with licence, size and device requirements.
+
+## Delivery phases and acceptance gates
+### Phase 0 — Inventory and deduplication
+- Build source-set/call-graph inventory for all advertised capabilities.
+- Mark each as implemented, partial, planned, broken or absent.
+- Confirm one canonical owner for memory, RAG, voice, OCR, camera, tools and PC companion.
+- Remove nothing from legacy/reference folders until build inputs and references prove it is safe.
+
+### Phase 1 — Shared trust and pack foundation
+- Add manifest schema, signature verification, quarantine store, trust-state persistence and migration.
+- Integrate policy with existing LocalKnowledgeDocumentStore; add pack provenance fields without breaking existing document imports.
+- Add review/rollback UI and admin diagnostics.
+
+### Phase 2 — Curriculum and skills
+- Build licensed packs in priority order: Hindi/English general knowledge, child tutor content, parenting/lullabies, productivity, business, agriculture, safety and finance.
+- Implement answer evaluation with deterministic checks where possible; source-ground LLM-generated explanations.
+- Add only missing tool handlers after call-graph audit.
+
+### Phase 3 — Automatic update pipeline
+- Schedule constrained update checks with Android WorkManager and equivalent Windows companion scheduler.
+- Check only allow-listed manifests; respect charging/Wi-Fi/data/battery settings.
+- Download into quarantine, verify, test, then activate atomically. Preserve rollback.
+- User can pause automatic updates, inspect changelog and disable any pack.
+
+### Phase 4 — Validation and release
+- Unit, integration, migration, security, content, privacy and regression tests.
+- Airplane-mode tests; provider quota/outage tests; low-storage and interrupted-download tests.
+- Android APK/AAB and Windows companion build/test independently.
+- No main merge until CI and supported-device tests pass and user approves.
+
+## Explicit non-goals
+- No silent training on personal chats, microphone recordings, camera frames or child data.
+- No automatic execution of downloaded code/plugins.
+- No LLM-only fact verification or self-modification of app binaries.
+- No paid API calls or silent paid fallback in Free mode.
+- No claim that a listed curriculum domain is complete until content, UI, integration and tests exist.
