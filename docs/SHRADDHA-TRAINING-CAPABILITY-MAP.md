@@ -113,3 +113,12 @@ These paths must not be treated as additional active Shraddha features. Before a
 - SMS/call actions require explicit guardian pre-authorisation, platform permission/policy compliance, rate limiting, and verified outcomes; otherwise use the system composer/dialer.
 - Human supervision remains mandatory; the app never claims to replace a caregiver or certified baby monitor.
 - All existing voice, memory, notification, and communication features are reused where suitable; no duplicate service, player, database, or action catalog is introduced.
+
+
+### Specific requirement: baby crying while no adult is nearby
+
+- Required intended behaviour: in guardian-enabled Baby Safety Mode, when sustained crying is detected and Visual Lens reports no adult visible in the configured camera field of view, automatically start the guardian's pre-authorised escalation sequence: call primary parent, call backup parent if unanswered, and send the configured SMS alert. This is stronger than a notification-only workflow.
+- Visual Lens can establish only “adult not detected in this camera view,” not prove that no adult exists elsewhere in the home. Document camera placement, blind spots, occlusion, lighting, and model limitations. Never use face recognition or identify who the adult is.
+- Add a visible monitoring health state for microphone, camera, network, battery, call/SMS permission, and last successful check. Alert the guardian when monitoring is unavailable; never show a false “protected” status.
+- Automatic call/SMS implementation is conditional on Android OS/app-store policy, runtime permissions, carrier and regional requirements. If prohibited, provide a dialer/SMS composer fallback and disclose that automatic escalation cannot run on that device.
+- Test sustained-cry thresholds, adult-in-view vs adult-not-detected paths, false positives, primary unanswered/backup call, SMS fallback, quiet hours, cooldowns, network loss, device shutdown, camera obstruction, and permission revocation.
