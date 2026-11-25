@@ -132,3 +132,33 @@ Default request order:
 The pure policy foundation is `OfflineFirstRoutingPolicy.kt`, with unit tests in `OfflineFirstRoutingPolicyTest.kt`. It makes a route decision but does not itself execute engines or prove that an API request has completed. Cloud execution must separately enforce feature-level consent and redact/minimise content. Ordinary tasks must not be sent to cloud just because a network is available.
 
 Offline learning should normally add verified, licensed knowledge packs to the existing local encrypted Knowledge/RAG store. Model fine-tuning is a separate optional PC workflow, only for suitable open-weight models and legally reusable data; it is not required for each new fact and must not train on private chats, child data, recordings or personal documents without explicit, separate consent.
+
+
+## Firebase-backed memory and cloud/offline split
+
+### Existing implementation facts
+The current `UnifiedMemoryRepository` already wraps `EncryptedFeatureStore` and `FirebaseCloudVault`. Its current behavior is **local-first**, not cloud-only: it writes the encrypted device vault first, and uploads/restores Firebase data only when explicit cloud consent and Firebase credentials are supplied. Cloud restore also refreshes the local copy. It exposes record listing, comparison, explicit conflict resolution, single-record deletion and clear operations. Do not create a second memory repository or a second Firebase vault.
+
+### Recommended target architecture
+- Firebase should hold the durable, account-scoped backup/sync copy of approved memory and knowledge-pack metadata.
+- The app should keep only a small encrypted hot cache: auth/session state, user-approved preferences needed immediately, recent conversation context, sync cursor and pending offline changes.
+- Large documents, embeddings/indexes and downloadable model weights should live in cloud object/file storage or as separately downloadable assets; Firebase Realtime Database should hold metadata, compact records and sync state, not huge binary model files.
+- Use Firebase Authentication and strict per-user database rules. Never embed service-account credentials or admin secrets in the APK. Do not treat a Firebase client API key as authorization.
+- Encrypt sensitive memory before upload with a user/device-controlled key where feasible; use TLS in transit, key rotation/recovery design, and exclude credentials, child audio/video, biometrics and private raw recordings from automatic memory.
+- Cloud-only mode must clearly disclose that memory access and updates require network. Offline mode must continue from the encrypted cache and local model/skills; queue changes and sync after connectivity returns.
+- Avoid writing every token or every microphone frame to Firebase. Persist compact, useful memory summaries and explicitly approved facts with provenance, timestamps, retention and deletion support.
+- Separate namespaces/retention for personal memory, general verified knowledge packs, child profiles/progress, and application diagnostics. Child data requires guardian consent and stricter minimisation; never use it as model-training data by default.
+
+### APK-size and device-load implications
+Moving durable memory and large content packs off-device can reduce installed APK size and long-term device storage. It does not remove the need for a small local cache, offline model runtime, or downloaded model weights. The APK should not bundle large models or the whole knowledge corpus; download optional models/packs on demand and allow the user to remove them. Cloud storage/network usage may incur Firebase billing depending on plan, reads, writes, bandwidth and stored data; this is not automatically free or unlimited.
+
+### Migration and acceptance gates
+1. Audit all current memory writers/readers and confirm they use `UnifiedMemoryRepository`; identify any direct local-store or Firebase writes before changing defaults.
+2. Add per-user Firebase Authentication and deploy/test restrictive Realtime Database rules; verify one user cannot read another user's memory.
+3. Add a cloud-first preference only after consent, with an explicit offline-cache size and clear cache control. Keep local-first as the safe migration fallback until cloud auth/rules and restore are verified.
+4. Implement a durable sync queue, conflict/version policy, retries/backoff, tombstones for deletions and resumable sync.
+5. Add export/restore, account deletion, cache clearing, encryption-key recovery and data-retention controls.
+6. Test airplane mode, login expiry, two devices, simultaneous edits, interrupted uploads, quota exhaustion, account deletion and Firebase rule denial.
+7. Measure APK/AAB size and device storage before/after. Do not claim savings until measured.
+
+**Important:** this is the target design. The existing repository remains local-first and opt-in; no cloud-only switch or automatic migration has been enabled by this documentation update.
