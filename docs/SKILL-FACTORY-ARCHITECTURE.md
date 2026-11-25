@@ -57,7 +57,7 @@ Every domain is a versioned content pack or a tested deterministic skill. A cate
 ## Skill Factory lifecycle
 1. **Discover:** check allow-listed official/open-source catalogues or user-selected imports. No unrestricted crawling.
 2. **Fetch:** download only over HTTPS, enforce size/type limits, and store in quarantine. Do not execute downloaded code.
-3. **Verify provenance:** validate source allow-list, publisher signature, manifest identity, version, content digest and licence. A digest alone is not proof of publisher authenticity.
+3. **Verify provenance:** validate source allow-list, publisher signature (required for external catalogue packs), manifest identity, version, content digest and licence. User-selected local imports instead require explicit import consent and provenance metadata; a publisher signature is not assumed. A digest alone is not proof of publisher authenticity.
 4. **Safety and privacy scan:** reject secrets, credentials, personal data, malware-like payloads, unsafe instructions and content outside the declared domain.
 5. **Fact-check:** compare factual claims with independent authoritative sources; preserve jurisdiction, date, uncertainty and citations. LLM agreement alone is not verification.
 6. **Duplicate/conflict check:** compare pack IDs, versions, content fingerprints and existing canonical skills. Extend current owners rather than creating parallel engines.
