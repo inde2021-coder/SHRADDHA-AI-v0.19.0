@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.Lia.assistant.data.NovaAppState
+import com.Lia.assistant.data.PasswordProtectedApiKeyVault
 import com.Lia.assistant.forge.ForgeController
 import com.Lia.assistant.license.AccessKeyManager
 import com.Lia.assistant.ui.fx.ListeningEdgeGlow
@@ -66,6 +67,11 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra("EXTRA_OPEN_FORGE", false) == true) {
             ForgeController.requestOpen()
         }
+    }
+
+    override fun onStop() {
+        PasswordProtectedApiKeyVault.lock()
+        super.onStop()
     }
 
     override fun onResume() {
