@@ -64,13 +64,23 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
           test -s "$ANDROID_KEYSTORE_PATH"
           chmod 600 "$ANDROID_KEYSTORE_PATH"
-          echo "Checking keystore container and alias (credential values are never printed)..."
-          if ! keytool -list -storetype JKS -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"; then
-            echo "::error::Keystore validation failed. Check that ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, and ANDROID_KEY_ALIAS all come from the same signing kit."
+          echo "Detecting keystore format and validating alias (credential values are never printed)..."
+          if keytool_output="$(keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1)"; then
+            printf '%s\\n' "$keytool_output"
+          else
+            printf '%s\\n' "$keytool_output"
+            echo "::error::Keystore could not be opened. The uploaded file and ANDROID_KEYSTORE_PASSWORD must be from the same signing kit."
             exit 1
           fi
+          store_type="$(printf '%s\\n' "$keytool_output" | sed -n 's/^Keystore type: //p' | head -n 1 | tr -d '\\r')"
+          if [[ -z "$store_type" ]]; then
+            echo "::error::Could not detect keystore format from keytool output."
+            exit 1
+          fi
+          echo "ANDROID_KEYSTORE_TYPE=$store_type" >> "$GITHUB_ENV"
+          echo "Detected keystore format: $store_type"
           echo "Checking private-key password..."
-          if ! keytool -certreq -storetype JKS -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
+          if ! keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null; then
             echo "::error::Private-key password validation failed. ANDROID_KEY_PASSWORD does not unlock the selected alias."
             exit 1
           fi
