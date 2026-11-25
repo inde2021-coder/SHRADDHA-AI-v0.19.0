@@ -119,3 +119,16 @@ Personal/child/health/legal/financial data must not be silently imported into sh
 - No LLM-only fact verification or self-modification of app binaries.
 - No paid API calls or silent paid fallback in Free mode.
 - No claim that a listed curriculum domain is complete until content, UI, integration and tests exist.
+
+
+## Offline-first runtime routing (2026-11-26)
+Default request order:
+1. Local deterministic skill for bounded tasks (arithmetic, formatting, validated local actions).
+2. On-device model for ordinary chat, tutoring, drafting and reasoning when a compatible model is installed.
+3. Local Knowledge/RAG for imported documents and verified offline packs.
+4. Eligible Free API only for live information, external service actions, or tasks explicitly classified as requiring online specialist capability—and only when online use is enabled and free quota remains.
+5. If no local route or eligible Free provider exists, explain the limitation. Never silently select a paid endpoint.
+
+The pure policy foundation is `OfflineFirstRoutingPolicy.kt`, with unit tests in `OfflineFirstRoutingPolicyTest.kt`. It makes a route decision but does not itself execute engines or prove that an API request has completed. Cloud execution must separately enforce feature-level consent and redact/minimise content. Ordinary tasks must not be sent to cloud just because a network is available.
+
+Offline learning should normally add verified, licensed knowledge packs to the existing local encrypted Knowledge/RAG store. Model fine-tuning is a separate optional PC workflow, only for suitable open-weight models and legally reusable data; it is not required for each new fact and must not train on private chats, child data, recordings or personal documents without explicit, separate consent.
