@@ -45,7 +45,7 @@ object ScreenOcrEngine {
                         continue
                     }
                     val bounds = line.boundingBox ?: continue
-                    val digitsSensitive = privateIdentifiers.containsMatchIn(value)
+                    val digitsSensitive = SensitiveFieldDetector.containsPrivateIdentifier(value)
                     safe += OcrLine(
                         text = if (digitsSensitive) "संवेदनशील अंक छिपाए गए" else value.take(120),
                         centerX = ((bounds.exactCenterX() / bitmap.width).coerceIn(0f, 1f)),
