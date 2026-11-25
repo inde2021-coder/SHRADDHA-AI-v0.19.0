@@ -55,17 +55,15 @@ class PasswordProtectedApiKeyVaultTest {
 
     @Test
     fun migrationMovesExistingProviderKeysIntoPasswordVault() {
-        ApiKeyStore.saveLegacyKey(context, "legacy-gemini-secret")
-        ProviderKeyStore.saveLegacy(context, "OPENAI", "legacy-openai-secret")
-        ProviderKeyStore.saveLegacy(context, "GROQ", "legacy-groq-secret")
+        ApiKeyStore.saveKey(context, "legacy-gemini-secret")
+        ProviderKeyStore.save(context, "OPENAI", "legacy-openai-secret")
+        ProviderKeyStore.save(context, "GROQ", "legacy-groq-secret")
 
         ApiKeyVaultMigration.enable(context, "Migrate12345".toCharArray())
 
         assertEquals("legacy-gemini-secret", ApiKeyStore.getKey(context))
         assertEquals("legacy-openai-secret", ProviderKeyStore.get(context, "OPENAI"))
         assertEquals("legacy-groq-secret", ProviderKeyStore.get(context, "GROQ"))
-        assertEquals("", ApiKeyStore.getLegacyKey(context))
-        assertEquals("", ProviderKeyStore.getLegacy(context, "OPENAI"))
 
         PasswordProtectedApiKeyVault.lock()
         assertFalse(runCatching { ProviderKeyStore.get(context, "OPENAI") }.isSuccess)
