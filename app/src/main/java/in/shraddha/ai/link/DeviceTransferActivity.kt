@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.widget.*
 import android.graphics.Color
 import android.provider.OpenableColumns
+import android.provider.DocumentsContract
 import android.content.ContentValues
 import org.json.JSONObject
 import java.io.File
@@ -16,6 +17,9 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /** SAF-based, consent-gated 100 MiB file transfer workspace. */
 class DeviceTransferActivity : Activity() {
@@ -45,8 +49,12 @@ class DeviceTransferActivity : Activity() {
     private val cancelled = AtomicBoolean(false)
     private val ackMonitor = Object()
     private val acknowledgedChunks = mutableSetOf<Int>()
+    private val inFlightChunks = mutableSetOf<Int>()
     private var sendFailed = false
     private var sendThread: Thread? = null
+    // Bound queued chunks so a fast/malicious peer cannot grow an unbounded in-memory queue.
+    private val transferIo = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue<Runnable>(8), ThreadPoolExecutor.AbortPolicy())
+    private var peerIdSnapshot = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +68,7 @@ class DeviceTransferActivity : Activity() {
                 setColor(0xFF102A36.toInt()); cornerRadius = 18f; setStroke(1, 0xFF2D8490.toInt())
             }
         }; root.addView(peer)
+        peerIdSnapshot = peer.text.toString().trim()
         root.addView(button("CHOOSE FILE & SEND") { chooseSource() })
         root.addView(button("RESUME / RETRY TRANSFER") { resumeTransfer() })
         pauseButton = button("PAUSE TRANSFER") {
@@ -85,9 +94,18 @@ class DeviceTransferActivity : Activity() {
         cancelled.set(true)
         paused.set(false)
         synchronized(ackMonitor) { ackMonitor.notifyAll() }
-        runCatching { incomingOut?.fd?.sync() }
-        runCatching { incomingOut?.close() }
-        incomingOut = null
+        // Stop accepting work, let already-queued durable writes finish, then close
+        // the file handle. Do not enqueue cleanup into the bounded queue: it may be full.
+        transferIo.shutdown()
+        Thread({
+            while (!transferIo.isTerminated) {
+                try { transferIo.awaitTermination(1, TimeUnit.MINUTES) }
+                catch (_: InterruptedException) { /* Continue cleanup; never close during a write. */ }
+            }
+            runCatching { incomingOut?.fd?.sync() }
+            runCatching { incomingOut?.close() }
+            incomingOut = null
+        }, "ShraddhaTransferCleanup").apply { isDaemon = true; start() }
         if (DeviceLinkManager.onFileTransferMessage != null) DeviceLinkManager.onFileTransferMessage = null
         super.onDestroy()
     }
@@ -144,17 +162,40 @@ class DeviceTransferActivity : Activity() {
         } else if (requestCode == 702) {
             runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             pendingSaveUri = uri
-            persistTransferState()
-            if (incomingVerified) saveIncoming(uri)
-            else {
-                DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = false, ok = true)
-                status.text = "Save destination selected. Receiver ready; waiting for file chunks…"
+            try {
+                persistTransferState(synchronous = true)
+            } catch (error: Exception) {
+                status.text = "Could not persist the save destination; transfer was not acknowledged."
+                return
+            }
+            val missing = synchronized(receivedChunkIndexes) {
+                (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
+            }
+            // Always send the persisted bitmap, including an empty missing list.
+            // The relay reconstructs its positive-ACK map from this receiver-owned state.
+            if (!DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+                status.text = "Save destination is ready, but resume request failed. Reconnect and tap Resume / Retry."
+            } else if (missing.isEmpty()) {
+                if (incomingVerified) enqueueTransferIo("save") { saveIncoming(uri) }
+                else enqueueTransferIo("verify") { verifyIncoming() }
+            } else {
+                status.text = "Save destination selected. Requesting ${missing.size} missing chunks from sender…"
             }
         }
     }
 
+    private fun launchIncomingSavePicker() {
+        startActivityForResult(
+            Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*")
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(Intent.EXTRA_TITLE, incomingName),
+            702
+        )
+    }
+
     private fun requestReceiverPermission() {
         val target = peer.text.toString().trim()
+        peerIdSnapshot = target
         if (target.isBlank() || sourceUri == null) { status.text = "Select target device and file first."; return }
         requestId = UUID.randomUUID().toString().replace("-", "")
         persistTransferState()
@@ -163,9 +204,11 @@ class DeviceTransferActivity : Activity() {
     }
 
     private fun beginSend() {
-        val target = peer.text.toString().trim(); val uri = sourceUri ?: return
+        val target = peerIdSnapshot.ifBlank { peer.text.toString().trim() }
+        peerIdSnapshot = target
+        val uri = sourceUri ?: return
         transferId = UUID.randomUUID().toString().replace("-", "")
-        synchronized(ackMonitor) { acknowledgedChunks.clear(); sendFailed = false }
+        synchronized(ackMonitor) { acknowledgedChunks.clear(); inFlightChunks.clear(); sendFailed = false }
         persistTransferState()
         val chunks = DeviceFileTransferProtocol.chunkCount(sourceSize) ?: run { status.text = "Unsupported file size."; return }
         if (!DeviceLinkManager.startFileTransfer(target, requestId, transferId, sourceName, sourceSize, chunks, sourceHash)) { status.text = "Could not start transfer. Check relay and receiver permission."; return }
@@ -183,7 +226,7 @@ class DeviceTransferActivity : Activity() {
             val bytes = buffer.copyOf(count)
             try {
                 require(bytes.isNotEmpty())
-                if (!DeviceLinkManager.sendFileTransferChunk(peer.text.toString().trim(), transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
+                if (!DeviceLinkManager.sendFileTransferChunk(peerIdSnapshot, transferId, index, bytes)) throw IllegalStateException("Relay send failed at chunk $index")
             } finally {
                 bytes.fill(0)
                 buffer.fill(0)
@@ -202,6 +245,10 @@ class DeviceTransferActivity : Activity() {
                 require(all.size <= count && all.distinct().size == all.size && all.all { it in 0 until count }) {
                     "Invalid chunk send list"
                 }
+                synchronized(ackMonitor) {
+                    all.forEach { acknowledgedChunks.remove(it); inFlightChunks.remove(it) }
+                    sendFailed = false
+                }
                 for ((batchNumber, batch) in all.chunked(8).withIndex()) {
                     while (paused.get() && !cancelled.get()) {
                         synchronized(ackMonitor) { ackMonitor.wait(250) }
@@ -210,7 +257,12 @@ class DeviceTransferActivity : Activity() {
                     synchronized(ackMonitor) { sendFailed = false }
                     for (index in batch) {
                         if (cancelled.get()) break
-                        sendChunk(index)
+                        synchronized(ackMonitor) { inFlightChunks.add(index) }
+                        try { sendChunk(index) }
+                        catch (error: Exception) {
+                            synchronized(ackMonitor) { inFlightChunks.remove(index) }
+                            throw error
+                        }
                     }
                     if (cancelled.get()) break
                     val deadline = System.currentTimeMillis() + 30_000L
@@ -245,30 +297,104 @@ class DeviceTransferActivity : Activity() {
                 if (msg.optBoolean("approved")) beginSend() else { status.text = "Receiver denied Documents access."; clearTransferState() }
             }
             "file_transfer_start" -> {
-                sourcePeer = msg.optString("fromDeviceId"); transferId = msg.optString("transferId")
-                incomingName = msg.optString("fileName"); incomingSize = msg.optLong("sizeBytes")
-                incomingCount = msg.optInt("chunkCount"); incomingHash = msg.optString("sha256")
-                incomingVerified = false; receivedChunkIndexes.clear(); incomingChunks = 0
+                val sender = msg.optString("fromDeviceId")
+                val offeredTransferId = msg.optString("transferId")
+                val offeredName = DeviceFileTransferProtocol.safeDisplayName(msg.optString("fileName"))
+                val rawSize = msg.opt("sizeBytes")
+                val rawCount = msg.opt("chunkCount")
+                val offeredSize = (rawSize as? Number)?.let {
+                    if (it.toDouble() == it.toLong().toDouble()) it.toLong() else -1L
+                } ?: -1L
+                val offeredCount = (rawCount as? Number)?.let {
+                    if (it.toDouble() == it.toLong().toDouble()) it.toInt() else -1
+                } ?: -1
+                val offeredHash = msg.optString("sha256")
+                // Validate every untrusted manifest field before persisting state,
+                // allocating a file, or presenting a save dialog. In particular,
+                // transferId is used in a local filename and must never contain path
+                // separators or traversal components.
+                if (sender.isBlank() || !DeviceFileTransferProtocol.isValidManifest(
+                        offeredTransferId, offeredSize, offeredCount, offeredHash
+                    )) {
+                    status.text = "Rejected invalid incoming transfer manifest."
+                    if (sender.isNotBlank()) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "invalid_manifest")
+                    return
+                }
+                val expectedPeer = if (transferId.isBlank()) peer.text.toString().trim() else peerIdSnapshot
+                peerIdSnapshot = expectedPeer
+                if (!DeviceFileTransferProtocol.isExpectedIncomingPeer(expectedPeer, sender)) {
+                    status.text = "Rejected file transfer from an unexpected paired device."
+                    DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "unexpected_peer")
+                    return
+                }
+                if (transferId.isNotBlank()) {
+                    val sameTransfer = transferId == offeredTransferId && sourcePeer == sender
+                    status.text = if (sameTransfer) {
+                        "This transfer is already active. Resume it instead of resetting received chunks."
+                    } else {
+                        "Another transfer is already active. Finish or cancel it before accepting a new file."
+                    }
+                    if (!sameTransfer) DeviceLinkManager.cancelFileTransfer(sender, offeredTransferId, "receiver_busy")
+                    return
+                }
+                cancelled.set(false)
+                paused.set(false)
+                sourcePeer = sender
+                peerIdSnapshot = sender
+                transferId = offeredTransferId
+                incomingName = offeredName
+                incomingSize = offeredSize
+                incomingCount = offeredCount
+                incomingHash = offeredHash.lowercase()
+                incomingVerified = false
+                receivedChunkIndexes.clear()
+                incomingChunks = 0
                 persistTransferState()
-                if (incomingSize !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || incomingCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || !incomingHash.matches(Regex("[a-f0-9]{64}"))) { status.text = "Rejected invalid incoming manifest."; return }
                 android.app.AlertDialog.Builder(this).setTitle("Incoming file")
-                    .setMessage("${msg.optString("fileName")} • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
+                    .setMessage("$incomingName • $incomingSize bytes\nFrom paired device $sourcePeer\nChoose whether to receive and save this file.")
                     .setNegativeButton("Reject") { _, _ -> DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receiver_rejected"); clearTransferState() }
                     .setPositiveButton("Choose save location") { _, _ ->
-                        val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
-                        incomingFile = File(inbox, "recv_$transferId.part")
-                        incomingOut = RandomAccessFile(incomingFile, "rw").apply { setLength(incomingSize) }
-                        persistTransferState()
-                        incomingChunks = 0
-                        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, incomingName), 702)
+                        try {
+                            val inbox = File(filesDir, "shraddha-transfers").apply { mkdirs() }
+                            incomingFile = File(inbox, "recv_$transferId.part")
+                            incomingOut = RandomAccessFile(incomingFile, "rw").apply {
+                                setLength(incomingSize)
+                                fd.sync()
+                            }
+                            incomingChunks = 0
+                            persistTransferState(synchronous = true)
+                            launchIncomingSavePicker()
+                        } catch (error: Exception) {
+                            status.text = "Could not prepare a safe receive file: ${error.message}"
+                            DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "receive_storage_error")
+                            incomingFile?.delete()
+                            clearTransferState()
+                        }
                     }.show()
             }
-            "file_transfer_chunk" -> receiveChunk(msg)
+            "file_transfer_chunk" -> {
+                try {
+                    transferIo.execute { receiveChunk(msg) }
+                } catch (_: java.util.concurrent.RejectedExecutionException) {
+                    status.text = "Receive queue is full; sender must retry this chunk."
+                    val sender = msg.optString("fromDeviceId")
+                    val offeredTransferId = msg.optString("transferId")
+                    val rawIndex = msg.opt("index")
+                    val index = (rawIndex as? Number)?.takeIf {
+                        it.toDouble() == it.toLong().toDouble()
+                    }?.toInt()
+                    if (index != null && index in 0 until incomingCount &&
+                        DeviceFileTransferProtocol.isExpectedPeerMessage(sourcePeer, sender, transferId, offeredTransferId)) {
+                        DeviceLinkManager.acknowledgeFileTransfer(sender, offeredTransferId, index, ok = false)
+                    }
+                }
+            }
             "file_transfer_ack" -> {
-                val expectedPeer = peer.text.toString().trim()
-                if (msg.optString("fromDeviceId") != expectedPeer ||
-                    msg.optString("transferId") != transferId || transferId.isBlank()) {
-                    status.text = "Ignored file ACK from an unexpected peer or transfer."
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        peerIdSnapshot, msg.optString("fromDeviceId"),
+                        transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored file-transfer acknowledgement from an unexpected peer or transfer."
                     return
                 }
                 val rawIndex = msg.opt("index")
@@ -280,14 +406,18 @@ class DeviceTransferActivity : Activity() {
                     startSending(emptyList())
                 } else if (index >= 0 && count != null && index < count) {
                     synchronized(ackMonitor) {
-                        if (msg.optBoolean("ok")) acknowledgedChunks.add(index) else sendFailed = true
-                        ackMonitor.notifyAll()
+                        if (inFlightChunks.remove(index)) {
+                            if (msg.optBoolean("ok")) acknowledgedChunks.add(index) else sendFailed = true
+                            ackMonitor.notifyAll()
+                        }
                     }
                     status.text = if (msg.optBoolean("ok")) "Receiver acknowledged chunk ${index + 1}." else "Receiver rejected chunk ${index + 1}."
-                } else if (msg.optBoolean("complete")) {
+                }
+                if (msg.optBoolean("complete")) {
                     if (msg.optBoolean("ok")) {
-                        status.text = "Receiver verified and saved file successfully."
-                        clearTransferState()
+                        cancelled.set(true)
+                        synchronized(ackMonitor) { ackMonitor.notifyAll() }
+                        enqueueTransferCleanup("Receiver verified and saved file successfully.", deletePartial = true)
                     } else status.text = "Receiver could not verify the file; resume after checking the destination."
                 }
             }
@@ -295,8 +425,10 @@ class DeviceTransferActivity : Activity() {
                 // Only the sender may act on a resume request, and only for the
                 // currently selected peer and the exact active transfer manifest.
                 val expectedCount = DeviceFileTransferProtocol.chunkCount(sourceSize)
-                if (sourceUri == null || msg.optString("fromDeviceId") != peer.text.toString().trim() ||
-                    msg.optString("transferId") != transferId || expectedCount == null ||
+                if (sourceUri == null || !DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        peerIdSnapshot, msg.optString("fromDeviceId"),
+                        transferId, msg.optString("transferId")
+                    ) || expectedCount == null ||
                     (msg.opt("chunkCount") as? Number)?.let { it.toDouble() == it.toLong().toDouble() && it.toInt() == expectedCount } != true) {
                     status.text = "Rejected resume request: peer or transfer manifest mismatch."
                     return
@@ -310,57 +442,153 @@ class DeviceTransferActivity : Activity() {
                     val raw = array.opt(position)
                     if (raw !is Number || raw.toDouble() != raw.toLong().toDouble()) null else raw.toInt()
                 }
-                if (indexes.size != array.length() || indexes.any { it !in 0 until expectedCount } ||
-                    indexes.distinct().size != indexes.size) {
+                if (indexes.size != array.length() || indexes.any { it !in 0 until expectedCount } || indexes.distinct().size != indexes.size) {
                     status.text = "Rejected resume request: invalid or duplicate chunk indexes."
                     return
                 }
                 if (indexes.isNotEmpty()) startSending(indexes)
-                else status.text = "Receiver reports no missing chunks."
+                else status.text = "Receiver reports no missing chunks; waiting for final verification."
             }
-            "file_transfer_cancel" -> { status.text = "Transfer cancelled: ${msg.optString("reason")}"; clearTransferState() }
+            "file_transfer_cancel" -> {
+                val expectedPeer = sourcePeer.ifBlank { peerIdSnapshot }
+                if (!DeviceFileTransferProtocol.isExpectedPeerMessage(
+                        expectedPeer, msg.optString("fromDeviceId"), transferId, msg.optString("transferId")
+                    )) {
+                    status.text = "Ignored cancellation from an unexpected peer or transfer."
+                    return
+                }
+                cancelled.set(true)
+                paused.set(false)
+                synchronized(ackMonitor) { ackMonitor.notifyAll() }
+                enqueueTransferCleanup("Transfer cancelled by paired device: ${msg.optString("reason").take(120)}", deletePartial = true)
+            }
         }
     }
 
     private fun receiveChunk(msg: JSONObject) {
-        if (paused.get()) { status.text = "Incoming transfer paused locally; resume to accept more chunks."; return }
+        if (cancelled.get()) return
+        if (paused.get()) {
+            runOnUiThread { status.text = "Incoming transfer paused locally; resume to accept more chunks." }
+            return
+        }
         try {
-            require(msg.optString("transferId") == transferId && incomingOut != null)
-            val index = msg.getInt("index"); require(index in 0 until incomingCount)
-            val bytes = android.util.Base64.decode(msg.getString("payload"), android.util.Base64.DEFAULT)
-            val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index) ?: throw IllegalArgumentException("Invalid chunk index or manifest")
-            require(bytes.size == expected)
-            if (!receivedChunkIndexes.get(index)) { incomingOut!!.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES); incomingOut!!.write(bytes); receivedChunkIndexes.set(index); incomingChunks++; persistTransferState() }
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)
-            progress.progress = (incomingChunks * 100 / incomingCount)
-            status.text = "Receiving ${incomingChunks}/$incomingCount chunks • ${progress.progress}%"
-            if (incomingChunks >= incomingCount) verifyIncoming()
-        } catch (e: Exception) { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
+            require(msg.optString("fromDeviceId") == sourcePeer && sourcePeer.isNotBlank())
+            require(msg.optString("transferId") == transferId && transferId.isNotBlank())
+            val rawIndex = msg.opt("index")
+            require(rawIndex is Number && rawIndex.toDouble() == rawIndex.toLong().toDouble())
+            val index = rawIndex.toInt()
+            require(index in 0 until incomingCount)
+            val encodedPayload = msg.getString("payload")
+            val bytes = android.util.Base64.decode(encodedPayload, android.util.Base64.NO_WRAP)
+            try {
+                require(android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP) == encodedPayload)
+                val expected = DeviceFileTransferProtocol.expectedChunkBytes(incomingSize, incomingCount, index)
+                    ?: throw IllegalArgumentException("Invalid chunk index or manifest")
+                require(bytes.size == expected)
+                synchronized(receivedChunkIndexes) {
+                    if (!receivedChunkIndexes.get(index)) {
+                        val output = incomingOut ?: throw IllegalStateException("Receive file is not open; retry after restoring the transfer.")
+                        output.seek(index.toLong() * DeviceFileTransferProtocol.CHUNK_BYTES)
+                        output.write(bytes)
+                        output.fd.sync()
+                        receivedChunkIndexes.set(index)
+                        incomingChunks++
+                        // Roll back the in-memory bitmap if durable state cannot be committed.
+                        try {
+                            persistTransferState(synchronous = true)
+                        } catch (error: Exception) {
+                            receivedChunkIndexes.clear(index)
+                            incomingChunks--
+                            throw error
+                        }
+                    } else {
+                        // A verified receiver may see a retransmission when the prior ACK was lost.
+                        // Its durable bitmap is sufficient to ACK this duplicate without reopening the file.
+                        require(incomingVerified || incomingOut != null) {
+                            "Receive file is not open; retry after restoring the transfer."
+                        }
+                    }
+                }
+                require(DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, index)) {
+                    "Could not send receiver acknowledgement"
+                }
+                val current = incomingChunks
+                runOnUiThread {
+                    progress.progress = current * 100 / incomingCount
+                    status.text = "Receiving $current/$incomingCount chunks • ${progress.progress}%"
+                }
+                if (!incomingVerified && incomingChunks >= incomingCount) verifyIncoming()
+            } finally {
+                bytes.fill(0)
+            }
+        } catch (e: Exception) {
+            runOnUiThread { status.text = "Receive failed: ${e.message}. Resume / retry after connection returns." }
+        }
     }
 
     private fun saveIncoming(destination: Uri) {
         val file = incomingFile ?: return
         val savedName = incomingName
+        var copiedCompletely = false
         try {
-            contentResolver.openOutputStream(destination, "w")?.use { output -> file.inputStream().use { it.copyTo(output) } }
-                ?: throw IllegalStateException("Could not open selected destination")
-            DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)
+            check(!cancelled.get()) { "Transfer was cancelled before saving." }
+            contentResolver.openOutputStream(destination, "w")?.use { output ->
+                file.inputStream().use { input -> input.copyTo(output) }
+                output.flush()
+            } ?: throw IllegalStateException("Could not open selected destination")
+            copiedCompletely = true
+            if (cancelled.get()) {
+                runCatching { DocumentsContract.deleteDocument(contentResolver, destination) }
+                throw IllegalStateException("Transfer was cancelled while saving.")
+            }
+            if (!DeviceLinkManager.acknowledgeFileTransfer(sourcePeer, transferId, -1, complete = true, ok = true)) {
+                runOnUiThread { status.text = "Saved $savedName and verified, but completion acknowledgement could not be sent. Reconnect and tap Resume / Retry." }
+                return
+            }
             file.delete(); incomingFile = null; incomingOut?.close(); incomingOut = null
             clearTransferState()
-            status.text = "Saved $savedName • SHA-256 verified • transfer complete."
-        } catch (e: Exception) { status.text = "Save failed: ${e.message}" }
+            runOnUiThread { status.text = "Saved $savedName • SHA-256 verified • transfer complete." }
+        } catch (e: Exception) {
+            if (!copiedCompletely) runCatching { DocumentsContract.deleteDocument(contentResolver, destination) }
+            // A revoked or unavailable Documents URI must not trap the transfer in an endless retry loop.
+            val failedDestination = pendingSaveUri
+            pendingSaveUri = null
+            failedDestination?.let { uri ->
+                runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            }
+            runCatching { persistTransferState(synchronous = true) }
+            runOnUiThread { status.text = "Save failed: ${e.message}. Tap Resume / Retry to choose another save location." }
+        }
     }
 
     private fun verifyIncoming() {
+        if (cancelled.get()) return
         incomingOut?.fd?.sync(); incomingOut?.close(); incomingOut = null
         val file = incomingFile ?: return
         val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            try {
+                while (true) {
+                    if (cancelled.get()) return
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    digest.update(buffer, 0, n)
+                }
+            } finally { buffer.fill(0) }
+        }
+        if (cancelled.get()) return
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        if (actual != incomingHash) { status.text = "SHA-256 mismatch. File rejected."; DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch"); file.delete(); clearTransferState(); return }
+        if (actual != incomingHash) {
+            runOnUiThread { status.text = "SHA-256 mismatch. File rejected." }
+            DeviceLinkManager.cancelFileTransfer(sourcePeer, transferId, "hash_mismatch")
+            file.delete()
+            clearTransferState()
+            return
+        }
         incomingVerified = true
-        persistTransferState()
-        status.text = "All chunks received. SHA-256 verified. Saving to selected destination…"
+        persistTransferState(synchronous = true)
+        runOnUiThread { status.text = "All chunks received. SHA-256 verified. Saving to selected destination…" }
         pendingSaveUri?.let { saveIncoming(it) }
     }
 
@@ -369,22 +597,42 @@ class DeviceTransferActivity : Activity() {
         if (sourceUri != null && sourcePeer.isBlank()) {
             status.text = "Sender ready. The receiver must request resume to identify missing chunks."
         } else if (sourcePeer.isNotBlank() && incomingCount in 1..DeviceFileTransferProtocol.MAX_CHUNKS) {
-            val missing = (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) }
-            if (missing.isEmpty()) {
-                if (incomingVerified && pendingSaveUri != null) saveIncoming(pendingSaveUri!!)
-                else status.text = "All chunks are already present. Verify or choose a save destination."
-            } else if (DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+            if (incomingFile == null || !incomingFile!!.exists()) {
+                status.text = "The temporary receive file is missing. Cancel this transfer and request it again."
+                return
+            }
+            if (pendingSaveUri == null) {
+                launchIncomingSavePicker()
+                return
+            }
+            val missing = synchronized(receivedChunkIndexes) { (0 until incomingCount).filterNot { receivedChunkIndexes.get(it) } }
+            if (!DeviceLinkManager.requestFileTransferResume(sourcePeer, transferId, incomingCount, missing)) {
+                status.text = "Could not send resume request. Verify the paired device and secure relay connection."
+            } else if (missing.isEmpty()) {
+                if (incomingVerified) enqueueTransferIo("save") { saveIncoming(pendingSaveUri!!) }
+                else enqueueTransferIo("verify") { verifyIncoming() }
+            } else {
                 status.text = "Requesting " + missing.size + " missing chunks from the paired sender…"
-            } else status.text = "Could not send resume request. Verify the paired device and secure relay connection."
+            }
         } else status.text = "Reconnect to relay first, then retry."
     }
 
+    private fun enqueueTransferIo(operation: String, task: () -> Unit) {
+        try {
+            transferIo.execute(task)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            runOnUiThread {
+                status.text = "Transfer worker is busy; $operation was not queued. Wait briefly and tap Resume / Retry."
+            }
+        }
+    }
+
     /** Persists only transfer metadata and chunk indexes; file bytes stay in app-private storage. */
-    private fun persistTransferState() {
+    private fun persistTransferState(synchronous: Boolean = false) {
         if (!::peer.isInitialized) return
         val prefs = getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE)
-        prefs.edit()
-            .putString("peer", peer.text.toString().trim())
+        val editor = prefs.edit()
+            .putString("peer", sourcePeer.ifBlank { peerIdSnapshot })
             .putString("sourceUri", sourceUri?.toString().orEmpty())
             .putString("sourceName", sourceName)
             .putLong("sourceSize", sourceSize)
@@ -397,10 +645,10 @@ class DeviceTransferActivity : Activity() {
             .putLong("incomingSize", incomingSize)
             .putString("incomingHash", incomingHash)
             .putString("incomingName", incomingName)
-            .putString("receivedIndexes", android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP))
+            .putString("receivedIndexes", synchronized(receivedChunkIndexes) { android.util.Base64.encodeToString(receivedChunkIndexes.toByteArray(), android.util.Base64.NO_WRAP) })
             .putBoolean("incomingVerified", incomingVerified)
             .putString("pendingSaveUri", pendingSaveUri?.toString().orEmpty())
-            .apply()
+        if (synchronous) check(editor.commit()) { "Could not persist file-transfer state" } else editor.apply()
     }
 
     private fun restoreTransferState() {
@@ -408,6 +656,7 @@ class DeviceTransferActivity : Activity() {
         transferId = prefs.getString("transferId", "").orEmpty()
         if (transferId.isBlank()) return
         peer.setText(prefs.getString("peer", "").orEmpty())
+        peerIdSnapshot = peer.text.toString().trim()
         sourceUri = prefs.getString("sourceUri", "").orEmpty().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
         sourceName = prefs.getString("sourceName", "").orEmpty()
         sourceSize = prefs.getLong("sourceSize", 0L)
@@ -422,8 +671,17 @@ class DeviceTransferActivity : Activity() {
         pendingSaveUri = prefs.getString("pendingSaveUri", "").orEmpty().takeIf { it.isNotBlank() }?.let(Uri::parse)
         val encodedIndexes = prefs.getString("receivedIndexes", "").orEmpty()
         if (encodedIndexes.isNotBlank()) {
-            runCatching { java.util.BitSet.valueOf(android.util.Base64.decode(encodedIndexes, android.util.Base64.DEFAULT)) }
-                .onSuccess { receivedChunkIndexes.clear(); receivedChunkIndexes.or(it) }
+            runCatching {
+                val restored = java.util.BitSet.valueOf(android.util.Base64.decode(encodedIndexes, android.util.Base64.DEFAULT))
+                require(incomingCount in 1..DeviceFileTransferProtocol.MAX_CHUNKS && restored.length() <= incomingCount) {
+                    "Stored receive bitmap exceeds the declared chunk count."
+                }
+                receivedChunkIndexes.clear()
+                receivedChunkIndexes.or(restored)
+            }.onFailure {
+                receivedChunkIndexes.clear()
+                status.text = "Stored receive progress is invalid. Verify or cancel this transfer before retrying."
+            }
         }
         incomingChunks = receivedChunkIndexes.cardinality()
         val savedFile = prefs.getString("incomingFile", "").orEmpty()
@@ -436,21 +694,16 @@ class DeviceTransferActivity : Activity() {
             }
         }
         status.text = "Previous transfer restored • $transferId • received $incomingChunks/$incomingCount chunks. Tap Resume / Retry after reconnect."
-        if (!incomingVerified && incomingCount > 0 && incomingChunks >= incomingCount && incomingFile?.exists() == true) {
-            verifyIncoming()
-        }
-        if (incomingVerified && pendingSaveUri != null && incomingFile?.exists() == true) {
-            runCatching { saveIncoming(pendingSaveUri!!) }
-                .onFailure { status.text = "Verified file restored. Re-select the save destination to finish." }
-        }
+        // Do not verify/save until Resume / Retry sends the persisted bitmap to the relay.
+        // This reconciles lost positive ACKs before a final completion request is sent.
     }
 
     private fun clearTransferState() {
         sourceUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
         pendingSaveUri?.let { uri -> runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
         getSharedPreferences("shraddha_device_transfer", MODE_PRIVATE).edit().clear().apply()
-        receivedChunkIndexes.clear()
-        synchronized(ackMonitor) { acknowledgedChunks.clear(); sendFailed = false; ackMonitor.notifyAll() }
+        synchronized(receivedChunkIndexes) { receivedChunkIndexes.clear() }
+        synchronized(ackMonitor) { acknowledgedChunks.clear(); inFlightChunks.clear(); sendFailed = false; ackMonitor.notifyAll() }
         incomingChunks = 0
         incomingVerified = false
         pendingSaveUri = null
@@ -467,13 +720,49 @@ class DeviceTransferActivity : Activity() {
         incomingHash = ""
     }
 
+    private fun enqueueTransferCleanup(message: String, deletePartial: Boolean) {
+        val senderThread = sendThread
+        Thread({
+            // Stop any in-flight source read before clearing transfer identifiers or URIs.
+            try { senderThread?.join() } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+            val cleanup = Runnable {
+                if (deletePartial) {
+                    runCatching { incomingOut?.fd?.sync() }
+                    runCatching { incomingOut?.close() }
+                    incomingOut = null
+                    incomingFile?.delete()
+                    incomingFile = null
+                }
+                clearTransferState()
+                runOnUiThread { status.text = message }
+            }
+            while (!transferIo.isShutdown) {
+                try {
+                    transferIo.execute(cleanup)
+                    return@Thread
+                } catch (_: java.util.concurrent.RejectedExecutionException) {
+                    try { Thread.sleep(25) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return@Thread }
+                }
+            }
+            // If Activity teardown already shut the worker down, wait for all queued
+            // writes to finish before touching the partial file or saved state.
+            while (!transferIo.isTerminated) {
+                try { transferIo.awaitTermination(1, TimeUnit.MINUTES) }
+                catch (_: InterruptedException) { Thread.currentThread().interrupt(); return@Thread }
+            }
+            cleanup.run()
+        }, "ShraddhaTransferCancel").apply { isDaemon = true; start() }
+    }
+
     private fun cancelTransfer() {
-        cancelled.set(true); paused.set(false)
+        cancelled.set(true)
+        paused.set(false)
         synchronized(ackMonitor) { ackMonitor.notifyAll() }
-        val target = if (sourcePeer.isNotBlank()) sourcePeer else peer.text.toString().trim()
-        if (transferId.isNotBlank() && target.isNotBlank()) DeviceLinkManager.cancelFileTransfer(target, transferId)
-        incomingOut?.close(); incomingOut = null; incomingFile?.delete(); incomingFile = null
-        clearTransferState()
-        status.text = "Transfer cancelled by user."
+        val target = if (sourcePeer.isNotBlank()) sourcePeer else peerIdSnapshot
+        val activeTransferId = transferId
+        if (activeTransferId.isNotBlank() && target.isNotBlank()) {
+            DeviceLinkManager.cancelFileTransfer(target, activeTransferId)
+        }
+        enqueueTransferCleanup("Transfer cancelled by user.", deletePartial = true)
     }
 }
