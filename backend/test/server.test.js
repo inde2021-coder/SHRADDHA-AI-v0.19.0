@@ -1119,6 +1119,21 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     await approvedPromise;
 
     const transferId = 'resume_test_12345';
+    for (const [index, invalidFields] of [
+      [0, { sizeBytes: '100000' }],
+      [1, { sizeBytes: true }],
+      [2, { chunkCount: '3' }],
+      [3, { fileName: 42 }]
+    ]) {
+      const ignoredMalformedStart = assert.rejects(nextWsMessage(memberSocket, () => true, 120), /Timed out/);
+      ownerSocket.send(JSON.stringify({
+        type: 'file_transfer_start', targetDeviceId: member.deviceId,
+        requestId: shareRequest.requestId, transferId: `invalid_manifest_${index}123`,
+        fileName: 'resume-test.bin', sizeBytes: 100000, chunkCount: 3,
+        sha256: 'a'.repeat(64), ...invalidFields
+      }));
+      await ignoredMalformedStart;
+    }
     const startedPromise = nextWsMessage(memberSocket, data => {
       try { return JSON.parse(data.toString()).type === 'file_transfer_start'; } catch { return false; }
     });
@@ -1129,6 +1144,17 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     }));
     const [startedMessage] = await startedPromise;
     assert.equal(JSON.parse(startedMessage.toString()).transferId, transferId);
+
+    // Simulate a stale ACK for chunk 1 from an earlier connection. The
+    // receiver's persisted bitmap below says chunk 1 is actually missing.
+    const staleAckPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 1; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 1, complete: false, ok: true
+    }));
+    await staleAckPromise;
 
     const resumePromise = nextWsMessage(ownerSocket, data => {
       try { return JSON.parse(data.toString()).type === 'file_transfer_resume'; } catch { return false; }
@@ -1143,6 +1169,79 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     assert.equal(resume.transferId, transferId);
     assert.equal(resume.chunkCount, 3);
     assert.deepEqual(resume.missingIndexes, [1, 2]);
+
+    // A receiver cannot close relay state until every chunk has a positive ACK.
+    // Malformed indexes must not be rewritten to the legacy -1 ready sentinel.
+    for (const malformed of [
+      { index: 'bad', complete: false, ok: true },
+      { index: -2, complete: false, ok: true },
+      { index: 0, complete: true, ok: true },
+      { index: -1, complete: false, ok: 'true' }
+    ]) {
+      const ignoredMalformedAck = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+      memberSocket.send(JSON.stringify({
+        type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+        transferId, ...malformed
+      }));
+      await ignoredMalformedAck;
+    }
+
+    const prematureCompletionPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [prematureCompletionMessage] = await prematureCompletionPromise;
+    assert.equal(JSON.parse(prematureCompletionMessage.toString()).ok, false);
+
+    // ACKing chunk 2 alone must not pass: stale chunk-1 ACK was cleared
+    // by the receiver's persisted resume bitmap; chunk 0 is restored from it.
+    const chunk2AckPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 2 && msg.complete === false; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 2, complete: false, ok: true
+    }));
+    await chunk2AckPromise;
+
+    const stillIncompletePromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [stillIncompleteMessage] = await stillIncompletePromise;
+    assert.equal(JSON.parse(stillIncompleteMessage.toString()).ok, false);
+
+    const chunk1AckPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.index === 1 && msg.complete === false; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: 1, complete: false, ok: true
+    }));
+    await chunk1AckPromise;
+
+    const verifiedCompletionPromise = nextWsMessage(ownerSocket, data => {
+      try { const msg = JSON.parse(data.toString()); return msg.type === 'file_transfer_ack' && msg.complete === true; } catch { return false; }
+    });
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    const [verifiedCompletionMessage] = await verifiedCompletionPromise;
+    assert.equal(JSON.parse(verifiedCompletionMessage.toString()).ok, true);
+
+    const duplicateCompletion = assert.rejects(nextWsMessage(ownerSocket, () => true, 150), /Timed out/);
+    memberSocket.send(JSON.stringify({
+      type: 'file_transfer_ack', targetDeviceId: owner.deviceId,
+      transferId, index: -1, complete: true, ok: true
+    }));
+    await duplicateCompletion;
 
     for (const invalid of [
       { type: 'file_transfer_resume', targetDeviceId: owner.deviceId, transferId, chunkCount: 3, missingIndexes: [1, 1] },
@@ -1162,7 +1261,6 @@ test('file transfer resume uses only the receiver persisted missing-index bitmap
     await Promise.all([closeWebSocket(ownerSocket), closeWebSocket(memberSocket)]);
   }
 });
-
 
 
 test('short-lived device invitation can pair multiple unique devices within the session limit', async () => {

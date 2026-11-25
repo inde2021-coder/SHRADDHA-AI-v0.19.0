@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -188,4 +188,42 @@ test('relay output backpressure rejects payloads that exceed the bounded peer qu
   assert.equal(canQueueRelayPayload(0, limit + 1), false);
   assert.equal(canQueueRelayPayload(-1, 1), false);
   assert.equal(canQueueRelayPayload(1, -1), false);
+});
+
+
+test('file-transfer completion requires positive acknowledgement for every chunk', () => {
+  const transfer = { chunkCount: 3, chunks: new Map() };
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(0, true);
+  transfer.chunks.set(1, true);
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(2, false);
+  assert.equal(canCompleteFileTransfer(transfer, true), false);
+  transfer.chunks.set(2, true);
+  assert.equal(canCompleteFileTransfer(transfer, true), true);
+  assert.equal(canCompleteFileTransfer(transfer, false), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 3, chunks: new Map([[0, true], [1, true], [2, true], [3, true]]) }, true), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 0, chunks: new Map() }, true), false);
+  assert.equal(canCompleteFileTransfer({ chunkCount: 2201, chunks: new Map() }, true), false);
+});
+
+test('resume bitmap overwrites relay ACKs and restores only receiver-persisted chunks', () => {
+  const transfer = { chunkCount: 3, chunks: new Map([[0, true], [1, true], [2, true]]) };
+  assert.equal(recordPersistedFileTransferChunks(transfer, [1, 2]), true);
+  assert.deepEqual([...transfer.chunks.entries()], [[0, true]]);
+  assert.equal(recordPersistedFileTransferChunks(transfer, [2]), true);
+  assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
+  assert.equal(recordPersistedFileTransferChunks(transfer, [1, 1]), false);
+  assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
+});
+
+test('file transfer admission rejects duplicate IDs and caps active receiver transfers', () => {
+  const device = { incomingTransfers: new Map() };
+  assert.equal(canStartFileTransfer(device, 'transfer_123456'), true);
+  device.incomingTransfers.set('transfer_123456', { expiresAt: Date.now() + 60000 });
+  assert.equal(canStartFileTransfer(device, 'transfer_123456'), false);
+  assert.equal(canStartFileTransfer(device, 'transfer_654321'), false);
+  assert.equal(canStartFileTransfer({}, 'transfer_123456'), false);
+  assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'bad'), false);
+  assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'transfer_123456', 0), false);
 });
