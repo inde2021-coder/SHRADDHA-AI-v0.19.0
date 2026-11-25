@@ -1,9 +1,12 @@
-# Final LIA-inspired Shraddha AI design decision
+# Unified LIA + Shraddha AI product decision
 
-## Product decision
-- Product identity and app name remain **Shraddha AI**.
-- LIA is the visual and interaction reference for the app shell, screen hierarchy, navigation, settings grouping, quick-action presentation, and voice workspace.
-- Shraddha AI retains its existing features, providers, execution modules, permissions, backend/APK configuration modes, and feature routes. This design decision must not remove, stub, rename, or silently disable an existing capability.
+## Product identity and feature-preservation rule
+- The single product, app name, assistant identity, and user-facing brand are **Shraddha AI**. There is no separate LIA AI product or LIA identity in the finished app.
+- **All LIA AI features and workflows must be retained and incorporated into Shraddha AI.** LIA is not merely a visual theme/reference; its functional capabilities, screens, interactions, and user workflows are part of the required product scope.
+- **All existing Shraddha AI features and workflows must also be retained.** Neither product's capabilities may be removed, stubbed, hidden, downgraded, or silently disabled to simplify integration or redesign.
+- The final app is one unified assistant: LIA AI capabilities + Shraddha AI capabilities, under the Shraddha AI name and identity. Shared/overlapping capabilities should be integrated into one coherent implementation rather than duplicated; preserve the full union of behavior and user-accessible actions.
+- Apply the LIA visual design and interaction patterns across the unified Shraddha AI experience, while retaining Shraddha AI branding and assistant identity. Keep all providers, execution modules, permissions, backend/APK configuration modes, routes, and workflows from both feature sets.
+- Any capability not yet ported or verified must be tracked as outstanding work, not described as complete. Do not infer that a feature is implemented merely because a screen, route, button, or design reference exists.
 
 ## Main-branch source audit (2026-11-25)
 The following implementation is already present in main and should be preserved:
