@@ -60,6 +60,8 @@ android {
         create("release") {
             if (hasReleaseSigning) {
                 storeFile = File(requireNotNull(releaseKeystorePath))
+                // Match the actual JKS/PKCS12 container detected by the release workflow.
+                storeType = System.getenv("ANDROID_KEYSTORE_TYPE")?.takeIf { it.isNotBlank() }
                 storePassword = requireNotNull(releaseStorePassword)
                 keyAlias = requireNotNull(releaseKeyAlias)
                 keyPassword = requireNotNull(releaseKeyPassword)
