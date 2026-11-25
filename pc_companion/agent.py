@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -148,6 +148,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
         ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
         ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Retry Pending File Chunks", command=self.retry_pc_file_transfer).pack(side="left", padx=6)
         ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
@@ -798,13 +799,14 @@ class PcCompanionApp:
                         not re.fullmatch(r"[a-f0-9]{64}", str(item.get("sha256", "")))):
                     continue
                 part = Path(item["path"] + ".shraddha-part")
-                size = int(item.get("size", 0))
-                chunks = int(item.get("chunks", 0))
-                if not part.is_file() or part.stat().st_size != size or not 1 <= size <= 20_000_000:
+                size = item.get("size")
+                chunks = item.get("chunks")
+                if type(size) is not int or type(chunks) is not int or not valid_transfer_manifest(
+                        transfer_id, size, chunks, item.get("sha256", "")):
                     continue
-                if chunks != chunk_count_for_size(size):
+                if not part.is_file() or part.stat().st_size != size:
                     continue
-                received = {int(i) for i in item.get("received", []) if isinstance(i, int) and 0 <= i < chunks}
+                received = {i for i in item.get("received", []) if type(i) is int and 0 <= i < chunks}
                 restored[transfer_id] = {
                     "peer": item["peer"], "path": item["path"], "size": size,
                     "chunks": chunks, "sha256": item["sha256"], "received": received
@@ -826,10 +828,15 @@ class PcCompanionApp:
                 for transfer_id, item in self.pc_incoming.items()
             }
             temp = path.with_suffix(".tmp")
-            temp.write_text(json.dumps(payload), encoding="utf-8")
+            with temp.open("w", encoding="utf-8") as output:
+                output.write(json.dumps(payload))
+                output.flush()
+                os.fsync(output.fileno())
             temp.replace(path)
+            return True
         except Exception as exc:
             self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
+            return False
 
     def choose_file_for_phone(self):
         peer_id = __import__("tkinter.simpledialog", fromlist=["askstring"]).askstring(
@@ -843,9 +850,9 @@ class PcCompanionApp:
             file_path = Path(path)
             size = file_path.stat().st_size
             if size < 1 or size > MAX_PC_FILE_BYTES:
-                raise ValueError("Relay currently permits files up to 20 MB per transfer.")
-            import hashlib, secrets
-            digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
+                raise ValueError(f"File size must be between 1 byte and {MAX_PC_FILE_BYTES // (1024 * 1024)} MiB.")
+            import secrets
+            digest = sha256_file(file_path)
             request_id = secrets.token_urlsafe(18).replace("-", "_")
             transfer_id = secrets.token_urlsafe(18).replace("-", "_")
             self.pending_pc_send = {
@@ -863,6 +870,32 @@ class PcCompanionApp:
             self.status_var.set("File selected. Waiting for the Android user to approve Documents access.")
         except Exception as exc:
             self.status_var.set(f"Could not prepare file: {str(exc)[:160]}")
+
+    def retry_pc_file_transfer(self):
+        pending = self.pending_pc_send
+        if not pending:
+            self.status_var.set("No pending PC-to-Android file transfer to retry.")
+            return
+        peer_id = pending.get("peer")
+        if not peer_id or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("Retry blocked: verify the paired Android device fingerprint on both devices first.")
+            return
+        path = Path(pending.get("path", ""))
+        try:
+            if not path.is_file() or path.stat().st_size != pending.get("size"):
+                raise ValueError("The selected source file is missing or its size has changed.")
+            if sha256_file(path) != pending.get("sha256"):
+                raise ValueError("The selected source file changed after the transfer began; select it again.")
+            queue = pending.setdefault("send_queue", [])
+            in_flight = pending.setdefault("in_flight", set())
+            retry_count = prepare_retry_queue(queue, in_flight)
+            if retry_count == 0:
+                self.status_var.set("No unacknowledged chunks remain. Ask the Android receiver to tap Resume / Retry to reconcile its saved bitmap.")
+                return
+            self.status_var.set(f"Retrying {retry_count} pending chunk(s) to the verified paired device…")
+            self._pump_pc_file_chunks()
+        except Exception as exc:
+            self.status_var.set(f"Could not retry file transfer: {str(exc)[:160]}")
 
     def _handle_data_share_request(self, msg):
         peer_id = str(msg.get("fromDeviceId", ""))[:80]
@@ -900,33 +933,74 @@ class PcCompanionApp:
 
     def _handle_file_ack(self, msg):
         pending = self.pending_pc_send
-        if not pending or msg.get("transferId") not in (None, "", pending["transferId"]):
+        if (not pending or msg.get("transferId") != pending["transferId"] or
+                msg.get("fromDeviceId") != pending["peer"]):
             return
-        index = int(msg.get("index", -2))
-        if index == -1 and msg.get("ok") and not msg.get("complete"):
+        index = msg.get("index", -2)
+        if not isinstance(index, int) or isinstance(index, bool):
+            return
+        if index == -1 and msg.get("ok") is True and msg.get("complete") is not True:
             self._send_pc_file_chunks(list(all_chunk_indexes(pending["size"])))
-        elif msg.get("complete") and msg.get("ok"):
-            self.pending_pc_send = None
-            self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
+        elif msg.get("complete") is True:
+            if msg.get("ok") is True:
+                self.pending_pc_send = None
+                self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
+            else:
+                self.status_var.set("Receiver could not verify the transfer. Resume only after checking the destination.")
         elif index >= 0:
+            in_flight = pending.setdefault("in_flight", set())
+            if msg.get("ok") is not True:
+                # Release the window slot and retain this chunk for explicit retry.
+                requeue_rejected_chunk(pending.setdefault("send_queue", []), in_flight, index)
+                self.status_var.set(f"Receiver rejected file chunk {index + 1}; transfer paused. Tap Resume / Retry after checking receiver storage.")
+                return
+            if index in in_flight:
+                in_flight.remove(index)
+                self._pump_pc_file_chunks()
             self.status_var.set(f"Android acknowledged file chunk {index + 1}.")
+
 
     def _send_pc_file_chunks(self, indexes):
         pending = self.pending_pc_send
         if not pending or not self.is_e2e_trusted(pending["peer"]):
             self.status_var.set("File send blocked: verify the Android peer fingerprint on both devices first.")
             return
+        pending["send_queue"] = list(indexes)
+        pending["in_flight"] = set()
+        self._pump_pc_file_chunks()
+
+    def _pump_pc_file_chunks(self):
+        pending = self.pending_pc_send
+        if not pending or not self.is_e2e_trusted(pending["peer"]):
+            return
+        queue = pending.setdefault("send_queue", [])
+        in_flight = pending.setdefault("in_flight", set())
         try:
+            batch = take_chunk_window(queue, in_flight, max_index=chunk_count_for_size(pending["size"]))
+            if not batch:
+                if not queue and not in_flight:
+                    self.status_var.set("All chunks acknowledged by receiver. Waiting for final SHA-256 completion.")
+                return
             with Path(pending["path"]).open("rb") as source:
-                for index in indexes:
+                for index in batch:
                     source.seek(index * FILE_CHUNK_BYTES)
                     data = source.read(FILE_CHUNK_BYTES)
+                    expected = expected_chunk_bytes(pending["size"], chunk_count_for_size(pending["size"]), index)
+                    if len(data) != expected:
+                        raise ValueError(f"Unexpected file length for chunk {index}")
                     if not data:
                         raise ValueError(f"Missing file bytes for chunk {index}")
                     self._send_encrypted_file_chunk(pending["peer"], pending["transferId"], index, data)
-            self.status_var.set(f"Sent {len(indexes)} file chunks. Waiting for receiver SHA-256 verification.")
+            self.status_var.set(f"Sent {len(batch)} chunks; {len(in_flight)} awaiting receiver acknowledgement.")
         except Exception as exc:
-            self.status_var.set(f"File transfer paused: {str(exc)[:160]}")
+            failed_batch = batch if "batch" in locals() else []
+            for index in failed_batch:
+                in_flight.discard(index)
+            # Requeue unsent and ambiguously sent chunks. The receiver deduplicates
+            # indexes and validates SHA-256, so retrying this bounded batch is safe.
+            queue[:0] = [index for index in failed_batch if index not in queue]
+            self.status_var.set(f"File transfer paused; {len(queue)} chunks queued for retry: {str(exc)[:120]}")
+
 
     def _send_encrypted_file_chunk(self, peer_id, transfer_id, index, data):
         with self.e2e_lock:
@@ -947,18 +1021,44 @@ class PcCompanionApp:
             raise RuntimeError(f"Relay send failed at chunk {index}")
 
     def _handle_incoming_file_start(self, msg):
-        peer_id = str(msg.get("fromDeviceId", ""))
-        transfer_id = str(msg.get("transferId", ""))
-        size = int(msg.get("sizeBytes", 0))
-        chunks = int(msg.get("chunkCount", 0))
-        digest = str(msg.get("sha256", ""))
+        peer_id = msg.get("fromDeviceId")
+        transfer_id = msg.get("transferId")
+        if not isinstance(peer_id, str) or not isinstance(transfer_id, str):
+            self.status_var.set("Rejected malformed incoming file identifiers.")
+            return
+        size = msg.get("sizeBytes")
+        chunks = msg.get("chunkCount")
+        digest = msg.get("sha256", "")
         if not self.is_e2e_trusted(peer_id):
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "reason": "peer_not_verified"})
             return
-        if (not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or size < 1 or size > 20_000_000
-                or chunks != chunk_count_for_size(size) or not re.fullmatch(r"[a-f0-9]{64}", digest)):
+        if not valid_transfer_manifest(transfer_id, size, chunks, digest):
             self.status_var.set("Rejected invalid incoming file manifest.")
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "invalid_manifest"})
+            return
+        existing = self.pc_incoming.get(transfer_id)
+        if existing:
+            part_path = Path(existing["path"] + ".shraddha-part")
+            if (existing["peer"] != peer_id or existing["size"] != size or
+                    existing["chunks"] != chunks or existing["sha256"] != digest):
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "transfer_manifest_changed"})
+                return
+            if not part_path.is_file() or part_path.stat().st_size != size:
+                self.pc_incoming.pop(transfer_id, None)
+                self._persist_pc_incoming()
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "resume_state_unavailable"})
+                return
+            if not self._persist_pc_incoming():
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "recovery_state_unavailable"})
+                return
+            self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
+            self.status_var.set(f"Resuming {Path(existing['path']).name}; saved chunks are retained.")
             return
         destination = filedialog.asksaveasfilename(
             title="Choose where to save incoming file",
@@ -974,7 +1074,12 @@ class PcCompanionApp:
         }
         with open(destination + ".shraddha-part", "wb") as output:
             output.truncate(size)
-        self._persist_pc_incoming()
+        if not self._persist_pc_incoming():
+            self.pc_incoming.pop(transfer_id, None)
+            Path(destination + ".shraddha-part").unlink(missing_ok=True)
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "recovery_state_unavailable"})
+            return
         self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                          "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
         self.status_var.set(f"Receiving {Path(destination).name} from paired Android device…")
@@ -984,7 +1089,10 @@ class PcCompanionApp:
         transfer = self.pc_incoming.get(transfer_id)
         if not transfer or transfer["peer"] != peer_id or not self.is_e2e_trusted(peer_id):
             return
-        index = int(msg.get("index", -1))
+        raw_index = msg.get("index", -1)
+        if not isinstance(raw_index, int) or isinstance(raw_index, bool):
+            return
+        index = raw_index
         if not 0 <= index < transfer["chunks"]:
             return
         try:
@@ -1004,13 +1112,17 @@ class PcCompanionApp:
                 with open(transfer["path"] + ".shraddha-part", "r+b") as output:
                     output.seek(index * FILE_CHUNK_BYTES)
                     output.write(data)
+                    output.flush()
+                    # Persist chunk bytes before persisting the received bitmap or ACKing.
+                    os.fsync(output.fileno())
                 transfer["received"].add(index)
-                self._persist_pc_incoming()
+                if not self._persist_pc_incoming():
+                    transfer["received"].discard(index)
+                    raise TransferPersistenceError("Could not persist the received-chunk bitmap; chunk acknowledgement withheld.")
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": True})
             if len(transfer["received"]) == transfer["chunks"]:
-                import hashlib
-                digest = hashlib.sha256(Path(transfer["path"] + ".shraddha-part").read_bytes()).hexdigest()
+                digest = sha256_file(transfer["path"] + ".shraddha-part")
                 if digest != transfer["sha256"]:
                     raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
                 os.replace(transfer["path"] + ".shraddha-part", transfer["path"])
@@ -1019,6 +1131,10 @@ class PcCompanionApp:
                 self.pc_incoming.pop(transfer_id, None)
                 self._persist_pc_incoming()
                 self.status_var.set("Incoming file saved and SHA-256 verified.")
+        except TransferPersistenceError as exc:
+            self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
+            self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "index": index, "complete": False, "ok": False})
         except Exception as exc:
             self.status_var.set(f"Incoming file rejected: {str(exc)[:140]}")
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
@@ -1031,29 +1147,44 @@ class PcCompanionApp:
         transfer_id = str(msg.get("transferId", ""))
         incoming = self.pc_incoming.get(transfer_id)
         if incoming:
-            peer_id = str(msg.get("fromDeviceId", incoming["peer"]))
-            if peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
+            peer_id = str(msg.get("fromDeviceId", ""))
+            if not peer_id or peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
                 return
             missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
             self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
-                             "transferId": transfer_id, "missingIndexes": missing})
+                             "transferId": transfer_id, "chunkCount": incoming["chunks"],
+                             "missingIndexes": missing})
             self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
             return
         pending = self.pending_pc_send
-        if not pending or transfer_id != pending["transferId"]:
+        if (not pending or transfer_id != pending["transferId"] or
+                msg.get("fromDeviceId") != pending["peer"] or not self.is_e2e_trusted(pending["peer"])):
             return
-        missing = msg.get("missingIndexes", [])
-        if isinstance(missing, list):
-            self._send_pc_file_chunks([i for i in missing if isinstance(i, int) and 0 <= i < chunk_count_for_size(pending["size"])])
+        missing = validate_resume_indexes(
+            msg.get("missingIndexes"), msg.get("chunkCount"), chunk_count_for_size(pending["size"])
+        )
+        if missing is None:
+            self.status_var.set("Rejected invalid file-transfer resume manifest.")
+            return
+        self._send_pc_file_chunks(missing)
 
     def _handle_file_cancel(self, msg):
         transfer_id = str(msg.get("transferId", ""))
-        if self.pending_pc_send and self.pending_pc_send.get("transferId") == transfer_id:
+        sender = str(msg.get("fromDeviceId", ""))
+        pending = self.pending_pc_send
+        incoming = self.pc_incoming.get(transfer_id)
+        if pending and pending.get("transferId") == transfer_id:
+            if sender != pending.get("peer") or not self.is_e2e_trusted(pending["peer"]):
+                return
             self.pending_pc_send = None
-        incoming = self.pc_incoming.pop(transfer_id, None)
-        if incoming:
+        elif incoming:
+            if sender != incoming.get("peer") or not self.is_e2e_trusted(incoming["peer"]):
+                return
+            self.pc_incoming.pop(transfer_id, None)
             Path(incoming["path"] + ".shraddha-part").unlink(missing_ok=True)
             self._persist_pc_incoming()
+        else:
+            return
         self.status_var.set(f"File transfer cancelled: {str(msg.get('reason', 'cancelled'))[:120]}")
 
     def _send_e2e_key_offer(self, peer_id):

@@ -6,6 +6,12 @@ from pc_companion.file_transfer import (
     all_chunk_indexes,
     chunk_count_for_size,
     expected_chunk_bytes,
+    take_chunk_window,
+    validate_resume_indexes,
+    valid_transfer_manifest,
+    requeue_rejected_chunk,
+    prepare_retry_queue,
+    sha256_file,
 )
 
 
@@ -43,5 +49,99 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
             expected_chunk_bytes(49153, 2, 2)
 
 
+    def test_send_window_bounds_in_flight_chunks_and_refills_after_ack(self):
+        queue = list(range(20))
+        in_flight = set()
+        first = take_chunk_window(queue, in_flight)
+        self.assertEqual(first, list(range(8)))
+        self.assertEqual(len(in_flight), 8)
+        self.assertEqual(take_chunk_window(queue, in_flight), [])
+        for index in first[:3]:
+            in_flight.remove(index)
+        second = take_chunk_window(queue, in_flight)
+        self.assertEqual(second, [8, 9, 10])
+        self.assertLessEqual(len(in_flight), 8)
+
+    def test_send_window_rejects_invalid_limits_and_duplicate_indexes(self):
+        with self.assertRaises(ValueError):
+            take_chunk_window([1], set(), 0)
+        with self.assertRaises(ValueError):
+            take_chunk_window([1, 1], set(), 8)
+        with self.assertRaises(ValueError):
+            take_chunk_window([-1], set())
+        with self.assertRaises(ValueError):
+            take_chunk_window([3], set(), max_index=3)
+
+
+    def test_resume_manifest_requires_exact_count_unique_integer_indexes(self):
+        self.assertEqual(validate_resume_indexes([0, 2], 3, 3), [0, 2])
+        self.assertEqual(validate_resume_indexes([], 3, 3), [])
+        for missing, declared, expected in (
+            ([0, 0], 3, 3), ([True], 3, 3), ([-1], 3, 3),
+            ([3], 3, 3), ([0], 2, 3), ("0,1", 3, 3), ([0, 1, 2, 3], 3, 3)
+        ):
+            self.assertIsNone(validate_resume_indexes(missing, declared, expected))
+
+
+    def test_incoming_manifest_requires_exact_integer_fields_and_safe_identifiers(self):
+        transfer_id = "transfer_123456"
+        digest = "a" * 64
+        chunks = chunk_count_for_size(49153)
+        self.assertTrue(valid_transfer_manifest(transfer_id, 49153, chunks, digest))
+        for values in (
+            (transfer_id, True, 1, digest),
+            (transfer_id, 49153.0, chunks, digest),
+            (transfer_id, "49153", chunks, digest),
+            (transfer_id, 49153, True, digest),
+            (transfer_id, 49153, "2", digest),
+            ("../escape12345", 49153, chunks, digest),
+            (transfer_id, 49153, chunks, "bad"),
+        ):
+            self.assertFalse(valid_transfer_manifest(*values))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class FileTransferNegativeAckTests(unittest.TestCase):
+    def test_negative_ack_requeues_chunk_and_releases_window_slot(self):
+        queue = [3, 4]
+        in_flight = {1, 2}
+        self.assertTrue(requeue_rejected_chunk(queue, in_flight, 2))
+        self.assertEqual(queue, [2, 3, 4])
+        self.assertEqual(in_flight, {1})
+        self.assertFalse(requeue_rejected_chunk(queue, in_flight, 2))
+        self.assertEqual(queue, [2, 3, 4])
+        self.assertFalse(requeue_rejected_chunk(queue, in_flight, True))
+
+
+class FileTransferRetryQueueTests(unittest.TestCase):
+    def test_retry_queue_requeues_in_flight_chunks_without_duplicates(self):
+        queue = [5, 1, 5]
+        in_flight = {2, 1, 4}
+        count = prepare_retry_queue(queue, in_flight)
+        self.assertEqual(count, 4)
+        self.assertEqual(queue, [1, 2, 4, 5])
+        self.assertEqual(in_flight, set())
+
+    def test_retry_queue_rejects_bool_and_invalid_indexes(self):
+        with self.assertRaises(ValueError):
+            prepare_retry_queue([True], set())
+        with self.assertRaises(ValueError):
+            prepare_retry_queue([-1], set())
+        with self.assertRaises(ValueError):
+            prepare_retry_queue([], [1])
+
+
+class FileTransferStreamingHashTests(unittest.TestCase):
+    def test_sha256_file_matches_standard_digest_without_loading_file_at_once(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+
+        payload = (b"Shraddha-transfer-test-" * 10000) + b"end"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.bin"
+            path.write_bytes(payload)
+            self.assertEqual(sha256_file(path), hashlib.sha256(payload).hexdigest())
