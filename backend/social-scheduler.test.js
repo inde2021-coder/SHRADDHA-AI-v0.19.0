@@ -118,3 +118,28 @@ test('provider failures are terminal and are not blindly replayed', async () => 
   assert.equal(calls, 1);
   assert.equal(db.records.get(scheduled.id).status, 'failed');
 });
+
+test('stale dispatch claims move to manual review and are never blindly replayed', async () => {
+  let now = Date.parse('2026-11-23T09:00:00.000Z');
+  const db = new FakeDb();
+  let calls = 0;
+  const scheduler = createSocialScheduler({
+    collection: db.collection(),
+    publish: async () => { calls++; return { ok: true }; },
+    now: () => now
+  });
+  const scheduled = await scheduler.schedule('firebaseUser123', valid('2026-11-23T07:00:00.000Z'));
+  const row = db.records.get(scheduled.id);
+  db.records.set(scheduled.id, {
+    ...row, status: 'dispatching', claimToken: 'interrupted-worker',
+    dispatchStartedAtMs: now - 6 * 60 * 1000
+  });
+  const result = await scheduler.dispatchDue(10);
+  assert.equal(result.needsReview, 1);
+  assert.equal(result.scanned, 0);
+  assert.equal(calls, 0);
+  assert.equal(db.records.get(scheduled.id).status, 'needs_review');
+  assert.match(db.records.get(scheduled.id).lastError, /Verify the provider account/);
+  assert.equal((await scheduler.dispatchDue(10)).needsReview, 0);
+});
+
