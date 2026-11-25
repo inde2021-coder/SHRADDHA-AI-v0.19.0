@@ -228,3 +228,63 @@ Build a versioned test suite for factual grounding, language quality, emotional 
 - Every consequential skill has preview, fresh confirmation, result verification, and audit coverage.
 - No language, modality, or automation is advertised beyond the tested device/runtime coverage.
 
+
+
+## Baby care, parenting, and child-friendly interaction
+
+This is a dedicated knowledge-and-skill domain, not a claim that Shraddha is a paediatrician, babysitter, or substitute caregiver. It must be age-aware, guardian-controlled, privacy-first, and conservative around health and safety.
+
+### Baby and child care knowledge packs
+- Newborn and infant hygiene, bathing safety, diapering, skin care, clothing, safe handling, burping, feeding cues, age-appropriate nutrition, sleep routines, soothing, play, and developmental milestones.
+- Breastfeeding and formula-feeding education that is supportive and non-judgmental; refer feeding difficulty, dehydration concerns, poor weight gain, or persistent problems to a qualified clinician.
+- Age-banded content (newborn, 0–3 months, 3–6 months, 6–12 months, 1–2 years, 2–5 years, and school-age) with explicit source, country/jurisdiction, verification date, and clinician/public-health review status.
+- Parent/caregiver support: feeding and diaper logs, growth and appointment records, vaccination reminders, sleep notes, and questions to discuss with a paediatrician. Do not diagnose or independently change medicines, feeding plans, or treatment.
+- Child development, play, early language, reading, rhymes, culturally respectful stories, and positive, non-punitive parenting guidance.
+
+### Original lullabies, stories, and child conversation
+- Generate and play original lullabies, gentle rhymes, bedtime stories, calming spoken stories, and age-appropriate learning games in supported languages.
+- Use licensed/public-domain content only when reproducing existing songs or stories; prefer original compositions and clearly track content licences.
+- Adapt vocabulary, length, pace, and tone to the guardian-selected age band. Do not use frightening, shaming, manipulative, or age-inappropriate content.
+- Child-facing conversation must avoid collecting names, address, school, contact details, photos, voiceprints, or other identifying data. A guardian controls any optional profile and can clear it.
+- Audio playback is a comfort/learning aid only; it must never replace a responsible adult's supervision or safe sleep practices.
+
+### Smart Baby Cry Detection and Parent Alert (proposed capability)
+The goal is to detect a crying-like sound, estimate possible reasons, and notify a guardian when configured. Cry sound alone cannot reliably identify the cause or diagnose illness. The UI and voice response must say “possible reason” and show uncertainty, never “the baby is definitely hungry/in pain”.
+
+**Possible-cause assistance (non-diagnostic):**
+- Candidate cues may include hunger, tiredness, wet/soiled diaper, need to burp/gas, temperature or clothing discomfort, overstimulation, need for comfort, and possible pain/illness.
+- Combine only guardian-approved context (baby's age band, recent feed/diaper/sleep log, time since last event) with acoustic features and optional guardian input. Do not infer a medical condition from sound.
+- Offer a short checklist for the adult to check the baby in person. Never recommend shaking, unsafe sleep positioning, unapproved remedies, or delaying care.
+- If confidence is low, say it cannot tell and ask the caregiver to check the baby. Do not repeatedly label normal sounds as distress.
+
+**Detection architecture and privacy:**
+- Audit and reuse the existing Android microphone/voice-session and policy infrastructure; do not create a second always-listening service.
+- Baby monitoring is OFF by default and requires explicit guardian setup, a visible foreground indicator, microphone permission, and a clear pause/stop control. Respect Android background microphone/foreground-service restrictions and battery limits.
+- Prefer on-device detection/inference. Do not stream baby audio to cloud providers by default. Raw audio is transient and discarded after inference unless a guardian separately opts into a clearly explained diagnostic sample workflow; no hidden recording or voiceprint creation.
+- Detect crying-like events and duration, not identity. Support false-positive suppression for TV/audio, pets, toys, and adult voices; allow sensitivity and quiet-hours configuration.
+- Never claim that the system is continuously monitoring if Android/device restrictions, battery saver, microphone use by another app, or revoked permissions prevent it.
+
+**Guardian alert and escalation:**
+- Guardian must add and verify parent/guardian contact numbers, choose primary and backup contacts, grant the required OS permissions, and explicitly enable call/SMS alerts.
+- Configurable escalation: local notification first; optionally send a concise SMS after a sustained/repeated cry threshold; optionally initiate a guardian call only under the guardian's explicit pre-authorised rule and only when platform permissions/policies permit. Avoid repeated call loops, rate-limit alerts, provide cooldowns, and record delivery outcome.
+- A safer default is a notification plus an SMS confirmation path; direct SMS/call execution must follow Android permission, Google Play policy, carrier, and regional legal requirements. If direct send/call is restricted, open the system SMS/dialer with a prefilled message for the adult to confirm.
+- Example alert: “Shraddha detected sustained crying at home. Please check the baby now. Possible cues: tiredness / discomfort (uncertain). Last logged feed: [time, if guardian enabled this log].”
+- Do not send baby audio, medical details, location, or unnecessary personal data in alerts. Let the guardian preview and edit message text.
+- Never auto-call emergency services based solely on crying classification. For clear emergency signs, immediately instruct the nearby adult to assess the baby and contact local emergency/medical services; provide a configured emergency contact shortcut where appropriate.
+- Alerts are best-effort, not guaranteed. Show failure/retry status and never imply a call or SMS succeeded until Android/provider confirms the result.
+
+**Medical and physical safety guardrails:**
+- Give general, source-backed information only; no diagnosis, medicine dose, or treatment plan generated from a cry classifier.
+- Red flags such as breathing difficulty, blue/grey colour, unresponsiveness, seizure, serious injury, or a very young infant with fever require urgent medical assessment. Use current, jurisdiction-appropriate official guidance and emergency numbers; do not bury urgent advice under a questionnaire.
+- Never leave an infant alone with a phone, camera, speaker, or AI system. A human caregiver must remain responsible and physically check the child.
+- Do not promise SIDS prevention, medical-grade monitoring, or guaranteed detection. This is not a certified baby monitor or medical device.
+- No camera-based assessment of health or face recognition is required for this feature. Any optional camera context must be a separate, guardian-controlled, privacy-reviewed capability.
+
+### Baby feature validation
+- Test crying vs speech, laughter, cough, TV, music, pets, toys, silence, and multiple simultaneous sounds across realistic rooms and devices.
+- Measure false alarms, missed events, detection latency, battery use, microphone conflicts, and performance in supported languages/acoustic environments; publish limitations.
+- Test age-band and recent-log context without allowing the model to overstate cause certainty.
+- Verify monitoring is visibly active, stops immediately when paused/revoked, and never silently restarts after reboot or permission loss.
+- Test guardian number verification, SMS preview/consent, call confirmation, rate limits, cooldowns, delivery failure, no network, no SIM, denied permissions, and OS policy restrictions.
+- Test that no raw audio leaves the device by default and no audio/child data is retained unexpectedly.
+- Test urgent-symptom messaging, false positives, and that the system never substitutes for in-person care.
