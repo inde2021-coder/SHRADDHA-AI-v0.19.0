@@ -100,9 +100,6 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
             self.assertFalse(valid_transfer_manifest(*values))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class FileTransferNegativeAckTests(unittest.TestCase):
     def test_negative_ack_requeues_chunk_and_releases_window_slot(self):
@@ -145,3 +142,6 @@ class FileTransferStreamingHashTests(unittest.TestCase):
             path = Path(directory) / "sample.bin"
             path.write_bytes(payload)
             self.assertEqual(sha256_file(path), hashlib.sha256(payload).hexdigest())
+
+if __name__ == "__main__":
+    unittest.main()
