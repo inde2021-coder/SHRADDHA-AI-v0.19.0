@@ -80,3 +80,36 @@ These paths must not be treated as additional active Shraddha features. Before a
 - Every action is permission-checked, confirmed when consequential, and verified from its real result.
 - All active user-facing branding says Shraddha AI; legacy source namespaces are handled without breaking builds.
 - CI and supported-device tests pass before merging to main.
+
+
+## Baby Care / Smart Cry Detection — duplicate-avoidance and implementation map
+
+### Existing modules to reuse (must verify in code before implementation)
+- Microphone and voice-session lifecycle: existing voice-session/service stack. Add a child-safety-specific mode only through the canonical audio capability contract; do not add a second always-on microphone service.
+- On-device audio inference: inspect existing local model/runtime and device capability registry first. If no suitable audio event classifier exists, add a small, replaceable on-device cry-event classifier behind the existing model interface; do not use a general chat LLM as the audio detector.
+- Knowledge and memory: use LocalKnowledgeDocumentStore for licensed baby-care packs and the existing approved memory repository for guardian-enabled feeding/diaper/sleep logs. Do not create another database or retain raw audio by default.
+- Notifications and actions: reuse existing Android notification, permission, action-journal, and communication handlers. Add parent contacts as a narrowly scoped, guardian-managed contact configuration, not as a broad contact-harvesting feature.
+- Lullabies/stories: reuse the existing TTS/audio playback and content-pack pipeline; add original/licensed content, not a second audio player.
+- Camera/Visual Lens is not required for cry detection and must not be enabled implicitly.
+
+### Capability status
+- **Planned only:** Baby-care knowledge packs, age-aware parenting guidance, original lullabies/stories, cry-event detection, possible-cause checklist, and guardian alert workflow.
+- **Not verified as implemented:** a validated baby-cry classifier, reliable cause classification, baby-monitor-grade continuous detection, guardian-configured automatic call/SMS escalation, or clinical validation.
+- Existing microphone, voice, memory, notification, and Android action components are building blocks only; their presence does not prove this feature works end-to-end.
+
+### Safe implementation sequence
+1. Map current microphone foreground service, voice session, TTS player, notification channel, contacts/permissions, SMS/call handlers, action journal, and model runtime. Record one canonical owner for each.
+2. Ship static, source-reviewed baby-care knowledge and original lullabies/stories first; include age band, jurisdiction, source, licence, medical review status, and last verification date.
+3. Add a local cry-event detector as a separate event-classification task only after collecting/licensing a consented, representative dataset and evaluating false positives/false negatives. Keep cause suggestions as low-confidence hypotheses, combining cry event + guardian-entered context; do not claim sound-only diagnosis.
+4. Add guardian setup, verified primary/backup numbers, visible monitoring state, pause control, notification-first alerts, optional SMS/call rules, cooldowns, and delivery verification. Provide system dialer/SMS composer fallback when direct actions are restricted.
+5. Run privacy, child-safety, Android background execution, battery, device, SIM/network, and policy tests. Independent paediatric/child-safety review is required before health guidance is released broadly.
+6. Keep the feature disabled by default and release behind an explicit guardian opt-in. Do not merge into main until the complete end-to-end test matrix passes and the user approves the merge.
+
+### Non-negotiable acceptance checks
+- Cry detection is described as “crying-like sound detected”; possible reasons are explicitly uncertain and non-diagnostic.
+- A guardian—not a child—sets up, verifies, enables, pauses, and deletes contacts/logs.
+- No silent microphone use, no hidden recording, no default cloud audio upload, and no automatic restart after stop/revocation.
+- No automatic emergency-service call from classifier output.
+- SMS/call actions require explicit guardian pre-authorisation, platform permission/policy compliance, rate limiting, and verified outcomes; otherwise use the system composer/dialer.
+- Human supervision remains mandatory; the app never claims to replace a caregiver or certified baby monitor.
+- All existing voice, memory, notification, and communication features are reused where suitable; no duplicate service, player, database, or action catalog is introduced.
