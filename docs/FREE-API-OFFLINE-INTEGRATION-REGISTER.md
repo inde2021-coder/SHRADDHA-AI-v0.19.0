@@ -84,3 +84,14 @@ Status: implementation register; this file does not claim that every adapter is 
 - Firebase pricing: https://firebase.google.com/pricing
 - Open-Meteo pricing: https://open-meteo.com/en/pricing
 
+
+
+## Skill Factory and automatic knowledge-update policy
+- Free mode remains restricted to genuine no-cost quotas and local/offline engines; paid endpoints are never a fallback.
+- Local knowledge retrieval and deterministic skills are preferred before network inference.
+- Automatic update checks must use allow-listed manifests only; no unrestricted crawler or downloaded-code execution.
+- New packs enter quarantine. Verify publisher signature, SHA-256 digest, licence, source, size/type limits, content safety, independent facts, duplicate/conflict status and regression tests before activation.
+- LLM agreement is not independent factual verification. Failed/unknown checks remain pending review or are rejected; they do not become trusted knowledge.
+- User-selected imports require explicit consent. Private conversations, child data, audio, camera frames, contacts and personal documents are not silently reused for training.
+- Preserve version history and rollback; show source, licence, verification date, provider/model and download size.
+- See `docs/SKILL-FACTORY-ARCHITECTURE.md` for the canonical lifecycle and delivery phases.
