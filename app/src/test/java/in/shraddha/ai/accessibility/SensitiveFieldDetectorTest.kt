@@ -10,10 +10,12 @@ class SensitiveFieldDetectorTest {
         assertTrue(SensitiveFieldDetector.isSensitive(false, listOf("Enter OTP")))
         assertTrue(SensitiveFieldDetector.isSensitive(false, listOf("UPI PIN")))
         assertTrue(SensitiveFieldDetector.isSensitive(false, listOf("सत्यापन कोड")))
+        assertTrue(SensitiveFieldDetector.isSensitive(false, listOf("Card number")))
+        assertTrue(SensitiveFieldDetector.isSensitive(false, listOf("verification code")))
     }
 
     @Test fun ignoresOrdinaryLabels() {
-        assertFalse(SensitiveFieldDetector.isSensitive(false, listOf("Search", "Message", "Name", "Shipping address", "Shopping cart")))
+        assertFalse(SensitiveFieldDetector.isSensitive(false, listOf("Search", "Message", "Name", "Shipping address", "Shopping cart", "Shipping PINATA")))
         assertFalse(SensitiveFieldDetector.isSensitive(false, emptyList()))
     }
 

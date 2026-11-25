@@ -17,7 +17,6 @@ object ScreenOcrEngine {
         val sensitive: Boolean = false
     )
 
-    private val sensitive = Regex("""(?i)password|passcode|one[ -]?time|otp|pin|cvv|security code|verification code|upi|account number|पासवर्ड|ओटीपी|पिन|गुप्त कोड|सत्यापन कोड|यूपीआई""")
     private val privateIdentifiers = Regex("""(?<!\d)\d{12}(?!\d)|\b[A-Z]{5}\d{4}[A-Z]\b""")
 
     fun recognize(bitmap: Bitmap, done: (Result<List<OcrLine>>) -> Unit) {
@@ -37,7 +36,7 @@ object ScreenOcrEngine {
                 for (line in lines) {
                     val value = line.text.trim()
                     if (value.isBlank()) continue
-                    if (sensitive.containsMatchIn(value)) {
+                    if (SensitiveFieldDetector.isSensitive(false, listOf(value))) {
                         hideFollowing = 2
                         continue
                     }

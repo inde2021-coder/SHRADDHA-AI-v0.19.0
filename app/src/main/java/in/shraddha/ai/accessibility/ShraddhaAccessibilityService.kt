@@ -174,8 +174,9 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         }
         val candidates = (if (exact.isNotEmpty()) exact else matches).mapNotNull { candidate ->
             var node: AccessibilityNodeInfo? = candidate
-            while (node != null && !node.isClickable) node = node.parent
-            node
+            while (node != null && !node.isClickable && !isSensitiveNode(node)) node = node.parent
+            // A safe-looking text child must never authorize clicking a sensitive ancestor.
+            if (node == null || !node.isClickable || isSensitiveNode(node)) null else node
         }.distinctBy { node ->
             val bounds = Rect().also { node.getBoundsInScreen(it) }
             listOf(node.viewIdResourceName.orEmpty(), node.className?.toString().orEmpty(),
@@ -191,7 +192,9 @@ class ShraddhaAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return false
         if (!resourceId.contains(":id/")) return false
         val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(resourceId) }.getOrDefault(emptyList())
-        val candidates = nodes.filter { it.isVisibleToUser && it.isEnabled && it.isClickable }
+        val candidates = nodes.filter {
+            it.isVisibleToUser && it.isEnabled && it.isClickable && !isSensitiveNode(it)
+        }
         // A repeated resource ID is not enough to identify a unique control.
         if (candidates.size != 1) return false
         return candidates.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
