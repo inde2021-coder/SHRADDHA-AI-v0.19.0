@@ -11,75 +11,51 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class PasswordProtectedApiKeyVaultTest {
+class ApiKeyStoreTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
     fun resetBeforeTest() {
         ApiKeyVaultMigration.resetAndDeleteAll(context)
+        context.getSharedPreferences("shraddha_api_keys_plaintext", 0).edit().clear().commit()
     }
 
     @After
     fun resetAfterTest() {
         ApiKeyVaultMigration.resetAndDeleteAll(context)
+        context.getSharedPreferences("shraddha_api_keys_plaintext", 0).edit().clear().commit()
     }
 
     @Test
-    fun passwordProtectsKeysAndSupportsRotationAndDeletion() {
-        val firstPassword = "Shraddha1234".toCharArray()
-        val secondPassword = "NewShraddha5678".toCharArray()
+    fun geminiKeyCanBeSavedReadAndRemovedWithoutVaultOrEncryption() {
+        ApiKeyStore.saveKey(context, "test-gemini-secret")
+        assertEquals("test-gemini-secret", ApiKeyStore.getKey(context))
+        assertEquals(
+            "test-gemini-secret",
+            context.getSharedPreferences("nova_prefs", 0).getString("gemini_api_key_plaintext", null)
+        )
+        assertFalse(PasswordProtectedApiKeyVault.isConfigured(context))
 
-        PasswordProtectedApiKeyVault.create(context, firstPassword)
-        assertTrue(PasswordProtectedApiKeyVault.isConfigured(context))
-        assertTrue(PasswordProtectedApiKeyVault.isUnlocked())
-
-        PasswordProtectedApiKeyVault.save(context, "GEMINI", "test-gemini-secret")
-        PasswordProtectedApiKeyVault.save(context, "OPENAI", "test-openai-secret")
-        assertEquals("test-gemini-secret", PasswordProtectedApiKeyVault.get(context, "GEMINI"))
-
-        PasswordProtectedApiKeyVault.lock()
-        assertFalse(PasswordProtectedApiKeyVault.isUnlocked())
-        assertFalse(PasswordProtectedApiKeyVault.unlock(context, "WrongPassword123".toCharArray()))
-        assertTrue(PasswordProtectedApiKeyVault.unlock(context, firstPassword))
-        assertEquals("test-openai-secret", PasswordProtectedApiKeyVault.get(context, "OPENAI"))
-
-        PasswordProtectedApiKeyVault.changePassword(context, firstPassword, secondPassword)
-        PasswordProtectedApiKeyVault.lock()
-        assertFalse(PasswordProtectedApiKeyVault.unlock(context, firstPassword))
-        assertTrue(PasswordProtectedApiKeyVault.unlock(context, secondPassword))
-        assertEquals("test-gemini-secret", PasswordProtectedApiKeyVault.get(context, "GEMINI"))
-
-        PasswordProtectedApiKeyVault.save(context, "GEMINI", "")
-        assertEquals("", PasswordProtectedApiKeyVault.get(context, "GEMINI"))
+        ApiKeyStore.saveKey(context, "")
+        assertEquals("", ApiKeyStore.getKey(context))
+        assertFalse(ApiKeyStore.hasKey(context))
     }
 
     @Test
-    fun migrationMovesExistingProviderKeysIntoPasswordVault() {
-        ApiKeyStore.saveKey(context, "legacy-gemini-secret")
-        ProviderKeyStore.save(context, "OPENAI", "legacy-openai-secret")
-        ProviderKeyStore.save(context, "GROQ", "legacy-groq-secret")
+    fun providerKeysCanBeSavedReadAndRemovedWithoutVaultOrEncryption() {
+        ProviderKeyStore.save(context, "OPENAI", "test-openai-secret")
+        ProviderKeyStore.save(context, "GROQ", "test-groq-secret")
 
-        ApiKeyVaultMigration.enable(context, "Migrate12345".toCharArray())
+        assertEquals("test-openai-secret", ProviderKeyStore.get(context, "OPENAI"))
+        assertEquals("test-groq-secret", ProviderKeyStore.get(context, "GROQ"))
+        assertEquals(
+            "test-openai-secret",
+            context.getSharedPreferences("shraddha_api_keys_plaintext", 0).getString("api_key_OPENAI", null)
+        )
+        assertFalse(PasswordProtectedApiKeyVault.isConfigured(context))
 
-        assertEquals("legacy-gemini-secret", ApiKeyStore.getKey(context))
-        assertEquals("legacy-openai-secret", ProviderKeyStore.get(context, "OPENAI"))
-        assertEquals("legacy-groq-secret", ProviderKeyStore.get(context, "GROQ"))
-
-        PasswordProtectedApiKeyVault.lock()
-        assertFalse(runCatching { ProviderKeyStore.get(context, "OPENAI") }.isSuccess)
-        assertTrue(PasswordProtectedApiKeyVault.unlock(context, "Migrate12345".toCharArray()))
-        assertEquals("legacy-openai-secret", ProviderKeyStore.get(context, "OPENAI"))
-    }
-
-    @Test
-    fun lockedVaultRejectsKeyReadsAndWrites() {
-        PasswordProtectedApiKeyVault.create(context, "Shraddha1234".toCharArray())
-        PasswordProtectedApiKeyVault.lock()
-
-        val readFailure = runCatching { PasswordProtectedApiKeyVault.get(context, "GEMINI") }
-        val writeFailure = runCatching { PasswordProtectedApiKeyVault.save(context, "GEMINI", "secret") }
-
-        assertTrue(readFailure.isFailure)
-        assertTrue(writeFailure.isFailure)
+        ProviderKeyStore.save(context, "OPENAI", "")
+        assertEquals("", ProviderKeyStore.get(context, "OPENAI"))
+        assertFalse(ProviderKeyStore.has(context, "OPENAI"))
     }
 }
