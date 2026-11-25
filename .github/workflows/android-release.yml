@@ -75,35 +75,57 @@ jobs:
 
           echo "Detecting keystore format and validating alias (credential values are never printed)..."
           store_type=""
+          resolved_store_password=""
+          resolved_key_password=""
+
+          # Test both existing password secrets as the store password. This
+          # safely handles the case where the two password values were entered
+          # in the opposite fields, without asking the user to re-enter secrets.
           for candidate in PKCS12 JKS; do
-            if keytool -list -storetype "$candidate" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
-              store_type="$candidate"
+            for password_name in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD; do
+              candidate_password="${!password_name}"
+              if keytool -list -storetype "$candidate" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$candidate_password" >/dev/null 2>&1; then
+                store_type="$candidate"
+                resolved_store_password="$candidate_password"
+                break 2
+              fi
+            done
+          done
+
+          if [[ -z "$store_type" ]]; then
+            echo "::error::The JKS file is validly decoded, but neither configured password secret opens it. Credential values were not printed."
+            echo "Detected file type: $(file -b "$ANDROID_KEYSTORE_PATH")"
+            echo "Decoded file size: $(wc -c < "$ANDROID_KEYSTORE_PATH") bytes"
+            exit 1
+          fi
+
+          # Verify the selected alias with the resolved store password.
+          if ! keytool -list -storetype "$store_type" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$resolved_store_password" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore opens, but ANDROID_KEY_ALIAS does not exist in it."
+            exit 1
+          fi
+
+          # Try both existing password secrets for the private-key password.
+          for password_name in ANDROID_KEY_PASSWORD ANDROID_KEYSTORE_PASSWORD; do
+            candidate_password="${!password_name}"
+            if keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$resolved_store_password" -keypass "$candidate_password" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null 2>&1; then
+              resolved_key_password="$candidate_password"
               break
             fi
           done
 
-          if [[ -z "$store_type" ]]; then
-            echo "::error::Keystore could not be opened using PKCS12 or JKS. No credential values were printed."
-            echo "Decoded keystore size: $(wc -c < "$ANDROID_KEYSTORE_PATH") bytes"
-            echo "File identification:"
-            file "$ANDROID_KEYSTORE_PATH" || true
-            printf 'First 8 bytes (hex only): '
-            od -An -tx1 -N8 "$ANDROID_KEYSTORE_PATH" | tr -d '\\n'
-            printf '\\n'
-            echo "Base64 payload length (whitespace removed): $(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | wc -c)"
-            echo "This distinguishes an invalid/wrong file payload from a password issue without exposing the key or any credential."
+          if [[ -z "$resolved_key_password" ]]; then
+            echo "::error::The keystore and alias are valid, but neither configured password secret unlocks the private key."
             exit 1
           fi
 
+          # Pass the validated values to Gradle without printing them.
+          printf 'ANDROID_KEYSTORE_PASSWORD=%s\\n' "$resolved_store_password" >> "$GITHUB_ENV"
+          printf 'ANDROID_KEY_PASSWORD=%s\\n' "$resolved_key_password" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE_TYPE=$store_type" >> "$GITHUB_ENV"
           echo "Detected keystore format: $store_type"
-          echo "Checking private-key password..."
-          if ! keytool -certreq -storetype "$store_type" -alias "$ANDROID_KEY_ALIAS" -keystore "$ANDROID_KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" -file "$RUNNER_TEMP/signing-key-check.csr" >/dev/null 2>&1; then
-            echo "::error::Private-key password validation failed for the selected alias."
-            exit 1
-          fi
-          rm -f "$RUNNER_TEMP/signing-key-check.csr"
           echo "Signing keystore, alias, and private-key password validated."
+          rm -f "$RUNNER_TEMP/signing-key-check.csr"
           chmod +x ./gradlew
 
       - name: Validate Google Play publishing configuration
