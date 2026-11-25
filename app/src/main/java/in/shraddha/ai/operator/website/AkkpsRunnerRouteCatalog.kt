@@ -33,8 +33,9 @@ data class AkkpsRunnerRouteMatch(
 object AkkpsRunnerRouteCatalog {
     private val createRoutes = mapOf(
         "/runner/farmers/new" to AkkpsRunnerModule.FARMERS,
-        "/runner/plots/new" to AkkpsRunnerModule.PLOTS,
-        "/runner/awd-reports/new" to AkkpsRunnerModule.AWD_REPORTS
+        // Shared route aliases observed in the APK; AKKPS still enforces Runner access.
+        "/plots/new" to AkkpsRunnerModule.PLOTS,
+        "/awd-reports/new" to AkkpsRunnerModule.AWD_REPORTS
     )
 
     fun match(rawPathOrUrl: String): AkkpsRunnerRouteMatch? {
@@ -52,7 +53,7 @@ object AkkpsRunnerRouteCatalog {
             }
             parsed.path.orEmpty().trimEnd('/').ifBlank { "/" }
         }.getOrNull() ?: return null
-        if (!path.startsWith("/runner/") && path != "/runner") return null
+        if (path !in createRoutes && !path.startsWith("/runner/") && path != "/runner") return null
         if (path.split('/').any { it == "." || it == ".." }) return null
 
         createRoutes[path]?.let { return AkkpsRunnerRouteMatch(it, path, isCreateRoute = true) }
@@ -63,7 +64,6 @@ object AkkpsRunnerRouteCatalog {
 
         val detailPatterns = listOf(
             Regex("^/runner/farmers/[^/]+$") to AkkpsRunnerModule.FARMERS,
-            Regex("^/runner/plots/[^/]+$") to AkkpsRunnerModule.PLOTS,
             Regex("^/runner/awd-reports/[^/]+$") to AkkpsRunnerModule.AWD_REPORTS
         )
         detailPatterns.firstOrNull { (pattern, _) -> pattern.matches(path) }?.let { (pattern, module) ->
