@@ -8,9 +8,9 @@ internal object SensitiveFieldDetector {
     )
 
     private val privateIdentifiers = Regex(
-        """(?<!\\d)\\d{12}(?!\\d)|\\b[A-Z]{5}\\d{4}[A-Z]\\b"""
+        """(?<!\d)\d{12}(?!\d)|\b[A-Z]{5}\d{4}[A-Z]\b"""
     )
-    private val cardNumberCandidates = Regex("""(?<!\\d)(?:\\d[ -]?){12,18}\\d(?!\\d)""")
+    private val cardNumberCandidates = Regex("""(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)""")
 
     /** Redact national identifiers and Luhn-valid payment-card numbers from OCR output. */
     fun containsPrivateIdentifier(value: String): Boolean {
