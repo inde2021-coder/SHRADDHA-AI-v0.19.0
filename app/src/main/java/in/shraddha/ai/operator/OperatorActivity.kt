@@ -167,6 +167,9 @@ class OperatorActivity : Activity() {
             "सीखा Workflow चलाएँ" to { chooseLearnedWorkflow() },
             "App Training Lab" to { startActivity(android.content.Intent(this, AppTrainingActivity::class.java)) })
         row(toolsCard,
+            "AKKPS Runner Data Entry" to { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)) },
+            "AKKPS वेबसाइट पर Login" to { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)) })
+        row(toolsCard,
             "AI Form Autofill" to { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) },
             "File Access" to { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
         page.addView(toolsCard)
