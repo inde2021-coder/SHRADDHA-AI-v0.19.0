@@ -53,6 +53,11 @@ jobs:
       - name: Run hardware, protocol, crypto and action tests
         run: python -m unittest discover -s pc_companion/tests -t . -v
 
+      - name: Verify direct file-transfer test invocation discovers every test
+        run: |
+          $env:PYTHONPATH = "."
+          python pc_companion/tests/test_file_transfer.py -v
+
       - name: Compile Windows companion source
         run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
 

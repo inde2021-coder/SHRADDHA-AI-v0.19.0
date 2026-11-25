@@ -17,8 +17,6 @@ object ScreenOcrEngine {
         val sensitive: Boolean = false
     )
 
-    private val privateIdentifiers = Regex("""(?<!\d)\d{12}(?!\d)|\b[A-Z]{5}\d{4}[A-Z]\b""")
-
     fun recognize(bitmap: Bitmap, done: (Result<List<OcrLine>>) -> Unit) {
         val image = InputImage.fromBitmap(bitmap, 0)
         val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -45,7 +43,7 @@ object ScreenOcrEngine {
                         continue
                     }
                     val bounds = line.boundingBox ?: continue
-                    val digitsSensitive = privateIdentifiers.containsMatchIn(value)
+                    val digitsSensitive = SensitiveFieldDetector.containsPrivateIdentifier(value)
                     safe += OcrLine(
                         text = if (digitsSensitive) "संवेदनशील अंक छिपाए गए" else value.take(120),
                         centerX = ((bounds.exactCenterX() / bitmap.width).coerceIn(0f, 1f)),

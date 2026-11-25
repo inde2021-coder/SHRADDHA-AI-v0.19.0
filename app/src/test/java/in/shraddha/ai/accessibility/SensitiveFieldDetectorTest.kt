@@ -14,6 +14,16 @@ class SensitiveFieldDetectorTest {
         assertTrue(SensitiveFieldDetector.isSensitive(false, listOf("verification code")))
     }
 
+
+    @Test fun redactsNationalIdentifiersAndValidPaymentCardNumbersFromOcr() {
+        assertTrue(SensitiveFieldDetector.containsPrivateIdentifier("Aadhaar 123456789012"))
+        assertTrue(SensitiveFieldDetector.containsPrivateIdentifier("PAN ABCDE1234F"))
+        assertTrue(SensitiveFieldDetector.containsPrivateIdentifier("Card 4111 1111 1111 1111"))
+        assertTrue(SensitiveFieldDetector.containsPrivateIdentifier("4111111111111111"))
+        assertFalse(SensitiveFieldDetector.containsPrivateIdentifier("4111111111111112"))
+        assertFalse(SensitiveFieldDetector.containsPrivateIdentifier("Order 1234567890123"))
+    }
+
     @Test fun ignoresOrdinaryLabels() {
         assertFalse(SensitiveFieldDetector.isSensitive(false, listOf("Search", "Message", "Name", "Shipping address", "Shopping cart", "Shipping PINATA")))
         assertFalse(SensitiveFieldDetector.isSensitive(false, emptyList()))

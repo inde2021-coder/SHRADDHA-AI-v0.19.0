@@ -35,6 +35,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
       let upstream;
       try {
         upstream = await fetch(`https://api.telegram.org/bot${botToken}/${media.kind === 'video' ? 'sendVideo' : 'sendPhoto'}`, {
+          redirect: 'error',
           method: 'POST', body: form, signal: AbortSignal.timeout(45000)
         });
       } catch { fail(502, 'Telegram media upload could not be reached'); }
@@ -45,6 +46,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
     let upstream;
     try {
       upstream = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        redirect: 'error',
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
         body: JSON.stringify({ chat_id: chatId, text: intent.text, disable_web_page_preview: true })
       });
@@ -75,6 +77,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
         form.set('message', intent.text);
       }
       upstream = await fetch(`https://graph.facebook.com/${version}/${pageId}/${endpoint}`, {
+        redirect: 'error',
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: form, signal: AbortSignal.timeout(intent.mediaKind === 'video' ? 90000 : 30000)
       });
@@ -101,6 +104,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
     let create;
     try {
       create = await fetch(`https://graph.facebook.com/${version}/${accountId}/media`, {
+        redirect: 'error',
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: params, signal: AbortSignal.timeout(20000)
       });
@@ -114,6 +118,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
         let poll;
         try {
           poll = await fetch(`https://graph.facebook.com/${version}/${container.id}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`, {
+            redirect: 'error',
             signal: AbortSignal.timeout(15000)
           });
         } catch { fail(502, 'Instagram video processing status could not be checked; do not blindly retry this container'); }
@@ -126,6 +131,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
     let publish;
     try {
       publish = await fetch(`https://graph.facebook.com/${version}/${accountId}/media_publish`, {
+        redirect: 'error',
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ creation_id: container.id, access_token: accessToken }),
         signal: AbortSignal.timeout(20000)
@@ -143,12 +149,14 @@ export async function publishSocialPost(body, intent, env = process.env, depende
     })();
     try {
       const login = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
+        redirect: 'error',
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
         body: JSON.stringify({ identifier: credentials.identifier, password: credentials.appPassword })
       });
       const session = await login.json().catch(() => ({}));
       if (!login.ok || typeof session.accessJwt !== 'string' || typeof session.did !== 'string') fail(502, 'Bluesky authentication failed; check the app password and identifier');
       const post = await fetch('https://bsky.social/xrpc/com.atproto.repo.createRecord', {
+        redirect: 'error',
         method: 'POST', headers: { authorization: 'Bearer ' + session.accessJwt, 'content-type': 'application/json' },
         signal: AbortSignal.timeout(15000),
         body: JSON.stringify({ repo: session.did, collection: 'app.bsky.feed.post', record: { '$type': 'app.bsky.feed.post', text: intent.text, createdAt: new Date().toISOString() } })
@@ -171,6 +179,7 @@ export async function publishSocialPost(body, intent, env = process.env, depende
     let upstream;
     try {
       upstream = await fetch('https://api.linkedin.com/rest/posts', {
+        redirect: 'error',
         method: 'POST',
         headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json', 'Linkedin-Version': version, 'X-Restli-Protocol-Version': '2.0.0' },
         signal: AbortSignal.timeout(20000),

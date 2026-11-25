@@ -6,7 +6,7 @@ test('Telegram text publishing uses only configured server credentials', async (
   const previous = globalThis.fetch;
   let captured;
   globalThis.fetch = async (url, options) => {
-    captured = { url: String(url), body: JSON.parse(options.body) };
+    captured = { url: String(url), body: JSON.parse(options.body), redirect: options.redirect };
     return new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), { status: 200 });
   };
   try {
@@ -16,6 +16,7 @@ test('Telegram text publishing uses only configured server credentials', async (
     });
     assert.equal(result.messageId, 77);
     assert.equal(captured.body.text, 'approved exact text');
+    assert.equal(captured.redirect, 'error');
     assert.match(captured.url, /sendMessage$/);
   } finally { globalThis.fetch = previous; }
 });
@@ -58,6 +59,7 @@ test('Facebook Page text publishing uses the configured Graph API token', async 
   globalThis.fetch = async (url, options) => {
     assert.match(String(url), /\/123456789\/feed$/);
     assert.match(String(options.body), /message=Page\+announcement/);
+    assert.equal(options.redirect, 'error');
     return new Response(JSON.stringify({ id: '123456789_987654321' }), { status: 200 });
   };
   try {
@@ -73,7 +75,7 @@ test('Instagram feed image creates and publishes a verified container', async ()
   const previous = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options) => {
-    calls.push({ url: String(url), body: String(options.body || '') });
+    calls.push({ url: String(url), body: String(options.body || ''), redirect: options.redirect });
     if (String(url).endsWith('/media')) return new Response(JSON.stringify({ id: 'container123' }), { status: 200 });
     return new Response(JSON.stringify({ id: 'igpost123' }), { status: 200 });
   };
@@ -85,6 +87,7 @@ test('Instagram feed image creates and publishes a verified container', async ()
     });
     assert.equal(result.postId, 'igpost123');
     assert.equal(calls.length, 2);
+    assert.ok(calls.every(call => call.redirect === 'error'));
     assert.match(calls[0].body, /image_url=https%3A%2F%2Fcdn/);
   } finally { globalThis.fetch = previous; }
 });
