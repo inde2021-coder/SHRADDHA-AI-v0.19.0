@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { extractBearerToken } from './auth-header.js';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validEncryptedTransferChunkEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer } from './relay-policy.js';
@@ -38,7 +39,7 @@ const edesyCalls = new Map();
 const edesyConfigured = () => Boolean(process.env.EDESY_STREAM_TOKEN && process.env.OPENAI_API_KEY);
 
 const AI_ROUTES = new Set(['/api/ai/gemini-live-token','/api/vision','/api/ai/providers','/api/ai/summarize','/api/chat','/api/agent/plan','/api/studio/work','/api/expert/assist','/api/agents/council','/api/agents/council/operator-plan','/api/ai/compare','/api/voice/synthesize','/api/social/publish','/api/social/schedule','/api/social/schedule/list','/api/social/schedule/cancel','/api/plugins/verify','/api/plugins/execute','/api/messages/send','/api/form/extract']);
-const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), process.env.GATEWAY_TOKEN);
+const gatewayAuthorized = req => Boolean(process.env.GATEWAY_TOKEN) && safeEqual(extractBearerToken(req.headers.authorization), process.env.GATEWAY_TOKEN);
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 
 function getSocialAdmin() {
@@ -485,7 +486,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/social/schedule/dispatch') {
       const expected = process.env.SOCIAL_SCHEDULER_CRON_SECRET || '';
-      const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+      const supplied = extractBearerToken(req.headers.authorization);
       if (!expected || !safeEqual(supplied, expected)) return json(res, 401, { error: 'Scheduler authorization is required' });
       try {
         const result = await socialScheduler().dispatchDue(2);
