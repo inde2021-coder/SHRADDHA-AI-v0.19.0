@@ -84,3 +84,23 @@ Text knowledge retrieval is independent of speech recognition and speech synthes
 - Offline mode remains functional without login or network.
 - No unsupported language/voice capability is advertised.
 - No unlicensed corpus is bundled.
+
+
+## Everyday conversation and natural speech
+Common daily conversation is a first-class part of the language pack, not an afterthought. Include:
+- Greetings, introductions, thanks, apologies, requests, confirmations, refusals, small talk, follow-up questions, and polite conversation.
+- Natural Hindi, English, Hinglish, and regional-language everyday phrasing, including common contractions and alternate spellings.
+- Romanized typing and spelling variation (for example, "kaise ho", "kya kar rahe ho", "thik hai", "zara rukna", "samjha do"), while retaining the user's original wording.
+- Common idioms, proverbs, colloquial expressions, locally common vocabulary, and respectful forms of address.
+- Context-sensitive intent and tone: distinguish a question, joke, sarcasm, urgency, frustration, consent, and a simple acknowledgement where confidence permits.
+- Natural turn-taking: short relevant replies, remembering the immediate topic, asking one clear follow-up when necessary, and not repeatedly asking for details already supplied.
+- Speech-friendly sentence forms and punctuation for TTS; do not make every spoken response sound like a formal textbook translation.
+
+Do not assume slang or dialect has one universal meaning. Store region/context variants and examples, mark ambiguous expressions, and ask for clarification rather than guessing. Avoid stereotyping speakers based on dialect. Keep abusive, hateful, or explicit expressions out of default reply suggestions; recognize them only as needed for safety/context handling.
+
+## Conversational quality tests
+- Test greetings and routine exchanges, not only factual question-answer prompts.
+- Test Hindi script, Roman Hindi, Hinglish, English, and enabled regional-language variants.
+- Test spelling mistakes, speech transcription errors, code-switching, idioms, politeness, and ambiguous short replies.
+- Verify Shraddha answers naturally and concisely while preserving the user's language and tone.
+- Verify a simple conversational exchange can be handled locally where possible, without making an unnecessary cloud call.
