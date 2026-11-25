@@ -21,7 +21,7 @@ class PasswordProtectedApiKeyVaultTest {
 
     @After
     fun resetAfterTest() {
-        PasswordProtectedApiKeyVault.resetAndDeleteAllKeys(context)
+        ApiKeyVaultMigration.resetAndDeleteAll(context)
     }
 
     @Test
