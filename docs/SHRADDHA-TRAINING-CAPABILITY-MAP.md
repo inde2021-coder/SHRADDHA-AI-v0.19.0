@@ -155,3 +155,26 @@ These paths must not be treated as additional active Shraddha features. Before a
 - Still required before claiming a working tutor: guardian profile/settings UI, vetted age-banded curriculum/content packs, child-safe answer evaluation and grounding, actual conversation/voice integration, progress storage with parent controls, session/break limits, accessibility checks, and end-to-end testing with adult supervision.
 - Child mode must be guardian-enabled, transparent and easy to exit. No targeted advertising, purchases, external links, open social chat, public sharing, or collection of precise location/biometrics. Minimize retention; do not create voiceprints or face profiles. Avoid unsupervised web browsing and never ask a child for passwords, addresses, school name, phone number or other sensitive details.
 - The tutor is educational support, not a replacement for a parent, teacher, special educator or professional assessment. Do not label/diagnose learning disabilities or mental-health conditions.
+
+
+## Expanded curriculum catalogue and Skill Factory decision (2026-11-26)
+
+The selected scope is all training domains and intelligence capabilities plus a future-extensible Skill Factory. The detailed architecture, lifecycle and rollout gates are in `docs/SKILL-FACTORY-ARCHITECTURE.md`.
+
+Additional curriculum domains beyond the original ten:
+- Parenting, infant care education, child development, original lullabies and stories.
+- Age-aware Child Learning Tutor (3–10), with guardian controls.
+- Cooking and food literacy.
+- Health literacy and first-aid awareness (not diagnosis or treatment).
+- Financial literacy and digital-payment safety.
+- Repair/technical literacy, creativity/design, travel and daily-life skills.
+- Accessibility and environmental/sustainability awareness.
+
+Automatic learning means **automatic discovery and preparation**, not blind activation. A candidate must pass source allow-list, publisher-signature, licence, content safety, independent fact validation, duplicate detection and regression tests before auto-activation. User-imported knowledge requires explicit import consent. Private conversations, child data, camera frames and microphone recordings are not training sources by default.
+
+### Skill Factory implementation foundation
+- Added `app/src/main/java/in/shraddha/ai/learning/SkillPackTrustPolicy.kt`.
+- Added `app/src/test/java/in/shraddha/ai/learning/SkillPackTrustPolicyTest.kt`.
+- Added `docs/SKILL-FACTORY-ARCHITECTURE.md`.
+- The policy rejects malformed metadata and queues candidates for review unless every independent activation gate passes and automatic learning is enabled.
+- The policy is not a crawler, signature-verification implementation, fact-checker, downloader, model trainer or skill executor. Production adapters, persistent pack state, quarantine, WorkManager scheduling, review/rollback UI and full tests remain follow-up work.
