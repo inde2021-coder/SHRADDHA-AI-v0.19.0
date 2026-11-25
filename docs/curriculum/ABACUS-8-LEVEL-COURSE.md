@@ -1,6 +1,6 @@
 # Shraddha AI Abacus — Eight-Level Course Blueprint with Practice Sets
 
-**Pack ID:** `abacus-foundation-8-levels` · **Version:** 1.0.0 · **Status:** structured course blueprint; qualified abacus educator must review bead technique and progression.  
+**Pack ID:** `abacus-foundation-8-levels` · **Version:** 1.0.0 · **Status:** structured course blueprint; qualified abacus educator must review bead technique and progression.
 **Important:** Abacus is a numeracy practice method. Do not claim guaranteed IQ, memory, school-score or brain-development improvements.
 
 ## Teaching principles
