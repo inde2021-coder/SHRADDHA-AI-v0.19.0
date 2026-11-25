@@ -182,3 +182,17 @@ Automatic learning means **automatic discovery and preparation**, not blind acti
 
 ## Firebase memory architecture decision (2026-11-26)
 Firebase may be the durable cloud memory store, but the current implementation is not cloud-only. `UnifiedMemoryRepository` already uses `EncryptedFeatureStore` plus `FirebaseCloudVault`, with local-first writes and explicit cloud consent. The target is Firebase-backed durable memory plus a small encrypted local hot cache for offline continuity. Keep large model weights and binary files out of Realtime Database; use separately downloadable assets/object storage. Require Firebase Auth, strict per-user rules, encryption/key recovery, sync queue/conflict handling, deletion/export and offline tests before enabling cloud-first defaults. See `docs/SKILL-FACTORY-ARCHITECTURE.md`.
+
+## Complete training catalogue linked (2026-11-26)
+
+The detailed curriculum specification is now maintained in `docs/SHRADDHA-CURRICULUM-CATALOG.md`. It consolidates:
+- All ten original training domains and five cross-cutting capability areas.
+- Baby Care 0–2: feeding education, safe sleep, diaper/hygiene, development/milestones, sensory play, baby talking/interaction, lullabies/stories, guardian journals and safety.
+- Toddler Learning 2–4 and Kids Academy 4–6.
+- Eight progressive Abacus levels (outline; educator-authored lesson books and reviewed assessment criteria still required).
+- All 18 named mind activities.
+- Child Learning Tutor ages 3–10, age-banded subjects and teacher-like scaffolded lesson flow.
+- Ten proposed Kids learning aids: story generator, worksheet maker, drawing teacher, phonics coach, virtual abacus, offline packs, parent voice, school readiness checklist, multilingual learning and physical activity coach.
+- Additional parenting, cooking, health/first-aid literacy, finance, agriculture, retail/business, repair, creativity, travel, accessibility and environment domains.
+
+**Status distinction:** the catalogue and syllabus outline are added to this branch; they are not all executable lessons in the APK yet. The existing policies and knowledge-store foundations are present, but authored lesson packs, curriculum UI/loader, child-mode integration and tests remain. See the catalogue's implementation-status section; do not claim the app is fully trained until packs are loaded and verified.
