@@ -9,6 +9,7 @@ from pc_companion.file_transfer import (
     take_chunk_window,
     validate_resume_indexes,
     valid_transfer_manifest,
+    can_accept_incoming_transfer,
     requeue_rejected_chunk,
     prepare_retry_queue,
     sha256_file,
@@ -100,8 +101,14 @@ class FileTransferChunkGeometryTests(unittest.TestCase):
             self.assertFalse(valid_transfer_manifest(*values))
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+
+class IncomingTransferAdmissionTests(unittest.TestCase):
+    def test_only_one_new_incoming_transfer_is_admitted(self):
+        self.assertTrue(can_accept_incoming_transfer({}, "transfer_123456"))
+        self.assertFalse(can_accept_incoming_transfer({"existing_123456": {}}, "transfer_654321"))
+        self.assertFalse(can_accept_incoming_transfer({}, "../bad"))
+        self.assertFalse(can_accept_incoming_transfer([], "transfer_123456"))
 
 
 class FileTransferNegativeAckTests(unittest.TestCase):
@@ -145,3 +152,6 @@ class FileTransferStreamingHashTests(unittest.TestCase):
             path = Path(directory) / "sample.bin"
             path.write_bytes(payload)
             self.assertEqual(sha256_file(path), hashlib.sha256(payload).hexdigest())
+
+if __name__ == "__main__":
+    unittest.main()
