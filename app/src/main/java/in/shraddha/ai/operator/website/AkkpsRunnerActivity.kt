@@ -56,6 +56,17 @@ class AkkpsRunnerActivity : Activity() {
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
+        val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf(
+            "Farmers" to "/runner/farmers",
+            "Plots" to "/runner/plots",
+            "AWD Reports" to "/runner/awd-reports",
+            "Data Sync" to "/runner/sync"
+        ).forEach { item ->
+            modules.addView(action(item.first) { web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + item.second) },
+                LinearLayout.LayoutParams(0, dp(42), 1f))
+        }
+        root.addView(modules)
         status = TextView(this).apply {
             text = "AKKPS वेबसाइट खुल रही है…"; textSize = 12f
             setTextColor(0xFFBBD8E2.toInt()); setPadding(dp(7), dp(7), dp(7), dp(7))
