@@ -54,10 +54,14 @@ object BabySafetyEscalationPolicy {
         if (input.cryConfidence < MIN_CRY_CONFIDENCE || input.sustainedCryMs < MIN_SUSTAINED_CRY_MS) {
             return Decision(emptyList(), Stage.NONE, "Cry event did not meet the confidence and duration thresholds")
         }
-        if (input.lastAlertAtMs > 0L) {
-            if (input.nowMs < input.lastAlertAtMs) return Decision(emptyList(), input.stage, "Clock moved backwards")
-            if (input.nowMs - input.lastAlertAtMs < ALERT_COOLDOWN_MS) {
-                return Decision(emptyList(), Stage.COOLDOWN, "Alert cooldown is active")
+        // Cooldown applies only before starting a new incident. It must not block
+        // the backup escalation for an incident already in progress.
+        if (input.stage == Stage.NONE || input.stage == Stage.COOLDOWN) {
+            if (input.lastAlertAtMs > 0L) {
+                if (input.nowMs < input.lastAlertAtMs) return Decision(emptyList(), input.stage, "Clock moved backwards")
+                if (input.nowMs - input.lastAlertAtMs < ALERT_COOLDOWN_MS) {
+                    return Decision(emptyList(), Stage.COOLDOWN, "Alert cooldown is active")
+                }
             }
         }
 
