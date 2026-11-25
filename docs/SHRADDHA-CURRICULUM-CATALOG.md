@@ -162,3 +162,23 @@ These are supporting product capabilities, not ten extra academic subjects:
 - This catalogue has now been added as a structured authoring specification to guide real lesson-pack creation.
 - **Not yet complete:** actual authored lesson corpus for every topic, eight full abacus level books, lullaby/audio library, worksheet/story/drawing generation flows, guardian dashboard, child-mode runtime wiring, curriculum pack downloader/sync, medical/education review, and end-to-end tests.
 - Do not describe the app as fully trained on these subjects until those content packs are authored, loaded and tested.
+
+
+## I. Authored lesson libraries added (2026-11-26)
+The following files contain actual starter lesson content, activities, examples, checks and answer keys—not only topic names. They are versioned authoring sources; app import, UI, pack manifests, independent review and runtime loading are still required.
+
+| Library | Content included | Review gate |
+|---|---|---|
+| `docs/curriculum/BABY-CARE-0-2-LESSON-LIBRARY.md` | Newborn responsive care, feeding literacy, complementary feeding, safe sleep, soothing, play, caregiver wellbeing, original Hindi lullabies and response contract | Qualified Indian paediatric review before production medical advice |
+| `docs/curriculum/KIDS-FOUNDATION-3-10-LESSON-LIBRARY.md` | Age-banded Hindi/English literacy, numeracy, science, comprehension, fractions, money, digital safety, formative rubric and sample story | Educator, Hindi and accessibility review |
+| `docs/curriculum/ABACUS-8-LEVEL-COURSE.md` | Eight progressive levels, bead-value assumptions, worked examples, 12-answer practice bank, assessment and test design | Abacus educator validates exact device algorithms and finger technique |
+| `docs/curriculum/CORE-10-DOMAINS-PRACTICAL-LESSONS.md` | Practical authored lessons across all ten core domains, including interaction, civic literacy, assistant planning, reasoning, tech, language, productivity, security, business, agriculture, retail, cooking and finance | Specialist review for regulated/current advice |
+| `docs/curriculum/MIND-ACTIVITIES-18-PLAYBOOK.md` | All 18 activities with age adaptation, rules, accessibility, safe materials, session flow and quality tests | Child-safety and educator review |
+
+The 5 additional capability areas remain architectural/runtime capabilities rather than academic subjects: context awareness, Skill Factory, multimodal understanding, permissioned task execution and self-evaluation. Their implementation must use existing canonical engines. The ten optional Kids learning aids remain product features, not additional curriculum subjects.
+
+### Source and freshness policy
+Use WHO/UNICEF/MoHFW/NHM for baby-care education; NCERT/DIKSHA/Ministry of Education for foundational learning; official RBI/NPCI/SEBI/banks for financial safety; ICAR/KVK/state agriculture universities for farming; CERT-In and vendor documentation for cybersecurity/technical instructions. Each pack must record source URL, publication/retrieval date, licence, reviewer, version and next review date. A changing or unsupported fact must be marked stale/unknown, not silently guessed.
+
+### Current completion boundary
+Five authored starter libraries now exist. This does **not** mean all 20 domains have exhaustive textbooks, that the APK has imported these files, or that every lesson is available offline. Further subject-by-subject lesson packs, translations, reviewed exercises, pack manifests, ingestion into the existing knowledge store, curriculum UI and integration tests remain required.
