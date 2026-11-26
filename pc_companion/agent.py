@@ -138,8 +138,6 @@ class PcCompanionApp:
         self.pc_completed = self._load_pc_completed()
         for completed_id in self.pc_completed:
             self.pc_incoming.pop(completed_id, None)
-        if self.pc_incoming:
-            self._persist_pc_incoming()
         self.pending_pc_send = self._load_pc_outgoing()
         now_epoch = time.time()
         for item in self.config.get("remoteActionReceipts", []):
@@ -160,6 +158,8 @@ class PcCompanionApp:
         self.remote_var = tk.BooleanVar(value=False)
         self.screen_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="Not connected")
+        if self.pc_completed:
+            self._persist_pc_incoming()
         if self.pending_pc_send:
             self.status_var.set("A verified-source transfer was restored. Re-verify the Android fingerprint, then use Android Resume receiving.")
         elif self._pc_outgoing_state_path().exists():
