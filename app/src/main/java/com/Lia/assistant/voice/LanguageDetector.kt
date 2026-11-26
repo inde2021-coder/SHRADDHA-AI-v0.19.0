@@ -15,7 +15,7 @@ object LanguageDetector {
     /** Maps detected text language to the installed custom voice model language. */
     fun toVoiceModelLanguage(language: String): String = when (language.trim().uppercase()) {
         "HI", "HINDI", "HI-IN" -> "hi"
-        "EN", "ENGLISH", "HINGLISH" -> "en"
+        "EN", "ENGLISH", "HINGLISH", "UNKNOWN" -> "en"
         else -> throw IllegalArgumentException("The configured custom voice currently supports Hindi and English only; no verified voice model is installed for $language.")
     }
 
