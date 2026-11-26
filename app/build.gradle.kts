@@ -132,9 +132,11 @@ dependencies {
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
     // Runtime only; selected models are downloaded on demand and SHA-256 verified.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     // Native Android/JNI runtime for verified app-private IndicConformer models.
-    implementation("com.github.k2-fsa:sherpa-onnx:v2.0.1")
+    implementation("com.github.k2-fsa:sherpa-onnx:v2.0.1") {
+        // The Android AAR already contains the JNI-backed Kotlin API; avoid its duplicate JVM jar.
+        exclude(group = "com.github.k2-fsa", module = "sherpa-onnx-jvm")
+    }
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
