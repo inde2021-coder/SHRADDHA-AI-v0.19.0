@@ -358,7 +358,7 @@ class MainActivity : AppCompatActivity() {
             addView(workspaceTile("▤  PRIVATE NOTES + OCR", "Hindi / English image text extraction • Local notes • Clipboard copy") { startActivity(Intent(this@MainActivity, `in`.shraddha.ai.notes.NoteOcrActivity::class.java)) })
             addView(workspaceTile("◇  AI PROJECT LAB", "Agents • Code • Website • App • Automation") { showPage("lab") })
             
-            addView(workspaceTile("◎  PEOPLE MEMORY", "Consent-based person profiles and recognition roadmap") { showPage("people") })
+            addView(workspaceTile("◎  PEOPLE MEMORY", "Consent-based person profiles and local face/speaker recognition") { showPage("people") })
             addView(workspaceTile("☁  CLOUD & DATA", "Firebase sync • Secure memory • Sharing") { showPage("cloud") })
             addView(workspaceTile("⚙  CONTROL & PRIVACY", "Permissions • Security • Device access") { showPage("permissions") })
             addView(workspaceTile("✧  FUTURE INTELLIGENCE", "Advanced systems • workflow safety • capability status") { showPage("future") })
