@@ -84,6 +84,30 @@ object DeviceFileTransferReceiver {
         }
     }
 
+    fun listReceived(context: Context): List<File> {
+        val directory = File(context.filesDir, "ReceivedFiles")
+        return directory.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }
+            ?.sortedByDescending { it.lastModified() }.orEmpty()
+    }
+
+    fun mimeType(file: File): String = when (file.extension.lowercase()) {
+        "pdf" -> "application/pdf"
+        "txt", "md" -> "text/plain"
+        "csv" -> "text/csv"
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "doc" -> "application/msword"
+        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "xls" -> "application/vnd.ms-excel"
+        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "ppt" -> "application/vnd.ms-powerpoint"
+        "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        else -> "application/octet-stream"
+    }
+
     @Synchronized fun reject(transferId: String): Boolean {
         val state = active.remove(transferId) ?: return false
         return state.temp.delete() || !state.temp.exists()
