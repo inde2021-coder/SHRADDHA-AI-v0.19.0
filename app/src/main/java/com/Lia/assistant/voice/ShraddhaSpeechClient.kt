@@ -139,9 +139,13 @@ object ShraddhaSpeechClient {
             done(Result.failure(IllegalStateException("Secure voice backend is not configured")))
             return
         }
+        val voiceLanguage = runCatching { LanguageDetector.toVoiceModelLanguage(language) }.getOrElse {
+            done(Result.failure(it))
+            return
+        }
         val body = JSONObject()
             .put("text", clean)
-            .put("language", LanguageDetector.toVoiceModelLanguage(language))
+            .put("language", voiceLanguage)
             .toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
