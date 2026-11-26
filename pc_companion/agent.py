@@ -204,6 +204,7 @@ class PcCompanionApp:
             ("Send File to Phone", self.choose_file_for_phone),
             ("Retry Pending File Chunks", self.retry_pc_file_transfer),
             ("PC Hardware Status", self._show_hardware_status),
+            ("Offline Language Lab", self._open_language_lab),
             ("Set PC Volume", lambda: self._set_local_hardware("set_volume")),
             ("Set PC Brightness", lambda: self._set_local_hardware("set_brightness")),
         ]
@@ -1913,6 +1914,13 @@ class PcCompanionApp:
                 pass
         self._clear_peer_keys()
         self.status_var.set("Emergency stop: permissions revoked." if emergency else "Disconnected. Permissions revoked.")
+
+    def _open_language_lab(self):
+        try:
+            from language_lab import LanguageLabDialog
+            LanguageLabDialog(self.root)
+        except Exception as exc:
+            messagebox.showerror("Offline Language Lab", str(exc)[:500], parent=self.root)
 
     def _close(self):
         self.disconnect()
