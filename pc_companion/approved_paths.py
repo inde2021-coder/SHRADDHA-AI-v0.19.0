@@ -16,11 +16,19 @@ def resolve_user_path(relative_path, kind, home=None):
     parts = [part for part in raw.split(chr(92)) if part]
     if not parts or any(part in {".", ".."} or ":" in part for part in parts):
         raise ValueError("Path traversal and drive syntax are not allowed.")
-    root_home = Path(home) if home is not None else Path.home()
+    root_home = (Path(home) if home is not None else Path.home()).resolve(strict=True)
+    if not root_home.is_dir():
+        raise ValueError("The current user's home directory is unavailable.")
     matches = []
     for name in APPROVED_ROOTS:
         try:
+            # Known folders may be junctions/symlinks. Resolve them, but do not
+            # allow a redirected Documents/Downloads/Desktop root outside this
+            # user's home directory (including network or removable locations).
             root = (root_home / name).resolve(strict=True)
+            root.relative_to(root_home)
+            if not root.is_dir():
+                continue
             candidate = root.joinpath(*parts).resolve(strict=True)
             candidate.relative_to(root)
             if (kind == "file" and candidate.is_file()) or (kind == "folder" and candidate.is_dir()):
