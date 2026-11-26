@@ -260,6 +260,7 @@ fun DeviceCenterScreen(navController: NavController) {
                             incomingTransferStatus = "PC cancelled the outgoing transfer."
                         } else {
                             DeviceFileTransferReceiver.reject(transferId)
+                            resumableIncoming = DeviceFileTransferReceiver.pendingTransfers()
                             incomingTransferStatus = "PC cancelled the incoming transfer."
                         }
                     }
