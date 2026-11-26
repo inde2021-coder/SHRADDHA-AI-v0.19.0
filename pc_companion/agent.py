@@ -987,6 +987,48 @@ class PcCompanionApp:
             self.status_var.set(f"Could not persist completed-transfer receipt: {str(exc)[:120]}")
             return False
 
+    def _finalize_pc_incoming(self, transfer_id, transfer, peer_id):
+        """Verify and publish a fully checkpointed Android upload; safe to call after restart."""
+        if (not transfer or transfer.get("peer") != peer_id or
+                not self.is_e2e_trusted(peer_id) or len(transfer.get("received", set())) != transfer.get("chunks")):
+            return False
+        part_path = Path(transfer["path"] + ".shraddha-part")
+        try:
+            if part_path.is_symlink() or not part_path.is_file() or part_path.stat().st_size != transfer["size"]:
+                raise TransferPersistenceError("The fully received partial file is unavailable; no completion ACK was sent.")
+            if sha256_file(part_path) != transfer["sha256"]:
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "final_sha256_mismatch"})
+                part_path.unlink(missing_ok=True)
+                self.pc_incoming.pop(transfer_id, None)
+                self._persist_pc_incoming()
+                self.status_var.set("Incoming file SHA-256 mismatch; corrupted partial data discarded.")
+                return False
+            completion_record = {
+                "peer": peer_id, "transferId": transfer_id, "path": transfer["path"],
+                "partPath": str(part_path), "size": transfer["size"],
+                "sha256": transfer["sha256"], "completedAt": int(time.time())
+            }
+            if not self._persist_pc_completed(completion_record):
+                raise TransferPersistenceError("Could not persist final completion receipt; file remains recoverable.")
+            publish_file_without_overwrite(part_path, Path(transfer["path"]))
+            # Receipt is durable before publication and is intentionally retained
+            # until expiry so the completion ACK can be repeated after reconnect.
+            self.pc_completed[transfer_id] = dict(completion_record)
+            self.pc_incoming.pop(transfer_id, None)
+            self._persist_pc_incoming()
+            sent = self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                    "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+            self.status_var.set("Incoming file saved and SHA-256 verified." if sent else
+                                "Incoming file saved and verified; completion ACK will be retried after reconnect.")
+            return True
+        except TransferPersistenceError as exc:
+            self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
+            return False
+        except Exception as exc:
+            self.status_var.set(f"Verified file could not be published safely: {str(exc)[:140]}")
+            return False
+
     def _pc_outgoing_state_path(self):
         return CONFIG_PATH.parent / "outgoing-transfer.json"
 
@@ -1349,29 +1391,7 @@ class PcCompanionApp:
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": True})
             if len(transfer["received"]) == transfer["chunks"]:
-                digest = sha256_file(transfer["path"] + ".shraddha-part")
-                if digest != transfer["sha256"]:
-                    raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
-                # Persist a completion receipt while the verified partial still exists.
-                # Startup can finish the publish if Windows exits before the final ACK.
-                completion_record = {
-                    "peer": peer_id, "transferId": transfer_id, "path": transfer["path"],
-                    "partPath": transfer["path"] + ".shraddha-part", "size": transfer["size"],
-                    "sha256": transfer["sha256"], "completedAt": int(time.time())
-                }
-                if not self._persist_pc_completed(completion_record):
-                    raise TransferPersistenceError("Could not persist final completion receipt; file remains recoverable.")
-                publish_file_without_overwrite(
-                    Path(transfer["path"] + ".shraddha-part"), Path(transfer["path"])
-                )
-                # The pre-publish receipt is already durable and now points to the
-                # verified destination; keep it for idempotent ACK retries.
-                self.pc_completed[transfer_id] = dict(completion_record)
-                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
-                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
-                self.pc_incoming.pop(transfer_id, None)
-                self._persist_pc_incoming()
-                self.status_var.set("Incoming file saved and SHA-256 verified.")
+                self._finalize_pc_incoming(transfer_id, transfer, peer_id)
         except TransferPersistenceError as exc:
             self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
@@ -1403,6 +1423,9 @@ class PcCompanionApp:
         if incoming:
             peer_id = str(msg.get("fromDeviceId", ""))
             if not peer_id or peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
+                return
+            if len(incoming["received"]) == incoming["chunks"]:
+                self._finalize_pc_incoming(transfer_id, incoming, peer_id)
                 return
             missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
             self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
