@@ -85,6 +85,7 @@ fun VoiceScreen(
     val scope = rememberCoroutineScope()
     var offlineLanguage by remember { mutableStateOf(IndicConformerRuntime.Language.HINDI) }
     var offlineModelStatus by remember { mutableStateOf("") }
+    var pendingOfflineStart by remember { mutableStateOf(false) }
     val microphoneReady = isActive && state !in setOf(NovaOrbState.IDLE, NovaOrbState.CONNECTING, NovaOrbState.ERROR)
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -118,7 +119,18 @@ fun VoiceScreen(
     ) { isGranted ->
         hasRecordAudioPermission = isGranted
         if (isGranted) {
-            VoiceForegroundService.start(context)
+            if (pendingOfflineStart) {
+                pendingOfflineStart = false
+                val status = IndicConformerRuntime.status(context, offlineLanguage)
+                offlineModelStatus = status.detail
+                if (status.availability == IndicConformerRuntime.Availability.READY) {
+                    VoiceForegroundService.startOffline(context, offlineLanguage)
+                }
+            } else {
+                VoiceForegroundService.start(context)
+            }
+        } else {
+            pendingOfflineStart = false
         }
     }
 
@@ -220,7 +232,10 @@ fun VoiceScreen(
                         text = if (isActive) "STOP OFFLINE MICROPHONE" else "START OFFLINE MICROPHONE",
                         onClick = {
                             if (isActive) VoiceForegroundService.stop(context)
-                            else {
+                            else if (!hasRecordAudioPermission) {
+                                pendingOfflineStart = true
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            } else {
                                 val status = IndicConformerRuntime.status(context, offlineLanguage)
                                 offlineModelStatus = status.detail
                                 if (status.availability == IndicConformerRuntime.Availability.READY) {
@@ -228,7 +243,7 @@ fun VoiceScreen(
                                 }
                             }
                         },
-                        enabled = hasRecordAudioPermission || isActive,
+                        enabled = true,
                         type = NovaButtonType.PRIMARY
                     )
                     if (offlineTranscript.isNotBlank()) Text("पहचाना गया: $offlineTranscript", color = colors.textPrimary, fontSize = 12.sp)
