@@ -53,6 +53,8 @@ import com.Lia.assistant.ui.components.NovaTopBar
 import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.link.DeviceLinkManager
+import `in`.shraddha.ai.link.DeviceFileTransferReceiver
+import org.json.JSONObject
 import kotlinx.coroutines.launch
 
 private data class LinkedPeer(
@@ -86,6 +88,9 @@ fun DeviceCenterScreen(navController: NavController) {
     var pcFileQuery by remember { mutableStateOf("") }
     var lastPcResult by remember { mutableStateOf("") }
     var lastPcResultOk by remember { mutableStateOf(false) }
+    var pendingShareRequest by remember { mutableStateOf<JSONObject?>(null) }
+    var pendingIncomingFile by remember { mutableStateOf<DeviceFileTransferReceiver.Manifest?>(null) }
+    var incomingTransferStatus by remember { mutableStateOf("") }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -133,12 +138,45 @@ fun DeviceCenterScreen(navController: NavController) {
                 }
             }
         }
+        DeviceLinkManager.onFileTransferMessage = { message ->
+            mainHandler.post {
+                when (message.optString("type")) {
+                    "file_transfer_start" -> {
+                        val peerId = message.optString("fromDeviceId")
+                        val manifest = DeviceFileTransferReceiver.parseManifest(peerId, message)
+                        if (manifest != null && DeviceLinkManager.isE2ETrusted(peerId)) {
+                            pendingIncomingFile = manifest
+                            incomingTransferStatus = ""
+                        } else {
+                            DeviceLinkManager.acknowledgeFileTransfer(peerId, message.optString("transferId"), -1, ok = false)
+                            incomingTransferStatus = "अमान्य manifest या unverified sender; transfer रोक दिया गया।"
+                        }
+                    }
+                    "file_transfer_chunk" -> {
+                        val peerId = message.optString("fromDeviceId")
+                        val result = DeviceFileTransferReceiver.receiveChunk(context, peerId, message)
+                        DeviceLinkManager.acknowledgeFileTransfer(peerId, message.optString("transferId"), result.index,
+                            complete = result.complete, ok = result.ok)
+                        incomingTransferStatus = when {
+                            result.complete -> "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}"
+                            !result.ok -> result.error ?: "फ़ाइल chunk reject हुआ।"
+                            else -> "फ़ाइल प्राप्त हो रही है… chunk ${result.index + 1}"
+                        }
+                    }
+                    "file_transfer_cancel" -> {
+                        DeviceFileTransferReceiver.reject(message.optString("transferId"))
+                        incomingTransferStatus = "PC ने file transfer cancel कर दिया।"
+                    }
+                }
+            }
+        }
         DeviceLinkManager.onE2EVerification = { peerId, fingerprint ->
             mainHandler.post { pendingFingerprint = peerId to fingerprint }
         }
         onDispose {
             DeviceLinkManager.onStatus = null
             DeviceLinkManager.onPeerMessage = null
+            DeviceLinkManager.onFileTransferMessage = null
             DeviceLinkManager.onE2EVerification = null
         }
     }
@@ -467,6 +505,12 @@ fun DeviceCenterScreen(navController: NavController) {
                 }
             }
         }
+        if (incomingTransferStatus.isNotBlank()) {
+            NovaGlassCard {
+                Text("PC → PHONE FILE TRANSFER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(incomingTransferStatus, color = colors.textPrimary, fontSize = 12.sp)
+            }
+        }
         NovaGlassCard {
             Text("SESSION SECURITY", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             NovaButton(
@@ -487,6 +531,59 @@ fun DeviceCenterScreen(navController: NavController) {
                 type = NovaButtonType.TEXT
             )
         }
+    }
+
+    pendingShareRequest?.let { request ->
+        val peerId = request.optString("fromDeviceId")
+        val requestId = request.optString("requestId")
+        AlertDialog(
+            onDismissRequest = { pendingShareRequest = null },
+            title = { Text("PC से फ़ाइल भेजने की अनुमति") },
+            text = { Text("Paired PC ($peerId) यह फ़ाइल भेजना चाहता है: ${request.optString("itemLabel", "document")}। केवल तभी अनुमति दें जब आपने स्वयं transfer शुरू किया हो।") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val sent = DeviceLinkManager.respondDataShare(peerId, "documents", requestId, true)
+                    incomingTransferStatus = if (sent) "अनुमति भेजी गई। अब आने वाली फ़ाइल का manifest स्वीकार करें।" else "अनुमति भेजी नहीं जा सकी।"
+                    pendingShareRequest = null
+                }) { Text("अनुमति दें") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    DeviceLinkManager.respondDataShare(peerId, "documents", requestId, false)
+                    pendingShareRequest = null
+                }) { Text("मना करें") }
+            }
+        )
+    }
+
+    pendingIncomingFile?.let { manifest ->
+        AlertDialog(
+            onDismissRequest = {
+                DeviceLinkManager.acknowledgeFileTransfer(manifest.peerId, manifest.transferId, -1, ok = false)
+                pendingIncomingFile = null
+            },
+            title = { Text("फ़ाइल प्राप्त करें?") },
+            text = { Text("PC: ${manifest.peerId}\nफ़ाइल: ${manifest.fileName}\nआकार: ${manifest.sizeBytes / 1024} KB\n\nफ़ाइल पहले app-private ReceivedFiles folder में save होगी। SHA-256 जाँच सफल होने पर ही final file बनेगी।") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val accepted = DeviceFileTransferReceiver.accept(context, manifest)
+                    val acknowledged = accepted && DeviceLinkManager.acknowledgeFileTransfer(manifest.peerId, manifest.transferId, -1, ok = true)
+                    if (!acknowledged) {
+                        DeviceFileTransferReceiver.reject(manifest.transferId)
+                        DeviceLinkManager.acknowledgeFileTransfer(manifest.peerId, manifest.transferId, -1, ok = false)
+                        incomingTransferStatus = "फ़ाइल receive शुरू नहीं हो सकी।"
+                    } else incomingTransferStatus = "फ़ाइल receive शुरू हो गई है…"
+                    pendingIncomingFile = null
+                }) { Text("फ़ाइल स्वीकार करें") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    DeviceLinkManager.acknowledgeFileTransfer(manifest.peerId, manifest.transferId, -1, ok = false)
+                    pendingIncomingFile = null
+                    incomingTransferStatus = "फ़ाइल transfer अस्वीकार किया।"
+                }) { Text("अस्वीकार करें") }
+            }
+        )
     }
 
     pendingFingerprint?.let { (peerId, fingerprint) ->
