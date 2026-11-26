@@ -100,6 +100,9 @@ object MultiProviderChatClient {
             `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             http.newCall(builder.build()).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
+                if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                    return ChatReplyResult.Error("Online AI consent was revoked while the request was running. The response was discarded.")
+                }
                 if (!response.isSuccessful) {
                     val message = runCatching {
                         val json = JSONObject(raw)
