@@ -87,7 +87,18 @@ object DeviceFileTransferSender {
     fun pending(storageDir: File): List<Prepared> {
         if (!storageDir.isDirectory) return emptyList()
         return storageDir.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }
-            ?.mapNotNull(::readMetadata)?.sortedByDescending { it.file.lastModified() }.orEmpty()
+            ?.mapNotNull { staged ->
+                readMetadata(staged) ?: run {
+                    // A staged source that cannot pass manifest + SHA-256 recovery
+                    // validation must never be offered for retry. Remove only the
+                    // app-private staging artifacts (never the user's original URI).
+                    runCatching { staged.delete() }
+                    val metadata = metadataFile(staged)
+                    runCatching { metadata.delete() }
+                    runCatching { File(metadata.parentFile, metadata.name + ".tmp").delete() }
+                    null
+                }
+            }?.sortedByDescending { it.file.lastModified() }.orEmpty()
     }
 
     private fun persist(prepared: Prepared) {
