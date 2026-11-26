@@ -226,4 +226,13 @@ test('file transfer admission rejects duplicate IDs and caps active receiver tra
   assert.equal(canStartFileTransfer({}, 'transfer_123456'), false);
   assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'bad'), false);
   assert.equal(canStartFileTransfer({ incomingTransfers: new Map() }, 'transfer_123456', 0), false);
+  const withCompletedReceipt = { incomingTransfers: new Map([
+    ['transfer_123456', { completed: true, expiresAt: Date.now() + 60000 }]
+  ]) };
+  assert.equal(canStartFileTransfer(withCompletedReceipt, 'transfer_654321'), true);
+  const withActiveAndCompleted = { incomingTransfers: new Map([
+    ['transfer_123456', { completed: true }],
+    ['transfer_999999', { completed: false }]
+  ]) };
+  assert.equal(canStartFileTransfer(withActiveAndCompleted, 'transfer_654321'), false);
 });
