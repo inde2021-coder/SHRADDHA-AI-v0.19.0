@@ -2,6 +2,10 @@ package `in`.shraddha.ai.operator.website
 
 import android.app.Activity
 import android.Manifest
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.SystemClock
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -46,6 +50,9 @@ class AkkpsRunnerActivity : Activity() {
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var uploadAllowsMultiple = false
     private var speechRecognizer: SpeechRecognizer? = null
+    private var perimeterTrack: AkkpsPerimeterTrack? = null
+    private var locationManager: LocationManager? = null
+    private var perimeterListener: LocationListener? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -80,6 +87,7 @@ class AkkpsRunnerActivity : Activity() {
         assistActions.addView(action("बोलें") { startVoiceCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         assistActions.addView(action("आँख से देखें") { inspectVisualScreen() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         assistActions.addView(action("बाउंड्री") { startBoundaryDraft() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        assistActions.addView(action("सीमा पूरी") { finishBoundaryWalk() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(assistActions)
         val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(
@@ -571,6 +579,7 @@ Return JSON only."""
         when {
             listOf("बाउंड्री शुरू", "सीमा बनाओ", "मैप पर सीमा", "boundary start").any(normalized::contains) -> startBoundaryDraft()
             listOf("क्षेत्रफल निकाल", "एरिया निकाल", "area calculate").any(normalized::contains) -> calculateBoundaryArea()
+            listOf("बाउंड्री पूरी", "सीमा पूरी", "चलना पूरा", "finish boundary").any(normalized::contains) -> finishBoundaryWalk()
             listOf("बाउंड्री हटाओ", "सीमा साफ", "clear boundary").any(normalized::contains) -> clearBoundaryDraft()
             listOf("मैप देखो", "स्क्रीन देखो", "आँख से देख").any(normalized::contains) -> inspectVisualScreen()
             else -> executeCommand()
@@ -607,29 +616,99 @@ Return JSON only."""
     }
 
     /**
-     * Reuses the map already rendered by AKKPS; no tile provider or map API key.
-     * Map taps are a correction/fallback only when the page exposes its map object.
+     * Satellite parcel recognition is not yet validated for this AKKPS map.
+     * Therefore this is the explicit field-edge GPS fallback; the user walks
+     * only on the outer bund/path and never through standing crops.
      */
     private fun startBoundaryDraft() {
         if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS का मैप पेज खोलें।"; return
         }
-        // Until a satellite segmentation model is bundled and validated,
-        // never substitute manual tracing or the website's native Draw mode.
-        web.evaluateJavascript("""
-            (function(){
-              const prior=window.__shraddhaBoundaryListener;
-              if(prior?.map&&prior?.handler){
-                try{
-                  if(prior.engine==='leaflet'||prior.engine==='mapbox-gl')prior.map.off('click',prior.handler);
-                  else if(prior.subscription)prior.subscription.remove();
-                }catch(_){}
-              }
-              window.__shraddhaBoundaryListener=null;
-              return true;
-            })()
-        """.trimIndent(), null)
-        status.text = "Satellite AI segmentation model अभी app में उपलब्ध/सत्यापित नहीं है। Shraddha ने Draw mode, manual point capture या Save नहीं चलाया। पहले से बनी AKKPS सीमाएँ अछूती रहेंगी।"
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_LOCATION)
+            status.text = "खेत की बाहरी मेड़ से GPS सीमा बनाने के लिए Precise Location अनुमति दें।"
+            return
+        }
+        beginFieldEdgeGpsWalk()
+    }
+
+    private fun beginFieldEdgeGpsWalk() {
+        stopFieldEdgeGpsWalk()
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            status.text = "फोन की Location/GPS चालू करें। फिर बाउंड्री शुरू करें।"
+            return
+        }
+        perimeterTrack = AkkpsPerimeterTrack()
+        locationManager = manager
+        val listener = LocationListener { location: Location ->
+            val track = perimeterTrack ?: return@LocationListener
+            val result = runCatching {
+                track.add(
+                    AkkpsGeoPoint(location.latitude, location.longitude),
+                    location.accuracy,
+                    location.elapsedRealtimeNanos / 1_000_000L
+                )
+            }.getOrElse {
+                status.text = "GPS बिंदु अमान्य है: ${it.localizedMessage ?: "जाँचें"}"
+                return@LocationListener
+            }
+            status.text = when (result) {
+                AkkpsPerimeterTrack.AddResult.ACCEPTED ->
+                    "खेत की बाहरी मेड़ पर चलते रहें • GPS बिंदु: ${track.points.size} • Accuracy: ${location.accuracy.toInt()} m • शुरुआत के पास लौटकर ‘सीमा पूरी’ बोलें"
+                AkkpsPerimeterTrack.AddResult.POOR_ACCURACY -> "GPS accuracy ${location.accuracy.toInt()} m है। 8 m या बेहतर होने तक बिंदु नहीं लिया गया।"
+                AkkpsPerimeterTrack.AddResult.TOO_CLOSE -> "बहुत पास का दोहराया GPS बिंदु छोड़ा गया। धीरे-धीरे मेड़ पर आगे बढ़ें।"
+                AkkpsPerimeterTrack.AddResult.OUT_OF_ORDER -> "पुराना GPS fix छोड़ा गया।"
+                AkkpsPerimeterTrack.AddResult.IMPLAUSIBLE_JUMP -> "GPS में असामान्य छलाँग मिली; यह बिंदु छोड़ा गया।"
+            }
+        }
+        perimeterListener = listener
+        try {
+            manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1_500L, 2f, listener)
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            status.text = "GPS सीमा शुरू। खेत के बाहर की मेड़/रास्ते पर ही चलें—फसल के अंदर न जाएँ। Accuracy 8 m या बेहतर होने पर बिंदु अपने-आप जुड़ेंगे।"
+        } catch (e: SecurityException) {
+            stopFieldEdgeGpsWalk()
+            status.text = "Precise Location अनुमति नहीं मिली। GPS सीमा शुरू नहीं हुई।"
+        } catch (e: Exception) {
+            stopFieldEdgeGpsWalk()
+            status.text = "GPS शुरू नहीं हुआ: ${e.localizedMessage ?: "फोन की Location जाँचें"}"
+        }
+    }
+
+    private fun finishBoundaryWalk() {
+        val track = perimeterTrack
+        if (track == null) {
+            status.text = "पहले खेत की बाहरी मेड़ से GPS सीमा शुरू करें।"
+            return
+        }
+        stopFieldEdgeGpsWalk()
+        val polygon = runCatching { track.finish() }.getOrElse {
+            status.text = it.message ?: "GPS सीमा अधूरी है। शुरुआती बिंदु तक बाहरी रास्ते से लौटें।"
+            perimeterTrack = track
+            return
+        }
+        val area = runCatching { AkkpsBoundaryGeometry.measure(polygon) }.getOrNull()
+        if (area == null) {
+            status.text = "GPS polygon का क्षेत्रफल सत्यापित नहीं हुआ। इसे सेव नहीं किया गया।"
+            perimeterTrack = null
+            return
+        }
+        status.text = String.format(
+            java.util.Locale.ROOT,
+            "GPS Draft तैयार • %d बिंदु • %.2f m² • %.4f hectare • %.4f acre। AKKPS की मौजूदा सीमाओं से overlap जाँच और Save/Reopen जोड़ना बाकी है; अभी कोई रिकॉर्ड सेव नहीं हुआ।",
+            polygon.size, area.squareMeters, area.hectares, area.acres
+        )
+        perimeterTrack = null
+    }
+
+    private fun stopFieldEdgeGpsWalk() {
+        val manager = locationManager
+        val listener = perimeterListener
+        if (manager != null && listener != null) runCatching { manager.removeUpdates(listener) }
+        perimeterListener = null
+        locationManager = null
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun calculateBoundaryArea() {
@@ -706,10 +785,11 @@ Return JSON only."""
     }
 
     override fun onDestroy() {
+        stopFieldEdgeGpsWalk()
         speechRecognizer?.destroy(); speechRecognizer = null
         uploadCallback?.onReceiveValue(null); uploadCallback=null
         web.stopLoading(); web.destroy(); super.onDestroy()
     }
 
-    companion object { private const val REQUEST_FILE=7314; private const val REQUEST_MIC=7315 }
+    companion object { private const val REQUEST_FILE=7314; private const val REQUEST_MIC=7315; private const val REQUEST_LOCATION=7316 }
 }
