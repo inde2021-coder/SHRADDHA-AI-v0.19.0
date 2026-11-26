@@ -364,6 +364,9 @@ fun DeviceCenterScreen(navController: NavController) {
                         if (item != null && item.transferId == transferId) {
                             DeviceFileTransferSender.cleanup(item)
                             outgoingFile = null
+                            outgoingQueue = emptyList()
+                            outgoingInFlight = emptySet()
+                            outgoingAcked = emptySet()
                             outgoingSending = false
                             outgoingProgress = 0
                             incomingTransferStatus = "PC cancelled the outgoing transfer."
@@ -436,8 +439,22 @@ fun DeviceCenterScreen(navController: NavController) {
                     val item = withContext(Dispatchers.IO) { DeviceFileTransferSender.bindPeer(staged, peer) }
                     val started = DeviceLinkManager.startFileTransfer(peer, java.util.UUID.randomUUID().toString().replace("-", ""),
                         item.transferId, item.fileName, item.sizeBytes, item.chunkCount, item.sha256)
-                    if (started) { outgoingFile = item; outgoingProgress = item.sentChunks; incomingTransferStatus = "PC पर save location चुनने की प्रतीक्षा…" }
-                    else { DeviceFileTransferSender.cleanup(item); incomingTransferStatus = "PC transfer शुरू नहीं हो सका।"; outgoingSending = false }
+                    if (started) {
+                        outgoingFile = item
+                        outgoingProgress = item.sentChunks
+                        outgoingQueue = emptyList()
+                        outgoingInFlight = emptySet()
+                        outgoingAcked = emptySet()
+                        incomingTransferStatus = "PC पर save location चुनने की प्रतीक्षा…"
+                    } else {
+                        DeviceFileTransferSender.cleanup(item)
+                        outgoingFile = null
+                        outgoingQueue = emptyList()
+                        outgoingInFlight = emptySet()
+                        outgoingAcked = emptySet()
+                        incomingTransferStatus = "PC transfer शुरू नहीं हो सका।"
+                        outgoingSending = false
+                    }
                 }.onFailure { incomingTransferStatus = "फ़ाइल तैयार नहीं हुई: ${it.message ?: "unknown error"}"; outgoingSending = false }
             }
         } else if (uri != null) incomingTransferStatus = "पहले trusted PC चुनें।"
@@ -808,22 +825,27 @@ fun DeviceCenterScreen(navController: NavController) {
             Text("PHONE TO PC FILE TRANSFER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text("Send a document to the trusted PC. The PC user must approve its save location. Maximum 100 MB.", color = colors.textSecondary, fontSize = 11.sp)
             NovaButton(text = "Choose file and send to PC", onClick = { sendFilePicker.launch(arrayOf("*/*")) },
-                modifier = Modifier.fillMaxWidth(), enabled = connected && selectedPeer?.online == true && selectedPeerId.isNotBlank() && peerTrusted && !outgoingSending,
+                modifier = Modifier.fillMaxWidth(), enabled = connected && selectedPeer?.online == true && selectedPeerId.isNotBlank() && peerTrusted && !outgoingSending && !outgoingPumpActive,
                 type = NovaButtonType.PRIMARY)
             outgoingFile?.let { item ->
                 Text("${item.fileName} • ${item.sizeBytes / 1024} KB • ${outgoingProgress}/${item.chunkCount} chunks", color = colors.textPrimary, fontSize = 11.sp)
                 NovaButton(text = "Resume / Retry", onClick = {
-                    if (item.peerId.isBlank() || item.peerId != selectedPeerId || !DeviceLinkManager.isE2ETrusted(item.peerId)) {
+                    if (outgoingSending || outgoingPumpActive) {
+                        incomingTransferStatus = "पहले चल रहा transfer window पूरा होने दें।"
+                    } else if (item.peerId.isBlank() || item.peerId != selectedPeerId || !DeviceLinkManager.isE2ETrusted(item.peerId)) {
                         incomingTransferStatus = "इस pending transfer के लिए वही trusted PC चुनें।"
                     } else {
                     val requested = DeviceLinkManager.requestFileTransferResume(selectedPeerId, item.transferId, item.chunkCount, emptyList())
                     incomingTransferStatus = if (requested) "PC से missing chunks की सूची माँगी गई…" else "Resume request नहीं भेजी जा सकी।"
                     }
-                }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+                }, modifier = Modifier.fillMaxWidth(), enabled = !outgoingSending && !outgoingPumpActive, type = NovaButtonType.SECONDARY)
                 NovaButton(text = "Cancel transfer", onClick = {
                     DeviceLinkManager.cancelFileTransfer(selectedPeerId, item.transferId, "cancelled_by_phone")
                     DeviceFileTransferSender.cleanup(item)
                     outgoingFile = null
+                    outgoingQueue = emptyList()
+                    outgoingInFlight = emptySet()
+                    outgoingAcked = emptySet()
                     outgoingSending = false
                     outgoingProgress = 0
                     incomingTransferStatus = "Phone transfer cancelled."
