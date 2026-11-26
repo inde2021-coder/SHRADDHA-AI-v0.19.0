@@ -495,7 +495,6 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         }
 
-        receivedFiles = receivedFiles.filter { it.exists() }
         NovaGlassCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("RECEIVED FILES", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
