@@ -7,6 +7,11 @@ data class AkkpsRunnerCommand(
 
 /** Small deterministic parser; it never guesses field values or invents missing data. */
 object AkkpsRunnerCommandParser {
+    /** Submission intent must be a standalone command/token, not a substring such as "resubmit". */
+    fun hasExplicitSubmitIntent(raw: String): Boolean =
+        Regex("(?:^|[\\s;])(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)(?:$|[\\s;])", RegexOption.IGNORE_CASE)
+            .containsMatchIn(raw.trim())
+
     fun parse(raw: String): AkkpsRunnerCommand {
         val assignments = mutableListOf<Pair<String, String>>()
         var submit = false
