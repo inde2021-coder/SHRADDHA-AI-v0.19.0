@@ -63,6 +63,7 @@ import `in`.shraddha.ai.brain.PersistentChatMemory
 import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import `in`.shraddha.ai.brain.LocalKnowledgeDocumentStore
 import `in`.shraddha.ai.brain.LocalKnowledgeAnswer
+import `in`.shraddha.ai.brain.LocalOfflineLlm
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.NovaOrbState
@@ -153,10 +154,36 @@ fun ChatScreen(
                 LocalKnowledgeDocumentStore(context.applicationContext).search(trimmed, limit = 8).getOrThrow()
             }.getOrDefault(emptyList())
             val localKnowledgeAnswer = LocalKnowledgeAnswer.build(trimmed, localKnowledgeHits)
-            val result = if (localKnowledgeAnswer != null) {
-                ChatReplyResult.Success(localKnowledgeAnswer.text)
-            } else {
-                `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
+            val offlineModelPath = context.getSharedPreferences(
+                "shraddha_offline_model",
+                Context.MODE_PRIVATE
+            ).getString("active_model_path", "").orEmpty().trim()
+
+            // Routing order: encrypted document knowledge -> explicitly imported on-device
+            // model -> configured provider. A selected local model failure is surfaced locally;
+            // it is never silently sent to a cloud provider with the same private prompt.
+            val result = when {
+                localKnowledgeAnswer != null -> ChatReplyResult.Success(localKnowledgeAnswer.text)
+                offlineModelPath.isNotBlank() -> runCatching {
+                    val localPrompt = buildString {
+                        append(boundedInstruction)
+                        append("\\n\\nRecent conversation:\\n")
+                        historySnapshot.takeLast(8).forEach { turn ->
+                            append(if (turn.isUser) "User: " else "Assistant: ")
+                            append(turn.text.take(700))
+                            append('\\n')
+                        }
+                    }.takeLast(6_000)
+                    ChatReplyResult.Success(
+                        LocalOfflineLlm.generate(context, offlineModelPath, localPrompt)
+                    )
+                }.getOrElse { error ->
+                    ChatReplyResult.Error(
+                        "Local offline model could not answer. Your message was not sent to a cloud provider. " +
+                            (error.localizedMessage ?: "Check the imported model and device memory.")
+                    )
+                }
+                else -> `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
                     context, appState.aiProvider, boundedInstruction, historySnapshot
                 )
             }
