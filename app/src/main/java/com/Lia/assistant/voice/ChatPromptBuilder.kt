@@ -19,10 +19,13 @@ object ChatPromptBuilder {
         sections.add(personality.systemInstruction)
 
         val langPolicy = when (language) {
-            LanguagePreference.AUTO -> "Language Policy: Match the language of the user's message (Hindi, Hinglish, or English) naturally."
+            LanguagePreference.AUTO -> "Language Policy: Match the language of the user's message (Hindi, Hinglish, English, Marathi, Sanskrit or a known Pawari variety) naturally. Devanagari alone cannot distinguish Hindi, Marathi and Sanskrit."
             LanguagePreference.HINDI -> "Language Policy: Always respond in natural Hindi."
             LanguagePreference.HINGLISH -> "Language Policy: Always respond in natural conversational Hinglish."
             LanguagePreference.ENGLISH -> "Language Policy: Always respond in clear, expressive English."
+            LanguagePreference.MARATHI -> "Language Policy: Always respond in natural Marathi; ask when a regional expression is ambiguous."
+            LanguagePreference.SANSKRIT -> "Language Policy: Respond in Sanskrit only within verified capability; distinguish classical Sanskrit and state uncertainty rather than invent grammar."
+            LanguagePreference.PAWARI -> "Language Policy: Use only reviewed phrases from the user-selected Pawari variety; never invent vocabulary and ask for local-speaker correction when uncertain."
         }
         sections.add(langPolicy)
 
