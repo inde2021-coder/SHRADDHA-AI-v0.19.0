@@ -29,9 +29,7 @@ object ShraddhaSpeechClient {
         synthesize(context, text, language) { result ->
             result.fold(
                 onSuccess = { pcm ->
-                    val onlineAiAllowed = context.applicationContext
-                        .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-                        .getBoolean("allow_online_ai", false)
+                    val onlineAiAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
                     if (!onlineAiAllowed) {
                         done(Result.failure(IllegalStateException("Online AI was disabled while speech was being prepared. Audio was not played.")))
                         return@fold
@@ -108,9 +106,7 @@ object ShraddhaSpeechClient {
             done(Result.failure(IllegalArgumentException("Speech text is empty")))
             return
         }
-        val onlineAiAllowed = context.applicationContext
-            .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-            .getBoolean("allow_online_ai", false)
+        val onlineAiAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
         if (!onlineAiAllowed) {
             done(Result.failure(IllegalStateException("Online AI is disabled. Enable Allow Online AI in Settings > Connections to use cloud speech.")))
             return
