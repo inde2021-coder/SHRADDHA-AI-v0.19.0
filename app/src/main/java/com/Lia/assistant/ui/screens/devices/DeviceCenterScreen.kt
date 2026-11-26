@@ -98,6 +98,7 @@ fun DeviceCenterScreen(navController: NavController) {
     var lastPcResultOk by remember { mutableStateOf(false) }
     var pendingShareRequest by remember { mutableStateOf<JSONObject?>(null) }
     var pendingIncomingFile by remember { mutableStateOf<DeviceFileTransferReceiver.Manifest?>(null) }
+    var resumableIncoming by remember { mutableStateOf(emptyList<DeviceFileTransferReceiver.Manifest>()) }
     var incomingTransferStatus by remember { mutableStateOf("") }
     var receivedFiles by remember { mutableStateOf(DeviceFileTransferReceiver.listReceived(context)) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
@@ -114,6 +115,10 @@ fun DeviceCenterScreen(navController: NavController) {
             }.onSuccess { incomingTransferStatus = "फ़ाइल Downloads में export हो गई: ${source.name}" }
                 .onFailure { incomingTransferStatus = "Export असफल: ${it.message ?: "unknown error"}" }
         }
+    }
+
+    LaunchedEffect(context) {
+        resumableIncoming = withContext(Dispatchers.IO) { DeviceFileTransferReceiver.restore(context) }
     }
 
     DisposableEffect(context) {
@@ -239,7 +244,7 @@ fun DeviceCenterScreen(navController: NavController) {
                         DeviceLinkManager.acknowledgeFileTransfer(peerId, message.optString("transferId"), result.index,
                             complete = result.complete, ok = result.ok)
                         incomingTransferStatus = when {
-                            result.complete -> { receivedFiles = DeviceFileTransferReceiver.listReceived(context); "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}" }
+                            result.complete -> { receivedFiles = DeviceFileTransferReceiver.listReceived(context); resumableIncoming = DeviceFileTransferReceiver.pendingTransfers(); "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}" }
                             !result.ok -> result.error ?: "फ़ाइल chunk reject हुआ।"
                             else -> "फ़ाइल प्राप्त हो रही है… chunk ${result.index + 1}"
                         }
@@ -592,6 +597,26 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         }
 
+        if (resumableIncoming.isNotEmpty()) {
+            NovaGlassCard {
+                Text("RECOVERABLE PC TO PHONE TRANSFERS", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                resumableIncoming.forEach { manifest ->
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(manifest.fileName, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        val missingCount = DeviceFileTransferReceiver.missingIndexes(manifest.transferId).size
+                        Text("PC: ${manifest.peerId} • ${missingCount} chunks बाकी", color = colors.textSecondary, fontSize = 10.sp)
+                        NovaButton(text = "Resume receiving", onClick = {
+                            val missing = DeviceFileTransferReceiver.missingIndexes(manifest.transferId)
+                            val sent = DeviceLinkManager.isE2ETrusted(manifest.peerId) &&
+                                DeviceLinkManager.requestFileTransferResume(manifest.peerId, manifest.transferId, manifest.chunkCount, missing)
+                            incomingTransferStatus = if (sent) "PC से ${missing.size} missing chunks दोबारा भेजने को कहा है।" else "उसी trusted PC से secure connection जरूरी है।"
+                        }, enabled = connected && peers.any { it.id == manifest.peerId && it.online } &&
+                            DeviceLinkManager.isE2ETrusted(manifest.peerId), modifier = Modifier.fillMaxWidth(),
+                            type = NovaButtonType.SECONDARY)
+                    }
+                }
+            }
+        }
         NovaGlassCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("RECEIVED FILES", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -751,6 +776,7 @@ fun DeviceCenterScreen(navController: NavController) {
             confirmButton = {
                 TextButton(onClick = {
                     val accepted = DeviceFileTransferReceiver.accept(context, manifest)
+                    resumableIncoming = DeviceFileTransferReceiver.pendingTransfers()
                     val acknowledged = accepted && DeviceLinkManager.acknowledgeFileTransfer(manifest.peerId, manifest.transferId, -1, ok = true)
                     if (!acknowledged) {
                         DeviceFileTransferReceiver.reject(manifest.transferId)
