@@ -60,24 +60,26 @@ object DeviceLinkManager {
             }
             activeAiCalls.add(call)
             call.enqueue(object : Callback {
-            override fun onFailure(call: Call, error: java.io.IOException) {
-                activeAiCalls.remove(call)
-                done(Result.failure(error))
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
+                override fun onFailure(call: Call, error: java.io.IOException) {
                     activeAiCalls.remove(call)
-                    val raw = it.body?.string().orEmpty()
-                    if (!onlineAiAllowed()) {
-                        done(Result.failure(IllegalStateException("Online AI permission was revoked while the request was running. The response was discarded.")))
-                    } else {
-                        done(parse(it, raw))
+                    done(Result.failure(error))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.use {
+                        activeAiCalls.remove(call)
+                        val raw = it.body?.string().orEmpty()
+                        if (!onlineAiAllowed()) {
+                            done(Result.failure(IllegalStateException("Online AI permission was revoked while the request was running. The response was discarded.")))
+                        } else {
+                            done(parse(it, raw))
+                        }
                     }
                 }
-            }
-        })
+            })
+        }
     }
+
     private val reconnectHandler = Handler(Looper.getMainLooper())
     @Volatile private var appContext: Context? = null
     @Volatile private var lastBaseUrl: String? = null
