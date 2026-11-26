@@ -133,6 +133,8 @@ class PcCompanionApp:
         self.auto_reconnect_enabled = True
         self.reconnect_attempts = 0
         self.reconnect_scheduled = False
+        self.file_transfer_lock = threading.RLock()
+        self.file_chunk_queue = queue.Queue(maxsize=8)
         self.pc_incoming = self._load_pc_incoming()
         self.remote_target_var = tk.StringVar()
         self.remote_action_var = tk.StringVar(value="home")
