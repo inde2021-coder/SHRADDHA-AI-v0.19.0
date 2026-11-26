@@ -65,6 +65,20 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(validate_remote_action_envelope({"kind": "home"}, "tap"))
         self.assertIsNone(validate_remote_action_envelope({"kind": "exec"}, "exec"))
 
+    def test_pc_file_actions_accept_only_relative_paths(self):
+        self.assertEqual(validate_remote_action({"kind": "file_list", "path": "Documents/Reports"}),
+                         {"kind": "file_list", "path": "Documents/Reports"})
+        self.assertEqual(validate_remote_action({"kind": "file_read", "path": "Notes/today.txt"}),
+                         {"kind": "file_read", "path": "Notes/today.txt"})
+        for action in (
+            {"kind": "file_list", "path": "../Windows"},
+            {"kind": "file_read", "path": "C:/Users/Someone/secret.txt"},
+            {"kind": "file_list", "path": ".ssh"},
+            {"kind": "file_read", "path": "/etc/passwd"},
+            {"kind": "file_list", "path": "safe", "command": "whoami"},
+        ):
+            self.assertIsNone(validate_remote_action(action))
+
     def test_ocr_is_allowlisted_without_client_supplied_payload(self):
         self.assertEqual(validate_remote_action({"kind": "ocr"}), {"kind": "ocr"})
         self.assertIsNone(validate_remote_action({"kind": "ocr", "script": "arbitrary"}))
