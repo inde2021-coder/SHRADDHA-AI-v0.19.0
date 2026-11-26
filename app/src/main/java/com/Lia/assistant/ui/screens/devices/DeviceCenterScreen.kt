@@ -667,6 +667,10 @@ fun DeviceCenterScreen(navController: NavController) {
                 type = NovaButtonType.PRIMARY)
             outgoingFile?.let { item ->
                 Text("${item.fileName} • ${item.sizeBytes / 1024} KB • ${outgoingProgress}/${item.chunkCount} chunks", color = colors.textPrimary, fontSize = 11.sp)
+                NovaButton(text = "Resume / Retry", onClick = {
+                    val requested = DeviceLinkManager.requestFileTransferResume(selectedPeerId, item.transferId, item.chunkCount, emptyList())
+                    incomingTransferStatus = if (requested) "PC से missing chunks की सूची माँगी गई…" else "Resume request नहीं भेजी जा सकी।"
+                }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
                 NovaButton(text = "Cancel transfer", onClick = {
                     DeviceLinkManager.cancelFileTransfer(selectedPeerId, item.transferId, "cancelled_by_phone")
                     DeviceFileTransferSender.cleanup(item)
