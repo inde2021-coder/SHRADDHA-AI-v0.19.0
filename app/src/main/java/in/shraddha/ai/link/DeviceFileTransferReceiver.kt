@@ -35,6 +35,7 @@ object DeviceFileTransferReceiver {
         if (active.containsKey(manifest.transferId)) return false
         val directory = File(context.filesDir, "ReceivedFiles")
         if (!directory.exists() && !directory.mkdirs()) return false
+        if (!directory.isDirectory || directory.usableSpace < manifest.sizeBytes) return false
         val temp = File(directory, ".${manifest.transferId}.part")
         if (temp.exists() || temp.isDirectory) return false
         return try {
