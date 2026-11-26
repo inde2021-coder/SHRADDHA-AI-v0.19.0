@@ -26,7 +26,6 @@ class CurriculumProgressStore(context: Context) {
         val dailyLimitMinutes: Int,
         val usedTodayMinutes: Int
     ) {
-        val hasPin: Boolean get() = false
     }
 
     @Synchronized fun hasGuardianPin(): Boolean = prefs.contains(PIN_HASH)
