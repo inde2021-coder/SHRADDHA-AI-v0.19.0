@@ -32,6 +32,9 @@ object AkkpsBoundaryGeometry {
         require(points.zipWithNext().none { (a, b) ->
             a.latitude == b.latitude && a.longitude == b.longitude
         }) { "लगातार दो सीमा-बिंदु एक जैसे नहीं हो सकते।" }
+        require(!hasSelfIntersection(points)) {
+            "बाउंड्री की रेखाएँ आपस में काट रही हैं; ऐसे polygon का क्षेत्रफल स्वीकार नहीं होगा।"
+        }
 
         var sum = 0.0
         for (i in points.indices) {
@@ -53,4 +56,40 @@ object AkkpsBoundaryGeometry {
             acres = squareMeters / 4_046.8564224
         )
     }
+    /** Rejects crossing/touching non-adjacent edges before an area is accepted. */
+    private fun hasSelfIntersection(points: List<AkkpsGeoPoint>): Boolean {
+        fun orientation(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint): Double =
+            (b.longitude - a.longitude) * (c.latitude - a.latitude) -
+                (b.latitude - a.latitude) * (c.longitude - a.longitude)
+
+        fun onSegment(a: AkkpsGeoPoint, b: AkkpsGeoPoint, p: AkkpsGeoPoint): Boolean =
+            p.longitude >= minOf(a.longitude, b.longitude) - 1e-12 &&
+                p.longitude <= maxOf(a.longitude, b.longitude) + 1e-12 &&
+                p.latitude >= minOf(a.latitude, b.latitude) - 1e-12 &&
+                p.latitude <= maxOf(a.latitude, b.latitude) + 1e-12
+
+        fun intersects(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint, d: AkkpsGeoPoint): Boolean {
+            val o1 = orientation(a, b, c)
+            val o2 = orientation(a, b, d)
+            val o3 = orientation(c, d, a)
+            val o4 = orientation(c, d, b)
+            if (((o1 > 1e-12 && o2 < -1e-12) || (o1 < -1e-12 && o2 > 1e-12)) &&
+                ((o3 > 1e-12 && o4 < -1e-12) || (o3 < -1e-12 && o4 > 1e-12))) return true
+            return (abs(o1) <= 1e-12 && onSegment(a, b, c)) ||
+                (abs(o2) <= 1e-12 && onSegment(a, b, d)) ||
+                (abs(o3) <= 1e-12 && onSegment(c, d, a)) ||
+                (abs(o4) <= 1e-12 && onSegment(c, d, b))
+        }
+
+        for (i in points.indices) {
+            val iNext = (i + 1) % points.size
+            for (j in i + 1 until points.size) {
+                val jNext = (j + 1) % points.size
+                if (i == j || iNext == j || jNext == i) continue
+                if (intersects(points[i], points[iNext], points[j], points[jNext])) return true
+            }
+        }
+        return false
+    }
+
 }
