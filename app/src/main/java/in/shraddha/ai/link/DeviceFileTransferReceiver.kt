@@ -128,10 +128,10 @@ object DeviceFileTransferReceiver {
         val state = active[transferId] ?: run {
             val receipt = loadReceipt(context, transferId)
             if (receipt != null && receipt.peerId == peerId) {
-                val saved = File(receipt.savedPath)
-                if (saved.isFile && !saved.isSymbolicLink() && saved.length() == receipt.sizeBytes) {
-                    return ChunkResult(index, true, complete = true, savedPath = saved.absolutePath)
-                }
+                // The receipt is written only after final SHA-256 verification. The
+                // user may subsequently move/delete the saved file; that must not
+                // strand the sender waiting for an ACK that was already earned.
+                return ChunkResult(index, true, complete = true, savedPath = receipt.savedPath)
             }
             return ChunkResult(index, false, error = "No approved transfer is active.")
         }
@@ -190,12 +190,7 @@ object DeviceFileTransferReceiver {
         return directory.listFiles()?.filter { it.isFile && it.name.startsWith(".") && it.name.endsWith(".receipt") }
             ?.mapNotNull { file ->
                 val id = file.name.removePrefix(".").removeSuffix(".receipt")
-                loadReceipt(context, id)?.takeIf { receipt ->
-                    (peerId == null || receipt.peerId == peerId) &&
-                        File(receipt.savedPath).let { saved ->
-                            saved.isFile && !saved.isSymbolicLink() && saved.length() == receipt.sizeBytes
-                        }
-                }
+                loadReceipt(context, id)?.takeIf { receipt -> peerId == null || receipt.peerId == peerId }
             }?.sortedBy { it.transferId }.orEmpty()
     }
 
