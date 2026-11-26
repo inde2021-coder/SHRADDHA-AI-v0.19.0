@@ -635,6 +635,10 @@ class PcCompanionApp:
                     self.config.get("deviceId", ""), peer_id
                 )
                 with self.e2e_lock:
+                    previous = self.peer_keys.get(peer_id)
+                    if previous and previous["fingerprint"] == fingerprint:
+                        # Duplicate relay fan-out in one session must not reset mutual trust.
+                        return
                     previous = self.peer_keys.pop(peer_id, None)
                     if previous:
                         previous["key"][:] = b"\x00" * len(previous["key"])
