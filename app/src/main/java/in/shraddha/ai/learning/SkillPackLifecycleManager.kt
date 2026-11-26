@@ -259,10 +259,11 @@ class SkillPackLifecycleManager(context: Context) {
         File(content.parentFile, content.name + ".json").writeText(metadata.toString(), Charsets.UTF_8)
     }
 
-    private fun readState(): JSONObject = runCatching {
-        if (state.isFile) JSONObject(state.readText(Charsets.UTF_8)) else JSONObject()
-    }.getOrElse { JSONObject() }
-
+    private fun readState(): JSONObject {
+        if (!state.exists()) return JSONObject()
+        require(state.isFile) { "Skill Factory activation state is not a regular file." }
+        return JSONObject(state.readText(Charsets.UTF_8))
+    }
     private fun writeState(value: JSONObject) {
         val temp = File(root, "activation-state.tmp")
         temp.writeText(value.toString(), Charsets.UTF_8)
