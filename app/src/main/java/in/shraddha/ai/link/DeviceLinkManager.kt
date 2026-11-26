@@ -163,7 +163,11 @@ object DeviceLinkManager {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
-                    if ((msg.optString("type").startsWith("file_transfer_") && msg.optString("type") != "file_transfer_chunk") || msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
+                    if (msg.optString("type") == "data_share_result" || msg.optString("type") == "connected") onFileTransferMessage?.invoke(msg)
+                    if (msg.optString("type").startsWith("file_transfer_")) {
+                        onStatus?.invoke("Blocked plaintext file-transfer control message. End-to-end encryption is mandatory.")
+                        return
+                    }
                     when (msg.optString("type")) {
                         "e2e_message" -> {
                             val peerId = msg.optString("fromDeviceId")
@@ -178,6 +182,7 @@ object DeviceLinkManager {
                             val index = msg.optInt("index", -1)
                             val correlation = when (kind) {
                                 "remote_action", "remote_action_result" -> actionId
+                                "file_transfer_start", "file_transfer_ack", "file_transfer_resume", "file_transfer_cancel" -> transferId
                                 "file_transfer_chunk" -> "$transferId:$index"
                                 "clipboard_payload" -> msg.optString("requestId")
                                 "data_share_payload" -> msg.optString("requestId") + "|" + msg.optString("category")
@@ -212,6 +217,10 @@ object DeviceLinkManager {
                                 "file_transfer_chunk" -> {
                                     payload.put("type", "file_transfer_chunk").put("fromDeviceId", peerId)
                                         .put("transferId", transferId).put("index", index)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_start", "file_transfer_ack", "file_transfer_resume", "file_transfer_cancel" -> {
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
                                     onFileTransferMessage?.invoke(payload)
                                 }
                                 "clipboard_payload" -> {
@@ -594,7 +603,9 @@ object DeviceLinkManager {
     }
     fun startFileTransfer(targetDeviceId: String, requestId: String, transferId: String, fileName: String, sizeBytes: Long, chunkCount: Int, sha256: String): Boolean {
         if (targetDeviceId.isBlank() || requestId.isBlank() || !transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || sizeBytes !in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES || chunkCount !in 1..DeviceFileTransferProtocol.MAX_CHUNKS || sha256.matches(Regex("[a-fA-F0-9]{64}")).not() || DeviceFileTransferProtocol.chunkCount(sizeBytes) != chunkCount) return false
-        return socket?.send(JSONObject().put("type", "file_transfer_start").put("targetDeviceId", targetDeviceId).put("requestId", requestId).put("transferId", transferId).put("fileName", fileName.take(120)).put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()).toString()) == true
+        return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_start",
+            JSONObject().put("requestId", requestId).put("fileName", DeviceFileTransferProtocol.safeDisplayName(fileName))
+                .put("sizeBytes", sizeBytes).put("chunkCount", chunkCount).put("sha256", sha256.lowercase()), transferId)
     }
     fun sendFileTransferChunk(targetDeviceId: String, transferId: String, index: Int, bytes: ByteArray): Boolean {
         if (transferId.isBlank() || index !in 0 until DeviceFileTransferProtocol.MAX_CHUNKS || bytes.isEmpty() || bytes.size > DeviceFileTransferProtocol.CHUNK_BYTES) return false
@@ -608,14 +619,18 @@ object DeviceLinkManager {
             missingIndexes.any { it !in 0 until chunkCount } || missingIndexes.distinct().size != missingIndexes.size) return false
         val indexes = JSONArray()
         missingIndexes.forEach(indexes::put)
-        return socket?.send(JSONObject().put("type", "file_transfer_resume")
-            .put("targetDeviceId", sourceDeviceId).put("transferId", transferId)
-            .put("chunkCount", chunkCount).put("missingIndexes", indexes).toString()) == true
+        return sendEncryptedPeerMessage(sourceDeviceId, "file_transfer_resume",
+            JSONObject().put("chunkCount", chunkCount).put("missingIndexes", indexes), transferId)
     }
-    fun acknowledgeFileTransfer(targetDeviceId: String, transferId: String, index: Int, complete: Boolean = false, ok: Boolean = true): Boolean =
-        socket?.send(JSONObject().put("type", "file_transfer_ack").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("index", index).put("complete", complete).put("ok", ok).toString()) == true
+    fun acknowledgeFileTransfer(targetDeviceId: String, transferId: String, index: Int, complete: Boolean = false, ok: Boolean = true): Boolean {
+        if (!transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) || index !in -1 until DeviceFileTransferProtocol.MAX_CHUNKS) return false
+        return sendEncryptedPeerMessage(targetDeviceId, "file_transfer_ack",
+            JSONObject().put("index", index).put("complete", complete).put("ok", ok), transferId)
+    }
     fun cancelFileTransfer(targetDeviceId: String, transferId: String, reason: String = "cancelled"): Boolean =
-        socket?.send(JSONObject().put("type", "file_transfer_cancel").put("targetDeviceId", targetDeviceId).put("transferId", transferId).put("reason", reason.take(120)).toString()) == true
+        if (!transferId.matches(Regex("[A-Za-z0-9_-]{12,64}"))) false
+        else sendEncryptedPeerMessage(targetDeviceId, "file_transfer_cancel",
+            JSONObject().put("reason", reason.take(120)), transferId)
 
 
     private fun sendE2EKeyOffer(targetDeviceId: String): Boolean =
@@ -678,7 +693,8 @@ object DeviceLinkManager {
         }
         val message = JSONObject().put("type", "e2e_message").put("targetDeviceId", targetDeviceId)
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
-        if (kind == "file_transfer_chunk") message.put("transferId", correlationId).put("index", index)
+        if (kind.startsWith("file_transfer_")) message.put("transferId", correlationId)
+        if (kind == "file_transfer_chunk") message.put("index", index)
         if (kind == "clipboard_payload" || kind == "task_handoff" || kind == "task_handoff_response") message.put("requestId", correlationId)
         if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
