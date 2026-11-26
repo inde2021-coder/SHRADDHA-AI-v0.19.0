@@ -5,7 +5,7 @@ import org.json.JSONArray
 import java.time.YearMonth
 import java.time.ZoneOffset
 
-/** Local monthly hard-stop for Main Brain council spend. Prices are user supplied. */
+/** Local monthly estimated-spend guard for metered Main Brain provider calls. Prices are user supplied. */
 object CouncilCostBudget {
     private const val PREFS = "council_cost_budget"
     private const val KEY_LIMIT = "monthly_limit_usd"
@@ -90,16 +90,16 @@ object CouncilCostBudget {
         }
         if (price == null) {
             p.edit().putBoolean(KEY_UNKNOWN, true).commit()
-            throw IllegalStateException("Monthly API budget is enabled, but no price is configured for ${usage.provider}/${usage.model}. Add its exact rates in Settings; further council calls are stopped.")
+            throw IllegalStateException("Monthly API budget is enabled, but no price is configured for ${usage.provider}/${usage.model}. Add its exact rates in Settings; further metered provider calls are stopped.")
         }
-        if (p.getBoolean(KEY_UNKNOWN, false)) throw IllegalStateException("Monthly API budget is paused because an earlier model usage had no configured price. Update the price table and start a new council task.")
+        if (p.getBoolean(KEY_UNKNOWN, false)) throw IllegalStateException("Monthly API budget is paused because an earlier model usage had no configured price. Update the price table and review the usage and price table.")
         val added = usage.inputTokens.toDouble() * price.getDouble("inputUsdPerMillionTokens") / 1_000_000.0 +
             usage.outputTokens.toDouble() * price.getDouble("outputUsdPerMillionTokens") / 1_000_000.0
         require(added.isFinite() && added >= 0.0) { "Token cost calculation is invalid." }
         val updated = p.getFloat(KEY_SPEND, 0f).toDouble() + added
         require(updated.isFinite()) { "Monthly API spend overflowed." }
         p.edit().putFloat(KEY_SPEND, updated.toFloat()).commit()
-        if (updated > limit) throw IllegalStateException("Monthly API budget exceeded: estimated spend USD ${updated} is above configured limit USD ${limit}. Further council provider calls are stopped.")
+        if (updated > limit) throw IllegalStateException("Monthly API budget exceeded: estimated spend USD ${updated} is above configured limit USD ${limit}. Further metered provider calls are stopped.")
     }
 
     /** Cloud gateways without token evidence must stop budgeted work instead of bypassing the cap. */
@@ -111,7 +111,7 @@ object CouncilCostBudget {
             p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f).putBoolean(KEY_UNKNOWN, false).commit()
         }
         check(p.edit().putBoolean(KEY_UNKNOWN, true).commit()) { "Could not persist unknown provider usage state." }
-        throw IllegalStateException("Monthly API budget is enabled, but the HTTPS gateway returned no token usage for $provider/${model ?: "unknown model"}. The call may already have been billed; further council calls are stopped until usage pricing is reviewed.")
+        throw IllegalStateException("Monthly API budget is enabled, but the HTTPS gateway returned no token usage for $provider/${model ?: "unknown model"}. The call may already have been billed; further metered provider calls are stopped until usage pricing is reviewed.")
     }
 
     fun monthlySpendUsd(context: Context): Double {
