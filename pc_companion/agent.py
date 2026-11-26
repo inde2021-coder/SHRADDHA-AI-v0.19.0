@@ -826,7 +826,7 @@ class PcCompanionApp:
                     self.status_var.set(f"Rejected encrypted file-transfer control message: {str(exc)[:120]}")
                 return
             if message_kind == "file_transfer_chunk":
-                self._handle_incoming_file_chunk(msg, peer_id)
+                self._enqueue_file_chunk(msg, peer_id)
                 return
             if message_kind == "remote_action_result":
                 self._handle_phone_remote_action_result(msg, peer_id, action_id, action_kind)
@@ -1429,6 +1429,37 @@ class PcCompanionApp:
         self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                          "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
         self.status_var.set(f"Receiving {Path(destination).name} from paired Android device…")
+
+    def _enqueue_file_chunk(self, msg, peer_id):
+        try:
+            self.file_chunk_queue.put_nowait((dict(msg), str(peer_id)))
+            return True
+        except queue.Full:
+            self._send_json({
+                "type": "file_transfer_ack", "targetDeviceId": peer_id,
+                "transferId": str(msg.get("transferId", "")),
+                "index": int(msg.get("index", -1)), "complete": False, "ok": False
+            })
+            self.events.put(("status", "Incoming transfer window is full; sender will retry this chunk."))
+            return False
+
+    def _file_chunk_worker(self):
+        while not self.stop_event.is_set():
+            try:
+                msg, peer_id = self.file_chunk_queue.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            try:
+                self._handle_incoming_file_chunk(msg, peer_id)
+            except Exception as exc:
+                self._send_json({
+                    "type": "file_transfer_ack", "targetDeviceId": peer_id,
+                    "transferId": str(msg.get("transferId", "")),
+                    "index": int(msg.get("index", -1)), "complete": False, "ok": False
+                })
+                self.events.put(("status", f"Incoming file chunk failed safely: {str(exc)[:140]}"))
+            finally:
+                self.file_chunk_queue.task_done()
 
     def _handle_incoming_file_chunk(self, msg, peer_id):
         with self.file_transfer_lock:
