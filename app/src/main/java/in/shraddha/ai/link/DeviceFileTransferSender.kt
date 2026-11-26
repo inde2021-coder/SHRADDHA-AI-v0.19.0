@@ -121,9 +121,13 @@ object DeviceFileTransferSender {
         val id = props.getProperty("transferId")
         val hash = props.getProperty("sha256")
         require(file.length() == size && DeviceFileTransferProtocol.isValidManifest(id, size, count, hash))
-        val sent = props.getProperty("sentChunks", "0").toInt().coerceIn(0, count)
+        require(sha256(file).equals(hash, ignoreCase = true)) { "Staged source failed SHA-256 recovery verification." }
+        val sentRaw = props.getProperty("sentChunks", "0").toInt()
+        require(sentRaw in 0..count)
+        val peer = props.getProperty("peerId", "")
+        require(peer.length <= 128)
         Prepared(file, id, DeviceFileTransferProtocol.safeDisplayName(props.getProperty("fileName", "")),
-            size, count, hash, props.getProperty("peerId", ""), sent)
+            size, count, hash, peer, sentRaw)
     }.getOrNull()
 
     fun readChunk(prepared: Prepared, index: Int): ByteArray {
@@ -141,6 +145,21 @@ object DeviceFileTransferSender {
     @Synchronized fun cleanup(prepared: Prepared) {
         prepared.file.delete()
         metadataFile(prepared.file).delete()
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            try {
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count > 0) digest.update(buffer, 0, count)
+                }
+            } finally { buffer.fill(0) }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun metadataFile(file: File) = File(file.parentFile, file.name + ".meta")
