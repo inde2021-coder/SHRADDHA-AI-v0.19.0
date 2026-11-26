@@ -10,6 +10,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -29,13 +30,18 @@ object VoiceGatewaySettings {
     private const val PAYLOAD = "config_ciphertext"
     private const val IV = "config_iv"
     private const val ALIAS = "shraddha_voice_gateway_aes_v1"
-    private data class ProviderCache(val baseUrl: String, val tokenHash: Int, val fetchedAt: Long, val providers: Set<String>)
+    private data class ProviderCache(val baseUrl: String, val tokenFingerprint: String, val fetchedAt: Long, val providers: Set<String>)
     @Volatile private var providerCache: ProviderCache? = null
     private val http = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .callTimeout(25, TimeUnit.SECONDS)
         .build()
+
+    private fun tokenFingerprint(token: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(token.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     private fun keyForEncryption(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -178,8 +184,9 @@ object VoiceGatewaySettings {
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
         val now = System.currentTimeMillis()
+        val fingerprint = tokenFingerprint(config.gatewayToken)
         val cached = providerCache
-        if (cached != null && cached.baseUrl == config.baseUrl && cached.tokenHash == config.gatewayToken.hashCode() && now - cached.fetchedAt < 30_000L) {
+        if (cached != null && cached.baseUrl == config.baseUrl && cached.tokenFingerprint == fingerprint && now - cached.fetchedAt < 30_000L) {
             return cached.providers
         }
         val request = Request.Builder()
@@ -196,7 +203,7 @@ object VoiceGatewaySettings {
             val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
                 .filter { provider -> flags.optBoolean(if (provider == "CLAUDE") "anthropic" else provider.lowercase()) }
                 .toSet()
-            providerCache = ProviderCache(config.baseUrl, config.gatewayToken.hashCode(), now, providers)
+            providerCache = ProviderCache(config.baseUrl, fingerprint, now, providers)
             return providers
         }
     }
