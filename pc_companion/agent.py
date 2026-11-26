@@ -1435,10 +1435,13 @@ class PcCompanionApp:
             self.file_chunk_queue.put_nowait((dict(msg), str(peer_id)))
             return True
         except queue.Full:
+            index = msg.get("index", -1)
+            if type(index) is not int:
+                index = -1
             self._send_json({
                 "type": "file_transfer_ack", "targetDeviceId": peer_id,
                 "transferId": str(msg.get("transferId", "")),
-                "index": int(msg.get("index", -1)), "complete": False, "ok": False
+                "index": index, "complete": False, "ok": False
             })
             self.events.put(("status", "Incoming transfer window is full; sender will retry this chunk."))
             return False
@@ -1452,10 +1455,13 @@ class PcCompanionApp:
             try:
                 self._handle_incoming_file_chunk(msg, peer_id)
             except Exception as exc:
+                index = msg.get("index", -1)
+                if type(index) is not int:
+                    index = -1
                 self._send_json({
                     "type": "file_transfer_ack", "targetDeviceId": peer_id,
                     "transferId": str(msg.get("transferId", "")),
-                    "index": int(msg.get("index", -1)), "complete": False, "ok": False
+                    "index": index, "complete": False, "ok": False
                 })
                 self.events.put(("status", f"Incoming file chunk failed safely: {str(exc)[:140]}"))
             finally:
