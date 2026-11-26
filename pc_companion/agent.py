@@ -974,9 +974,13 @@ class PcCompanionApp:
             return
         if not msg.get("approved"):
             self.pending_pc_send = None
+            self._persist_pc_outgoing()
             self.status_var.set("Android user denied file transfer.")
             return
         chunks = chunk_count_for_size(pending["size"])
+        if not self._persist_pc_outgoing():
+            self.status_var.set("Transfer paused: Windows could not persist its recovery record.")
+            return
         sent = self._send_json({
             "type": "file_transfer_start", "targetDeviceId": pending["peer"],
             "requestId": pending["requestId"], "transferId": pending["transferId"],
@@ -984,7 +988,7 @@ class PcCompanionApp:
             "chunkCount": chunks, "sha256": pending["sha256"]
         })
         self.status_var.set("Transfer manifest sent; waiting for Android user to accept and choose a save location." if sent
-                            else "Could not send transfer manifest.")
+                            else "Manifest saved for recovery; reconnect and resume after Android approval.")
 
     def _handle_file_ack(self, msg):
         pending = self.pending_pc_send
@@ -999,6 +1003,7 @@ class PcCompanionApp:
         elif msg.get("complete") is True:
             if msg.get("ok") is True:
                 self.pending_pc_send = None
+                self._persist_pc_outgoing()
                 self.status_var.set("Android receiver verified and saved the file (completion acknowledged).")
             else:
                 self.status_var.set("Receiver could not verify the transfer. Resume only after checking the destination.")
@@ -1259,6 +1264,7 @@ class PcCompanionApp:
             if sender != pending.get("peer") or not self.is_e2e_trusted(pending["peer"]):
                 return
             self.pending_pc_send = None
+            self._persist_pc_outgoing()
         elif incoming:
             if sender != incoming.get("peer") or not self.is_e2e_trusted(incoming["peer"]):
                 return
