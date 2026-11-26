@@ -72,3 +72,6 @@ From the paired Android Device Center, enter a relative path under the Windows u
 - Received files are capped at 100 MB and verified against the advertised SHA-256 before publication.
 - Partial-transfer files are created with exclusive-create semantics; an existing `.shraddha-part` is never truncated.
 - Completed files are published with an atomic no-overwrite operation. If the destination name already exists or the filesystem cannot safely publish the file, the transfer fails closed rather than replacing user data.
+
+
+Screen sharing is off by default, requires a local Windows opt-in, and is restricted to the single Android device ID entered in the control target field; the target must be mutually E2E verified. A peer disconnect automatically stops that stream.
