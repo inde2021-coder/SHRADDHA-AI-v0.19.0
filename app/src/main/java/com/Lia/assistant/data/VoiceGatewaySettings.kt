@@ -170,6 +170,8 @@ object VoiceGatewaySettings {
 
     /** Returns server-side provider keys configured on the HTTPS gateway; null means no gateway. */
     fun configuredProviders(context: Context): Set<String>? {
+        // Enforce consent at the provider-discovery boundary itself, not only at callers.
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
