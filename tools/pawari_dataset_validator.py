@@ -118,10 +118,10 @@ def validate_csv(csv_path: Path, audio_dir: Path | None = None) -> dict:
                 reviews = [(row.get(field) or "").strip().upper() for field in REVIEW_FIELDS]
                 # A row is eligible for internal training only with research + commercial-training consent,
                 # both independent reviews, and no withdrawal. Public release / voice synthesis are separate.
-                if consents["consent_research"] == "YES" and consents["consent_commercial_training"] == "YES" and reviews == ["APPROVED", "APPROVED"]:
+                if consents["consent_transcription"] == "YES" and consents["consent_research"] == "YES" and consents["consent_commercial_training"] == "YES" and "WITHDRAWN" not in consents.values() and reviews == ["APPROVED", "APPROVED"]:
                     accepted.append(rid)
                 else:
-                    warnings.append({"row": row_no, "code": "NOT_TRAINING_ELIGIBLE", "message": "Valid record, but missing explicit research/commercial-training consent or two approvals."})
+                    warnings.append({"row": row_no, "code": "NOT_TRAINING_ELIGIBLE", "message": "Valid record, but missing transcription/research/commercial-training consent, has a withdrawal, or lacks two approvals."})
 
     return {
         "ok": not errors,
