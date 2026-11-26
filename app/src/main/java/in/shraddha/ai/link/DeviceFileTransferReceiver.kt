@@ -93,7 +93,7 @@ object DeviceFileTransferReceiver {
                         if (sha256(temp).equals(hash, ignoreCase = true)) {
                             val receipt = loadReceipt(context, id)
                             val destination = receipt?.let { File(it.savedPath) } ?: uniqueDestination(directory, name)
-                            require(destination.parentFile?.canonicalFile == directory.canonicalFile)
+                            require(!destination.isSymbolicLink() && destination.parentFile?.canonicalFile == directory.canonicalFile)
                             if (persistReceipt(context, CompletedReceipt(peer, id, name, size, hash, destination.absolutePath)) &&
                                 (destination.isFile && destination.length() == size && sha256(destination).equals(hash, true) ||
                                     temp.renameTo(destination))) {
@@ -190,7 +190,7 @@ object DeviceFileTransferReceiver {
                 loadReceipt(context, id)?.takeIf { receipt ->
                     (peerId == null || receipt.peerId == peerId) &&
                         File(receipt.savedPath).let { saved ->
-                            saved.isFile && saved.length() == receipt.sizeBytes &&
+                            saved.isFile && !saved.isSymbolicLink() && saved.length() == receipt.sizeBytes &&
                                 sha256(saved).equals(receipt.sha256, ignoreCase = true)
                         }
                 }
@@ -238,7 +238,8 @@ object DeviceFileTransferReceiver {
         val path = props.getProperty("savedPath").orEmpty()
         val file = File(path)
         require(id == transferId && peer.isNotBlank() && size in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES &&
-            hash.matches(Regex("[a-fA-F0-9]{64}")) && file.parentFile?.canonicalFile == receivedDirectory(context).canonicalFile)
+            hash.matches(Regex("[a-fA-F0-9]{64}")) && !file.isSymbolicLink() &&
+            file.parentFile?.canonicalFile == receivedDirectory(context).canonicalFile)
         CompletedReceipt(peer, id, name, size, hash, path)
     }.getOrNull()
 
