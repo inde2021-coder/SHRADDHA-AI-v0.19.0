@@ -138,6 +138,18 @@ class ActionTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "text files"):
                     read_user_text_file("image.png")
 
+    def test_remote_file_open_launches_only_supported_pdf(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.actions import open_user_path
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "report.pdf").write_bytes(b"%PDF")
+            with patch("pc_companion.actions.Path.home", return_value=root), patch("pc_companion.actions.os.startfile", create=True) as startfile:
+                result = open_user_path("report.pdf")
+                self.assertEqual(result, {"opened": "report.pdf", "type": "file"})
+                startfile.assert_called_once_with(str(root / "report.pdf"))
+
     def test_remote_file_open_rejects_executable_extensions(self):
         import tempfile
         from pathlib import Path
