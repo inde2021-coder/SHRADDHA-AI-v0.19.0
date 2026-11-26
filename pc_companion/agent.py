@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError, save_outgoing_transfer_record, load_outgoing_transfer_record
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError, save_outgoing_transfer_record, load_outgoing_transfer_record, save_completed_transfer_record, load_completed_transfer_records
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -100,6 +100,11 @@ class PcCompanionApp:
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
+        self.pc_completed = self._load_pc_completed()
+        for completed_id in self.pc_completed:
+            self.pc_incoming.pop(completed_id, None)
+        if self.pc_incoming:
+            self._persist_pc_incoming()
         self.pending_pc_send = self._load_pc_outgoing()
         now_epoch = time.time()
         for item in self.config.get("remoteActionReceipts", []):
@@ -893,6 +898,21 @@ class PcCompanionApp:
             self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
             return False
 
+    def _pc_completed_state_path(self):
+        return CONFIG_PATH.parent / "completed-transfers.json"
+
+    def _load_pc_completed(self):
+        return load_completed_transfer_records(self._pc_completed_state_path())
+
+    def _persist_pc_completed(self, record):
+        try:
+            save_completed_transfer_record(self._pc_completed_state_path(), record)
+            self.pc_completed[record["transferId"]] = dict(record)
+            return True
+        except Exception as exc:
+            self.status_var.set(f"Could not persist completed-transfer receipt: {str(exc)[:120]}")
+            return False
+
     def _pc_outgoing_state_path(self):
         return CONFIG_PATH.parent / "outgoing-transfer.json"
 
@@ -1049,6 +1069,14 @@ class PcCompanionApp:
         if not pending or not self.is_e2e_trusted(pending["peer"]):
             self.status_var.set("File send blocked: verify the Android peer fingerprint on both devices first.")
             return
+        try:
+            source = Path(pending["path"])
+            if (source.is_symlink() or not source.is_file() or source.stat().st_size != pending["size"] or
+                    sha256_file(source) != pending["sha256"]):
+                raise ValueError("Original source file changed; transfer cannot safely resume.")
+        except Exception as exc:
+            self.status_var.set(f"File send blocked: {str(exc)[:140]}")
+            return
         pending["send_queue"] = list(indexes)
         pending["in_flight"] = set()
         self._pump_pc_file_chunks()
@@ -1121,6 +1149,18 @@ class PcCompanionApp:
             self.status_var.set("Rejected invalid incoming file manifest.")
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "reason": "invalid_manifest"})
+            return
+        completed = self.pc_completed.get(transfer_id)
+        if completed:
+            if (completed.get("peer") == peer_id and completed.get("size") == size and
+                    completed.get("sha256") == digest and Path(completed.get("path", "")).is_file() and
+                    sha256_file(completed["path"]) == digest):
+                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+                self.status_var.set("This transfer was already saved and verified; completion ACK resent.")
+            else:
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "completed_receipt_mismatch"})
             return
         existing = self.pc_incoming.get(transfer_id)
         if existing:
@@ -1231,12 +1271,20 @@ class PcCompanionApp:
                 digest = sha256_file(transfer["path"] + ".shraddha-part")
                 if digest != transfer["sha256"]:
                     raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
-                # Publish atomically without replacing an existing destination.
-                # A hard link is same-volume and fails if the chosen name appeared
-                # after the save dialog; never fall back to overwrite semantics.
+                # Persist a completion receipt while the verified partial still exists.
+                # Startup can finish the publish if Windows exits before the final ACK.
+                completion_record = {
+                    "peer": peer_id, "transferId": transfer_id, "path": transfer["path"],
+                    "partPath": transfer["path"] + ".shraddha-part", "size": transfer["size"],
+                    "sha256": transfer["sha256"], "completedAt": int(time.time())
+                }
+                if not self._persist_pc_completed(completion_record):
+                    raise TransferPersistenceError("Could not persist final completion receipt; file remains recoverable.")
                 publish_file_without_overwrite(
                     Path(transfer["path"] + ".shraddha-part"), Path(transfer["path"])
                 )
+                if not self._persist_pc_completed(completion_record):
+                    raise TransferPersistenceError("Saved file is verified but completion receipt update failed; recovery will retry.")
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.pc_incoming.pop(transfer_id, None)
@@ -1266,6 +1314,19 @@ class PcCompanionApp:
                              "transferId": transfer_id, "chunkCount": incoming["chunks"],
                              "missingIndexes": missing})
             self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
+            return
+        completed = self.pc_completed.get(transfer_id)
+        if completed:
+            peer_id = str(msg.get("fromDeviceId", ""))
+            if (peer_id != completed.get("peer") or not self.is_e2e_trusted(peer_id)):
+                return
+            destination = Path(completed.get("path", ""))
+            if (destination.is_file() and not destination.is_symlink() and
+                    destination.stat().st_size == completed.get("size") and
+                    sha256_file(destination) == completed.get("sha256")):
+                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+                self.status_var.set("Verified completion ACK resent after reconnect.")
             return
         pending = self.pending_pc_send
         if (not pending or transfer_id != pending["transferId"] or
