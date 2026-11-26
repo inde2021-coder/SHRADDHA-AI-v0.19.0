@@ -45,8 +45,7 @@ object TrainingCurriculumInstaller {
             setOf("Hindi", "English", "Sanskrit", "Marathi", "Pawari"), "All ages"),
         Pack("curriculum_advanced_practical_skills_v1", "Advanced Practical Skills", "1.0.0",
             "training/advanced-practical-skills-hi-en-v1.md",
-            setOf("Hindi", "English"), "General")
-,
+            setOf("Hindi", "English"), "General"),
         Pack("curriculum_gita_chapter_01_v1", "Bhagavad Gita — Chapter 1: Arjuna Vishada Yoga", "1.0.0",
             "training/gita/chapter-01-700-v1.json", setOf("Sanskrit", "Hindi", "English"), "All ages"),
         Pack("curriculum_gita_chapter_02_v1", "Bhagavad Gita — Chapter 2: Sankhya Yoga", "1.0.0",
