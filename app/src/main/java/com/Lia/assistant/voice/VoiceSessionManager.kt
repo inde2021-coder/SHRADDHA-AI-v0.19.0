@@ -87,6 +87,16 @@ object VoiceSessionManager {
     fun start(context: Context) {
         if (_isActive.value) return
         val application = context.applicationContext
+        if (!application.getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
+                .getBoolean("allow_online_ai", false)) {
+            appContext = application
+            _lastError.value = "Online AI is disabled. Enable Allow Online AI in Settings > Connections before starting cloud voice."
+            _statusText.value = "Enable Online AI in Settings"
+            _state.value = NovaOrbState.ERROR
+            _isActive.value = false
+            _muted.value = true
+            return
+        }
         if (ContextCompat.checkSelfPermission(application, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             appContext = application
             _lastError.value = "Microphone permission is required before starting a voice session."
