@@ -1164,8 +1164,12 @@ wss.on('connection', (ws, ctx) => {
         if (!transfer || transfer.fromDeviceId !== targetId || transfer.expiresAt < Date.now() ||
             !Number.isSafeInteger(index) || typeof ok !== 'boolean') return;
         if (index === -1) {
-          if (complete === true && (!ok || !canCompleteFileTransfer(transfer, true))) return;
-          if (complete !== true && complete !== false) return;
+          if (complete === true) {
+            if (!ok || !canCompleteFileTransfer(transfer, true)) return;
+            // Keep a short-lived completed receipt so a lost final ACK can be
+            // recovered after reconnect; completed entries do not block new sends.
+            transfer.completed = true;
+          } else if (complete !== false) return;
         } else {
           if (index < 0 || index >= transfer.chunkCount || complete === true) return;
           if (ok) transfer.chunks.set(index, true);
