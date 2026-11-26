@@ -157,9 +157,7 @@ object ShraddhaSpeechClient {
                         return
                     }
                     val bytes = it.body?.bytes() ?: ByteArray(0)
-                    val onlineAiStillAllowed = context.applicationContext
-                        .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-                        .getBoolean("allow_online_ai", false)
+                    val onlineAiStillAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
                     if (!onlineAiStillAllowed) {
                         done(Result.failure(IllegalStateException("Online AI was disabled while speech was in progress. The returned audio was discarded.")))
                         return
