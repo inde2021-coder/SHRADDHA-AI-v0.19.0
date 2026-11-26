@@ -17,6 +17,7 @@ from pc_companion.file_transfer import (
     load_outgoing_transfer_record,
     save_completed_transfer_record,
     load_completed_transfer_records,
+    completed_file_matches,
 )
 
 
@@ -198,6 +199,24 @@ class OutgoingTransferRecoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 save_outgoing_transfer_record(state, record)
 
+
+
+class CompletedFileVerificationTests(unittest.TestCase):
+    def test_ack_replay_rejects_same_size_tampering(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "received.bin"
+            original = b"verified-file-data"
+            source.write_bytes(original)
+            record = {"path": str(source), "size": len(original),
+                      "sha256": hashlib.sha256(original).hexdigest()}
+            self.assertTrue(completed_file_matches(record))
+            source.write_bytes(b"tampered-file-data")
+            self.assertEqual(source.stat().st_size, record["size"])
+            self.assertFalse(completed_file_matches(record))
 
 
 class IncomingCompletionReceiptRecoveryTests(unittest.TestCase):
