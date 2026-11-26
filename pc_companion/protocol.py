@@ -158,7 +158,7 @@ def remote_action_approval_summary(peer_id, action):
     if clean is None:
         return None
     return (
-        f"Paired device: {peer_id.strip()}\\n"
-        "Exact requested action (review before approving):\\n"
+        f"Paired device: {peer_id.strip()}\n"
+        "Exact requested action (review before approving):\n"
         + json.dumps(clean, ensure_ascii=False, sort_keys=True)
     )
