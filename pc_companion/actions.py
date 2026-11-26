@@ -98,6 +98,8 @@ def select_ocr_languages(available):
 def read_active_window_ocr(pyautogui):
     """Read only the active non-sensitive window using local Tesseract Hindi+English OCR."""
     _, title, (left, top, width, height) = _active_window()
+    if width * height > 16_000_000:
+        raise RuntimeError("The active window is too large for safe OCR capture; resize it and retry.")
     try:
         import pytesseract
     except ImportError as exc:
@@ -137,7 +139,7 @@ def read_active_window_ocr(pyautogui):
         raise RuntimeError("The active window is minimized; OCR capture was cancelled.")
     image = pyautogui.screenshot(region=(max(0, left), max(0, top), width, height))
     try:
-        raw = pytesseract.image_to_string(image, lang="+".join(selected), config="--psm 6")
+        raw = pytesseract.image_to_string(image, lang="+".join(selected), config="--psm 6", timeout=8)
     except Exception as exc:
         raise RuntimeError("Installed Tesseract OCR language data could not process this window.") from exc
     finally:
