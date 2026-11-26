@@ -39,6 +39,41 @@ CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" /
 MAX_FRAME_BYTES = 2_500_000
 
 
+class CompanionEventQueue(queue.Queue):
+    """Bound relay/UI events and replace stale visual frames instead of growing RAM."""
+    def __init__(self, maxsize=256):
+        super().__init__(maxsize=maxsize)
+
+    def put(self, item, block=True, timeout=None):
+        try:
+            super().put_nowait(item)
+            return True
+        except queue.Full:
+            pass
+        with self.mutex:
+            removable = None
+            for index, queued in enumerate(self.queue):
+                if isinstance(queued, tuple) and queued and queued[0] == "frame":
+                    removable = index
+                    break
+            if removable is None:
+                for index, queued in enumerate(self.queue):
+                    if isinstance(queued, tuple) and queued and queued[0] == "status":
+                        removable = index
+                        break
+            if removable is not None:
+                del self.queue[removable]
+                self.unfinished_tasks = max(0, self.unfinished_tasks - 1)
+                self.not_full.notify()
+        try:
+            super().put_nowait(item)
+            return True
+        except queue.Full:
+            # Never block the WebSocket thread. A dropped action/control event
+            # fails closed; the bounded queue prevents relay-driven memory growth.
+            return False
+
+
 def _https_base(value):
     value = value.strip().rstrip("/")
     parsed = urllib.parse.urlparse(value)
@@ -73,7 +108,7 @@ class PcCompanionApp:
         pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.04
 
-        self.events = queue.Queue()
+        self.events = CompanionEventQueue(maxsize=256)
         self.ws_app = None
         self.ws_thread = None
         self.send_lock = threading.Lock()
