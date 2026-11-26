@@ -29,6 +29,13 @@ class AkkpsRunnerCommandParserTest {
         assertFalse(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("remarks=जमा करें बाद में"))
     }
 
+    @Test fun parsesNewlineSeparatedVoiceAssignments() {
+        val parsed = AkkpsRunnerCommandParser.parse("Farmer Name=Ram Kumar\\nVillage=Rampur\\nsubmit")
+        assertEquals(listOf("Farmer Name", "Village"), parsed.assignments.map { it.first })
+        assertEquals(listOf("Ram Kumar", "Rampur"), parsed.assignments.map { it.second })
+        assertTrue(parsed.submit)
+    }
+
     @Test fun preservesCommasInsideValues() {
         val parsed = AkkpsRunnerCommandParser.parse("Address=Ward 4, Near School; Village=Rampur")
         assertEquals("Ward 4, Near School", parsed.assignments.first().second)
