@@ -4,6 +4,7 @@ import kotlin.math.PI
 import kotlin.math.atan
 import kotlin.math.ln
 import kotlin.math.sinh
+import kotlin.math.pow
 import kotlin.math.tan
 
 /**
@@ -32,7 +33,7 @@ object AkkpsWebMercatorProjection {
             viewport.center.longitude.isFinite() &&
             viewport.center.longitude in -180.0..180.0) { "Map center is outside Web Mercator bounds." }
 
-        val scale = TILE_SIZE * Math.pow(2.0, viewport.zoom)
+        val scale = TILE_SIZE * 2.0.pow(viewport.zoom)
         val centerX = (viewport.center.longitude + 180.0) / 360.0 * scale
         val latRad = Math.toRadians(viewport.center.latitude)
         val centerY = (1.0 - ln(tan(latRad) + 1.0 / kotlin.math.cos(latRad)) / PI) / 2.0 * scale
