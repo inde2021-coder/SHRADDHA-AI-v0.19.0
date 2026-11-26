@@ -30,12 +30,9 @@ object LanguageDetector {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return "UNKNOWN"
 
-        // Check for Devanagari script (U+0900..U+097F)
-        for (ch in trimmed) {
-            if (ch in '\u0900'..'\u097F') {
-                return "HINDI"
-            }
-        }
+        // Devanagari is shared by Hindi, Marathi and Sanskrit (and may contain Pawari).
+        // AUTO mode must not guess a language from script alone or select the wrong TTS voice.
+        if (detectScript(trimmed) == "DEVANAGARI") return "DEVANAGARI_UNSPECIFIED"
 
         // Tokenize Latin text
         val words = trimmed.lowercase()
