@@ -1,0 +1,8 @@
+# Optional PC-side language models. Install only on a PC that will run these models.
+# Main Windows Companion does not require these large ML packages.
+sherpa-onnx==2.0.3
+numpy==2.2.6
+soundfile==0.13.1
+transformers==4.51.3
+sentencepiece==0.2.0
+IndicTransToolkit
