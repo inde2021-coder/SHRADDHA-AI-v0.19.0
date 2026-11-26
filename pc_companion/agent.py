@@ -100,6 +100,7 @@ class PcCompanionApp:
         self.remote_action_var = tk.StringVar(value="home")
         self.remote_value_var = tk.StringVar()
         self.config = self._load_config()
+        self.pending_pc_send = self._load_pc_outgoing()
         now_epoch = time.time()
         for item in self.config.get("remoteActionReceipts", []):
             try:
@@ -838,6 +839,60 @@ class PcCompanionApp:
             self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
             return False
 
+    def _pc_outgoing_state_path(self):
+        return CONFIG_PATH.parent / "outgoing-transfer.json"
+
+    def _load_pc_outgoing(self):
+        try:
+            raw = json.loads(self._pc_outgoing_state_path().read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                return None
+            transfer_id, peer, path_value = raw.get("transferId"), raw.get("peer"), raw.get("path")
+            size, digest = raw.get("size"), raw.get("sha256")
+            request_id, name = raw.get("requestId"), raw.get("name")
+            if (not isinstance(peer, str) or not peer or len(peer) > 128 or
+                    not isinstance(path_value, str) or len(path_value) > 2048 or
+                    type(size) is not int or not valid_transfer_manifest(transfer_id, size,
+                        chunk_count_for_size(size), digest) or
+                    not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", request_id) or
+                    not isinstance(name, str) or not name or len(name) > 120):
+                return None
+            source = Path(path_value)
+            if source.is_symlink() or not source.is_file() or source.stat().st_size != size:
+                return None
+            if sha256_file(source) != digest:
+                return None
+            return {"peer": peer, "path": str(source), "name": name, "size": size,
+                    "sha256": digest, "requestId": request_id, "transferId": transfer_id,
+                    "send_queue": [], "in_flight": set(), "awaiting_approval": False}
+        except Exception:
+            return None
+
+    def _persist_pc_outgoing(self):
+        pending = self.pending_pc_send
+        path = self._pc_outgoing_state_path()
+        if pending is None:
+            try:
+                path.unlink(missing_ok=True)
+                return True
+            except OSError:
+                return False
+        try:
+            source = Path(pending["path"])
+            if source.is_symlink() or not source.is_file() or source.stat().st_size != pending["size"]:
+                raise ValueError("Outgoing source file is unavailable or changed.")
+            payload = {key: pending[key] for key in
+                       ("peer", "path", "name", "size", "sha256", "requestId", "transferId")}
+            temp = path.with_suffix(".tmp")
+            with temp.open("w", encoding="utf-8") as output:
+                output.write(json.dumps(payload, separators=(",", ":")))
+                output.flush()
+                os.fsync(output.fileno())
+            temp.replace(path)
+            return True
+        except Exception as exc:
+            self.status_var.set(f"Could not persist outgoing transfer: {str(exc)[:110]}")
+            return False
     def choose_file_for_phone(self):
         peer_id = __import__("tkinter.simpledialog", fromlist=["askstring"]).askstring(
             "Send to paired phone", "Enter the paired Android device ID:", parent=self.root)
