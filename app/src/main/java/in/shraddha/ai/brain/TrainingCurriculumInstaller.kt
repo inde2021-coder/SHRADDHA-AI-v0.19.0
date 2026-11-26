@@ -140,5 +140,5 @@ object TrainingCurriculumInstaller {
 
     @Volatile private var checkedThisProcess = false
 
-    private const val MAX_PACK_CHARS = 50_000
+    private const val MAX_PACK_CHARS = 100_000
 }
