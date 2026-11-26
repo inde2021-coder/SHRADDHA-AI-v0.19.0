@@ -90,6 +90,12 @@ class ProtocolTests(unittest.TestCase):
         ):
             self.assertIsNone(validate_remote_action(action))
 
+    def test_file_open_requires_safe_relative_path(self):
+        self.assertEqual(validate_remote_action({"kind": "file_open", "path": "Documents/report.pdf"}),
+                         {"kind": "file_open", "path": "Documents/report.pdf"})
+        for path in ("../secret.pdf", ".ssh/key", "C:/Windows/win.ini"):
+            self.assertIsNone(validate_remote_action({"kind": "file_open", "path": path}))
+
     def test_ocr_is_allowlisted_without_client_supplied_payload(self):
         self.assertEqual(validate_remote_action({"kind": "ocr"}), {"kind": "ocr"})
         self.assertIsNone(validate_remote_action({"kind": "ocr", "script": "arbitrary"}))
