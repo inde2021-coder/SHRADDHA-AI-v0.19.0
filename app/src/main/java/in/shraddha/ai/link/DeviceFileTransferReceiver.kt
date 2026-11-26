@@ -37,7 +37,11 @@ object DeviceFileTransferReceiver {
 
     /** Call only after the user approves the incoming transfer prompt. */
     @Synchronized fun accept(context: Context, manifest: Manifest): Boolean {
-        if (active.containsKey(manifest.transferId)) return false
+        active[manifest.transferId]?.let { return it.manifest == manifest }
+        loadReceipt(context, manifest.transferId)?.let { receipt ->
+            return receipt.peerId == manifest.peerId && receipt.sizeBytes == manifest.sizeBytes &&
+                receipt.sha256.equals(manifest.sha256, ignoreCase = true)
+        }
         val directory = receivedDirectory(context)
         if (!directory.exists() && !directory.mkdirs()) return false
         if (!directory.isDirectory || directory.usableSpace < manifest.sizeBytes) return false
