@@ -1695,6 +1695,7 @@ class PcCompanionApp:
             )
         except Exception as exc:
             ok, message = False, f"OCR failed: {str(exc)[:160]}"
+        self.ocr_busy = False
         self.events.put(("remote_action_finished", (peer_id, action_id, action_kind, bool(ok), str(message)[:12000])))
 
     def _execute(self, action, peer_id=None, action_id=None):
