@@ -286,7 +286,7 @@ def read_user_text_file(relative_path):
     return {
         "file": str(target.relative_to(root)).replace("\\", "/"),
         "content": safe_content[:12000],
-        "truncated": len(content) > 12000 or len(safe_content) < len(content),
+        "truncated": len(content) > 12000 or len(content.splitlines()) > 200,
         "redacted": safe_content != content[:12000]
     }
 
