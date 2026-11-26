@@ -317,8 +317,8 @@ class AkkpsRunnerActivity : Activity() {
 Return JSON only: {"assignments":[{"field":"exact visible field label/name/id","value":"literal value explicitly said by the user"}],"missing":["required value not supplied"],"submit":false}.
 Map only explicit values from the user's command to visible fields. Do not invent or infer personal data. Use only exact visible fields and select options. Never submit unless the user explicitly asked.
 AKKPS page: ${page.optString("title")}
-Visible fields: ${fields.toString().take(9000)}
-User command: ${raw.take(2500)}
+Visible fields: ${fields.toString().take(3500)}
+User command: ${raw.take(1200)}
 Return JSON only."""
             status.text = "Shraddha का Offline AI फॉर्म समझ रहा है…"
             Thread {
