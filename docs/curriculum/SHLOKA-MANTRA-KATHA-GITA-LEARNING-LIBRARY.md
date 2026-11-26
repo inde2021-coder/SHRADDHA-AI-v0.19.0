@@ -1,6 +1,6 @@
 # Shraddha AI — Shloka, Mantra, Katha & Bhagavad Gita Learning Library
 Version: 1.0 | Date: 2026-11-26
-Status: Authored starter curriculum and content specification. Not yet imported into APK or reviewed by a panel of Sanskrit scholars/teachers. Religious practice is personal; the app must remain respectful and non-coercive.
+Status: Authored starter curriculum, bundled in the APK offline Knowledge Library. Sanskrit scholar/teacher review and expanded verse-by-verse source-checked content remain required. Religious practice is personal; the app must remain respectful and non-coercive.
 
 ## 1. Learning goals
 Shraddha should help a learner:
