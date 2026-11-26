@@ -1,3 +1,4 @@
+from approved_paths import open_user_path
 """Allowlisted Windows UI actions. No shell execution or arbitrary process launch."""
 import re
 
@@ -144,6 +145,8 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
             return True, "Text pasted into the focused control."
         if kind == "open_app":
             return (True, "Application shortcut opened.") if open_shortcut(action["appName"]) else (False, "No matching Start Menu shortcut found.")
+        if kind in {"open_file", "open_folder"}:
+            return True, open_user_path(action["path"], "file" if kind == "open_file" else "folder")
         if kind == "home":
             pyautogui.hotkey("win", "d")
             return True, "Desktop shown."
