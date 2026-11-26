@@ -56,6 +56,7 @@ object GeminiTextClient {
             .build()
 
         try {
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             internalHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     // A transient catalog outage must not be cached as a permanent
@@ -182,6 +183,9 @@ object GeminiTextClient {
         var lastTransientError: String? = null
         for (attempt in 0..2) {
             try {
+                // Re-check on every retry so revoking consent prevents the next
+                // provider request, not merely the first attempt.
+                `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
                 internalHttpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         val code = response.code
