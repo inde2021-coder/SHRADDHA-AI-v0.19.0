@@ -1,0 +1,276 @@
+{
+  "schema": "shraddha.gita.chapter.v1",
+  "chapter": 8,
+  "chapterVerseCount": 28,
+  "canonicalEdition": "700-verse numbering; chapter 13 excludes the separately attested Arjuna question used as 13.1 in some 701-verse editions",
+  "source": {
+    "repository": "gita/gita",
+    "file": "data/verse.json",
+    "license": "The Unlicense",
+    "url": "https://github.com/gita/gita/blob/main/data/verse.json"
+  },
+  "crossReference": {
+    "name": "Hansi Gita Bhawan Trust 700-verse corpus",
+    "url": "https://gitabhawan.org.in/gita/research",
+    "note": "Independent corpus reports the same traditional 700-verse chapter counts; its Hindi/English translations are not bundled here."
+  },
+  "fields": {
+    "sanskrit": "source transcription",
+    "transliteration": "source-provided transliteration; not a phonetic guarantee",
+    "wordGloss": "source-provided English gloss; requires Sanskrit-scholar review"
+  },
+  "verses": [
+    {
+      "ref": "8.1",
+      "chapter": 8,
+      "verse": 1,
+      "sourceNumber": "8.1",
+      "sanskrit": "अर्जुन उवाच\n\nकिं तद्ब्रह्म किमध्यात्मं किं कर्म पुरुषोत्तम।\n\nअधिभूतं च किं प्रोक्तमधिदैवं किमुच्यते।।8.1।।",
+      "transliteration": "arjuna uvācha\nkiṁ tad brahma kim adhyātmaṁ kiṁ karma puruṣhottama\nadhibhūtaṁ cha kiṁ proktam adhidaivaṁ kim uchyate",
+      "wordGloss": "arjunaḥ uvācha—Arjun said; kim—what; tat—that; brahma—Brahman; kim—what; adhyātmam—the individual soul; kim—what; karma—the principle of karma; puruṣha-uttama—Shree Krishna, the Supreme Divine Personality; adhibhūtam—the material manifestation; cha—and; kim—what; proktam—is called; adhidaivam—the Lord of the celestial gods; kim—what; uchyate—is called;"
+    },
+    {
+      "ref": "8.2",
+      "chapter": 8,
+      "verse": 2,
+      "sourceNumber": "8.2",
+      "sanskrit": "अधियज्ञः कथं कोऽत्र देहेऽस्मिन्मधुसूदन।\n\nप्रयाणकाले च कथं ज्ञेयोऽसि नियतात्मभिः।।8.2।।",
+      "transliteration": "adhiyajñaḥ kathaṁ ko ’tra dehe ’smin madhusūdana\nprayāṇa-kāle cha kathaṁ jñeyo ’si niyatātmabhiḥ",
+      "wordGloss": "adhiyajñaḥ—the Lord all sacrificial performances; katham—how; kaḥ—who; atra—here; dehe—in body; asmin—this; madhusūdana—Shree Krishna, the killer of the demon named Madhu; prayāṇa-kāle—at the time of death; cha—and; katham—how; jñeyaḥ—to be known; asi—are (you); niyata-ātmabhiḥ—by those of steadfast mind"
+    },
+    {
+      "ref": "8.3",
+      "chapter": 8,
+      "verse": 3,
+      "sourceNumber": "8.3",
+      "sanskrit": "श्री भगवानुवाच\n\nअक्षरं ब्रह्म परमं स्वभावोऽध्यात्ममुच्यते।\n\nभूतभावोद्भवकरो विसर्गः कर्मसंज्ञितः।।8.3।।",
+      "transliteration": "śhrī bhagavān uvācha\nakṣharaṁ brahma paramaṁ svabhāvo ’dhyātmam uchyate\nbhūta-bhāvodbhava-karo visargaḥ karma-sanjñitaḥ",
+      "wordGloss": "śhrī-bhagavān uvācha—the Blessed Lord said; akṣharam—indestructible; brahma—Brahman; paramam—the Supreme; svabhāvaḥ—nature; adhyātmam—one’s own self; uchyate—is called; bhūta-bhāva-udbhava-karaḥ—Actions pertaining to the material personality of living beings, and its development; visargaḥ—creation; karma—fruitive activities; sanjñitaḥ—are called"
+    },
+    {
+      "ref": "8.4",
+      "chapter": 8,
+      "verse": 4,
+      "sourceNumber": "8.4",
+      "sanskrit": "अधिभूतं क्षरो भावः पुरुषश्चाधिदैवतम्।\n\nअधियज्ञोऽहमेवात्र देहे देहभृतां वर।।8.4।।",
+      "transliteration": "adhibhūtaṁ kṣharo bhāvaḥ puruṣhaśh chādhidaivatam\nadhiyajño ’ham evātra dehe deha-bhṛitāṁ vara",
+      "wordGloss": "adhibhūtam—the ever changing physical manifestation; kṣharaḥ—perishable; bhāvaḥ—nature; puruṣhaḥ—the cosmic personality of God, encompassing the material creation; cha—and; adhidaivatam—the Lord of the celestial gods; adhiyajñaḥ—the Lord of all sacrifices; aham—I; eva—certainly; atra—here; dehe—in the body; deha-bhṛitām—of the embodied; vara—O best"
+    },
+    {
+      "ref": "8.5",
+      "chapter": 8,
+      "verse": 5,
+      "sourceNumber": "8.5",
+      "sanskrit": "अन्तकाले च मामेव स्मरन्मुक्त्वा कलेवरम्।\n\nयः प्रयाति स मद्भावं याति नास्त्यत्र संशयः।।8.5।।",
+      "transliteration": "anta-kāle cha mām eva smaran muktvā kalevaram\nyaḥ prayāti sa mad-bhāvaṁ yāti nāstyatra sanśhayaḥ",
+      "wordGloss": "anta-kāle—at the time of death; cha—and; mām—me; eva—alone; smaran—remembering; muktvā—relinquish; kalevaram—the body; yaḥ—who; prayāti—goes; saḥ—he; mat-bhāvam—Godlike nature; yāti—achieves; na—no; asti—there is; atra—here; sanśhayaḥ—doubt"
+    },
+    {
+      "ref": "8.6",
+      "chapter": 8,
+      "verse": 6,
+      "sourceNumber": "8.6",
+      "sanskrit": "यं यं वापि स्मरन्भावं त्यजत्यन्ते कलेवरम्।\n\nतं तमेवैति कौन्तेय सदा तद्भावभावितः।।8.6।।",
+      "transliteration": "yaṁ yaṁ vāpi smaran bhāvaṁ tyajatyante kalevaram\ntaṁ tam evaiti kaunteya sadā tad-bhāva-bhāvitaḥ",
+      "wordGloss": "yam yam—whatever; vā—or; api—even; smaran—remembering; bhāvam—remembrance; tyajati—gives up; ante—in the end; kalevaram—the body; tam—to that; tam—to that; eva—certainly; eti—gets; kaunteya—Arjun, the son of Kunti; sadā—always; tat—that; bhāva-bhāvitaḥ—absorbed in contemplation"
+    },
+    {
+      "ref": "8.7",
+      "chapter": 8,
+      "verse": 7,
+      "sourceNumber": "8.7",
+      "sanskrit": "तस्मात्सर्वेषु कालेषु मामनुस्मर युध्य च।\n\nमय्यर्पितमनोबुद्धिर्मामेवैष्यस्यसंशयम्।।8.7।।",
+      "transliteration": "tasmāt sarveṣhu kāleṣhu mām anusmara yudhya cha\nmayyarpita-mano-buddhir mām evaiṣhyasyasanśhayam",
+      "wordGloss": "tasmāt—therefore; sarveṣhu—in all; kāleṣhu—times; mām—me; anusmara—remember; yudhya—fight; cha—and; mayi—to me; arpita—surrender; manaḥ—mind; buddhiḥ—intellect; mām—to me; eva—surely; eṣhyasi—you shall attain; asanśhayaḥ—without a doubt"
+    },
+    {
+      "ref": "8.8",
+      "chapter": 8,
+      "verse": 8,
+      "sourceNumber": "8.8",
+      "sanskrit": "अभ्यासयोगयुक्तेन चेतसा नान्यगामिना।\n\nपरमं पुरुषं दिव्यं याति पार्थानुचिन्तयन्।।8.8।।",
+      "transliteration": "abhyāsa-yoga-yuktena chetasā nānya-gāminā\nparamaṁ puruṣhaṁ divyaṁ yāti pārthānuchintayan",
+      "wordGloss": "abhyāsa-yoga—by practice of yog; yuktena—being constantly engaged in remembrance; chetasā—by the mind; na anya-gāminā—without deviating; paramam puruṣham—the Supreme Divine Personality; divyam—divine; yāti—one attains; pārtha—Arjun, the son of Pritha; anuchintayan—constant remembrance"
+    },
+    {
+      "ref": "8.9",
+      "chapter": 8,
+      "verse": 9,
+      "sourceNumber": "8.9",
+      "sanskrit": "कविं पुराणमनुशासितार\n\nमणोरणीयांसमनुस्मरेद्यः।\n\nसर्वस्य धातारमचिन्त्यरूप\n\nमादित्यवर्णं तमसः परस्तात्।।8.9।।",
+      "transliteration": "kaviṁ purāṇam anuśhāsitāram\naṇor aṇīyānsam anusmared yaḥ\nsarvasya dhātāram achintya-rūpam\nāditya-varṇaṁ tamasaḥ parastāt",
+      "wordGloss": "kavim—poet; purāṇam—ancient; anuśhāsitāram—the controller; aṇoḥ—than the atom; aṇīyānsam—smaller; anusmaret—always remembers; yaḥ—who; sarvasya—of everything; dhātāram—the support; achintya—inconceivable; rūpam—divine form; āditya-varṇam—effulgent like the sun; tamasaḥ—to the darkness of ignorance; parastāt—beyond;"
+    },
+    {
+      "ref": "8.10",
+      "chapter": 8,
+      "verse": 10,
+      "sourceNumber": "8.10",
+      "sanskrit": "प्रयाणकाले मनसाऽचलेन\n\nभक्त्या युक्तो योगबलेन चैव।\n\nभ्रुवोर्मध्ये प्राणमावेश्य सम्यक्\n\nस तं परं पुरुषमुपैति दिव्यम्।।8.10।।",
+      "transliteration": "prayāṇa-kāle manasāchalena\nbhaktyā yukto yoga-balena chaiva\nbhruvor madhye prāṇam āveśhya samyak\nsa taṁ paraṁ puruṣham upaiti divyam",
+      "wordGloss": "prayāṇa-kāle—at the time of death; manasā—mind; achalena—steadily; bhaktyā—remembering with great devotion; yuktaḥ—united; yoga-balena—through the power of yog; cha—and; eva—certainly; bhruvoḥ—the two eyebrows; madhye—between; prāṇam—life airs; āveśhya—fixing; samyak—completely; saḥ—he; tam—him; param puruṣham—the Supreme Divine Lord; upaiti—attains; divyam—divine"
+    },
+    {
+      "ref": "8.11",
+      "chapter": 8,
+      "verse": 11,
+      "sourceNumber": "8.11",
+      "sanskrit": "यदक्षरं वेदविदो वदन्ति\n\nविशन्ति यद्यतयो वीतरागाः।\n\nयदिच्छन्तो ब्रह्मचर्यं चरन्ति\n\nतत्ते पदं संग्रहेण प्रवक्ष्ये।।8.11।।",
+      "transliteration": "yad akṣharaṁ veda-vido vadanti\nviśhanti yad yatayo vīta-rāgāḥ\nyad ichchhanto brahmacharyaṁ charanti\ntat te padaṁ saṅgraheṇa pravakṣhye",
+      "wordGloss": "yat—which; akṣharam—Imperishable; veda-vidaḥ—scholars of the Vedas; vadanti—describe; viśhanti—enter; yat—which; yatayaḥ—great ascetics; vīta-rāgāḥ—free from attachment; yat—which; ichchhantaḥ—desiring; brahmacharyam—celibacy; charanti—practice; tat—that; te—to you; padam—goal; saṅgraheṇa—briefly; pravakṣhye—I shall explain"
+    },
+    {
+      "ref": "8.12",
+      "chapter": 8,
+      "verse": 12,
+      "sourceNumber": "8.12",
+      "sanskrit": "सर्वद्वाराणि संयम्य मनो हृदि निरुध्य च।\n\nमूर्ध्न्याधायात्मनः प्राणमास्थितो योगधारणाम्।।8.12।।",
+      "transliteration": "sarva-dvārāṇi sanyamya mano hṛidi nirudhya cha\nmūrdhnyādhāyātmanaḥ prāṇam āsthito yoga-dhāraṇām",
+      "wordGloss": "sarva-dvārāṇi—all gates; sanyamya—restraining; manaḥ—the mind; hṛidi—in the heart region; nirudhya—confining; cha—and; mūrdhni—in the head; ādhāya—establish; ātmanaḥ—of the self; prāṇam—the life breath; āsthitaḥ—situated (in); yoga-dhāraṇām—the yogic concentration"
+    },
+    {
+      "ref": "8.13",
+      "chapter": 8,
+      "verse": 13,
+      "sourceNumber": "8.13",
+      "sanskrit": "ओमित्येकाक्षरं ब्रह्म व्याहरन्मामनुस्मरन्।\n\nयः प्रयाति त्यजन्देहं स याति परमां गतिम्।।8.13।।",
+      "transliteration": "oṁ ityekākṣharaṁ brahma vyāharan mām anusmaran\nyaḥ prayāti tyajan dehaṁ sa yāti paramāṁ gatim",
+      "wordGloss": "om—sacred syllable representing the formless aspect of God; iti—thus; eka-akṣharam—one syllabled; brahma—the Absolute Truth; vyāharan—chanting; mām—me (Shree Krishna); anusmaran—remembering; yaḥ—who; prayāti—departs; tyajan—quitting; deham—the body; saḥ—he; yāti—attains; paramām—the supreme; gatim—goal"
+    },
+    {
+      "ref": "8.14",
+      "chapter": 8,
+      "verse": 14,
+      "sourceNumber": "8.14",
+      "sanskrit": "अनन्यचेताः सततं यो मां स्मरति नित्यशः।\n\nतस्याहं सुलभः पार्थ नित्ययुक्तस्य योगिनः।।8.14।।",
+      "transliteration": "ananya-chetāḥ satataṁ yo māṁ smarati nityaśhaḥ\ntasyāhaṁ sulabhaḥ pārtha nitya-yuktasya yoginaḥ",
+      "wordGloss": "ananya-chetāḥ—without deviation of the mind; satatam—always; yaḥ—who; mām—me; smarati—remembers; nityaśhaḥ—regularly; tasya—to him; aham—I; su-labhaḥ—easily attainable; pārtha—Arjun, the son of Pritha; nitya—constantly; yuktasya—engaged; yoginaḥ—of the yogis"
+    },
+    {
+      "ref": "8.15",
+      "chapter": 8,
+      "verse": 15,
+      "sourceNumber": "8.15",
+      "sanskrit": "मामुपेत्य पुनर्जन्म दुःखालयमशाश्वतम्।\n\nनाप्नुवन्ति महात्मानः संसिद्धिं परमां गताः।।8.15।।",
+      "transliteration": "mām upetya punar janma duḥkhālayam aśhāśhvatam\nnāpnuvanti mahātmānaḥ sansiddhiṁ paramāṁ gatāḥ",
+      "wordGloss": "mām—me; upetya—having attained; punaḥ—again; janma—birth; duḥkha-ālayam—place full of miseries; aśhāśhvatam—temporary; na—never; āpnuvanti—attain; mahā-ātmānaḥ—the great souls; sansiddhim—perfection; paramām—highest; gatāḥ—having achieved"
+    },
+    {
+      "ref": "8.16",
+      "chapter": 8,
+      "verse": 16,
+      "sourceNumber": "8.16",
+      "sanskrit": "आब्रह्मभुवनाल्लोकाः पुनरावर्तिनोऽर्जुन।\n\nमामुपेत्य तु कौन्तेय पुनर्जन्म न विद्यते।।8.16।।",
+      "transliteration": "ā-brahma-bhuvanāl lokāḥ punar āvartino ’rjuna\nmām upetya tu kaunteya punar janma na vidyate",
+      "wordGloss": "ā-brahma-bhuvanāt—up to the abode of Brahma; lokāḥ—worlds; punaḥ āvartinaḥ—subject to rebirth; arjuna—Arjun; mām—mine; upetya—having attained; tu—but; kaunteya—Arjun, the son of Kunti; punaḥ janma—rebirth; na—never; vidyate—is"
+    },
+    {
+      "ref": "8.17",
+      "chapter": 8,
+      "verse": 17,
+      "sourceNumber": "8.17",
+      "sanskrit": "सहस्रयुगपर्यन्तमहर्यद्ब्रह्मणो विदुः।\n\nरात्रिं युगसहस्रान्तां तेऽहोरात्रविदो जनाः।।8.17।।",
+      "transliteration": "sahasra-yuga-paryantam ahar yad brahmaṇo viduḥ\nrātriṁ yuga-sahasrāntāṁ te ’ho-rātra-vido janāḥ",
+      "wordGloss": "sahasra—one thousand; yuga—age; paryantam—until; ahaḥ—one day; yat—which; brahmaṇaḥ—of Brahma; viduḥ—know; rātrim—night; yuga-sahasra-antām—lasts one thousand yugas; te—they; ahaḥ-rātra-vidaḥ—those who know his day and night; janāḥ—people"
+    },
+    {
+      "ref": "8.18",
+      "chapter": 8,
+      "verse": 18,
+      "sourceNumber": "8.18",
+      "sanskrit": "अव्यक्ताद्व्यक्तयः सर्वाः प्रभवन्त्यहरागमे।\n\nरात्र्यागमे प्रलीयन्ते तत्रैवाव्यक्तसंज्ञके।।8.18।।",
+      "transliteration": "avyaktād vyaktayaḥ sarvāḥ prabhavantyahar-āgame\nrātryāgame pralīyante tatraivāvyakta-sanjñake",
+      "wordGloss": "avyaktāt—from the unmanifested; vyaktayaḥ—the manifested; sarvāḥ—all; prabhavanti—emanate; ahaḥ-āgame—at the advent of Brahma’s day; rātri-āgame—at the fall of Brahma’s night; pralīyante—they dissolve; tatra—into that; eva—certainly; avyakta-sanjñake—in that which is called the unmanifest"
+    },
+    {
+      "ref": "8.19",
+      "chapter": 8,
+      "verse": 19,
+      "sourceNumber": "8.19",
+      "sanskrit": "भूतग्रामः स एवायं भूत्वा भूत्वा प्रलीयते।\n\nरात्र्यागमेऽवशः पार्थ प्रभवत्यहरागमे।।8.19।।",
+      "transliteration": "bhūta-grāmaḥ sa evāyaṁ bhūtvā bhūtvā pralīyate\nrātryāgame ’vaśhaḥ pārtha prabhavatyahar-āgame",
+      "wordGloss": "bhūta-grāmaḥ—the multitude of beings; saḥ—these; eva—certainly; ayam—this; bhūtvā bhūtvā—repeatedly taking birth; pralīyate—dissolves; rātri-āgame—with the advent of night; avaśhaḥ—helpless; pārtha—Arjun, the son of Pritha; prabhavati—become manifest; ahaḥ-āgame—with the advent of day"
+    },
+    {
+      "ref": "8.20",
+      "chapter": 8,
+      "verse": 20,
+      "sourceNumber": "8.20",
+      "sanskrit": "परस्तस्मात्तु भावोऽन्योऽव्यक्तोऽव्यक्तात्सनातनः।\n\nयः स सर्वेषु भूतेषु नश्यत्सु न विनश्यति।।8.20।।",
+      "transliteration": "paras tasmāt tu bhāvo ’nyo ’vyakto ’vyaktāt sanātanaḥ\nyaḥ sa sarveṣhu bhūteṣhu naśhyatsu na vinaśhyati",
+      "wordGloss": "paraḥ—transcendental; tasmāt—than that; tu—but; bhāvaḥ—creation; anyaḥ—another; avyaktaḥ—unmanifest; avyaktāt—to the unmanifest; sanātanaḥ—eternal; yaḥ—who; saḥ—that; sarveṣhu—all; bhūteṣhu—in beings; naśhyatsu—cease to exist; na—never; vinaśhyati—is annihilated"
+    },
+    {
+      "ref": "8.21",
+      "chapter": 8,
+      "verse": 21,
+      "sourceNumber": "8.21",
+      "sanskrit": "अव्यक्तोऽक्षर इत्युक्तस्तमाहुः परमां गतिम्।\n\nयं प्राप्य न निवर्तन्ते तद्धाम परमं मम।।8.21।।",
+      "transliteration": "avyakto ’kṣhara ityuktas tam āhuḥ paramāṁ gatim\nyaṁ prāpya na nivartante tad dhāma paramaṁ mama",
+      "wordGloss": "avyaktaḥ—unmanifest; akṣharaḥ—imperishable; iti—thus; uktaḥ—is said; tam—that; āhuḥ—is called; paramām—the supreme; gatim—destination; yam—which; prāpya—having reached; na—never; nivartante—come back; tat—that; dhāma—abode; paramam—the supreme; mama—my"
+    },
+    {
+      "ref": "8.22",
+      "chapter": 8,
+      "verse": 22,
+      "sourceNumber": "8.22",
+      "sanskrit": "पुरुषः स परः पार्थ भक्त्या लभ्यस्त्वनन्यया।\n\nयस्यान्तःस्थानि भूतानि येन सर्वमिदं ततम्।।8.22।।",
+      "transliteration": "puruṣhaḥ sa paraḥ pārtha bhaktyā labhyas tvananyayā\nyasyāntaḥ-sthāni bhūtāni yena sarvam idaṁ tatam",
+      "wordGloss": "puruṣhaḥ—the Supreme Divine Personality; saḥ—he; paraḥ—greatest; pārtha—Arjun, the son of Pritha; bhaktyā—through devotion; labhyaḥ—is attainable; tu—indeed; ananyayā—without another; yasya—of whom; antaḥ-sthāni—situated within; bhūtāni—beings; yena—by whom; sarvam—all; idam—this; tatam—is pervaded"
+    },
+    {
+      "ref": "8.23",
+      "chapter": 8,
+      "verse": 23,
+      "sourceNumber": "8.23",
+      "sanskrit": "यत्र काले त्वनावृत्तिमावृत्तिं चैव योगिनः।\n\nप्रयाता यान्ति तं कालं वक्ष्यामि भरतर्षभ।।8.23।।",
+      "transliteration": "yatra kāle tvanāvṛittim āvṛittiṁ chaiva yoginaḥ\nprayātā yānti taṁ kālaṁ vakṣhyāmi bharatarṣhabha",
+      "wordGloss": "yatra—where; kāle—time; tu—certainly; anāvṛittim—no return; āvṛittim—return; cha—and; eva—certainly; yoginaḥ—a yogi; prayātāḥ—having departed; yānti—attain; tam—that; kālam—time; vakṣhyāmi—I shall describe; bharata-ṛiṣhabha—Arjun, the best of the Bharatas;"
+    },
+    {
+      "ref": "8.24",
+      "chapter": 8,
+      "verse": 24,
+      "sourceNumber": "8.24",
+      "sanskrit": "अग्निर्ज्योतिरहः शुक्लः षण्मासा उत्तरायणम्।\n\nतत्र प्रयाता गच्छन्ति ब्रह्म ब्रह्मविदो जनाः।।8.24।।",
+      "transliteration": "agnir jyotir ahaḥ śhuklaḥ ṣhaṇ-māsā uttarāyaṇam\ntatra prayātā gachchhanti brahma brahma-vido janāḥ",
+      "wordGloss": "agniḥ—fire; jyotiḥ—light; ahaḥ—day; śhuklaḥ—the bright fortnight of the moon; ṣhaṭ-māsāḥ—six months; uttara-ayanam—the sun’s northern course; tatra—there; prayātāḥ—departed; gachchhanti—go; brahma—Brahman; brahma-vidaḥ—those who know the Brahman; janāḥ—persons;"
+    },
+    {
+      "ref": "8.25",
+      "chapter": 8,
+      "verse": 25,
+      "sourceNumber": "8.25",
+      "sanskrit": "धूमो रात्रिस्तथा कृष्णः षण्मासा दक्षिणायनम्।\n\nतत्र चान्द्रमसं ज्योतिर्योगी प्राप्य निवर्तते।।8.25।।",
+      "transliteration": "dhūmo rātris tathā kṛiṣhṇaḥ ṣhaṇ-māsā dakṣhiṇāyanam\ntatra chāndramasaṁ jyotir yogī prāpya nivartate",
+      "wordGloss": "dhūmaḥ—smoke; rātriḥ—night; tathā—and; kṛiṣhṇaḥ—the dark fortnight of the moon; ṣhaṭ-māsāḥ—six months; dakṣhiṇa-ayanam—the sun’s southern course; tatra—there; chāndra-masam—lunar; jyotiḥ—light; yogī—a yogi; prāpya—attain; nivartate—comes back;"
+    },
+    {
+      "ref": "8.26",
+      "chapter": 8,
+      "verse": 26,
+      "sourceNumber": "8.26",
+      "sanskrit": "शुक्लकृष्णे गती ह्येते जगतः शाश्वते मते।\n\nएकया यात्यनावृत्तिमन्ययाऽऽवर्तते पुनः।।8.26।।",
+      "transliteration": "śhukla-kṛiṣhṇe gatī hyete jagataḥ śhāśhvate mate\nekayā yātyanāvṛittim anyayāvartate punaḥ",
+      "wordGloss": "śhukla—bright; kṛiṣhṇe—dark; gatī—paths; hi—certainly; ete—these; jagataḥ—of the material world; śhāśhvate—eternal; mate—opinion; ekayā—by one; yāti—goes; anāvṛittim—to non return; anyayā—by the other; āvartate—comes back; punaḥ—again"
+    },
+    {
+      "ref": "8.27",
+      "chapter": 8,
+      "verse": 27,
+      "sourceNumber": "8.27",
+      "sanskrit": "नैते सृती पार्थ जानन्योगी मुह्यति कश्चन।\n\nतस्मात्सर्वेषु कालेषु योगयुक्तो भवार्जुन।।8.27।।",
+      "transliteration": "naite sṛitī pārtha jānan yogī muhyati kaśhchana\ntasmāt sarveṣhu kāleṣhu yoga-yukto bhavārjuna",
+      "wordGloss": "na—never; ete—these two; sṛitī—paths; pārtha—Arjun, the son of Pritha; jānan—knowing; yogī—a yogi; muhyati—bewildered; kaśhchana—any; tasmāt—therefore; sarveṣhu kāleṣhu—always; yoga-yuktaḥ—situated in Yog; bhava—be; arjuna—Arjun"
+    },
+    {
+      "ref": "8.28",
+      "chapter": 8,
+      "verse": 28,
+      "sourceNumber": "8.28",
+      "sanskrit": "वेदेषु यज्ञेषु तपःसु चैव\n\nदानेषु यत्पुण्यफलं प्रदिष्टम्।\n\nअत्येति तत्सर्वमिदं विदित्वा\n\nयोगी परं स्थानमुपैति चाद्यम्।।8.28।।",
+      "transliteration": "vedeṣhu yajñeṣhu tapaḥsu chaiva\ndāneṣhu yat puṇya-phalaṁ pradiṣhṭam\natyeti tat sarvam idaṁ viditvā\nyogī paraṁ sthānam upaiti chādyam",
+      "wordGloss": "vedeṣhu—in the study of the Vedas; yajñeṣhu—in performance of sacrifices; tapaḥsu—in austerities; cha—and; eva—certainly; dāneṣhu—in giving charities; yat—which; puṇya-phalam—fruit of merit; pradiṣhṭam—is gained; atyeti—surpasses; tat sarvam—all; idam—this; viditvā—having known; yogī—a yogi; param—Supreme; sthānam—Abode; upaiti—achieves; cha—and; ādyam—original"
+    }
+  ]
+}
