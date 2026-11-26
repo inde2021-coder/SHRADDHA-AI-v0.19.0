@@ -124,6 +124,7 @@ class OfflineIndicVoiceSession(
                     modelPath,
                     "User voice transcript (${selectedLanguage.label}): $transcript\nRespond naturally in the same language. This is local-only; do not claim device actions."
                 )
+                PersistentChatMemory.record(context, "Assistant", answer)
                 onBrainResponse(answer)
                 onStatus("Offline ${selectedLanguage.label} • Brain response ready")
             } catch (error: Exception) {
