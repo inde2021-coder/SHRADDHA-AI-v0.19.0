@@ -105,6 +105,10 @@ fun DeviceCenterScreen(navController: NavController) {
     var outgoingFile by remember { mutableStateOf(DeviceFileTransferSender.pending(File(context.filesDir, "OutgoingTransfers")).firstOrNull()) }
     var outgoingProgress by remember { mutableStateOf(outgoingFile?.sentChunks ?: 0) }
     var outgoingSending by remember { mutableStateOf(false) }
+    var outgoingQueue by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var outgoingInFlight by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var outgoingAcked by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var outgoingPumpActive by remember { mutableStateOf(false) }
 
     fun flushCompletedIncomingReceipts(peerId: String) {
         if (!connected || peers.none { it.id == peerId && it.online } || !DeviceLinkManager.isE2ETrusted(peerId)) return
@@ -114,6 +118,60 @@ fun DeviceCenterScreen(navController: NavController) {
             )
             if (queued && DeviceFileTransferReceiver.acknowledgeReceipt(context, peerId, receipt.transferId)) {
                 incomingTransferStatus = "PC को saved transfer completion confirm कर दिया: ${receipt.fileName}"
+            }
+        }
+    }
+
+    fun pumpOutgoingFile(peerId: String, item: DeviceFileTransferSender.Prepared) {
+        if (outgoingPumpActive || !outgoingSending) return
+        if (!connected || !DeviceLinkManager.isE2ETrusted(peerId)) {
+            outgoingSending = false
+            incomingTransferStatus = "Trusted PC connection lost; transfer is paused safely."
+            return
+        }
+        val capacity = (8 - outgoingInFlight.size).coerceAtLeast(0)
+        if (capacity == 0) return
+        val batch = outgoingQueue.take(capacity)
+        if (batch.isEmpty()) {
+            if (outgoingInFlight.isEmpty() && outgoingAcked.size == item.chunkCount) {
+                outgoingSending = false
+                incomingTransferStatus = "सभी chunks PC ने स्वीकार किए; अंतिम SHA-256 verification की प्रतीक्षा…"
+            }
+            return
+        }
+        outgoingQueue = outgoingQueue.drop(batch.size)
+        outgoingInFlight = outgoingInFlight + batch
+        outgoingPumpActive = true
+        scope.launch {
+            var failedAt = -1
+            for ((position, chunkIndex) in batch.withIndex()) {
+                val bytes = try {
+                    withContext(Dispatchers.IO) { DeviceFileTransferSender.readChunk(item, chunkIndex) }
+                } catch (_: Exception) {
+                    failedAt = position
+                    break
+                }
+                val sent = try { DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes) }
+                    finally { bytes.fill(0) }
+                if (!sent) {
+                    failedAt = position
+                    break
+                }
+            }
+            if (failedAt >= 0) {
+                val unsent = batch.drop(failedAt)
+                outgoingInFlight = outgoingInFlight - unsent.toSet()
+                outgoingQueue = unsent + outgoingQueue
+                outgoingSending = false
+                incomingTransferStatus = "Chunk भेजना रुक गया; भेजे गए chunks सुरक्षित हैं। Resume / Retry दबाएँ।"
+            }
+            outgoingPumpActive = false
+            if (outgoingSending && outgoingQueue.isNotEmpty() && outgoingInFlight.size < 8) {
+                pumpOutgoingFile(peerId, item)
+            } else if (outgoingSending && outgoingQueue.isEmpty() && outgoingInFlight.isEmpty() &&
+                outgoingAcked.size == item.chunkCount) {
+                outgoingSending = false
+                incomingTransferStatus = "सभी chunks PC ने स्वीकार किए; अंतिम SHA-256 verification की प्रतीक्षा…"
             }
         }
     }
