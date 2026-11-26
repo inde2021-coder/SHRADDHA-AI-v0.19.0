@@ -3,7 +3,7 @@ import json
 import math
 import re
 
-_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr", "file_list", "file_read", "file_search"}
+_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr", "file_list", "file_read", "file_search", "file_open"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -69,6 +69,7 @@ def validate_remote_action(action):
         "file_list": {"kind", "path"},
         "file_read": {"kind", "path"},
         "file_search": {"kind", "query", "path"},
+        "file_open": {"kind", "path"},
     }
     if set(action) - allowed_fields[kind]:
         return None
@@ -114,7 +115,7 @@ def validate_remote_action(action):
         clean["operation"] = operation
     elif kind in {"hardware_status", "ocr"}:
         pass
-    elif kind in {"file_list", "file_read", "file_search"}:
+    elif kind in {"file_list", "file_read", "file_search", "file_open"}:
         path = action.get("path", "")
         if not isinstance(path, str) or len(path) > 500 or "\x00" in path:
             return None
