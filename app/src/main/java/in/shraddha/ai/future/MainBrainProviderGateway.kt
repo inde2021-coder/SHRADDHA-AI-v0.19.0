@@ -26,21 +26,6 @@ object MainBrainProviderGateway {
     private val providerOrder = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
     val supportedProviders: Set<String> = providerOrder.toSet()
 
-    /**
-     * Central cloud-consent gate. Feature screens may call different gateway methods,
-     * so consent must be enforced here as well as at the UI entry points.
-     */
-    private fun onlineAiAllowed(context: Context): Boolean =
-        context.applicationContext
-            .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-            .getBoolean("allow_online_ai", false)
-
-    private fun requireOnlineAiConsent(context: Context) {
-        check(onlineAiAllowed(context)) {
-            "Online AI is disabled. Enable Allow Online AI in Settings > Connections before using cloud services."
-        }
-    }
-
     fun configuredProviders(context: Context, preferredProvider: String? = null): List<String> {
         val preferred = (preferredProvider
             ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI"))
@@ -58,7 +43,7 @@ object MainBrainProviderGateway {
 
     /** Secure realtime Gemini Live session token; raw provider credentials never enter the UI. */
     suspend fun fetchLiveVoiceToken(context: Context): String {
-        requireOnlineAiConsent(context)
+        OnlineAiConsent.requireAllowed(context)
         return VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
     }
 
@@ -70,7 +55,7 @@ object MainBrainProviderGateway {
         systemPrompt: String,
         onChunk: (String) -> Unit
     ): StreamingTextResult {
-        if (!onlineAiAllowed(context)) {
+        if (!OnlineAiConsent.isAllowed(context)) {
             return StreamingTextResult(403, "Online AI is disabled by the user.", null)
         }
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
@@ -122,7 +107,7 @@ object MainBrainProviderGateway {
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
-        if (!onlineAiAllowed(context)) {
+        if (!OnlineAiConsent.isAllowed(context)) {
             return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
         }
         val provider = providerName.uppercase()
@@ -157,7 +142,7 @@ object MainBrainProviderGateway {
     }
 
     fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
-        requireOnlineAiConsent(context)
+        OnlineAiConsent.requireAllowed(context)
         VoiceGatewaySettings.executeAgent(context, providerName, "Assistant", systemInstruction, prompt)?.let { return it.text }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
             is ChatReplyResult.Success -> result.text
@@ -172,7 +157,7 @@ object MainBrainProviderGateway {
         systemInstruction: String,
         prompt: String
     ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
-        requireOnlineAiConsent(context)
+        OnlineAiConsent.requireAllowed(context)
         VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
