@@ -89,6 +89,8 @@ fun OfflineModelScreen(navController: NavController) {
                         }
                     } ?: error("Android could not open the selected model file.")
                     require(temporary.length() >= MIN_MODEL_BYTES) { "Model file is too small to be a valid LiteRT-LM model." }
+                    // Verify the complete temporary file before replacing a known-good model.
+                    val digest = sha256File(temporary)
                     val backup = File(folder, "previous.litertlm.bak")
                     if (backup.exists()) backup.delete()
                     val hadPrevious = target.exists()
@@ -98,7 +100,7 @@ fun OfflineModelScreen(navController: NavController) {
                         error("Could not finalize the imported model file; previous model was restored where possible.")
                     }
                     backup.delete()
-                    target.absolutePath to sha256File(target)
+                    target.absolutePath to digest
                 }
             }
             working = false
