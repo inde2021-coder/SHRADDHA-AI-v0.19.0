@@ -12,9 +12,11 @@ class LanguageDetectorTest {
     }
 
     @Test
-    fun testDevanagariHindi() {
-        assertEquals("HINDI", LanguageDetector.detect("नमस्ते, आप कैसे हैं?"))
-        assertEquals("HINDI", LanguageDetector.detect("क्या हाल है"))
+    fun devanagariAutoDetectionDoesNotGuessHindiForMarathiSanskritOrPawari() {
+        assertEquals("DEVANAGARI_UNSPECIFIED", LanguageDetector.detect("नमस्ते, आप कैसे हैं?"))
+        assertEquals("DEVANAGARI_UNSPECIFIED", LanguageDetector.detect("नमस्कार, तुम्ही कसे आहात?"))
+        assertEquals("DEVANAGARI_UNSPECIFIED", LanguageDetector.detect("कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"))
+        assertEquals("DEVANAGARI_UNSPECIFIED", LanguageDetector.detect("पावरी बोलीचा नमुना"))
     }
 
     @Test
@@ -42,6 +44,11 @@ class LanguageDetectorTest {
     @Test(expected = IllegalArgumentException::class)
     fun unsupportedCustomVoiceLanguageDoesNotSilentlyFallBackToEnglish() {
         LanguageDetector.toVoiceModelLanguage("MARATHI")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun ambiguousDevanagariDoesNotSilentlySelectHindiOrEnglishVoice() {
+        LanguageDetector.toVoiceModelLanguage("DEVANAGARI_UNSPECIFIED")
     }
 
     @Test
