@@ -54,6 +54,11 @@ object VoiceSessionManager {
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
+    private val _offlineTranscript = MutableStateFlow("")
+    val offlineTranscript: StateFlow<String> = _offlineTranscript.asStateFlow()
+    private val _offlineBrainResponse = MutableStateFlow("")
+    val offlineBrainResponse: StateFlow<String> = _offlineBrainResponse.asStateFlow()
+
     private val _currentPersonality = MutableStateFlow(Personality.NORMAL)
     val currentPersonality: StateFlow<Personality> = _currentPersonality.asStateFlow()
 
@@ -68,6 +73,7 @@ object VoiceSessionManager {
 
     @Volatile private var client: GeminiLiveClient? = null
     @Volatile private var audioIO: LiveAudioIO? = null
+    @Volatile private var offlineVoiceSession: OfflineIndicVoiceSession? = null
     private var appContext: Context? = null
 
     private var reconnectJob: Job? = null
@@ -182,6 +188,53 @@ object VoiceSessionManager {
             sessionMutex.withLock {
                 connectSession(isResuming = false, expectedEpoch = startEpoch)
             }
+        }
+    }
+
+    /** Starts an explicitly selected local Indic speech path. This method never checks or uses cloud consent. */
+    fun startOffline(context: Context, language: IndicConformerRuntime.Language) {
+        if (_isActive.value) stop()
+        val application = context.applicationContext
+        if (ContextCompat.checkSelfPermission(application, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            _lastError.value = "Microphone permission is required for offline voice."
+            _statusText.value = "Microphone permission required"
+            _state.value = NovaOrbState.ERROR
+            return
+        }
+        appContext = application
+        _isActive.value = true
+        _muted.value = false
+        _lastError.value = null
+        _offlineTranscript.value = ""
+        _offlineBrainResponse.value = ""
+        _currentLanguage.value = when (language) {
+            IndicConformerRuntime.Language.HINDI -> LanguagePreference.HINDI
+            IndicConformerRuntime.Language.MARATHI -> LanguagePreference.MARATHI
+            IndicConformerRuntime.Language.SANSKRIT -> LanguagePreference.SANSKRIT
+        }
+        _state.value = NovaOrbState.CONNECTING
+        _statusText.value = "Checking offline ${language.label} model..."
+        offlineVoiceSession?.release()
+        offlineVoiceSession = OfflineIndicVoiceSession(
+            onStatus = { message ->
+                if (_isActive.value) {
+                    _statusText.value = message
+                    _state.value = if (message.contains("stopped", true)) NovaOrbState.IDLE else NovaOrbState.LISTENING
+                }
+            },
+            onTranscript = { text -> _offlineTranscript.value = text },
+            onBrainResponse = { text -> _offlineBrainResponse.value = text },
+            onError = { message ->
+                _lastError.value = message
+                _statusText.value = message
+                _state.value = NovaOrbState.ERROR
+            }
+        )
+        runCatching { offlineVoiceSession?.start(application, language) }.onFailure { error ->
+            _lastError.value = error.localizedMessage ?: "Offline voice could not start."
+            _statusText.value = _lastError.value.orEmpty()
+            _state.value = NovaOrbState.ERROR
+            _isActive.value = false
         }
     }
 
@@ -633,6 +686,8 @@ object VoiceSessionManager {
             audioIO?.release()
             audioIO = null
         }
+        offlineVoiceSession?.release()
+        offlineVoiceSession = null
 
         EchoGuard.reset()
         ConversationMemory.clear()
