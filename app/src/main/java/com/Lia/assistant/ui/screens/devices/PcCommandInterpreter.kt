@@ -23,6 +23,21 @@ object PcCommandInterpreter {
                 JSONObject().put("kind", "scroll").put("amount", -5)
             lower in setOf("hardware status", "pc status", "कंप्यूटर की स्थिति") ->
                 JSONObject().put("kind", "hardware_status")
+            Regex("^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
+                val match = Regex("^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!
+                val path = match.groupValues[1].trim().replace("\\\\", "/")
+                val parts = path.split("/").filter { it.isNotBlank() && it != "." }
+                require(path.length <= 500 && !path.startsWith("/") && !Regex("^[A-Za-z]:").containsMatchIn(path) &&
+                    parts.isNotEmpty() && parts.none { it == ".." || it.startsWith(".") }) {
+                    "File/folder path केवल PC user folder के अंदर relative path होना चाहिए।"
+                }
+                JSONObject().put("kind", "file_open").put("path", parts.joinToString("/"))
+            }
+            Regex("^(?:search files?|find files?|फ़ाइल खोजो|फाइल खोजो|फ़ाइल ढूंढो|फाइल ढूंढो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
+                val query = Regex("^(?:search files?|find files?|फ़ाइल खोजो|फाइल खोजो|फ़ाइल ढूंढो|फाइल ढूंढो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!.groupValues[1].trim()
+                require(query.length in 2..80) { "File search में 2 से 80 characters लिखें।" }
+                JSONObject().put("kind", "file_search").put("query", query).put("path", "")
+            }
             Regex("^(open|launch|खोलो|खोल)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
                 val app = Regex("^(open|launch|खोलो|खोल)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!.groupValues[2].trim()
                 require(app.length <= 80 && !app.contains(Regex("[\\\\/:]")) && !app.contains("..")) { "App name मान्य नहीं है।" }
