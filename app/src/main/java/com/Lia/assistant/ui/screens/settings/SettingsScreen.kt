@@ -556,6 +556,35 @@ private fun SettingsScreenContent(
         }
 
         SettingsGroupHeader(
+            title = "Workspace & Tools",
+            expanded = expandedSettingsGroup == "Workspace & Tools",
+            onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "Workspace & Tools") null else "Workspace & Tools" }
+        )
+        if (expandedSettingsGroup == "Workspace & Tools") {
+            NovaGlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Column {
+                    NovaSettingsRow(
+                        title = "Quick Actions & Workspaces",
+                        subtitle = "Visual Lens, Device Center, Expert Studio, Project Lab, Data Vault, Website Forge and Agent Council",
+                        icon = Icons.Default.Speed,
+                        onClick = { navController.navigate("quick_actions") }
+                    )
+                    NovaSettingsRow(
+                        title = "People Memory",
+                        subtitle = "Consent-based local person profiles, face and speaker recognition",
+                        icon = Icons.Default.Person,
+                        onClick = {
+                            context.startActivity(
+                                android.content.Intent(context, `in`.shraddha.ai.MainActivity::class.java)
+                                    .putExtra("initial_page", "people")
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        SettingsGroupHeader(
             title = "About & Support",
             expanded = expandedSettingsGroup == "About & Support",
             onClick = { expandedSettingsGroup = if (expandedSettingsGroup == "About & Support") null else "About & Support" }
