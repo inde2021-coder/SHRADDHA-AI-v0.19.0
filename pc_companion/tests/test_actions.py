@@ -103,5 +103,44 @@ class ActionTests(unittest.TestCase):
         self.assertNotIn("654321", safe)
 
 
+    def test_approved_path_resolver_rejects_traversal_and_outside_symlink(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.approved_paths import resolve_user_path
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            (home / "Documents").mkdir()
+            (home / "Downloads").mkdir()
+            (home / "Desktop").mkdir()
+            target = home / "Documents" / "report.pdf"
+            target.write_text("test", encoding="utf-8")
+            self.assertEqual(resolve_user_path("report.pdf", "file", home), target)
+            with self.assertRaises(ValueError):
+                resolve_user_path("../outside.txt", "file", home)
+            outside = home / "outside.txt"
+            outside.write_text("secret", encoding="utf-8")
+            try:
+                (home / "Documents" / "escape.txt").symlink_to(outside)
+            except OSError:
+                self.skipTest("Symlink creation is unavailable on this Windows test account.")
+            with self.assertRaises(FileNotFoundError):
+                resolve_user_path("escape.txt", "file", home)
+
+    def test_approved_path_opener_only_receives_resolved_user_path(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.approved_paths import open_user_path
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            for folder in ("Documents", "Downloads", "Desktop"):
+                (home / folder).mkdir()
+            (home / "Downloads" / "invoice.pdf").write_text("invoice", encoding="utf-8")
+            opened = []
+            result = open_user_path("invoice.pdf", "file", opener=opened.append, home=home)
+            self.assertEqual(len(opened), 1)
+            self.assertTrue(opened[0].endswith("invoice.pdf"))
+            self.assertIn("Opened approved file", result)
+
+
 if __name__ == "__main__":
     unittest.main()
