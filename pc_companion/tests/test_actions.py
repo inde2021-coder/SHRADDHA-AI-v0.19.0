@@ -130,11 +130,14 @@ class ActionTests(unittest.TestCase):
         from pc_companion.actions import read_user_text_file
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "note.txt").write_text("नमस्ते Shraddha", encoding="utf-8")
+            (root / "note.txt").write_text("नमस्ते Shraddha\\nOTP: 123456\\n654321\\nInvoice total 42", encoding="utf-8")
             (root / "image.png").write_bytes(b"not text")
             with patch("pc_companion.actions.Path.home", return_value=root):
                 preview = read_user_text_file("note.txt")
                 self.assertIn("नमस्ते", preview["content"])
+                self.assertIn("[संवेदनशील OCR पंक्ति छिपाई गई]", preview["content"])
+                self.assertNotIn("123456", preview["content"])
+                self.assertTrue(preview["redacted"])
                 with self.assertRaisesRegex(RuntimeError, "text files"):
                     read_user_text_file("image.png")
 
