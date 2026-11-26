@@ -96,6 +96,12 @@ kotlin {
     }
 }
 
+// sherpa-onnx Android AAR bundles the Kotlin API itself. Exclude its JVM jar
+// across every configuration so no transitive path reintroduces duplicate classes.
+configurations.configureEach {
+    exclude(group = "com.github.k2-fsa", module = "sherpa-onnx-jvm")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
