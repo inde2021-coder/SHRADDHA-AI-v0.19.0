@@ -124,6 +124,12 @@ private fun SettingsScreenContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
+    var allowOnlineAi by remember {
+        mutableStateOf(
+            context.getSharedPreferences("shraddha_network_ai", android.content.Context.MODE_PRIVATE)
+                .getBoolean("allow_online_ai", false)
+        )
+    }
 
     var expandedSettingsGroup by remember { mutableStateOf<String?>(null) }
     var showHomeDesignDialog by remember { mutableStateOf(false) }
@@ -433,6 +439,17 @@ private fun SettingsScreenContent(
                         val nextProvider = providers[(currentIndex + 1) % providers.size]
                         appState.applyAiProvider(context, nextProvider)
                         android.widget.Toast.makeText(context, "AI provider: $nextProvider", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+                NovaSettingsRow(
+                    title = "Allow Online AI",
+                    subtitle = "Off by default. When enabled, Chat may send prompts to your selected provider; provider charges or free-tier limits depend on that provider.",
+                    icon = Icons.Default.Security,
+                    switch = allowOnlineAi,
+                    onCheckedChange = { enabled ->
+                        allowOnlineAi = enabled
+                        context.getSharedPreferences("shraddha_network_ai", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("allow_online_ai", enabled).apply()
                     }
                 )
                 NovaSettingsRow(

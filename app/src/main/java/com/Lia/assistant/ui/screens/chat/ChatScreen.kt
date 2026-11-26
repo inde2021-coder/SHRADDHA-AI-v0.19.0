@@ -183,9 +183,22 @@ fun ChatScreen(
                             (error.localizedMessage ?: "Check the imported model and device memory.")
                     )
                 }
-                else -> `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
-                    context, appState.aiProvider, boundedInstruction, historySnapshot
-                )
+                else -> {
+                    val onlineAiAllowed = context.getSharedPreferences(
+                        "shraddha_network_ai",
+                        Context.MODE_PRIVATE
+                    ).getBoolean("allow_online_ai", false)
+                    if (onlineAiAllowed) {
+                        `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
+                            context, appState.aiProvider, boundedInstruction, historySnapshot
+                        )
+                    } else {
+                        ChatReplyResult.Error(
+                            "Online AI is turned off. Your message stayed on this device. " +
+                                "Enable Allow Online AI in Settings > Connections only when you want to use your selected provider."
+                        )
+                    }
+                }
             }
 
             if (result is ChatReplyResult.Success) {

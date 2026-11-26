@@ -101,6 +101,13 @@ object ShraddhaSpeechClient {
             done(Result.failure(IllegalArgumentException("Speech text is empty")))
             return
         }
+        val onlineAiAllowed = context.applicationContext
+            .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
+            .getBoolean("allow_online_ai", false)
+        if (!onlineAiAllowed) {
+            done(Result.failure(IllegalStateException("Online AI is disabled. Enable Allow Online AI in Settings > Connections to use cloud speech.")))
+            return
+        }
         val config = com.Lia.assistant.data.VoiceGatewaySettings.get(context)
         if (config.readError != null) {
             done(Result.failure(IllegalStateException(config.readError)))
