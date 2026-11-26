@@ -895,8 +895,8 @@ class PcCompanionApp:
             minutes = max(1, min(5, int(msg.get("requestedMinutes", 5))))
             approved = messagebox.askyesno(
                 "Shraddha AI • Remote control request",
-                f"{requester} wants to control this PC for up to {minutes} minutes.\n\n"
-                "Approve only if you initiated this request on your phone."
+                f"{requester} ({requester_id}) wants to control this PC for up to {minutes} minutes.\n\n"
+                "Approve only if you initiated this request on your phone and the device ID is correct."
             )
             self._send_json({
                 "type": "control_response", "requesterDeviceId": requester_id,
