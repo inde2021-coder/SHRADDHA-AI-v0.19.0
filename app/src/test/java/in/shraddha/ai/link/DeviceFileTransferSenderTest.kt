@@ -84,6 +84,8 @@ class DeviceFileTransferSenderTest {
         DeviceFileTransferSender.bindPeer(prepared, "trusted-pc-02")
         source.writeText("tampered bytes")
         assertTrue(DeviceFileTransferSender.pending(directory).isEmpty())
+        assertFalse("Corrupt app-private staging data must be discarded", source.exists())
+        assertFalse("Corrupt recovery metadata must be discarded", java.io.File(directory, "durable.part.meta").exists())
     }
 
     @Test fun persistedAcknowledgedProgressNeverMovesBackward() {
