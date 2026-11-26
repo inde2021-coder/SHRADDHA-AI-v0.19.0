@@ -169,8 +169,9 @@ fun ChatScreen(
                     "[" + hit.title + " • " + hit.citation + "]\n" + hit.excerpt.take(900)
                 }
             val trainedSystemInstruction = if (bundledCurriculumContext.isNotBlank()) {
-                (boundedInstruction.take(4_500) +
-                    "\n\nRelevant bundled Shraddha curriculum (source-labelled excerpts):\n" +
+                (boundedInstruction.take(3_900) +
+                    "\n\nTutor guidance: Answer in the learner's language. Use the retrieved lessons as the primary source; explain one concept at a time, give a simple worked example, then one short practice question when the user is learning. Correct gently. Cite the pack title. Clearly state when the pack is only a starter lesson or when a current official source/specialist is needed. Never invent a verse, medical dose, legal rule, scheme amount or financial return. For children, keep activities age-appropriate and non-competitive.\\n" +
+                    "\nRelevant bundled Shraddha curriculum (source-labelled excerpts):\n" +
                     bundledCurriculumContext.take(3_000)).take(8_000)
             } else boundedInstruction
             val offlineModelPath = context.getSharedPreferences(
@@ -182,7 +183,8 @@ fun ChatScreen(
             // model -> configured provider. A selected local model failure is surfaced locally;
             // it is never silently sent to a cloud provider with the same private prompt.
             val result = when {
-                localKnowledgeAnswer != null -> ChatReplyResult.Success(localKnowledgeAnswer.text)
+                // When a local model is installed, let it teach from the bundled lesson context.
+                // Without model weights, keep the deterministic extractive local answer path.
                 offlineModelPath.isNotBlank() -> runCatching {
                     val localPrompt = buildString {
                         append(trainedSystemInstruction)
@@ -202,6 +204,7 @@ fun ChatScreen(
                             (error.localizedMessage ?: "Check the imported model and device memory.")
                     )
                 }
+                localKnowledgeAnswer != null -> ChatReplyResult.Success(localKnowledgeAnswer.text)
                 else -> {
                     // Use the central consent policy; never read a parallel preference
                     // that could drift from Settings or other cloud entry points.
