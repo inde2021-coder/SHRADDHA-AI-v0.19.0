@@ -57,4 +57,28 @@ class SkillPackLifecycleSecurityInstrumentedTest {
             source.delete()
         }
     }
+    @Test fun modifiedQuarantinedBytesCannotBeActivated() {
+        val manager = SkillPackLifecycleManager(context)
+        val id = "tampered-" + UUID.randomUUID().toString().take(8)
+        val source = File(context.cacheDir, "$id.md").apply { writeText("# reviewed content") }
+        try {
+            val staged = manager.importForReview(id, "1.0.0", "Tamper fixture", "CC0-1.0", "user selected", source, true)
+            staged.file.writeText("# changed after review")
+            var rejected = false
+            try {
+                manager.approveAndActivate(
+                    staged,
+                    SkillPackLifecycleManager.Approval(true, true, true, true, true),
+                    automaticLearningEnabled = false
+                )
+            } catch (_: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue(rejected)
+            assertNull(manager.activePackFile(id))
+        } finally {
+            source.delete()
+        }
+    }
+
 }
