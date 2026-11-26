@@ -151,6 +151,7 @@ object ShraddhaSpeechClient {
             return
         }
         val call = http.newCall(request)
+        activeSynthesisCall?.cancel()
         activeSynthesisCall = call
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
