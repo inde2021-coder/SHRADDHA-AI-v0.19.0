@@ -45,4 +45,43 @@ class DeviceFileTransferRecoveryInstrumentedTest {
             DeviceFileTransferReceiver.reject(transferId)
         }
     }
+    @Test
+    fun completedReceiveRetainsReceiptUntilCompletionAckAfterRestart() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val transferId = UUID.randomUUID().toString().replace("-", "")
+        val peerId = "instrumented-test-pc"
+        val payload = "complete-before-ack".toByteArray()
+        val digest = MessageDigest.getInstance("SHA-256").digest(payload)
+            .joinToString("") { "%02x".format(it) }
+        val manifest = DeviceFileTransferReceiver.Manifest(
+            peerId, transferId, "completion-recovery.txt", payload.size.toLong(), 1, digest
+        )
+        var savedFile: java.io.File? = null
+        try {
+            assertTrue(DeviceFileTransferReceiver.accept(context, manifest))
+            val result = DeviceFileTransferReceiver.receiveChunk(context, peerId,
+                JSONObject().put("transferId", transferId).put("index", 0)
+                    .put("payload", Base64.encodeToString(payload, Base64.NO_WRAP)))
+            assertTrue(result.ok)
+            assertTrue(result.complete)
+            savedFile = java.io.File(result.savedPath!!)
+            assertTrue(savedFile.isFile)
+
+            // Simulate process death after publishing the file but before the final ACK.
+            val activeField = DeviceFileTransferReceiver::class.java.getDeclaredField("active")
+            activeField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            (activeField.get(DeviceFileTransferReceiver) as MutableMap<String, Any>).clear()
+
+            val receipts = DeviceFileTransferReceiver.completedReceipts(context, peerId)
+            assertEquals(1, receipts.count { it.transferId == transferId })
+            assertTrue(DeviceFileTransferReceiver.acknowledgeReceipt(context, peerId, transferId))
+            assertTrue(DeviceFileTransferReceiver.completedReceipts(context, peerId).none { it.transferId == transferId })
+        } finally {
+            DeviceFileTransferReceiver.reject(transferId)
+            savedFile?.delete()
+            context.filesDir.resolve("ReceivedFiles/.$transferId.receipt").delete()
+        }
+    }
+
 }
