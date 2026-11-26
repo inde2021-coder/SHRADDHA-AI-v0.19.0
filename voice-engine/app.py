@@ -76,7 +76,7 @@ def render_pcm(body: SpeechRequest, model_path: Path) -> Response:
                 ["piper", "--model", str(model_path), "--output_file", str(wav_path)],
                 input=body.text.strip().encode("utf-8"),
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 timeout=45,
                 check=True,
             )
