@@ -60,6 +60,8 @@ import `in`.shraddha.ai.link.DeviceFileTransferReceiver
 import `in`.shraddha.ai.link.DeviceFileTransferSender
 import org.json.JSONObject
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private data class LinkedPeer(
     val id: String,
@@ -255,7 +257,8 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         } else if (uri != null) incomingTransferStatus = "पहले trusted PC चुनें।"
     }
-    val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }    val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
+    val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }
+    val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
 
     Column(
         modifier = Modifier.fillMaxSize().nightSky()
