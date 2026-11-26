@@ -7,19 +7,18 @@ data class AkkpsRunnerCommand(
 
 /** Deterministic parser: values are copied literally and never inferred. */
 object AkkpsRunnerCommandParser {
-    private val submitToken = Regex(
-        "^(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)$",
-        RegexOption.IGNORE_CASE
-    )
-    private val politeSubmitPhrase = Regex(
-        "^(?:(?:please|kindly|कृपया|अब|रिकॉर्ड|फॉर्म|डाटा|डेटा|जानकारी|इसे)\\s+)*(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)(?:\\s+करें)?$",
-        RegexOption.IGNORE_CASE
+    private val submitTokens = setOf(
+        "submit", "सबमिट", "जमा करें", "जमा", "भेजो", "भेज दें",
+        "कृपया रिकॉर्ड जमा करें", "कृपया फॉर्म जमा करें",
+        "कृपया सबमिट करें", "रिकॉर्ड जमा करें", "फॉर्म जमा करें",
+        "अब जमा करें", "अब सबमिट करें", "please submit", "kindly submit"
     )
 
-    private fun isSubmitCommandSegment(segment: String): Boolean {
-        val value = segment.trim()
-        return submitToken.matches(value) || politeSubmitPhrase.matches(value)
-    }
+    private fun normalizeCommand(value: String): String =
+        value.trim().lowercase().replace(Regex("\\s+"), " ")
+
+    private fun isSubmitCommandSegment(segment: String): Boolean =
+        normalizeCommand(segment) in submitTokens
 
     /** Submission intent must occupy a whole command segment, never appear inside a field value. */
     fun hasExplicitSubmitIntent(raw: String): Boolean =
