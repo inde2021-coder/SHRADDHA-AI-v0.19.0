@@ -32,6 +32,18 @@ class LanguageDetectorTest {
         assertEquals("en", LanguageDetector.toVoiceModelLanguage("ENGLISH"))
     }
 
+
+    @Test
+    fun devanagariScriptIsNotEnoughToIdentifyHindiVersusMarathiOrSanskrit() {
+        assertEquals("DEVANAGARI", LanguageDetector.detectScript("नमस्कार"))
+        assertEquals("LATIN", LanguageDetector.detectScript("hello"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun unsupportedCustomVoiceLanguageDoesNotSilentlyFallBackToEnglish() {
+        LanguageDetector.toVoiceModelLanguage("MARATHI")
+    }
+
     @Test
     fun testEnglish() {
         assertEquals("ENGLISH", LanguageDetector.detect("what's the weather"))
