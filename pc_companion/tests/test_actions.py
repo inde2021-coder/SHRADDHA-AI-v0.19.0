@@ -151,7 +151,8 @@ class ActionTests(unittest.TestCase):
             with patch("pc_companion.actions.Path.home", return_value=root), patch("pc_companion.actions.os.startfile", create=True) as startfile:
                 result = open_user_path("report.pdf")
                 self.assertEqual(result, {"opened": "report.pdf", "type": "file"})
-                startfile.assert_called_once_with(str(root / "report.pdf"))
+                startfile.assert_called_once()
+                self.assertTrue(Path(startfile.call_args.args[0]).samefile(root / "report.pdf"))
 
     def test_remote_file_open_rejects_executable_extensions(self):
         import tempfile
@@ -199,7 +200,7 @@ class ActionTests(unittest.TestCase):
             isMinimized = True
         active = MinimizedWindow()
         with patch("pc_companion.actions._active_window", return_value=(active, "Notepad", (0, 0, 500, 300))), \
-             patch.object(self.gui, "screenshot") as screenshot:
+             patch.object(self.gui, "screenshot", create=True) as screenshot:
             with self.assertRaisesRegex(RuntimeError, "minimized"):
                 actions.read_active_window_ocr(self.gui)
         screenshot.assert_not_called()
