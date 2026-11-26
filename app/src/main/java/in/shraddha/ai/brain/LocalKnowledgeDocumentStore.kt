@@ -53,10 +53,14 @@ class LocalKnowledgeDocumentStore(context: Context) {
         sourceLabel: String,
         sourceUri: String? = null,
         content: String,
-        importedAt: Long = System.currentTimeMillis()
+        importedAt: Long = System.currentTimeMillis(),
+        internalBundled: Boolean = false
     ): Result<Unit> = runCatching {
         require(consent) { "Explicit user approval is required before importing personal knowledge." }
         require(id.matches(ID_PATTERN)) { "Document ID is invalid." }
+        require(if (internalBundled) id.startsWith("curriculum_") else !id.startsWith("curriculum_")) {
+            "The curriculum_ document namespace is reserved for signed APK lesson packs."
+        }
         require(title.isNotBlank() && title.length <= 160)
         require(sourceLabel.isNotBlank() && sourceLabel.length <= 200)
         require(sourceUri == null || (sourceUri.length <= 2_048 && isAllowedSourceUri(sourceUri))) {
@@ -108,7 +112,8 @@ class LocalKnowledgeDocumentStore(context: Context) {
             title = title,
             sourceLabel = "Shraddha AI built-in curriculum v$version",
             sourceUri = null,
-            content = content
+            content = content,
+            internalBundled = true
         ).getOrThrow()
     }
 
