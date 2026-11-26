@@ -57,6 +57,8 @@ object IndicConformerRuntime {
         .connectTimeout(20, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS)
         .callTimeout(30, TimeUnit.MINUTES).followRedirects(true).build()
 
+    fun canDownload(language: Language): Boolean = packs.getValue(language).checksumsPinned
+
     fun status(context: Context, language: Language): Status {
         val pack = packs.getValue(language)
         if (!pack.checksumsPinned) return Status(language, Availability.CHECKSUM_NOT_PINNED,
