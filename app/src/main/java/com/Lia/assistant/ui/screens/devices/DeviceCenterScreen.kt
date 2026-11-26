@@ -398,8 +398,20 @@ fun DeviceCenterScreen(navController: NavController) {
                         enabled = connected && peer.online && peerTrusted && pcFilePath.isNotBlank()
                     )
                 }
+                NovaButton(
+                    text = "Open file / folder on PC",
+                    onClick = {
+                        lastPcResult = ""
+                        status = if (DeviceLinkManager.requestPcFileOpen(peer.id, pcFilePath)) {
+                            "PC पर file/folder open request भेजी गई। Windows पर exact path approve करें।"
+                        } else "एक सुरक्षित relative file/folder path लिखें।"
+                    },
+                    enabled = connected && peer.online && peerTrusted && pcFilePath.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                    type = NovaButtonType.SECONDARY
+                )
                 Text(
-                    "सुरक्षा: hidden/credential folders, parent paths और binary files block हैं। केवल छोटे UTF-8 text files का preview मिलता है; हर request Windows PC पर अलग से approve होगी।",
+                    "सुरक्षा: hidden/credential folders, parent paths, executable files और unknown formats block हैं। हर open action Windows PC पर अलग से approve होगी।",
                     color = colors.textSecondary, fontSize = 10.sp
                 )
                 NovaTextField(
