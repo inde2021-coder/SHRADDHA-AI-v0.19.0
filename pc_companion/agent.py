@@ -68,8 +68,8 @@ class PcCompanionApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Shraddha AI • Windows PC Companion")
-        self.root.geometry("560x470")
-        self.root.minsize(520, 430)
+        self.root.geometry("720x760")
+        self.root.minsize(620, 650)
         pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.04
 
@@ -153,15 +153,23 @@ class PcCompanionApp:
         ttk.Entry(frame, textvariable=self.code_var, width=12).pack(anchor="w", pady=(2, 8))
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", pady=(2, 8))
-        ttk.Button(buttons, text="Join & Connect", command=self.join_and_connect).pack(side="left")
-        ttk.Button(buttons, text="Connect Saved PC", command=self.connect_saved).pack(side="left", padx=6)
-        ttk.Button(buttons, text="Disconnect", command=self.disconnect).pack(side="left")
-        ttk.Button(buttons, text="Revoke PC Pairing", command=self.revoke_pairing).pack(side="left", padx=6)
-        ttk.Button(buttons, text="Send File to Phone", command=self.choose_file_for_phone).pack(side="left", padx=6)
-        ttk.Button(buttons, text="Retry Pending File Chunks", command=self.retry_pc_file_transfer).pack(side="left", padx=6)
-        ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
-        ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
-        ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
+        button_specs = [
+            ("Join & Connect", self.join_and_connect),
+            ("Connect Saved PC", self.connect_saved),
+            ("Disconnect", self.disconnect),
+            ("Revoke PC Pairing", self.revoke_pairing),
+            ("Send File to Phone", self.choose_file_for_phone),
+            ("Retry Pending File Chunks", self.retry_pc_file_transfer),
+            ("PC Hardware Status", self._show_hardware_status),
+            ("Set PC Volume", lambda: self._set_local_hardware("set_volume")),
+            ("Set PC Brightness", lambda: self._set_local_hardware("set_brightness")),
+        ]
+        for index, (label, callback) in enumerate(button_specs):
+            ttk.Button(buttons, text=label, command=callback).grid(
+                row=index // 3, column=index % 3, sticky="ew", padx=3, pady=3
+            )
+        for column in range(3):
+            buttons.columnconfigure(column, weight=1)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
