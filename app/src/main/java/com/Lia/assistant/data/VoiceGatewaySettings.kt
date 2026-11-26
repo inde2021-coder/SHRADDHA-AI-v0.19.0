@@ -234,9 +234,9 @@ object VoiceGatewaySettings {
             }
             val answer = json.optString("answer").takeIf { it.isNotBlank() }
                 ?: error("Cloud agent returned an empty response.")
-            val usage = json.optJSONObject("usage")
-            val inputTokens = usage?.takeIf { it.has("inputTokens") && !it.isNull("inputTokens") }?.optLong("inputTokens")?.takeIf { it >= 0L }
-            val outputTokens = usage?.takeIf { it.has("outputTokens") && !it.isNull("outputTokens") }?.optLong("outputTokens")?.takeIf { it >= 0L }
+            val usageJson = json.optJSONObject("usage")
+            val inputTokens = usageJson?.takeIf { it.has("inputTokens") && !it.isNull("inputTokens") }?.optLong("inputTokens")?.takeIf { it >= 0L }
+            val outputTokens = usageJson?.takeIf { it.has("outputTokens") && !it.isNull("outputTokens") }?.optLong("outputTokens")?.takeIf { it >= 0L }
             val model = json.optString("model").takeIf { it.isNotBlank() }
             val reply = AgentReply(answer, normalized, model, inputTokens, outputTokens)
             val usage = if (inputTokens != null && outputTokens != null && model != null) {
