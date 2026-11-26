@@ -82,6 +82,8 @@ fun DeviceCenterScreen(navController: NavController) {
     var pendingFingerprint by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showClearPairing by remember { mutableStateOf(false) }
     var commandText by remember { mutableStateOf("") }
+    var lastPcResult by remember { mutableStateOf("") }
+    var lastPcResultOk by remember { mutableStateOf(false) }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -119,7 +121,12 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                     "peer_status" -> status = message.optString("name", "Device") + ": " +
                         if (message.optBoolean("online")) "online" else "offline"
-                    "remote_action_result" -> status = (if (message.optBoolean("ok")) "PC action succeeded: " else "PC action failed: ") + message.optString("result").take(300)
+                    "remote_action_result" -> {
+    lastPcResultOk = message.optBoolean("ok")
+    lastPcResult = message.optString("result").take(12000)
+    status = if (lastPcResultOk) "PC command completed. Full result is shown below."
+        else "PC command failed. Details are shown below."
+}
                     else -> status = message.optString("type", "Relay message received")
                 }
             }
@@ -338,6 +345,7 @@ fun DeviceCenterScreen(navController: NavController) {
                         onClick = {
                             PcCommandInterpreter.parse(commandText).onSuccess { action ->
                                 busy = true
+                                lastPcResult = ""
                                 val sent = DeviceLinkManager.sendAction(peer.id, action)
                                 status = if (sent) "Command सुरक्षित रूप से भेजा गया। PC पर approval/परिणाम देखें।"
                                     else "Command नहीं भेजा गया। PC online और remote approval जाँचें।"
@@ -355,6 +363,38 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         }
 
+        if (lastPcResult.isNotBlank()) {
+            NovaGlassCard {
+                Text(
+                    if (lastPcResultOk) "PC RESULT" else "PC ERROR",
+                    color = if (lastPcResultOk) Color(0xFF58D6A5) else Color(0xFFFF8A80),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                SelectionContainer {
+                    Text(lastPcResult, color = colors.textPrimary, fontSize = 12.sp)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(
+                        text = "Copy full result",
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Shraddha PC result", lastPcResult))
+                            status = "पूरा PC result clipboard में copy हो गया।"
+                        },
+                        modifier = Modifier.weight(1f),
+                        type = NovaButtonType.SECONDARY
+                    )
+                    NovaButton(
+                        text = "Clear",
+                        onClick = { lastPcResult = "" },
+                        modifier = Modifier.weight(1f),
+                        type = NovaButtonType.TEXT
+                    )
+                }
+            }
+        }
         NovaGlassCard {
             Text("SESSION SECURITY", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             NovaButton(
