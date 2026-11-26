@@ -160,6 +160,19 @@ fun ChatScreen(
                 LocalKnowledgeDocumentStore(context.applicationContext).search(trimmed, limit = 8).getOrThrow()
             }.getOrDefault(emptyList())
             val localKnowledgeAnswer = LocalKnowledgeAnswer.build(trimmed, localKnowledgeHits)
+            // Only app-bundled curriculum excerpts may enter an enabled cloud request.
+            // User-imported/private documents remain local and are never silently uploaded.
+            val bundledCurriculumContext = localKnowledgeHits
+                .filter { it.sourceLabel.startsWith("Shraddha AI built-in curriculum") }
+                .take(4)
+                .joinToString("\n\n") { hit ->
+                    "[" + hit.title + " • " + hit.citation + "]\n" + hit.excerpt.take(900)
+                }
+            val trainedSystemInstruction = if (bundledCurriculumContext.isNotBlank()) {
+                (boundedInstruction.take(4_500) +
+                    "\n\nRelevant bundled Shraddha curriculum (source-labelled excerpts):\n" +
+                    bundledCurriculumContext.take(3_000)).take(8_000)
+            } else boundedInstruction
             val offlineModelPath = context.getSharedPreferences(
                 "shraddha_offline_model",
                 Context.MODE_PRIVATE
@@ -172,7 +185,7 @@ fun ChatScreen(
                 localKnowledgeAnswer != null -> ChatReplyResult.Success(localKnowledgeAnswer.text)
                 offlineModelPath.isNotBlank() -> runCatching {
                     val localPrompt = buildString {
-                        append(boundedInstruction)
+                        append(trainedSystemInstruction)
                         append("\n\nRecent conversation:\n")
                         historySnapshot.takeLast(8).forEach { turn ->
                             append(if (turn.isUser) "User: " else "Assistant: ")
@@ -195,7 +208,7 @@ fun ChatScreen(
                     val onlineAiAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
                     if (onlineAiAllowed) {
                         `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
-                            context, appState.aiProvider, boundedInstruction, historySnapshot
+                            context, appState.aiProvider, trainedSystemInstruction, historySnapshot
                         )
                     } else {
                         ChatReplyResult.Error(
