@@ -3,7 +3,7 @@ import json
 import math
 import re
 
-_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr", "file_list", "file_read"}
+_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr", "file_list", "file_read", "file_search"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -68,6 +68,7 @@ def validate_remote_action(action):
         "ocr": {"kind"},
         "file_list": {"kind", "path"},
         "file_read": {"kind", "path"},
+        "file_search": {"kind", "query", "path"},
     }
     if set(action) - allowed_fields[kind]:
         return None
@@ -113,7 +114,7 @@ def validate_remote_action(action):
         clean["operation"] = operation
     elif kind in {"hardware_status", "ocr"}:
         pass
-    elif kind in {"file_list", "file_read"}:
+    elif kind in {"file_list", "file_read", "file_search"}:
         path = action.get("path", "")
         if not isinstance(path, str) or len(path) > 500 or "\x00" in path:
             return None
@@ -124,6 +125,11 @@ def validate_remote_action(action):
         if any(part == ".." or part.startswith(".") for part in parts):
             return None
         clean["path"] = "/".join(parts)
+        if kind == "file_search":
+            query = action.get("query")
+            if not isinstance(query, str) or len(query.strip()) < 2 or len(query) > 80 or "\x00" in query:
+                return None
+            clean["query"] = query.strip()
     elif kind == "scroll":
         amount = action.get("amount", 5)
         if not isinstance(amount, int) or isinstance(amount, bool) or not -20 <= amount <= 20 or amount == 0:
