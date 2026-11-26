@@ -405,6 +405,8 @@ Return exact JSON only. Do not include prose or markdown."""
         if(requestCode==REQUEST_FILE) {
             val selected=if(resultCode==RESULT_OK) data?.data?.let { arrayOf(it) } else null
             uploadCallback?.onReceiveValue(selected); uploadCallback=null
+        } else if (requestCode == REQUEST_FARMER_CARD && resultCode == RESULT_OK) {
+            data?.data?.let(::processFarmerCardImage)
         }
     }
 
@@ -413,5 +415,5 @@ Return exact JSON only. Do not include prose or markdown."""
         web.stopLoading(); web.destroy(); super.onDestroy()
     }
 
-    companion object { private const val REQUEST_FILE=7314 }
+    companion object { private const val REQUEST_FILE=7314; private const val REQUEST_FARMER_CARD=7315 }
 }
