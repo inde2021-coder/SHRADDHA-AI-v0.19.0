@@ -11,7 +11,7 @@ _SENSITIVE_WINDOW = re.compile(
 )
 _SENSITIVE_LINE = re.compile(
     r"(?i)password|passcode|otp|one[- ]time|pin|cvv|security code|verification code|"
-    r"recovery phrase|seed phrase|mnemonic|api key|access token|secret key|private key|bearer|authorization|" 
+    r"recovery phrase|seed phrase|mnemonic|api key|access token|secret key|private key|bearer|authorization|"
     r"account number|card number|bank account|aadhaar|aadhar|pan(?: number)?|ifsc|upi|passport|"
     r"पासवर्ड|ओटीपी|पिन|गुप्त कोड|आधार|पैन|पासपोर्ट|"
     r"सत्यापन कोड|खाता संख्या|कार्ड नंबर|यूपीआई"
