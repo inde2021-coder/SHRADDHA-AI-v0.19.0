@@ -698,6 +698,15 @@ object DeviceLinkManager {
         if (relativePath.isBlank()) false else sendAction(targetDeviceId,
             JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
 
+    fun requestPcFileSearch(targetDeviceId: String, query: String, relativePath: String = ""): Boolean {
+        val cleanQuery = query.trim()
+        if (targetDeviceId.isBlank() || cleanQuery.length !in 2..80 || relativePath.length > 500) return false
+        return sendAction(targetDeviceId, JSONObject()
+            .put("kind", "file_search")
+            .put("query", cleanQuery)
+            .put("path", relativePath.trim()))
+    }
+
     @Deprecated("Plaintext peer chat is disabled; use a mutually verified E2E peer channel.")
     fun sendChat(message: String): Boolean = false
     fun sendTaskHandoff(targetDeviceId: String, title: String, description: String, steps: List<String>): Boolean {
