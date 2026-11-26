@@ -13,8 +13,18 @@ object LanguageDetector {
     )
 
     /** Maps detected text language to the installed custom voice model language. */
-    fun toVoiceModelLanguage(language: String): String =
-        if (language.equals("HI", true) || language.equals("HINDI", true) || language.equals("hi-IN", true)) "hi" else "en"
+    fun toVoiceModelLanguage(language: String): String = when (language.trim().uppercase()) {
+        "HI", "HINDI", "HI-IN" -> "hi"
+        "EN", "ENGLISH", "HINGLISH" -> "en"
+        else -> throw IllegalArgumentException("The configured custom voice currently supports Hindi and English only; no verified voice model is installed for $language.")
+    }
+
+    /** Devanagari is shared by Hindi, Marathi and Sanskrit; script detection alone cannot identify the language. */
+    fun detectScript(text: String): String = when {
+        text.any { it.code in 0x0900..0x097F } -> "DEVANAGARI"
+        text.any { it.code in 0x0041..0x005A || it.code in 0x0061..0x007A } -> "LATIN"
+        else -> "UNKNOWN"
+    }
 
     fun detect(text: String): String {
         val trimmed = text.trim()
