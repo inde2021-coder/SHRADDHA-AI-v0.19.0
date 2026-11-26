@@ -170,7 +170,7 @@ fun ChatScreen(
                 }
             val trainedSystemInstruction = if (bundledCurriculumContext.isNotBlank()) {
                 (boundedInstruction.take(3_900) +
-                    "\n\nTutor guidance: Answer in the learner's language. Use the retrieved lessons as the primary source; explain one concept at a time, give a simple worked example, then one short practice question when the user is learning. Correct gently. Cite the pack title. Clearly state when the pack is only a starter lesson or when a current official source/specialist is needed. Never invent a verse, medical dose, legal rule, scheme amount or financial return. For children, keep activities age-appropriate and non-competitive.\\n" +
+                    "\n\nTutor guidance: Answer in the learner's language. Use the retrieved lessons as the primary source; explain one concept at a time, give a simple worked example, then one short practice question when the user is learning. Correct gently. Cite the pack title. Clearly state when the pack is only a starter lesson or when a current official source/specialist is needed. Never invent a verse, medical dose, legal rule, scheme amount or financial return. For children, keep activities age-appropriate and non-competitive.\n" +
                     "\nRelevant bundled Shraddha curriculum (source-labelled excerpts):\n" +
                     bundledCurriculumContext.take(3_000)).take(8_000)
             } else boundedInstruction
