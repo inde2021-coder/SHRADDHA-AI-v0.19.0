@@ -107,7 +107,7 @@ object MainBrainProviderGateway {
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
-        if (!onlineAiAllowed(context)) {
+        if (!OnlineAiConsent.isAllowed(context)) {
             return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
         }
         val provider = providerName.uppercase()
