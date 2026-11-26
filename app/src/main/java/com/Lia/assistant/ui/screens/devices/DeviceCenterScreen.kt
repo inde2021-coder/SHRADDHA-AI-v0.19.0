@@ -240,8 +240,18 @@ fun DeviceCenterScreen(navController: NavController) {
                         }
                     }
                     "file_transfer_cancel" -> {
-                        DeviceFileTransferReceiver.reject(message.optString("transferId"))
-                        incomingTransferStatus = "PC ने file transfer cancel कर दिया।"
+                        val transferId = message.optString("transferId")
+                        val item = outgoingFile
+                        if (item != null && item.transferId == transferId) {
+                            DeviceFileTransferSender.cleanup(item)
+                            outgoingFile = null
+                            outgoingSending = false
+                            outgoingProgress = 0
+                            incomingTransferStatus = "PC cancelled the outgoing transfer."
+                        } else {
+                            DeviceFileTransferReceiver.reject(transferId)
+                            incomingTransferStatus = "PC cancelled the incoming transfer."
+                        }
                     }
                 }
             }
