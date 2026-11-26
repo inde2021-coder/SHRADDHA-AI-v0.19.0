@@ -9,6 +9,8 @@ import org.json.JSONObject
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
@@ -61,7 +63,7 @@ class CurriculumProgressStore(context: Context) {
             completedPacks = state.stringSet("completedPacks"),
             guardianMode = state.optBoolean("guardianMode", false),
             dailyLimitMinutes = state.optInt("dailyLimitMinutes", 45).coerceIn(5, 240),
-            usedTodayMinutes = state.optInt("usedTodayMinutes", 0).coerceAtLeast(0)
+            usedTodayMinutes = (state.optInt("usedTodayMinutes", 0).coerceAtLeast(0) + activeSessionMinutesToday()).coerceAtMost(24 * 60)
         )
     }
 
@@ -99,14 +101,35 @@ class CurriculumProgressStore(context: Context) {
     }
 
     @Synchronized fun startSession() {
-        prefs.edit().putLong(SESSION_STARTED_AT, System.currentTimeMillis()).apply()
+        // Recover a session left open by process death before starting a new one.
+        if (prefs.getLong(SESSION_STARTED_AT, 0L) > 0L) endSession()
+        prefs.edit().putLong(SESSION_STARTED_AT, System.currentTimeMillis()).commit()
+    }
+
+    private fun activeSessionMinutesToday(): Int {
+        val started = prefs.getLong(SESSION_STARTED_AT, 0L)
+        if (started <= 0L) return 0
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        val todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val countedFrom = maxOf(started, todayStart)
+        if (countedFrom >= now) return 0
+        val elapsed = (now - countedFrom).coerceAtMost(12L * 60L * 60L * 1000L)
+        return kotlin.math.ceil(elapsed / 60_000.0).toInt()
     }
 
     @Synchronized fun endSession() {
         val started = prefs.getLong(SESSION_STARTED_AT, 0L)
         prefs.edit().remove(SESSION_STARTED_AT).apply()
         if (started <= 0L) return
-        val elapsed = ((System.currentTimeMillis() - started).coerceAtLeast(0L) / 60_000.0).let { kotlin.math.ceil(it).toInt() }
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        val todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val countedFrom = maxOf(started, todayStart)
+        val elapsed = if (countedFrom >= now) 0 else {
+            val bounded = (now - countedFrom).coerceAtMost(12L * 60L * 60L * 1000L)
+            kotlin.math.ceil(bounded / 60_000.0).toInt()
+        }
         if (elapsed <= 0) return
         val state = readState()
         val today = java.time.LocalDate.now().toString()
