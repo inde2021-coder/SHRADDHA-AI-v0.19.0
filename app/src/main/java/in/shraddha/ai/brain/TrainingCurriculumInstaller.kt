@@ -48,6 +48,9 @@ object TrainingCurriculumInstaller {
             setOf("Hindi", "English"), "General")
     )
 
+    /** True only for IDs in the static APK-bundled manifest. */
+    fun isBundledPackId(documentId: String): Boolean = catalog.any { it.id == documentId }
+
     /**
      * Safe to call at chat startup. A process-local guard avoids repeated disk work.
      * Every fresh process verifies the bundled content digest and repairs missing/outdated packs.
