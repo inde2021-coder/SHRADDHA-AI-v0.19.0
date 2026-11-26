@@ -139,6 +139,13 @@ class LiveEyesCameraService : Service() {
             reader?.setOnImageAvailableListener({ source ->
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
+                    // Consent revocation stops the camera before local analysis or another cloud frame.
+                    if (!OnlineAiConsent.isAllowed(this@LiveEyesCameraService)) {
+                        stopped = true
+                        publishState(STATE_OFF)
+                        stopSelf()
+                        return@setOnImageAvailableListener
+                    }
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (now - lastAnalysisAt < ANALYSIS_INTERVAL_MS || !requestInFlight.compareAndSet(false, true)) return@setOnImageAvailableListener
                     val buffer = image.planes[0].buffer
