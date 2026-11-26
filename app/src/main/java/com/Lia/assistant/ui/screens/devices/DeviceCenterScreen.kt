@@ -631,6 +631,24 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         }
         NovaGlassCard {
+            Text("PHONE TO PC FILE TRANSFER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Send a document to the trusted PC. The PC user must approve its save location. Maximum 100 MB.", color = colors.textSecondary, fontSize = 11.sp)
+            NovaButton(text = "Choose file and send to PC", onClick = { sendFilePicker.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth(), enabled = selectedPeerId.isNotBlank() && peerTrusted && !outgoingSending,
+                type = NovaButtonType.PRIMARY)
+            outgoingFile?.let { item ->
+                Text("${item.fileName} • ${item.sizeBytes / 1024} KB • ${outgoingProgress}/${item.chunkCount} chunks", color = colors.textPrimary, fontSize = 11.sp)
+                NovaButton(text = "Cancel transfer", onClick = {
+                    DeviceLinkManager.cancelFileTransfer(selectedPeerId, item.transferId, "cancelled_by_phone")
+                    DeviceFileTransferSender.cleanup(item)
+                    outgoingFile = null
+                    outgoingSending = false
+                    outgoingProgress = 0
+                    incomingTransferStatus = "Phone transfer cancelled."
+                }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
+            }
+        }
+        NovaGlassCard {
             Text("SESSION SECURITY", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             NovaButton(
                 text = "Disconnect (keep saved pairing)",
