@@ -29,6 +29,13 @@ def parse_android_command(raw):
         if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase)\b|पासवर्ड|ओटीपी|पिन", text):
             raise ValueError("Sensitive password, OTP or PIN text cannot be typed remotely.")
         return {"kind": "type", "text": text}
+    match = re.match(r"^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\s+(.+)$", command, re.I)
+    if match:
+        path = match.group(1).strip().replace("\\\\", "/")
+        parts = [part for part in path.split("/") if part not in ("", ".")]
+        if not path or len(path) > 500 or path.startswith("/") or re.match(r"^[A-Za-z]:", path) or any(part == ".." or part.startswith(".") for part in parts):
+            raise ValueError("File/folder path must be a safe relative path under the PC user folder.")
+        return {"kind": "file_open", "path": "/".join(parts)}
     match = re.match(r"^(?:search files?|find files?|फाइल खोजो|फाइल ढूंढो|फ़ाइल खोजो|फ़ाइल ढूंढो)\s+(.+)$", command, re.I)
     if match:
         query = match.group(1).strip()
