@@ -3,7 +3,7 @@ import json
 import math
 import re
 
-_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr"}
+_ALLOWED = {"tap", "swipe", "type", "click_text", "open_app", "open_file", "open_folder", "home", "back", "scroll", "key_press", "hardware_status", "set_volume", "set_brightness", "power", "ocr"}
 _ALLOWED_CHORDS = {"enter", "escape", "tab", "ctrl+c", "ctrl+f", "ctrl+z", "alt+tab", "alt+left", "alt+right", "ctrl+s", "ctrl+a", "ctrl+v", "ctrl+x", "shift+tab"}
 _DEVICE_ID = re.compile(r"^[a-f0-9]{24}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -57,6 +57,8 @@ def validate_remote_action(action):
         "type": {"kind", "text"},
         "click_text": {"kind", "text"},
         "open_app": {"kind", "appName"},
+        "open_file": {"kind", "path"},
+        "open_folder": {"kind", "path"},
         "home": {"kind"},
         "back": {"kind"},
         "scroll": {"kind", "amount"},
@@ -94,6 +96,16 @@ def validate_remote_action(action):
         if any(ch in name for ch in ("\\", "/", ":", "\x00")) or ".." in name:
             return None
         clean["appName"] = name.strip()
+    elif kind in {"open_file", "open_folder"}:
+        path = action.get("path")
+        if not isinstance(path, str) or not path.strip() or len(path) > 260:
+            return None
+        path = path.strip()
+        if path.startswith("/") or re.match(r"^[A-Za-z]:", path) or not re.fullmatch(r"[A-Za-z0-9 _.-]+(?:/[A-Za-z0-9 _.-]+)*", path):
+            return None
+        if any(part in {".", ".."} for part in path.split("/")):
+            return None
+        clean["path"] = path
     elif kind == "key_press":
         chord = action.get("chord")
         if not isinstance(chord, str) or chord.lower() not in _ALLOWED_CHORDS:
