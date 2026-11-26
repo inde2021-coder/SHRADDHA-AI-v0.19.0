@@ -44,6 +44,7 @@ object MainBrainProviderGateway {
     /** Secure realtime Gemini Live session token; raw provider credentials never enter the UI. */
     suspend fun fetchLiveVoiceToken(context: Context): String {
         OnlineAiConsent.requireAllowed(context)
+        CouncilCostBudget.requireUsageCountersAvailable(context, "Gemini Live voice")
         return VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
     }
 
@@ -58,6 +59,7 @@ object MainBrainProviderGateway {
         if (!OnlineAiConsent.isAllowed(context)) {
             return StreamingTextResult(403, "Online AI is disabled by the user.", null)
         }
+        CouncilCostBudget.requireUsageCountersAvailable(context, "Streaming Gemini generation")
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
         require(apiKey.isNotBlank()) { "GEMINI API key is missing." }
         val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(context.applicationContext, apiKey) }
@@ -113,6 +115,8 @@ object MainBrainProviderGateway {
         val provider = providerName.uppercase()
         if (provider !in supportedProviders) return ChatReplyResult.Error("Unsupported AI provider: $provider")
         if (history.isEmpty()) return ChatReplyResult.Error("No conversation history provided.")
+        runCatching { CouncilCostBudget.ensureBudgetAllowsCall(context, provider) }
+            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         val boundedHistory = history.takeLast(40).map { it.copy(text = it.text.take(8_000)) }
         // Hybrid routing: use the authenticated HTTPS agent when this provider is configured there.
         // A failed configured cloud route is surfaced; it is not silently retried against a
@@ -127,10 +131,17 @@ object MainBrainProviderGateway {
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 runCatching { com.Lia.assistant.voice.ProviderTokenUsage(provider, cloud.model, cloud.inputTokens, cloud.outputTokens) }.getOrNull()
             } else null
+            if (usage == null) {
+                runCatching { CouncilCostBudget.stopIfUsageUnknown(context, provider, cloud.model) }
+                    .onFailure { return ChatReplyResult.Error(it.message ?: "Provider usage could not be verified.") }
+            } else {
+                runCatching { CouncilCostBudget.recordUsageAndEnforce(context, usage) }
+                    .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget stopped this request.") }
+            }
             return ChatReplyResult.Success(cloud.text, usage)
         }
         // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
-        return if (provider == "GEMINI") {
+        val directResult = if (provider == "GEMINI") {
             val key = runCatching { ApiKeyStore.getKey(context) }.getOrElse {
                 return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
             }
@@ -139,6 +150,17 @@ object MainBrainProviderGateway {
         } else {
             MultiProviderChatClient.reply(context, provider, systemInstruction.take(8_000), boundedHistory)
         }
+        if (directResult is ChatReplyResult.Success) {
+            val usage = directResult.tokenUsage
+            if (usage == null) {
+                runCatching { CouncilCostBudget.stopIfUsageUnknown(context, provider, null) }
+                    .onFailure { return ChatReplyResult.Error(it.message ?: "Provider usage could not be verified.") }
+            } else {
+                runCatching { CouncilCostBudget.recordUsageAndEnforce(context, usage) }
+                    .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget stopped this request.") }
+            }
+        }
+        return directResult
     }
 
     fun complete(context: Context, providerName: String, systemInstruction: String, prompt: String): String {
@@ -158,6 +180,8 @@ object MainBrainProviderGateway {
         prompt: String
     ): Pair<String, com.Lia.assistant.voice.ProviderTokenUsage?> {
         OnlineAiConsent.requireAllowed(context)
+        runCatching { CouncilCostBudget.ensureBudgetAllowsCall(context, providerName) }
+            .getOrElse { error(it.message ?: "Monthly API budget blocked this request.") }
         VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
@@ -165,6 +189,7 @@ object MainBrainProviderGateway {
                 CouncilCostBudget.stopIfUsageUnknown(context, providerName, cloud.model)
                 null
             }
+            if (usage != null) CouncilCostBudget.recordUsageAndEnforce(context, usage)
             return cloud.text to usage
         }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
