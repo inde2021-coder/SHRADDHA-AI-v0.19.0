@@ -95,6 +95,9 @@ object MultiProviderChatClient {
         }
 
         return try {
+            // Key lookup and request construction may take time; do not send a
+            // prompt if the user revoked cloud consent in the meantime.
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             http.newCall(builder.build()).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
