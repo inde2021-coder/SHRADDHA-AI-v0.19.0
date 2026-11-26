@@ -6,3 +6,4 @@ soundfile==0.13.1
 transformers==4.51.3
 sentencepiece==0.2.0
 IndicTransToolkit
+git+https://github.com/AI4Bharat/IndicF5.git
