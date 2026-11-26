@@ -39,10 +39,13 @@ object DeviceFileTransferReceiver {
     @Synchronized fun accept(context: Context, manifest: Manifest): Boolean {
         active[manifest.transferId]?.let { return it.manifest == manifest }
         loadReceipt(context, manifest.transferId)?.let { receipt ->
-            val published = promoteReceipt(context, receipt)
-            return published != null && published.peerId == manifest.peerId &&
-                published.sizeBytes == manifest.sizeBytes &&
-                published.sha256.equals(manifest.sha256, ignoreCase = true)
+            // A durable receipt means the payload passed SHA-256 verification and was
+            // published before the completion ACK. Match the full manifest identity.
+            return receipt.peerId == manifest.peerId &&
+                receipt.transferId == manifest.transferId &&
+                receipt.fileName == manifest.fileName &&
+                receipt.sizeBytes == manifest.sizeBytes &&
+                receipt.sha256.equals(manifest.sha256, ignoreCase = true)
         }
         val directory = receivedDirectory(context)
         if (!directory.exists() && !directory.mkdirs()) return false
