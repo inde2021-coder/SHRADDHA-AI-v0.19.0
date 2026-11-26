@@ -1474,7 +1474,18 @@ class PcCompanionApp:
     def _handle_incoming_file_chunk_locked(self, msg, peer_id):
         transfer_id = str(msg.get("transferId", ""))
         transfer = self.pc_incoming.get(transfer_id)
-        if not transfer or transfer["peer"] != peer_id or not self.is_e2e_trusted(peer_id):
+        if not self.is_e2e_trusted(peer_id):
+            return
+        if not transfer:
+            completed = self.pc_completed.get(transfer_id)
+            if completed and completed.get("peer") == peer_id:
+                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+            else:
+                self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "reason": "no_approved_transfer"})
+            return
+        if transfer["peer"] != peer_id:
             return
         raw_index = msg.get("index", -1)
         if not isinstance(raw_index, int) or isinstance(raw_index, bool):
