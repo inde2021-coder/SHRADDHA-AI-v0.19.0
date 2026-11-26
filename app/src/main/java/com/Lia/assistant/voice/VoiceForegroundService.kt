@@ -33,12 +33,23 @@ class VoiceForegroundService : Service() {
     companion object {
         const val ACTION_START = "com.Lia.assistant.action.START_VOICE"
         const val ACTION_STOP = "com.Lia.assistant.action.STOP_VOICE"
+        const val ACTION_START_OFFLINE = "com.Lia.assistant.action.START_OFFLINE_VOICE"
+        private const val EXTRA_OFFLINE_LANGUAGE = "offline_speech_language"
         private const val CHANNEL_ID = "lia_voice_channel"
         private const val NOTIFICATION_ID = 1001
         private const val EXTRA_EXPECTED_SESSION_EPOCH = "expected_session_epoch"
 
         fun start(context: Context) {
             val intent = Intent(context, VoiceForegroundService::class.java).apply { action = ACTION_START }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
+            else context.startService(intent)
+        }
+
+        fun startOffline(context: Context, language: IndicConformerRuntime.Language) {
+            val intent = Intent(context, VoiceForegroundService::class.java).apply {
+                action = ACTION_START_OFFLINE
+                putExtra(EXTRA_OFFLINE_LANGUAGE, language.name)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
@@ -70,6 +81,28 @@ class VoiceForegroundService : Service() {
                     stopForeground(true)
                 }
                 stopSelf(startId)
+                START_NOT_STICKY
+            }
+            ACTION_START_OFFLINE -> {
+                // Offline mode is explicitly user-started and does not require cloud consent or a backend key.
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    VoiceSessionManager.stop()
+                    OverlayEdgeGlowController.stop(this)
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                createNotificationChannel()
+                val notification = buildNotification()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
+                OverlayEdgeGlowController.start(this)
+                val language = runCatching {
+                    IndicConformerRuntime.Language.valueOf(intent.getStringExtra(EXTRA_OFFLINE_LANGUAGE) ?: "HINDI")
+                }.getOrDefault(IndicConformerRuntime.Language.HINDI)
+                VoiceSessionManager.startOffline(this, language)
                 START_NOT_STICKY
             }
             ACTION_START -> {
