@@ -143,6 +143,77 @@ def read_active_window_ocr(pyautogui):
     return "OCR • " + title[:100] + " • " + language_note + "\n" + safe
 
 
+_SAFE_TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".xml", ".html", ".htm", ".log", ".ini", ".yaml", ".yml"}
+_SENSITIVE_PATH_PARTS = {
+    "appdata", "application data", "credentials", "credential", ".ssh", ".gnupg",
+    ".aws", ".azure", ".config", "wallet", "passwords", "secrets", "tokens",
+    "browser", "login data", "cookies", "keychains"
+}
+
+
+def _safe_user_path(relative_path, *, must_exist=True):
+    """Resolve a relative path strictly inside the current user's home directory."""
+    if not isinstance(relative_path, str) or len(relative_path) > 500 or "\x00" in relative_path:
+        raise RuntimeError("Invalid PC file path.")
+    normalized = relative_path.replace("\\", "/").strip()
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        raise RuntimeError("Only paths relative to the Windows user folder are allowed.")
+    parts = [part for part in normalized.split("/") if part not in ("", ".")]
+    if any(part == ".." or part.startswith(".") for part in parts):
+        raise RuntimeError("Parent and hidden paths are blocked.")
+    if any(part.casefold() in _SENSITIVE_PATH_PARTS for part in parts):
+        raise RuntimeError("Access to sensitive folders is blocked.")
+    root = Path.home().resolve(strict=True)
+    candidate = root.joinpath(*parts)
+    resolved = candidate.resolve(strict=must_exist)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise RuntimeError("The requested path is outside the user folder.") from exc
+    if any(part.casefold() in _SENSITIVE_PATH_PARTS for part in resolved.relative_to(root).parts):
+        raise RuntimeError("Access to sensitive folders is blocked.")
+    return root, resolved
+
+
+def list_user_files(relative_path=""):
+    """List a bounded set of non-hidden entries under the current user's home folder."""
+    root, folder = _safe_user_path(relative_path)
+    if not folder.is_dir():
+        raise RuntimeError("The requested path is not a folder.")
+    entries = []
+    try:
+        children = sorted(folder.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold()))
+    except OSError as exc:
+        raise RuntimeError("The folder could not be read.") from exc
+    for item in children:
+        if len(entries) >= 100:
+            break
+        if item.name.startswith(".") or item.is_symlink() or item.name.casefold() in _SENSITIVE_PATH_PARTS:
+            continue
+        try:
+            if item.is_dir():
+                entries.append({"name": item.name[:160], "type": "folder"})
+            elif item.is_file():
+                entries.append({"name": item.name[:160], "type": "file", "sizeBytes": item.stat().st_size})
+        except OSError:
+            continue
+    return {"folder": str(folder.relative_to(root)).replace("\\", "/") or ".", "entries": entries, "truncated": len(children) > len(entries)}
+
+
+def read_user_text_file(relative_path):
+    """Read only small, known text formats; never return arbitrary binary or secret files."""
+    root, target = _safe_user_path(relative_path)
+    if not target.is_file() or target.suffix.casefold() not in _SAFE_TEXT_EXTENSIONS:
+        raise RuntimeError("Only supported text files can be previewed.")
+    if target.stat().st_size > 128 * 1024:
+        raise RuntimeError("Text preview is limited to 128 KB.")
+    try:
+        content = target.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError("The file is not readable UTF-8 text.") from exc
+    return {"file": str(target.relative_to(root)).replace("\\", "/"), "content": content[:12000], "truncated": len(content) > 12000}
+
+
 def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=None,
                    text_clicker=None, ocr_reader=None):
     kind = action["kind"]
@@ -155,6 +226,12 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
         left, top = 0, 0
         if monitor_bounds:
             left, top, width, height = monitor_bounds
+        if kind == "file_list":
+            import json
+            return True, json.dumps(list_user_files(action.get("path", "")), ensure_ascii=False, indent=2)[:12000]
+        if kind == "file_read":
+            import json
+            return True, json.dumps(read_user_text_file(action.get("path", "")), ensure_ascii=False, indent=2)[:14000]
         if kind == "tap":
             pyautogui.click(left + round(action["x"] * (width - 1)), top + round(action["y"] * (height - 1)))
             return True, "Mouse click completed."
