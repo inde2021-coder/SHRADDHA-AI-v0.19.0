@@ -861,7 +861,7 @@ class PcCompanionApp:
                 return
             approved = messagebox.askyesno(
                 "Shraddha AI • Approve this exact PC action",
-                approval_summary + "\\n\\nApprove only this single action? A separate approval is required for every command."
+                approval_summary + "\n\nApprove only this single action? A separate approval is required for every command."
             )
             if not approved:
                 self.status_var.set("Remote action rejected by the local Windows user.")
@@ -1574,7 +1574,7 @@ class PcCompanionApp:
                     action,
                     confirm_power=lambda operation: messagebox.askyesno(
                         "Shraddha AI • Confirm Windows power action",
-                        f"Are you sure you want to {operation} this PC now?\\n\\n"
+                        f"Are you sure you want to {operation} this PC now?\n\n"
                         "This confirmation must be approved locally on the Windows PC."
                     )
                 )
