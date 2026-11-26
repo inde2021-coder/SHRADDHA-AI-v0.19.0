@@ -123,3 +123,21 @@ def sha256_file(path):
 
 class TransferPersistenceError(Exception):
     """A durable chunk write succeeded but its recovery bitmap was not committed."""
+
+
+def publish_file_without_overwrite(part_path, destination_path):
+    """Atomically publish a completed file without ever replacing user data.
+
+    Both paths must be on the same filesystem. If hard-link publication is not
+    supported, fail closed and leave the verified partial file for recovery.
+    """
+    from pathlib import Path
+
+    part = Path(part_path)
+    destination = Path(destination_path)
+    if not part.is_file() or part.is_symlink() or destination.exists() or destination.is_symlink():
+        raise FileExistsError("Destination already exists or partial file is unsafe.")
+    # os.link is atomic and has create-new semantics on supported local filesystems.
+    import os
+    os.link(str(part), str(destination))
+    part.unlink()
