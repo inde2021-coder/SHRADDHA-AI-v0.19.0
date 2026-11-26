@@ -105,6 +105,25 @@ class ActionTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "hidden"):
                     list_user_files(".ssh")
 
+    def test_pc_file_search_is_bounded_and_skips_hidden_and_sensitive_paths(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.actions import search_user_files
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Documents").mkdir()
+            (root / "Documents" / "invoice-2026.txt").write_text("ok", encoding="utf-8")
+            (root / ".ssh").mkdir()
+            (root / ".ssh" / "invoice-secret.txt").write_text("secret", encoding="utf-8")
+            (root / "AppData").mkdir()
+            (root / "AppData" / "invoice-token.txt").write_text("secret", encoding="utf-8")
+            with patch("pc_companion.actions.Path.home", return_value=root):
+                result = search_user_files("invoice")
+                self.assertEqual([item["name"] for item in result["matches"]], ["invoice-2026.txt"])
+                self.assertGreaterEqual(result["scannedFiles"], 1)
+                with self.assertRaisesRegex(RuntimeError, "2-80"):
+                    search_user_files("x")
+
     def test_pc_text_preview_allows_small_utf8_text_only(self):
         import tempfile
         from pathlib import Path
