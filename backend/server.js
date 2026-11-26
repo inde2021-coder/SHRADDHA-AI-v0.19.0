@@ -1107,8 +1107,13 @@ wss.on('connection', (ws, ctx) => {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
       const fingerprint = String(msg.fingerprint || '');
-      if (!target || targetId === deviceId || !/^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$/.test(fingerprint)) return;
-      send(targetId, JSON.stringify({ type: 'e2e_key_confirm', fromDeviceId: deviceId, fingerprint }));
+      const proof = String(msg.proof || '');
+      if (!target || targetId === deviceId ||
+          !/^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$/.test(fingerprint) ||
+          !/^[a-f0-9]{64}$/.test(proof)) return;
+      // The relay forwards the proof unchanged; only the receiving peer can
+      // verify it because the HMAC key is derived from the private ECDH secret.
+      send(targetId, JSON.stringify({ type: 'e2e_key_confirm', fromDeviceId: deviceId, fingerprint, proof }));
     } else if (msg.type === 'e2e_message') {
       const targetId = String(msg.targetDeviceId || '');
       const target = session.devices.get(targetId);
