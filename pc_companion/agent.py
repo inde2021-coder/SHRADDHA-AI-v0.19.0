@@ -1497,6 +1497,9 @@ class PcCompanionApp:
             self.events.put(("status", "Rejected invalid incoming file chunk index."))
             return
         index = raw_index
+        plain = None
+        data = None
+        payload = None
         try:
             with self.e2e_lock:
                 state = self.peer_keys.get(peer_id)
@@ -1504,9 +1507,9 @@ class PcCompanionApp:
             if key is None:
                 return
             aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|file_transfer_chunk|{transfer_id}:{index}".encode("utf-8")
-            plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+            plain = bytearray(DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad))
             payload = json.loads(plain.decode("utf-8"))
-            data = base64.b64decode(payload["payload"], validate=True)
+            data = bytearray(base64.b64decode(payload["payload"], validate=True))
             expected = expected_chunk_bytes(transfer["size"], transfer["chunks"], index)
             if len(data) != expected:
                 raise ValueError("Chunk length mismatch")
@@ -1539,6 +1542,13 @@ class PcCompanionApp:
             Path(transfer["path"] + ".shraddha-part").unlink(missing_ok=True)
             self.pc_incoming.pop(transfer_id, None)
             self._persist_pc_incoming()
+        finally:
+            if isinstance(data, bytearray):
+                data[:] = b"\\x00" * len(data)
+            if isinstance(plain, bytearray):
+                plain[:] = b"\\x00" * len(plain)
+            if isinstance(payload, dict):
+                payload.clear()
 
     def _handle_file_resume(self, msg):
         with self.file_transfer_lock:
