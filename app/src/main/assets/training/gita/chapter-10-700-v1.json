@@ -2,6 +2,10 @@
   "schema": "shraddha.gita.chapter.v1",
   "chapter": 10,
   "chapterVerseCount": 42,
+  "speakerCounts": {
+    "krishna": 35,
+    "arjuna": 7
+  },
   "canonicalEdition": "700-verse numbering; chapter 13 excludes the separately attested Arjuna question used as 13.1 in some 701-verse editions",
   "source": {
     "repository": "gita/gita",
@@ -12,10 +16,11 @@
   "crossReference": {
     "name": "Hansi Gita Bhawan Trust 700-verse corpus",
     "url": "https://gitabhawan.org.in/gita/research",
-    "note": "Independent corpus reports the same traditional 700-verse chapter counts; byte-for-byte comparison has not been claimed."
+    "note": "Independent corpus reports the same traditional 700-verse chapter counts and speaker totals; byte-for-byte text comparison has not been claimed."
   },
   "fields": {
-    "sanskrit": "source transcription, speaker attribution separated",
+    "sanskrit": "source transcription with speaker headings separated",
+    "speaker": "propagated from explicit speaker declarations in verse order; aggregate counts match the independent Trust count",
     "transliteration": "source-provided transliteration with speaker line separated; not a phonetic guarantee",
     "wordGloss": "source-provided English gloss; requires Sanskrit-scholar review"
   },
@@ -36,7 +41,7 @@
       "chapter": 10,
       "verse": 2,
       "sourceNumber": "10.2",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "न मे विदुः सुरगणाः प्रभवं न महर्षयः।\n\nअहमादिर्हि देवानां महर्षीणां च सर्वशः।।10.2।।",
       "transliteration": "na me viduḥ sura-gaṇāḥ prabhavaṁ na maharṣhayaḥ\naham ādir hi devānāṁ maharṣhīṇāṁ cha sarvaśhaḥ",
       "wordGloss": "na—neither; me—my; viduḥ—know; sura-gaṇāḥ—the celestial gods; prabhavam—origin; na—nor; mahā-ṛiṣhayaḥ—the great sages; aham—I; ādiḥ—the source; hi—certainly; devānām—of the celestial gods; mahā-ṛiṣhīṇām—of the great seers; cha—also; sarvaśhaḥ—in every way"
@@ -46,7 +51,7 @@
       "chapter": 10,
       "verse": 3,
       "sourceNumber": "10.3",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "यो मामजमनादिं च वेत्ति लोकमहेश्वरम्।\n\nअसम्मूढः स मर्त्येषु सर्वपापैः प्रमुच्यते।।10.3।।",
       "transliteration": "yo māmajam anādiṁ cha vetti loka-maheśhvaram\nasammūḍhaḥ sa martyeṣhu sarva-pāpaiḥ pramuchyate",
       "wordGloss": "verseyaḥ—who; mām—me; ajam—unborn; anādim—beginningless; cha—and; vetti—know; loka—of the universe; mahā-īśhvaram—the Supreme Lord; asammūḍhaḥ—undeluded; saḥ—they; martyeṣhu—among mortals; sarva-pāpaiḥ—from all evils; pramuchyate—are freed from-3"
@@ -56,7 +61,7 @@
       "chapter": 10,
       "verse": 4,
       "sourceNumber": "10.4",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "बुद्धिर्ज्ञानमसंमोहः क्षमा सत्यं दमः शमः।\n\nसुखं दुःखं भवोऽभावो भयं चाभयमेव च।।10.4।।",
       "transliteration": "buddhir jñānam asammohaḥ kṣhamā satyaṁ damaḥ śhamaḥ\nsukhaṁ duḥkhaṁ bhavo ’bhāvo bhayaṁ chābhayameva cha",
       "wordGloss": "buddhiḥ—intellect; jñānam—knowledge; asammohaḥ—clarity of thought; kṣhamā—forgiveness; satyam—truthfulness; damaḥ—control over the senses; śhamaḥ—control of the mind; sukham—joy; duḥkham—sorrow; bhavaḥ—birth; abhāvaḥ—death; bhayam—fear; cha—and; abhayam—courage; eva—certainly; cha—and;"
@@ -66,7 +71,7 @@
       "chapter": 10,
       "verse": 5,
       "sourceNumber": "10.5",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अहिंसा समता तुष्टिस्तपो दानं यशोऽयशः।\n\nभवन्ति भावा भूतानां मत्त एव पृथग्विधाः।।10.5।।",
       "transliteration": "ahiṁsā   samatā  tuṣṭis tapo dānaṁ   yaśo    'yaśaḥ  bhavanti    bhāvā   bhūtānāṁ    matta   eva pṛthag-vidhāḥ",
       "wordGloss": "ahiṁsā—nonviolence;    samatā—equilibrium; tuṣṭiḥ—satisfaction;    tapaḥ—penance;  dānam—charity;  yaśaḥ—fame; ayaśaḥ—infamy;  bhavanti—become;    bhāvāḥ—natures;     bhūtānām—of living  entities;   mattaḥ—from Me; eva—certainly;  pṛthakvidhāḥ—differently    arranged."
@@ -76,7 +81,7 @@
       "chapter": 10,
       "verse": 6,
       "sourceNumber": "10.6",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "महर्षयः सप्त पूर्वे चत्वारो मनवस्तथा।\n\nमद्भावा मानसा जाता येषां लोक इमाः प्रजाः।।10.6।।",
       "transliteration": "maharṣhayaḥ sapta pūrve chatvāro manavas tathā\nmad-bhāvā mānasā jātā yeṣhāṁ loka imāḥ prajāḥ",
       "wordGloss": "mahā-ṛiṣhayaḥ—the great Sages; sapta—seven; pūrve—before; chatvāraḥ—four; manavaḥ—Manus; tathā—also; mat bhāvāḥ—are born from me; mānasāḥ—mind; jātāḥ—born; yeṣhām—from them; loke—in the world; imāḥ—all these; prajāḥ—people"
@@ -86,7 +91,7 @@
       "chapter": 10,
       "verse": 7,
       "sourceNumber": "10.7",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "एतां विभूतिं योगं च मम यो वेत्ति तत्त्वतः।\n\nसोऽविकम्पेन योगेन युज्यते नात्र संशयः।।10.7।।",
       "transliteration": "etāṁ vibhūtiṁ yogaṁ cha mama yo vetti tattvataḥ\nso ’vikampena yogena yujyate nātra sanśhayaḥ",
       "wordGloss": "etām—these; vibhūtim—glories; yogam—divine powers; cha—and; mama—my; yaḥ—those who; vetti—know; tattvataḥ—in truth; saḥ—they; avikalpena—unwavering; yogena—in bhakti yog; yujyate—becomes united; na—never; atra—here; sanśhayaḥ—doubt"
@@ -96,7 +101,7 @@
       "chapter": 10,
       "verse": 8,
       "sourceNumber": "10.8",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अहं सर्वस्य प्रभवो मत्तः सर्वं प्रवर्तते।\n\nइति मत्वा भजन्ते मां बुधा भावसमन्विताः।।10.8।।",
       "transliteration": "ahaṁ sarvasya prabhavo mattaḥ sarvaṁ pravartate\niti matvā bhajante māṁ budhā bhāva-samanvitāḥ",
       "wordGloss": "aham—I; sarvasya—of all creation; prabhavaḥ—the origin of; mattaḥ—from me; sarvam—everything; pravartate—proceeds; iti—thus; matvā—having known; bhajante—worship; mām—me; budhāḥ—the wise; bhāva-samanvitāḥ—endowed with great faith and devotion"
@@ -106,7 +111,7 @@
       "chapter": 10,
       "verse": 9,
       "sourceNumber": "10.9",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "मच्चित्ता मद्गतप्राणा बोधयन्तः परस्परम्।\n\nकथयन्तश्च मां नित्यं तुष्यन्ति च रमन्ति च।।10.9।।",
       "transliteration": "mach-chittā mad-gata-prāṇā bodhayantaḥ parasparam\nkathayantaśh cha māṁ nityaṁ tuṣhyanti cha ramanti cha",
       "wordGloss": "mat-chittāḥ—those with minds fixed on me; mat-gata-prāṇāḥ—those who have surrendered their lives to me; bodhayantaḥ—enlightening (with divine knowledge of God); parasparam—one another; kathayantaḥ—speaking; cha—and; mām—about me; nityam—continously; tuṣhyanti—satisfaction; cha—and; ramanti—(they) delight; cha—also"
@@ -116,7 +121,7 @@
       "chapter": 10,
       "verse": 10,
       "sourceNumber": "10.10",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "तेषां सततयुक्तानां भजतां प्रीतिपूर्वकम्।\n\nददामि बुद्धियोगं तं येन मामुपयान्ति ते।।10.10।।",
       "transliteration": "teṣhāṁ satata-yuktānāṁ bhajatāṁ prīti-pūrvakam\ndadāmi buddhi-yogaṁ taṁ yena mām upayānti te",
       "wordGloss": "teṣhām—to them; satata-yuktānām—ever steadfast; bhajatām—who engage in devotion; prīti-pūrvakam—with love; dadāmi—I give; buddhi-yogam—divine knowledge; tam—that; yena—by which; mām—to me; upayānti—come; te—they"
@@ -126,7 +131,7 @@
       "chapter": 10,
       "verse": 11,
       "sourceNumber": "10.11",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "तेषामेवानुकम्पार्थमहमज्ञानजं तमः।\n\nनाशयाम्यात्मभावस्थो ज्ञानदीपेन भास्वता।।10.11।।",
       "transliteration": "teṣhām evānukampārtham aham ajñāna-jaṁ tamaḥ\nnāśhayāmyātma-bhāva-stho jñāna-dīpena bhāsvatā",
       "wordGloss": "teṣhām—for them; eva—only; anukampā-artham—out of compassion; aham—I; ajñāna-jam—born of ignorance; tamaḥ—darkness; nāśhayāmi—destroy; ātma-bhāva—within their hearts; sthaḥ—dwelling; jñāna—of knowledge; dīpena—with the lamp; bhāsvatā—luminous"
@@ -146,7 +151,7 @@
       "chapter": 10,
       "verse": 13,
       "sourceNumber": "10.13",
-      "speaker": "unknown",
+      "speaker": "arjuna",
       "sanskrit": "आहुस्त्वामृषयः सर्वे देवर्षिर्नारदस्तथा।\n\nअसितो देवलो व्यासः स्वयं चैव ब्रवीषि मे।।10.13।।",
       "transliteration": "āhus tvām ṛiṣhayaḥ sarve devarṣhir nāradas tathā\nasito devalo vyāsaḥ svayaṁ chaiva bravīṣhi me",
       "wordGloss": "āhuḥ—(they) declare; tvām—you; ṛiṣhayaḥ—sages; sarve—all; deva-ṛiṣhiḥ-nāradaḥ—devarṣhi Narad; tathā—also; asitaḥ—Asit; devalaḥ—Deval; vyāsaḥ—Vyās; svayam—personally; cha—and; eva—even; bravīṣhī—you are declaring; me—to me"
@@ -156,7 +161,7 @@
       "chapter": 10,
       "verse": 14,
       "sourceNumber": "10.14",
-      "speaker": "unknown",
+      "speaker": "arjuna",
       "sanskrit": "सर्वमेतदृतं मन्ये यन्मां वदसि केशव।\n\nन हि ते भगवन् व्यक्ितं विदुर्देवा न दानवाः।।10.14।।",
       "transliteration": "sarvam etad ṛitaṁ manye yan māṁ vadasi keśhava\nna hi te bhagavan vyaktiṁ vidur devā na dānavāḥ",
       "wordGloss": "sarvam—everything; etat—this; ṛitam—truth; manye—I accept; yat—which; mām—me; vadasi—you tell; keśhava—Shree Krishna, the killer of the demon named Keshi; na—neither; hi—verily; te—your; bhagavan—the Supreme Lord; vyaktim—personality; viduḥ—can understand; devāḥ—the celestial gods; na—nor; dānavāḥ—the demons"
@@ -166,7 +171,7 @@
       "chapter": 10,
       "verse": 15,
       "sourceNumber": "10.15",
-      "speaker": "unknown",
+      "speaker": "arjuna",
       "sanskrit": "स्वयमेवात्मनाऽत्मानं वेत्थ त्वं पुरुषोत्तम।\n\nभूतभावन भूतेश देवदेव जगत्पते।।10.15।।",
       "transliteration": "swayam evātmanātmānaṁ vettha tvaṁ puruṣhottama\nbhūta-bhāvana bhūteśha deva-deva jagat-pate",
       "wordGloss": "swayam—yourself; eva—indeed; ātmanā—by yourself; ātmānam—yourself; vettha—know; tvam—you; puruṣha-uttama—the Supreme Personality; bhūta-bhāvana—the Creator of all beings; bhūta-īśha—the Lord of everything; deva-deva—the God of gods; jagat-pate—the Lord of the universe"
@@ -176,7 +181,7 @@
       "chapter": 10,
       "verse": 16,
       "sourceNumber": "10.16",
-      "speaker": "unknown",
+      "speaker": "arjuna",
       "sanskrit": "वक्तुमर्हस्यशेषेण दिव्या ह्यात्मविभूतयः।\n\nयाभिर्विभूतिभिर्लोकानिमांस्त्वं व्याप्य तिष्ठसि।।10.16।।",
       "transliteration": "vaktum arhasyaśheṣheṇa divyā hyātma-vibhūtayaḥ\nyābhir vibhūtibhir lokān imāṁs tvaṁ vyāpya tiṣhṭhasi",
       "wordGloss": "vaktum—to describe; arhasi—please do; aśheṣheṇa—completely; divyāḥ—divine; hi—indeed; ātma—your own; vibhūtayaḥ—opulences; yābhiḥ—by which; vibhūtibhiḥ—opulences; lokān—all worlds; imān—these; tvam—you; vyāpya—pervade; tiṣhṭhasi—reside;"
@@ -186,7 +191,7 @@
       "chapter": 10,
       "verse": 17,
       "sourceNumber": "10.17",
-      "speaker": "unknown",
+      "speaker": "arjuna",
       "sanskrit": "कथं विद्यामहं योगिंस्त्वां सदा परिचिन्तयन्।\n\nकेषु केषु च भावेषु चिन्त्योऽसि भगवन्मया।।10.17।।",
       "transliteration": "kathaṁ vidyām ahaṁ yogins tvāṁ sadā parichintayan\nkeṣhu keṣhu cha bhāveṣhu chintyo ’si bhagavan mayā",
       "wordGloss": "katham—how; vidyām aham—shall I know; yogin—the Supreme Master of Yogmaya; tvām—you; sadā—always; parichintayan—meditating; keṣhu—in what; keṣhu—in what; cha—and; bhāveṣhu—forms; chintyaḥ asi—to be thought of; bhagavan—the Supreme Divine Personality; mayā—by me"
@@ -196,7 +201,7 @@
       "chapter": 10,
       "verse": 18,
       "sourceNumber": "10.18",
-      "speaker": "unknown",
+      "speaker": "arjuna",
       "sanskrit": "विस्तरेणात्मनो योगं विभूतिं च जनार्दन।\n\nभूयः कथय तृप्तिर्हि श्रृण्वतो नास्ति मेऽमृतम्।।10.18।।",
       "transliteration": "vistareṇātmano yogaṁ vibhūtiṁ cha janārdana\nbhūyaḥ kathaya tṛiptir hi śhṛiṇvato nāsti me ’mṛitam",
       "wordGloss": "vistareṇa—in detail; ātmanaḥ—your; yogam—divine glories; vibhūtim—opulences; cha—also; janaārdana—Shree Krishna, he who looks after the public; bhūyaḥ—again; kathaya—describe; tṛiptiḥ—satisfaction; hi—because; śhṛiṇvataḥ—hearing; na—not; asti—is; me—my; amṛitam—nectar"
@@ -216,7 +221,7 @@
       "chapter": 10,
       "verse": 20,
       "sourceNumber": "10.20",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अहमात्मा गुडाकेश सर्वभूताशयस्थितः।\n\nअहमादिश्च मध्यं च भूतानामन्त एव च।।10.20।।",
       "transliteration": "aham ātmā guḍākeśha sarva-bhūtāśhaya-sthitaḥ\naham ādiśh cha madhyaṁ cha bhūtānām anta eva cha",
       "wordGloss": "aham—I; ātmā—soul; guḍākeśha—Arjun, the conqueror of sleep; sarva-bhūta—of all living entities; āśhaya-sthitaḥ—seated in the heart; aham—I; ādiḥ—the beginning; cha—and; madhyam—middle; cha—and; bhūtānām—of all beings; antaḥ—end; eva—even; cha—also"
@@ -226,7 +231,7 @@
       "chapter": 10,
       "verse": 21,
       "sourceNumber": "10.21",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "आदित्यानामहं विष्णुर्ज्योतिषां रविरंशुमान्।\n\nमरीचिर्मरुतामस्मि नक्षत्राणामहं शशी।।10.21।।",
       "transliteration": "ādityānām ahaṁ viṣhṇur jyotiṣhāṁ ravir anśhumān\nmarīchir marutām asmi nakṣhatrāṇām ahaṁ śhaśhī",
       "wordGloss": "ādityānām—amongst the twelve sons of Aditi; aham—I; viṣhṇuḥ—Lord Vishnu; jyotiṣhām—amongst luminous objects; raviḥ—the sun; anśhu-mān—radiant; marīchiḥ—Marichi; marutām—of the Maruts; asmi—(I) am; nakṣhatrāṇām—amongst the stars; aham—I; śhaśhī—the moon"
@@ -236,7 +241,7 @@
       "chapter": 10,
       "verse": 22,
       "sourceNumber": "10.22",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "वेदानां सामवेदोऽस्मि देवानामस्मि वासवः।\n\nइन्द्रियाणां मनश्चास्मि भूतानामस्मि चेतना।।10.22।।",
       "transliteration": "vedānāṁ sāma-vedo ’smi devānām asmi vāsavaḥ\nindriyāṇāṁ manaśh chāsmi bhūtānām asmi chetanā",
       "wordGloss": "vedānām—amongst the Vedas; sāma-vedaḥ—the Sāma Veda; asmi—I am; devānām—of all the celestial gods; asmi—I am; vāsavaḥ̣—Indra; indriyāṇām—of amongst the senses; manaḥ—the mind; ca—and; asmi—I am; bhūtānām—amongst the living beings; asmi—I am; chetanā—consciousness"
@@ -246,7 +251,7 @@
       "chapter": 10,
       "verse": 23,
       "sourceNumber": "10.23",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "रुद्राणां शङ्करश्चास्मि वित्तेशो यक्षरक्षसाम्।\n\nवसूनां पावकश्चास्मि मेरुः शिखरिणामहम्।।10.23।।",
       "transliteration": "rudrāṇāṁ śhaṅkaraśh chāsmi vitteśho yakṣha-rakṣhasām\nvasūnāṁ pāvakaśh chāsmi meruḥ śhikhariṇām aham",
       "wordGloss": "rudrāṇām—amongst the Rudras; śhaṅkaraḥ—Lord Shiv; cha—and; asmi—I am; vitta-īśhaḥ—the god of wealth and the treasurer of the celestial gods; yakṣha—amongst the semi-divine demons; rakṣhasām—amongst the demons; vasūnām—amongst the Vasus; pāvakaḥ—Agni (fire); cha—and; asmi—I am; meruḥ—Mount Meru; śhikhariṇām—amongst the mountains; aham—I am"
@@ -256,7 +261,7 @@
       "chapter": 10,
       "verse": 24,
       "sourceNumber": "10.24",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "पुरोधसां च मुख्यं मां विद्धि पार्थ बृहस्पतिम्।\n\nसेनानीनामहं स्कन्दः सरसामस्मि सागरः।।10.24।।",
       "transliteration": "purodhasāṁ cha mukhyaṁ māṁ viddhi pārtha bṛihaspatim\nsenānīnām ahaṁ skandaḥ sarasām asmi sāgaraḥ",
       "wordGloss": "purodhasām—amongst priests; cha—and; mukhyam—the chiefs; mām—me; viddhi—know; pārtha—Arjun, the son of Pritha; bṛihaspatim—Brihaspati; senānīnām—warrior chief; aham—I; skandaḥ—Kartikeya; sarasām—amongst reservoirs of water; asmi—I am; sāgaraḥ—the ocean"
@@ -266,7 +271,7 @@
       "chapter": 10,
       "verse": 25,
       "sourceNumber": "10.25",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "महर्षीणां भृगुरहं गिरामस्म्येकमक्षरम्।\n\nयज्ञानां जपयज्ञोऽस्मि स्थावराणां हिमालयः।।10.25।।",
       "transliteration": "maharṣhīṇāṁ bhṛigur ahaṁ girām asmyekam akṣharam\nyajñānāṁ japa-yajño ’smi sthāvarāṇāṁ himālayaḥ",
       "wordGloss": "mahā-ṛiṣhīṇām—among the great seers; bhṛiguḥ—Bhrigu; aham—I; girām—amongst chants; asmi—I am; ekam akṣharam—the syllable Om; yajñānām—of sacrifices; japa-yajñaḥ—sacrifice of the devotional repetition of the divine names of God; asmi—I am; sthāvarāṇām—amongst immovable things; himālayaḥ—the Himalayas"
@@ -276,7 +281,7 @@
       "chapter": 10,
       "verse": 26,
       "sourceNumber": "10.26",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अश्वत्थः सर्ववृक्षाणां देवर्षीणां च नारदः।\n\nगन्धर्वाणां चित्ररथः सिद्धानां कपिलो मुनिः।।10.26।।",
       "transliteration": "aśhvatthaḥ sarva-vṛikṣhāṇāṁ devarṣhīṇāṁ cha nāradaḥ\ngandharvāṇāṁ chitrarathaḥ siddhānāṁ kapilo muniḥ",
       "wordGloss": "aśhvatthaḥ—the banyan tree; sarva-vṛikṣhāṇām—amongst all trees; deva-ṛiṣhīṇām—amongst celestial sages; cha—and; nāradaḥ—Narad; gandharvāṇām—amongst the gandharvas; chitrarathaḥ—Chitrarath; siddhānām—of all those who are perfected; kapilaḥ muniḥ—sage Kapil"
@@ -286,7 +291,7 @@
       "chapter": 10,
       "verse": 27,
       "sourceNumber": "10.27",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "उच्चैःश्रवसमश्वानां विद्धि माममृतोद्भवम्।\n\nऐरावतं गजेन्द्राणां नराणां च नराधिपम्।।10.27।।",
       "transliteration": "uchchaiḥśhravasam aśhvānāṁ viddhi mām amṛitodbhavam\nairāvataṁ gajendrāṇāṁ narāṇāṁ cha narādhipam",
       "wordGloss": "uchchaiḥśhravasam—Uchchaihshrava; aśhvānām—amongst horses; viddhi—know; mām—me; amṛita-udbhavam—begotten from the churning of the ocean of nectar; airāvatam—Airavata; gaja-indrāṇām—amongst all lordly elephants; narāṇām—amongst humans; cha—and; nara-adhipam—the king"
@@ -296,7 +301,7 @@
       "chapter": 10,
       "verse": 28,
       "sourceNumber": "10.28",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "आयुधानामहं वज्रं धेनूनामस्मि कामधुक्।\n\nप्रजनश्चास्मि कन्दर्पः सर्पाणामस्मि वासुकिः।।10.28।।",
       "transliteration": "āyudhānām ahaṁ vajraṁ dhenūnām asmi kāmadhuk\nprajanaśh chāsmi kandarpaḥ sarpāṇām asmi vāsukiḥ",
       "wordGloss": "āyudhānām—amongst weapons; aham—I; vajram—the Vajra (thunderbolt); dhenūnām—amongst cows; asmi—I am; kāma-dhuk—Kamdhenu; prajanaḥ—amongst causes for procreation; cha—and; asmi—I am; kandarpaḥ—Kaamdev, the god of love; sarpāṇām—amongst serpents; asmi—I am; vāsukiḥ—serpent Vasuki"
@@ -306,7 +311,7 @@
       "chapter": 10,
       "verse": 29,
       "sourceNumber": "10.29",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अनन्तश्चास्मि नागानां वरुणो यादसामहम्।\n\nपितृ़णामर्यमा चास्मि यमः संयमतामहम्।।10.29।।",
       "transliteration": "anantaśh chāsmi nāgānāṁ varuṇo yādasām aham\npitṝīṇām aryamā chāsmi yamaḥ sanyamatām aham",
       "wordGloss": "anantaḥ—Anant; cha—and; asmi—I am; nāgānām—amongst snakes; varuṇaḥ—the celestial god of the ocean; yādasām—amongst aquatics; aham—I; pitṝīṇām—amongst the departed ancestors; aryamā—Aryama; cha—and; asmi—am; yamaḥ—the celestial god of death; sanyamatām—amongst dispensers of law; aham—I"
@@ -316,7 +321,7 @@
       "chapter": 10,
       "verse": 30,
       "sourceNumber": "10.30",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "प्रह्लादश्चास्मि दैत्यानां कालः कलयतामहम्।\n\nमृगाणां च मृगेन्द्रोऽहं वैनतेयश्च पक्षिणाम्।।10.30।।",
       "transliteration": "prahlādaśh chāsmi daityānāṁ kālaḥ kalayatām aham\nmṛigāṇāṁ cha mṛigendro ’haṁ vainateyaśh cha pakṣhiṇām",
       "wordGloss": "prahlādaḥ—Prahlad; cha—and; asmi—I am; daityānām—of the demons; kālaḥ—time; kalayatām—of all that controls; aham—I; mṛigāṇām—amongst animals; cha—and; mṛiga-indraḥ—the lion; aham—I; vainateyaḥ—Garud; cha—and; pakṣhiṇām—amongst birds"
@@ -326,7 +331,7 @@
       "chapter": 10,
       "verse": 31,
       "sourceNumber": "10.31",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "पवनः पवतामस्मि रामः शस्त्रभृतामहम्।\n\nझषाणां मकरश्चास्मि स्रोतसामस्मि जाह्नवी।।10.31।।",
       "transliteration": "pavanaḥ pavatām asmi rāmaḥ śhastra-bhṛitām aham\njhaṣhāṇāṁ makaraśh chāsmi srotasām asmi jāhnavī",
       "wordGloss": "pavanaḥ—the wind; pavatām—of all that purifies; asmi—I am; rāmaḥ—Ram; śhastra-bhṛitām—of the carriers of weapons; aham—I am; jhaṣhāṇām—of all acquatics; makaraḥ—crocodile; cha—also; asmi—I am; srotasām—of flowing rivers; asmi—I am; jāhnavī—the Ganges"
@@ -336,7 +341,7 @@
       "chapter": 10,
       "verse": 32,
       "sourceNumber": "10.32",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "सर्गाणामादिरन्तश्च मध्यं चैवाहमर्जुन।\n\nअध्यात्मविद्या विद्यानां वादः प्रवदतामहम्।।10.32।।",
       "transliteration": "sargāṇām ādir antaśh cha madhyaṁ chaivāham arjuna\nadhyātma-vidyā vidyānāṁ vādaḥ pravadatām aham",
       "wordGloss": "sargāṇām—of all creations; ādiḥ—the beginning; antaḥ—end; cha—and; madhyam—middle; cha—and; eva—indeed; aham—I; arjuna—Arjun; adhyātma-vidyā—science of spirituality; vidyānām—amongst sciences; vādaḥ—the logical conclusion; pravadatām—of debates; aham—I"
@@ -346,7 +351,7 @@
       "chapter": 10,
       "verse": 33,
       "sourceNumber": "10.33",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अक्षराणामकारोऽस्मि द्वन्द्वः सामासिकस्य च।\n\nअहमेवाक्षयः कालो धाताऽहं विश्वतोमुखः।।10.33।।",
       "transliteration": "अहमेवाक्षय: कालो धाताहं विश्वतोमुख: || 33||\n\nakṣharāṇām a-kāro ’smi dvandvaḥ sāmāsikasya cha\naham evākṣhayaḥ kālo dhātāhaṁ viśhvato-mukhaḥ",
       "wordGloss": "akṣharāṇām—amongst all letters; a-kāraḥ—the beginning letter “A”; asmi—I am; dvandvaḥ—the dual; sāmāsikasya—amongst grammatical compounds; cha—and; aham—I; eva—only; akṣhayaḥ—endless; kālaḥ—time; dhātā—amongst the creators; aham—I; viśhwataḥ-mukhaḥ—Brahma"
@@ -356,7 +361,7 @@
       "chapter": 10,
       "verse": 34,
       "sourceNumber": "10.34",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "मृत्युः सर्वहरश्चाहमुद्भवश्च भविष्यताम्।\n\nकीर्तिः श्रीर्वाक्च नारीणां स्मृतिर्मेधा धृतिः क्षमा।।10.34।।",
       "transliteration": "mṛityuḥ sarva-haraśh chāham udbhavaśh cha bhaviṣhyatām\nkīrtiḥ śhrīr vāk cha nārīṇāṁ smṛitir medhā dhṛitiḥ kṣhamā",
       "wordGloss": "mṛityuḥ—death; sarva-haraḥ—all-devouring; cha—and; aham—I; udbhavaḥ—the origin; cha—and; bhaviṣhyatām—those things that are yet to be; kīrtiḥ—fame; śhrīḥ—prospective; vāk—fine speech; cha—and; nārīṇām—amongst feminine qualities; smṛitiḥ—memory; medhā—intelligence; dhṛitiḥ—courage; kṣhamā—forgiveness"
@@ -366,7 +371,7 @@
       "chapter": 10,
       "verse": 35,
       "sourceNumber": "10.35",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "बृहत्साम तथा साम्नां गायत्री छन्दसामहम्।\n\nमासानां मार्गशीर्षोऽहमृतूनां कुसुमाकरः।।10.35।।",
       "transliteration": "bṛihat-sāma tathā sāmnāṁ gāyatrī chhandasām aham\nmāsānāṁ mārga-śhīrṣho ’ham ṛitūnāṁ kusumākaraḥ",
       "wordGloss": "bṛihat-sāma—the Brihatsama; tathā—also; sāmnām—amongst the hymns in the Sama Veda; gāyatrī—the Gayatri mantra; chhandasām—amongst poetic meters; aham—I; māsānām—of the twelve months; mārga-śhīrṣhaḥ—the month of November-December; aham—I; ṛitūnām—of all seasons; kusuma-ākaraḥ—spring"
@@ -376,7 +381,7 @@
       "chapter": 10,
       "verse": 36,
       "sourceNumber": "10.36",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "द्यूतं छलयतामस्मि तेजस्तेजस्विनामहम्।\n\nजयोऽस्मि व्यवसायोऽस्मि सत्त्वं सत्त्ववतामहम्।।10.36।।",
       "transliteration": "dyūtaṁ chhalayatām asmi tejas tejasvinām aham\njayo ’smi vyavasāyo ’smi sattvaṁ sattvavatām aham",
       "wordGloss": "dyūtam—gambling; chhalayatām—of all cheats; asmi—I am; tejaḥ—the splendor; tejasvinām—of the splendid; aham—I; jayaḥ—victory; asmi—I am; vyavasāyaḥ—firm resolve; asmi—I am; sattvam—virtue; sattva-vatām—of the virtuous; aham—I"
@@ -386,7 +391,7 @@
       "chapter": 10,
       "verse": 37,
       "sourceNumber": "10.37",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "वृष्णीनां वासुदेवोऽस्मि पाण्डवानां धनंजयः।\n\nमुनीनामप्यहं व्यासः कवीनामुशना कविः।।10.37।।",
       "transliteration": "vṛiṣhṇīnāṁ vāsudevo ’smi pāṇḍavānāṁ dhanañjayaḥ\nmunīnām apyahaṁ vyāsaḥ kavīnām uśhanā kaviḥ",
       "wordGloss": "vṛiṣhṇīnām—amongst the descendants of Vrishni; vāsudevaḥ—Krishna, the son of Vasudev; asmi—I am; pāṇḍavānām—amongst the Pandavas; dhanañjayaḥ—Arjun, the conqueror of wealth; munīnām—amongst the sages; api—also; aham—I; vyāsaḥ—Ved Vyas; kavīnām—amongst the great thinkers; uśhanā—Shukracharya; kaviḥ—the thinker"
@@ -396,7 +401,7 @@
       "chapter": 10,
       "verse": 38,
       "sourceNumber": "10.38",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "दण्डो दमयतामस्मि नीतिरस्मि जिगीषताम्।\n\nमौनं चैवास्मि गुह्यानां ज्ञानं ज्ञानवतामहम्।।10.38।।",
       "transliteration": "daṇḍo damayatām asmi nītir asmi jigīṣhatām\nmaunaṁ chaivāsmi guhyānāṁ jñānaṁ jñānavatām aham",
       "wordGloss": "daṇḍaḥ—punishment; damayatām—amongst means of preventing lawlessness; asmi—I am; nītiḥ—proper conduct; asmi—I am; jigīṣhatām—amongst those who seek victory; maunam—silence; cha—and; eva—also; asmi—I am; guhyānām—amongst secrets; jñānam—wisdom; jñāna-vatām—in the wise; aham—I"
@@ -406,7 +411,7 @@
       "chapter": 10,
       "verse": 39,
       "sourceNumber": "10.39",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "यच्चापि सर्वभूतानां बीजं तदहमर्जुन।\n\nन तदस्ति विना यत्स्यान्मया भूतं चराचरम्।।10.39।।",
       "transliteration": "yach chāpi sarva-bhūtānāṁ bījaṁ tad aham arjuna\nna tad asti vinā yat syān mayā bhūtaṁ charācharam",
       "wordGloss": "yat—which; cha—and; api—also; sarva-bhūtānām—of all living beings; bījam—generating seed; tat—that; aham—I; arjuna—Arjun; na—not; tat—that; asti—is; vinā—without; yat—which; syāt—may exist; mayā—me; bhūtam—creature; chara-acharam—moving and nonmoving"
@@ -416,7 +421,7 @@
       "chapter": 10,
       "verse": 40,
       "sourceNumber": "10.40",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "नान्तोऽस्ति मम दिव्यानां विभूतीनां परंतप।\n\nएष तूद्देशतः प्रोक्तो विभूतेर्विस्तरो मया।।10.40।।",
       "transliteration": "nānto ’sti mama divyānāṁ vibhūtīnāṁ parantapa\neṣha tūddeśhataḥ prokto vibhūter vistaro mayā",
       "wordGloss": "na—not; antaḥ—end; asti—is; mama—my; divyānām—divine; vibhūtīnām—manifestations; parantapa—Arjun, the conqueror of the enemies; eṣhaḥ—this; tu—but; uddeśhataḥ—just one portion; proktaḥ—declared; vibhūteḥ—of (my) glories; vistaraḥ—the breath of the topic; mayā—by me"
@@ -426,7 +431,7 @@
       "chapter": 10,
       "verse": 41,
       "sourceNumber": "10.41",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "यद्यद्विभूतिमत्सत्त्वं श्रीमदूर्जितमेव वा।\n\nतत्तदेवावगच्छ त्वं मम तेजोंऽशसंभवम्।।10.41।।",
       "transliteration": "yad yad vibhūtimat sattvaṁ śhrīmad ūrjitam eva vā\ntat tad evāvagachchha tvaṁ mama tejo ’nśha-sambhavam",
       "wordGloss": "yat yat—whatever; vibhūtimat—opulent; sattvam—being; śhrī-mat—beautiful; ūrjitam—glorious; eva—also; vā—or; tat tat—all that; eva—only; avagachchha—know; tvam—you; mama—my; tejaḥ-anśha-sambhavam—splendor; anśha—a part; sambhavam—born of"
@@ -436,7 +441,7 @@
       "chapter": 10,
       "verse": 42,
       "sourceNumber": "10.42",
-      "speaker": "unknown",
+      "speaker": "krishna",
       "sanskrit": "अथवा बहुनैतेन किं ज्ञातेन तवार्जुन।\n\nविष्टभ्याहमिदं कृत्स्नमेकांशेन स्थितो जगत्।।10.42।।",
       "transliteration": "atha vā bahunaitena kiṁ jñātena tavārjuna\nviṣhṭabhyāham idaṁ kṛitsnam ekānśhena sthito jagat",
       "wordGloss": "athavā—or; bahunā—detailed; etena—by this; kim—what; jñātena tava—can be known by you; arjuna—Arjun; viṣhṭabhya—pervade and support; aham—I; idam—this; kṛitsnam—entire; eka—by one; anśhena—fraction; sthitaḥ—am situated; jagat—creation"
