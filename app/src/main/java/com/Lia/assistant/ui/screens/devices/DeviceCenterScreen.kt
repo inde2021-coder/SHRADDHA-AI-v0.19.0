@@ -185,7 +185,7 @@ fun DeviceCenterScreen(navController: NavController) {
                                         bytes.fill(0)
                                         if (!sent) { incomingTransferStatus = "Chunk भेजना असफल।"; outgoingSending = false; return@launch }
                                         outgoingProgress = chunkIndex + 1
-                                        outgoingFile = DeviceFileTransferSender.updateProgress(item, outgoingProgress)
+                                        outgoingFile = withContext(Dispatchers.IO) { DeviceFileTransferSender.updateProgress(item, outgoingProgress) }
                                     }
                                     incomingTransferStatus = "सभी chunks भेजे गए; PC verification की प्रतीक्षा…"
                                 }
@@ -214,7 +214,7 @@ fun DeviceCenterScreen(navController: NavController) {
                                     val sent = DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes)
                                     bytes.fill(0)
                                     if (!sent) { incomingTransferStatus = "Retry chunk send failed."; outgoingSending = false; return@launch }
-                                    outgoingFile = DeviceFileTransferSender.updateProgress(item, maxOf(item.sentChunks, chunkIndex + 1))
+                                    outgoingFile = withContext(Dispatchers.IO) { DeviceFileTransferSender.updateProgress(item, maxOf(item.sentChunks, chunkIndex + 1)) }
                                 }
                                 incomingTransferStatus = "Missing chunks resent; waiting for PC verification…"
                             }
@@ -316,7 +316,7 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                 }
                 prepared.onSuccess { staged ->
-                    val item = DeviceFileTransferSender.bindPeer(staged, peer)
+                    val item = withContext(Dispatchers.IO) { DeviceFileTransferSender.bindPeer(staged, peer) }
                     val started = DeviceLinkManager.startFileTransfer(peer, java.util.UUID.randomUUID().toString().replace("-", ""),
                         item.transferId, item.fileName, item.sizeBytes, item.chunkCount, item.sha256)
                     if (started) { outgoingFile = item; outgoingProgress = item.sentChunks; incomingTransferStatus = "PC पर save location चुनने की प्रतीक्षा…" }
