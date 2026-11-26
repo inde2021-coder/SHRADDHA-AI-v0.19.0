@@ -55,9 +55,10 @@ object GeminiTextClient {
         try {
             internalHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    val fallback = "models/gemini-3.8-flash"
-                    resolvedModels[cacheKey] = fallback
-                    return fallback
+                    // A transient catalog outage must not be cached as a permanent
+                    // model decision for this credential. Use the safe fallback for
+                    // this request only and retry model discovery on the next call.
+                    return "models/gemini-3.8-flash"
                 }
 
                 val body = response.body?.string() ?: ""
@@ -109,9 +110,9 @@ object GeminiTextClient {
                 return chosen
             }
         } catch (_: Exception) {
-            val fallback = "models/gemini-3.8-flash"
-            resolvedModels[cacheKey] = fallback
-            return fallback
+            // Do not poison the per-key model cache when discovery fails due to
+            // connectivity, quota, or temporary Google API availability.
+            return "models/gemini-3.8-flash"
         }
     }
 
@@ -181,7 +182,11 @@ object GeminiTextClient {
                         }.getOrNull().orEmpty().ifBlank { "HTTP error $code" }
                         if (code in setOf(408, 425, 429, 500, 502, 503, 504) && attempt < 2) {
                             lastTransientError = providerReason
-                            Thread.sleep(400L * (attempt + 1))
+                            val retryAfterSeconds = response.header("Retry-After")
+                                ?.toLongOrNull()?.coerceIn(0L, 8L)
+                            val backoffMillis = retryAfterSeconds?.times(1_000L)
+                                ?: if (attempt == 0) 1_000L else 2_500L
+                            Thread.sleep(backoffMillis)
                             return@use
                         }
                         val friendly = when (code) {
@@ -218,7 +223,7 @@ object GeminiTextClient {
             } catch (e: IOException) {
                 if (attempt < 2) {
                     lastTransientError = e.localizedMessage ?: "network error"
-                    Thread.sleep(400L * (attempt + 1))
+                    Thread.sleep(if (attempt == 0) 1_000L else 2_500L)
                     continue
                 }
                 return ChatReplyResult.Error("Couldn't reach Gemini after 3 attempts. Check your internet connection and try again.")
