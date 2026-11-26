@@ -167,11 +167,11 @@ fun ChatScreen(
                 offlineModelPath.isNotBlank() -> runCatching {
                     val localPrompt = buildString {
                         append(boundedInstruction)
-                        append("\\n\\nRecent conversation:\\n")
+                        append("\n\nRecent conversation:\n")
                         historySnapshot.takeLast(8).forEach { turn ->
                             append(if (turn.isUser) "User: " else "Assistant: ")
                             append(turn.text.take(700))
-                            append('\\n')
+                            append('\n')
                         }
                     }.takeLast(6_000)
                     ChatReplyResult.Success(
