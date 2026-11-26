@@ -200,7 +200,11 @@ class AkkpsRunnerActivity : Activity() {
                     .map { f.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
                 label + if (f.optBoolean("required")) " *" else ""
             }
-            status.text = "पेज: " + obj.optString("title") + "\nFields: " + labels.take(22).joinToString(" • ")
+            val mapInfo = obj.optJSONObject("map")
+            val mapSummary = if (mapInfo != null && mapInfo.optInt("visibleNodes") > 0)
+                " • Map: " + mapInfo.optJSONArray("engines").toString()
+            else " • Map container नहीं मिला"
+            status.text = "पेज: " + obj.optString("title") + "\nFields: " + labels.take(22).joinToString(" • ") + mapSummary
             onReady?.invoke(obj)
         }
     }
@@ -571,12 +575,15 @@ Return JSON only."""
         }
         val js = """
             (function(){
+              const drawButton=[...document.querySelectorAll('button,[role="button"]')].find(b=>(b.innerText||b.getAttribute('aria-label')||'').trim().toLowerCase()==='draw');
+              if(drawButton && !/active|selected/i.test(drawButton.className||'')) drawButton.click();
               const globals=Object.keys(window).filter(k=>/map/i.test(k)).map(k=>({name:k,value:window[k]}));
               const leaflet=globals.find(x=>x.value&&x.value._container&&typeof x.value.on==='function'&&typeof x.value.getCenter==='function');
               const google=globals.find(x=>x.value&&x.value.__gm&&typeof x.value.getCenter==='function');
               const mapbox=globals.find(x=>x.value&&typeof x.value.addSource==='function'&&typeof x.value.on==='function');
               const map=leaflet?.value||google?.value||mapbox?.value;
-              if(!map) return JSON.stringify({ok:false});
+              if(!map) return JSON.stringify({ok:false,drawActivated:!!drawButton,
+                mapVisible:!!document.querySelector('.leaflet-container,.mapboxgl-map,.ol-viewport,canvas')});
               window.__shraddhaBoundaryPoints=[];
               window.__shraddhaBoundaryLayer=null;
               const addPoint=(lat,lng)=>{
@@ -608,6 +615,8 @@ Return JSON only."""
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             status.text = if (result?.optBoolean("ok") == true)
                 "AKKPS मैप से जुड़ गया। खेत के कोने मैप पर टैप करें; फिर 'क्षेत्रफल निकालें' बोलें।"
+            else if (result?.optBoolean("drawActivated") == true)
+                "AKKPS का Draw mode सक्रिय किया। मैप अंदरूनी object छिपाता है; बिना खेत की सीमा पहचाने Shraddha गलत polygon नहीं बनाएगी।"
             else "AKKPS मैप का अंदरूनी object उपलब्ध नहीं है। स्क्रीन OCR उपलब्ध है, पर polygon auto-draw अभी समर्थित नहीं।"
         }
     }
