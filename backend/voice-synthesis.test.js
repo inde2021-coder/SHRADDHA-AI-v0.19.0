@@ -20,10 +20,18 @@ test('does not silently use a provider when custom voice is missing', async () =
 
 test('requires HTTPS and returns validated PCM', async () => {
   await assert.rejects(() => synthesizeShraddhaPcm({ text: 'hello' }, { SHRADDHA_TTS_URL: 'http://localhost:5000/tts' }), /HTTPS/);
+  await assert.rejects(
+    () => synthesizeShraddhaPcm({ text: 'hello' }, { SHRADDHA_TTS_URL: 'https://tts.example/synthesize' }),
+    /SHRADDHA_TTS_TOKEN/
+  );
   const audio = Buffer.from([1, 0, 2, 0]);
-  const result = await synthesizeShraddhaPcm({ text: 'hello', language: 'en' }, { SHRADDHA_TTS_URL: 'https://tts.example/synthesize' }, async (_url, options) => {
+  const result = await synthesizeShraddhaPcm({ text: 'hello', language: 'en' }, {
+    SHRADDHA_TTS_URL: 'https://tts.example/synthesize',
+    SHRADDHA_TTS_TOKEN: 'a-strong-test-token-with-more-than-16'
+  }, async (_url, options) => {
     assert.equal(JSON.parse(options.body).voice, 'shraddha');
     assert.equal(JSON.parse(options.body).sample_rate, 24000);
+    assert.equal(options.headers.authorization, 'Bearer a-strong-test-token-with-more-than-16');
     return { ok: true, headers: { get: () => 'audio/pcm' }, arrayBuffer: async () => audio };
   });
   assert.deepEqual(result, audio);
