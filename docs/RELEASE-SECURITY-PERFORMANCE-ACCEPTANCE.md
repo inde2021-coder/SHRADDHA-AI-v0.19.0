@@ -12,7 +12,7 @@
 
 ## Runtime resource protection
 - Live OCR/object recognition checks Android heap pressure before starting another inference. At 90% heap use or invalid memory telemetry it pauses local inference rather than increasing crash risk.
-- The shared runtime budget policy defines slower frame intervals for battery saver, memory pressure and thermal throttling, and blocks cloud analysis unless consent and healthy device conditions are present.
+- The shared runtime budget policy defines slower frame intervals and a cloud-eligibility gate for battery saver, memory pressure and thermal throttling. The current live frame integration enforces the heap-pressure pause; battery-saver and thermal signals still require wiring to the platform service before they can be claimed as enforced.
 - Model downloads and optional AI assets must remain size-bounded and must never be bundled as large APK assets.
 
 ## Required final device test matrix
