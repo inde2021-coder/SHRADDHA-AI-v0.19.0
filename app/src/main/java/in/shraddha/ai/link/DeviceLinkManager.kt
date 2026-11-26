@@ -29,6 +29,7 @@ object DeviceLinkManager {
     // Bound Visual Lens calls: a stalled HTTP response must not keep the camera analysis gate locked for OkHttp's default 10-minute read timeout.
     private val visionClient = buildVisionHttpClient(client)
     private val activeAiCalls = ConcurrentHashMap.newKeySet<Call>()
+    private val aiCallLock = Any()
 
     private fun onlineAiAllowed(): Boolean =
         appContext?.let { `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(it) } == true
@@ -41,8 +42,10 @@ object DeviceLinkManager {
 
     /** Cancel every in-flight cloud AI request when the user revokes consent. */
     fun cancelAiRequests() {
-        activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
-        activeAiCalls.clear()
+        synchronized(aiCallLock) {
+            activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
+            activeAiCalls.clear()
+        }
     }
 
     private fun enqueueOnlineAiCall(
@@ -50,8 +53,13 @@ object DeviceLinkManager {
         done: (Result<String>) -> Unit,
         parse: (Response, String) -> Result<String>
     ) {
-        activeAiCalls.add(call)
-        call.enqueue(object : Callback {
+        synchronized(aiCallLock) {
+            if (!onlineAiAllowed()) {
+                done(Result.failure(IllegalStateException("Online AI permission is off. The cloud request was blocked before sending.")))
+                return
+            }
+            activeAiCalls.add(call)
+            call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: java.io.IOException) {
                 activeAiCalls.remove(call)
                 done(Result.failure(error))
