@@ -8,7 +8,9 @@ object LocalKnowledgeAnswer {
         "what", "when", "where", "which", "who", "whom", "why", "how", "the", "and", "for",
         "with", "from", "that", "this", "are", "was", "were", "is", "in", "on", "of", "to",
         "का", "की", "के", "है", "हैं", "था", "थी", "थे", "और", "में", "से", "को", "क्या",
-        "कैसे", "कब", "कहाँ", "कौन", "एक", "मुझे", "बताओ", "बताइए"
+        "कैसे", "कब", "कहाँ", "कौन", "एक", "मुझे", "बताओ", "बताइए",
+        "it", "its", "they", "them", "he", "she", "we", "you", "me", "my", "your", "this", "there",
+        "यह", "ये", "वह", "वो", "इस", "उस", "मेरा", "मेरी", "मेरे"
     )
 
     /** Weak matches return null so normal provider routing can continue. */
