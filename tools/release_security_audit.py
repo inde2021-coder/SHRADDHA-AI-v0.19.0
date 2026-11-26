@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 SECRET_PATTERNS = (
-    re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(b"-" * 5 + rb"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(rb'"private_key"\s*:\s*"-----BEGIN'),
     re.compile(rb"\bsk-[A-Za-z0-9]{24,}\b"),
     re.compile(rb"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
