@@ -454,6 +454,7 @@ private fun SettingsScreenContent(
                                 // and any assistant speech already queued for playback.
                                 VoiceSessionManager.stop()
                                 ShraddhaSpeechClient.stopPlayback()
+                                `in`.shraddha.ai.link.DeviceLinkManager.cancelAiRequests()
                                 // Revoke background camera/cloud vision immediately as well.
                                 context.stopService(android.content.Intent(context, `in`.shraddha.ai.vision.LiveEyesCameraService::class.java))
                             }
