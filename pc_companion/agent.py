@@ -1491,6 +1491,9 @@ class PcCompanionApp:
         if type(raw_index) is not int or not 0 <= raw_index < transfer["chunks"]:
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "reason": "invalid_chunk_index"})
+            Path(transfer["path"] + ".shraddha-part").unlink(missing_ok=True)
+            self.pc_incoming.pop(transfer_id, None)
+            self._persist_pc_incoming()
             self.events.put(("status", "Rejected invalid incoming file chunk index."))
             return
         index = raw_index
