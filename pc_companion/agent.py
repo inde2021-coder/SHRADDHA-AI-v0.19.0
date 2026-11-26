@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError, save_outgoing_transfer_record, load_outgoing_transfer_record
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -843,30 +843,7 @@ class PcCompanionApp:
         return CONFIG_PATH.parent / "outgoing-transfer.json"
 
     def _load_pc_outgoing(self):
-        try:
-            raw = json.loads(self._pc_outgoing_state_path().read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                return None
-            transfer_id, peer, path_value = raw.get("transferId"), raw.get("peer"), raw.get("path")
-            size, digest = raw.get("size"), raw.get("sha256")
-            request_id, name = raw.get("requestId"), raw.get("name")
-            if (not isinstance(peer, str) or not peer or len(peer) > 128 or
-                    not isinstance(path_value, str) or len(path_value) > 2048 or
-                    type(size) is not int or not valid_transfer_manifest(transfer_id, size,
-                        chunk_count_for_size(size), digest) or
-                    not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", request_id) or
-                    not isinstance(name, str) or not name or len(name) > 120):
-                return None
-            source = Path(path_value)
-            if source.is_symlink() or not source.is_file() or source.stat().st_size != size:
-                return None
-            if sha256_file(source) != digest:
-                return None
-            return {"peer": peer, "path": str(source), "name": name, "size": size,
-                    "sha256": digest, "requestId": request_id, "transferId": transfer_id,
-                    "send_queue": [], "in_flight": set(), "awaiting_approval": False}
-        except Exception:
-            return None
+        return load_outgoing_transfer_record(self._pc_outgoing_state_path())
 
     def _persist_pc_outgoing(self):
         pending = self.pending_pc_send
@@ -878,18 +855,7 @@ class PcCompanionApp:
             except OSError:
                 return False
         try:
-            source = Path(pending["path"])
-            if source.is_symlink() or not source.is_file() or source.stat().st_size != pending["size"]:
-                raise ValueError("Outgoing source file is unavailable or changed.")
-            payload = {key: pending[key] for key in
-                       ("peer", "path", "name", "size", "sha256", "requestId", "transferId")}
-            temp = path.with_suffix(".tmp")
-            with temp.open("w", encoding="utf-8") as output:
-                output.write(json.dumps(payload, separators=(",", ":")))
-                output.flush()
-                os.fsync(output.fileno())
-            temp.replace(path)
-            return True
+            return save_outgoing_transfer_record(path, pending)
         except Exception as exc:
             self.status_var.set(f"Could not persist outgoing transfer: {str(exc)[:110]}")
             return False
