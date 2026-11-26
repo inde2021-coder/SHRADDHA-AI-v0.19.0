@@ -359,7 +359,7 @@ fun DeviceCenterScreen(navController: NavController) {
                     )
                 }
                 Text(
-                    "एक ही जगह बोलकर या लिखकर PC चलाएँ। उदाहरण: “desktop दिखाओ”, “Notepad खोलो”, “ऊपर scroll करो”, “type नमस्ते”, “volume 40”. हर control PC पर आपकी अनुमति के बाद ही चलेगा।",
+                    "एक ही जगह बोलकर या लिखकर PC चलाएँ। उदाहरण: “desktop दिखाओ”, “Notepad खोलो”, “ऊपर scroll करो”, “type नमस्ते”, “volume 40”, “फ़ाइल खोजो invoice”, “फ़ाइल खोलो Documents/report.pdf”. हर control PC पर आपकी अनुमति के बाद ही चलेगा।",
                     color = colors.textSecondary, fontSize = 10.sp
                 )
                 Text(
