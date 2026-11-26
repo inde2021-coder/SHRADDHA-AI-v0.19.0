@@ -58,8 +58,8 @@ class OfflineIndicVoiceSession(
             onMicChunk = ::acceptPcm16,
             onMicAmplitude = { },
             onRecordingError = { message ->
-                onError(message)
                 stop()
+                onError(message)
             }
         )
         onStatus("Offline ${selectedLanguage.label} ready • microphone stays on-device")
