@@ -1175,13 +1175,26 @@ wss.on('connection', (ws, ctx) => {
           if (ok) transfer.chunks.set(index, true);
         }
       } else if (messageKind === 'file_transfer_resume') {
-        const transfer = device.incomingTransfers?.get(transferId);
         const chunkCount = msg.chunkCount;
         const missing = msg.missingIndexes;
-        if (!transfer || transfer.fromDeviceId !== targetId || transfer.expiresAt < Date.now() ||
-            !Number.isSafeInteger(chunkCount) || chunkCount !== transfer.chunkCount ||
-            !validMissingTransferIndexes(missing, chunkCount) ||
-            !recordPersistedFileTransferChunks(transfer, missing)) return;
+        const localTransfer = device.incomingTransfers?.get(transferId);
+        if (localTransfer && localTransfer.fromDeviceId === targetId) {
+          // Receiver -> sender: this bitmap is authoritative because it came
+          // from the receiver's persisted file state.
+          if (localTransfer.expiresAt < Date.now() ||
+              !Number.isSafeInteger(chunkCount) || chunkCount !== localTransfer.chunkCount ||
+              !validMissingTransferIndexes(missing, chunkCount) ||
+              !recordPersistedFileTransferChunks(localTransfer, missing)) return;
+        } else {
+          // Sender -> receiver: empty bitmap is a resume probe. The receiver
+          // replies with its actual missing indexes; never let a sender invent
+          // or overwrite the receiver's persisted bitmap.
+          const remoteTransfer = target.incomingTransfers?.get(transferId);
+          if (!remoteTransfer || remoteTransfer.fromDeviceId !== deviceId ||
+              remoteTransfer.expiresAt < Date.now() ||
+              !Number.isSafeInteger(chunkCount) || chunkCount !== remoteTransfer.chunkCount ||
+              !Array.isArray(missing) || missing.length !== 0) return;
+        }
       } else if (messageKind === 'file_transfer_cancel') {
         const role = resolveFileTransferCancellation(device, target, deviceId, targetId, transferId, Date.now());
         if (!role) return;
