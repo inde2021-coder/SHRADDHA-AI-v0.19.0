@@ -29,6 +29,12 @@ def parse_android_command(raw):
         if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase)\b|पासवर्ड|ओटीपी|पिन", text):
             raise ValueError("Sensitive password, OTP or PIN text cannot be typed remotely.")
         return {"kind": "type", "text": text}
+    match = re.match(r"^(?:search files?|find files?|फाइल खोजो|फाइल ढूंढो|फ़ाइल खोजो|फ़ाइल ढूंढो)\\s+(.+)$", command, re.I)
+    if match:
+        query = match.group(1).strip()
+        if len(query) < 2 or len(query) > 80:
+            raise ValueError("File search text must contain 2-80 characters.")
+        return {"kind": "file_search", "query": query, "path": ""}
     if lower in {"read screen", "read this screen", "screen ocr", "ocr", "स्क्रीन पढ़ो", "स्क्रीन का टेक्स्ट पढ़ो", "स्क्रीन से टेक्स्ट निकालो"}:
         return {"kind": "ocr"}
     match = re.match(r"^(?:click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\s+(.+)$", command, re.I)
