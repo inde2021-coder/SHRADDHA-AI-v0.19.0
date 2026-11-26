@@ -100,8 +100,16 @@ object DeviceFileTransferSender {
         val target = metadataFile(prepared.file)
         val temp = File(target.parentFile, target.name + ".tmp")
         FileOutputStream(temp).use { output -> props.store(output, "Shraddha AI outgoing transfer"); output.fd.sync() }
-        if (target.exists() && !target.delete()) { temp.delete(); error("Could not update transfer recovery record.") }
-        if (!temp.renameTo(target)) { temp.delete(); error("Could not commit transfer recovery record.") }
+        try {
+            java.nio.file.Files.move(
+                temp.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (error: Exception) {
+            temp.delete()
+            throw IllegalStateException("Could not atomically commit transfer recovery record.", error)
+        }
     }
 
     private fun readMetadata(file: File): Prepared? = runCatching {
