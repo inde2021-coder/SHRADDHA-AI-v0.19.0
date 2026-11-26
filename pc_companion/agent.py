@@ -465,6 +465,20 @@ class PcCompanionApp:
             payload = {"type": "e2e_message", "targetDeviceId": peer_id,
                        "messageKind": kind, "transferId": transfer_id,
                        "nonce": nonce, "ciphertext": ciphertext}
+            # The relay sees only bounded routing metadata; the authenticated
+            # manifest and control body remain encrypted and are cross-checked
+            # by the receiving client after decryption.
+            if kind == "file_transfer_start":
+                for field in ("requestId", "fileName", "sizeBytes", "chunkCount", "sha256"):
+                    payload[field] = body.get(field)
+            elif kind == "file_transfer_ack":
+                for field in ("index", "complete", "ok"):
+                    payload[field] = body.get(field)
+            elif kind == "file_transfer_resume":
+                for field in ("chunkCount", "missingIndexes"):
+                    payload[field] = body.get(field)
+            elif kind == "file_transfer_cancel":
+                payload["reason"] = body.get("reason", "cancelled")
         ws = self.ws_app
         if not ws or not ws.sock or not ws.sock.connected:
             return False
