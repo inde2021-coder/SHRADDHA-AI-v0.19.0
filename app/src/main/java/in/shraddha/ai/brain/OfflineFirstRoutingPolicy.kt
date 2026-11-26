@@ -38,6 +38,12 @@ object OfflineFirstRoutingPolicy {
         if (!specialOnlineTask && state.deterministicSkillAvailable) {
             return Decision(Route.LOCAL_DETERMINISTIC_SKILL, "A local deterministic skill can handle this task", false)
         }
+        // Document and personal-memory questions must prefer source-grounded local records
+        // over generative model output, even when an on-device model is also installed.
+        if ((task == TaskKind.DOCUMENT_QA || task == TaskKind.PERSONAL_MEMORY) &&
+            state.localKnowledgeAvailable) {
+            return Decision(Route.LOCAL_KNOWLEDGE, "Use locally stored, source-grounded knowledge", false)
+        }
         if (!specialOnlineTask && state.localModelAvailable) {
             return Decision(Route.LOCAL_MODEL, "Prefer the on-device model to avoid API usage", false)
         }
