@@ -39,6 +39,14 @@ object CouncilCostBudget {
             .putFloat(KEY_LIMIT, monthlyLimitUsd.toFloat()).putString(KEY_PRICES, parsed.toString()).apply()
     }
 
+    internal fun requestBlockReason(limitUsd: Double, spentUsd: Double, usageUnknown: Boolean, provider: String): String? {
+        require(limitUsd.isFinite() && spentUsd.isFinite() && limitUsd >= 0.0 && spentUsd >= 0.0)
+        if (limitUsd <= 0.0) return null
+        if (usageUnknown) return "Provider usage is unverified for this month. Further $provider calls are blocked until the usage and price table are reviewed."
+        if (spentUsd >= limitUsd) return "Monthly API budget reached: estimated spend USD $spentUsd / USD $limitUsd. Further provider calls are blocked."
+        return null
+    }
+
     /**
      * Applies the configured monthly ceiling to every metered Main Brain request, not
      * only council jobs. Unknown usage is a hard stop while a ceiling is enabled.
@@ -53,13 +61,9 @@ object CouncilCostBudget {
             check(p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f)
                 .putBoolean(KEY_UNKNOWN, false).commit()) { "Could not reset monthly API budget state." }
         }
-        check(!p.getBoolean(KEY_UNKNOWN, false)) {
-            "Provider usage is unverified for this month. Further $provider calls are blocked until the usage and price table are reviewed."
-        }
         val spent = p.getFloat(KEY_SPEND, 0f).toDouble()
-        check(spent < limit) {
-            "Monthly API budget reached: estimated spend USD $spent / USD $limit. Further provider calls are blocked."
-        }
+        val blockReason = requestBlockReason(limit, spent, p.getBoolean(KEY_UNKNOWN, false), provider)
+        check(blockReason == null) { blockReason ?: "Monthly API budget blocked this request." }
     }
 
     /** Use for cloud features whose provider does not return billable token counters. */
