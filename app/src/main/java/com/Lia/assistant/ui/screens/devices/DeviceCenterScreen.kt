@@ -360,8 +360,9 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                     "file_transfer_cancel" -> {
                         val transferId = message.optString("transferId")
+                        val peerId = message.optString("fromDeviceId")
                         val item = outgoingFile
-                        if (item != null && item.transferId == transferId) {
+                        if (item != null && item.peerId == peerId && item.transferId == transferId) {
                             DeviceFileTransferSender.cleanup(item)
                             outgoingFile = null
                             outgoingQueue = emptyList()
@@ -370,10 +371,11 @@ fun DeviceCenterScreen(navController: NavController) {
                             outgoingSending = false
                             outgoingProgress = 0
                             incomingTransferStatus = "PC cancelled the outgoing transfer."
-                        } else {
-                            DeviceFileTransferReceiver.reject(transferId)
+                        } else if (DeviceFileTransferReceiver.reject(transferId, peerId)) {
                             resumableIncoming = DeviceFileTransferReceiver.pendingTransfers()
-                            incomingTransferStatus = "PC cancelled the incoming transfer."
+                            incomingTransferStatus = "Trusted PC cancelled the incoming transfer."
+                        } else {
+                            incomingTransferStatus = "Ignored cancellation for an unknown transfer or unexpected peer."
                         }
                     }
                 }
