@@ -102,6 +102,28 @@ class ActionTests(unittest.TestCase):
         self.assertIn("[संवेदनशील जानकारी छिपाई गई]", safe)
         self.assertNotIn("654321", safe)
 
+    def test_ocr_aborts_if_active_window_changes_before_capture(self):
+        import pc_companion.actions as actions
+        active = object()
+        with patch("pc_companion.actions._active_window", side_effect=[
+            (active, "Notepad", (0, 0, 500, 300)),
+            (active, "Password Manager", (0, 0, 500, 300)),
+        ]), patch.object(self.gui, "screenshot") as screenshot:
+            with self.assertRaisesRegex(RuntimeError, "active window changed"):
+                actions.read_active_window_ocr(self.gui)
+        screenshot.assert_not_called()
+
+    def test_ocr_aborts_for_minimized_active_window(self):
+        import pc_companion.actions as actions
+        class MinimizedWindow:
+            isMinimized = True
+        active = MinimizedWindow()
+        with patch("pc_companion.actions._active_window", return_value=(active, "Notepad", (0, 0, 500, 300))), \
+             patch.object(self.gui, "screenshot") as screenshot:
+            with self.assertRaisesRegex(RuntimeError, "minimized"):
+                actions.read_active_window_ocr(self.gui)
+        screenshot.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
