@@ -27,5 +27,18 @@ class AndroidCommandParserTests(unittest.TestCase):
             parse_android_command("x" * 501)
 
 
+    def test_open_file_and_folder_commands_are_relative_and_allowlisted(self):
+        self.assertEqual(parse_android_command("open file Reports/summary.pdf"),
+                         {"kind": "open_file", "path": "Reports/summary.pdf"})
+        self.assertEqual(parse_android_command("फ़ाइल खोलो Reports/summary.pdf"),
+                         {"kind": "open_file", "path": "Reports/summary.pdf"})
+        self.assertEqual(parse_android_command("open folder Projects"),
+                         {"kind": "open_folder", "path": "Projects"})
+        with self.assertRaises(ValueError):
+            parse_android_command("open file ../secret.txt")
+        with self.assertRaises(ValueError):
+            parse_android_command("open file C:/Windows/win.ini")
+
+
 if __name__ == "__main__":
     unittest.main()
