@@ -34,7 +34,9 @@ object AkkpsFarmerCardOcrParser {
                         line.startsWith("$label ", ignoreCase = true) ||
                         line.startsWith("$label-", ignoreCase = true)
                 } ?: continue
-                val value = line.substring(alias.length).trim().trimStart(':', '-', '—', '|').trim()\n                    .replace(Regex("[;=\\\\r\\\\n\\\\u0000-\\\\u001F]"), " ")\n                    .replace(Regex("\\\\s+"), " ").trim()
+                val value = line.substring(alias.length).trim().trimStart(':', '-', '—', '|').trim()
+                    .replace(Regex("[;=\\r\\n\\u0000-\\u001F]"), " ")
+                    .replace(Regex("\\s+"), " ").trim()
                 if (value.length in 2..100 && !value.contains(Regex("(?i)aadhaar|aadhar|आधार|otp|पासवर्ड|password"))) {
                     found[key] = value
                 }
