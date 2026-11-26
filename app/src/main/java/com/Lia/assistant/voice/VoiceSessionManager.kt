@@ -241,6 +241,7 @@ object VoiceSessionManager {
                 _lastError.value = message
                 _statusText.value = message
                 _state.value = NovaOrbState.ERROR
+                VoiceForegroundService.stop(application)
             }
         )
         runCatching { offlineVoiceSession?.start(application, language) }.onFailure { error ->
