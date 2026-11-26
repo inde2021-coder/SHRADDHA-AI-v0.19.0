@@ -37,6 +37,10 @@ object FormExtractionClient {
         personalDataConsent: Boolean = false
     ): Result<FormExtractionResult> = runCatching {
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
+        `in`.shraddha.ai.future.CouncilCostBudget.requireUsageCountersAvailable(
+            context,
+            "Cloud form image extraction"
+        )
         require(cloudProcessingConsent) { "Please approve cloud image processing before sending this image." }
         require(formType in setOf("farmer", "plot", "boundary", "land_deed", "consent", "unknown")) { "Unsupported form type." }
         require(provider in setOf("auto", "gemini", "openai", "anthropic")) { "Unsupported vision provider." }
