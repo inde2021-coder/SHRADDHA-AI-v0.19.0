@@ -121,7 +121,17 @@ object DeviceFileTransferReceiver {
     fun receiveChunk(context: Context, peerId: String, message: JSONObject): ChunkResult {
         val transferId = message.optString("transferId")
         val index = message.optInt("index", -1)
-        val state = active[transferId] ?: return ChunkResult(index, false, error = "No approved transfer is active.")
+        val state = active[transferId] ?: run {
+            val receipt = loadReceipt(context, transferId)
+            if (receipt != null && receipt.peerId == peerId) {
+                val saved = File(receipt.savedPath)
+                if (saved.isFile && saved.length() == receipt.sizeBytes &&
+                    sha256(saved).equals(receipt.sha256, ignoreCase = true)) {
+                    return ChunkResult(index, true, complete = true, savedPath = saved.absolutePath)
+                }
+            }
+            return ChunkResult(index, false, error = "No approved transfer is active.")
+        }
         if (!DeviceFileTransferProtocol.isExpectedPeerMessage(state.manifest.peerId, peerId, state.manifest.transferId, transferId))
             return ChunkResult(index, false, error = "Unexpected sender or transfer ID.")
         val expected = DeviceFileTransferProtocol.expectedChunkBytes(state.manifest.sizeBytes, state.manifest.chunkCount, index)
@@ -187,11 +197,10 @@ object DeviceFileTransferReceiver {
             }?.sortedBy { it.transferId }.orEmpty()
     }
 
-    /** Call only after the encrypted completion ACK was accepted by the relay socket. */
+    /** Keep receipts after ACK attempts: a relay may drop a queued ACK during disconnect. */
     @Synchronized fun acknowledgeReceipt(context: Context, peerId: String, transferId: String): Boolean {
         val receipt = loadReceipt(context, transferId) ?: return false
-        if (receipt.peerId != peerId) return false
-        return deleteReceipt(context, transferId)
+        return receipt.peerId == peerId
     }
 
     private fun persistReceipt(context: Context, receipt: CompletedReceipt): Boolean = runCatching {
@@ -214,6 +223,8 @@ object DeviceFileTransferReceiver {
         FileOutputStream(staging).use { output -> props.store(output, "Shraddha AI completed transfer receipt"); output.fd.sync() }
         java.nio.file.Files.move(staging.toPath(), target.toPath(),
             java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        directory.listFiles()?.filter { it.isFile && it.name.startsWith(".") && it.name.endsWith(".receipt") }
+            ?.sortedByDescending { it.lastModified() }?.drop(128)?.forEach { it.delete() }
     }.isSuccess
 
     private fun loadReceipt(context: Context, transferId: String): CompletedReceipt? = runCatching {
