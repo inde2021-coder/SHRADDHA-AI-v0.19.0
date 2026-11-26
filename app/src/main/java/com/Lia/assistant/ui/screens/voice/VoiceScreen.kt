@@ -69,6 +69,7 @@ fun VoiceScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasKey by remember { mutableStateOf(VoiceGatewaySettings.isConfigured(context)) }
+    var onlineAiAllowed by remember { mutableStateOf(`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) }
 
     val state by VoiceSessionManager.state.collectAsState()
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
@@ -92,6 +93,7 @@ fun VoiceScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasKey = VoiceGatewaySettings.isConfigured(context)
+                onlineAiAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
                 hasRecordAudioPermission = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.RECORD_AUDIO
                 ) == PackageManager.PERMISSION_GRANTED
@@ -171,6 +173,32 @@ fun VoiceScreen(
                         onClick = { navController.navigate("settings") },
                         type = NovaButtonType.PRIMARY
                     )
+                } else if (!onlineAiAllowed) {
+                    LiaOrb3D(
+                        state = NovaOrbState.ERROR,
+                        size = orbSize,
+                        amplitude = 0f,
+                        assistantName = appState.assistantName
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Online AI अनुमति बंद है",
+                        fontFamily = SerifFontFamily,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 18.sp,
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Live Voice के लिए cloud processing की स्पष्ट अनुमति जरूरी है। Offline Chat अलग से इस्तेमाल कर सकते हैं।",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    NovaButton(
+                        text = "Settings में Online AI अनुमति खोलें",
+                        onClick = { navController.navigate("settings") }
+                    )
                 } else if (!hasRecordAudioPermission) {
                     LiaOrb3D(
                         state = NovaOrbState.ERROR,
@@ -227,7 +255,7 @@ fun VoiceScreen(
                 }
             }
 
-            if (hasKey && hasRecordAudioPermission) {
+            if (hasKey && hasRecordAudioPermission && onlineAiAllowed) {
                 // One microphone control: tap once to end the active session,
                 // tap again to start it. The close control above only dismisses this screen.
                 val micShape = RoundedCornerShape(50)
