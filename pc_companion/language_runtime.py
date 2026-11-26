@@ -33,9 +33,12 @@ def _read_pcm16_mono(path: Path) -> tuple[list[float], int]:
     import array
     with wave.open(str(path), "rb") as wav:
         channels, width, rate = wav.getnchannels(), wav.getsampwidth(), wav.getframerate()
+        frame_count = wav.getnframes()
         if width != 2 or channels not in (1, 2):
             raise LanguageRuntimeError("ASR input must be 16-bit PCM WAV with one or two channels.")
-        frames = wav.readframes(wav.getnframes())
+        if frame_count <= 0 or frame_count > rate * 600:
+            raise LanguageRuntimeError("ASR audio must be between 0 and 10 minutes.")
+        frames = wav.readframes(frame_count)
     samples = array.array("h")
     samples.frombytes(frames)
     if __import__("sys").byteorder != "little":
