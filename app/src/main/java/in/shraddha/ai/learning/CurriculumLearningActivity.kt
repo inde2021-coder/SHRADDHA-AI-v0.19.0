@@ -12,6 +12,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import org.json.JSONObject
 import `in`.shraddha.ai.brain.TrainingCurriculumInstaller
 
@@ -324,9 +325,11 @@ class CurriculumLearningActivity : Activity() {
                     startStudySession()
                     refreshDashboard()
                 } else {
-                    limitDialogVisible = false
-                    showMessage("गलत PIN", "अभिभावक PIN सही नहीं है।")
-                    showDailyLimitDialog()
+                    Toast.makeText(this, "अभिभावक PIN सही नहीं है।", Toast.LENGTH_SHORT).show()
+                    uiHandler.postDelayed({
+                        limitDialogVisible = false
+                        showDailyLimitDialog()
+                    }, 350L)
                 }
             }
             .setNegativeButton("बाद में") { _, _ ->
