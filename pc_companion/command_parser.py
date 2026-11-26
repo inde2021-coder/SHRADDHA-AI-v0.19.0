@@ -17,13 +17,13 @@ def parse_android_command(raw):
         return {"kind": "scroll", "amount": 5}
     if lower in {"scroll down", "नीचे scroll", "नीचे स्क्रॉल"}:
         return {"kind": "scroll", "amount": -5}
-    match = re.match(r"^(?:open file|फ़ाइल खोलो|फाइल खोलो)\\s+(.+)$", command, re.I)
+    match = re.match(r"^(?:open file|फ़ाइल खोलो|फाइल खोलो)\s+(.+)$", command, re.I)
     if match:
         path = match.group(1).strip()
         if len(path) > 260 or not re.fullmatch(r"[A-Za-z0-9 _.-]+(?:/[A-Za-z0-9 _.-]+)*", path) or any(part in {".", ".."} for part in path.split("/")):
             raise ValueError("Use a relative path inside Documents, Downloads or Desktop.")
         return {"kind": "open_file", "path": path}
-    match = re.match(r"^(?:open folder|open directory|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", command, re.I)
+    match = re.match(r"^(?:open folder|open directory|फ़ोल्डर खोलो|फोल्डर खोलो)\s+(.+)$", command, re.I)
     if match:
         path = match.group(1).strip()
         if len(path) > 260 or not re.fullmatch(r"[A-Za-z0-9 _.-]+(?:/[A-Za-z0-9 _.-]+)*", path) or any(part in {".", ".."} for part in path.split("/")):
