@@ -61,6 +61,8 @@ import com.Lia.assistant.voice.ShraddhaSpeechClient
 import com.Lia.assistant.voice.LanguageDetector
 import `in`.shraddha.ai.brain.PersistentChatMemory
 import `in`.shraddha.ai.brain.LocalKnowledgeBase
+import `in`.shraddha.ai.brain.LocalKnowledgeDocumentStore
+import `in`.shraddha.ai.brain.LocalKnowledgeAnswer
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
 import com.Lia.assistant.voice.NovaOrbState
@@ -144,9 +146,20 @@ fun ChatScreen(
                     relevantMemory.joinToString("\n")
             } else ""
             val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
-            val result = `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
-                context, appState.aiProvider, boundedInstruction, historySnapshot
-            )
+
+            // Imported documents are searched locally first. A confident extractive match is
+            // answered on-device and is never copied into a cloud prompt without separate consent.
+            val localKnowledgeHits = runCatching {
+                LocalKnowledgeDocumentStore(context.applicationContext).search(trimmed, limit = 8).getOrThrow()
+            }.getOrDefault(emptyList())
+            val localKnowledgeAnswer = LocalKnowledgeAnswer.build(trimmed, localKnowledgeHits)
+            val result = if (localKnowledgeAnswer != null) {
+                ChatReplyResult.Success(localKnowledgeAnswer.text)
+            } else {
+                `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
+                    context, appState.aiProvider, boundedInstruction, historySnapshot
+                )
+            }
 
             if (result is ChatReplyResult.Success) {
                 PersistentChatMemory.record(context, "Assistant", result.text)
