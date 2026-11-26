@@ -30,21 +30,23 @@ def _required_file(env_name: str) -> Path:
 
 
 def _read_pcm16_mono(path: Path) -> tuple[list[float], int]:
-    try:
-        import numpy as np
-    except ImportError as exc:
-        raise LanguageRuntimeError("Install optional language runtime dependencies first.") from exc
+    import array
     with wave.open(str(path), "rb") as wav:
         channels, width, rate = wav.getnchannels(), wav.getsampwidth(), wav.getframerate()
         if width != 2 or channels not in (1, 2):
             raise LanguageRuntimeError("ASR input must be 16-bit PCM WAV with one or two channels.")
         frames = wav.readframes(wav.getnframes())
-    audio = np.frombuffer(frames, dtype="<i2").astype("float32") / 32768.0
+    samples = array.array("h")
+    samples.frombytes(frames)
+    if __import__("sys").byteorder != "little":
+        samples.byteswap()
     if channels == 2:
-        audio = audio.reshape(-1, 2).mean(axis=1)
+        mono = [(samples[i] + samples[i + 1]) / 65536.0 for i in range(0, len(samples), 2)]
+    else:
+        mono = [sample / 32768.0 for sample in samples]
     if rate != 16000:
         raise LanguageRuntimeError(f"ASR input must be 16 kHz mono after downmix/resampling; file is {rate} Hz.")
-    return audio.tolist(), rate
+    return mono, rate
 
 
 class IndicConformerRuntime:
