@@ -304,9 +304,11 @@ fun DeviceCenterScreen(navController: NavController) {
                                     val progress = outgoingProgress
                                     scope.launch {
                                         val current = outgoingFile?.takeIf { it.transferId == item.transferId } ?: item
-                                        val updated = withContext(Dispatchers.IO) {
-                                            DeviceFileTransferSender.updateProgress(current, progress)
-                                        }
+                                        val updated = runCatching {
+                                            withContext(Dispatchers.IO) {
+                                                DeviceFileTransferSender.updateProgress(current, progress)
+                                            }
+                                        }.getOrNull() ?: return@launch
                                         if (outgoingFile?.transferId == item.transferId &&
                                             updated.sentChunks >= (outgoingFile?.sentChunks ?: 0)) outgoingFile = updated
                                     }
