@@ -270,6 +270,9 @@ object VoiceGatewaySettings {
             .url(config.baseUrl.trimEnd('/') + "/api/ai/gemini-live-token")
             .header("Authorization", "Bearer ${config.gatewayToken}")
             .post(body).build()
+        // Token setup can be delayed by local storage/config work; consent must still
+        // be enabled at the exact network-dispatch boundary.
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
