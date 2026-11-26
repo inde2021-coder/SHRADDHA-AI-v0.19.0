@@ -36,6 +36,8 @@ class PcCommandInterpreterTest {
         val hindi = PcCommandInterpreter.parse("फ़ाइल खोलो Documents/report.pdf").getOrThrow()
         assertEquals("file_open", hindi.getString("kind"))
         assertEquals("Documents/report.pdf", hindi.getString("path"))
+        val windows = PcCommandInterpreter.parse("open file Documents\\\\report.pdf").getOrThrow()
+        assertEquals("Documents/report.pdf", windows.getString("path"))
         assertFalse(PcCommandInterpreter.parse("open file ../Windows/win.ini").isSuccess)
         assertFalse(PcCommandInterpreter.parse("फ़ाइल खोलो C:/Windows/win.ini").isSuccess)
         assertFalse(PcCommandInterpreter.parse("open file .ssh/key").isSuccess)
