@@ -135,6 +135,8 @@ class ProtocolTests(unittest.TestCase):
             {"kind": "type", "text": "Send this exact approved text"}
         )
         self.assertIn("0123456789abcdef01234567", summary)
+        self.assertIn("\nExact requested action", summary)
+        self.assertNotIn("\\nExact requested action", summary)
         self.assertIn('"kind": "type"', summary)
         self.assertIn('"text": "Send this exact approved text"', summary)
         self.assertIsNone(remote_action_approval_summary("", {"kind": "home"}))
