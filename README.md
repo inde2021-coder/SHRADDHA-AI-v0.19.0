@@ -23,3 +23,11 @@ The Android **AI Work Agent** is available from the Mobile Command Center. It co
 - Starting the separately user-enabled Live Eyes foreground service releases the in-app preview camera first; stopping Live Eyes returns the preview to the screen.
 - Live Eyes is not a hidden camera feature: Android camera privacy indicators and its persistent foreground notification remain visible, with a Stop action.
 - Core Visual Lens does not require ARCore or Google Play Services for AR.
+
+## AI Brain, Online Consent and Custom Voice
+
+- Online AI consent is OFF by default and is enforced by the central consent policy at chat, provider discovery, Gemini Live, direct provider, plugin, form extraction, Visual Lens and custom speech request boundaries. Revoking consent stops live voice, cancels pending custom speech synthesis, and prevents new stream chunks or prompt dispatch.
+- Provider keys remain in the Android encrypted key stores or on the HTTPS relay; they are not embedded in the APK. Provider routing is explicit: an unavailable configured cloud route is surfaced instead of silently charging a second local provider.
+- The custom Shraddha TTS engine is a separate self-hosted Piper service. See [voice-engine/README.md](voice-engine/README.md) for the hardened Docker Compose setup and relay configuration.
+- Hindi and English Shraddha voice model weights are intentionally not included. Supply licensed model files and matching `.onnx.json` files before the custom voice endpoint can report both models ready. A generic pretrained Piper voice is not represented as a unique Shraddha identity.
+- The custom voice service binds to localhost by default and accepts one synthesis job at a time. For a hosted relay, expose it only through a trusted HTTPS reverse proxy and configure the same strong `SHRADDHA_TTS_TOKEN` on the voice service and relay.
