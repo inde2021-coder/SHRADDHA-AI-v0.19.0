@@ -67,17 +67,17 @@ class LiveEyesCameraService : Service() {
             .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false)
         val config = VoiceGatewaySettings.get(this)
         val backendReady = config.readError == null && config.baseUrl.startsWith("https://") && config.gatewayToken.isNotBlank()
-        if (cloudEnabled && !backendReady) {
-            updateNotification((config.readError ?: "Cloud दृश्य विश्लेषण के लिए सुरक्षित HTTPS backend आवश्यक है").take(120))
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        // A missing cloud gateway must never disable the local-first camera path.
+        // Cloud frames are independently gated below; local OCR/object tracking remains active.
         closeCamera()
         previousObservation = ""
         lastAnnouncedAt = 0L
         lastCloudAnalysisAt = 0L
-        updateNotification(if (cloudEnabled) "Live Eyes active • local + consented cloud understanding"
-            else "Live Eyes active • on-device OCR and object tracking only")
+        updateNotification(
+            if (cloudEnabled && backendReady) "Live Eyes active • local + consented cloud understanding"
+            else if (cloudEnabled) "Live Eyes active • local-only (secure cloud backend unavailable)"
+            else "Live Eyes active • on-device OCR and object tracking only"
+        )
         openHeadlessCamera(if (backendReady) config.baseUrl else "", if (backendReady) config.gatewayToken else "")
         return START_NOT_STICKY
     }
