@@ -164,10 +164,14 @@ export function canCompleteFileTransfer(transfer, ok) {
 
 export function canStartFileTransfer(device, transferId, maxActive = 1) {
   const transfers = device?.incomingTransfers;
-  return transfers instanceof Map &&
-    typeof transferId === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(transferId) &&
-    Number.isSafeInteger(maxActive) && maxActive >= 1 && maxActive <= 16 &&
-    transfers.size < maxActive && !transfers.has(transferId);
+  if (!(transfers instanceof Map) ||
+      typeof transferId !== 'string' || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
+      !Number.isSafeInteger(maxActive) || maxActive < 1 || maxActive > 16 ||
+      transfers.has(transferId)) return false;
+  // Retain completed receipts for idempotent final-ACK recovery without blocking
+  // the user from starting a later transfer during the receipt retention window.
+  const activeCount = [...transfers.values()].filter(item => item?.completed !== true).length;
+  return activeCount < maxActive;
 }
 
 /** Synchronize relay ACK state with the receiver's persisted missing-chunk bitmap. */
