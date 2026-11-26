@@ -39,13 +39,12 @@ object DeviceFileTransferReceiver {
     @Synchronized fun accept(context: Context, manifest: Manifest): Boolean {
         active[manifest.transferId]?.let { return it.manifest == manifest }
         loadReceipt(context, manifest.transferId)?.let { receipt ->
-            // A durable receipt means the payload passed SHA-256 verification and was
-            // published before the completion ACK. Match the full manifest identity.
-            return receipt.peerId == manifest.peerId &&
-                receipt.transferId == manifest.transferId &&
-                receipt.fileName == manifest.fileName &&
-                receipt.sizeBytes == manifest.sizeBytes &&
-                receipt.sha256.equals(manifest.sha256, ignoreCase = true)
+            val published = promoteReceipt(context, receipt) ?: return false
+            return published.peerId == manifest.peerId &&
+                published.transferId == manifest.transferId &&
+                published.fileName == manifest.fileName &&
+                published.sizeBytes == manifest.sizeBytes &&
+                published.sha256.equals(manifest.sha256, ignoreCase = true)
         }
         val directory = receivedDirectory(context)
         if (!directory.exists() && !directory.mkdirs()) return false
@@ -149,10 +148,10 @@ object DeviceFileTransferReceiver {
         val state = active[transferId] ?: run {
             val receipt = loadReceipt(context, transferId)
             if (receipt != null && receipt.peerId == peerId) {
-                // The receipt is written only after final SHA-256 verification. The
-                // user may subsequently move/delete the saved file; that must not
-                // strand the sender waiting for an ACK that was already earned.
-                return ChunkResult(index, true, complete = true, savedPath = receipt.savedPath)
+                // Recover the publish-before-ACK crash window before acknowledging.
+                val published = promoteReceipt(context, receipt)
+                    ?: return ChunkResult(index, false, error = "Verified transfer is awaiting file publication; retry shortly.")
+                return ChunkResult(index, true, complete = true, savedPath = published.savedPath)
             }
             return ChunkResult(index, false, error = "No approved transfer is active.")
         }
@@ -224,6 +223,23 @@ object DeviceFileTransferReceiver {
         return true
     }
 
+    /** Complete a verified receipt left between durable receipt write and atomic publish. */
+    private fun promoteReceipt(context: Context, receipt: CompletedReceipt): CompletedReceipt? = runCatching {
+        val directory = receivedDirectory(context)
+        val destination = File(receipt.savedPath)
+        require(destination.parentFile?.canonicalFile == directory.canonicalFile && !destination.isSymbolicLink())
+        if (destination.isFile && destination.length() == receipt.sizeBytes &&
+            sha256(destination).equals(receipt.sha256, ignoreCase = true)) {
+            return@runCatching receipt.copy(published = true)
+        }
+        require(!destination.exists()) { "Receipt destination is occupied by a different file." }
+        val temp = File(directory, ".${receipt.transferId}.part")
+        require(temp.isFile && !temp.isSymbolicLink() && temp.length() == receipt.sizeBytes &&
+            sha256(temp).equals(receipt.sha256, ignoreCase = true))
+        require(temp.renameTo(destination)) { "Verified file could not be published." }
+        metadataFile(temp).delete()
+        receipt.copy(published = true)
+    }.getOrNull()
     private fun persistReceipt(context: Context, receipt: CompletedReceipt): Boolean = runCatching {
         require(receipt.transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) &&
             receipt.peerId.isNotBlank() && receipt.sizeBytes in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES &&
