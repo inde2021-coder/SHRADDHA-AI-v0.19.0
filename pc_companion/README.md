@@ -77,3 +77,26 @@ From the paired Android Device Center, enter a relative path under the Windows u
 
 
 Screen sharing is off by default, requires a local Windows opt-in, and is restricted to the single Android device ID entered in the control target field; the target must be mutually E2E verified. A peer disconnect automatically stops that stream.
+
+
+## Offline multilingual Language Lab (optional PC models)
+
+The **Offline Language Lab** button opens three local-only adapters. It does not upload audio/text, does not fall back to cloud, and is not part of the small base Android APK.
+
+1. **ASR:** `language_runtime.py` uses Sherpa-ONNX `OfflineRecognizer.from_nemo_ctc` with the Android-ready IndicConformer CTC export for Hindi, Marathi and Sanskrit, and the separate English FastConformer export. Input is 16 kHz PCM WAV. The model and token paths are configured before starting the companion:
+   - `SHRADDHA_ASR_MODEL_HI`, `SHRADDHA_ASR_MODEL_MR`, `SHRADDHA_ASR_MODEL_SA`, `SHRADDHA_ASR_MODEL_EN`
+   - `SHRADDHA_ASR_TOKENS_INDIC` for IndicConformer and `SHRADDHA_ASR_TOKENS_EN` for English.
+   The community model repository documents approximately 190 MB per Indic model and approximately 170 MB for English; download only the languages needed and verify their published checksums and licences before use.
+2. **Translation:** the local IndicTrans2 adapter loads a pre-staged Transformers checkpoint from `SHRADDHA_TRANSLATION_MODEL_DIR`, with `local_files_only=True`. It supports Hindi, English, Sanskrit and Marathi language codes. It does not support Pawari and will reject Pawari requests rather than substitute Hindi.
+3. **TTS:** the local IndicF5 adapter supports Hindi and Marathi, requires a locally selected reference audio clip and its exact transcript, and saves a WAV file locally. Do not use another person's reference voice unless they have explicitly consented to voice synthesis. IndicF5 is reference-guided and is not a unique Shraddha identity by itself.
+
+Install optional packages separately (the base companion build intentionally excludes multi-GB ML stacks):
+
+```powershell
+python -m pip install -r pc_companion/requirements-language.txt
+# Install a PyTorch build suitable for this PC separately from https://pytorch.org/get-started/locally/
+```
+
+Stage model files and set the environment variables in the Windows user environment before launching the companion. No model weights, reference recordings or private dataset are committed to Git. Do not point the app at unlicensed or unverified model copies. Model availability is not the same as language quality approval: run the documented held-out test sets and native-speaker review before enabling a language in production.
+
+**Current limitation:** this is a PC-side optional runtime adapter and Language Lab, not yet an Android microphone/voice-session replacement. Android still needs Sherpa-ONNX native AAR/JNI integration, signed model downloads and device benchmarks. Sanskrit TTS and Pawari ASR/TTS/translation remain unsupported until a suitable model and expert/community review exist.
