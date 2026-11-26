@@ -108,7 +108,7 @@ class ActionTests(unittest.TestCase):
         with patch("pc_companion.actions._active_window", side_effect=[
             (active, "Notepad", (0, 0, 500, 300)),
             (active, "Password Manager", (0, 0, 500, 300)),
-        ]), patch.object(self.gui, "screenshot") as screenshot:
+        ]), patch.object(self.gui, "screenshot", create=True) as screenshot:
             with self.assertRaisesRegex(RuntimeError, "active window changed"):
                 actions.read_active_window_ocr(self.gui)
         screenshot.assert_not_called()
