@@ -46,7 +46,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
     private val store = EncryptedFeatureStore(contextRef)
 
     @Synchronized
-    fun importText(
+    internal fun importText(
         consent: Boolean,
         id: String,
         title: String,
