@@ -33,7 +33,7 @@ object PersonalityPromptBuilder {
                 } else {
                     ""
                 }
-                "Language Policy: Match the language of the user turn by turn (Hindi, Hinglish, or English). Never translate what the user said back to them; simply respond naturally in the exact same language they spoke. $currentHint"
+                "Language Policy: Match the language of the user turn by turn (Hindi, Hinglish, English, Marathi, Sanskrit or a known Pawari variety). Devanagari script alone cannot distinguish Hindi, Marathi and Sanskrit; respect the user-selected language override. Never invent Pawari forms. Never translate what the user said back to them; respond naturally in the same language. $currentHint"
             }
             LanguagePreference.HINDI -> {
                 "Language Policy: Always respond in natural, fluent Hindi (using either conversational Devanagari or intuitive transliteration suited for spoken audio)."
