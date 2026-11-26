@@ -80,8 +80,10 @@ class SkillPackLifecycleManager(context: Context) {
         val publisher = trustedPublishers[manifest.publisherKeyId]
             ?: throw SecurityException("Publisher key is not pinned by this app release.")
         val url = URL(manifest.contentUrl)
-        require(url.protocol.equals("https", true) && url.host.equals(publisher.allowedHost, true)) {
-            "Pack host is not on the pinned publisher allow-list."
+        val source = URL(manifest.sourceUrl)
+        require(url.protocol.equals("https", true) && url.host.equals(publisher.allowedHost, true) &&
+            source.protocol.equals("https", true) && source.host.equals(publisher.allowedHost, true)) {
+            "Content and provenance URLs must use the pinned publisher host over HTTPS."
         }
         val target = File(quarantine, "${manifest.packId}-${manifest.version}.pack")
         val part = File(quarantine, "${manifest.packId}-${manifest.version}.part")
@@ -124,6 +126,7 @@ class SkillPackLifecycleManager(context: Context) {
         } catch (error: Exception) {
             part.delete()
             target.delete()
+            File(quarantine, target.name + ".json").delete()
             throw error
         } finally {
             connection.disconnect()
@@ -184,7 +187,8 @@ class SkillPackLifecycleManager(context: Context) {
         check(pack.file.renameTo(target)) { "Could not atomically move the approved pack into installed storage." }
         val sourceMetadata = File(quarantine, pack.file.name + ".json")
         val targetMetadata = File(target.parentFile, target.name + ".json")
-        if (sourceMetadata.isFile && !sourceMetadata.renameTo(targetMetadata)) {
+        require(sourceMetadata.isFile) { "Pack provenance metadata is missing; activation is blocked." }
+        if (!sourceMetadata.renameTo(targetMetadata)) {
             target.renameTo(pack.file)
             throw IllegalStateException("Could not move pack provenance metadata; pack remains quarantined.")
         }
