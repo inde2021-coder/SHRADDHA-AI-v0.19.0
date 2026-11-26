@@ -42,7 +42,7 @@ These paths must not be treated as additional active Shraddha features. Before a
 
 ## Offline curriculum runtime integration
 
-Eight bundled Markdown packs are installed into the existing encrypted knowledge store before Chat's first local retrieval:
+Nine bundled Markdown packs are installed into the existing encrypted knowledge store before Chat's first local retrieval:
 
 1. Core ten domains — human interaction, education, civic/practical life, organisation, reasoning, technology, language, productivity, safety and professional skills.
 2. Bhagavad Gita, shloka, mantra and katha starter library.
@@ -59,7 +59,7 @@ Limitations: these are authored starter packs, not exhaustive subject corpora. S
 ## Ten training domains mapped to existing systems
 
 1. Human behaviour and everyday interaction → existing conversation memory, personality prompt and conversation quality tests; extend content and test behaviour, not a second personality engine.
-2. General knowledge and education → LocalKnowledgeDocumentStore + versioned content packs; eight bundled starter curriculum packs are now indexed offline; the broader corpus still needs expansion and review.
+2. General knowledge and education → LocalKnowledgeDocumentStore + versioned content packs; nine bundled starter curriculum packs are now indexed offline; the broader corpus still needs expansion and review.
 3. India, culture, civic and practical life → same knowledge-pack pipeline with official sources and freshness metadata.
 4. Personal assistant and organisation → PersonalKnowledgeStore, PersistentChatMemory, UnifiedMemoryRepository and existing reminder/routine/action paths; verify complete UI/CRUD before adding anything.
 5. Reasoning and decision support → OfflineCommandEngine and existing multi-role planning tool; planning is not equivalent to executing or verifying a task.
