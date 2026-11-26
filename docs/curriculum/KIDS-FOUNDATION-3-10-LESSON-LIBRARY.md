@@ -1,6 +1,6 @@
 # Shraddha AI Kids Foundation — Lesson Library (Ages 3–10)
 
-**Pack ID:** `kids-foundation-hi-en-3-10` · **Version:** 1.0.0 · **Status:** authored foundational content; educator review and runtime integration required.
+**Pack ID:** `kids-foundation-hi-en-3-10` · **Version:** 1.0.0 · **Status:** authored starter content, bundled in the APK offline Knowledge Library; educator review and expanded lesson coverage required.
 **Approach:** play-based, inclusive, low-pressure learning aligned in spirit with India's Foundational Literacy and Numeracy (FLN) framework. This is not a claimed official NCERT/CBSE/state-board syllabus.
 
 ## Teaching contract
