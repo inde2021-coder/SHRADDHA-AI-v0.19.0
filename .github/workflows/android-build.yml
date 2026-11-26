@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - main
+      - feature/indic-language-runtime-and-pawari-data
       - audit-fixes-v0.19.1
       - redesign-v0.19.2
       - 'optimization/**'
