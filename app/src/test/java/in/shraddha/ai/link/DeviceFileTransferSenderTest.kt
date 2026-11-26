@@ -86,4 +86,22 @@ class DeviceFileTransferSenderTest {
         assertTrue(DeviceFileTransferSender.pending(directory).isEmpty())
     }
 
+    @Test fun persistedAcknowledgedProgressNeverMovesBackward() {
+        val directory = temporaryFolder.newFolder("monotonic-progress")
+        val source = java.io.File(directory, "outgoing.part")
+        val payload = "progress".toByteArray()
+        source.writeBytes(payload)
+        val prepared = DeviceFileTransferSender.Prepared(
+            file = source, transferId = "transfer_765432", fileName = "progress.txt",
+            sizeBytes = payload.size.toLong(), chunkCount = 3,
+            sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(payload)
+                .joinToString("") { "%02x".format(it) }
+        )
+        val first = DeviceFileTransferSender.updateProgress(prepared, 2)
+        val stale = DeviceFileTransferSender.updateProgress(prepared, 1)
+        assertEquals(2, first.sentChunks)
+        assertEquals(2, stale.sentChunks)
+        DeviceFileTransferSender.cleanup(stale)
+    }
+
 }
