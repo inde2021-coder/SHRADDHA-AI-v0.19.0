@@ -29,6 +29,28 @@ class PcCommandInterpreterTest {
         assertEquals("Submit", PcCommandInterpreter.parse("बटन दबाओ Submit").getOrThrow().getString("text"))
     }
 
+    @Test fun parsesHindiAndEnglishFileOpenCommandsSafely() {
+        val english = PcCommandInterpreter.parse("open file Documents/report.pdf").getOrThrow()
+        assertEquals("file_open", english.getString("kind"))
+        assertEquals("Documents/report.pdf", english.getString("path"))
+        val hindi = PcCommandInterpreter.parse("फ़ाइल खोलो Documents/report.pdf").getOrThrow()
+        assertEquals("file_open", hindi.getString("kind"))
+        assertEquals("Documents/report.pdf", hindi.getString("path"))
+        assertFalse(PcCommandInterpreter.parse("open file ../Windows/win.ini").isSuccess)
+        assertFalse(PcCommandInterpreter.parse("फ़ाइल खोलो C:/Windows/win.ini").isSuccess)
+        assertFalse(PcCommandInterpreter.parse("open file .ssh/key").isSuccess)
+    }
+
+    @Test fun parsesHindiAndEnglishFileSearchCommands() {
+        val english = PcCommandInterpreter.parse("search files invoice").getOrThrow()
+        assertEquals("file_search", english.getString("kind"))
+        assertEquals("invoice", english.getString("query"))
+        val hindi = PcCommandInterpreter.parse("फ़ाइल खोजो बिल").getOrThrow()
+        assertEquals("file_search", hindi.getString("kind"))
+        assertEquals("बिल", hindi.getString("query"))
+        assertFalse(PcCommandInterpreter.parse("find files x").isSuccess)
+    }
+
     @Test fun rejectsUnknownAndSensitiveCommands() {
         assertFalse(PcCommandInterpreter.parse("do anything").isSuccess)
         assertFalse(PcCommandInterpreter.parse("type my password 123").isSuccess)
