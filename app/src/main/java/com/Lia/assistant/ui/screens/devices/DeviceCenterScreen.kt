@@ -101,7 +101,7 @@ fun DeviceCenterScreen(navController: NavController) {
     var receivedFiles by remember { mutableStateOf(DeviceFileTransferReceiver.listReceived(context)) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
     var outgoingFile by remember { mutableStateOf(DeviceFileTransferSender.pending(File(context.filesDir, "OutgoingTransfers")).firstOrNull()) }
-    var outgoingProgress by remember { mutableStateOf(0) }
+    var outgoingProgress by remember { mutableStateOf(outgoingFile?.sentChunks ?: 0) }
     var outgoingSending by remember { mutableStateOf(false) }
     val exportFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val source = pendingExportFile
@@ -671,8 +671,13 @@ fun DeviceCenterScreen(navController: NavController) {
             outgoingFile?.let { item ->
                 Text("${item.fileName} • ${item.sizeBytes / 1024} KB • ${outgoingProgress}/${item.chunkCount} chunks", color = colors.textPrimary, fontSize = 11.sp)
                 NovaButton(text = "Resume / Retry", onClick = {
+                    if (item.peerId.isBlank() || item.peerId != selectedPeerId || !DeviceLinkManager.isE2ETrusted(item.peerId)) {
+                        incomingTransferStatus = "इस pending transfer के लिए वही trusted PC चुनें।"
+                    } else {
+                    val requested = DeviceLinkManager.requestFileTransferResume(selectedPeerId, item.transferId, item.chunkCount, emptyList())
                     val requested = DeviceLinkManager.requestFileTransferResume(selectedPeerId, item.transferId, item.chunkCount, emptyList())
                     incomingTransferStatus = if (requested) "PC से missing chunks की सूची माँगी गई…" else "Resume request नहीं भेजी जा सकी।"
+                    }
                 }, modifier = Modifier.fillMaxWidth(), type = NovaButtonType.SECONDARY)
                 NovaButton(text = "Cancel transfer", onClick = {
                     DeviceLinkManager.cancelFileTransfer(selectedPeerId, item.transferId, "cancelled_by_phone")
