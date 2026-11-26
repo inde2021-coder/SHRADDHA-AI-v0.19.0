@@ -188,6 +188,30 @@ export function recordPersistedFileTransferChunks(transfer, missingIndexes) {
   return true;
 }
 
+/** Resolve both supported resume directions without trusting a sender-supplied bitmap. */
+export function resolveEncryptedFileTransferResume(actor, target, actorId, targetId, transferId,
+                                                    chunkCount, missingIndexes, now = Date.now()) {
+  if (!actor || !target || !(actor.incomingTransfers instanceof Map) ||
+      !(target.incomingTransfers instanceof Map) ||
+      typeof actorId !== 'string' || typeof targetId !== 'string' || actorId === targetId ||
+      typeof transferId !== 'string' || !/^[A-Za-z0-9_-]{12,64}$/.test(transferId) ||
+      !Number.isSafeInteger(now)) return null;
+  const local = actor.incomingTransfers.get(transferId);
+  if (local && local.fromDeviceId === targetId) {
+    if (local.expiresAt <= now || !Number.isSafeInteger(chunkCount) ||
+        chunkCount !== local.chunkCount || !validMissingTransferIndexes(missingIndexes, chunkCount) ||
+        !recordPersistedFileTransferChunks(local, missingIndexes)) return null;
+    return 'receiver';
+  }
+  const remote = target.incomingTransfers.get(transferId);
+  if (remote && remote.fromDeviceId === actorId) {
+    if (remote.expiresAt <= now || !Number.isSafeInteger(chunkCount) ||
+        chunkCount !== remote.chunkCount || !Array.isArray(missingIndexes) || missingIndexes.length !== 0) return null;
+    return 'sender';
+  }
+  return null;
+}
+
 export function pruneExpiredDeviceState(device, now = Date.now()) {
   if (!device || typeof device !== 'object' || !Number.isFinite(now)) return 0;
   let removed = 0;
