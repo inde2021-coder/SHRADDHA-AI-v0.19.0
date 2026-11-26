@@ -33,7 +33,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError, save_outgoing_transfer_record, load_outgoing_transfer_record, save_completed_transfer_record, load_completed_transfer_records
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError, save_outgoing_transfer_record, load_outgoing_transfer_record, save_completed_transfer_record, load_completed_transfer_records, completed_file_matches
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -1382,11 +1382,8 @@ class PcCompanionApp:
             return
         completed = self.pc_completed.get(transfer_id)
         if completed:
-            completed_path = Path(completed.get("path", ""))
             if (completed.get("peer") == peer_id and completed.get("size") == size and
-                    completed.get("sha256") == digest and completed_path.is_file() and
-                    not completed_path.is_symlink() and completed_path.stat().st_size == size and
-                    sha256_file(completed_path) == digest):
+                    completed.get("sha256") == digest and completed_file_matches(completed)):
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.status_var.set("This transfer was already saved and verified; completion ACK resent.")
@@ -1533,10 +1530,7 @@ class PcCompanionApp:
         if not transfer:
             completed = self.pc_completed.get(transfer_id)
             if completed and completed.get("peer") == peer_id:
-                completed_path = Path(completed.get("path", ""))
-                if (completed_path.is_file() and not completed_path.is_symlink() and
-                        completed_path.stat().st_size == completed.get("size") and
-                        sha256_file(completed_path) == completed.get("sha256")):
+                if completed_file_matches(completed):
                     self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                      "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 else:
@@ -1621,10 +1615,7 @@ class PcCompanionApp:
             peer_id = str(msg.get("fromDeviceId", ""))
             if peer_id != completed.get("peer") or not self.is_e2e_trusted(peer_id):
                 return
-            destination = Path(completed.get("path", ""))
-            if (destination.is_file() and not destination.is_symlink() and
-                    destination.stat().st_size == completed.get("size") and
-                    sha256_file(destination) == completed.get("sha256")):
+            if completed_file_matches(completed):
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.status_var.set("Verified completion ACK resent after reconnect.")
