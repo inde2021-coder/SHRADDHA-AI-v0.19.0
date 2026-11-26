@@ -169,10 +169,18 @@ class IndicF5Runtime:
         try:
             import numpy as np
             import soundfile as sf
-            audio = self.model(text.strip(), ref_audio_path=str(reference), ref_text=reference_transcript.strip())
+            audio = np.asarray(self.model(
+                text.strip(), ref_audio_path=str(reference), ref_text=reference_transcript.strip()
+            ))
+            if audio.dtype == np.int16:
+                audio = audio.astype(np.float32) / 32768.0
+            else:
+                audio = audio.astype(np.float32)
+            if audio.size == 0 or not np.isfinite(audio).all():
+                raise LanguageRuntimeError("IndicF5 returned empty or non-finite audio.")
             target = Path(output_wav).expanduser().resolve()
             target.parent.mkdir(parents=True, exist_ok=True)
-            sf.write(str(target), np.asarray(audio, dtype=np.float32), samplerate=24000)
+            sf.write(str(target), audio, samplerate=24000)
             if not target.is_file() or target.stat().st_size <= 44:
                 raise LanguageRuntimeError("IndicF5 produced an empty audio file.")
             return target
