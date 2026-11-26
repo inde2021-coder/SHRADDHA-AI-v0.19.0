@@ -1091,6 +1091,11 @@ class PcCompanionApp:
                              "transferId": transfer_id, "reason": "partial_destination_exists"})
             self.status_var.set("Transfer blocked: a partial file already exists at the selected destination.")
             return
+        except OSError as exc:
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "destination_unavailable"})
+            self.status_var.set(f"Could not prepare the selected destination: {str(exc)[:120]}")
+            return
         if not self._persist_pc_incoming():
             self.pc_incoming.pop(transfer_id, None)
             Path(destination + ".shraddha-part").unlink(missing_ok=True)
