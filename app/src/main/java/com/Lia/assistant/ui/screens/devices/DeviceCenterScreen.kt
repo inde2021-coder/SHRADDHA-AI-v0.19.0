@@ -100,7 +100,7 @@ fun DeviceCenterScreen(navController: NavController) {
     var incomingTransferStatus by remember { mutableStateOf("") }
     var receivedFiles by remember { mutableStateOf(DeviceFileTransferReceiver.listReceived(context)) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
-    var outgoingFile by remember { mutableStateOf<DeviceFileTransferSender.Prepared?>(null) }
+    var outgoingFile by remember { mutableStateOf(DeviceFileTransferSender.pending(File(context.filesDir, "OutgoingTransfers")).firstOrNull()) }
     var outgoingProgress by remember { mutableStateOf(0) }
     var outgoingSending by remember { mutableStateOf(false) }
     val exportFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
@@ -184,6 +184,7 @@ fun DeviceCenterScreen(navController: NavController) {
                                         bytes.fill(0)
                                         if (!sent) { incomingTransferStatus = "Chunk भेजना असफल।"; outgoingSending = false; return@launch }
                                         outgoingProgress = chunkIndex + 1
+                                        outgoingFile = DeviceFileTransferSender.updateProgress(item, outgoingProgress)
                                     }
                                     incomingTransferStatus = "सभी chunks भेजे गए; PC verification की प्रतीक्षा…"
                                 }
@@ -212,6 +213,7 @@ fun DeviceCenterScreen(navController: NavController) {
                                     val sent = DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes)
                                     bytes.fill(0)
                                     if (!sent) { incomingTransferStatus = "Retry chunk send failed."; outgoingSending = false; return@launch }
+                                    outgoingFile = DeviceFileTransferSender.updateProgress(item, maxOf(item.sentChunks, chunkIndex + 1))
                                 }
                                 incomingTransferStatus = "Missing chunks resent; waiting for PC verification…"
                             }
@@ -305,13 +307,14 @@ fun DeviceCenterScreen(navController: NavController) {
                     runCatching {
                         val name = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
                             ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-                        DeviceFileTransferSender.prepare(context.contentResolver, uri, context.cacheDir, name)
+                        DeviceFileTransferSender.prepare(context.contentResolver, uri, File(context.filesDir, "OutgoingTransfers"), name)
                     }
                 }
-                prepared.onSuccess { item ->
+                prepared.onSuccess { staged ->
+                    val item = DeviceFileTransferSender.bindPeer(staged, peer)
                     val started = DeviceLinkManager.startFileTransfer(peer, java.util.UUID.randomUUID().toString().replace("-", ""),
                         item.transferId, item.fileName, item.sizeBytes, item.chunkCount, item.sha256)
-                    if (started) { outgoingFile = item; outgoingProgress = 0; incomingTransferStatus = "PC पर save location चुनने की प्रतीक्षा…" }
+                    if (started) { outgoingFile = item; outgoingProgress = item.sentChunks; incomingTransferStatus = "PC पर save location चुनने की प्रतीक्षा…" }
                     else { DeviceFileTransferSender.cleanup(item); incomingTransferStatus = "PC transfer शुरू नहीं हो सका।"; outgoingSending = false }
                 }.onFailure { incomingTransferStatus = "फ़ाइल तैयार नहीं हुई: ${it.message ?: "unknown error"}"; outgoingSending = false }
             }
