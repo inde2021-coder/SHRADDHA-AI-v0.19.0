@@ -31,4 +31,4 @@ POST `/synthesize` with Bearer token and JSON:
 
 Response: `audio/pcm`, 24 kHz mono signed-16 little-endian PCM. Health: `GET /health`.
 
-Use a persistent CPU/GPU host or container service, not a short-lived serverless function. Keep models read-only, protect the endpoint with TLS and a strong token, limit request size/rate, and do not log speech text.
+Use a persistent CPU/GPU host or container service, not a short-lived serverless function. The engine accepts one synthesis job at a time and returns HTTP 429 while busy. Keep models read-only, protect the endpoint with TLS and a strong token, limit request size/rate, and do not log speech text. The relay requires `SHRADDHA_TTS_TOKEN` (16-512 characters) and sends it as a Bearer token; configure the same secret on both services.
