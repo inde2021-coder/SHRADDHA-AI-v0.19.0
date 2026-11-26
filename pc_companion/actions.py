@@ -282,7 +282,13 @@ def read_user_text_file(relative_path):
         content = target.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeError) as exc:
         raise RuntimeError("The file is not readable UTF-8 text.") from exc
-    return {"file": str(target.relative_to(root)).replace("\\", "/"), "content": content[:12000], "truncated": len(content) > 12000}
+    safe_content = redact_ocr_text(content)
+    return {
+        "file": str(target.relative_to(root)).replace("\\", "/"),
+        "content": safe_content[:12000],
+        "truncated": len(content) > 12000 or len(safe_content) < len(content),
+        "redacted": safe_content != content[:12000]
+    }
 
 
 _SAFE_OPEN_EXTENSIONS = {".pdf", ".txt", ".md", ".csv", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
