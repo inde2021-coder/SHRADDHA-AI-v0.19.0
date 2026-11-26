@@ -1,0 +1,38 @@
+name: Shraddha Android release security audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/src/main/AndroidManifest.xml"
+      - "app/build.gradle.kts"
+      - "tools/release_security_audit.py"
+      - "tools/tests/test_release_security_audit.py"
+      - ".github/workflows/release-security-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/src/main/AndroidManifest.xml"
+      - "app/build.gradle.kts"
+      - "tools/release_security_audit.py"
+      - "tools/tests/test_release_security_audit.py"
+      - ".github/workflows/release-security-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile release audit tooling
+        run: python -m py_compile tools/release_security_audit.py
+      - name: Test release audit rules
+        run: python -m unittest discover -s tools/tests -p "test_release_security_audit.py" -v
+      - name: Audit Android release configuration and repository credentials
+        run: python tools/release_security_audit.py
