@@ -162,12 +162,12 @@ fun ApiKeysScreen(navController: NavController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var vaultAccess by remember { mutableStateOf(!PasswordProtectedApiKeyVault.isConfigured(context) || PasswordProtectedApiKeyVault.isUnlocked()) }
+    var vaultAccess by remember { mutableStateOf(PasswordProtectedApiKeyVault.isConfigured(context) && PasswordProtectedApiKeyVault.isUnlocked()) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
-                vaultAccess = !PasswordProtectedApiKeyVault.isConfigured(context) || PasswordProtectedApiKeyVault.isUnlocked()
+                vaultAccess = PasswordProtectedApiKeyVault.isConfigured(context) && PasswordProtectedApiKeyVault.isUnlocked()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
