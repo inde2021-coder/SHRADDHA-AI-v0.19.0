@@ -37,5 +37,5 @@ The label Pawari/Powari is not a sufficient training label by itself. Historical
 - Pawari Dictionary (creator/about): https://pawaridictionary.rfhindi.com/public/page/about-us
 - LDC-IL Pawari Parallel Text Corpus catalogue: https://www.ldcil.org/resourcesparallel
 - VAANI dataset portal: https://vaani.iisc.ac.in/dataset
-- PLSI Madhya Pradesh language survey reference: https://www.orientblackswan.com/details?id=9788125059714
+- PLSI Madhya Pradesh language survey reference: https://dev.orientblackswan.com/pdfs/downloads/ELT_2015.pdf
 - Glottolog reference for Pawari/Pawri/Bareli-Rathwi naming: https://glottolog.org/resource/reference/id/318353
