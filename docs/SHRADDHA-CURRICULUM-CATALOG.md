@@ -165,7 +165,7 @@ These are supporting product capabilities, not ten extra academic subjects:
 
 
 ## I. Authored lesson libraries added (2026-11-26)
-The following files contain actual starter lesson content, activities, examples, checks and answer keys—not only topic names. They are versioned authoring sources; app import, UI, pack manifests, independent review and runtime loading are still required.
+The following files contain actual starter lesson content, activities, examples, checks and answer keys—not only topic names. Nine versioned packs (including the full catalogue and advanced practical skills) are bundled and loaded into the encrypted offline Knowledge Library. Curriculum browser/progress UI, independent review and exhaustive subject coverage remain required.
 
 | Library | Content included | Review gate |
 |---|---|---|
