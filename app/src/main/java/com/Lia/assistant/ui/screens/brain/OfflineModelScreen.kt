@@ -91,6 +91,10 @@ fun OfflineModelScreen(navController: NavController) {
                     require(temporary.length() >= MIN_MODEL_BYTES) { "Model file is too small to be a valid LiteRT-LM model." }
                     // Verify the complete temporary file before replacing a known-good model.
                     val digest = sha256File(temporary)
+                    // The active engine may still hold the previous model at the same path.
+                    // Close it before the atomic replacement so the next inference reloads
+                    // the newly imported bytes instead of continuing with a stale engine.
+                    LocalOfflineLlm.close()
                     val backup = File(folder, "previous.litertlm.bak")
                     if (backup.exists()) backup.delete()
                     val hadPrevious = target.exists()
