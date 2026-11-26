@@ -165,6 +165,11 @@ def _safe_user_path(relative_path, *, must_exist=True):
         raise RuntimeError("Access to sensitive folders is blocked.")
     root = Path.home().resolve(strict=True)
     candidate = root.joinpath(*parts)
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError("Symbolic links are blocked for remote file access.")
     resolved = candidate.resolve(strict=must_exist)
     try:
         resolved.relative_to(root)
