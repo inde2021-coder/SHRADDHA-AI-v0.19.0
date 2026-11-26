@@ -22,7 +22,7 @@ class TrainingCurriculumInstallerInstrumentedTest {
             val document = documents[pack.id]
             assertNotNull("Missing installed pack: ${pack.id}", document)
             assertTrue("Empty pack: ${pack.id}", document!!.content.isNotBlank())
-            assertTrue("Pack integrity metadata missing: ${pack.id}", document.sourceLabel.contains("SHA-256"))
+            assertTrue("Pack integrity metadata missing: ${pack.id}", document.sourceLabel.contains("built-in curriculum"))
         }
     }
 
