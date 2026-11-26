@@ -445,7 +445,7 @@ private fun SettingsScreenContent(
                 )
                 NovaSettingsRow(
                     title = "Allow Online AI",
-                    subtitle = "Off by default. When enabled, Chat may send prompts to your selected provider; provider charges or free-tier limits depend on that provider.",
+                    subtitle = "Off by default. When enabled, cloud AI features such as Chat, Voice and supported assistant tools may send the content needed for that feature to the configured provider. Provider pricing and quotas vary; this switch is consent, not a free-only or spending cap.",
                     icon = Icons.Default.Security,
                     switch = allowOnlineAi,
                     onCheckedChange = { enabled ->
