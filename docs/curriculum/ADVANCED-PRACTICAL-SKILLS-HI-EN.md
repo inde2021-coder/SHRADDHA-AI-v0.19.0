@@ -47,8 +47,8 @@ For each topic: understand the goal → identify what is known and missing → e
 ### Lesson B2 — Stock ledger
 - Closing stock = opening + purchases/receipts + accepted returns − sales/dispatch − verified damage/loss ± authorised adjustments.
 - Track quantity and unit, not just value. A missing item is an investigation record, not an automatic customer charge.
-- Practice: 500 chairs − 250 dispatched + 200 returned − 50 verified missing = 400 chairs.
-- Check: compare system balance with a physical count and record who approved each adjustment.
+- Practice: 500 chairs − 250 dispatched + 200 returned = 450 chairs. Record 50 missing as a discrepancy for investigation; do not deduct it again from book stock or charge a customer automatically.
+- Check: compare system balance with a physical count and record who approved any stock adjustment.
 
 ### Lesson B3 — Quotation and customer order
 - Capture customer, date, item description, quantity, unit, rate, discount, taxes if applicable, delivery terms, validity and payment terms.
