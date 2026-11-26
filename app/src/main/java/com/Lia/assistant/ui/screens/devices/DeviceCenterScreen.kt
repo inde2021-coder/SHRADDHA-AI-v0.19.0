@@ -249,9 +249,13 @@ fun DeviceCenterScreen(navController: NavController) {
                         if (peerOnline) flushCompletedIncomingReceipts(peerId)
                     }
                     "data_share_request" -> {
+                        val requesterId = message.optString("fromDeviceId")
                         if (message.optString("category") == "documents" &&
-                            message.optString("requestId").matches(Regex("[A-Za-z0-9_-]{12,64}"))) {
+                            message.optString("requestId").matches(Regex("[A-Za-z0-9_-]{12,64}")) &&
+                            DeviceLinkManager.isE2ETrusted(requesterId)) {
                             pendingShareRequest = JSONObject(message.toString())
+                        } else {
+                            status = "Unverified PC file-share request blocked."
                         }
                     }
                     "remote_action_result" -> {
