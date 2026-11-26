@@ -4,7 +4,7 @@ Status: implementation in progress; no end-to-end Android device validation has 
 
 ## 1. ASR runtime selected
 
-- Runtime: sherpa-onnx Android AAR, pinned to v2.0.1 through JitPack.
+- Runtime: sherpa-onnx Android artifact, pinned to v1.13.5 through JitPack (the Android-specific Maven coordinate).
 - Android API: `OfflineRecognizer` + `OfflineNemoEncDecCtcModelConfig`, matching the IndicConformer CTC exports.
 - Audio contract: mono Float32 PCM, 16 kHz.
 - Model files are downloaded to app-private storage, written as `.part`, checked against source-controlled SHA-256 pins, then installed. Unpinned artifacts are blocked.
