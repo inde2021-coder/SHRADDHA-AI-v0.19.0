@@ -131,13 +131,7 @@ object MainBrainProviderGateway {
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 runCatching { com.Lia.assistant.voice.ProviderTokenUsage(provider, cloud.model, cloud.inputTokens, cloud.outputTokens) }.getOrNull()
             } else null
-            if (usage == null) {
-                runCatching { CouncilCostBudget.stopIfUsageUnknown(context, provider, cloud.model) }
-                    .onFailure { return ChatReplyResult.Error(it.message ?: "Provider usage could not be verified.") }
-            } else {
-                runCatching { CouncilCostBudget.recordUsageAndEnforce(context, usage) }
-                    .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget stopped this request.") }
-            }
+            // VoiceGatewaySettings.executeAgent meters this response at the transport boundary.
             return ChatReplyResult.Success(cloud.text, usage)
         }
         // Direct device API keys are an explicit fallback only when the gateway has no key for this provider.
@@ -185,11 +179,8 @@ object MainBrainProviderGateway {
         VoiceGatewaySettings.executeAgent(context, providerName, "Main Brain", systemInstruction, prompt)?.let { cloud ->
             val usage = if (cloud.inputTokens != null && cloud.outputTokens != null && !cloud.model.isNullOrBlank()) {
                 com.Lia.assistant.voice.ProviderTokenUsage(providerName.uppercase(), cloud.model, cloud.inputTokens, cloud.outputTokens)
-            } else {
-                CouncilCostBudget.stopIfUsageUnknown(context, providerName, cloud.model)
-                null
-            }
-            if (usage != null) CouncilCostBudget.recordUsageAndEnforce(context, usage)
+            } else null
+            // VoiceGatewaySettings.executeAgent meters this response at the transport boundary.
             return cloud.text to usage
         }
         return when (val result = reply(context, providerName, systemInstruction, listOf(ChatTurn(true, prompt.take(8_000))))) {
