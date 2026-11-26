@@ -369,11 +369,11 @@ Return JSON only."""
             .setTitle("AKKPS रिकॉर्ड की अंतिम जाँच")
             .setMessage("ये मान AKKPS में जमा किए जाएँगे। नाम, गाँव और अन्य जानकारी जाँच लें।\n\n$preview")
             .setNegativeButton("वापस जाँचें", null)
-            .setPositiveButton("सही है — Submit करें") { _, _ -> submitForm() }
+            .setPositiveButton("सही है — Submit करें") { _, _ -> submitForm(values) }
             .show()
     }
 
-    private fun submitForm() {
+    private fun submitForm(expectedValues: List<Pair<String, String>>) {
         val js = """
             (function(){
               const path=(location.pathname||'').toLowerCase();
@@ -404,196 +404,76 @@ Return JSON only."""
                 return@evaluateJavascript
             }
             status.text = "Submit request भेजी गई। AKKPS response जाँचा जा रहा है…"
-            web.postDelayed({ verifySubmit(before) }, 1500)
+            web.postDelayed({ verifySubmit(before, expectedValues) }, 1800)
         }
     }
 
-    private fun verifySubmit(beforeUrl: String) {
+    /** A success toast alone is not proof. Find the matching saved row, open it, and compare values. */
+    private fun verifySubmit(beforeUrl: String, expectedValues: List<Pair<String, String>>) {
+        val expected = JSONArray()
+        expectedValues.forEach { (_, value) -> expected.put(value) }
         val js = """
-            (function(){
-              const t=(document.body?.innerText||'').replace(/\s+/g,' ').trim();
-              return JSON.stringify({success:/success|submitted|saved successfully|created successfully|record saved|सफलतापूर्वक|जमा हो गया/i.test(t),
-                error:/failed|error|invalid|unable to|try again|त्रुटि|असफल/i.test(t)});
-            })()
-        """.trimIndent()
-        web.evaluateJavascript(js) { raw ->
-            val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
-            status.text = when {
-                o?.optBoolean("success") == true -> "AKKPS पेज पर सफलता संदेश मिला। Submit की पुष्टि दिखाई दे रही है।"
-                o?.optBoolean("error") == true -> "AKKPS ने त्रुटि दिखाई। Submit सफल नहीं माना गया।"
-                web.url.orEmpty() != beforeUrl -> "पेज बदल गया, लेकिन स्पष्ट सफलता संदेश नहीं मिला। रिकॉर्ड सूची में जाँचें।"
-                else -> "स्पष्ट सफलता प्रमाण नहीं मिला। Submit को सफल नहीं माना गया।"
-            }
-        }
-    }
-
-    /** Uses the device speech service with offline preference and no Shraddha API key. */
-    private fun startVoiceCommand() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MIC)
-            return
-        }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.text = "इस फोन में Speech Recognition service उपलब्ध नहीं है।"
-            return
-        }
-        runCatching {
-            speechRecognizer?.destroy()
-            speechRecognizer = if (Build.VERSION.SDK_INT >= 31 &&
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(this)
-            }
-            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { status.text = "बोलिए… Offline recognition उपलब्ध होने पर डिवाइस पर समझा जाएगा।" }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { status.text = "आवाज़ समझी जा रही है…" }
-                override fun onError(error: Int) { status.text = "आवाज़ नहीं समझी गई (कोड \${error})। दोबारा बोलें।" }
-                override fun onResults(results: Bundle?) {
-                    val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    if (spoken.isBlank()) { status.text = "कोई आवाज़ पहचानी नहीं गई।"; return }
-                    handleVoiceCommand(spoken)
-                }
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN")
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            }
-            speechRecognizer?.startListening(intent)
-        }.onFailure { status.text = "Voice engine शुरू नहीं हुआ: \${it.localizedMessage ?: "unknown error"}" }
-    }
-
-    private fun handleVoiceCommand(spoken: String) {
-        val value = spoken.trim()
-        command.setText(value)
-        val normalized = value.lowercase()
-        when {
-            listOf("बाउंड्री शुरू", "सीमा बनाओ", "मैप पर सीमा", "boundary start").any(normalized::contains) -> startBoundaryDraft()
-            listOf("क्षेत्रफल निकाल", "एरिया निकाल", "area calculate").any(normalized::contains) -> calculateBoundaryArea()
-            listOf("बाउंड्री हटाओ", "सीमा साफ", "clear boundary").any(normalized::contains) -> clearBoundaryDraft()
-            listOf("मैप देखो", "स्क्रीन देखो", "आँख से देख").any(normalized::contains) -> inspectVisualScreen()
-            else -> executeCommand()
-        }
-    }
-
-    /** On-device OCR reads the AKKPS WebView; screenshots are never uploaded. */
-    private fun inspectVisualScreen() {
-        if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
-            status.text = "पहले AKKPS का सुरक्षित पेज खोलें।"; return
-        }
-        web.post {
-            if (web.width <= 0 || web.height <= 0) { status.text = "मैप स्क्रीन अभी तैयार नहीं है।"; return@post }
-            val bitmap = Bitmap.createBitmap(web.width, web.height, Bitmap.Config.ARGB_8888)
-            web.draw(Canvas(bitmap))
-            val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-            val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
-            val image = InputImage.fromBitmap(bitmap, 0)
-            val latinTask = latin.process(image)
-            val devanagariTask = devanagari.process(image)
-            com.google.android.gms.tasks.Tasks.whenAllComplete(latinTask, devanagariTask)
-                .addOnSuccessListener {
-                    val text = listOf(latinTask.result?.text, devanagariTask.result?.text)
-                        .filterNotNull().filter { it.isNotBlank() }.distinct().joinToString(" | ")
-                    status.text = if (text.isBlank()) "स्क्रीन डिवाइस पर पढ़ी गई, लेकिन स्पष्ट टेक्स्ट नहीं मिला।"
-                        else "डिवाइस पर स्क्रीन पढ़ी गई: " + text.take(650)
-                    bitmap.recycle(); latin.close(); devanagari.close()
-                }
-                .addOnFailureListener {
-                    bitmap.recycle(); latin.close(); devanagari.close()
-                    status.text = "Offline screen OCR असफल: \${it.localizedMessage ?: "unknown error"}"
-                }
-        }
-    }
-
-    /**
-     * Reuses the map already rendered by AKKPS; no tile provider or map API key.
-     * Tapping map corners is only a correction/fallback when the page exposes its map object.
-     */
-    private fun startBoundaryDraft() {
-        if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
-            status.text = "AKKPS का मैप पेज खोलें।"; return
-        }
-        val js = """
-            (function(){
-              const globals=Object.keys(window).filter(k=>/map/i.test(k)).map(k=>({name:k,value:window[k]}));
-              const leaflet=globals.find(x=>x.value && x.value._container && typeof x.value.on==='function' && typeof x.value.getCenter==='function');
-              const google=globals.find(x=>x.value && x.value.__gm && typeof x.value.getCenter==='function');
-              const mapbox=globals.find(x=>x.value && typeof x.value.addSource==='function' && typeof x.value.on==='function');
-              const map=leaflet?.value||google?.value||mapbox?.value;
-              if(!map) return JSON.stringify({ok:false,reason:'map_instance_not_exposed'});
-              window.__shraddhaBoundaryPoints=[];
-              window.__shraddhaBoundaryLayer=null;
-              const addPoint=(lat,lng)=>{
-                window.__shraddhaBoundaryPoints.push({latitude:Number(lat),longitude:Number(lng)});
-                const pts=window.__shraddhaBoundaryPoints;
-                if(leaflet){
-                  if(!window.__shraddhaBoundaryLayer) window.__shraddhaBoundaryLayer=window.L.polygon(pts.map(p=>[p.latitude,p.longitude]),{color:'#00e5ff',weight:3,fillOpacity:.18}).addTo(map);
-                  else window.__shraddhaBoundaryLayer.setLatLngs(pts.map(p=>[p.latitude,p.longitude]));
-                } else if(google && window.google?.maps?.Polygon){
-                  if(!window.__shraddhaBoundaryLayer) window.__shraddhaBoundaryLayer=new google.maps.Polygon({map,strokeColor:'#00e5ff',strokeWeight:3,fillColor:'#00e5ff',fillOpacity:.18});
-                  window.__shraddhaBoundaryLayer.setPath(pts.map(p=>({lat:p.latitude,lng:p.longitude})));
-                } else if(mapbox){
-                  const ring=pts.map(p=>[p.longitude,p.latitude]);
-                  if(pts.length>=3) ring.push(ring[0]);
-                  const data={type:'Feature',geometry:{type:'Polygon',coordinates:[ring]},properties:{}};
-                  if(!map.getSource('shraddha-boundary')) {
-                    map.addSource('shraddha-boundary',{type:'geojson',data});
-                    map.addLayer({id:'shraddha-boundary-fill',type:'fill',source:'shraddha-boundary',paint:{'fill-color':'#00e5ff','fill-opacity':.18}});
-                    map.addLayer({id:'shraddha-boundary-line',type:'line',source:'shraddha-boundary',paint:{'line-color':'#00e5ff','line-width':3}});
-                  } else map.getSource('shraddha-boundary').setData(data);
-                }
-              };
-              if(leaflet) map.on('click',e=>addPoint(e.latlng.lat,e.latlng.lng));
-              else if(google) map.addListener('click',e=>addPoint(e.latLng.lat(),e.latLng.lng()));
-              else if(mapbox) map.on('click',e=>addPoint(e.lngLat.lat,e.lngLat.lng));
-              return JSON.stringify({ok:true,engine:leaflet?'leaflet':google?'google-maps':'mapbox-gl'});
-            })()
-        """.trimIndent()
+            (function(expected){
+              const norm=s=>(s||'').toLowerCase().replace(/\\s+/g,' ').trim();
+              const body=norm(document.body?.innerText||'');
+              const values=expected.map(norm).filter(Boolean);
+              const currentMatches=values.length>0 && values.every(v=>body.includes(v));
+              const rows=[...document.querySelectorAll('tr,[role="row"]')];
+              const row=rows.find(r=>{const t=norm(r.innerText);return values.length>0&&values.every(v=>t.includes(v));});
+              let href='';
+              if(row){
+                const links=[...row.querySelectorAll('a[href]')];
+                const link=links.find(a=>/view|detail|open|record|देखें/i.test((a.innerText||'')+' '+a.href))||links[0];
+                if(link){try{const u=new URL(link.href,location.href);if(u.protocol==='https:'&&u.hostname===location.hostname)href=u.href;}catch(e){}}
+              }
+              return JSON.stringify({currentMatches,rowFound:!!row,href,bodyHasSuccess:/success|submitted|saved successfully|created successfully|record saved|सफलतापूर्वक|जमा हो गया/i.test(body),url:location.href});
+            })(__EXPECTED__)
+        """.trimIndent().replace("__EXPECTED__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
-            status.text = if (result?.optBoolean("ok") == true)
-                "AKKPS मैप से जुड़ गया। खेत के कोने मैप पर टैप करें; फिर 'क्षेत्रफल निकालें' बोलें।"
-            else "AKKPS मैप का अंदरूनी object उपलब्ध नहीं है। स्क्रीन OCR उपलब्ध है, पर इस पेज पर polygon auto-draw अभी संभव नहीं।"
-        }
-    }
-
-    private fun calculateBoundaryArea() {
-        web.evaluateJavascript("(window.__shraddhaBoundaryPoints||[]).map(p=>JSON.stringify(p)).join('\\\\n')") { raw ->
-            val points = decode(raw).lineSequence().mapNotNull { line ->
-                runCatching { JSONObject(line).let { AkkpsGeoPoint(it.getDouble("latitude"), it.getDouble("longitude")) } }.getOrNull()
-            }.toList()
-            val measurement = runCatching { AkkpsBoundaryGeometry.measure(points) }.getOrNull()
-            if (measurement == null) {
-                status.text = "कम-से-कम 3 अलग सही मैप पॉइंट लगाएँ; क्षेत्रफल नहीं निकाला गया।"
-            } else {
-                status.text = String.format(java.util.Locale.ROOT,
-                    "बाउंड्री: %.2f m² • %.4f hectare • %.4f acre. पुष्टि के बाद ही AKKPS में सेव करें।",
-                    measurement.squareMeters, measurement.hectares, measurement.acres)
+            if (result == null) {
+                status.text = "AKKPS response पढ़ा नहीं जा सका। रिकॉर्ड सफल नहीं माना गया।"
+                return@evaluateJavascript
+            }
+            val href = result.optString("href")
+            when {
+                result.optBoolean("currentMatches") && result.optString("url") != beforeUrl ->
+                    status.text = "रिकॉर्ड नए पेज पर खुला और दिए गए मान मिल गए। AKKPS रिकॉर्ड सत्यापित है।"
+                href.isNotBlank() -> {
+                    status.text = "मिलता-जुलता सेव रिकॉर्ड मिला। अब उसे खोलकर मान जाँचे जा रहे हैं…"
+                    web.loadUrl(href)
+                    web.postDelayed({ verifyOpenedRecord(expectedValues) }, 1800)
+                }
+                result.optBoolean("rowFound") ->
+                    status.text = "सूची में रिकॉर्ड मिला, लेकिन उसे दोबारा खोलने का सुरक्षित लिंक नहीं मिला। पूर्ण सत्यापन बाकी है।"
+                result.optBoolean("bodyHasSuccess") ->
+                    status.text = "AKKPS सफलता संदेश मिला, लेकिन रिकॉर्ड दोबारा खोलकर मान सत्यापित नहीं हुए। इसे पूर्ण सफलता नहीं माना।"
+                result.optBoolean("url") != beforeUrl ->
+                    status.text = "AKKPS पेज बदला, लेकिन रिकॉर्ड के मान सत्यापित नहीं हुए।"
+                else -> status.text = "सेव रिकॉर्ड का प्रमाण नहीं मिला। Submit सफल नहीं माना गया।"
             }
         }
     }
 
-    private fun clearBoundaryDraft() {
-        web.evaluateJavascript("""
-            (function(){
-              const layer=window.__shraddhaBoundaryLayer;
-              if(layer && layer.remove) layer.remove();
-              if(layer && layer.setMap) layer.setMap(null);
-              window.__shraddhaBoundaryLayer=null;
-              window.__shraddhaBoundaryPoints=[];
-              return true;
-            })()
-        """.trimIndent(), null)
-        status.text = "अस्थायी बाउंड्री हटाई गई। AKKPS रिकॉर्ड में कुछ सेव नहीं किया गया।"
+    private fun verifyOpenedRecord(expectedValues: List<Pair<String, String>>) {
+        val expected = JSONArray()
+        expectedValues.forEach { (_, value) -> expected.put(value) }
+        val js = """
+            (function(expected){
+              const norm=s=>(s||'').toLowerCase().replace(/\\s+/g,' ').trim();
+              const body=norm(document.body?.innerText||'');
+              const values=expected.map(norm).filter(Boolean);
+              const matched=values.length>0&&values.every(v=>body.includes(v));
+              return JSON.stringify({matched,url:location.href,body:body.slice(0,12000)});
+            })(__EXPECTED__)
+        """.trimIndent().replace("__EXPECTED__", expected.toString())
+        web.evaluateJavascript(js) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            status.text = if (result?.optBoolean("matched") == true)
+                "AKKPS में सेव रिकॉर्ड दोबारा खुला। सभी दिए गए मान मिल गए; रिकॉर्ड सत्यापित है।"
+            else
+                "रिकॉर्ड पेज खुला, लेकिन सभी मान नहीं मिले। इसे सत्यापित नहीं माना गया; कृपया AKKPS रिकॉर्ड जाँचें।"
+        }
     }
 
     private fun decode(raw: String?): String =
