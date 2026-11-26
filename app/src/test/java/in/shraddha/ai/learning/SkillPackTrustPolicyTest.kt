@@ -12,6 +12,7 @@ class SkillPackTrustPolicyTest {
         licenceId = "CC-BY-4.0",
         sha256 = "a".repeat(64),
         signedManifestVerified = true,
+        sourceAllowlistVerified = true,
         contentSafetyPassed = true,
         factualValidationPassed = true,
         regressionTestsPassed = true,
@@ -31,6 +32,23 @@ class SkillPackTrustPolicyTest {
             SkillPackTrustPolicy.Decision.QUEUE_FOR_REVIEW,
             SkillPackTrustPolicy.evaluate(unverified, true).decision
         )
+    }
+
+    @Test fun externalSourceWithoutAllowlistEvidenceStaysInReview() {
+        val unverifiedHost = candidate().copy(sourceAllowlistVerified = false)
+        assertEquals(
+            SkillPackTrustPolicy.Decision.QUEUE_FOR_REVIEW,
+            SkillPackTrustPolicy.evaluate(unverifiedHost, true).decision
+        )
+    }
+
+    @Test fun sourceUrlRejectsCredentialTrickAndNonStandardPort() {
+        val credentialTrick = candidate().copy(sourceUrl = "https://trusted.example@evil.example/pack")
+        val nonStandardPort = candidate().copy(sourceUrl = "https://trusted.example:8443/pack")
+        assertEquals(SkillPackTrustPolicy.Decision.REJECT,
+            SkillPackTrustPolicy.evaluate(credentialTrick, true).decision)
+        assertEquals(SkillPackTrustPolicy.Decision.REJECT,
+            SkillPackTrustPolicy.evaluate(nonStandardPort, true).decision)
     }
 
     @Test fun unknownSourceNeverAutoActivates() {
