@@ -31,8 +31,10 @@ class AndroidCommandParserTests(unittest.TestCase):
             parse_android_command("open file ../Windows/system.ini")
 
     def test_rejects_sensitive_and_unknown(self):
-        with self.assertRaises(ValueError):
-            parse_android_command("type my password 123")
+        for command in ("type my password 123", "type API key abc123secret",
+                        "type Bearer token abc123secret", "लिखो OTP 123456"):
+            with self.assertRaises(ValueError):
+                parse_android_command(command)
         with self.assertRaises(ValueError):
             parse_android_command("do anything")
 
