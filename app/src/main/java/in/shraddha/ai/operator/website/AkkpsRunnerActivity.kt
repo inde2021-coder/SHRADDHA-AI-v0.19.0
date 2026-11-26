@@ -259,7 +259,7 @@ class AkkpsRunnerActivity : Activity() {
                   chosen.dispatchEvent(new Event('change',{bubbles:true}));
                   out.push({key:item.key,status:'filled'}); continue;
                 } else if(e.type==='date'){
-                  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(item.value)){out.push({key:item.key,status:'date_must_be_yyyy_mm_dd'});continue;}
+                  if(!/^\d{4}-\d{2}-\d{2}$/.test(item.value)){out.push({key:item.key,status:'date_must_be_yyyy_mm_dd'});continue;}
                   e.value=item.value;
                   if(e.value!==item.value){out.push({key:item.key,status:'invalid_date'});continue;}
                 } else if(e.type==='number'){
@@ -418,7 +418,7 @@ Return JSON only."""
         expectedValues.forEach { (_, value) -> expected.put(value) }
         val js = """
             (function(expected){
-              const norm=s=>(s||'').toLowerCase().replace(/\\s+/g,' ').trim();
+              const norm=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
               const body=norm(document.body?.innerText||'');
               const values=expected.map(norm).filter(Boolean);
               const currentMatches=values.length>0 && values.every(v=>body.includes(v));
@@ -464,7 +464,7 @@ Return JSON only."""
         expectedValues.forEach { (_, value) -> expected.put(value) }
         val js = """
             (function(expected){
-              const norm=s=>(s||'').toLowerCase().replace(/\\s+/g,' ').trim();
+              const norm=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
               const body=norm(document.body?.innerText||'');
               const values=expected.map(norm).filter(Boolean);
               const matched=values.length>0&&values.every(v=>body.includes(v));
@@ -622,7 +622,7 @@ Return JSON only."""
     }
 
     private fun calculateBoundaryArea() {
-        web.evaluateJavascript("(window.__shraddhaBoundaryPoints||[]).map(p=>JSON.stringify(p)).join('\\\\n')") { raw ->
+        web.evaluateJavascript("(window.__shraddhaBoundaryPoints||[]).map(p=>JSON.stringify(p)).join('\\n')") { raw ->
             val points = decode(raw).lineSequence().mapNotNull { line ->
                 runCatching { JSONObject(line).let { AkkpsGeoPoint(it.getDouble("latitude"), it.getDouble("longitude")) } }.getOrNull()
             }.toList()
