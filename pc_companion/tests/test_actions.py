@@ -200,6 +200,17 @@ class ActionTests(unittest.TestCase):
                 actions.read_active_window_ocr(self.gui)
         screenshot.assert_not_called()
 
+    def test_file_open_action_is_wired_to_safe_user_path_handler(self):
+        from pc_companion.actions import open_user_path
+        with patch("pc_companion.actions.open_user_path",
+                   return_value={"opened": "Documents/report.pdf", "type": "file"}) as opener:
+            ok, result = execute_action(
+                {"kind": "file_open", "path": "Documents/report.pdf"},
+                self.gui, self.clipboard, lambda _name: False
+            )
+        self.assertTrue(ok)
+        self.assertIn("Documents/report.pdf", result)
+        opener.assert_called_once_with("Documents/report.pdf")
 
 if __name__ == "__main__":
     unittest.main()
