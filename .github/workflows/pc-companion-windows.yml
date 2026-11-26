@@ -1,7 +1,6 @@
 name: Shraddha Windows PC Companion
 
-# Intentionally manual: the user requested one combined validation pass after
-# implementation is complete. Do not start Windows tests on every code commit.
+# Manual build only. Run the combined test pass after implementation is complete.
 on:
   workflow_dispatch:
 
@@ -10,7 +9,7 @@ permissions:
 
 jobs:
   pc-companion:
-    name: Build Shraddha Windows PC Companion
+    name: Package Shraddha Windows PC Companion
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -22,25 +21,20 @@ jobs:
       - name: Install companion dependencies
         run: python -m pip install -r pc_companion/requirements.txt
       - name: Build Windows executable
-        run: >-
-          python -m PyInstaller --noconfirm --clean --onefile --windowed
-          --name ShraddhaAI-PC-Companion
-          --collect-all keyring
-          --collect-all cryptography
-          --hidden-import pyautogui
-          --hidden-import pygetwindow
-          --hidden-import pywinauto
-          --hidden-import mss
-          --hidden-import PIL
-          --hidden-import pytesseract
-          --hidden-import pyperclip
-          pc_companion/agent.py
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --collect-all keyring --collect-all cryptography --collect-all pywinauto --collect-all pycaw --collect-all comtypes --collect-all screen_brightness_control --collect-all pygetwindow --collect-all pytesseract --collect-all PIL --collect-all mss --hidden-import websocket --hidden-import pyautogui --hidden-import pyperclip pc_companion/agent.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
+      - name: Assemble self-contained release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item dist/ShraddhaAI-PC-Companion.exe release/
+          Copy-Item pc_companion/setup-ocr.ps1 release/
+          Copy-Item pc_companion/README.md release/README.txt
       - uses: actions/upload-artifact@v6
         with:
           name: ShraddhaAI-PC-Companion-Windows
-          path: |
-            dist/ShraddhaAI-PC-Companion.exe
-            pc_companion/setup-ocr.ps1
-            pc_companion/README.md
+          path: release/
           if-no-files-found: error
           retention-days: 14
