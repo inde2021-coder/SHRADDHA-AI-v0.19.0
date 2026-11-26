@@ -13,6 +13,8 @@ from pc_companion.file_transfer import (
     requeue_rejected_chunk,
     prepare_retry_queue,
     sha256_file,
+    save_outgoing_transfer_record,
+    load_outgoing_transfer_record,
 )
 
 
@@ -151,6 +153,48 @@ class FileTransferStreamingHashTests(unittest.TestCase):
             path = Path(directory) / "sample.bin"
             path.write_bytes(payload)
             self.assertEqual(sha256_file(path), hashlib.sha256(payload).hexdigest())
+
+
+class OutgoingTransferRecoveryTests(unittest.TestCase):
+    def test_sender_record_survives_restart_and_verifies_original_file(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "report.pdf"
+            payload = b"shraddha outgoing transfer recovery"
+            source.write_bytes(payload)
+            record = {
+                "peer": "paired-android-01", "path": str(source), "name": "report.pdf",
+                "size": len(payload), "sha256": hashlib.sha256(payload).hexdigest(),
+                "requestId": "request_123456", "transferId": "transfer_123456"
+            }
+            state = Path(directory) / "outgoing-transfer.json"
+            self.assertTrue(save_outgoing_transfer_record(state, record))
+            restored = load_outgoing_transfer_record(state)
+            self.assertEqual(restored["transferId"], record["transferId"])
+            self.assertEqual(restored["peer"], record["peer"])
+            self.assertEqual(restored["path"], str(source))
+            self.assertEqual(restored["send_queue"], [])
+            self.assertEqual(restored["in_flight"], set())
+
+    def test_sender_restore_rejects_changed_source_and_bad_manifest(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "report.pdf"
+            source.write_bytes(b"original")
+            record = {"peer": "paired-android-01", "path": str(source), "name": "report.pdf",
+                      "size": 8, "sha256": hashlib.sha256(b"original").hexdigest(),
+                      "requestId": "request_123456", "transferId": "transfer_123456"}
+            state = Path(directory) / "outgoing-transfer.json"
+            save_outgoing_transfer_record(state, record)
+            source.write_bytes(b"tampered")
+            self.assertIsNone(load_outgoing_transfer_record(state))
+            record["name"] = "../escape.pdf"
+            with self.assertRaises(ValueError):
+                save_outgoing_transfer_record(state, record)
 
 
 if __name__ == "__main__":
