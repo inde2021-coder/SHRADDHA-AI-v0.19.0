@@ -690,7 +690,7 @@ class PcCompanionApp:
             ) if key is not None else ""
             supplied = msg.get("proof", "")
             proof_valid = (isinstance(supplied, str) and re.fullmatch(r"[a-f0-9]{64}", supplied) and
-                           __import__("hmac").compare_digest(expected, supplied))
+                           hmac.compare_digest(expected, supplied))
             with self.e2e_lock:
                 state = self.peer_keys.get(peer_id)
                 if state and state["fingerprint"] == fingerprint and proof_valid:
