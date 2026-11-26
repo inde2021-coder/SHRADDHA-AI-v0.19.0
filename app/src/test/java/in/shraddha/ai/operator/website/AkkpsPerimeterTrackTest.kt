@@ -1,4 +1,4 @@
-package \`in\`.shraddha.ai.operator.website
+package `in`.shraddha.ai.operator.website
 
 import org.junit.Assert.*
 import org.junit.Test
