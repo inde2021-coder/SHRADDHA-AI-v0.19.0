@@ -182,6 +182,12 @@ class SkillPackLifecycleManager(context: Context) {
         if (target.exists()) throw IllegalStateException("This pack version is already installed.")
         val previous = readState().optJSONObject(pack.packId)?.optString("current", "").orEmpty()
         check(pack.file.renameTo(target)) { "Could not atomically move the approved pack into installed storage." }
+        val sourceMetadata = File(quarantine, pack.file.name + ".json")
+        val targetMetadata = File(target.parentFile, target.name + ".json")
+        if (sourceMetadata.isFile && !sourceMetadata.renameTo(targetMetadata)) {
+            target.renameTo(pack.file)
+            throw IllegalStateException("Could not move pack provenance metadata; pack remains quarantined.")
+        }
         val stateJson = readState()
         val entry = JSONObject().apply {
             put("current", pack.version)
