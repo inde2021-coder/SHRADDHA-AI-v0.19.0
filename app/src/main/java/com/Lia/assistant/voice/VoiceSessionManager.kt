@@ -233,8 +233,7 @@ object VoiceSessionManager {
 
         // Recheck consent after the network token request. If the user switched
         // Online AI off while it was in flight, do not create a WebSocket or reopen mic.
-        if (!currentContext.getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-                .getBoolean("allow_online_ai", false)) {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
             _lastError.value = "Online AI consent was revoked during connection. Cloud voice was stopped."
             _state.value = NovaOrbState.ERROR
             _statusText.value = "Online AI disabled"
