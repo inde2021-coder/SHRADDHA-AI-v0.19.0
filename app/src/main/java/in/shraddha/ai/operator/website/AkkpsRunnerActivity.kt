@@ -448,7 +448,7 @@ Return JSON only."""
                     status.text = "सूची में रिकॉर्ड मिला, लेकिन उसे दोबारा खोलने का सुरक्षित लिंक नहीं मिला। पूर्ण सत्यापन बाकी है।"
                 result.optBoolean("bodyHasSuccess") ->
                     status.text = "AKKPS सफलता संदेश मिला, लेकिन रिकॉर्ड दोबारा खोलकर मान सत्यापित नहीं हुए। इसे पूर्ण सफलता नहीं माना।"
-                result.optBoolean("url") != beforeUrl ->
+                result.optString("url") != beforeUrl ->
                     status.text = "AKKPS पेज बदला, लेकिन रिकॉर्ड के मान सत्यापित नहीं हुए।"
                 else -> status.text = "सेव रिकॉर्ड का प्रमाण नहीं मिला। Submit सफल नहीं माना गया।"
             }
