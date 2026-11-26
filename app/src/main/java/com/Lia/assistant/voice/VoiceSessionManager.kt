@@ -201,6 +201,14 @@ object VoiceSessionManager {
             _state.value = NovaOrbState.ERROR
             return
         }
+        val modelStatus = IndicConformerRuntime.status(application, language)
+        if (modelStatus.availability != IndicConformerRuntime.Availability.READY) {
+            _lastError.value = modelStatus.detail
+            _statusText.value = modelStatus.detail
+            _state.value = NovaOrbState.ERROR
+            _isActive.value = false
+            return
+        }
         appContext = application
         _isActive.value = true
         _muted.value = false
@@ -219,7 +227,12 @@ object VoiceSessionManager {
             onStatus = { message ->
                 if (_isActive.value) {
                     _statusText.value = message
-                    _state.value = if (message.contains("stopped", true)) NovaOrbState.IDLE else NovaOrbState.LISTENING
+                    if (message.contains("stopped", true)) {
+                        _isActive.value = false
+                        _state.value = NovaOrbState.IDLE
+                    } else {
+                        _state.value = NovaOrbState.LISTENING
+                    }
                 }
             },
             onTranscript = { text -> _offlineTranscript.value = text },
