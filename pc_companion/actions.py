@@ -61,6 +61,9 @@ def click_unique_text(label):
     active_handle = getattr(active_before, "_hWnd", None)
     from pywinauto import Desktop
     root = Desktop(backend="uia").get_active()
+    root_handle = getattr(getattr(root, "element_info", None), "handle", None)
+    if active_handle is not None and root_handle is not None and root_handle != active_handle:
+        raise RuntimeError("UI Automation target does not match the active foreground window.")
     wanted = " ".join(str(label).casefold().split())
     matches = []
     for control in root.descendants()[:1500]:
