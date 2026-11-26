@@ -110,3 +110,10 @@ fun NovaTheme(
         )
     }
 }
+
+
+/** Canonical app theme; the legacy reference theme is not used by the Shraddha launcher. */
+@Composable
+fun ShraddhaTheme(content: @Composable () -> Unit) {
+    NovaTheme(mode = "DARK", content = content)
+}
