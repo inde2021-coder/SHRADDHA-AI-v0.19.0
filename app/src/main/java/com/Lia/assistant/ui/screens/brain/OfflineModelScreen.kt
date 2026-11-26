@@ -43,6 +43,7 @@ import java.io.File
 
 private const val MODEL_PREFS = "shraddha_offline_model"
 private const val MODEL_PATH_KEY = "active_model_path"
+private const val MODEL_SHA256_KEY = "active_model_sha256"
 
 @Composable
 fun OfflineModelScreen(navController: NavController) {
@@ -97,13 +98,15 @@ fun OfflineModelScreen(navController: NavController) {
                         error("Could not finalize the imported model file; previous model was restored where possible.")
                     }
                     backup.delete()
-                    target.absolutePath
+                    target.absolutePath to sha256File(target)
                 }
             }
             working = false
-            result.onSuccess { path ->
+            result.onSuccess { imported ->
+                val (path, digest) = imported
                 modelPath = path
-                prefs.edit().putString(MODEL_PATH_KEY, path).apply()
+                prefs.edit().putString(MODEL_PATH_KEY, path)
+                    .putString(MODEL_SHA256_KEY, digest).apply()
                 status = "Model imported into private app storage. Run the RAM/storage preflight before loading it."
                 answer = ""
             }.onFailure { error ->
@@ -220,7 +223,7 @@ fun OfflineModelScreen(navController: NavController) {
                         }
                         working = false
                         result.onSuccess {
-                            prefs.edit().remove(MODEL_PATH_KEY).apply()
+                            prefs.edit().remove(MODEL_PATH_KEY).remove(MODEL_SHA256_KEY).apply()
                             modelPath = ""
                             report = ""
                             answer = ""
@@ -236,3 +239,17 @@ fun OfflineModelScreen(navController: NavController) {
 
 private const val MIN_MODEL_BYTES = 10_000_000L
 private const val MAX_MODEL_BYTES = 5L * 1024L * 1024L * 1024L
+
+private fun sha256File(file: File): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().buffered().use { input ->
+        val buffer = ByteArray(1024 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+        buffer.fill(0)
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
