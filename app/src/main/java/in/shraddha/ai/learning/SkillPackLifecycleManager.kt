@@ -291,7 +291,7 @@ class SkillPackLifecycleManager(context: Context) {
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT)
             val text = decoder.decode(ByteBuffer.wrap(file.readBytes())).toString()
-            text.none { ch -> ch == '\\u0000' || (ch < ' ' && ch != '\\n' && ch != '\\r' && ch != '\\t') }
+            text.none { ch -> ch == '\u0000' || (ch < ' ' && ch != '\n' && ch != '\r' && ch != '\t') }
         } catch (_: Exception) {
             false
         }
