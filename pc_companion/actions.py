@@ -7,11 +7,13 @@ from pathlib import Path
 
 _SENSITIVE_WINDOW = re.compile(
     r"(?i)password|passcode|otp|one[- ]time|pin|cvv|bank|payment|checkout|"
-    r"credential|sign[ -]?in|login|पासवर्ड|ओटीपी|पिन|बैंक|भुगतान"
+    r"credential|password manager|vault|sign[ -]?in|login|पासवर्ड|ओटीपी|पिन|बैंक|भुगतान"
 )
 _SENSITIVE_LINE = re.compile(
     r"(?i)password|passcode|otp|one[- ]time|pin|cvv|security code|verification code|"
-    r"recovery phrase|account number|card number|upi|पासवर्ड|ओटीपी|पिन|गुप्त कोड|"
+    r"recovery phrase|seed phrase|mnemonic|api key|access token|secret key|private key|bearer|authorization|" 
+    r"account number|card number|bank account|aadhaar|aadhar|pan(?: number)?|ifsc|upi|passport|"
+    r"पासवर्ड|ओटीपी|पिन|गुप्त कोड|आधार|पैन|पासपोर्ट|"
     r"सत्यापन कोड|खाता संख्या|कार्ड नंबर|यूपीआई"
 )
 _LONG_NUMBER = re.compile(r"(?<!\d)(?:\d[ -]?){4,}(?!\d)")
