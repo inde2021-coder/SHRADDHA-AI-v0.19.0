@@ -72,7 +72,7 @@ object TrainingCurriculumInstaller {
             val digest = MessageDigest.getInstance("SHA-256")
                 .digest(content.toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it) }
-            val sourceLabel = "Shraddha AI built-in curriculum v${pack.version} • SHA-256 $digest"
+            val sourceLabel = "Shraddha AI built-in curriculum v${pack.version}"
             val old = existing[pack.id]
             if (old != null && old.sourceLabel == sourceLabel && old.content == content) {
                 unchanged++
