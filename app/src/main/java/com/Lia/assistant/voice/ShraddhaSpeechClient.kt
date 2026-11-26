@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
  */
 object ShraddhaSpeechClient {
     @Volatile private var playbackTrack: AudioTrack? = null
+    @Volatile private var activeSynthesisCall: Call? = null
 
     /** Plays the configured custom Shraddha PCM voice. No Android or Google TTS is used. */
     fun speak(context: Context, text: String, language: String, done: (Result<Unit>) -> Unit = {}) {
@@ -81,6 +82,11 @@ object ShraddhaSpeechClient {
     }
 
     fun stopPlayback() {
+        // Also cancel any cloud synthesis still in flight; revoking consent must
+        // stop pending audio generation, not only silence an already-playing track.
+        val pending = activeSynthesisCall
+        activeSynthesisCall = null
+        pending?.cancel()
         val current = playbackTrack
         playbackTrack = null
         if (current != null) {
@@ -139,12 +145,21 @@ object ShraddhaSpeechClient {
             .header("Authorization", "Bearer ${config.gatewayToken}")
             .post(body)
             .build()
-        http.newCall(request).enqueue(object : Callback {
+        // Final synchronous consent check after configuration and request construction.
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            done(Result.failure(IllegalStateException("Online AI consent was revoked before speech dispatch.")))
+            return
+        }
+        val call = http.newCall(request)
+        activeSynthesisCall = call
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
+                if (activeSynthesisCall === call) activeSynthesisCall = null
                 done(Result.failure(e))
             }
 
             override fun onResponse(call: Call, response: Response) {
+                if (activeSynthesisCall === call) activeSynthesisCall = null
                 response.use {
                     if (!it.isSuccessful) {
                         val message = it.body?.string().orEmpty().take(300)
