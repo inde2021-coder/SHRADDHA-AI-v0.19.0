@@ -161,6 +161,9 @@ object VoiceSessionManager {
                             // Also remove the foreground notification: it must not claim
                             // that a live microphone session is active after permission loss.
                             VoiceForegroundService.stop(appContext ?: context.applicationContext)
+                            // Tear down the live socket and release all audio resources as well.
+                            // A revoked microphone permission must not leave a cloud session alive.
+                            stop()
                         } else {
                             // AudioRecord can fail after a successful Live API connection
                             // (device contention, route changes or a transient read error).
