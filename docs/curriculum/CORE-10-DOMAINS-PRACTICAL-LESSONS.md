@@ -1,6 +1,6 @@
 # Shraddha AI — Core Ten Domains: Practical Lesson Library
 
-**Pack ID:** `core-life-skills-hi-en-v1` · **Version:** 1.0.0 · **Status:** authored foundational lessons; specialist review required for regulated topics.
+**Pack ID:** `core-life-skills-hi-en-v1` · **Version:** 1.0.0 · **Status:** authored starter lessons, bundled in the APK offline Knowledge Library; specialist review remains required for regulated topics.
 
 ## 1. Human behaviour and everyday interaction
 **Lesson 1.1 — Listen before solving**
