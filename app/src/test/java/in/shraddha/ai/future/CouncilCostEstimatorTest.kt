@@ -8,6 +8,27 @@ import org.junit.Test
 
 class CouncilCostEstimatorTest {
     @Test
+    fun providerBudgetAllowsCallsWhenNoCeilingIsConfigured() {
+        assertNull(CouncilCostBudget.requestBlockReason(0.0, 500.0, false, "GEMINI"))
+    }
+
+    @Test
+    fun providerBudgetBlocksAtOrAboveTheConfiguredCeiling() {
+        assertTrue(CouncilCostBudget.requestBlockReason(5.0, 5.0, false, "GEMINI")!!.contains("budget reached"))
+        assertTrue(CouncilCostBudget.requestBlockReason(5.0, 6.0, false, "GEMINI")!!.contains("budget reached"))
+    }
+
+    @Test
+    fun providerBudgetBlocksWhenPreviousUsageIsUnknown() {
+        assertTrue(CouncilCostBudget.requestBlockReason(5.0, 1.0, true, "OPENAI")!!.contains("unverified"))
+    }
+
+    @Test
+    fun providerBudgetAllowsKnownUsageBelowCeiling() {
+        assertNull(CouncilCostBudget.requestBlockReason(5.0, 4.99, false, "GROQ"))
+    }
+
+    @Test
     fun estimatesInputAndOutputTokensUsingExplicitModelRates() {
         val estimate = CouncilCostEstimator.estimate(
             usage = listOf(CouncilCostEstimator.TokenUsage("OPENAI", "gpt-example", 2_000_000, 500_000)),
