@@ -73,6 +73,13 @@ class VoiceForegroundService : Service() {
                 START_NOT_STICKY
             }
             ACTION_START -> {
+                // Do not publish a foreground notification or activate the overlay when cloud voice consent is off.
+                if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(this)) {
+                    VoiceSessionManager.stop()
+                    OverlayEdgeGlowController.stop(this)
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
                 // Permission can be revoked in Android Settings while the app is backgrounded.
                 // Never activate the microphone unless the current runtime grant is still valid.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
