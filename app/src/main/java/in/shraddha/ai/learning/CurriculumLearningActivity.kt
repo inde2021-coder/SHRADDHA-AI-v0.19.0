@@ -78,9 +78,9 @@ class CurriculumLearningActivity : Activity() {
         root.addView(dashboard, matchWrap())
         root.addView(actionButton("अभिभावक नियंत्रण", "PIN, Guardian Mode और दैनिक समय सीमा") { openGuardianControls() })
         root.addView(TextView(this).apply {
-            text = "भाषा मॉडल स्थिति\\n" + LanguageModelCapabilityCatalog.languages.joinToString("\\n") {
+            text = "भाषा मॉडल स्थिति\n" + LanguageModelCapabilityCatalog.languages.joinToString("\n") {
                 "${it.name}: ASR — ${it.asrCandidate}; TTS — ${it.ttsCandidate}; Translation — ${it.translationCandidate}"
-            } + "\\nये candidate models अभी इस APK में install नहीं हैं।"
+            } + "\nये candidate models अभी इस APK में install नहीं हैं।"
             textSize = 11f
             setTextColor(0xFFB8C9D8.toInt())
             setPadding(12, 12, 12, 12)
