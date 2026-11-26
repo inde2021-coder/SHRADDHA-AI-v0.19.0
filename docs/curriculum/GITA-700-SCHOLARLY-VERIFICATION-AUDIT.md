@@ -1,6 +1,6 @@
 # Bhagavad Gita — 700-verse scholarly verification audit
 
-**Status: STRUCTURAL CHECKS PASSED; SCHOLARLY VERIFICATION NOT YET COMPLETED.**  
+**Status: STRUCTURAL CHECKS PASSED; SCHOLARLY VERIFICATION NOT YET COMPLETED.**
 **Do not label the corpus scholar-verified, certified or error-free.** The 700 records are present and internally sequential, but a qualified Sanskrit scholar must still check every verse against named print editions and document each decision.
 
 ## 1. Corpus structure checked
