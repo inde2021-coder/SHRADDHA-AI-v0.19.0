@@ -1,5 +1,8 @@
 """Allowlisted Windows UI actions. No shell execution or arbitrary process launch."""
+import os
 import re
+import shutil
+from pathlib import Path
 
 
 _SENSITIVE_WINDOW = re.compile(
@@ -91,10 +94,29 @@ def read_active_window_ocr(pyautogui):
         import pytesseract
     except ImportError as exc:
         raise RuntimeError("Install the optional pytesseract package and the Windows Tesseract OCR engine with Hindi (hin) and English (eng) language data.") from exc
+    # Discover standard Windows installations even when the installer did not
+    # add Tesseract to PATH. SHRADDHA_TESSERACT_CMD can override this safely.
+    configured = os.environ.get("SHRADDHA_TESSERACT_CMD", "").strip()
+    candidates = [
+        configured,
+        shutil.which("tesseract"),
+        r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+        r"C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe",
+    ]
+    executable = next((candidate for candidate in candidates
+                       if candidate and Path(candidate).is_file()), None)
+    if executable:
+        pytesseract.pytesseract.tesseract_cmd = executable
+        tessdata = Path(executable).parent / "tessdata"
+        if tessdata.is_dir() and not os.environ.get("TESSDATA_PREFIX"):
+            os.environ["TESSDATA_PREFIX"] = str(tessdata)
     try:
         installed = pytesseract.get_languages(config="")
     except Exception as exc:
-        raise RuntimeError("Tesseract is not installed or its executable is not on PATH.") from exc
+        raise RuntimeError(
+            "Tesseract OCR engine was not found. Install Tesseract to "
+            r"C:\\Program Files\\Tesseract-OCR or set SHRADDHA_TESSERACT_CMD."
+        ) from exc
     selected, missing = select_ocr_languages(installed)
     if not selected:
         raise RuntimeError("No supported OCR language data found. Install Tesseract eng and/or hin traineddata.")
