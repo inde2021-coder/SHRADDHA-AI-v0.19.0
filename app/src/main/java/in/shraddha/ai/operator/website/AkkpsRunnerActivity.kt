@@ -296,14 +296,16 @@ Return exact JSON only. Do not include prose or markdown."""
                         else "कमांड से कोई स्पष्ट फॉर्म मान नहीं मिला। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
-                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
-                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit
-                    fillValues(values, shouldSubmit)
                     val missing = mapped.optJSONArray("missing") ?: JSONArray()
+                    val explicitSubmit = AkkpsRunnerCommandParser.hasExplicitSubmitIntent(raw)
+                    // AI-reported missing information always blocks submission, even if
+                    // the website does not mark those fields as HTML-required.
+                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit && missing.length() == 0
+                    fillValues(values, shouldSubmit)
                     if (missing.length() > 0) {
                         status.text = "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
                             (0 until missing.length()).joinToString { missing.optString(it) } +
-                            if (shouldSubmit) "। Submit रोका गया।" else ""
+                            "। Submit रोक दिया गया।"
                     }
                 }
             }.start()
