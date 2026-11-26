@@ -86,6 +86,7 @@ fun VoiceScreen(
     var offlineLanguage by remember { mutableStateOf(IndicConformerRuntime.Language.HINDI) }
     var offlineModelStatus by remember { mutableStateOf("") }
     var pendingOfflineStart by remember { mutableStateOf(false) }
+    var showOfflinePanel by remember { mutableStateOf(!VoiceGatewaySettings.isConfigured(context) || !`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) }
     val microphoneReady = isActive && state !in setOf(NovaOrbState.IDLE, NovaOrbState.CONNECTING, NovaOrbState.ERROR)
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -105,6 +106,7 @@ fun VoiceScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasKey = VoiceGatewaySettings.isConfigured(context)
                 onlineAiAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
+                if (!hasKey || !onlineAiAllowed) showOfflinePanel = true
                 hasRecordAudioPermission = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.RECORD_AUDIO
                 ) == PackageManager.PERMISSION_GRANTED
@@ -174,7 +176,7 @@ fun VoiceScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                if (!hasKey || !onlineAiAllowed) {
+                if (!hasKey || !onlineAiAllowed || showOfflinePanel) {
                     LiaOrb3D(
                         state = NovaOrbState.IDLE,
                         size = orbSize * 0.62f,
@@ -251,7 +253,9 @@ fun VoiceScreen(
                     if (!hasKey) {
                         NovaButton(text = "Configure Secure Backend", onClick = { navController.navigate("settings") }, type = NovaButtonType.TEXT)
                     }
-                    if (onlineAiAllowed) {
+                    if (hasKey && onlineAiAllowed) {
+                        NovaButton(text = "USE ONLINE VOICE", onClick = { showOfflinePanel = false }, type = NovaButtonType.TEXT)
+                    } else if (onlineAiAllowed) {
                         NovaButton(text = "Online Voice Settings", onClick = { navController.navigate("settings") }, type = NovaButtonType.TEXT)
                     }
                 } else if (!hasRecordAudioPermission) {
@@ -310,7 +314,8 @@ fun VoiceScreen(
                 }
             }
 
-            if (hasKey && hasRecordAudioPermission && onlineAiAllowed) {
+            if (hasKey && hasRecordAudioPermission && onlineAiAllowed && !showOfflinePanel) {
+                NovaButton(text = "USE OFFLINE VOICE", onClick = { showOfflinePanel = true }, type = NovaButtonType.TEXT)
                 // One microphone control: tap once to end the active session,
                 // tap again to start it. The close control above only dismisses this screen.
                 val micShape = RoundedCornerShape(50)
