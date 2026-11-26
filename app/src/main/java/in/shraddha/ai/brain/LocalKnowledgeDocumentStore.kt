@@ -83,6 +83,36 @@ class LocalKnowledgeDocumentStore(context: Context) {
     }
 
     /**
+     * Installs a curriculum pack shipped inside the signed APK. These are app-authored
+     * educational materials, not personal user imports, so no personal-data import consent
+     * is requested. Only the dedicated installer may call this internal API.
+     */
+    internal fun importBundledCurriculum(
+        id: String,
+        title: String,
+        version: String,
+        sha256: String,
+        content: String
+    ): Result<Unit> = runCatching {
+        require(id.matches(Regex("curriculum_[a-z0-9_]{3,60}")))
+        require(version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")))
+        require(sha256.matches(Regex("[a-fA-F0-9]{64}")))
+        require(content.isNotBlank() && content.length <= MAX_DOCUMENT_CHARS)
+        val actual = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(content.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        require(actual.equals(sha256, ignoreCase = true)) { "Bundled curriculum integrity check failed." }
+        importText(
+            consent = true,
+            id = id,
+            title = title,
+            sourceLabel = "Shraddha AI built-in curriculum v$version • SHA-256 $actual",
+            sourceUri = null,
+            content = content
+        ).getOrThrow()
+    }
+
+    /**
      * OCR-imports a user-selected PDF through Android's document provider. Pages are rendered
      * one at a time and processed with Latin + Devanagari ML Kit recognizers to bound memory.
      * Requires a readable content URI and explicit consent.
