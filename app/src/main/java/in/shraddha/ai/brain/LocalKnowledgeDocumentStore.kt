@@ -435,7 +435,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         private const val INDEX_KEY = "knowledge_docs_index_v1"
         private const val CLOUD_INDEX_KEY = "knowledge_docs_cloud_index_v1"
         private const val DOC_PREFIX = "knowledge_doc_"
-        private const val MAX_DOCUMENTS = 50
+        private const val MAX_DOCUMENTS = 100
         private const val MAX_DOCUMENT_CHARS = 50_000
         private const val CHUNK_CHARS = 1_200
         private const val CHUNK_OVERLAP = 160
