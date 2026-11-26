@@ -17,7 +17,6 @@ dependencyResolutionManagement {
         // Keep the mirror before Maven Central so dependencies resolve without 429 bursts.
         maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2") }
         mavenCentral()
-        // sherpa-onnx Android Kotlin/JNI runtime; model weights are downloaded separately.
     }
 }
 
