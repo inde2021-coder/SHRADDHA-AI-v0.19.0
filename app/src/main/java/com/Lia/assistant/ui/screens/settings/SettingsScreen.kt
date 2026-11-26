@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.Lia.assistant.data.VoiceGatewaySettings
+import com.Lia.assistant.voice.VoiceSessionManager
+import com.Lia.assistant.voice.ShraddhaSpeechClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -450,6 +452,10 @@ private fun SettingsScreenContent(
                         allowOnlineAi = enabled
                         context.getSharedPreferences("shraddha_network_ai", android.content.Context.MODE_PRIVATE)
                             .edit().putBoolean("allow_online_ai", enabled).apply()
+                        if (!enabled) {
+                            VoiceSessionManager.stop()
+                            ShraddhaSpeechClient.stopPlayback()
+                        }
                     }
                 )
                 NovaSettingsRow(
