@@ -667,9 +667,14 @@ class PcCompanionApp:
                     sent = bool(proof) and self._send_json({"type": "e2e_key_confirm",
                         "targetDeviceId": peer_id, "fingerprint": fingerprint, "proof": proof})
                     with self.e2e_lock:
-                        if peer_id in self.peer_keys:
-                            self.peer_keys[peer_id]["local_confirmed"] = bool(sent)
-                    self.status_var.set("Fingerprint confirmation sent; waiting for the other device.")
+                        current = self.peer_keys.get(peer_id)
+                        if current and current["fingerprint"] == fingerprint:
+                            current["local_confirmed"] = bool(sent)
+                            trusted = bool(current["local_confirmed"] and current["remote_confirmed"])
+                        else:
+                            trusted = False
+                    self.status_var.set("Mutual E2E trust verified." if trusted else
+                                        "Fingerprint confirmation sent; waiting for the other device.")
                 else:
                     with self.e2e_lock:
                         rejected = self.peer_keys.pop(peer_id, None)
