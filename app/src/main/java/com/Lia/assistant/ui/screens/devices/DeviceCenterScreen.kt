@@ -370,12 +370,12 @@ fun DeviceCenterScreen(navController: NavController) {
                                     message.optInt("index", -1), false, error = error.message ?: "Chunk receive failed."
                                 )
                             }
-                            val terminalReject = !result.ok && result.error in setOf(
+                            val terminalReject = !result.ok && result.error?.let { it in setOf(
                                 "No approved transfer is active.", "Unexpected sender or transfer ID.",
                                 "Invalid chunk index.", "Malformed chunk encoding.",
                                 "Chunk length does not match manifest.",
                                 "Final SHA-256 mismatch; incomplete file discarded."
-                            )
+                            ) } == true
                             val ackQueued = if (terminalReject) {
                                 DeviceLinkManager.cancelFileTransfer(peerId, transferId, "receiver_rejected")
                             } else {
