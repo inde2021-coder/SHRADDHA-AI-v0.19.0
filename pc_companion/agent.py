@@ -377,6 +377,35 @@ class PcCompanionApp:
         self.ws_thread.start()
 
     def _send_json(self, payload):
+        # File-transfer control metadata is encrypted just like file chunks.
+        # This central guard covers start/ack/resume/cancel call sites.
+        if isinstance(payload, dict) and str(payload.get("type", "")).startswith("file_transfer_"):
+            kind = payload.get("type")
+            if kind == "file_transfer_chunk":
+                return False
+            peer_id = payload.get("targetDeviceId")
+            transfer_id = payload.get("transferId")
+            if not isinstance(peer_id, str) or not isinstance(transfer_id, str):
+                return False
+            body = {key: value for key, value in payload.items()
+                    if key not in {"type", "targetDeviceId", "transferId"}}
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                    return False
+                key = bytes(state["key"])
+            source_id = str(self.config.get("deviceId", ""))
+            session_id = str(self.config.get("sessionId", ""))
+            aad = f"{session_id}|{source_id}|{peer_id}|{kind}|{transfer_id}".encode("utf-8")
+            try:
+                nonce, ciphertext = DeviceE2ECrypto.encrypt(
+                    key, json.dumps(body, separators=(",", ":")).encode("utf-8"), aad
+                )
+            except Exception:
+                return False
+            payload = {"type": "e2e_message", "targetDeviceId": peer_id,
+                       "messageKind": kind, "transferId": transfer_id,
+                       "nonce": nonce, "ciphertext": ciphertext}
         ws = self.ws_app
         if not ws or not ws.sock or not ws.sock.connected:
             return False
@@ -640,19 +669,40 @@ class PcCompanionApp:
             self._handle_data_share_request(msg)
         elif kind == "data_share_result":
             self._handle_data_share_result(msg)
-        elif kind == "file_transfer_start":
-            self._handle_incoming_file_start(msg)
-        elif kind == "file_transfer_ack":
-            self._handle_file_ack(msg)
-        elif kind == "file_transfer_resume":
-            self._handle_file_resume(msg)
-        elif kind == "file_transfer_cancel":
-            self._handle_file_cancel(msg)
+        elif isinstance(kind, str) and kind.startswith("file_transfer_"):
+            self.status_var.set("Blocked plaintext file-transfer control message. E2E encryption is mandatory.")
         elif kind == "e2e_message":
             peer_id = str(msg.get("fromDeviceId", ""))
             message_kind = str(msg.get("messageKind", ""))
             action_id = str(msg.get("actionId", ""))
             action_kind = str(msg.get("actionKind", ""))
+            if message_kind.startswith("file_transfer_") and message_kind != "file_transfer_chunk":
+                transfer_id = str(msg.get("transferId", ""))
+                if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id):
+                    return
+                with self.e2e_lock:
+                    state = self.peer_keys.get(peer_id)
+                    if not state or not state["local_confirmed"] or not state["remote_confirmed"]:
+                        return
+                    key = bytes(state["key"])
+                aad = f"{self.config.get('sessionId', '')}|{peer_id}|{self.config.get('deviceId', '')}|{message_kind}|{transfer_id}".encode("utf-8")
+                try:
+                    plain = DeviceE2ECrypto.decrypt(key, msg.get("nonce", ""), msg.get("ciphertext", ""), aad)
+                    body = json.loads(plain.decode("utf-8"))
+                    if not isinstance(body, dict):
+                        return
+                    body.update({"type": message_kind, "fromDeviceId": peer_id, "transferId": transfer_id})
+                    if message_kind == "file_transfer_start":
+                        self._handle_incoming_file_start(body)
+                    elif message_kind == "file_transfer_ack":
+                        self._handle_file_ack(body)
+                    elif message_kind == "file_transfer_resume":
+                        self._handle_file_resume(body)
+                    elif message_kind == "file_transfer_cancel":
+                        self._handle_file_cancel(body)
+                except Exception as exc:
+                    self.status_var.set(f"Rejected encrypted file-transfer control message: {str(exc)[:120]}")
+                return
             if message_kind == "file_transfer_chunk":
                 self._handle_incoming_file_chunk(msg, peer_id)
                 return
