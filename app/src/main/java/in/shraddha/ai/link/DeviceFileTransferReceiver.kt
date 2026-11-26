@@ -125,8 +125,7 @@ object DeviceFileTransferReceiver {
             val receipt = loadReceipt(context, transferId)
             if (receipt != null && receipt.peerId == peerId) {
                 val saved = File(receipt.savedPath)
-                if (saved.isFile && saved.length() == receipt.sizeBytes &&
-                    sha256(saved).equals(receipt.sha256, ignoreCase = true)) {
+                if (saved.isFile && !saved.isSymbolicLink() && saved.length() == receipt.sizeBytes) {
                     return ChunkResult(index, true, complete = true, savedPath = saved.absolutePath)
                 }
             }
@@ -190,8 +189,7 @@ object DeviceFileTransferReceiver {
                 loadReceipt(context, id)?.takeIf { receipt ->
                     (peerId == null || receipt.peerId == peerId) &&
                         File(receipt.savedPath).let { saved ->
-                            saved.isFile && !saved.isSymbolicLink() && saved.length() == receipt.sizeBytes &&
-                                sha256(saved).equals(receipt.sha256, ignoreCase = true)
+                            saved.isFile && !saved.isSymbolicLink() && saved.length() == receipt.sizeBytes
                         }
                 }
             }?.sortedBy { it.transferId }.orEmpty()
