@@ -175,11 +175,12 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(select_ocr_languages(["ENG", "hin"]), (["eng", "hin"], []))
 
     def test_ocr_redacts_secret_lines_and_long_numbers(self):
-        safe = redact_ocr_text("Invoice total 42\nOTP: 123456\n654321\nAmount 900")
+        safe = redact_ocr_text("Invoice total 42\nOTP: 123456\n654321\nAPI key: abc123secret\nAmount 900")
         self.assertIn("Invoice total 42", safe)
         self.assertIn("[संवेदनशील OCR पंक्ति छिपाई गई]", safe)
         self.assertIn("[संवेदनशील जानकारी छिपाई गई]", safe)
         self.assertNotIn("654321", safe)
+        self.assertNotIn("abc123secret", safe)
 
     def test_ocr_aborts_if_active_window_changes_before_capture(self):
         import pc_companion.actions as actions
