@@ -1,8 +1,8 @@
+"""Allowlisted Windows UI actions. No shell execution or arbitrary process launch."""
 try:
     from .approved_paths import open_user_path
 except ImportError:
     from approved_paths import open_user_path
-"""Allowlisted Windows UI actions. No shell execution or arbitrary process launch."""
 import re
 
 
