@@ -102,8 +102,8 @@ fun DeviceCenterScreen(navController: NavController) {
     var incomingTransferStatus by remember { mutableStateOf("") }
     var receivedFiles by remember { mutableStateOf(DeviceFileTransferReceiver.listReceived(context)) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
-    var outgoingFile by remember { mutableStateOf(DeviceFileTransferSender.pending(File(context.filesDir, "OutgoingTransfers")).firstOrNull()) }
-    var outgoingProgress by remember { mutableStateOf(outgoingFile?.sentChunks ?: 0) }
+    var outgoingFile by remember { mutableStateOf<DeviceFileTransferSender.Prepared?>(null) }
+    var outgoingProgress by remember { mutableStateOf(0) }
     var outgoingSending by remember { mutableStateOf(false) }
     var outgoingQueue by remember { mutableStateOf<List<Int>>(emptyList()) }
     var outgoingInFlight by remember { mutableStateOf<Set<Int>>(emptySet()) }
@@ -197,6 +197,10 @@ fun DeviceCenterScreen(navController: NavController) {
 
     LaunchedEffect(context) {
         resumableIncoming = withContext(Dispatchers.IO) { DeviceFileTransferReceiver.restore(context) }
+        outgoingFile = withContext(Dispatchers.IO) {
+            DeviceFileTransferSender.pending(File(context.filesDir, "OutgoingTransfers")).firstOrNull()
+        }
+        outgoingProgress = outgoingFile?.sentChunks ?: 0
     }
 
     DisposableEffect(context) {
