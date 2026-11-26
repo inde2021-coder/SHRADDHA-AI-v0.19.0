@@ -50,12 +50,18 @@ object FormExtractionClient {
         }
         val bytes = compressForUpload(image)
         require(bytes.size <= 3_100_000) { "Image is too large after compression. Crop it and try again." }
+        val imageBase64 = try {
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } finally {
+            // Do not retain the compressed source image after building the request payload.
+            bytes.fill(0)
+        }
         val body = JSONObject()
             .put("formType", formType)
             .put("instruction", instruction.take(1500))
             .put("provider", provider)
             .put("mimeType", "image/jpeg")
-            .put("imageBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            .put("imageBase64", imageBase64)
             .put("cloudProcessingConsent", true)
             .put("personalDataConsent", personalDataConsent)
             .toString()
@@ -65,6 +71,7 @@ object FormExtractionClient {
             .header("Authorization", "Bearer ${config.gatewayToken}")
             .post(body)
             .build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
