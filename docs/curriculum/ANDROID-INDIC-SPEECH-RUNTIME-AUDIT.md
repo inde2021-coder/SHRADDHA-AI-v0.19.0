@@ -61,7 +61,7 @@ Decision:
 
 ## 5. Licence and release gates (checked 2026-11-27)
 
-- The AI4Bharat IndicConformer source model is MIT-licensed. The selected sherpa-onnx export repository currently identifies its Indian-language model source as MIT; the Android sherpa-onnx runtime is a separate dependency whose own licence notices must be retained.
+- The upstream AI4Bharat IndicConformer source model is MIT-licensed. The selected ONNX export repository identifies its package as Apache-2.0 while separately crediting the AI4Bharat source model as MIT. Retain both notices and comply with the export repository's Apache-2.0 terms for the downloaded artifacts. The Android sherpa-onnx runtime is a separate dependency whose own licence notices must also be retained.
 - Hindi and Sanskrit model artifacts in the current app code have pinned SHA-256 values. They are not bundled in the APK; the user downloads them on demand. The app verifies the exact bytes before installation and inference.
 - Marathi is listed as a candidate language but remains blocked in the app because its exact ONNX digest has not been independently confirmed. A model being listed by the publisher is not enough to enable a download.
 - AI4Bharat IndicF5 is MIT-licensed and lists Hindi and Marathi among its supported languages. It requires a reference voice and does not itself provide a consented Shraddha identity. The Android TTS runtime, speaker consent, audio quality checks and native-speaker review are not implemented in this branch.
