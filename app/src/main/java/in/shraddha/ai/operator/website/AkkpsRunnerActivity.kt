@@ -131,6 +131,46 @@ class AkkpsRunnerActivity : Activity() {
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
     }
 
+    private fun chooseFarmerCardImage() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivityForResult(pick, REQUEST_FARMER_CARD) }
+            .onFailure { status.text = "Farmer Card image picker उपलब्ध नहीं है।" }
+    }
+
+    /** Runs Hindi + Latin OCR on-device. Raw card text is not sent to the cloud or persisted. */
+    private fun processFarmerCardImage(uri: Uri) {
+        status.text = "Farmer Card का local OCR चल रहा है…"
+        val input = runCatching { InputImage.fromFilePath(this, uri) }.getOrElse {
+            status.text = "चुनी गई तस्वीर पढ़ी नहीं जा सकी: " + (it.localizedMessage ?: "file error")
+            return
+        }
+        val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
+        latin.process(input).addOnSuccessListener { latinResult ->
+            devanagari.process(input).addOnSuccessListener { devResult ->
+                val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\n" + devResult.text)
+                latin.close(); devanagari.close()
+                if (!parsed.readyForUserReview) {
+                    status.text = "कार्ड से स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या आवाज़ से जानकारी दें।"
+                } else {
+                    command.setText(parsed.toRunnerCommand())
+                    val missing = parsed.missing.joinToString()
+                    val missingText = if (missing.isBlank()) "मुख्य fields मिलीं" else "अभी जानकारी चाहिए: $missing"
+                    status.text = "स्थानीय OCR ने ${parsed.assignments.size} candidate fields पहचाने। $missingText। हर मान जाँचें/सुधारें। कोई field स्वतः submit नहीं हुई।"
+                }
+            }.addOnFailureListener { error ->
+                latin.close(); devanagari.close()
+                status.text = "Hindi OCR उपलब्ध नहीं: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+            }
+        }.addOnFailureListener { error ->
+            latin.close(); devanagari.close()
+            status.text = "OCR नहीं चल पाया: " + (error.localizedMessage ?: "OCR error") + ". कोई data submit नहीं हुआ।"
+        }
+    }
     private fun action(label: String, click: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; setTextColor(Color.WHITE); setOnClickListener { click() }
     }
