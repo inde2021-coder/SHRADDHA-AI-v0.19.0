@@ -938,7 +938,7 @@ class PcCompanionApp:
                 if type(size) is not int or type(chunks) is not int or not valid_transfer_manifest(
                         transfer_id, size, chunks, item.get("sha256", "")):
                     continue
-                if not part.is_file() or part.stat().st_size != size:
+                if part.is_symlink() or not part.is_file() or part.stat().st_size != size:
                     continue
                 received = {i for i in item.get("received", []) if type(i) is int and 0 <= i < chunks}
                 restored[transfer_id] = {
@@ -1017,6 +1017,8 @@ class PcCompanionApp:
             return
         try:
             file_path = Path(path)
+            if file_path.is_symlink() or not file_path.is_file():
+                raise ValueError("Choose a regular file, not a symbolic link or special file.")
             size = file_path.stat().st_size
             if size < 1 or size > MAX_PC_FILE_BYTES:
                 raise ValueError(f"File size must be between 1 byte and {MAX_PC_FILE_BYTES // (1024 * 1024)} MiB.")
@@ -1051,7 +1053,7 @@ class PcCompanionApp:
             return
         path = Path(pending.get("path", ""))
         try:
-            if not path.is_file() or path.stat().st_size != pending.get("size"):
+            if path.is_symlink() or not path.is_file() or path.stat().st_size != pending.get("size"):
                 raise ValueError("The selected source file is missing or its size has changed.")
             if sha256_file(path) != pending.get("sha256"):
                 raise ValueError("The selected source file changed after the transfer began; select it again.")
@@ -1230,7 +1232,7 @@ class PcCompanionApp:
         if completed:
             if (completed.get("peer") == peer_id and completed.get("size") == size and
                     completed.get("sha256") == digest and Path(completed.get("path", "")).is_file() and
-                    sha256_file(completed["path"]) == digest):
+                    not Path(completed.get("path", "")).is_symlink() and sha256_file(completed["path"]) == digest):
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.status_var.set("This transfer was already saved and verified; completion ACK resent.")
@@ -1331,7 +1333,10 @@ class PcCompanionApp:
             if len(data) != expected:
                 raise ValueError("Chunk length mismatch")
             if index not in transfer["received"]:
-                with open(transfer["path"] + ".shraddha-part", "r+b") as output:
+                part_file = Path(transfer["path"] + ".shraddha-part")
+                if part_file.is_symlink() or not part_file.is_file():
+                    raise ValueError("Incoming partial file is missing or was replaced by a symbolic link.")
+                with part_file.open("r+b") as output:
                     output.seek(index * FILE_CHUNK_BYTES)
                     output.write(data)
                     output.flush()
