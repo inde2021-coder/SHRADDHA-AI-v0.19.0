@@ -723,6 +723,25 @@ object DeviceLinkManager {
             .put("messageKind", kind).put("nonce", sealed.nonce).put("ciphertext", sealed.ciphertext)
         if (kind.startsWith("file_transfer_")) message.put("transferId", correlationId)
         if (kind == "file_transfer_chunk") message.put("index", index)
+        when (kind) {
+            "file_transfer_start" -> {
+                message.put("requestId", payload.optString("requestId"))
+                    .put("fileName", payload.optString("fileName"))
+                    .put("sizeBytes", payload.optLong("sizeBytes", -1L))
+                    .put("chunkCount", payload.optInt("chunkCount", -1))
+                    .put("sha256", payload.optString("sha256"))
+            }
+            "file_transfer_ack" -> {
+                message.put("index", payload.optInt("index", -2))
+                    .put("complete", payload.optBoolean("complete"))
+                    .put("ok", payload.optBoolean("ok"))
+            }
+            "file_transfer_resume" -> {
+                message.put("chunkCount", payload.optInt("chunkCount", -1))
+                    .put("missingIndexes", payload.optJSONArray("missingIndexes") ?: JSONArray())
+            }
+            "file_transfer_cancel" -> message.put("reason", payload.optString("reason", "cancelled"))
+        }
         if (kind == "clipboard_payload" || kind == "task_handoff" || kind == "task_handoff_response") message.put("requestId", correlationId)
         if (kind == "data_share_payload") message.put("requestId", correlationId).put("category", category.orEmpty())
         if (kind == "remote_action" || kind == "remote_action_result") message.put("actionId", correlationId).put("actionKind", actionKind.ifBlank { payload.optString("kind", "unknown") })
