@@ -48,4 +48,33 @@ class AkkpsBoundaryGeometryTest {
         )
         assertTrue(runCatching { AkkpsBoundaryGeometry.measure(bowTie) }.isFailure)
     }
+
+    @Test fun allowsSeparateNewParcelWithoutChangingExistingBoundary() {
+        val existing = square
+        val candidate = listOf(
+            AkkpsGeoPoint(0.0, 0.002),
+            AkkpsGeoPoint(0.0, 0.003),
+            AkkpsGeoPoint(0.001, 0.003),
+            AkkpsGeoPoint(0.001, 0.002)
+        )
+        assertTrue(AkkpsBoundaryGeometry.doesNotOverlapExisting(candidate, listOf(existing)))
+        assertEquals(square, existing)
+    }
+
+    @Test fun rejectsCandidateThatOverlapsOrTouchesProtectedParcel() {
+        val overlap = listOf(
+            AkkpsGeoPoint(0.0005, 0.0005),
+            AkkpsGeoPoint(0.0005, 0.0015),
+            AkkpsGeoPoint(0.0015, 0.0015),
+            AkkpsGeoPoint(0.0015, 0.0005)
+        )
+        val touching = listOf(
+            AkkpsGeoPoint(0.0, 0.001),
+            AkkpsGeoPoint(0.0, 0.002),
+            AkkpsGeoPoint(0.001, 0.002),
+            AkkpsGeoPoint(0.001, 0.001)
+        )
+        assertTrue(!AkkpsBoundaryGeometry.doesNotOverlapExisting(overlap, listOf(square)))
+        assertTrue(!AkkpsBoundaryGeometry.doesNotOverlapExisting(touching, listOf(square)))
+    }
 }
