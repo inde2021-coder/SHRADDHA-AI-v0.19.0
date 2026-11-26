@@ -7,6 +7,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CurriculumProgressStoreInstrumentedTest {
+    @Test fun activeStudyTimeIsCountedAndAbandonedSessionIsRecovered() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = CurriculumProgressStore(context)
+        store.startSession()
+        Thread.sleep(1_100L)
+        assertTrue("Active study time must appear in the live snapshot.", store.snapshot().usedTodayMinutes >= 1)
+        store.endSession()
+        val afterPause = store.snapshot().usedTodayMinutes
+        assertTrue(afterPause >= 1)
+
+        // Simulate a new Activity/process starting while an old session marker remains.
+        store.startSession()
+        Thread.sleep(1_100L)
+        store.startSession()
+        assertTrue("Starting a new session must first recover the previous one.", store.snapshot().usedTodayMinutes >= afterPause + 1)
+        store.endSession()
+    }
+
     @Test fun guardianPinAndProgressPersistLocallyWithEncryptedState() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CurriculumProgressStore(context)
