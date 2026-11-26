@@ -57,6 +57,16 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
+private val BUILT_IN_CURRICULUM_FILES = listOf(
+    "CORE-10-DOMAINS-PRACTICAL-LESSONS.md",
+    "FIVE-LANGUAGE-CAPABILITY-AND-LESSON-SPEC.md",
+    "BABY-CARE-0-2-LESSON-LIBRARY.md",
+    "KIDS-FOUNDATION-3-10-LESSON-LIBRARY.md",
+    "ABACUS-8-LEVEL-COURSE.md",
+    "MIND-ACTIVITIES-18-PLAYBOOK.md",
+    "SHLOKA-MANTRA-KATHA-GITA-LEARNING-LIBRARY.md"
+)
+
 @Composable
 fun DataVaultScreen(navController: NavController) {
     val context = LocalContext.current
@@ -341,6 +351,47 @@ fun DataVaultScreen(navController: NavController) {
         NovaGlassCard {
             Text("PERSONAL KNOWLEDGE BRAIN", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Text("Import PDFs with Hindi/English OCR, search encrypted source-grounded notes, and optionally sync encrypted records across devices.", color = colors.textSecondary, fontSize = 11.sp)
+            NovaButton(
+                text = if (isBusy) "Installing curriculum…" else "INSTALL SHRADDHA TRAINING LIBRARY",
+                onClick = {
+                    scope.launch {
+                        isBusy = true
+                        val result = withContext(Dispatchers.IO) {
+                            val store = LocalKnowledgeDocumentStore(context.applicationContext)
+                            var installed = 0
+                            val failures = mutableListOf<String>()
+                            BUILT_IN_CURRICULUM_FILES.forEach { fileName ->
+                                runCatching {
+                                    val content = context.assets.open(fileName).bufferedReader(Charsets.UTF_8).use { it.readText() }
+                                    val title = fileName.removeSuffix(".md").replace('-', ' ')
+                                    val id = "curriculum-" + fileName.removeSuffix(".md")
+                                        .lowercase().replace(Regex("[^a-z0-9_-]"), "-").take(48)
+                                    store.importText(
+                                        consent = true,
+                                        id = id,
+                                        title = title,
+                                        sourceLabel = "Shraddha AI curated curriculum • v1.0",
+                                        content = content
+                                    ).getOrThrow()
+                                }.onSuccess { installed++ }
+                                    .onFailure { failures += "$fileName: ${it.message ?: "import failed"}" }
+                            }
+                            installed to failures
+                        }
+                        knowledgeDocuments = LocalKnowledgeDocumentStore(context.applicationContext)
+                            .listDocuments().getOrDefault(emptyList())
+                        status = buildString {
+                            append("Installed/updated ${result.first} of ${BUILT_IN_CURRICULUM_FILES.size} built-in curriculum packs in encrypted local Knowledge Brain.")
+                            if (result.second.isNotEmpty()) append(" Errors: ").append(result.second.joinToString(" • "))
+                            append(" No Firebase upload or API call was made.")
+                        }
+                        isBusy = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isBusy,
+                type = NovaButtonType.SECONDARY
+            )
             NovaButton(text = "Import PDF with OCR", onClick = { knowledgePdfLauncher.launch(arrayOf("application/pdf")) },
                 modifier = Modifier.fillMaxWidth(), enabled = !isBusy)
             NovaButton(text = "Refresh knowledge documents", onClick = {
