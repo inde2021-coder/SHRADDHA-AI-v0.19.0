@@ -39,6 +39,38 @@ object CouncilCostBudget {
             .putFloat(KEY_LIMIT, monthlyLimitUsd.toFloat()).putString(KEY_PRICES, parsed.toString()).apply()
     }
 
+    /**
+     * Applies the configured monthly ceiling to every metered Main Brain request, not
+     * only council jobs. Unknown usage is a hard stop while a ceiling is enabled.
+     */
+    @Synchronized
+    fun ensureBudgetAllowsCall(context: Context, provider: String) {
+        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val limit = p.getFloat(KEY_LIMIT, 0f).toDouble()
+        if (limit <= 0.0) return
+        val month = YearMonth.now(ZoneOffset.UTC).toString()
+        if (p.getString(KEY_MONTH, null) != month) {
+            check(p.edit().putString(KEY_MONTH, month).putFloat(KEY_SPEND, 0f)
+                .putBoolean(KEY_UNKNOWN, false).commit()) { "Could not reset monthly API budget state." }
+        }
+        check(!p.getBoolean(KEY_UNKNOWN, false)) {
+            "Provider usage is unverified for this month. Further $provider calls are blocked until the usage and price table are reviewed."
+        }
+        val spent = p.getFloat(KEY_SPEND, 0f).toDouble()
+        check(spent < limit) {
+            "Monthly API budget reached: estimated spend USD $spent / USD $limit. Further provider calls are blocked."
+        }
+    }
+
+    /** Use for cloud features whose provider does not return billable token counters. */
+    fun requireUsageCountersAvailable(context: Context, feature: String) {
+        val limit = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getFloat(KEY_LIMIT, 0f).toDouble()
+        check(limit <= 0.0) {
+            "$feature does not expose billable token usage, so it is blocked while a monthly API ceiling is enabled. Disable the ceiling or use a metered text route."
+        }
+    }
+
     @Synchronized
     fun recordUsageAndEnforce(context: Context, usage: com.Lia.assistant.voice.ProviderTokenUsage) {
         val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
