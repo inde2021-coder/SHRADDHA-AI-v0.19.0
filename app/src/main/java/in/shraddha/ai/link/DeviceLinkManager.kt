@@ -279,7 +279,8 @@ object DeviceLinkManager {
                             val proofValid = expectedProof != null && suppliedProof.matches(Regex("[a-f0-9]{64}")) &&
                                 MessageDigest.isEqual(expectedProof.toByteArray(Charsets.US_ASCII),
                                     suppliedProof.toByteArray(Charsets.US_ASCII))
-                            if (state != null && proofValid) {
+                            val currentState = peerKeys[peerId]
+                            if (state != null && currentState === state && proofValid) {
                                 state.remoteConfirmed = true
                                 onStatus?.invoke("Peer fingerprint confirmed: " + peerId)
                             } else onStatus?.invoke("E2E confirmation proof invalid. Peer remains untrusted.")
@@ -665,8 +666,9 @@ object DeviceLinkManager {
         }.getOrNull() ?: return false
         val sent = socket?.send(JSONObject().put("type", "e2e_key_confirm")
             .put("targetDeviceId", peerId).put("fingerprint", fingerprint).put("proof", proof).toString()) == true
-        state.localConfirmed = sent
-        return sent
+        val stillCurrent = peerKeys[peerId] === state
+        state.localConfirmed = sent && stillCurrent
+        return sent && stillCurrent
     }
 
     private fun clearVisualFrameState(peerId: String) {
