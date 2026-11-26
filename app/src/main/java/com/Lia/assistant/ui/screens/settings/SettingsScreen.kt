@@ -453,6 +453,7 @@ private fun SettingsScreenContent(
                                 // Revoke first (synchronous commit), then tear down live audio
                                 // and any assistant speech already queued for playback.
                                 VoiceSessionManager.stop()
+                                com.Lia.assistant.voice.VoiceForegroundService.stop(context)
                                 ShraddhaSpeechClient.stopPlayback()
                                 `in`.shraddha.ai.link.DeviceLinkManager.cancelAiRequests()
                                 // Revoke background camera/cloud vision immediately as well.
