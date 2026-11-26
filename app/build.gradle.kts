@@ -134,7 +134,7 @@ dependencies {
     // Runtime only; selected models are downloaded on demand and SHA-256 verified.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     // Native Android/JNI runtime for verified app-private IndicConformer models.
-    implementation("com.github.k2-fsa:sherpa-onnx:v2.0.3")
+    implementation("com.github.k2-fsa:sherpa-onnx:v2.0.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
