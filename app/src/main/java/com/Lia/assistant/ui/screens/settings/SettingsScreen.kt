@@ -245,7 +245,10 @@ private fun SettingsScreenContent(
                             LanguagePreference.AUTO -> LanguagePreference.HINDI
                             LanguagePreference.HINDI -> LanguagePreference.HINGLISH
                             LanguagePreference.HINGLISH -> LanguagePreference.ENGLISH
-                            LanguagePreference.ENGLISH -> LanguagePreference.AUTO
+                            LanguagePreference.ENGLISH -> LanguagePreference.MARATHI
+                            LanguagePreference.MARATHI -> LanguagePreference.SANSKRIT
+                            LanguagePreference.SANSKRIT -> LanguagePreference.PAWARI
+                            LanguagePreference.PAWARI -> LanguagePreference.AUTO
                         }
                         appState.applyLanguage(context, nextLang)
                     }
