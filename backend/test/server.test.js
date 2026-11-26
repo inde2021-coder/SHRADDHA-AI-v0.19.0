@@ -302,10 +302,32 @@ test('end-to-end key offers and fingerprint confirmations are forwarded only to 
     assert.equal(offerBody.fromDeviceId, owner.deviceId);
     assert.equal(offerBody.publicKey, 'A'.repeat(120));
 
+    const confirmationFingerprint = 'ABCD-EF01-2345-6789-ABCD-EF01-2345-6789';
+    const confirmationProof = 'a'.repeat(64);
+    const malformedProofForwarded = new Promise(resolve => {
+      const listener = data => {
+        try {
+          if (JSON.parse(data.toString()).type === 'e2e_key_confirm') {
+            ownerSocket.off('message', listener);
+            resolve(true);
+          }
+        } catch {}
+      };
+      ownerSocket.on('message', listener);
+      setTimeout(() => { ownerSocket.off('message', listener); resolve(false); }, 100);
+    });
+    memberSocket.send(JSON.stringify({ type: 'e2e_key_confirm', targetDeviceId: owner.deviceId,
+      fingerprint: confirmationFingerprint, proof: 'invalid' }));
+    assert.equal(await malformedProofForwarded, false, 'confirmation without a valid proof must not be forwarded');
+
     const confirmPromise = wait(ownerSocket, 'e2e_key_confirm');
-    memberSocket.send(JSON.stringify({ type: 'e2e_key_confirm', targetDeviceId: owner.deviceId, fingerprint: 'ABCD-EF01-2345-6789-ABCD-EF01-2345-6789' }));
+    memberSocket.send(JSON.stringify({ type: 'e2e_key_confirm', targetDeviceId: owner.deviceId,
+      fingerprint: confirmationFingerprint, proof: confirmationProof }));
     const [confirm] = await confirmPromise;
-    assert.equal(JSON.parse(confirm.toString()).fromDeviceId, member.deviceId);
+    const confirmBody = JSON.parse(confirm.toString());
+    assert.equal(confirmBody.fromDeviceId, member.deviceId);
+    assert.equal(confirmBody.fingerprint, confirmationFingerprint);
+    assert.equal(confirmBody.proof, confirmationProof);
 
     const malformedOfferForwarded = new Promise(resolve => {
       const listener = data => {
