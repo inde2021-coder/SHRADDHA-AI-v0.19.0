@@ -198,6 +198,25 @@ fun DeviceCenterScreen(navController: NavController) {
                             }
                         }
                     }
+                    "file_transfer_resume" -> {
+                        val item = outgoingFile
+                        val peerId = message.optString("fromDeviceId")
+                        val indexes = message.optJSONArray("missingIndexes")
+                        if (item != null && peerId == selectedPeerId && message.optString("transferId") == item.transferId && indexes != null) {
+                            scope.launch {
+                                outgoingSending = true
+                                for (position in 0 until indexes.length()) {
+                                    val chunkIndex = indexes.optInt(position, -1)
+                                    if (chunkIndex !in 0 until item.chunkCount) continue
+                                    val bytes = withContext(Dispatchers.IO) { DeviceFileTransferSender.readChunk(item, chunkIndex) }
+                                    val sent = DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes)
+                                    bytes.fill(0)
+                                    if (!sent) { incomingTransferStatus = "Retry chunk send failed."; outgoingSending = false; return@launch }
+                                }
+                                incomingTransferStatus = "Missing chunks resent; waiting for PC verification…"
+                            }
+                        }
+                    }
                     "file_transfer_start" -> {
                         val peerId = message.optString("fromDeviceId")
                         val manifest = DeviceFileTransferReceiver.parseManifest(peerId, message)
