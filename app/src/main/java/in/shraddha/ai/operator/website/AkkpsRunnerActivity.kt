@@ -282,17 +282,16 @@ class AkkpsRunnerActivity : Activity() {
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
                 if(e.tagName==='SELECT'){
-                  const o=[...e.options].find(x=>norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value));
+                  const o=[...e.options].find(x=>x.value!=='' && norm(x.value)===norm(item.value));
                   if(!o){out.push({key:item.key,status:'option_not_found'});continue;} e.value=o.value;
                 } else if(e.type==='checkbox'){
                   const v=norm(item.value);
-                  if(['yes','true','1','on','हाँ','हां','सही'].includes(v)) e.checked=true;
-                  else if(['no','false','0','off','नहीं','गलत'].includes(v)) e.checked=false;
+                  if(['yes','true','1','on'].includes(v)) e.checked=true;
+                  else if(['no','false','0','off'].includes(v)) e.checked=false;
                   else {out.push({key:item.key,status:'boolean_value_required'});continue;}
                 } else if(e.type==='radio'){
                   const group=[...document.querySelectorAll('input[type="radio"]')].filter(x=>x.name===e.name);
-                  const chosen=group.find(x=>norm(x.value)===norm(item.value) ||
-                    [...(x.labels||[])].some(l=>norm(l.innerText)===norm(item.value)));
+                  const chosen=group.find(x=>x.value!=='' && norm(x.value)===norm(item.value));
                   if(!chosen){out.push({key:item.key,status:'option_not_found'});continue;}
                   chosen.checked=true;
                   chosen.dispatchEvent(new Event('input',{bubbles:true}));
