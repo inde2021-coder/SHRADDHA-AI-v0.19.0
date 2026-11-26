@@ -784,6 +784,8 @@ Return JSON only."""
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_MIC && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startVoiceCommand()
         else if (requestCode == REQUEST_MIC) status.text = "आवाज़ के लिए Microphone अनुमति आवश्यक है।"
+        else if (requestCode == REQUEST_LOCATION && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) beginFieldEdgeGpsWalk()
+        else if (requestCode == REQUEST_LOCATION) status.text = "GPS सीमा के लिए Precise Location अनुमति आवश्यक है।"
     }
 
     override fun onDestroy() {
