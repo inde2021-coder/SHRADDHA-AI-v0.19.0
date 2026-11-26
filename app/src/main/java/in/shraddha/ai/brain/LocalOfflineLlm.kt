@@ -30,6 +30,17 @@ object LocalOfflineLlm {
     fun checkDevice(context: Context, modelPath: String, backendPreference: String = "auto"): DeviceCheck {
         val model = File(modelPath).canonicalFile
         if (!model.isFile || !model.extension.equals("litertlm", true)) return DeviceCheck(false, "Compatible .litertlm model file not found.")
+        val expectedDigest = context.applicationContext.getSharedPreferences("shraddha_offline_model", Context.MODE_PRIVATE)
+            .getString("active_model_sha256", "").orEmpty().trim()
+        if (!expectedDigest.matches(Regex("[a-fA-F0-9]{64}"))) {
+            return DeviceCheck(false, "Model integrity fingerprint is missing. Remove and re-import this model to verify it before use.")
+        }
+        val actualDigest = runCatching { sha256File(model) }.getOrElse {
+            return DeviceCheck(false, "Could not verify imported model integrity: ${it.localizedMessage ?: "file read failed"}")
+        }
+        if (!actualDigest.equals(expectedDigest, true)) {
+            return DeviceCheck(false, "Imported model integrity check failed. The file changed after import; remove and import a trusted model again.")
+        }
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val memory = ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo)
         val modelBytes = model.length()
@@ -117,6 +128,20 @@ object LocalOfflineLlm {
         }
         val response = requireNotNull(conversation).sendMessage(prompt)
         response.contents.toString().trim().ifBlank { "Local model ने कोई उत्तर नहीं दिया।" }
+    }
+
+    private fun sha256File(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(1024 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+            buffer.fill(0)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun close() = synchronized(lock) { closeLocked() }
