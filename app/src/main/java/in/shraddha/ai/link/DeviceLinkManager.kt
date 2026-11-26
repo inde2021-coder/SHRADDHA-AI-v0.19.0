@@ -698,6 +698,10 @@ object DeviceLinkManager {
         if (relativePath.isBlank()) false else sendAction(targetDeviceId,
             JSONObject().put("kind", "file_read").put("path", relativePath.take(500)))
 
+    fun requestPcFileOpen(targetDeviceId: String, relativePath: String): Boolean =
+        if (targetDeviceId.isBlank() || relativePath.isBlank() || relativePath.length > 500) false
+        else sendAction(targetDeviceId, JSONObject().put("kind", "file_open").put("path", relativePath.trim()))
+
     fun requestPcFileSearch(targetDeviceId: String, query: String, relativePath: String = ""): Boolean {
         val cleanQuery = query.trim()
         if (targetDeviceId.isBlank() || cleanQuery.length !in 2..80 || relativePath.length > 500) return false
