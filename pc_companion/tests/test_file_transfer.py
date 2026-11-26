@@ -214,7 +214,7 @@ class IncomingCompletionReceiptRecoveryTests(unittest.TestCase):
             record = {
                 "peer": "paired-android-01", "transferId": "transfer_done123",
                 "path": str(destination), "partPath": str(part), "size": len(payload),
-                "sha256": hashlib.sha256(payload).hexdigest(), "completedAt": 1_800_000_000
+                "sha256": hashlib.sha256(payload).hexdigest(), "completedAt": int(__import__("time").time())
             }
             state = root / "completed-transfers.json"
             self.assertTrue(save_completed_transfer_record(state, record))
@@ -240,7 +240,7 @@ class IncomingCompletionReceiptRecoveryTests(unittest.TestCase):
             record = {
                 "peer": "paired-android-02", "transferId": "transfer_done456",
                 "path": str(destination), "partPath": str(part), "size": 8,
-                "sha256": hashlib.sha256(b"original").hexdigest(), "completedAt": 1_800_000_000
+                "sha256": hashlib.sha256(b"original").hexdigest(), "completedAt": int(__import__("time").time())
             }
             with self.assertRaises(ValueError):
                 save_completed_transfer_record(root / "receipts.json", record)
