@@ -1,5 +1,7 @@
 package com.Lia.assistant.voice
 
+import android.content.Context
+
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,7 +43,8 @@ object GeminiTextClient {
             .digest(apiKey.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
-    suspend fun resolveModel(apiKey: String): String {
+    suspend fun resolveModel(context: Context, apiKey: String): String {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val cacheKey = credentialFingerprint(apiKey)
         resolvedModels[cacheKey]?.let { return it }
 
@@ -117,10 +120,14 @@ object GeminiTextClient {
     }
 
     fun reply(
+        context: Context,
         apiKey: String,
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
+        }
         if (apiKey.isBlank()) {
             return ChatReplyResult.Error("Gemini API key is missing. Please add it in Settings.")
         }
@@ -135,7 +142,7 @@ object GeminiTextClient {
         }
 
         val modelName = runCatching {
-            kotlinx.coroutines.runBlocking { resolveModel(apiKey) }
+            kotlinx.coroutines.runBlocking { resolveModel(context, apiKey) }
         }.getOrDefault("models/gemini-3.8-flash")
 
         val modelEndpoint = if (modelName.startsWith("models/")) modelName else "models/$modelName"
