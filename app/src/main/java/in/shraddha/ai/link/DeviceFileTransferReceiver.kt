@@ -4,11 +4,14 @@ import android.content.Context
 import android.util.Base64
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.security.MessageDigest
+import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
-/** Receives approved PC-to-phone transfers into app-private storage. */
+/** Receives approved PC-to-phone transfers into app-private storage with restart recovery. */
 object DeviceFileTransferReceiver {
     data class Manifest(val peerId: String, val transferId: String, val fileName: String,
         val sizeBytes: Long, val chunkCount: Int, val sha256: String)
@@ -33,16 +36,67 @@ object DeviceFileTransferReceiver {
     /** Call only after the user approves the incoming transfer prompt. */
     @Synchronized fun accept(context: Context, manifest: Manifest): Boolean {
         if (active.containsKey(manifest.transferId)) return false
-        val directory = File(context.filesDir, "ReceivedFiles")
+        val directory = receivedDirectory(context)
         if (!directory.exists() && !directory.mkdirs()) return false
         if (!directory.isDirectory || directory.usableSpace < manifest.sizeBytes) return false
         val temp = File(directory, ".${manifest.transferId}.part")
         if (temp.exists() || temp.isDirectory) return false
         return try {
-            RandomAccessFile(temp, "rw").use { it.setLength(manifest.sizeBytes) }
-            active[manifest.transferId] = Active(manifest, temp, BooleanArray(manifest.chunkCount))
-            true
-        } catch (_: Exception) { temp.delete(); false }
+            RandomAccessFile(temp, "rw").use { file -> file.setLength(manifest.sizeBytes); file.fd.sync() }
+            val state = Active(manifest, temp, BooleanArray(manifest.chunkCount))
+            active[manifest.transferId] = state
+            if (!persistState(state)) {
+                active.remove(manifest.transferId)
+                temp.delete()
+                metadataFile(temp).delete()
+                false
+            } else true
+        } catch (_: Exception) {
+            active.remove(manifest.transferId)
+            temp.delete()
+            metadataFile(temp).delete()
+            false
+        }
+    }
+
+    /** Rehydrates only app-private partial files whose manifest and bitmap validate. */
+    @Synchronized fun restore(context: Context): List<Manifest> {
+        val directory = receivedDirectory(context)
+        if (!directory.isDirectory) return emptyList()
+        directory.listFiles()?.filter { it.isFile && it.name.startsWith(".") && it.name.endsWith(".part") }
+            ?.forEach { temp ->
+                val transferId = temp.name.removePrefix(".").removeSuffix(".part")
+                if (active.containsKey(transferId)) return@forEach
+                runCatching {
+                    require(!temp.isSymbolicLink())
+                    val props = Properties().apply { FileInputStream(metadataFile(temp)).use { load(it) } }
+                    val peer = props.getProperty("peerId").orEmpty()
+                    val name = DeviceFileTransferProtocol.safeDisplayName(props.getProperty("fileName").orEmpty())
+                    val size = props.getProperty("sizeBytes").toLong()
+                    val chunks = props.getProperty("chunkCount").toInt()
+                    val hash = props.getProperty("sha256").orEmpty()
+                    val id = props.getProperty("transferId").orEmpty()
+                    require(id == transferId && temp.length() == size &&
+                        DeviceFileTransferProtocol.isValidManifest(id, size, chunks, hash) && peer.isNotBlank())
+                    val received = BooleanArray(chunks)
+                    val rawIndexes = props.getProperty("receivedIndexes", "")
+                    if (rawIndexes.isNotBlank()) rawIndexes.split(',').forEach { raw ->
+                        val index = raw.toInt()
+                        require(index in 0 until chunks)
+                        received[index] = true
+                    }
+                    val manifest = Manifest(peer, id, name, size, chunks, hash)
+                    active[id] = Active(manifest, temp, received)
+                }
+            }
+        return pendingTransfers()
+    }
+
+    fun pendingTransfers(): List<Manifest> = active.values.map { it.manifest }.sortedBy { it.fileName }
+
+    fun missingIndexes(transferId: String): List<Int> {
+        val state = active[transferId] ?: return emptyList()
+        synchronized(state.lock) { return state.received.indices.filterNot { state.received[it] } }
     }
 
     fun receiveChunk(context: Context, peerId: String, message: JSONObject): ChunkResult {
@@ -66,15 +120,22 @@ object DeviceFileTransferReceiver {
                     file.fd.sync()
                 }
                 state.received[index] = true
+                if (!persistState(state)) {
+                    state.received[index] = false
+                    return ChunkResult(index, false, error = "Chunk was written but its recovery record could not be saved; retry this chunk.")
+                }
                 if (state.received.all { it }) {
                     if (!sha256(state.temp).equals(state.manifest.sha256, ignoreCase = true)) {
-                        active.remove(transferId); state.temp.delete()
+                        active.remove(transferId)
+                        state.temp.delete()
+                        metadataFile(state.temp).delete()
                         return ChunkResult(index, false, error = "Final SHA-256 mismatch; incomplete file discarded.")
                     }
-                    val destination = uniqueDestination(File(context.filesDir, "ReceivedFiles"), state.manifest.fileName)
+                    val destination = uniqueDestination(receivedDirectory(context), state.manifest.fileName)
                     if (!state.temp.renameTo(destination))
                         return ChunkResult(index, false, error = "Verified file could not be published; transfer retained for retry.")
                     active.remove(transferId)
+                    metadataFile(state.temp).delete()
                     return ChunkResult(index, true, complete = true, savedPath = destination.absolutePath)
                 }
                 return ChunkResult(index, true)
@@ -85,7 +146,7 @@ object DeviceFileTransferReceiver {
     }
 
     fun listReceived(context: Context): List<File> {
-        val directory = File(context.filesDir, "ReceivedFiles")
+        val directory = receivedDirectory(context)
         return directory.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }
             ?.sortedByDescending { it.lastModified() }.orEmpty()
     }
@@ -110,8 +171,29 @@ object DeviceFileTransferReceiver {
 
     @Synchronized fun reject(transferId: String): Boolean {
         val state = active.remove(transferId) ?: return false
+        metadataFile(state.temp).delete()
         return state.temp.delete() || !state.temp.exists()
     }
+
+    private fun persistState(state: Active): Boolean = runCatching {
+        val props = Properties().apply {
+            setProperty("transferId", state.manifest.transferId)
+            setProperty("peerId", state.manifest.peerId)
+            setProperty("fileName", state.manifest.fileName)
+            setProperty("sizeBytes", state.manifest.sizeBytes.toString())
+            setProperty("chunkCount", state.manifest.chunkCount.toString())
+            setProperty("sha256", state.manifest.sha256)
+            setProperty("receivedIndexes", state.received.indices.filter { state.received[it] }.joinToString(","))
+        }
+        val target = metadataFile(state.temp)
+        val staging = File(target.parentFile, target.name + ".tmp")
+        FileOutputStream(staging).use { output -> props.store(output, "Shraddha AI incoming transfer"); output.fd.sync() }
+        java.nio.file.Files.move(staging.toPath(), target.toPath(),
+            java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }.isSuccess
+
+    private fun receivedDirectory(context: Context) = File(context.filesDir, "ReceivedFiles")
+    private fun metadataFile(temp: File) = File(temp.parentFile, temp.name + ".meta")
 
     private fun uniqueDestination(directory: File, displayName: String): File {
         val safe = DeviceFileTransferProtocol.safeDisplayName(displayName)
@@ -138,4 +220,8 @@ object DeviceFileTransferReceiver {
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
+
+    private fun File.isSymbolicLink(): Boolean = runCatching {
+        java.nio.file.Files.isSymbolicLink(this.toPath())
+    }.getOrDefault(true)
 }
