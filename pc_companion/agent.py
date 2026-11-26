@@ -1018,7 +1018,9 @@ class PcCompanionApp:
 
     def _handle_data_share_result(self, msg):
         pending = self.pending_pc_send
-        if not pending or msg.get("requestId") != pending["requestId"]:
+        if (not pending or msg.get("requestId") != pending["requestId"] or
+                msg.get("fromDeviceId") != pending["peer"] or
+                not self.is_e2e_trusted(pending["peer"])):
             return
         if not msg.get("approved"):
             self.pending_pc_send = None
