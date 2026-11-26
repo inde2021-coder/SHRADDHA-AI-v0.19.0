@@ -200,6 +200,55 @@ def list_user_files(relative_path=""):
     return {"folder": str(folder.relative_to(root)).replace("\\", "/") or ".", "entries": entries, "truncated": len(children) > len(entries)}
 
 
+def search_user_files(query, relative_path="", max_results=40, max_directories=500, max_files=5000, time_limit_seconds=2.0):
+    """Search filenames below a safe user folder with strict traversal/time/result limits."""
+    import time
+    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
+        raise RuntimeError("Search text must contain 2-80 characters.")
+    root, folder = _safe_user_path(relative_path)
+    if not folder.is_dir():
+        raise RuntimeError("The requested search location is not a folder.")
+    needle = query.strip().casefold()
+    deadline = time.monotonic() + time_limit_seconds
+    pending = [(folder, 0)]
+    results = []
+    visited_dirs = 0
+    visited_files = 0
+    truncated = False
+    while pending:
+        if time.monotonic() >= deadline or visited_dirs >= max_directories or visited_files >= max_files or len(results) >= max_results:
+            truncated = True
+            break
+        current, depth = pending.pop(0)
+        visited_dirs += 1
+        try:
+            children = list(current.iterdir())
+        except OSError:
+            continue
+        for item in children:
+            if time.monotonic() >= deadline or visited_files >= max_files or len(results) >= max_results:
+                truncated = True
+                break
+            if item.is_symlink() or item.name.startswith(".") or item.name.casefold() in _SENSITIVE_PATH_PARTS:
+                continue
+            try:
+                relative = item.relative_to(root)
+                if any(part.casefold() in _SENSITIVE_PATH_PARTS or part.startswith(".") for part in relative.parts):
+                    continue
+                if item.is_dir():
+                    if depth < 5:
+                        pending.append((item, depth + 1))
+                    continue
+                if not item.is_file():
+                    continue
+                visited_files += 1
+                if needle in item.name.casefold():
+                    results.append({"name": item.name[:160], "path": str(relative).replace("\\", "/")[:500], "sizeBytes": item.stat().st_size})
+            except OSError:
+                continue
+    return {"query": query.strip(), "location": str(folder.relative_to(root)).replace("\\", "/") or ".", "matches": results, "scannedFiles": visited_files, "truncated": truncated}
+
+
 def read_user_text_file(relative_path):
     """Read only small, known text formats; never return arbitrary binary or secret files."""
     root, target = _safe_user_path(relative_path)
@@ -229,6 +278,10 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
         if kind == "file_list":
             import json
             return True, json.dumps(list_user_files(action.get("path", "")), ensure_ascii=False, indent=2)[:12000]
+        if kind == "file_search":
+            import json
+            result = search_user_files(action.get("query", ""), action.get("path", ""))
+            return True, json.dumps(result, ensure_ascii=False, indent=2)[:12000]
         if kind == "file_read":
             import json
             return True, json.dumps(read_user_text_file(action.get("path", "")), ensure_ascii=False, indent=2)[:14000]
