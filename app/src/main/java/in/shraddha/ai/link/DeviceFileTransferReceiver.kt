@@ -17,6 +17,8 @@ object DeviceFileTransferReceiver {
         val sizeBytes: Long, val chunkCount: Int, val sha256: String)
     data class ChunkResult(val index: Int, val ok: Boolean, val complete: Boolean = false,
         val savedPath: String? = null, val error: String? = null)
+    data class CompletedReceipt(val peerId: String, val transferId: String, val fileName: String,
+        val sizeBytes: Long, val sha256: String, val savedPath: String)
     private data class Active(val manifest: Manifest, val temp: File,
         val received: BooleanArray, val lock: Any = Any())
     private val active = ConcurrentHashMap<String, Active>()
@@ -89,9 +91,14 @@ object DeviceFileTransferReceiver {
                     val state = Active(manifest, temp, received)
                     if (received.all { it }) {
                         if (sha256(temp).equals(hash, ignoreCase = true)) {
-                            val destination = uniqueDestination(directory, name)
-                            if (temp.renameTo(destination)) metadataFile(temp).delete()
-                            else active[id] = state
+                            val receipt = loadReceipt(context, id)
+                            val destination = receipt?.let { File(it.savedPath) } ?: uniqueDestination(directory, name)
+                            require(destination.parentFile?.canonicalFile == directory.canonicalFile)
+                            if (persistReceipt(context, CompletedReceipt(peer, id, name, size, hash, destination.absolutePath)) &&
+                                (destination.isFile && destination.length() == size && sha256(destination).equals(hash, true) ||
+                                    temp.renameTo(destination))) {
+                                metadataFile(temp).delete()
+                            } else active[id] = state
                         } else {
                             temp.delete()
                             metadataFile(temp).delete()
@@ -143,9 +150,16 @@ object DeviceFileTransferReceiver {
                         metadataFile(state.temp).delete()
                         return ChunkResult(index, false, error = "Final SHA-256 mismatch; incomplete file discarded.")
                     }
-                    val destination = uniqueDestination(receivedDirectory(context), state.manifest.fileName)
-                    if (!state.temp.renameTo(destination))
+                    val directory = receivedDirectory(context)
+                    val destination = uniqueDestination(directory, state.manifest.fileName)
+                    val receipt = CompletedReceipt(state.manifest.peerId, transferId, state.manifest.fileName,
+                        state.manifest.sizeBytes, state.manifest.sha256, destination.absolutePath)
+                    if (!persistReceipt(context, receipt))
+                        return ChunkResult(index, false, error = "Verified file is ready, but completion receipt could not be saved; transfer retained for recovery.")
+                    if (!state.temp.renameTo(destination)) {
+                        deleteReceipt(context, transferId)
                         return ChunkResult(index, false, error = "Verified file could not be published; transfer retained for retry.")
+                    }
                     active.remove(transferId)
                     metadataFile(state.temp).delete()
                     return ChunkResult(index, true, complete = true, savedPath = destination.absolutePath)
@@ -156,6 +170,72 @@ object DeviceFileTransferReceiver {
             } finally { bytes.fill(0) }
         }
     }
+
+    /** Receipts bridge the crash window between publishing the file and ACKing the sender. */
+    @Synchronized fun completedReceipts(context: Context, peerId: String? = null): List<CompletedReceipt> {
+        val directory = receivedDirectory(context)
+        return directory.listFiles()?.filter { it.isFile && it.name.startsWith(".") && it.name.endsWith(".receipt") }
+            ?.mapNotNull { file ->
+                val id = file.name.removePrefix(".").removeSuffix(".receipt")
+                loadReceipt(context, id)?.takeIf { receipt ->
+                    (peerId == null || receipt.peerId == peerId) &&
+                        File(receipt.savedPath).let { saved ->
+                            saved.isFile && saved.length() == receipt.sizeBytes &&
+                                sha256(saved).equals(receipt.sha256, ignoreCase = true)
+                        }
+                }
+            }?.sortedBy { it.transferId }.orEmpty()
+    }
+
+    /** Call only after the encrypted completion ACK was accepted by the relay socket. */
+    @Synchronized fun acknowledgeReceipt(context: Context, peerId: String, transferId: String): Boolean {
+        val receipt = loadReceipt(context, transferId) ?: return false
+        if (receipt.peerId != peerId) return false
+        return deleteReceipt(context, transferId)
+    }
+
+    private fun persistReceipt(context: Context, receipt: CompletedReceipt): Boolean = runCatching {
+        require(receipt.transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")) &&
+            receipt.peerId.isNotBlank() && receipt.sizeBytes in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES &&
+            receipt.sha256.matches(Regex("[a-fA-F0-9]{64}")))
+        val directory = receivedDirectory(context)
+        val destination = File(receipt.savedPath)
+        require(destination.parentFile?.canonicalFile == directory.canonicalFile)
+        val props = Properties().apply {
+            setProperty("peerId", receipt.peerId)
+            setProperty("transferId", receipt.transferId)
+            setProperty("fileName", receipt.fileName)
+            setProperty("sizeBytes", receipt.sizeBytes.toString())
+            setProperty("sha256", receipt.sha256)
+            setProperty("savedPath", receipt.savedPath)
+        }
+        val target = receiptFile(context, receipt.transferId)
+        val staging = File(directory, target.name + ".tmp")
+        FileOutputStream(staging).use { output -> props.store(output, "Shraddha AI completed transfer receipt"); output.fd.sync() }
+        java.nio.file.Files.move(staging.toPath(), target.toPath(),
+            java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }.isSuccess
+
+    private fun loadReceipt(context: Context, transferId: String): CompletedReceipt? = runCatching {
+        require(transferId.matches(Regex("[A-Za-z0-9_-]{12,64}")))
+        val props = Properties().apply { FileInputStream(receiptFile(context, transferId)).use { load(it) } }
+        val peer = props.getProperty("peerId").orEmpty()
+        val id = props.getProperty("transferId").orEmpty()
+        val name = DeviceFileTransferProtocol.safeDisplayName(props.getProperty("fileName").orEmpty())
+        val size = props.getProperty("sizeBytes").toLong()
+        val hash = props.getProperty("sha256").orEmpty()
+        val path = props.getProperty("savedPath").orEmpty()
+        val file = File(path)
+        require(id == transferId && peer.isNotBlank() && size in 1L..DeviceFileTransferProtocol.MAX_FILE_BYTES &&
+            hash.matches(Regex("[a-fA-F0-9]{64}")) && file.parentFile?.canonicalFile == receivedDirectory(context).canonicalFile)
+        CompletedReceipt(peer, id, name, size, hash, path)
+    }.getOrNull()
+
+    private fun deleteReceipt(context: Context, transferId: String): Boolean =
+        receiptFile(context, transferId).delete() || !receiptFile(context, transferId).exists()
+
+    private fun receiptFile(context: Context, transferId: String) =
+        File(receivedDirectory(context), ".$transferId.receipt")
 
     fun listReceived(context: Context): List<File> {
         val directory = receivedDirectory(context)
