@@ -353,9 +353,9 @@ class AkkpsRunnerActivity : Activity() {
         }
         inspectPage { page ->
             val fields = page.optJSONArray("fields") ?: JSONArray()
-            val prompt = """You are a strict offline AKKPS form mapper.
-Return JSON only: {"assignments":[{"field":"exact visible field label/name/id","value":"literal value explicitly said by the user"}],"missing":["required value not supplied"],"submit":false}.
-Map only explicit values from the user's command to visible fields. Do not invent or infer personal data. Use only exact visible fields and select options. Never submit unless the user explicitly asked.
+            val prompt = """You are a strict offline AKKPS form mapper. The AKKPS website UI language and all form labels/options must remain exactly as the website presents them (normally English); never translate or modify the website UI.
+Return JSON only: {"assignments":[{"field":"exact visible field label/name/id","value":"value in the exact format AKKPS expects"}],"missing":["required value not supplied"],"submit":false}.
+Understand the user's Hindi/Pawari command, but map it to the exact visible AKKPS field. For SELECT and RADIO fields, choose only an exact existing option value from that field's listed options; output its actual option.value (not a Hindi translation or guessed synonym). If no listed option unambiguously matches the user's meaning, leave that field out and add it to missing for clarification. For free-text fields, preserve the explicitly spoken information and use English only where the AKKPS field/schema requires it; never invent a translation or personal data. Preserve numeric/date formats required by the field. Do not change the page language. Never submit unless the user explicitly asked.
 AKKPS page: ${page.optString("title")}
 Visible fields: ${fields.toString().take(3500)}
 User command: ${raw.take(1200)}
