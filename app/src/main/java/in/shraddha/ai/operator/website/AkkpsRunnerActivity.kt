@@ -312,9 +312,9 @@ class AkkpsRunnerActivity : Activity() {
             val prompt = """You are a strict offline AKKPS form mapper.
 Return JSON only: {"assignments":[{"field":"exact visible field label/name/id","value":"literal value explicitly said by the user"}],"missing":["required value not supplied"],"submit":false}.
 Map only explicit values from the user's command to visible fields. Do not invent or infer personal data. Use only exact visible fields and select options. Never submit unless the user explicitly asked.
-AKKPS page: \${page.optString("title")}
-Visible fields: \${fields.toString().take(9000)}
-User command: \${raw.take(2500)}
+AKKPS page: ${page.optString("title")}
+Visible fields: ${fields.toString().take(9000)}
+User command: ${raw.take(2500)}
 Return JSON only."""
             status.text = "Shraddha का Offline AI फॉर्म समझ रहा है…"
             Thread {
@@ -349,7 +349,7 @@ Return JSON only."""
                     val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit && missing.length() == 0
                     fillValues(values, shouldSubmit)
                     if (missing.length() > 0) {
-                        status.text = "Offline AI ने \${values.size} फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
+                        status.text = "Offline AI ने ${values.size} फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
                             (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit रोक दिया गया।"
                     }
                 }
