@@ -43,7 +43,9 @@ class ProtocolTests(unittest.TestCase):
             "UPI PIN 1234",
             "CVV 123",
             "यह ओटीपी 654321 है",
-            "पासवर्ड बदलें"
+            "पासवर्ड बदलें",
+            "API key: abc123secret",
+            "Bearer token abc123secret"
         ):
             self.assertIsNone(validate_remote_action({"kind": "type", "text": text}))
 
