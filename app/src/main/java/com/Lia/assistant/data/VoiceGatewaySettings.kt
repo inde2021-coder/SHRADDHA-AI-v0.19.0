@@ -222,6 +222,9 @@ object VoiceGatewaySettings {
             .url(config.baseUrl.trimEnd('/') + "/api/chat")
             .header("Authorization", "Bearer " + config.gatewayToken)
             .post(body).build()
+        // Provider discovery can take time. Re-check immediately before sending user
+        // content so a consent revocation during discovery cannot leak the prompt.
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
