@@ -38,6 +38,9 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: ShraddhaAI-PC-Companion-Windows
-          path: dist/ShraddhaAI-PC-Companion.exe
+          path: |
+            dist/ShraddhaAI-PC-Companion.exe
+            pc_companion/setup-ocr.ps1
+            pc_companion/README.md
           if-no-files-found: error
           retention-days: 14
