@@ -1,8 +1,8 @@
 # Shraddha AI — Training Capability Map and Duplicate-Avoidance Audit
 
 Date: 2026-11-26
-Branch: `feat/free-api-offline-integration`
-Scope: static repository inventory of the active Android source tree and canonical Windows companion. This is not a runtime test report or a claim that every feature is complete.
+Branch: `fix/global-online-ai-consent-gateway`
+Scope: active Android source tree and canonical Windows companion. This map separates shipped starter curriculum integration from specialist content review and model/runtime work.
 
 ## Audit rules
 
@@ -16,7 +16,7 @@ Scope: static repository inventory of the active Android source tree and canonic
 
 | Capability | Existing source discovered | Current evidence / limitation | Direction |
 |---|---|---|---|
-| Local knowledge retrieval | `in/shraddha/ai/brain/LocalKnowledgeBase.kt`, `LocalKnowledgeDocumentStore.kt` | Lexical retrieval and encrypted imported-document RAG; document store describes BM25 plus deterministic hashed n-gram vectors, not a neural embedding model. PDF import performs Latin + Devanagari OCR. | Extend this store/schema and add curated packs; do not create another RAG database. |
+| Local knowledge retrieval | `in/shraddha/ai/brain/LocalKnowledgeBase.kt`, `LocalKnowledgeDocumentStore.kt`, `TrainingCurriculumInstaller.kt` | Existing encrypted BM25 + deterministic hashed n-gram retrieval now installs eight signed-APK bundled starter curriculum packs on first Chat use, verifies SHA-256 and repairs missing/outdated packs. Private user documents remain local. This is not neural embedding search. | Keep one RAG store; add reviewed content packs and acceptance tests. |
 | Personal memory | `PersistentChatMemory.kt`, `PersonalKnowledgeStore.kt`, `SecureMemoryVault.kt`, `UnifiedMemoryRepository.kt` | Encrypted local recap, timeline/skill examples/routine proposals, optional explicit Firebase sync. Personal store comments say it does not execute routines or ingest sensors. | Audit screens, consent and CRUD end-to-end; add only missing memory categories to the existing repository. |
 | Offline text AI | `LocalOfflineLlm.kt`, `OfflineModelScreen.kt` | Existing LiteRT-LM local text path; model weights are imported separately. Not a complete offline voice stack. | Keep separate from knowledge packs; do not bundle model weights in APK. |
 | Commands and planning | `OfflineCommandEngine.kt`, `LiaToolCatalog.kt`, `LiaCapabilityPrompts.kt`, `VoiceToolActionJournal.kt` | Tool declarations and safety descriptions exist. Prompt documentation distinguishes local planning from execution; each command still needs implementation and result verification. | Maintain one canonical tool registry; audit each tool declaration against handler, permission and tests. |
@@ -40,10 +40,26 @@ The repository tree also contains multiple legacy/reference trees and old packag
 
 These paths must not be treated as additional active Shraddha features. Before any branding/namespace cleanup, verify Gradle source sets, imports, manifests, build variants, workflows, and runtime entry points. Do not blindly delete or bulk-rename legacy folders; first establish whether they are build inputs, migration sources, or archival material. User-facing identity must remain Shraddha AI.
 
+## Offline curriculum runtime integration
+
+Eight bundled Markdown packs are installed into the existing encrypted knowledge store before Chat's first local retrieval:
+
+1. Core ten domains — human interaction, education, civic/practical life, organisation, reasoning, technology, language, productivity, safety and professional skills.
+2. Bhagavad Gita, shloka, mantra and katha starter library.
+3. Baby care ages 0–2 (caregiver education with medical-safety boundaries).
+4. Kids foundation ages 3–10.
+5. Abacus eight-level starter course.
+6. Eighteen non-clinical mind activities.
+7. Five-language text-learning specification and starter lessons (Hindi, English, Sanskrit, Marathi, Pawari).
+8. Full curriculum catalogue and product-wide safety/learning rules.
+
+Runtime path: signed APK assets → SHA-256 validation → TrainingCurriculumInstaller → existing encrypted LocalKnowledgeDocumentStore → source-labelled local retrieval → extractive local answer. If an imported on-device LiteRT-LM model is available, bundled curriculum excerpts are also supplied as context. If Online AI is explicitly enabled, only bundled curriculum excerpts may be added to the provider prompt; user-imported/private document excerpts are not silently uploaded.
+
+Limitations: these are authored starter packs, not exhaustive subject corpora. Specialist clinical, education and Sanskrit review is still required. Five-language text content does not prove ASR/TTS/OCR/translation-model support for all five languages. Model-weight fine-tuning is not performed by this installer.
 ## Ten training domains mapped to existing systems
 
 1. Human behaviour and everyday interaction → existing conversation memory, personality prompt and conversation quality tests; extend content and test behaviour, not a second personality engine.
-2. General knowledge and education → LocalKnowledgeDocumentStore + versioned content packs; corpus is not yet evidenced as complete.
+2. General knowledge and education → LocalKnowledgeDocumentStore + versioned content packs; eight bundled starter curriculum packs are now indexed offline; the broader corpus still needs expansion and review.
 3. India, culture, civic and practical life → same knowledge-pack pipeline with official sources and freshness metadata.
 4. Personal assistant and organisation → PersonalKnowledgeStore, PersistentChatMemory, UnifiedMemoryRepository and existing reminder/routine/action paths; verify complete UI/CRUD before adding anything.
 5. Reasoning and decision support → OfflineCommandEngine and existing multi-role planning tool; planning is not equivalent to executing or verifying a task.
