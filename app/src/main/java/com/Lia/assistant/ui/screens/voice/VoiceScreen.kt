@@ -28,6 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,10 @@ import com.Lia.assistant.ui.theme.nightSky
 import com.Lia.assistant.voice.NovaOrbState
 import com.Lia.assistant.voice.VoiceForegroundService
 import com.Lia.assistant.voice.VoiceSessionManager
+import com.Lia.assistant.voice.IndicConformerRuntime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun VoiceScreen(
@@ -75,6 +80,11 @@ fun VoiceScreen(
     val amplitude by VoiceSessionManager.amplitude.collectAsState()
     val isActive by VoiceSessionManager.isActive.collectAsState()
     val statusText by VoiceSessionManager.statusText.collectAsState()
+    val offlineTranscript by VoiceSessionManager.offlineTranscript.collectAsState()
+    val offlineBrainResponse by VoiceSessionManager.offlineBrainResponse.collectAsState()
+    val scope = rememberCoroutineScope()
+    var offlineLanguage by remember { mutableStateOf(IndicConformerRuntime.Language.HINDI) }
+    var offlineModelStatus by remember { mutableStateOf("") }
     val microphoneReady = isActive && state !in setOf(NovaOrbState.IDLE, NovaOrbState.CONNECTING, NovaOrbState.ERROR)
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -152,53 +162,83 @@ fun VoiceScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                if (!hasKey) {
+                if (!hasKey || !onlineAiAllowed) {
                     LiaOrb3D(
-                        state = NovaOrbState.ERROR,
-                        size = orbSize,
+                        state = NovaOrbState.IDLE,
+                        size = orbSize * 0.62f,
                         amplitude = 0f,
                         assistantName = appState.assistantName
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "Secure Voice Backend Required",
-                        fontFamily = SerifFontFamily,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 20.sp,
-                        color = colors.error
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    NovaButton(
-                        text = "Configure Secure Backend",
-                        onClick = { navController.navigate("settings") },
-                        type = NovaButtonType.PRIMARY
-                    )
-                } else if (!onlineAiAllowed) {
-                    LiaOrb3D(
-                        state = NovaOrbState.ERROR,
-                        size = orbSize,
-                        amplitude = 0f,
-                        assistantName = appState.assistantName
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Online AI अनुमति बंद है",
+                        text = if (onlineAiAllowed) "Offline Voice • Cloud Backend not configured" else "Offline Voice • Cloud AI disabled",
                         fontFamily = SerifFontFamily,
                         fontStyle = FontStyle.Italic,
-                        fontSize = 18.sp,
+                        fontSize = 17.sp,
                         color = colors.textPrimary
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("अपनी offline speech language चुनें", color = colors.textSecondary, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IndicConformerRuntime.Language.entries.forEach { language ->
+                            Text(
+                                text = language.label,
+                                color = if (offlineLanguage == language) colors.accent else colors.textPrimary,
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(colors.surfaceGlass).clickable {
+                                        offlineLanguage = language
+                                        offlineModelStatus = IndicConformerRuntime.status(context, language).detail
+                                    }.padding(horizontal = 10.dp, vertical = 8.dp),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    val selectedStatus = IndicConformerRuntime.status(context, offlineLanguage)
                     Text(
-                        text = "Live Voice के लिए cloud processing की स्पष्ट अनुमति जरूरी है। Offline Chat अलग से इस्तेमाल कर सकते हैं।",
-                        color = colors.textSecondary,
-                        fontSize = 12.sp
+                        text = offlineModelStatus.ifBlank { selectedStatus.detail },
+                        color = if (selectedStatus.availability == IndicConformerRuntime.Availability.READY) colors.accent else colors.textSecondary,
+                        fontSize = 11.sp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
                     NovaButton(
-                        text = "Settings में Online AI अनुमति खोलें",
-                        onClick = { navController.navigate("settings") }
+                        text = "DOWNLOAD / VERIFY ${offlineLanguage.label} MODEL",
+                        onClick = {
+                            offlineModelStatus = "Downloading ${offlineLanguage.label} model and checking SHA-256…"
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching { IndicConformerRuntime.download(context, offlineLanguage) }
+                                }
+                                offlineModelStatus = result.fold(
+                                    { IndicConformerRuntime.status(context, offlineLanguage).detail },
+                                    { it.localizedMessage ?: "Model download failed safely." }
+                                )
+                            }
+                        },
+                        enabled = !isActive,
+                        type = NovaButtonType.SECONDARY
                     )
+                    NovaButton(
+                        text = if (isActive) "STOP OFFLINE MICROPHONE" else "START OFFLINE MICROPHONE",
+                        onClick = {
+                            if (isActive) VoiceForegroundService.stop(context)
+                            else {
+                                val status = IndicConformerRuntime.status(context, offlineLanguage)
+                                offlineModelStatus = status.detail
+                                if (status.availability == IndicConformerRuntime.Availability.READY) {
+                                    VoiceForegroundService.startOffline(context, offlineLanguage)
+                                }
+                            }
+                        },
+                        enabled = hasRecordAudioPermission || isActive,
+                        type = NovaButtonType.PRIMARY
+                    )
+                    if (offlineTranscript.isNotBlank()) Text("पहचाना गया: $offlineTranscript", color = colors.textPrimary, fontSize = 12.sp)
+                    if (offlineBrainResponse.isNotBlank()) Text(offlineBrainResponse, color = colors.textPrimary, fontSize = 12.sp)
+                    if (!hasKey) {
+                        NovaButton(text = "Configure Secure Backend", onClick = { navController.navigate("settings") }, type = NovaButtonType.TEXT)
+                    }
+                    if (onlineAiAllowed) {
+                        NovaButton(text = "Online Voice Settings", onClick = { navController.navigate("settings") }, type = NovaButtonType.TEXT)
+                    }
                 } else if (!hasRecordAudioPermission) {
                     LiaOrb3D(
                         state = NovaOrbState.ERROR,
