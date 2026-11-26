@@ -278,11 +278,11 @@ fun DeviceCenterScreen(navController: NavController) {
                                 outgoingQueue = emptyList()
                                 outgoingInFlight = emptySet()
                                 outgoingAcked = emptySet()
-                                outgoingPumpActive = false
                                 outgoingSending = false
                                 outgoingProgress = 0
                                 incomingTransferStatus = "फ़ाइल PC पर SHA-256 verify होकर save हो गई।"
-                            } else if (index == -1 && message.optBoolean("ok")) {
+                            } else if (index == -1 && message.optBoolean("ok") &&
+                                outgoingAcked.isEmpty() && outgoingInFlight.isEmpty() && outgoingQueue.isEmpty()) {
                                 outgoingAcked = emptySet()
                                 outgoingInFlight = emptySet()
                                 outgoingQueue = (0 until item.chunkCount).toList()
