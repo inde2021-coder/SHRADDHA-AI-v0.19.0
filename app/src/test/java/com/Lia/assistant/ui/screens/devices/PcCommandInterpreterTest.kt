@@ -60,8 +60,8 @@ class PcCommandInterpreterTest {
     }
 
     @Test fun onlyProducesProtocolAllowlistedActions() {
-        val kinds = listOf("home", "back", "scroll up", "open Calculator", "type hello", "volume 20")
+        val kinds = listOf("home", "back", "scroll up", "open Calculator", "type hello", "volume 20", "open file Documents/report.pdf", "search files invoice")
             .map { PcCommandInterpreter.parse(it).getOrThrow().getString("kind") }
-        assertTrue(kinds.all { it in setOf("home", "back", "scroll", "open_app", "type", "set_volume") })
+        assertTrue(kinds.all { it in setOf("home", "back", "scroll", "open_app", "type", "set_volume", "file_open", "file_search") })
     }
 }
