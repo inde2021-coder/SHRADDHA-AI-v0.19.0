@@ -99,7 +99,7 @@ kotlin {
 // sherpa-onnx Android AAR bundles the Kotlin API itself. Exclude its JVM jar
 // across every configuration so no transitive path reintroduces duplicate classes.
 configurations.configureEach {
-    exclude(group = "com.github.k2-fsa", module = "sherpa-onnx-jvm")
+    exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
 }
 
 dependencies {
@@ -141,7 +141,7 @@ dependencies {
     // Native Android/JNI runtime for verified app-private IndicConformer models.
     implementation("com.github.k2-fsa:sherpa-onnx:v2.0.1") {
         // The Android AAR already contains the JNI-backed Kotlin API; avoid its duplicate JVM jar.
-        exclude(group = "com.github.k2-fsa", module = "sherpa-onnx-jvm")
+        exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
     }
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
