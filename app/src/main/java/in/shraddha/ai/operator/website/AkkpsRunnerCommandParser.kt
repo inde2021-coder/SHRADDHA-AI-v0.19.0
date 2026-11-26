@@ -14,12 +14,12 @@ object AkkpsRunnerCommandParser {
 
     /** Submission intent must be a standalone command segment, never a substring of a value. */
     fun hasExplicitSubmitIntent(raw: String): Boolean =
-        raw.split(';', '\\n').any { submitToken.matches(it.trim()) }
+        raw.split(';', '\n').any { submitToken.matches(it.trim()) }
 
     fun parse(raw: String): AkkpsRunnerCommand {
         val assignments = mutableListOf<Pair<String, String>>()
         var submit = false
-        raw.split(';', '\\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+        raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
             if (submitToken.matches(part)) {
                 submit = true
             } else {
