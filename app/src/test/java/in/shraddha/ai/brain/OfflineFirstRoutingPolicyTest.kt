@@ -31,6 +31,24 @@ class OfflineFirstRoutingPolicyTest {
         assertFalse(result.maySendUserContentToCloud)
     }
 
+    @Test fun localKnowledgeOutranksGenerativeModelForDocumentQuestions() {
+        val result = OfflineFirstRoutingPolicy.choose(
+            OfflineFirstRoutingPolicy.TaskKind.DOCUMENT_QA,
+            state(model = true, knowledge = true)
+        )
+        assertEquals(OfflineFirstRoutingPolicy.Route.LOCAL_KNOWLEDGE, result.route)
+        assertFalse(result.maySendUserContentToCloud)
+    }
+
+    @Test fun localKnowledgeOutranksGenerativeModelForPersonalMemory() {
+        val result = OfflineFirstRoutingPolicy.choose(
+            OfflineFirstRoutingPolicy.TaskKind.PERSONAL_MEMORY,
+            state(model = true, knowledge = true)
+        )
+        assertEquals(OfflineFirstRoutingPolicy.Route.LOCAL_KNOWLEDGE, result.route)
+        assertFalse(result.maySendUserContentToCloud)
+    }
+
     @Test fun localKnowledgeIsUsedBeforeCloud() {
         val result = OfflineFirstRoutingPolicy.choose(
             OfflineFirstRoutingPolicy.TaskKind.DOCUMENT_QA,
