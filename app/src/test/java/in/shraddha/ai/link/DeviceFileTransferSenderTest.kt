@@ -89,7 +89,7 @@ class DeviceFileTransferSenderTest {
     @Test fun persistedAcknowledgedProgressNeverMovesBackward() {
         val directory = temporaryFolder.newFolder("monotonic-progress")
         val source = java.io.File(directory, "outgoing.part")
-        val payload = "progress".toByteArray()
+        val payload = ByteArray(DeviceFileTransferProtocol.CHUNK_BYTES * 2 + 1) { (it % 251).toByte() }
         source.writeBytes(payload)
         val prepared = DeviceFileTransferSender.Prepared(
             file = source, transferId = "transfer_765432", fileName = "progress.txt",
