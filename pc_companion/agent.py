@@ -1026,6 +1026,22 @@ class PcCompanionApp:
             self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
             return False
         except Exception as exc:
+            destination = Path(transfer["path"])
+            try:
+                already_published = (destination.is_file() and not destination.is_symlink() and
+                                     destination.stat().st_size == transfer["size"] and
+                                     sha256_file(destination) == transfer["sha256"])
+            except OSError:
+                already_published = False
+            if already_published:
+                self.pc_completed[transfer_id] = dict(completion_record)
+                self.pc_incoming.pop(transfer_id, None)
+                self._persist_pc_incoming()
+                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+                self.status_var.set("Previously published file verified; completion ACK recovered.")
+                return True
+            self.pc_completed.pop(transfer_id, None)
             self.status_var.set(f"Verified file could not be published safely: {str(exc)[:140]}")
             return False
 
