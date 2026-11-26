@@ -57,6 +57,7 @@ import com.Lia.assistant.ui.theme.LocalNovaColors
 import com.Lia.assistant.ui.theme.nightSky
 import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.link.DeviceFileTransferReceiver
+import `in`.shraddha.ai.link.DeviceFileTransferSender
 import org.json.JSONObject
 import kotlinx.coroutines.launch
 
@@ -96,6 +97,9 @@ fun DeviceCenterScreen(navController: NavController) {
     var incomingTransferStatus by remember { mutableStateOf("") }
     var receivedFiles by remember { mutableStateOf(DeviceFileTransferReceiver.listReceived(context)) }
     var pendingExportFile by remember { mutableStateOf<File?>(null) }
+    var outgoingFile by remember { mutableStateOf<DeviceFileTransferSender.Prepared?>(null) }
+    var outgoingProgress by remember { mutableStateOf(0) }
+    var outgoingSending by remember { mutableStateOf(false) }
     val exportFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val source = pendingExportFile
         pendingExportFile = null
@@ -229,8 +233,29 @@ fun DeviceCenterScreen(navController: NavController) {
             if (commandText.isBlank()) status = "आवाज़ समझ नहीं आई। फिर से बोलें या लिखें।"
         }
     }
-    val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }
-    val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
+    val sendFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val peer = selectedPeerId
+        if (uri != null && peer.isNotBlank() && peerTrusted) {
+            scope.launch {
+                outgoingSending = true
+                incomingTransferStatus = "चुनी गई फ़ाइल तैयार हो रही है…"
+                val prepared = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val name = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                        DeviceFileTransferSender.prepare(context.contentResolver, uri, context.cacheDir, name)
+                    }
+                }
+                prepared.onSuccess { item ->
+                    val started = DeviceLinkManager.startFileTransfer(peer, java.util.UUID.randomUUID().toString().replace("-", ""),
+                        item.transferId, item.fileName, item.sizeBytes, item.chunkCount, item.sha256)
+                    if (started) { outgoingFile = item; outgoingProgress = 0; incomingTransferStatus = "PC पर save location चुनने की प्रतीक्षा…" }
+                    else { DeviceFileTransferSender.cleanup(item); incomingTransferStatus = "PC transfer शुरू नहीं हो सका।"; outgoingSending = false }
+                }.onFailure { incomingTransferStatus = "फ़ाइल तैयार नहीं हुई: ${it.message ?: "unknown error"}"; outgoingSending = false }
+            }
+        } else if (uri != null) incomingTransferStatus = "पहले trusted PC चुनें।"
+    }
+    val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }    val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
 
     Column(
         modifier = Modifier.fillMaxSize().nightSky()
