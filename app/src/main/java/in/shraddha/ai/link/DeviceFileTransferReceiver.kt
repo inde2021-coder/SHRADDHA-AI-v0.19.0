@@ -18,7 +18,7 @@ object DeviceFileTransferReceiver {
     data class ChunkResult(val index: Int, val ok: Boolean, val complete: Boolean = false,
         val savedPath: String? = null, val error: String? = null)
     data class CompletedReceipt(val peerId: String, val transferId: String, val fileName: String,
-        val sizeBytes: Long, val sha256: String, val savedPath: String)
+        val sizeBytes: Long, val sha256: String, val savedPath: String, val published: Boolean = false)
     private data class Active(val manifest: Manifest, val temp: File,
         val received: BooleanArray, val lock: Any = Any())
     private val active = ConcurrentHashMap<String, Active>()
@@ -39,8 +39,10 @@ object DeviceFileTransferReceiver {
     @Synchronized fun accept(context: Context, manifest: Manifest): Boolean {
         active[manifest.transferId]?.let { return it.manifest == manifest }
         loadReceipt(context, manifest.transferId)?.let { receipt ->
-            return receipt.peerId == manifest.peerId && receipt.sizeBytes == manifest.sizeBytes &&
-                receipt.sha256.equals(manifest.sha256, ignoreCase = true)
+            val published = promoteReceipt(context, receipt)
+            return published != null && published.peerId == manifest.peerId &&
+                published.sizeBytes == manifest.sizeBytes &&
+                published.sha256.equals(manifest.sha256, ignoreCase = true)
         }
         val directory = receivedDirectory(context)
         if (!directory.exists() && !directory.mkdirs()) return false
