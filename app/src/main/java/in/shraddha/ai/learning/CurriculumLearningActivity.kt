@@ -157,6 +157,7 @@ class CurriculumLearningActivity : Activity() {
                 preview
             ) { showVerse(verse) })
         }
+        if (chapter == 13) list.addView(TextView(this).apply { text = "कुछ संस्करण अर्जुन के प्रश्न को अलग 13.1 गिनते हैं। यहाँ सामान्य 700-श्लोक क्रम रखा गया है; वैकल्पिक पाठ metadata में सुरक्षित है।"; setTextColor(0xFFFFD38A.toInt()); setPadding(12, 10, 12, 10) }, 0)
         val scroll = ScrollView(this).apply { addView(list) }
         AlertDialog.Builder(this)
             .setTitle("अध्याय $chapter  •  ${verses.length()} श्लोक")
