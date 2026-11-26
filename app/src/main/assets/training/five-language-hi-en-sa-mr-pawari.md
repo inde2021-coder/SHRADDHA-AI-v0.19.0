@@ -1,7 +1,7 @@
 # Shraddha AI — Five-Language Learning & Communication Pack
 Version: 1.0
 Date: 2026-11-26
-Status: Detailed product/content specification and starter lessons. This file does not claim that ASR, TTS, OCR, translation models or every language workflow are already integrated in the APK.
+Status: Starter text curriculum/specification is bundled in the APK offline Knowledge Library for Hindi, English, Sanskrit, Marathi and Pawari. This does not claim validated ASR, TTS, OCR or full translation-model support for all five languages; those runtime/model integrations require separate testing.
 
 ## Languages in scope
 1. Hindi — हिन्दी; Devanagari; standard Hindi plus common conversational registers.
