@@ -76,6 +76,21 @@ class DeviceE2ECryptoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             DeviceE2ECrypto().derive_peer_key(peer + "=", "session", "a" * 24, "b" * 24)
 
+    def test_confirmation_proof_is_directional_and_bound_to_fingerprint(self):
+        key = bytes(range(32))
+        session = "session-123456789012"
+        left, right = "a" * 24, "b" * 24
+        fingerprint = "ABCD-EF01-2345-6789-ABCD-EF01-2345-6789"
+        proof = DeviceE2ECrypto.confirmation_proof(key, session, left, right, fingerprint)
+        self.assertRegex(proof, r"^[a-f0-9]{64}$")
+        self.assertEqual(proof, DeviceE2ECrypto.confirmation_proof(key, session, left, right, fingerprint))
+        self.assertNotEqual(proof, DeviceE2ECrypto.confirmation_proof(key, session, right, left, fingerprint))
+        self.assertNotEqual(proof, DeviceE2ECrypto.confirmation_proof(key, session, left, right, fingerprint[:-1] + "0"))
+
+    def test_confirmation_proof_rejects_invalid_inputs(self):
+        with self.assertRaises(ValueError):
+            DeviceE2ECrypto.confirmation_proof(b"short", "session", "left", "right",
+                                               "ABCD-EF01-2345-6789")
 
 if __name__ == "__main__":
     unittest.main()
