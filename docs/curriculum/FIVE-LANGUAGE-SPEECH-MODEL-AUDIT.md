@@ -42,6 +42,32 @@ Result: language selection is now explicit, but none of the candidate offline sp
 - The selected language override is passed to the custom voice adapter.
 - Unit tests cover script detection and the unsupported-language rejection path.
 
+
+## New runtime and data-source findings (2026-11-26)
+
+### On-device ASR integration candidate
+
+A community Hugging Face repository now documents Android-ready, INT8 ONNX exports of AI4Bharat IndicConformer for all 22 scheduled Indian languages, including Hindi, Marathi and Sanskrit, plus a separate English NeMo FastConformer model. The published layout uses Sherpa-ONNX `OfflineRecognizer.from_nemo_ctc`, a shared Indic `tokens.txt`, per-language `model.int8.onnx` files and an English-specific token file. The model card reports approximately 190 MB per Indic language model and approximately 170 MB for English. This is a practical downloadable-on-demand integration path, but it is a third-party conversion: pin exact repository commit, verify source lineage and licence, verify file SHA-256 from the release metadata, and run our own WER/CER and Android ABI tests before marking it supported.
+
+The current app already has ONNX Runtime but does **not** have Sherpa-ONNX's Android JNI/API wired in. Do not try to load a Sherpa CTC export as a generic ONNX graph without the matching frontend, decoder, vocabulary and metadata. The official Sherpa Android build documentation describes native Android ABI packaging; adding that runtime must be an explicit APK-size and ABI decision. AAR/native libraries and model files must remain downloadable or optional, not bundled in the base APK.
+
+### Translation runtime
+
+IndicTrans2 has a Python/Transformers/IndicTransToolkit inference path and published language codes for Hindi, English, Sanskrit and Marathi. No verified official lightweight Android runtime/export was found in this audit. The realistic first adapter is a separately installed PC companion / self-hosted service using a pinned IndicTrans2 checkpoint, with model licence acceptance, memory preflight, CPU/GPU capability detection, and a local-only endpoint. It must not be described as on-device Android or offline phone translation until an actual Android-compatible export is benchmarked.
+
+### TTS runtime
+
+IndicF5 supports Hindi and Marathi among 11 Indian languages, but official inference requires a reference audio clip and its transcript to guide voice characteristics; it is a Python/Transformers runtime, not a drop-in Android TTS engine. Sanskrit is not listed among its supported languages. Indic-Speak lists English/Hindi/Marathi as Production and Sanskrit as Preview; its 3B model is not an appropriate default phone download. First integration target should be an optional self-hosted PC/desktop TTS adapter with licensed reference voice assets and explicit user consent. Pawari remains unsupported pending community data and voice permission.
+
+### Pawari data discovery
+
+- A Seoni-based community Pawari Dictionary project describes words, Hindi/English meanings, usage examples and audio. It is a contact lead, not an open training dataset; written permission and licence are required.
+- LDC-IL publicly lists a Pawari Parallel Text Corpus. The listing alone does not confirm exact variety, access terms or commercial training permission.
+- VAANI provides district-diverse speech discovery, but Pawari must be confirmed by its own language label and dataset card; district alone is not a dialect label.
+- Pawari/Pawri naming is not uniform across sources. Glottolog references Pawari/Pawri in relation to Bareli-Rathwi, while community usage in Seoni may identify a local Pawari variety. Keep varieties separate until fluent speakers resolve the relationship.
+
+See [PAWARI-COMMUNITY-DATASET-PLAN.md](PAWARI-COMMUNITY-DATASET-PLAN.md) for consent, recording, annotation, split and community sign-off requirements.
+
 ## Release acceptance tests still required
 
 - ASR: 100+ consented utterances per language, multiple speakers/accents/noise levels; report WER/CER, code-switch accuracy, proper-noun accuracy, latency and peak RAM.
