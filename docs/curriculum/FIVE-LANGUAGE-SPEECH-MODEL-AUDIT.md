@@ -2,15 +2,15 @@
 
 Audit date: 2026-11-26
 Scope: Hindi, English, Sanskrit, Marathi and Pawari
-Result: language selection is now explicit, but none of the candidate offline speech/translation weights is integrated into the Android runtime yet. Do not present the following candidate models as already working in Shraddha.
+Result: language selection is explicit. An optional PC-side local inference adapter and Language Lab have now been added for Sherpa-ONNX ASR, IndicTrans2 and IndicF5. No model weights are included and no offline speech/translation runtime is integrated into the Android phone voice session yet. Do not present a model as working until its licensed checkpoint is installed and the runtime tests pass.
 
 ## Current application reality
 
 | Capability | Current implementation | Actual status |
 |---|---|---|
-| Voice input | Gemini Live streaming over the configured online gateway; Android SpeechRecognizer is also used for the phone-contact voice flow | Online/OS-dependent, not a bundled offline ASR model |
-| Voice output | `ShraddhaSpeechClient` sends text to `/api/voice/synthesize` and plays returned 24 kHz PCM | Custom self-hosted backend, bilingual Hindi/English only; not offline and not model weights in the APK |
-| Translation | Visual translation sends frames/text to the configured AI gateway | Online gateway task, not a dedicated local translation model |
+| Voice input | Gemini Live streaming over the configured online gateway; Android SpeechRecognizer is also used for the phone-contact voice flow. Optional Windows Language Lab now has a Sherpa-ONNX CTC adapter | Android remains online/OS-dependent; PC adapter requires separately installed model files and has not passed native-speaker accuracy testing |
+| Voice output | `ShraddhaSpeechClient` sends text to `/api/voice/synthesize`; optional Windows Language Lab has an IndicF5 adapter for Hindi/Marathi | Existing app backend is online Hindi/English; PC IndicF5 requires licensed cached weights and a consented reference clip; Sanskrit/Pawari unsupported |
+| Translation | Visual translation sends frames/text to the configured AI gateway; optional Windows Language Lab has a local IndicTrans2 adapter | Android remains online; PC adapter requires a local checkpoint and is not yet benchmarked |
 | Offline speech weights | No ASR or TTS model files found in app assets | Not installed |
 | Offline translation weights | No IndicTrans2 or other MT checkpoint found in app assets | Not installed |
 
@@ -18,11 +18,11 @@ Result: language selection is now explicit, but none of the candidate offline sp
 
 | Language | ASR candidate | TTS candidate | Translation candidate | Pawari/community status |
 |---|---|---|---|---|
-| Hindi | AI4Bharat IndicConformer (22-language family) | AI4Bharat IndicF5; Indic-Speak production tier | AI4Bharat IndicTrans2 | Not applicable |
-| English | sherpa-onnx FastConformer English or Whisper multilingual | Indic-Speak production tier; Piper English voices are another candidate | IndicTrans2 English ↔ Indic | Not applicable |
-| Sanskrit | AI4Bharat IndicConformer lists Sanskrit; validate pronunciation/domain accuracy before release | Indic-Speak lists Sanskrit in Preview, not Production | IndicTrans2 lists Sanskrit | Not applicable |
-| Marathi | AI4Bharat IndicConformer | AI4Bharat IndicF5; Indic-Speak production tier | IndicTrans2 | Not applicable |
-| Pawari | No verified model/corpus identified | No verified voice model identified | No validated parallel corpus/model identified | Requires consented recordings, orthography/variety labels, transcripts and community review |
+| Hindi | AI4Bharat IndicConformer; Sherpa-ONNX Android-ready CTC export | IndicF5; Indic-Speak Production | IndicTrans2 | PC adapters added; checkpoint install and validation pending |
+| English | Sherpa-ONNX NeMo FastConformer CTC export | Indic-Speak Production; existing Piper custom service | IndicTrans2 English ↔ Indic | PC ASR adapter added; English TTS remains existing Piper service, not IndicF5 |
+| Sanskrit | AI4Bharat IndicConformer; Sherpa-ONNX Android-ready CTC export | Indic-Speak Preview only; IndicF5 does not list Sanskrit | IndicTrans2 lists Sanskrit | PC ASR adapter added; no Sanskrit TTS adapter |
+| Marathi | AI4Bharat IndicConformer; Sherpa-ONNX Android-ready CTC export | IndicF5; Indic-Speak Production | IndicTrans2 | PC ASR/TTS adapters added; checkpoint install and validation pending |
+| Pawari | No verified model | No verified voice model | LDC-IL lists a Pawari Parallel Text Corpus, but access/licence/variety are not yet verified | Must collect consented variety-labelled speech and obtain community review; app explicitly rejects unsupported Pawari inference |
 
 ## Sources and licensing gates
 
@@ -31,7 +31,7 @@ Result: language selection is now explicit, but none of the candidate offline sp
 3. AI4Bharat IndicF5: https://github.com/AI4Bharat/IndicF5 — 11 Indian languages including Hindi and Marathi; model card lists MIT. It is a TTS candidate, not a five-language solution.
 4. Bodhan AI / AI4Bharat Indic-Speak: https://huggingface.co/bodhan-ai/indic-speak — 3B-parameter TTS model; English/Hindi/Marathi are Production tier and Sanskrit is Preview tier. The model card currently shows a non-standard/other licence and gated access conditions; do not bundle or redistribute until legal terms and model access are reviewed. Its size makes it a PC/self-hosted candidate, not a default phone APK asset.
 5. BHASHINI model catalogue: https://bhashini-developer-portal.bhashini.co.in/docs/get-started/models — useful for hosted ASR/TTS/translation discovery, but hosted pipelines are online and require account/configuration. Do not assume they are free, offline or integrated.
-6. sherpa-onnx: https://github.com/k2-fsa/sherpa-onnx — evaluate a small English FastConformer export for local English ASR; validate model licence and Android ABI compatibility before use.
+6. Sherpa-ONNX Android runtime: https://github.com/k2-fsa/sherpa-onnx — native Android AAR/JNI is required for an Android integration; the current PC adapter uses the Python runtime only.
 
 ## Runtime changes in this audit
 
@@ -67,6 +67,14 @@ IndicF5 supports Hindi and Marathi among 11 Indian languages, but official infer
 - Pawari/Pawri naming is not uniform across sources. Glottolog references Pawari/Pawri in relation to Bareli-Rathwi, while community usage in Seoni may identify a local Pawari variety. Keep varieties separate until fluent speakers resolve the relationship.
 
 See [PAWARI-COMMUNITY-DATASET-PLAN.md](PAWARI-COMMUNITY-DATASET-PLAN.md) for consent, recording, annotation, split and community sign-off requirements.
+
+## Current code delivery
+
+- Added `pc_companion/language_runtime.py`: local-only Sherpa-ONNX ASR, IndicTrans2 translation and IndicF5 TTS adapters. Model loading is local-files-only; no model download, cloud fallback or automatic upload occurs.
+- Added `pc_companion/language_lab.py` and an **Offline Language Lab** button in the Windows companion.
+- Added optional dependencies in `pc_companion/requirements-language.txt`; the default companion build stays small.
+- Added WAV validation and fail-closed unsupported-language tests.
+- This is not yet the Android microphone runtime. The Android native Sherpa AAR/JNI, model download/checksum manager and live-session adapter remain to be implemented and tested on arm64 devices.
 
 ## Release acceptance tests still required
 
