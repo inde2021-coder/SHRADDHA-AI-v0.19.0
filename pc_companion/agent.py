@@ -120,6 +120,10 @@ class PcCompanionApp:
         self.remote_var = tk.BooleanVar(value=False)
         self.screen_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="Not connected")
+        if self.pending_pc_send:
+            self.status_var.set("A verified-source transfer was restored. Re-verify the Android fingerprint, then use Android Resume receiving.")
+        elif self._pc_outgoing_state_path().exists():
+            self.status_var.set("A saved outgoing transfer could not be restored: its source file or SHA-256 no longer matches.")
         self._build_ui()
 
         self.screen_thread = threading.Thread(target=self._screen_loop, daemon=True)
@@ -953,8 +957,12 @@ class PcCompanionApp:
             "fileName": pending["name"], "sizeBytes": pending["size"],
             "chunkCount": chunks, "sha256": pending["sha256"]
         })
-        self.status_var.set("Transfer manifest sent; waiting for Android user to accept and choose a save location." if sent
-                            else "Manifest saved for recovery; reconnect and resume after Android approval.")
+        if not sent:
+            self.pending_pc_send = None
+            self._persist_pc_outgoing()
+            self.status_var.set("Could not send the transfer manifest; no resumable transfer was started.")
+        else:
+            self.status_var.set("Transfer manifest sent; waiting for Android user to accept and choose a save location.")
 
     def _handle_file_ack(self, msg):
         pending = self.pending_pc_send
