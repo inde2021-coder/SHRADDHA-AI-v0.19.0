@@ -132,7 +132,7 @@ dependencies {
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
     // Optional on-device ASR runtime. Model weights remain downloadable and are not bundled.
-    implementation("com.github.k2-fsa:sherpa-onnx:v2.0.1")
+    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.5")
     // Runtime only; selected models are downloaded on demand and SHA-256 verified.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("com.google.android.material:material:1.12.0")
