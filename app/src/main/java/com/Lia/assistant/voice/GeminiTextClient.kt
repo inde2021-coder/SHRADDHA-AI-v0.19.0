@@ -211,6 +211,9 @@ object GeminiTextClient {
                     }
 
                     val body = response.body?.string().orEmpty()
+                    if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                        return ChatReplyResult.Error("Online AI consent was revoked while the request was running. The response was discarded.")
+                    }
                     val json = JSONObject(body)
                     val candidates = json.optJSONArray("candidates")
                     if (candidates == null || candidates.length() == 0) {
