@@ -274,8 +274,10 @@ object DeviceFileTransferReceiver {
         else -> "application/octet-stream"
     }
 
-    @Synchronized fun reject(transferId: String): Boolean {
-        val state = active.remove(transferId) ?: return false
+    @Synchronized fun reject(transferId: String, expectedPeerId: String? = null): Boolean {
+        val state = active[transferId] ?: return false
+        if (expectedPeerId != null && state.manifest.peerId != expectedPeerId) return false
+        active.remove(transferId, state)
         metadataFile(state.temp).delete()
         return state.temp.delete() || !state.temp.exists()
     }
