@@ -449,12 +449,22 @@ private fun SettingsScreenContent(
                     icon = Icons.Default.Security,
                     switch = allowOnlineAi,
                     onCheckedChange = { enabled ->
-                        allowOnlineAi = enabled
-                        context.getSharedPreferences("shraddha_network_ai", android.content.Context.MODE_PRIVATE)
-                            .edit().putBoolean("allow_online_ai", enabled).apply()
-                        if (!enabled) {
-                            VoiceSessionManager.stop()
-                            ShraddhaSpeechClient.stopPlayback()
+                        val saved = `in`.shraddha.ai.future.OnlineAiConsent.setAllowed(context, enabled)
+                        if (saved) {
+                            allowOnlineAi = enabled
+                            if (!enabled) {
+                                // Revoke first (synchronous commit), then tear down live audio
+                                // and any assistant speech already queued for playback.
+                                VoiceSessionManager.stop()
+                                ShraddhaSpeechClient.stopPlayback()
+                            }
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Online AI consent could not be saved. The previous setting remains active.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                            allowOnlineAi = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
                         }
                     }
                 )
