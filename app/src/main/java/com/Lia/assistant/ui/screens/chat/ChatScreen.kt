@@ -179,8 +179,8 @@ fun ChatScreen(
                 Context.MODE_PRIVATE
             ).getString("active_model_path", "").orEmpty().trim()
 
-            // Routing order: encrypted document knowledge -> explicitly imported on-device
-            // model -> configured provider. A selected local model failure is surfaced locally;
+            // Routing order: installed on-device model with bundled lesson context ->
+            // confident encrypted local extract -> explicitly enabled cloud provider. A selected local model failure is surfaced locally;
             // it is never silently sent to a cloud provider with the same private prompt.
             val result = when {
                 // When a local model is installed, let it teach from the bundled lesson context.
