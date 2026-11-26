@@ -115,8 +115,9 @@ class DeviceE2ECryptoTest {
         val sentProof = DeviceE2ECrypto.confirmationProof(leftKey, session, "left", "right", fingerprint)
         val expectedProof = DeviceE2ECrypto.confirmationProof(rightKey, session, "left", "right", fingerprint)
         val reverseProof = DeviceE2ECrypto.confirmationProof(rightKey, session, "right", "left", fingerprint)
+        val alteredFingerprint = (if (fingerprint.startsWith("A")) "B" else "A") + fingerprint.drop(1)
         val changedFingerprint = DeviceE2ECrypto.confirmationProof(
-            rightKey, session, "left", "right", fingerprint.dropLast(1) + "0"
+            rightKey, session, "left", "right", alteredFingerprint
         )
         assertEquals(sentProof, expectedProof)
         assertNotEquals(sentProof, reverseProof)
