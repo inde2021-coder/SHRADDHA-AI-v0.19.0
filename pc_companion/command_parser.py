@@ -31,7 +31,7 @@ def parse_android_command(raw):
         return {"kind": "type", "text": text}
     match = re.match(r"^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\s+(.+)$", command, re.I)
     if match:
-        path = match.group(1).strip().replace("\\\\", "/")
+        path = match.group(1).strip().replace("\\", "/")
         parts = [part for part in path.split("/") if part not in ("", ".")]
         if not path or len(path) > 500 or path.startswith("/") or re.match(r"^[A-Za-z]:", path) or any(part == ".." or part.startswith(".") for part in parts):
             raise ValueError("File/folder path must be a safe relative path under the PC user folder.")
