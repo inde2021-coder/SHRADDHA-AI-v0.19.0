@@ -14,6 +14,14 @@ class AndroidCommandParserTests(unittest.TestCase):
         self.assertEqual(parse_android_command("click text Save"), {"kind": "click_text", "text": "Save"})
         self.assertEqual(parse_android_command("बटन दबाओ Submit"), {"kind": "click_text", "text": "Submit"})
 
+    def test_file_search_commands_in_hindi_and_english(self):
+        self.assertEqual(parse_android_command("search files invoice"),
+                         {"kind": "file_search", "query": "invoice", "path": ""})
+        self.assertEqual(parse_android_command("फाइल खोजो बिल"),
+                         {"kind": "file_search", "query": "बिल", "path": ""})
+        with self.assertRaises(ValueError):
+            parse_android_command("search files x")
+
     def test_rejects_sensitive_and_unknown(self):
         with self.assertRaises(ValueError):
             parse_android_command("type my password 123")
