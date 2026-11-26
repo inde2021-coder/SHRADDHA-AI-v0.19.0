@@ -238,6 +238,9 @@ object VoiceGatewaySettings {
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                throw IllegalStateException("Online AI consent was revoked while the cloud request was running. The response was discarded.")
+            }
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw GatewayRequestException(response.code, message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
