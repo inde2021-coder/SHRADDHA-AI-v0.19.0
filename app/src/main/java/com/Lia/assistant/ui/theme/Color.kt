@@ -29,28 +29,28 @@ data class NovaColorScheme(
 )
 
 val DarkNovaColors = NovaColorScheme(
-    background = Color(0xFF07131B),
-    backgroundGradientTop = Color(0xFF12323D),
-    surface = Color(0xFF102A35),
-    surfaceGlass = Color(0xCC102A35),
-    surfaceBorder = Color(0x5566C2C8),
-    surfaceRaised = Color(0xFF173B47),
-    accent = Color(0xFF68E7EA),
-    accentSecondary = Color(0xFF62D7C8),
-    accentGlow = Color(0x5568E7EA),
+    background = Color(0xFF090D16),
+    backgroundGradientTop = Color(0xFF151D2C),
+    surface = Color(0xFF111827),
+    surfaceGlass = Color(0xCC111827),
+    surfaceBorder = Color(0x554B5872),
+    surfaceRaised = Color(0xFF1B2638),
+    accent = Color(0xFFB69CFF),
+    accentSecondary = Color(0xFF78D6E8),
+    accentGlow = Color(0x55B69CFF),
     onAccent = Color(0xFF07111D),
     textPrimary = Color(0xFFF0F6FF),
     textSecondary = Color(0xFFA7B8CE),
     textTertiary = Color(0xFF71849D),
-    success = Color(0xFF3FE0D0),
+    success = Color(0xFF48D6A6),
     warning = Color(0xFFFFC36B),
     error = Color(0xFFFF5252),
-    userBubble = Color(0xFF164A55),
-    assistantBubble = Color(0xFF111D31),
+    userBubble = Color(0xFF30264D),
+    assistantBubble = Color(0xFF151E2D),
     depthShadow = Color(0x80000000),
     rimLight = Color(0x26FFFFFF),
-    lagoon = Color(0xFF62E5D0),
-    lotus = Color(0xFF8CE8E7)
+    lagoon = Color(0xFF78D6E8),
+    lotus = Color(0xFFB69CFF)
 )
 
 val LightNovaColors = NovaColorScheme(
