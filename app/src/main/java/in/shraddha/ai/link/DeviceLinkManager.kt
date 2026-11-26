@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Base64
 import android.os.Handler
 import android.os.Looper
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.*
