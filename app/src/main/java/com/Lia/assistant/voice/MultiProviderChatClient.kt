@@ -45,7 +45,7 @@ object MultiProviderChatClient {
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
-        if (!in.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
             return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
         }
         val selected = provider.uppercase()
