@@ -39,20 +39,21 @@ object TrainingCurriculumInstaller {
             "training/mind-activities-18-hi-en.md", setOf("Hindi", "English"), "All ages"),
         Pack("curriculum_five_language_learning_v1", "Five-Language Learning", "1.0.0",
             "training/five-language-hi-en-sa-mr-pawari.md",
+            setOf("Hindi", "English", "Sanskrit", "Marathi", "Pawari"), "All ages"),
+        Pack("curriculum_full_catalog_v1", "Complete Training Curriculum Catalogue", "1.0.0",
+            "training/full-curriculum-catalog-v1.md",
             setOf("Hindi", "English", "Sanskrit", "Marathi", "Pawari"), "All ages")
     )
 
     /**
-     * Safe to call at chat startup. A manifest marker makes installation idempotent; if an
-     * installation is interrupted, the marker is not written and the next call retries.
+     * Safe to call at chat startup. A process-local guard avoids repeated disk work.
+     * Every fresh process verifies the bundled content digest and repairs missing/outdated packs.
      */
+    @Synchronized
     fun install(context: Context): Result<InstallReport> = runCatching {
+        if (checkedThisProcess) return@runCatching InstallReport(0, 0, catalog.size, catalog.size)
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        if (prefs.getString(KEY_VERSION, null) == BUNDLE_VERSION) {
-            return@runCatching InstallReport(0, 0, catalog.size, catalog.size)
-        }
-
         val store = LocalKnowledgeDocumentStore(app)
         val existing = store.listDocuments().getOrThrow().associateBy { it.id }
         var installed = 0
@@ -91,11 +92,14 @@ object TrainingCurriculumInstaller {
         check(prefs.edit().putString(KEY_VERSION, BUNDLE_VERSION).commit()) {
             "Could not persist the curriculum installation version."
         }
+        checkedThisProcess = true
         InstallReport(installed, updated, unchanged, catalog.size)
     }
 
+    @Volatile private var checkedThisProcess = false
+
     private const val PREFERENCES = "shraddha_curriculum_installer"
     private const val KEY_VERSION = "installed_bundle_version"
-    private const val BUNDLE_VERSION = "1"
+    private const val BUNDLE_VERSION = "2"
     private const val MAX_PACK_CHARS = 50_000
 }
