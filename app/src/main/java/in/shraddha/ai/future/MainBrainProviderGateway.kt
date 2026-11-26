@@ -144,16 +144,7 @@ object MainBrainProviderGateway {
         } else {
             MultiProviderChatClient.reply(context, provider, systemInstruction.take(8_000), boundedHistory)
         }
-        if (directResult is ChatReplyResult.Success) {
-            val usage = directResult.tokenUsage
-            if (usage == null) {
-                runCatching { CouncilCostBudget.stopIfUsageUnknown(context, provider, null) }
-                    .onFailure { return ChatReplyResult.Error(it.message ?: "Provider usage could not be verified.") }
-            } else {
-                runCatching { CouncilCostBudget.recordUsageAndEnforce(context, usage) }
-                    .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget stopped this request.") }
-            }
-        }
+        // Direct Gemini and multi-provider clients meter their own transport responses.
         return directResult
     }
 
