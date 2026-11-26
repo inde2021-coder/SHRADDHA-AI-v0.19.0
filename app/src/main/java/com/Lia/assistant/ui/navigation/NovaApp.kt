@@ -81,7 +81,7 @@ fun NovaApp(appState: NovaAppState) {
                 .nightSky(),
             bottomBar = {
                 if (showBottomBar) {
-                    LiaBottomNavigation(
+                    ShraddhaBottomNavigation(
                         navController = navController,
                         currentRoute = currentRoute
                     )
