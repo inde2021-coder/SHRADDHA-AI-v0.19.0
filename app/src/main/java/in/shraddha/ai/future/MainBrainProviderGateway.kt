@@ -27,6 +27,9 @@ object MainBrainProviderGateway {
     val supportedProviders: Set<String> = providerOrder.toSet()
 
     fun configuredProviders(context: Context, preferredProvider: String? = null): List<String> {
+        // Even a provider-discovery/status request contacts the cloud gateway. Do not
+        // make that request until the user has explicitly enabled Online AI.
+        if (!OnlineAiConsent.isAllowed(context)) return emptyList()
         val preferred = (preferredProvider
             ?: NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI"))
             .uppercase()
