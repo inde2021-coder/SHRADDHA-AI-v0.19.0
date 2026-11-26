@@ -357,13 +357,32 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                     "file_transfer_chunk" -> {
                         val peerId = message.optString("fromDeviceId")
-                        val result = DeviceFileTransferReceiver.receiveChunk(context, peerId, message)
-                        DeviceLinkManager.acknowledgeFileTransfer(peerId, message.optString("transferId"), result.index,
-                            complete = result.complete, ok = result.ok)
-                        incomingTransferStatus = when {
-                            result.complete -> { receivedFiles = DeviceFileTransferReceiver.listReceived(context); resumableIncoming = DeviceFileTransferReceiver.pendingTransfers(); "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}" }
-                            !result.ok -> result.error ?: "फ़ाइल chunk reject हुआ।"
-                            else -> "फ़ाइल प्राप्त हो रही है… chunk ${result.index + 1}"
+                        val transferId = message.optString("transferId")
+                        scope.launch(Dispatchers.IO) {
+                            val result = runCatching {
+                                DeviceFileTransferReceiver.receiveChunk(context, peerId, message)
+                            }.getOrElse { error ->
+                                DeviceFileTransferReceiver.ChunkResult(
+                                    message.optInt("index", -1), false, error = error.message ?: "Chunk receive failed."
+                                )
+                            }
+                            val ackQueued = DeviceLinkManager.acknowledgeFileTransfer(
+                                peerId, transferId, result.index, complete = result.complete, ok = result.ok
+                            )
+                            val refreshedFiles = if (result.complete) DeviceFileTransferReceiver.listReceived(context) else null
+                            val refreshedPending = if (result.complete) DeviceFileTransferReceiver.pendingTransfers() else null
+                            mainHandler.post {
+                                if (result.complete) {
+                                    receivedFiles = refreshedFiles.orEmpty()
+                                    resumableIncoming = refreshedPending.orEmpty()
+                                    incomingTransferStatus = "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}"
+                                } else if (!result.ok) {
+                                    incomingTransferStatus = result.error ?: "फ़ाइल chunk reject हुआ।"
+                                } else {
+                                    incomingTransferStatus = "फ़ाइल प्राप्त हो रही है… chunk ${result.index + 1}"
+                                }
+                                if (!ackQueued) incomingTransferStatus += " • ACK reconnect पर retry होगा।"
+                            }
                         }
                     }
                     "file_transfer_cancel" -> {
