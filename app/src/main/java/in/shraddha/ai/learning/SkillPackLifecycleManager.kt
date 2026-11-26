@@ -172,7 +172,12 @@ class SkillPackLifecycleManager(context: Context) {
 
     /** Requires an explicit review and every deterministic gate; no downloaded code is executed. */
     @Synchronized
-    fun approveAndActivate(\n        pack: StagedPack,\n        approval: Approval,\n        automaticLearningEnabled: Boolean,\n        trustedPublishers: Map<String, TrustedPublisher> = emptyMap()\n    ): Boolean {
+    fun approveAndActivate(
+        pack: StagedPack,
+        approval: Approval,
+        automaticLearningEnabled: Boolean,
+        trustedPublishers: Map<String, TrustedPublisher> = emptyMap()
+    ): Boolean {
         require(validId(pack.packId) && validVersion(pack.version))
         require(pack.file.canonicalFile.parentFile == quarantine.canonicalFile && pack.file.isFile)
         require(pack.file.name == "${pack.packId}-${pack.version}.pack" ||
