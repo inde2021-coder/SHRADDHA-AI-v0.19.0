@@ -16,9 +16,20 @@ export async function synthesizeShraddhaPcm(body, env = process.env, fetchImpl =
     throw error;
   }
   const parsed = new URL(endpoint);
-  if (parsed.protocol !== 'https:') throw new Error('SHRADDHA_TTS_URL must use HTTPS');
-  const headers = { 'content-type': 'application/json', accept: 'audio/pcm, application/octet-stream' };
-  if (env.SHRADDHA_TTS_TOKEN) headers.authorization = `Bearer ${env.SHRADDHA_TTS_TOKEN}`;
+  if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('SHRADDHA_TTS_URL must be a clean HTTPS endpoint without embedded credentials, query or fragment');
+  }
+  const token = String(env.SHRADDHA_TTS_TOKEN || '').trim();
+  if (token.length < 16 || token.length > 512) {
+    const error = new Error('SHRADDHA_TTS_TOKEN must be configured with a 16-512 character secret');
+    error.statusCode = 503;
+    throw error;
+  }
+  const headers = {
+    'content-type': 'application/json',
+    accept: 'audio/pcm, application/octet-stream',
+    authorization: `Bearer ${token}`
+  };
   const upstream = await fetchImpl(endpoint, {
     method: 'POST',
     headers,
