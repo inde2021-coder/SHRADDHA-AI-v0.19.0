@@ -63,6 +63,7 @@ import `in`.shraddha.ai.brain.PersistentChatMemory
 import `in`.shraddha.ai.brain.LocalKnowledgeBase
 import `in`.shraddha.ai.brain.LocalKnowledgeDocumentStore
 import `in`.shraddha.ai.brain.LocalKnowledgeAnswer
+import `in`.shraddha.ai.brain.TrainingCurriculumInstaller
 import `in`.shraddha.ai.brain.LocalOfflineLlm
 import com.Lia.assistant.voice.ChatReplyResult
 import com.Lia.assistant.voice.ChatTurn
@@ -147,6 +148,11 @@ fun ChatScreen(
                     relevantMemory.joinToString("\n")
             } else ""
             val boundedInstruction = (systemInstruction + memoryInstruction).take(8_000)
+
+            // Install the authored Hindi/English/Sanskrit/Marathi/Pawari lesson packs into
+            // the existing encrypted local knowledge store before the first retrieval.
+            // This is bundled, offline content: no paid API, network fetch or model download.
+            TrainingCurriculumInstaller.install(context.applicationContext)
 
             // Imported documents are searched locally first. A confident extractive match is
             // answered on-device and is never copied into a cloud prompt without separate consent.
