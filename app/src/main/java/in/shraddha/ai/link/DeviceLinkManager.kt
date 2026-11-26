@@ -251,6 +251,10 @@ object DeviceLinkManager {
                         "e2e_key_offer" -> {
                             val peerId = msg.optString("fromDeviceId")
                             val derived = e2eCrypto.derivePeerKey(msg.optString("publicKey"), sessionId.orEmpty(), deviceId.orEmpty(), peerId)
+                            val current = peerKeys[peerId]
+                            // Relays may repeat the same offer during reconnect/status fan-out.
+                            // Do not reset an already-confirmed same-session fingerprint.
+                            if (current?.fingerprint == derived.second) return
                             peerKeys.put(peerId, PeerKeyState(derived.first, derived.second))?.key?.fill(0)
                             clearVisualFrameState(peerId)
                             onE2EVerification?.invoke(peerId, derived.second)
@@ -639,8 +643,10 @@ object DeviceLinkManager {
     fun confirmE2EPeer(peerId: String, fingerprint: String): Boolean {
         val state = peerKeys[peerId] ?: return false
         if (state.fingerprint != fingerprint) return false
-        state.localConfirmed = true
-        return socket?.send(JSONObject().put("type", "e2e_key_confirm").put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
+        val sent = socket?.send(JSONObject().put("type", "e2e_key_confirm")
+            .put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
+        state.localConfirmed = sent
+        return sent
     }
 
     private fun clearVisualFrameState(peerId: String) {
