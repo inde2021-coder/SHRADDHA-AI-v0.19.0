@@ -68,7 +68,9 @@ The Windows workflow is a manual packaging workflow; it does not run the deferre
 From the paired Android Device Center, enter a relative path under the Windows user folder and request **Open file / folder on PC**. The Windows companion shows the exact path in its per-action local approval dialog before opening it. Hidden and credential folders, parent traversal, symbolic links, executable/script/shortcut/installer formats, unknown extensions, and files larger than 100 MB are blocked. Supported document and image formats are opened with the user's normal Windows default application. This action does not provide shell execution or delete/overwrite capability.
 
 
-### Incoming file safety
+#Encrypted transfer control frames (`start`, `ack`, `resume`, and `cancel`) are relayed as authenticated E2E envelopes. The relay sees only bounded manifest/routing metadata needed for admission, chunk bounds and ACK bookkeeping; each endpoint cross-checks that metadata against the decrypted control body. Resume probes from a sender are distinct from receiver-owned missing-chunk bitmaps, so a sender cannot overwrite the receiver's persisted progress. Completed relay receipts remain briefly available for final-ACK retries without blocking the next transfer.
+
+## Incoming file safety
 - Received files are capped at 100 MB and verified against the advertised SHA-256 before publication.
 - Partial-transfer files are created with exclusive-create semantics; an existing `.shraddha-part` is never truncated.
 - Completed files are published with an atomic no-overwrite operation. If the destination name already exists or the filesystem cannot safely publish the file, the transfer fails closed rather than replacing user data.
