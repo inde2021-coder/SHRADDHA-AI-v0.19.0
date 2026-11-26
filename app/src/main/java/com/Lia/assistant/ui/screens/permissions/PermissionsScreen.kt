@@ -271,6 +271,7 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("microphone", "Microphone", "Voice input and live speech recognition", Manifest.permission.RECORD_AUDIO))
         add(runtime("camera", "Camera", "Visual Lens and biometric capture", Manifest.permission.CAMERA))
         add(runtime("contacts", "Contacts", "Resolve people by name", Manifest.permission.READ_CONTACTS))
+        if (Build.VERSION.SDK_INT >= 31) add(runtime("bluetooth", "Nearby Bluetooth devices", "Read Bluetooth adapter status on Android 12+", Manifest.permission.BLUETOOTH_CONNECT, 31))
         add(runtime("call", "Direct phone calls", "Place calls after user confirmation", Manifest.permission.CALL_PHONE))
         add(runtime(
             "sms",
