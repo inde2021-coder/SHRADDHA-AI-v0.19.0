@@ -11,16 +11,25 @@ object AkkpsRunnerCommandParser {
         "^(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)$",
         RegexOption.IGNORE_CASE
     )
+    private val politeSubmitPhrase = Regex(
+        "^(?:(?:please|kindly|कृपया|अब|रिकॉर्ड|फॉर्म|डाटा|डेटा|जानकारी|इसे)\\s+)*(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)(?:\\s+करें)?$",
+        RegexOption.IGNORE_CASE
+    )
 
-    /** Submission intent must be a standalone command segment, never a substring of a value. */
+    private fun isSubmitCommandSegment(segment: String): Boolean {
+        val value = segment.trim()
+        return submitToken.matches(value) || politeSubmitPhrase.matches(value)
+    }
+
+    /** Submission intent must occupy a whole command segment, never appear inside a field value. */
     fun hasExplicitSubmitIntent(raw: String): Boolean =
-        raw.split(';', '\n').any { submitToken.matches(it.trim()) }
+        raw.split(';', '\\n').any(::isSubmitCommandSegment)
 
     fun parse(raw: String): AkkpsRunnerCommand {
         val assignments = mutableListOf<Pair<String, String>>()
         var submit = false
-        raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
-            if (submitToken.matches(part)) {
+        raw.split(';', '\\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+            if (isSubmitCommandSegment(part)) {
                 submit = true
             } else {
                 val splitAt = part.indexOf('=').takeIf { it >= 0 } ?: part.indexOf(':')
