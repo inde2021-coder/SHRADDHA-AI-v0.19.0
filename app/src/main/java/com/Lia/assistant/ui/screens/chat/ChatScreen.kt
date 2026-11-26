@@ -184,10 +184,9 @@ fun ChatScreen(
                     )
                 }
                 else -> {
-                    val onlineAiAllowed = context.getSharedPreferences(
-                        "shraddha_network_ai",
-                        Context.MODE_PRIVATE
-                    ).getBoolean("allow_online_ai", false)
+                    // Use the central consent policy; never read a parallel preference
+                    // that could drift from Settings or other cloud entry points.
+                    val onlineAiAllowed = `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)
                     if (onlineAiAllowed) {
                         `in`.shraddha.ai.future.MainBrainProviderGateway.reply(
                             context, appState.aiProvider, boundedInstruction, historySnapshot
