@@ -719,7 +719,15 @@ class PcCompanionApp:
                 with self.e2e_lock:
                     previous = self.peer_keys.get(peer_id)
                     if previous and previous["fingerprint"] == fingerprint:
-                        # Duplicate relay fan-out in one session must not reset mutual trust.
+                        # If Android reconnected without a delivered offline event,
+                        # replay our authenticated proof for the same still-trusted key.
+                        if previous["local_confirmed"]:
+                            proof = DeviceE2ECrypto.confirmation_proof(
+                                bytes(previous["key"]), self.config.get("sessionId", ""),
+                                self.config.get("deviceId", ""), peer_id, fingerprint
+                            )
+                            self._send_json({"type": "e2e_key_confirm", "targetDeviceId": peer_id,
+                                             "fingerprint": fingerprint, "proof": proof})
                         return
                     previous = self.peer_keys.pop(peer_id, None)
                     if previous:
