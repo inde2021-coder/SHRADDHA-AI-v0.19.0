@@ -27,7 +27,9 @@ object AkkpsWebMercatorProjection {
         require(viewport.zoom.isFinite() && viewport.zoom in 0.0..30.0) { "Map zoom is invalid." }
         require(viewport.widthCssPixels.isFinite() && viewport.widthCssPixels > 0.0)
         require(viewport.heightCssPixels.isFinite() && viewport.heightCssPixels > 0.0)
-        require(xCssPixels.isFinite() && yCssPixels.isFinite())
+        require(xCssPixels.isFinite() && yCssPixels.isFinite() &&
+            xCssPixels in 0.0..viewport.widthCssPixels &&
+            yCssPixels in 0.0..viewport.heightCssPixels) { "Pixel is outside the observed map viewport." }
         require(viewport.center.latitude.isFinite() &&
             viewport.center.latitude in -MAX_LATITUDE..MAX_LATITUDE &&
             viewport.center.longitude.isFinite() &&
