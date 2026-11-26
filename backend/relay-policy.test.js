@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer } from './relay-policy.js';
+import { canShareVisualFrame, consumePairingCode, resolveControlApproval, validFileTransferManifest, validFileTransferChunk, validRemoteActionEnvelope, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer, resolveEncryptedFileTransferResume } from './relay-policy.js';
 
 test('screen frames require explicit screen permission', () => {
   assert.equal(canShareVisualFrame({}, 1), false);
@@ -216,6 +216,29 @@ test('resume bitmap overwrites relay ACKs and restores only receiver-persisted c
   assert.equal(recordPersistedFileTransferChunks(transfer, [1, 1]), false);
   assert.deepEqual([...transfer.chunks.entries()], [[0, true], [1, true]]);
 });
+
+test('encrypted transfer resume supports sender probes and receiver-owned bitmaps', () => {
+  const transferId = 'transfer_resume01';
+  const sender = { incomingTransfers: new Map() };
+  const receiver = { incomingTransfers: new Map([[transferId, {
+    fromDeviceId: 'sender', chunkCount: 3, expiresAt: 500,
+    chunks: new Map([[0, true], [1, true], [2, true]])
+  }]]) };
+  assert.equal(resolveEncryptedFileTransferResume(
+    sender, receiver, 'sender', 'receiver', transferId, 3, [], 100
+  ), 'sender');
+  assert.equal(resolveEncryptedFileTransferResume(
+    receiver, sender, 'receiver', 'sender', transferId, 3, [1], 100
+  ), 'receiver');
+  assert.deepEqual([...receiver.incomingTransfers.get(transferId).chunks.entries()], [[0, true], [2, true]]);
+  assert.equal(resolveEncryptedFileTransferResume(
+    sender, receiver, 'sender', 'receiver', transferId, 3, [0], 100
+  ), null);
+  assert.equal(resolveEncryptedFileTransferResume(
+    receiver, sender, 'receiver', 'sender', transferId, 3, [1, 1], 100
+  ), null);
+});
+
 
 test('file transfer admission rejects duplicate IDs and caps active receiver transfers', () => {
   const device = { incomingTransfers: new Map() };
