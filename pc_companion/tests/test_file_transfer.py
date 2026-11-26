@@ -15,6 +15,8 @@ from pc_companion.file_transfer import (
     sha256_file,
     save_outgoing_transfer_record,
     load_outgoing_transfer_record,
+    save_completed_transfer_record,
+    load_completed_transfer_records,
 )
 
 
@@ -196,6 +198,52 @@ class OutgoingTransferRecoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 save_outgoing_transfer_record(state, record)
 
+
+
+class IncomingCompletionReceiptRecoveryTests(unittest.TestCase):
+    def test_completion_receipt_finishes_publish_after_restart_and_is_repeatable(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            destination = root / "received.pdf"
+            part = root / "received.pdf.shraddha-part"
+            payload = b"verified PC receive before completion ACK"
+            part.write_bytes(payload)
+            record = {
+                "peer": "paired-android-01", "transferId": "transfer_done123",
+                "path": str(destination), "partPath": str(part), "size": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(), "completedAt": 1_800_000_000
+            }
+            state = root / "completed-transfers.json"
+            self.assertTrue(save_completed_transfer_record(state, record))
+            self.assertTrue(part.exists())
+            restored = load_completed_transfer_records(state)
+            self.assertIn("transfer_done123", restored)
+            self.assertTrue(destination.is_file())
+            self.assertFalse(part.exists())
+            self.assertEqual(destination.read_bytes(), payload)
+            # The completion receipt intentionally remains for idempotent ACK retries.
+            again = load_completed_transfer_records(state)
+            self.assertIn("transfer_done123", again)
+
+    def test_completion_receipt_rejects_tampered_or_unverified_partial(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            destination = root / "received.bin"
+            part = root / "received.bin.shraddha-part"
+            part.write_bytes(b"changed")
+            record = {
+                "peer": "paired-android-02", "transferId": "transfer_done456",
+                "path": str(destination), "partPath": str(part), "size": 8,
+                "sha256": hashlib.sha256(b"original").hexdigest(), "completedAt": 1_800_000_000
+            }
+            with self.assertRaises(ValueError):
+                save_completed_transfer_record(root / "receipts.json", record)
 
 if __name__ == "__main__":
     unittest.main()
