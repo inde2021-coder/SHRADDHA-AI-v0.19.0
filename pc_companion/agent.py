@@ -128,6 +128,7 @@ class PcCompanionApp:
         self.frame_window = None
         self.frame_label = None
         self.frame_photo = None
+        self.ocr_busy = False
         self._pending_pairing_auth = False
         self.pending_pc_send = None
         self.auto_reconnect_enabled = True
@@ -557,6 +558,17 @@ class PcCompanionApp:
                         self.control_grant_peer = None
                         self.phone_control_grant_until = 0
                         self.phone_control_peer = None
+                elif kind == "remote_action_finished":
+                    peer_id, action_id, action_kind, ok, result = payload
+                    self.ocr_busy = False
+                    self.status_var.set(result)
+                    if self.is_e2e_trusted(peer_id):
+                        sent = self._send_e2e_message(peer_id, "remote_action_result",
+                            {"ok": bool(ok), "result": str(result)[:12000]}, action_id, action_kind)
+                        if not sent:
+                            self.status_var.set("PC OCR finished, but its encrypted result could not be delivered.")
+                    if not ok and "fail-safe" in str(result).lower():
+                        self.disconnect(emergency=True)
                 elif kind == "hardware_status_result":
                     ok, payload = payload
                     if ok:
@@ -890,7 +902,19 @@ class PcCompanionApp:
                                        {"ok": False, "result": "Rejected by local Windows user."},
                                        action_id, action_kind)
                 return
-            self._execute(action, peer_id, action_id)
+            if action.get("kind") == "ocr":
+                if self.ocr_busy:
+                    self._send_e2e_message(peer_id, "remote_action_result",
+                                           {"ok": False, "result": "A PC OCR request is already running."},
+                                           action_id, action_kind)
+                    return
+                self.ocr_busy = True
+                threading.Thread(
+                    target=self._execute_ocr_background,
+                    args=(action, peer_id, action_id, action_kind), daemon=True
+                ).start()
+            else:
+                self._execute(action, peer_id, action_id)
         elif kind == "remote_action":
             self.status_var.set("Blocked plaintext remote action. E2E encryption is mandatory.")
         elif kind == "control_result":
@@ -1663,6 +1687,15 @@ class PcCompanionApp:
             "actionId": action_id, "actionKind": action_kind,
             "nonce": nonce, "ciphertext": ciphertext
         })
+
+    def _execute_ocr_background(self, action, peer_id, action_id, action_kind):
+        try:
+            ok, message = execute_action(
+                action, pyautogui, pyperclip, self._open_start_menu_shortcut, None
+            )
+        except Exception as exc:
+            ok, message = False, f"OCR failed: {str(exc)[:160]}"
+        self.events.put(("remote_action_finished", (peer_id, action_id, action_kind, bool(ok), str(message)[:12000])))
 
     def _execute(self, action, peer_id=None, action_id=None):
         ok = False
