@@ -121,6 +121,19 @@ fun VisualLensScreen(navController: NavController) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
             return
         }
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            answer = "Online AI अनुमति बंद है। Cloud Visual Lens इस्तेमाल करने से पहले Settings > Connections में अनुमति दें।"
+            return
+        }
+        runCatching {
+            `in`.shraddha.ai.future.CouncilCostBudget.requireUsageCountersAvailable(
+                context,
+                "Cloud Visual Lens image analysis"
+            )
+        }.onFailure {
+            answer = it.localizedMessage ?: "Monthly API budget blocks unmetered visual analysis."
+            return
+        }
         val prompt = question.trim().ifBlank { "इस तस्वीर में क्या दिखाई दे रहा है? महत्वपूर्ण वस्तुएँ, लिखावट और उपयोगी जानकारी हिंदी में बताओ।" }
         val config = VoiceGatewaySettings.get(context)
         if (config.readError != null) {
