@@ -1662,7 +1662,7 @@ class PcCompanionApp:
                                 if ws.sock and ws.sock.connected:
                                     ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
                 finally:
-                    jpeg[:] = b"\\x00" * len(jpeg)
+                    jpeg[:] = b"\x00" * len(jpeg)
                     image.close()
             except Exception as exc:
                 self.events.put(("status", f"Screen capture paused: {str(exc)[:120]}"))
