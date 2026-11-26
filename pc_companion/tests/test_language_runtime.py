@@ -3,7 +3,7 @@ import unittest
 import wave
 from pathlib import Path
 
-from language_runtime import IndicConformerRuntime, LanguageRuntimeError, _read_pcm16_mono
+from pc_companion.language_runtime import IndicConformerRuntime, LanguageRuntimeError, _read_pcm16_mono
 
 
 class LanguageRuntimeTests(unittest.TestCase):
