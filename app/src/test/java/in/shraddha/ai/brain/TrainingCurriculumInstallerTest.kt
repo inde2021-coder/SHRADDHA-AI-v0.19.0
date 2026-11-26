@@ -7,7 +7,7 @@ import org.junit.Test
 class TrainingCurriculumInstallerTest {
     @Test fun curriculumCatalogHasUniqueIdsAndValidOfflineAssets() {
         val catalog = TrainingCurriculumInstaller.catalog
-        assertEquals(8, catalog.size)
+        assertEquals(9, catalog.size)
         assertEquals(catalog.size, catalog.map { it.id }.distinct().size)
         assertTrue(catalog.all { it.id.startsWith("curriculum_") })
         assertTrue(catalog.all { it.version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")) })
@@ -24,5 +24,6 @@ class TrainingCurriculumInstallerTest {
         assertTrue("Eighteen mind activities", "curriculum_mind_activities_18_v1" in ids)
         assertTrue("Five languages", "curriculum_five_language_learning_v1" in ids)
         assertTrue("Full training catalogue", "curriculum_full_catalog_v1" in ids)
+        assertTrue("Advanced practical skills", "curriculum_advanced_practical_skills_v1" in ids)
     }
 }
