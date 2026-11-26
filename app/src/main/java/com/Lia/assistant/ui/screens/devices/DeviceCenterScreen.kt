@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -297,6 +298,10 @@ fun DeviceCenterScreen(navController: NavController) {
     }
     val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }
     val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
+    LaunchedEffect(outgoingFile?.peerId, peers) {
+        val pendingPeer = outgoingFile?.peerId
+        if (selectedPeerId.isBlank() && !pendingPeer.isNullOrBlank() && peers.any { it.id == pendingPeer }) selectedPeerId = pendingPeer
+    }
     val sendFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         val peer = selectedPeerId
         if (uri != null && peer.isNotBlank() && peerTrusted) {
@@ -674,7 +679,6 @@ fun DeviceCenterScreen(navController: NavController) {
                     if (item.peerId.isBlank() || item.peerId != selectedPeerId || !DeviceLinkManager.isE2ETrusted(item.peerId)) {
                         incomingTransferStatus = "इस pending transfer के लिए वही trusted PC चुनें।"
                     } else {
-                    val requested = DeviceLinkManager.requestFileTransferResume(selectedPeerId, item.transferId, item.chunkCount, emptyList())
                     val requested = DeviceLinkManager.requestFileTransferResume(selectedPeerId, item.transferId, item.chunkCount, emptyList())
                     incomingTransferStatus = if (requested) "PC से missing chunks की सूची माँगी गई…" else "Resume request नहीं भेजी जा सकी।"
                     }
