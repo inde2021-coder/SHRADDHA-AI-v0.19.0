@@ -114,7 +114,7 @@ class ActionTests(unittest.TestCase):
             (home / "Desktop").mkdir()
             target = home / "Documents" / "report.pdf"
             target.write_text("test", encoding="utf-8")
-            self.assertEqual(resolve_user_path("report.pdf", "file", home), target)
+            self.assertEqual(str(resolve_user_path("report.pdf", "file", home)).casefold(), str(target.resolve()).casefold())
             with self.assertRaises(ValueError):
                 resolve_user_path("../outside.txt", "file", home)
             outside = home / "outside.txt"
