@@ -231,7 +231,7 @@ class AkkpsRunnerActivity : Activity() {
                     (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit नहीं किया।"
                 return@evaluateJavascript
             }
-            submitForm()
+            confirmSubmit(values)
         }
     }
 
@@ -308,6 +308,22 @@ Return exact JSON only. Do not include prose or markdown."""
                 }
             }.start()
         }
+    }
+
+    /**
+     * Show the exact values that will be sent to AKKPS before any consequential submit.
+     * A typed "submit" command expresses intent, but the final on-device review remains required.
+     */
+    private fun confirmSubmit(values: List<Pair<String, String>>) {
+        val preview = values.take(12).joinToString("\n") { (key, value) ->
+            "$key: ${value.take(120)}"
+        } + if (values.size > 12) "\n…और ${values.size - 12} फील्ड" else ""
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS रिकॉर्ड की अंतिम जाँच")
+            .setMessage("ये मान AKKPS में जमा किए जाएँगे। नाम, गाँव और अन्य जानकारी जाँच लें।\n\n$preview")
+            .setNegativeButton("वापस जाँचें", null)
+            .setPositiveButton("सही है — Submit करें") { _, _ -> submitForm() }
+            .show()
     }
 
     private fun submitForm() {
