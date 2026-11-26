@@ -100,8 +100,8 @@ def read_active_window_ocr(pyautogui):
     candidates = [
         configured,
         shutil.which("tesseract"),
-        r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
-        r"C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe",
+        os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Tesseract-OCR", "tesseract.exe"),
+        os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Tesseract-OCR", "tesseract.exe"),
     ]
     executable = next((candidate for candidate in candidates
                        if candidate and Path(candidate).is_file()), None)
