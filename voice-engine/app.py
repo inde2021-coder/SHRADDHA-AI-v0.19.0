@@ -19,7 +19,7 @@ _SYNTHESIS_LOCK = threading.BoundedSemaphore(value=1)
 class SpeechRequest(BaseModel):
     text: str = Field(min_length=1, max_length=6000)
     language: str = Field(default="hi", pattern="^(hi|en)$")
-    voice: str = Field(default="shraddha", max_length=80)
+    voice: str = Field(default="shraddha", pattern="^shraddha$")
     format: str = "pcm_s16le"
     sample_rate: int = 24000
     channels: int = 1
