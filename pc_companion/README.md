@@ -61,3 +61,8 @@ The Windows GitHub Actions workflow packages a ready-to-use release folder conta
 
 
 The Windows workflow is a manual packaging workflow; it does not run the deferred combined test pass. A successful EXE build also does not replace paired Android↔Windows physical-device verification.
+
+
+### Remote file open
+
+From the paired Android Device Center, enter a relative path under the Windows user folder and request **Open file / folder on PC**. The Windows companion shows the exact path in its per-action local approval dialog before opening it. Hidden and credential folders, parent traversal, symbolic links, executable/script/shortcut/installer formats, unknown extensions, and files larger than 100 MB are blocked. Supported document and image formats are opened with the user's normal Windows default application. This action does not provide shell execution or delete/overwrite capability.
