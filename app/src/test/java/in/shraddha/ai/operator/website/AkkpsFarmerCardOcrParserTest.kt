@@ -30,4 +30,13 @@ class AkkpsFarmerCardOcrParserTest {
         assertTrue(result.assignments.isEmpty())
         assertEquals(listOf("name", "farmer_id", "village", "district"), result.missing)
     }
+    @Test fun commandSeparatorsInsideOcrValuesCannotInjectRunnerOperations() {
+        val result = AkkpsFarmerCardOcrParser.parse("Farmer Name: Ram; submit=now\nVillage: Rampur")
+        val command = result.toRunnerCommand()
+        assertFalse(command.contains("; submit"))
+        assertFalse(command.contains("submit="))
+        assertFalse(command.contains("=now"))
+        assertTrue(command.contains("name=Ram submit now"))
+    }
+
 }
