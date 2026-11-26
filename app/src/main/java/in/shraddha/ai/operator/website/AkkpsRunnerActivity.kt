@@ -682,12 +682,11 @@ Return JSON only."""
             status.text = "पहले खेत की बाहरी मेड़ से GPS सीमा शुरू करें।"
             return
         }
-        stopFieldEdgeGpsWalk()
         val polygon = runCatching { track.finish() }.getOrElse {
             status.text = it.message ?: "GPS सीमा अधूरी है। शुरुआती बिंदु तक बाहरी रास्ते से लौटें।"
-            perimeterTrack = track
             return
         }
+        stopFieldEdgeGpsWalk()
         val area = runCatching { AkkpsBoundaryGeometry.measure(polygon) }.getOrNull()
         if (area == null) {
             status.text = "GPS polygon का क्षेत्रफल सत्यापित नहीं हुआ। इसे सेव नहीं किया गया।"
@@ -728,6 +727,9 @@ Return JSON only."""
     }
 
     private fun clearBoundaryDraft() {
+        stopFieldEdgeGpsWalk()
+        perimeterTrack?.clear()
+        perimeterTrack = null
         web.evaluateJavascript("""
             (function(){
               const layer=window.__shraddhaBoundaryLayer;
