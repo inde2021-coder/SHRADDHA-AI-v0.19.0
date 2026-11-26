@@ -39,7 +39,7 @@ import com.Lia.assistant.ui.theme.depthSurface
 import com.Lia.assistant.voice.NovaOrbState
 
 @Composable
-fun LiaBottomNavigation(
+fun ShraddhaBottomNavigation(
     navController: NavController,
     currentRoute: String?,
     modifier: Modifier = Modifier
