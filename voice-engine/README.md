@@ -22,6 +22,21 @@ docker run --rm -p 8000:8000 -v "$PWD/models:/models:ro" \
 
 Expose only behind a trusted HTTPS reverse proxy. Set backend environment `SHRADDHA_TTS_URL=https://your-voice-host.example/synthesize`, `SHRADDHA_TTS_TOKEN` to the same secret, and `SHRADDHA_TTS_VOICE=shraddha`.
 
+## Local Docker Compose (personal PC)
+
+1. Copy `.env.example` to `.env` and replace the placeholder with a unique random secret.
+2. Put the licensed model files and matching `.onnx.json` files in `voice-engine/models/`:
+   - `shraddha-hi.onnx` and `shraddha-hi.onnx.json`
+   - `shraddha-en.onnx` and `shraddha-en.onnx.json`
+3. From the `voice-engine` directory run:
+
+```powershell
+docker compose up -d --build
+docker compose logs -f
+```
+
+The service binds to `127.0.0.1:8000` only. This is intentionally not reachable from the public internet. To connect the hosted relay, publish it through a trusted HTTPS reverse proxy or secure tunnel, then set the backend's `SHRADDHA_TTS_URL` and the same `SHRADDHA_TTS_TOKEN`. Do not expose port 8000 directly or commit `.env` or model weights.
+
 ## API
 POST `/synthesize` with Bearer token and JSON:
 
