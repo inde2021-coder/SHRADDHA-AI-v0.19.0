@@ -461,8 +461,15 @@ object VoiceSessionManager {
 
         val nextClient = GeminiLiveClient(liveListener, assistantName)
         synchronized(clientLock) {
-            if (!_isActive.value || sessionEpoch.get() != currentEpoch) {
+            if (!_isActive.value || sessionEpoch.get() != currentEpoch ||
+                !`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
                 nextClient.disconnect()
+                if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
+                    _lastError.value = "Online AI consent was revoked before voice connection."
+                    _state.value = NovaOrbState.ERROR
+                    _statusText.value = "Online AI disabled"
+                    stop()
+                }
                 return
             }
             client = nextClient
