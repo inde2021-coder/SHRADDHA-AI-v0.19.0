@@ -32,24 +32,24 @@ object IndicConformerRuntime {
     private val packs = mapOf(
         Language.HINDI to Pack(
             Language.HINDI,
-            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/hi/model.int8.onnx",
+            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/1a1e39e88931f4d6f19642085dcad5c47353d965/hi/model.int8.onnx",
             "915c71e04dd7e5378a4057fdebb252b3a587188e4e99db6d7ce0909ad5ad05fa",
-            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/tokens.txt",
-            null
+            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/1a1e39e88931f4d6f19642085dcad5c47353d965/tokens.txt",
+            "ee60967630213f31951817ac8b402b92ec18cce80718a24a49b388e56672dfb2"
         ),
         Language.MARATHI to Pack(
             Language.MARATHI,
             "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/mr/model.int8.onnx",
             null,
-            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/tokens.txt",
-            null
+            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/1a1e39e88931f4d6f19642085dcad5c47353d965/tokens.txt",
+            "ee60967630213f31951817ac8b402b92ec18cce80718a24a49b388e56672dfb2"
         ),
         Language.SANSKRIT to Pack(
             Language.SANSKRIT,
-            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/sa/model.int8.onnx",
-            null,
-            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/tokens.txt",
-            null
+            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/46e904e48b5fc622eaf99588f827744cc0ba8d76/sa/model.int8.onnx",
+            "08a878cdc31ef93c2a05545dbd0c44c5a95b3884d0754104beed984262a5b981",
+            "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/1a1e39e88931f4d6f19642085dcad5c47353d965/tokens.txt",
+            "ee60967630213f31951817ac8b402b92ec18cce80718a24a49b388e56672dfb2"
         )
     )
     private val http = OkHttpClient.Builder()
