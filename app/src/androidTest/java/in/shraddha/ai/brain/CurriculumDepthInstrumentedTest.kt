@@ -30,7 +30,7 @@ class CurriculumDepthInstrumentedTest {
             languages.contains("Pawari") && (languages.contains("not") || languages.contains("अभी")))
         assertTrue("Core pack covers ten domains", (1..10).all { core.contains("## $it.") })
         assertTrue("Advanced skills includes agriculture, finance, safety and bookkeeping",
-            advanced.contains("Agriculture") && advanced.contains("Finance") &&
-                advanced.contains("bookkeeping") && advanced.contains("cybersecurity"))
+            advanced.contains("Agriculture and farming") && advanced.contains("Personal finance") &&
+                advanced.contains("Daily cashbook") && advanced.contains("Account and device security"))
     }
 }
