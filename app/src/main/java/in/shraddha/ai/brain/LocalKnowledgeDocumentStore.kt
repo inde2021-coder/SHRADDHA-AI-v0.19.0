@@ -106,7 +106,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
             consent = true,
             id = id,
             title = title,
-            sourceLabel = "Shraddha AI built-in curriculum v$version • SHA-256 $actual",
+            sourceLabel = "Shraddha AI built-in curriculum v$version",
             sourceUri = null,
             content = content
         ).getOrThrow()
