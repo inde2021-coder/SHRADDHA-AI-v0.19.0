@@ -25,7 +25,7 @@ object PcCommandInterpreter {
                 JSONObject().put("kind", "hardware_status")
             Regex("^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
                 val match = Regex("^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!
-                val path = match.groupValues[1].trim().replace("\\\\", "/")
+                val path = match.groupValues[1].trim().replace("\\", "/")
                 val parts = path.split("/").filter { it.isNotBlank() && it != "." }
                 require(path.length <= 500 && !path.startsWith("/") && !Regex("^[A-Za-z]:").containsMatchIn(path) &&
                     parts.isNotEmpty() && parts.none { it == ".." || it.startsWith(".") }) {
