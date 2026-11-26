@@ -367,6 +367,10 @@ class PcCompanionApp:
             self.status_var.set("Already connecting or connected.")
             return
         base = _https_base(self.config.get("baseUrl", self.base_var.get()))
+        # Each transport session gets a new P-256 keypair; captured proof messages
+        # from an earlier connection cannot authenticate this new handshake.
+        self._clear_peer_keys()
+        self.e2e_crypto = DeviceE2ECrypto()
         query = urllib.parse.urlencode({
             "sessionId": self.config["sessionId"], "deviceId": self.config["deviceId"]
         })
@@ -653,8 +657,15 @@ class PcCompanionApp:
                     "Confirm only if every character matches."
                 )
                 if approved:
-                    sent = self._send_json({"type": "e2e_key_confirm", "targetDeviceId": peer_id,
-                                            "fingerprint": fingerprint})
+                    with self.e2e_lock:
+                        state = self.peer_keys.get(peer_id)
+                        key = bytes(state["key"]) if state and state["fingerprint"] == fingerprint else None
+                    proof = DeviceE2ECrypto.confirmation_proof(
+                        key, self.config.get("sessionId", ""), self.config.get("deviceId", ""),
+                        peer_id, fingerprint
+                    ) if key is not None else ""
+                    sent = bool(proof) and self._send_json({"type": "e2e_key_confirm",
+                        "targetDeviceId": peer_id, "fingerprint": fingerprint, "proof": proof})
                     with self.e2e_lock:
                         if peer_id in self.peer_keys:
                             self.peer_keys[peer_id]["local_confirmed"] = bool(sent)
@@ -669,19 +680,30 @@ class PcCompanionApp:
                 self.status_var.set(f"Rejected peer E2E key offer: {str(exc)[:140]}")
         elif kind == "e2e_key_confirm":
             peer_id = str(msg.get("fromDeviceId", ""))
+            fingerprint = str(msg.get("fingerprint", ""))
             with self.e2e_lock:
                 state = self.peer_keys.get(peer_id)
-                if state and state["fingerprint"] == msg.get("fingerprint"):
+                key = bytes(state["key"]) if state and state["fingerprint"] == fingerprint else None
+            expected = DeviceE2ECrypto.confirmation_proof(
+                key, self.config.get("sessionId", ""), peer_id,
+                self.config.get("deviceId", ""), fingerprint
+            ) if key is not None else ""
+            supplied = msg.get("proof", "")
+            proof_valid = (isinstance(supplied, str) and re.fullmatch(r"[a-f0-9]{64}", supplied) and
+                           __import__("hmac").compare_digest(expected, supplied))
+            with self.e2e_lock:
+                state = self.peer_keys.get(peer_id)
+                if state and state["fingerprint"] == fingerprint and proof_valid:
                     state["remote_confirmed"] = True
                     trusted = state["local_confirmed"]
                 else:
                     trusted = False
             if trusted:
                 self.status_var.set("Peer fingerprint confirmed. Mutual trust: READY")
-            elif state and state["fingerprint"] == msg.get("fingerprint"):
+            elif state and state["fingerprint"] == fingerprint and proof_valid:
                 self.status_var.set("Peer fingerprint confirmed; waiting for local confirmation.")
             else:
-                self.status_var.set("E2E fingerprint mismatch. Do not trust this peer.")
+                self.status_var.set("E2E confirmation proof invalid. Peer remains untrusted.")
         elif kind == "data_share_request":
             self._handle_data_share_request(msg)
         elif kind == "data_share_result":
