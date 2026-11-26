@@ -46,7 +46,7 @@ class CompanionEventQueue(queue.Queue):
 
     def put(self, item, block=True, timeout=None):
         try:
-            super().put_nowait(item)
+            super().put(item, block=False)
             return True
         except queue.Full:
             pass
@@ -66,7 +66,7 @@ class CompanionEventQueue(queue.Queue):
                 self.unfinished_tasks = max(0, self.unfinished_tasks - 1)
                 self.not_full.notify()
         try:
-            super().put_nowait(item)
+            super().put(item, block=False)
             return True
         except queue.Full:
             # Never block the WebSocket thread. A dropped action/control event
