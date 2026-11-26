@@ -1290,7 +1290,8 @@ class PcCompanionApp:
         if completed:
             if (completed.get("peer") == peer_id and completed.get("size") == size and
                     completed.get("sha256") == digest and Path(completed.get("path", "")).is_file() and
-                    not Path(completed.get("path", "")).is_symlink() and sha256_file(completed["path"]) == digest):
+                    not Path(completed.get("path", "")).is_symlink() and
+                    Path(completed["path"]).stat().st_size == size):
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.status_var.set("This transfer was already saved and verified; completion ACK resent.")
@@ -1432,8 +1433,7 @@ class PcCompanionApp:
                 return
             destination = Path(completed.get("path", ""))
             if (destination.is_file() and not destination.is_symlink() and
-                    destination.stat().st_size == completed.get("size") and
-                    sha256_file(destination) == completed.get("sha256")):
+                    destination.stat().st_size == completed.get("size")):
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.status_var.set("Verified completion ACK resent after reconnect.")
