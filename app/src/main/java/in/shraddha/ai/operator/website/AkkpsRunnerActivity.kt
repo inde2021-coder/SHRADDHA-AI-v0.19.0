@@ -297,6 +297,9 @@ Never invent or infer personal data, never modify a value, never map a field unl
 """ + raw.take(3000) + """
 AKKPS page: """ + page.optString("title") + """
 Visible form fields (JSON): """ + fields.toString().take(8000) + """
+Visible page actions (JSON): """ + (page.optJSONArray("actions") ?: JSONArray()).toString().take(5000) + """
+Visible table column headers (JSON): """ + (page.optJSONArray("tables") ?: JSONArray()).toString().take(3000) + """
+Use only controls and options actually shown on this page. Do not click buttons, add repeat rows, navigate, or submit; return field assignments only. If a requested repeated row does not exist yet, list it in missing instead of inventing a control.
 Return exact JSON only. Do not include prose or markdown."""
             status.text = "AI कमांड समझ रहा है…"
             Thread {
