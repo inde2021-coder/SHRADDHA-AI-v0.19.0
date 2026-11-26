@@ -615,102 +615,26 @@ Return JSON only."""
         if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS का मैप पेज खोलें।"; return
         }
-        val js = """
+        // Until a satellite segmentation model is bundled and validated,
+        // never substitute manual tracing or the website's native Draw mode.
+        web.evaluateJavascript("""
             (function(){
-              // Only create a uniquely named Shraddha draft overlay. Never reuse,
-              // replace, clear, or update any AKKPS-owned layer/source.
-              // Do not activate AKKPS's native Draw mode: it could mutate the
-              // site's in-progress polygon. This listener is an isolated correction draft only.
-              const drawButton=[...document.querySelectorAll('button,[role="button"]')]
-                .find(b=>(b.innerText||b.getAttribute('aria-label')||'').trim().toLowerCase()==='draw');
-              const globals=Object.keys(window).filter(k=>/map/i.test(k)).map(k=>({name:k,value:window[k]}));
-              const leaflet=globals.find(x=>x.value&&x.value._container&&typeof x.value.on==='function'&&typeof x.value.getCenter==='function');
-              const google=globals.find(x=>x.value&&x.value.__gm&&typeof x.value.getCenter==='function');
-              const mapbox=globals.find(x=>x.value&&typeof x.value.addSource==='function'&&typeof x.value.on==='function');
-              const map=leaflet?.value||google?.value||mapbox?.value;
-              if(!map) return JSON.stringify({ok:false,drawButtonPresent:!!drawButton,
-                mapVisible:!!document.querySelector('.leaflet-container,.mapboxgl-map,.ol-viewport,canvas')});
-
-              // Detach only the listener previously installed by this Shraddha draft.
-              const previous=window.__shraddhaBoundaryListener;
-              if(previous?.map&&previous?.handler){
-                try {
-                  if(previous.engine==='leaflet'||previous.engine==='mapbox-gl') previous.map.off('click',previous.handler);
-                  else if(previous.engine==='google-maps'&&previous.subscription) previous.subscription.remove();
-                } catch(_){}
+              const prior=window.__shraddhaBoundaryListener;
+              if(prior?.map&&prior?.handler){
+                try{
+                  if(prior.engine==='leaflet'||prior.engine==='mapbox-gl')prior.map.off('click',prior.handler);
+                  else if(prior.subscription)prior.subscription.remove();
+                }catch(_){}
               }
-              // Remove only our own temporary overlay, never an existing parcel boundary.
-              const oldLayer=window.__shraddhaBoundaryLayer;
-              if(oldLayer){try{if(oldLayer.remove)oldLayer.remove();else if(oldLayer.setMap)oldLayer.setMap(null);}catch(_){}}
-              const oldMap=previous?.map;
-              const oldLayers=window.__shraddhaBoundaryLayerIds||[];
-              const oldSource=window.__shraddhaBoundarySourceId;
-              if(oldMap&&oldSource&&String(oldSource).startsWith('shraddha-draft-')){
-                try{for(const id of oldLayers){if(oldMap.getLayer?.(id))oldMap.removeLayer(id);}}catch(_){}
-                try{if(oldMap.getSource?.(oldSource))oldMap.removeSource(oldSource);}catch(_){}
-              }
-              window.__shraddhaBoundaryLayerIds=[];
-              window.__shraddhaBoundarySourceId=null;
-              window.__shraddhaBoundaryPoints=[];
-              window.__shraddhaBoundaryLayer=null;
-              const uid='shraddha-draft-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
-              const addPoint=(lat,lng)=>{
-                const latitude=Number(lat),longitude=Number(lng);
-                if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||Math.abs(latitude)>90||Math.abs(longitude)>180)return;
-                window.__shraddhaBoundaryPoints.push({latitude,longitude});
-                const pts=window.__shraddhaBoundaryPoints;
-                if(leaflet&&pts.length>=3){
-                  if(!window.__shraddhaBoundaryLayer)
-                    window.__shraddhaBoundaryLayer=window.L.polygon(pts.map(p=>[p.latitude,p.longitude]),{color:'#00e5ff',weight:3,fillOpacity:.18}).addTo(map);
-                  else window.__shraddhaBoundaryLayer.setLatLngs(pts.map(p=>[p.latitude,p.longitude]));
-                } else if(google&&window.google?.maps?.Polygon&&pts.length>=3){
-                  if(!window.__shraddhaBoundaryLayer)
-                    window.__shraddhaBoundaryLayer=new google.maps.Polygon({map,paths:pts.map(p=>({lat:p.latitude,lng:p.longitude})),strokeColor:'#00e5ff',strokeWeight:3,fillColor:'#00e5ff',fillOpacity:.18});
-                  else window.__shraddhaBoundaryLayer.setPath(pts.map(p=>({lat:p.latitude,lng:p.longitude})));
-                } else if(mapbox&&pts.length>=3){
-                  const ring=pts.map(p=>[p.longitude,p.latitude]);ring.push(ring[0]);
-                  const data={type:'Feature',geometry:{type:'Polygon',coordinates:[ring]},properties:{owner:'shraddha-draft'}};
-                  // Allocate collision-free IDs; never call setData on a pre-existing source.
-                  let sourceId=uid+'-source',fillId=uid+'-fill',lineId=uid+'-line',suffix=0;
-                  while(map.getSource(sourceId)||map.getLayer(fillId)||map.getLayer(lineId)){
-                    suffix++;sourceId=uid+'-'+suffix+'-source';fillId=uid+'-'+suffix+'-fill';lineId=uid+'-'+suffix+'-line';
-                  }
-                  if(!window.__shraddhaBoundarySourceId){
-                    map.addSource(sourceId,{type:'geojson',data});
-                    map.addLayer({id:fillId,type:'fill',source:sourceId,paint:{'fill-color':'#00e5ff','fill-opacity':.18}});
-                    map.addLayer({id:lineId,type:'line',source:sourceId,paint:{'line-color':'#00e5ff','line-width':3}});
-                    window.__shraddhaBoundarySourceId=sourceId;
-                    window.__shraddhaBoundaryLayerIds=[fillId,lineId];
-                  } else {
-                    // Subsequent point edits are restricted to the source created above.
-                    const ownSource=map.getSource(window.__shraddhaBoundarySourceId);
-                    if(ownSource) ownSource.setData(data);
-                  }
-                }
-              };
-              let handler;
-              if(leaflet) handler=e=>addPoint(e.latlng.lat,e.latlng.lng);
-              else if(google) handler=e=>addPoint(e.latLng.lat(),e.latLng.lng());
-              else handler=e=>addPoint(e.lngLat.lat,e.lngLat.lng);
-              let subscription=null;
-              if(leaflet||mapbox) map.on('click',handler);
-              else subscription=map.addListener('click',handler);
-              window.__shraddhaBoundaryListener={map,handler,subscription,engine:leaflet?'leaflet':google?'google-maps':'mapbox-gl'};
-              return JSON.stringify({ok:true,engine:leaflet?'leaflet':google?'google-maps':'mapbox-gl',draftId:uid});
+              window.__shraddhaBoundaryListener=null;
+              return true;
             })()
-        """.trimIndent()
-        web.evaluateJavascript(js) { raw ->
-            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
-            status.text = if (result?.optBoolean("ok") == true)
-                "केवल Shraddha का अलग अस्थायी Draft overlay बनाया गया है। पहले से बनी AKKPS सीमाएँ नहीं बदली जाएँगी। Satellite से dot-boundary की automatic पहचान अभी उपलब्ध नहीं; बिना पहचान के Save नहीं होगा।"
-            else if (result?.optBoolean("drawButtonPresent") == true)
-                "AKKPS Draw mode सक्रिय है, लेकिन map object उपलब्ध नहीं। पुरानी सीमाएँ सुरक्षित हैं; automatic पहचान के बिना कोई सीमा नहीं बनाई या Save की जाएगी।"
-            else "AKKPS map object नहीं मिला। पुरानी सीमाएँ सुरक्षित हैं; automatic boundary extraction अभी उपलब्ध नहीं है।"
-        }
+        """.trimIndent(), null)
+        status.text = "Satellite AI segmentation model अभी app में उपलब्ध/सत्यापित नहीं है। Shraddha ने Draw mode, manual point capture या Save नहीं चलाया। पहले से बनी AKKPS सीमाएँ अछूती रहेंगी।"
     }
 
     private fun calculateBoundaryArea() {
-        web.evaluateJavascript("(window.__shraddhaBoundaryPoints||[]).map(p=>JSON.stringify(p)).join('\\n')") { raw ->
+        web.evaluateJavascript("(window.__shraddhaBoundarySource==='verified-ai-segmentation'?(window.__shraddhaBoundaryPoints||[]).map(p=>JSON.stringify(p)).join('\\n'):'')") { raw ->
             val points = decode(raw).lineSequence().mapNotNull { line ->
                 runCatching { JSONObject(line).let { AkkpsGeoPoint(it.getDouble("latitude"), it.getDouble("longitude")) } }.getOrNull()
             }.toList()
