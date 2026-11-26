@@ -849,6 +849,24 @@ class PcCompanionApp:
                     body = json.loads(plain.decode("utf-8"))
                     if not isinstance(body, dict):
                         return
+                    if message_kind == "file_transfer_start":
+                        if (body.get("fileName") != msg.get("fileName") or
+                                body.get("sizeBytes") != msg.get("sizeBytes") or
+                                body.get("chunkCount") != msg.get("chunkCount") or
+                                body.get("sha256") != msg.get("sha256")):
+                            raise ValueError("Encrypted transfer manifest does not match relay routing metadata.")
+                    elif message_kind == "file_transfer_ack":
+                        if (body.get("index") != msg.get("index") or
+                                body.get("complete") is not msg.get("complete") or
+                                body.get("ok") is not msg.get("ok")):
+                            raise ValueError("Encrypted transfer ACK does not match relay routing metadata.")
+                    elif message_kind == "file_transfer_resume":
+                        if (body.get("chunkCount") != msg.get("chunkCount") or
+                                body.get("missingIndexes") != msg.get("missingIndexes")):
+                            raise ValueError("Encrypted transfer resume does not match relay routing metadata.")
+                    elif message_kind == "file_transfer_cancel":
+                        if body.get("reason", "cancelled") != msg.get("reason", "cancelled"):
+                            raise ValueError("Encrypted transfer cancellation does not match relay routing metadata.")
                     body.update({"type": message_kind, "fromDeviceId": peer_id, "transferId": transfer_id})
                     if message_kind == "file_transfer_start":
                         self._handle_incoming_file_start(body)
