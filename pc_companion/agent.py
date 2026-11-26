@@ -249,14 +249,13 @@ class PcCompanionApp:
             self.status_var.set(f"Hardware control failed: {str(exc)[:140]}")
 
     def _show_hardware_status(self):
-        try:
-            status = get_hardware_status()
-            messagebox.showinfo("Shraddha AI • PC Hardware Status",
-                                json.dumps(status, ensure_ascii=False, indent=2)[:12000],
-                                parent=self.root)
-            self.status_var.set("PC hardware status refreshed. Unsupported vendor sensors are reported as unavailable.")
-        except Exception as exc:
-            self.status_var.set(f"Hardware status unavailable: {str(exc)[:160]}")
+        self.status_var.set("Collecting Windows hardware telemetry…")
+        def collect():
+            try:
+                self.events.put(("hardware_status_result", (True, get_hardware_status())))
+            except Exception as exc:
+                self.events.put(("hardware_status_result", (False, str(exc)[:160])))
+        threading.Thread(target=collect, daemon=True).start()
 
     def _monitor_labels(self):
         try:
@@ -554,6 +553,15 @@ class PcCompanionApp:
                         self.control_grant_peer = None
                         self.phone_control_grant_until = 0
                         self.phone_control_peer = None
+                elif kind == "hardware_status_result":
+                    ok, payload = payload
+                    if ok:
+                        messagebox.showinfo("Shraddha AI • PC Hardware Status",
+                                            json.dumps(payload, ensure_ascii=False, indent=2)[:12000],
+                                            parent=self.root)
+                        self.status_var.set("PC hardware status refreshed. Unsupported vendor sensors are reported as unavailable.")
+                    else:
+                        self.status_var.set(f"Hardware status unavailable: {payload}")
                 elif kind == "credential_rejected":
                     device_id = str(self.config.get("deviceId", ""))
                     if device_id:
