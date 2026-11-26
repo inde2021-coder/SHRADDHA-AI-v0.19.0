@@ -39,7 +39,7 @@ The PC device token is stored in Windows Credential Manager only after the relay
 The Windows companion includes a separate, allowlisted hardware adapter:
 
 - **Telemetry:** CPU utilization/core count, RAM, battery/charging, mounted disk usage and monitor dimensions.
-- **Optional GPU telemetry:** NVIDIA name, temperature, utilization and VRAM via the fixed `nvidia-smi` query when installed.
+- **Optional GPU telemetry:** NVIDIA name, temperature, utilization and VRAM via the fixed `nvidia-smi` query when installed; AMD/Intel adapters fall back to Windows WMI identity, driver and reported adapter RAM. WMI does not claim live utilization, and its adapter-RAM value may be driver-capped.
 - **Controls:** Windows master volume and supported display brightness (driver/API dependent).
 - **Power:** shutdown, restart and sleep are accepted only after a separate confirmation dialog on the physical Windows PC.
 - **Unavailable sensors:** CPU temperature and fan speed are not fabricated; they remain unavailable until a supported vendor/LibreHardwareMonitor adapter is configured.
