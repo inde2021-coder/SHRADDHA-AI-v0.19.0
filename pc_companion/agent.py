@@ -171,6 +171,8 @@ class PcCompanionApp:
 
         self.screen_thread = threading.Thread(target=self._screen_loop, daemon=True)
         self.screen_thread.start()
+        self.file_chunk_thread = threading.Thread(target=self._file_chunk_worker, daemon=True)
+        self.file_chunk_thread.start()
         self.root.after(120, self._drain_events)
         # Reconnect saved pair automatically after app launch; no LAN discovery is required.
         self.root.after(1500, self._auto_connect_saved_pair)
@@ -1323,6 +1325,10 @@ class PcCompanionApp:
             raise RuntimeError(f"Relay send failed at chunk {index}")
 
     def _handle_incoming_file_start(self, msg):
+        with self.file_transfer_lock:
+            return self._handle_incoming_file_start_locked(msg)
+
+    def _handle_incoming_file_start_locked(self, msg):
         peer_id = msg.get("fromDeviceId")
         transfer_id = msg.get("transferId")
         if not isinstance(peer_id, str) or not isinstance(transfer_id, str):
@@ -1425,6 +1431,10 @@ class PcCompanionApp:
         self.status_var.set(f"Receiving {Path(destination).name} from paired Android device…")
 
     def _handle_incoming_file_chunk(self, msg, peer_id):
+        with self.file_transfer_lock:
+            return self._handle_incoming_file_chunk_locked(msg, peer_id)
+
+    def _handle_incoming_file_chunk_locked(self, msg, peer_id):
         transfer_id = str(msg.get("transferId", ""))
         transfer = self.pc_incoming.get(transfer_id)
         if not transfer or transfer["peer"] != peer_id or not self.is_e2e_trusted(peer_id):
@@ -1479,6 +1489,10 @@ class PcCompanionApp:
             self._persist_pc_incoming()
 
     def _handle_file_resume(self, msg):
+        with self.file_transfer_lock:
+            return self._handle_file_resume_locked(msg)
+
+    def _handle_file_resume_locked(self, msg):
         transfer_id = str(msg.get("transferId", ""))
         completed = self.pc_completed.get(transfer_id)
         if completed:
@@ -1519,6 +1533,10 @@ class PcCompanionApp:
         self._send_pc_file_chunks(missing)
 
     def _handle_file_cancel(self, msg):
+        with self.file_transfer_lock:
+            return self._handle_file_cancel_locked(msg)
+
+    def _handle_file_cancel_locked(self, msg):
         transfer_id = str(msg.get("transferId", ""))
         sender = str(msg.get("fromDeviceId", ""))
         pending = self.pending_pc_send
