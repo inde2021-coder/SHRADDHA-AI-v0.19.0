@@ -640,7 +640,7 @@ class PcCompanionApp:
                         previous["key"][:] = b"\x00" * len(previous["key"])
                     self.peer_keys[peer_id] = {"key": bytearray(key), "fingerprint": fingerprint,
                                                "local_confirmed": False, "remote_confirmed": False,
-                                               "send_sequence": 0, "recv_screen_sequence": -1,
+                                               "send_sequence": 1, "recv_screen_sequence": -1,
                                                "recv_camera_sequence": -1}
                 approved = messagebox.askyesno(
                     "Shraddha AI • Verify paired-device fingerprint",
