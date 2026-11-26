@@ -141,6 +141,27 @@ class ActionTests(unittest.TestCase):
             self.assertTrue(opened[0].endswith("invoice.pdf"))
             self.assertIn("Opened approved file", result)
 
+    def test_approved_root_junction_cannot_redirect_outside_user_home(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.approved_paths import resolve_user_path
+        with tempfile.TemporaryDirectory() as td:
+            parent = Path(td)
+            home = parent / "user"
+            home.mkdir()
+            for folder in ("Documents", "Downloads", "Desktop"):
+                (home / folder).mkdir()
+            outside = parent / "external"
+            outside.mkdir()
+            (outside / "secret.txt").write_text("secret", encoding="utf-8")
+            try:
+                (home / "Documents").rmdir()
+                (home / "Documents").symlink_to(outside, target_is_directory=True)
+            except OSError:
+                self.skipTest("Directory symlink creation is unavailable on this Windows test account.")
+            with self.assertRaises(FileNotFoundError):
+                resolve_user_path("secret.txt", "file", home)
+
 
 if __name__ == "__main__":
     unittest.main()
