@@ -19,6 +19,10 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.VoiceGatewaySettings
 import java.net.URI
@@ -57,6 +61,7 @@ class AkkpsRunnerActivity : Activity() {
         root.addView(command, LinearLayout.LayoutParams(-1, dp(82)))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        actions.addView(action("Farmer Card OCR") { chooseFarmerCardImage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
         val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
