@@ -224,7 +224,37 @@ object DeviceLinkManager {
                                         .put("transferId", transferId).put("index", index)
                                     onFileTransferMessage?.invoke(payload)
                                 }
-                                "file_transfer_start", "file_transfer_ack", "file_transfer_resume", "file_transfer_cancel" -> {
+                                "file_transfer_start" -> {
+                                    require(payload.optString("fileName") == msg.optString("fileName") &&
+                                        payload.optLong("sizeBytes", -1L) == msg.optLong("sizeBytes", -2L) &&
+                                        payload.optInt("chunkCount", -1) == msg.optInt("chunkCount", -2) &&
+                                        payload.optString("sha256").equals(msg.optString("sha256"), ignoreCase = true)) {
+                                        "Encrypted transfer manifest does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_ack" -> {
+                                    require(payload.optInt("index", -2) == msg.optInt("index", -3) &&
+                                        payload.optBoolean("complete") == msg.optBoolean("complete") &&
+                                        payload.optBoolean("ok") == msg.optBoolean("ok")) {
+                                        "Encrypted transfer ACK does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_resume" -> {
+                                    require(payload.optInt("chunkCount", -1) == msg.optInt("chunkCount", -2) &&
+                                        payload.optJSONArray("missingIndexes")?.toString() == msg.optJSONArray("missingIndexes")?.toString()) {
+                                        "Encrypted transfer resume does not match relay routing metadata."
+                                    }
+                                    payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
+                                    onFileTransferMessage?.invoke(payload)
+                                }
+                                "file_transfer_cancel" -> {
+                                    require(payload.optString("reason") == msg.optString("reason")) {
+                                        "Encrypted transfer cancellation does not match relay routing metadata."
+                                    }
                                     payload.put("type", kind).put("fromDeviceId", peerId).put("transferId", transferId)
                                     onFileTransferMessage?.invoke(payload)
                                 }
