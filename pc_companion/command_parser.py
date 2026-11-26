@@ -17,12 +17,6 @@ def parse_android_command(raw):
         return {"kind": "scroll", "amount": 5}
     if lower in {"scroll down", "नीचे scroll", "नीचे स्क्रॉल"}:
         return {"kind": "scroll", "amount": -5}
-    match = re.match(r"^(?:open|launch|खोलो|खोल)\s+(.+)$", command, re.I)
-    if match:
-        name = match.group(1).strip()
-        if len(name) > 80 or any(ch in name for ch in "\\/:") or ".." in name:
-            raise ValueError("App name is invalid.")
-        return {"kind": "open_app", "appName": name}
     match = re.match(r"^(?:type|लिखो|टाइप करो)\s+(.+)$", command, re.I)
     if match:
         text = match.group(1)
@@ -36,6 +30,13 @@ def parse_android_command(raw):
         if not path or len(path) > 500 or path.startswith("/") or re.match(r"^[A-Za-z]:", path) or any(part == ".." or part.startswith(".") for part in parts):
             raise ValueError("File/folder path must be a safe relative path under the PC user folder.")
         return {"kind": "file_open", "path": "/".join(parts)}
+
+    match = re.match(r"^(?:open|launch|खोलो|खोल)\s+(.+)$", command, re.I)
+    if match:
+        name = match.group(1).strip()
+        if len(name) > 80 or any(ch in name for ch in "\\/:") or ".." in name:
+            raise ValueError("App name is invalid.")
+        return {"kind": "open_app", "appName": name}
     match = re.match(r"^(?:search files?|find files?|फाइल खोजो|फाइल ढूंढो|फ़ाइल खोजो|फ़ाइल ढूंढो)\s+(.+)$", command, re.I)
     if match:
         query = match.group(1).strip()
