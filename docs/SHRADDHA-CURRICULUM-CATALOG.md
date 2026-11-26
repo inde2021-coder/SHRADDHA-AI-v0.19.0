@@ -1,7 +1,7 @@
 # Shraddha AI — Complete Training & Learning Curriculum Catalogue
 
 Date: 2026-11-26
-Status: Curriculum scope and structured syllabus specification added to PR #141. This catalogue is content scope, not a claim that every lesson, screen, model or action is already shipped in the APK. Runtime loading, lesson authoring, review and end-to-end integration remain implementation work.
+Status: Curriculum scope and structured syllabus specification. Seven authored starter lesson/specification packs are bundled in the APK and indexed into the encrypted offline Knowledge Library at first Chat use. The catalogue is broader than the current lesson corpus; specialist review, additional authored lessons, and separate speech/model integrations remain required.
 
 ## Product-wide training rules
 
