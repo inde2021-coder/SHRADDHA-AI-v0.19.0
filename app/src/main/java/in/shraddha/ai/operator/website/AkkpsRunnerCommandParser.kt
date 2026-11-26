@@ -5,18 +5,22 @@ data class AkkpsRunnerCommand(
     val submit: Boolean
 )
 
-/** Small deterministic parser; it never guesses field values or invents missing data. */
+/** Deterministic parser: values are copied literally and never inferred. */
 object AkkpsRunnerCommandParser {
-    /** Submission intent must be a standalone command/token, not a substring such as "resubmit". */
+    private val submitToken = Regex(
+        "^(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)$",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** Submission intent must be a standalone command segment, never a substring of a value. */
     fun hasExplicitSubmitIntent(raw: String): Boolean =
-        Regex("(?:^|[\\s;])(?:submit|सबमिट|जमा करें|जमा|भेजो|भेज दें)(?:$|[\\s;])", RegexOption.IGNORE_CASE)
-            .containsMatchIn(raw.trim())
+        raw.split(';', '\\n').any { submitToken.matches(it.trim()) }
 
     fun parse(raw: String): AkkpsRunnerCommand {
         val assignments = mutableListOf<Pair<String, String>>()
         var submit = false
-        raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
-            if (part.equals("submit", ignoreCase = true)) {
+        raw.split(';', '\\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+            if (submitToken.matches(part)) {
                 submit = true
             } else {
                 val splitAt = part.indexOf('=').takeIf { it >= 0 } ?: part.indexOf(':')
