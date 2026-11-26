@@ -30,12 +30,26 @@ def require_auth(authorization: str | None):
     if not expected or not supplied or not hmac.compare_digest(expected, supplied):
         raise HTTPException(status_code=401, detail="Voice engine authentication failed")
 
+def model_is_ready(env_name: str) -> bool:
+    configured = os.getenv(env_name, "").strip()
+    if not configured:
+        return False
+    model_path = Path(configured)
+    return model_path.is_file() and Path(str(model_path) + ".json").is_file()
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "Shraddha custom voice engine", "modelsConfigured": {
-        "hi": bool(os.getenv("SHRADDHA_MODEL_HI")),
-        "en": bool(os.getenv("SHRADDHA_MODEL_EN")),
-    }}
+    models = {
+        "hi": model_is_ready("SHRADDHA_MODEL_HI"),
+        "en": model_is_ready("SHRADDHA_MODEL_EN"),
+    }
+    return {
+        "ok": True,
+        "service": "Shraddha custom voice engine",
+        "modelsConfigured": models,
+        "modelsReady": all(models.values()),
+    }
 
 @app.post("/synthesize")
 def synthesize(body: SpeechRequest, authorization: str | None = Header(default=None)):
