@@ -120,6 +120,26 @@ def sha256_file(path):
             digest.update(block)
     return digest.hexdigest()
 
+def completed_file_matches(record):
+    """Return true only while a completed receipt still points to the exact verified file."""
+    from pathlib import Path
+
+    if not isinstance(record, dict):
+        return False
+    path_value = record.get("path")
+    size = record.get("size")
+    digest = record.get("sha256")
+    if (not isinstance(path_value, str) or not path_value or
+            type(size) is not int or not 1 <= size <= MAX_PC_FILE_BYTES or
+            not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)):
+        return False
+    path = Path(path_value)
+    try:
+        return (not path.is_symlink() and path.is_file() and
+                path.stat().st_size == size and sha256_file(path) == digest)
+    except OSError:
+        return False
+
 
 class TransferPersistenceError(Exception):
     """A durable chunk write succeeded but its recovery bitmap was not committed."""
