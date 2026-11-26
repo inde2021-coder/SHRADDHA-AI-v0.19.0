@@ -509,10 +509,20 @@ object VoiceSessionManager {
         }
     }
 
+    private fun selectedSpeechLanguage(): String = when (_currentLanguage.value) {
+        LanguagePreference.AUTO -> _detectedLanguage.value
+        LanguagePreference.HINDI -> "HINDI"
+        LanguagePreference.HINGLISH -> "HINGLISH"
+        LanguagePreference.ENGLISH -> "ENGLISH"
+        LanguagePreference.MARATHI -> "MARATHI"
+        LanguagePreference.SANSKRIT -> "SANSKRIT"
+        LanguagePreference.PAWARI -> "PAWARI"
+    }
+
     private fun speakWithShraddha(context: Context, epoch: Long, assistantName: String, text: String) {
         _state.value = NovaOrbState.THINKING
         _statusText.value = "Preparing $assistantName's voice..."
-        ShraddhaSpeechClient.synthesize(context, text, _detectedLanguage.value) { result ->
+        ShraddhaSpeechClient.synthesize(context, text, selectedSpeechLanguage()) { result ->
             if (sessionEpoch.get() != epoch || !_isActive.value) return@synthesize
             result.onSuccess { pcm ->
                 scope.launch {
