@@ -15,6 +15,11 @@ object OnlineAiConsent {
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(KEY_ALLOW_ONLINE_AI, false)
 
+    /** Persist consent synchronously so revocation is visible before active cloud work is stopped. */
+    fun setAllowed(context: Context, allowed: Boolean): Boolean =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_ALLOW_ONLINE_AI, allowed).commit()
+
     fun requireAllowed(context: Context) {
         check(isAllowed(context)) {
             "Online AI is disabled. Enable Allow Online AI in Settings > Connections before using cloud services."
