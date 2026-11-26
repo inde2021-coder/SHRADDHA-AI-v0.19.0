@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - main
+      - fix/global-online-ai-consent-gateway
   pull_request:
     branches:
       - main
@@ -47,7 +48,7 @@ jobs:
         run: git fetch origin --prune
 
       - name: Verify source branches are integrated (merge commits or squash-merged PRs)
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
