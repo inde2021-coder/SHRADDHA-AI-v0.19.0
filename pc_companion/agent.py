@@ -32,6 +32,7 @@ from protocol import valid_pairing_ids, validate_remote_action, validate_remote_
 from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
+from language_lab import LanguageLabDialog
 from command_parser import parse_android_command
 from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError, save_outgoing_transfer_record, load_outgoing_transfer_record, save_completed_transfer_record, load_completed_transfer_records, completed_file_matches
 
@@ -1917,7 +1918,6 @@ class PcCompanionApp:
 
     def _open_language_lab(self):
         try:
-            from language_lab import LanguageLabDialog
             LanguageLabDialog(self.root)
         except Exception as exc:
             messagebox.showerror("Offline Language Lab", str(exc)[:500], parent=self.root)
