@@ -1,6 +1,7 @@
 """Wire-compatible P-256 ECDH / HKDF-SHA256 / AES-256-GCM for Shraddha peer frames."""
 import base64
 import hashlib
+import hmac
 import os
 
 from cryptography.hazmat.primitives import hashes, serialization
@@ -72,6 +73,20 @@ class DeviceE2ECrypto:
             for index in range(0, 32, 4)
         )
         return key, fingerprint_text
+
+    @staticmethod
+    def confirmation_proof(key, session_id, source_device_id, target_device_id, fingerprint):
+        if (not isinstance(key, (bytes, bytearray, memoryview)) or len(key) != 32 or
+                not isinstance(session_id, str) or not 1 <= len(session_id) <= 128 or
+                not isinstance(source_device_id, str) or not 1 <= len(source_device_id) <= 64 or
+                not isinstance(target_device_id, str) or not 1 <= len(target_device_id) <= 64 or
+                source_device_id == target_device_id or
+                not isinstance(fingerprint, str) or not 19 <= len(fingerprint) <= 40 or
+                any(char not in "ABCDEF0123456789-" for char in fingerprint)):
+            raise ValueError("Invalid E2E confirmation proof fields")
+        context = (f"shraddha-device-e2e-confirm-v1|{session_id}|{source_device_id}|"
+                   f"{target_device_id}|{fingerprint}").encode("utf-8")
+        return hmac.new(bytes(key), context, hashlib.sha256).hexdigest()
 
     @staticmethod
     def encrypt(key, plaintext, associated_data):
