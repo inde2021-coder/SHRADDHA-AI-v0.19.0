@@ -3,6 +3,8 @@ package `in`.shraddha.ai.learning
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.widget.Button
@@ -20,6 +22,16 @@ class CurriculumLearningActivity : Activity() {
     private lateinit var dashboard: TextView
     private var learningLocked = false
     private var sessionStarted = false
+    private var limitDialogVisible = false
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private val progressTicker = object : Runnable {
+        override fun run() {
+            if (!isFinishing && ::dashboard.isInitialized) {
+                refreshDashboard()
+                uiHandler.postDelayed(this, 30_000L)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,9 +51,12 @@ class CurriculumLearningActivity : Activity() {
         if (learningLocked) showDailyLimitDialog()
         else startStudySession()
         refreshDashboard()
+        uiHandler.removeCallbacks(progressTicker)
+        uiHandler.postDelayed(progressTicker, 30_000L)
     }
 
     override fun onPause() {
+        uiHandler.removeCallbacks(progressTicker)
         if (sessionStarted) {
             progress.endSession()
             sessionStarted = false
@@ -129,6 +144,14 @@ class CurriculumLearningActivity : Activity() {
     private fun refreshDashboard() {
         if (!::dashboard.isInitialized) return
         val s = progress.snapshot()
+        if (s.guardianMode && s.usedTodayMinutes >= s.dailyLimitMinutes && !learningLocked) {
+            learningLocked = true
+            if (sessionStarted) {
+                progress.endSession()
+                sessionStarted = false
+            }
+            showDailyLimitDialog()
+        }
         val completed = s.completedVerses.size.coerceAtMost(700)
         dashboard.text = buildString {
             append("गीता प्रगति: $completed / 700 श्लोक")
@@ -284,7 +307,8 @@ class CurriculumLearningActivity : Activity() {
     }
 
     private fun showDailyLimitDialog() {
-        if (isFinishing) return
+        if (isFinishing || limitDialogVisible) return
+        limitDialogVisible = true
         val pin = EditText(this).apply {
             hint = "अभिभावक PIN"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
@@ -295,12 +319,20 @@ class CurriculumLearningActivity : Activity() {
             .setView(pin)
             .setPositiveButton("अभिभावक अनुमति") { _, _ ->
                 if (progress.verifyGuardianPin(pin.text.toString().toCharArray())) {
+                    limitDialogVisible = false
                     learningLocked = false
                     startStudySession()
                     refreshDashboard()
-                } else showMessage("गलत PIN", "अभिभावक PIN सही नहीं है।")
+                } else {
+                    limitDialogVisible = false
+                    showMessage("गलत PIN", "अभिभावक PIN सही नहीं है।")
+                    showDailyLimitDialog()
+                }
             }
-            .setNegativeButton("बाद में") { _, _ -> finish() }
+            .setNegativeButton("बाद में") { _, _ ->
+                limitDialogVisible = false
+                finish()
+            }
             .setCancelable(false)
             .show()
     }
