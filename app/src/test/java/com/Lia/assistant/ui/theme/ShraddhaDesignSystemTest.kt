@@ -1,5 +1,6 @@
 package com.Lia.assistant.ui.theme
 
+import androidx.compose.ui.graphics.toArgb
 import com.Lia.assistant.data.AssistantBrand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -12,8 +13,8 @@ class ShraddhaDesignSystemTest {
     }
 
     @Test fun defaultDarkPaletteUsesPremiumDarkBackgroundAndDistinctAccents() {
-        assertEquals(0xFF090D16.toInt(), DarkNovaColors.background.value.toLong().toInt())
-        assertEquals(0xFFB69CFF.toInt(), DarkNovaColors.accent.value.toLong().toInt())
+        assertEquals(0xFF090D16.toInt(), DarkNovaColors.background.toArgb())
+        assertEquals(0xFFB69CFF.toInt(), DarkNovaColors.accent.toArgb())
         assertNotEquals(DarkNovaColors.accent, DarkNovaColors.accentSecondary)
     }
 }
