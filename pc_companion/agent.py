@@ -1283,8 +1283,9 @@ class PcCompanionApp:
                 publish_file_without_overwrite(
                     Path(transfer["path"] + ".shraddha-part"), Path(transfer["path"])
                 )
-                if not self._persist_pc_completed(completion_record):
-                    raise TransferPersistenceError("Saved file is verified but completion receipt update failed; recovery will retry.")
+                # The pre-publish receipt is already durable and now points to the
+                # verified destination; keep it for idempotent ACK retries.
+                self.pc_completed[transfer_id] = dict(completion_record)
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.pc_incoming.pop(transfer_id, None)
@@ -1304,6 +1305,19 @@ class PcCompanionApp:
 
     def _handle_file_resume(self, msg):
         transfer_id = str(msg.get("transferId", ""))
+        completed = self.pc_completed.get(transfer_id)
+        if completed:
+            peer_id = str(msg.get("fromDeviceId", ""))
+            if peer_id != completed.get("peer") or not self.is_e2e_trusted(peer_id):
+                return
+            destination = Path(completed.get("path", ""))
+            if (destination.is_file() and not destination.is_symlink() and
+                    destination.stat().st_size == completed.get("size") and
+                    sha256_file(destination) == completed.get("sha256")):
+                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
+                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
+                self.status_var.set("Verified completion ACK resent after reconnect.")
+            return
         incoming = self.pc_incoming.get(transfer_id)
         if incoming:
             peer_id = str(msg.get("fromDeviceId", ""))
@@ -1314,19 +1328,6 @@ class PcCompanionApp:
                              "transferId": transfer_id, "chunkCount": incoming["chunks"],
                              "missingIndexes": missing})
             self.status_var.set(f"Resume response sent: {len(missing)} missing chunks.")
-            return
-        completed = self.pc_completed.get(transfer_id)
-        if completed:
-            peer_id = str(msg.get("fromDeviceId", ""))
-            if (peer_id != completed.get("peer") or not self.is_e2e_trusted(peer_id)):
-                return
-            destination = Path(completed.get("path", ""))
-            if (destination.is_file() and not destination.is_symlink() and
-                    destination.stat().st_size == completed.get("size") and
-                    sha256_file(destination) == completed.get("sha256")):
-                self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
-                                 "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
-                self.status_var.set("Verified completion ACK resent after reconnect.")
             return
         pending = self.pending_pc_send
         if (not pending or transfer_id != pending["transferId"] or
