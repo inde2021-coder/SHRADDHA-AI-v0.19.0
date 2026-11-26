@@ -57,7 +57,8 @@ def _active_window():
 
 def click_unique_text(label):
     """Click one exact visible UI Automation control; ambiguity never falls back to coordinates."""
-    _, _, _bounds = _active_window()
+    active_before, title_before, bounds_before = _active_window()
+    active_handle = getattr(active_before, "_hWnd", None)
     from pywinauto import Desktop
     root = Desktop(backend="uia").get_active()
     wanted = " ".join(str(label).casefold().split())
@@ -75,6 +76,10 @@ def click_unique_text(label):
         if not matches:
             raise RuntimeError("No exact visible clickable control matched that text.")
         raise RuntimeError("More than one control has that text; refusing an ambiguous click.")
+    active_now, title_now, bounds_now = _active_window()
+    if (title_now != title_before or bounds_now != bounds_before or
+            (active_handle is not None and getattr(active_now, "_hWnd", None) != active_handle)):
+        raise RuntimeError("The active window changed before text click; retry on the intended window.")
     matches[0].click_input()
     return "Clicked the unique visible control labelled: " + str(label)[:120]
 
