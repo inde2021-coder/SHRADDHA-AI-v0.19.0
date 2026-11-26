@@ -84,8 +84,10 @@ def get_hardware_status():
                             continue
                         name = str(adapter.get("Name"))[:160]
                         ram = adapter.get("AdapterRAM")
+                        vendor = ("AMD" if "amd" in name.casefold() or "radeon" in name.casefold()
+                                  else "Intel" if "intel" in name.casefold() else "Other")
                         clean.append({
-                            "name": name,
+                            "name": name, "vendor": vendor,
                             "adapter_ram_bytes_reported": ram if isinstance(ram, int) and ram > 0 else None,
                             "driver_version": str(adapter.get("DriverVersion", ""))[:80]
                         })
