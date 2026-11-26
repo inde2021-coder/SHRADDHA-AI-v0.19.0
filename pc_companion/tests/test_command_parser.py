@@ -22,6 +22,14 @@ class AndroidCommandParserTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_android_command("search files x")
 
+    def test_file_open_commands_in_hindi_and_english(self):
+        self.assertEqual(parse_android_command("open file Documents/report.pdf"),
+                         {"kind": "file_open", "path": "Documents/report.pdf"})
+        self.assertEqual(parse_android_command("फ़ाइल खोलो Documents/report.pdf"),
+                         {"kind": "file_open", "path": "Documents/report.pdf"})
+        with self.assertRaises(ValueError):
+            parse_android_command("open file ../Windows/system.ini")
+
     def test_rejects_sensitive_and_unknown(self):
         with self.assertRaises(ValueError):
             parse_android_command("type my password 123")
