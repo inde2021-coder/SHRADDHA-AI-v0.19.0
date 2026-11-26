@@ -1689,6 +1689,9 @@ class PcCompanionApp:
         self.remote_var.set(False)
         self.screen_var.set(False)
         self.control_grant_until = 0
+        self.control_grant_peer = None
+        self.phone_control_grant_until = 0
+        self.phone_control_peer = None
         self._send_json({"type": "permission_update", "permissions": {"remote_control": False, "screen": False}})
         ws = self.ws_app
         if ws:
