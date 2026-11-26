@@ -1,18 +1,17 @@
-package \`in\`.shraddha.ai.learning
+package `in`.shraddha.ai.learning
 
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONObject
-import \`in\`.shraddha.ai.brain.TrainingCurriculumInstaller
+import `in`.shraddha.ai.brain.TrainingCurriculumInstaller
 
 /** Offline curriculum browser with encrypted progress and PIN-gated guardian controls. */
 class CurriculumLearningActivity : Activity() {
@@ -26,7 +25,7 @@ class CurriculumLearningActivity : Activity() {
         super.onCreate(savedInstanceState)
         val installed = TrainingCurriculumInstaller.install(applicationContext)
         if (installed.isFailure) {
-            showFatal("ऑफलाइन पाठ्यक्रम लोड नहीं हुआ: \${installed.exceptionOrNull()?.message}")
+            showFatal("ऑफलाइन पाठ्यक्रम लोड नहीं हुआ: ${installed.exceptionOrNull()?.message}")
             return
         }
         buildHome()
@@ -91,7 +90,7 @@ class CurriculumLearningActivity : Activity() {
             val chapter = index + 1
             val done = progress.snapshot().completedVerses.count { it.startsWith("$chapter.") }
             root.addView(actionButton(
-                "अध्याय $chapter  •  \${chapterNames[index]}",
+                "अध्याय $chapter  •  ${chapterNames[index]}",
                 "$done / $count श्लोक पूरे"
             ) { showChapter(chapter) })
         }
@@ -117,10 +116,10 @@ class CurriculumLearningActivity : Activity() {
         val completed = s.completedVerses.size.coerceAtMost(700)
         dashboard.text = buildString {
             append("गीता प्रगति: $completed / 700 श्लोक")
-            append("  •  \${(completed * 100 / 700)}%")
-            append("\\nअध्ययन समय: \${s.usedTodayMinutes} / \${s.dailyLimitMinutes} मिनट")
-            append("\\nGuardian Mode: \${if (s.guardianMode) "चालू" else "बंद"}")
-            if (learningLocked) append("\\nआज की समय सीमा पूरी — अभिभावक PIN आवश्यक")
+            append("  •  ${(completed * 100 / 700)}%")
+            append("\nअध्ययन समय: ${s.usedTodayMinutes} / ${s.dailyLimitMinutes} मिनट")
+            append("\nGuardian Mode: ${if (s.guardianMode) "चालू" else "बंद"}")
+            if (learningLocked) append("\nआज की समय सीमा पूरी — अभिभावक PIN आवश्यक")
         }
     }
 
@@ -136,15 +135,15 @@ class CurriculumLearningActivity : Activity() {
             val verse = verses.getJSONObject(i)
             val ref = verse.getString("ref")
             val completed = ref in progress.snapshot().completedVerses
-            val preview = verse.getString("sanskrit").replace("\\n", " ").take(92)
+            val preview = verse.getString("sanskrit").replace("\n", " ").take(92)
             list.addView(actionButton(
-                "$ref  \${if (completed) "✓" else ""}",
+                "$ref  ${if (completed) "✓" else ""}",
                 preview
             ) { showVerse(verse) })
         }
         val scroll = ScrollView(this).apply { addView(list) }
         AlertDialog.Builder(this)
-            .setTitle("अध्याय $chapter  •  \${verses.length()} श्लोक")
+            .setTitle("अध्याय $chapter  •  ${verses.length()} श्लोक")
             .setView(scroll)
             .setPositiveButton("बंद करें", null)
             .show()
@@ -154,11 +153,11 @@ class CurriculumLearningActivity : Activity() {
         if (learningLocked) return showDailyLimitDialog()
         val ref = verse.getString("ref")
         val text = buildString {
-            append("श्लोक $ref\\n\\n")
+            append("श्लोक $ref\n\n")
             append(verse.getString("sanskrit"))
-            append("\\n\\nIAST / Transliteration\\n")
+            append("\n\nIAST / Transliteration\n")
             append(verse.getString("transliteration"))
-            append("\\n\\nशब्दार्थ (स्रोत-प्रदत्त; विशेषज्ञ समीक्षा बाकी)\\n")
+            append("\n\nशब्दार्थ (स्रोत-प्रदत्त; विशेषज्ञ समीक्षा बाकी)\n")
             append(verse.getString("wordGloss"))
         }
         AlertDialog.Builder(this)
@@ -304,7 +303,7 @@ class CurriculumLearningActivity : Activity() {
     }
 
     private fun actionButton(title: String, subtitle: String, click: () -> Unit) = Button(this).apply {
-        text = "$title\\n$subtitle"
+        text = "$title\n$subtitle"
         textSize = 12f
         isAllCaps = false
         gravity = Gravity.START or Gravity.CENTER_VERTICAL
