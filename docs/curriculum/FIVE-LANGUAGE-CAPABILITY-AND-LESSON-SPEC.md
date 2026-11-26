@@ -117,3 +117,8 @@ Acceptance tests:
 
 ## Release promise
 Shraddha must never claim “all functions work” merely because a language appears in a selector. It may advertise only the tested functions per language. Text, translation, OCR, ASR, TTS and offline availability are separate capability flags.
+
+
+## Runtime model audit
+
+See [FIVE-LANGUAGE-SPEECH-MODEL-AUDIT.md](FIVE-LANGUAGE-SPEECH-MODEL-AUDIT.md) for the current app implementation, candidate ASR/TTS/translation models, licences, language coverage, Pawari community-data gap and release acceptance tests. Candidate models are not installed or integrated merely because they are listed. The app now exposes Hindi, English, Marathi, Sanskrit and Pawari as explicit language choices; unsupported speech output is reported rather than silently routed through the wrong language.
