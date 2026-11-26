@@ -148,7 +148,9 @@ class AkkpsRunnerActivity : Activity() {
                 return {index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
                   name:e.name||'',id:e.id||'',placeholder:e.placeholder||'',
                   aria:e.getAttribute('aria-label')||'',label:[...new Set(labels)].join(' / '),
-                  required:!!e.required,disabled:!!e.disabled};
+                  required:!!e.required,disabled:!!e.disabled,
+                  options:e.tagName==='SELECT'?[...e.options].map(o=>({label:n(o.text),value:o.value,disabled:o.disabled})):[],
+                  min:e.min||'',max:e.max||'',pattern:e.pattern||''};
               }).filter(x=>x.type!=='hidden' && x.type!=='password' && !x.disabled);
               return JSON.stringify({title:document.title,url:location.href,fields});
             })()
@@ -217,6 +219,14 @@ class AkkpsRunnerActivity : Activity() {
                   chosen.dispatchEvent(new Event('input',{bubbles:true}));
                   chosen.dispatchEvent(new Event('change',{bubbles:true}));
                   out.push({key:item.key,status:'filled'}); continue;
+                } else if(e.type==='date'){
+                  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(item.value)){out.push({key:item.key,status:'date_must_be_yyyy_mm_dd'});continue;}
+                  e.value=item.value;
+                  if(e.value!==item.value){out.push({key:item.key,status:'invalid_date'});continue;}
+                } else if(e.type==='number'){
+                  const numeric=Number(item.value);
+                  if(!Number.isFinite(numeric)){out.push({key:item.key,status:'number_required'});continue;}
+                  e.value=String(numeric);
                 } else e.value=item.value;
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
@@ -350,9 +360,16 @@ Return exact JSON only. Do not include prose or markdown."""
     private fun submitForm() {
         val js = """
             (function(){
+              const path=(location.pathname||'').toLowerCase();
+              const kind=path.includes('awd')?'awd':path.includes('plot')?'plot':path.includes('farmer')?'farmer':'unknown';
+              if(kind==='unknown') return JSON.stringify({status:'unsupported_module'});
               const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
-              const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
+              const f=forms[0];
+              const labels=[...f.querySelectorAll('input,textarea,select')].map(e=>[e.name,e.id,e.placeholder,...[...(e.labels||[])].map(l=>l.innerText)].join(' ').toLowerCase()).join(' ');
+              const markers=kind==='farmer'?['name','phone']:kind==='plot'?['survey','village']:['year','season'];
+              if(!markers.some(m=>labels.includes(m))) return JSON.stringify({status:'module_form_mismatch'});
+              if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               const b=f.querySelector('button[type=submit],input[type=submit]');
               if(b)b.click();else f.requestSubmit();
               return JSON.stringify({status:'dispatched'});
@@ -362,7 +379,12 @@ Return exact JSON only. Do not include prose or markdown."""
         web.evaluateJavascript(js) { raw ->
             val statusCode = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
             if (statusCode != "dispatched") {
-                status.text = if (statusCode == "invalid") "AKKPS validation अधूरी है।" else "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
+                status.text = when(statusCode) {
+                    "invalid" -> "AKKPS validation अधूरी है।"
+                    "unsupported_module" -> "यह Farmer, Plot या AWD पेज नहीं है; Submit रोक दिया।"
+                    "module_form_mismatch" -> "पेज और फॉर्म का प्रकार मेल नहीं खाता; Submit रोक दिया।"
+                    else -> "एक स्पष्ट और सही module form नहीं मिला; Submit नहीं किया।"
+                }
                 return@evaluateJavascript
             }
             status.text = "Submit request भेजी गई। AKKPS response जाँचा जा रहा है…"
