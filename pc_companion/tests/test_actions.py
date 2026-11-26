@@ -87,6 +87,38 @@ class ActionTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("Namaste Shraddha", message)
 
+    def test_pc_file_browser_is_confined_to_home_and_filters_hidden_files(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.actions import list_user_files
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Documents").mkdir()
+            (root / ".ssh").mkdir()
+            (root / "Documents" / "note.txt").write_text("hello", encoding="utf-8")
+            with patch("pc_companion.actions.Path.home", return_value=root):
+                listing = list_user_files("Documents")
+                self.assertEqual(listing["entries"][0]["name"], "note.txt")
+                self.assertEqual(listing["entries"][0]["type"], "file")
+                with self.assertRaisesRegex(RuntimeError, "Parent"):
+                    list_user_files("../outside")
+                with self.assertRaisesRegex(RuntimeError, "hidden"):
+                    list_user_files(".ssh")
+
+    def test_pc_text_preview_allows_small_utf8_text_only(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.actions import read_user_text_file
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "note.txt").write_text("नमस्ते Shraddha", encoding="utf-8")
+            (root / "image.png").write_bytes(b"not text")
+            with patch("pc_companion.actions.Path.home", return_value=root):
+                preview = read_user_text_file("note.txt")
+                self.assertIn("नमस्ते", preview["content"])
+                with self.assertRaisesRegex(RuntimeError, "text files"):
+                    read_user_text_file("image.png")
+
     def test_ocr_language_selection_falls_back_to_installed_packs(self):
         from pc_companion.actions import select_ocr_languages
         self.assertEqual(select_ocr_languages(["eng", "hin"]), (["eng", "hin"], []))
