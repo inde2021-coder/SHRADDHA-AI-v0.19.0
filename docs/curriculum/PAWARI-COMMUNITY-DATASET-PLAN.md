@@ -4,7 +4,9 @@
 
 ## Important language-identity gate
 
-The label Pawari/Powari is not a sufficient training label by itself. Historical linguistic references use Pawari/Pawri in connection with Bareli-Rathwi (Glottolog code shown as `bgd`), while community usage and the Seoni Pawari Dictionary describe a Pawari colloquial dialect used by the Pawar community in Seoni, Madhya Pradesh. These labels must not be merged automatically. Shraddha must record the speaker's own name for their variety, district/tehsil/village (only with consent), and preferred writing system. Preserve multiple varieties as separate profiles until fluent speakers approve any mapping.
+**Product scope confirmed by the user:** Shraddha should plan for both (1) the Seoni, Madhya Pradesh local Pawari/Pawari boli and (2) the Pawari/Powari variety spoken in Maharashtra. Treat these as two separate regional profiles at the start; do not merge their vocabulary, pronunciation, transcripts or model labels.
+
+The label Pawari/Powari is not a sufficient training label by itself. Historical linguistic references use Pawari/Pawri in connection with Bareli-Rathwi (Glottolog code shown as `bgd`), while community usage and the Seoni Pawari Dictionary describe a Pawari colloquial dialect used by the Pawar community in Seoni, Madhya Pradesh. The Maharashtra profile must be validated with speakers from the exact locality; do not assume every Maharashtra Pawar/Powari-speaking community uses the same variety. For each speaker, record the self-identified variety, district/tehsil (village only if needed and consented), and preferred writing system. Keep separate profiles until fluent speakers from both regions approve any mapping.
 
 ## Publicly discoverable candidate resources
 
@@ -23,7 +25,8 @@ The label Pawari/Powari is not a sufficient training label by itself. Historical
 - Two independent fluent speakers review every transcript; disagreements remain as documented variants until resolved. Do not normalize distinctive Pawari words into Hindi.
 - Keep speaker-disjoint train/dev/test splits. No speaker may occur across splits. Deduplicate repeated prompts and near-duplicate recordings.
 - Publish a dataset card, consent form version, licence, takedown contact, data retention policy, and SHA-256 manifest before any training run.
-- Until the dataset is approved, Pawari must remain **community-data required / not supported by a verified ASR, TTS or translation model**. Shraddha may search an approved local dictionary or show a human-reviewed phrasebook, but must not invent Pawari translations or speak Hindi as if it were Pawari.
+- Build two separate collection/evaluation tracks: `pawari-seoni-mp` and `powari-maharashtra`. These are provisional product profile IDs, not claims of formally established linguistic classification.
+- Until each regional dataset is approved, that profile must remain **community-data required / not supported by a verified ASR, TTS or translation model**. Shraddha may search an approved local dictionary or show a human-reviewed phrasebook, but must not invent Pawari translations or speak Hindi as if it were Pawari.
 
 ## Minimum evaluation gate
 
