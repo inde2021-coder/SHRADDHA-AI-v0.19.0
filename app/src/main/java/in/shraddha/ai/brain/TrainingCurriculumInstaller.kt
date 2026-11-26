@@ -42,7 +42,10 @@ object TrainingCurriculumInstaller {
             setOf("Hindi", "English", "Sanskrit", "Marathi", "Pawari"), "All ages"),
         Pack("curriculum_full_catalog_v1", "Complete Training Curriculum Catalogue", "1.0.0",
             "training/full-curriculum-catalog-v1.md",
-            setOf("Hindi", "English", "Sanskrit", "Marathi", "Pawari"), "All ages")
+            setOf("Hindi", "English", "Sanskrit", "Marathi", "Pawari"), "All ages"),
+        Pack("curriculum_advanced_practical_skills_v1", "Advanced Practical Skills", "1.0.0",
+            "training/advanced-practical-skills-hi-en-v1.md",
+            setOf("Hindi", "English"), "General")
     )
 
     /**
