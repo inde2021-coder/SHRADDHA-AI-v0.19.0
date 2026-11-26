@@ -83,6 +83,7 @@ fun DeviceCenterScreen(navController: NavController) {
     var showClearPairing by remember { mutableStateOf(false) }
     var commandText by remember { mutableStateOf("") }
     var pcFilePath by remember { mutableStateOf("") }
+    var pcFileQuery by remember { mutableStateOf("") }
     var lastPcResult by remember { mutableStateOf("") }
     var lastPcResultOk by remember { mutableStateOf(false) }
 
@@ -400,6 +401,24 @@ fun DeviceCenterScreen(navController: NavController) {
                 Text(
                     "सुरक्षा: hidden/credential folders, parent paths और binary files block हैं। केवल छोटे UTF-8 text files का preview मिलता है; हर request Windows PC पर अलग से approve होगी।",
                     color = colors.textSecondary, fontSize = 10.sp
+                )
+                NovaTextField(
+                    value = pcFileQuery,
+                    onValueChange = { pcFileQuery = it.take(80) },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = "Filename खोजें, जैसे invoice या बिल"
+                )
+                NovaButton(
+                    text = "Search PC files",
+                    onClick = {
+                        lastPcResult = ""
+                        status = if (DeviceLinkManager.requestPcFileSearch(peer.id, pcFileQuery, pcFilePath)) {
+                            "Filename search request भेजी गई। Windows पर exact search approve करें।"
+                        } else "कम से कम 2 अक्षरों का filename search लिखें।"
+                    },
+                    enabled = connected && peer.online && peerTrusted && pcFileQuery.trim().length >= 2,
+                    modifier = Modifier.fillMaxWidth(),
+                    type = NovaButtonType.SECONDARY
                 )
             }
         }
