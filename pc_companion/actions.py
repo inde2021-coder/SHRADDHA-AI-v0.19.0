@@ -102,6 +102,13 @@ def read_active_window_ocr(pyautogui):
     _, title, (left, top, width, height) = _active_window()
     if width * height > 16_000_000:
         raise RuntimeError("The active window is too large for safe OCR capture; resize it and retry.")
+    # Re-check focus before consulting external OCR tooling: window changes and
+    # minimized windows must fail deterministically without requiring Tesseract.
+    active_now, title_now, bounds_now = _active_window()
+    if title_now != title or bounds_now != (left, top, width, height):
+        raise RuntimeError("The active window changed before OCR capture; retry on the intended window.")
+    if getattr(active_now, "isMinimized", False):
+        raise RuntimeError("The active window is minimized; OCR capture was cancelled.")
     try:
         import pytesseract
     except ImportError as exc:
@@ -132,13 +139,6 @@ def read_active_window_ocr(pyautogui):
     selected, missing = select_ocr_languages(installed)
     if not selected:
         raise RuntimeError("No supported OCR language data found. Install Tesseract eng and/or hin traineddata.")
-    # Re-check focus immediately before capture. If the user switched windows
-    # after the initial check, never OCR the newly focused (possibly sensitive) app.
-    active_now, title_now, bounds_now = _active_window()
-    if title_now != title or bounds_now != (left, top, width, height):
-        raise RuntimeError("The active window changed before OCR capture; retry on the intended window.")
-    if getattr(active_now, "isMinimized", False):
-        raise RuntimeError("The active window is minimized; OCR capture was cancelled.")
     image = pyautogui.screenshot(region=(max(0, left), max(0, top), width, height))
     try:
         raw = pytesseract.image_to_string(image, lang="+".join(selected), config="--psm 6", timeout=8)
