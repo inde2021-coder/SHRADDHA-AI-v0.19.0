@@ -152,7 +152,11 @@ class AkkpsRunnerActivity : Activity() {
                   options:e.tagName==='SELECT'?[...e.options].map(o=>({label:n(o.text),value:o.value,disabled:o.disabled})):[],
                   min:e.min||'',max:e.max||'',pattern:e.pattern||''};
               }).filter(x=>x.type!=='hidden' && x.type!=='password' && !x.disabled);
-              return JSON.stringify({title:document.title,url:location.href,fields});
+              const actions=[...document.querySelectorAll('button,input[type="button"],input[type="submit"],[role="button"]')]
+                .map((e,i)=>({index:i,text:n(e.innerText||e.value||e.getAttribute('aria-label')),type:e.type||'',disabled:!!e.disabled}))
+                .filter(x=>x.text);
+              const tables=[...document.querySelectorAll('table,[role="table"]')].map(t=>[...t.querySelectorAll('th,[role="columnheader"]')].map(h=>n(h.innerText)).filter(Boolean));
+              return JSON.stringify({title:document.title,url:location.href,fields,actions,tables});
             })()
         """.trimIndent()
         web.evaluateJavascript(js) { raw ->
