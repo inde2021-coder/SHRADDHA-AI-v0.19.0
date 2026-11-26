@@ -115,6 +115,7 @@ class PcCompanionApp:
         self.screen_event = threading.Event()
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
+        self.control_grant_peer = None
         self.phone_control_peer = None
         self.phone_control_grant_until = 0.0
         self.device_token = None
@@ -497,6 +498,7 @@ class PcCompanionApp:
         self._clear_peer_keys()
         self.screen_event.clear()
         self.control_grant_until = 0
+        self.control_grant_peer = None
         if code == 4003:
             self.events.put(("revoked", None))
         elif self._pending_pairing_auth:
@@ -513,6 +515,7 @@ class PcCompanionApp:
         self._save_config()
         if not remote:
             self.control_grant_until = 0
+            self.control_grant_peer = None
         if screen:
             self.screen_event.set()
         else:
@@ -666,6 +669,7 @@ class PcCompanionApp:
                 if peer_id == self.phone_control_peer:
                     self.phone_control_grant_until = 0
                 self.control_grant_until = 0
+                self.control_grant_peer = None
             elif msg.get("online") and peer_id:
                 self._send_e2e_key_offer(peer_id)
             self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
@@ -816,7 +820,8 @@ class PcCompanionApp:
                 self.status_var.set("Blocked replayed remote action ID.")
                 self._send_e2e_message(peer_id, "remote_action_result", {"ok": False, "reason": "Duplicate action ID rejected."}, action_id, action_kind)
                 return
-            if not self.remote_var.get() or time.time() > self.control_grant_until:
+            if (not self.remote_var.get() or peer_id != self.control_grant_peer or
+                    time.time() > self.control_grant_until):
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "reason": "No active local PC approval."},
@@ -873,7 +878,8 @@ class PcCompanionApp:
                 "approved": bool(approved), "minutes": minutes
             })
             self.control_grant_until = time.time() + minutes * 60 if approved else 0
-            self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
+            self.control_grant_peer = requester_id if approved else None
+            self.status_var.set("Remote control approved for this verified device." if approved else "Remote control request denied.")
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
 
