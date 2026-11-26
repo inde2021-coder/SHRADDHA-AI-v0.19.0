@@ -140,7 +140,8 @@ class LiveEyesCameraService : Service() {
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
                     // Consent revocation stops the camera before local analysis or another cloud frame.
-                    if (!OnlineAiConsent.isAllowed(this@LiveEyesCameraService)) {
+                    if (!OnlineAiConsent.isAllowed(this@LiveEyesCameraService) ||
+                        ContextCompat.checkSelfPermission(this@LiveEyesCameraService, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                         stopped = true
                         publishState(STATE_OFF)
                         stopSelf()
