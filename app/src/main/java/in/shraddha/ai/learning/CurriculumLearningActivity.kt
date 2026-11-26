@@ -77,6 +77,15 @@ class CurriculumLearningActivity : Activity() {
         }
         root.addView(dashboard, matchWrap())
         root.addView(actionButton("अभिभावक नियंत्रण", "PIN, Guardian Mode और दैनिक समय सीमा") { openGuardianControls() })
+        root.addView(TextView(this).apply {
+            text = "भाषा मॉडल स्थिति\\n" + LanguageModelCapabilityCatalog.languages.joinToString("\\n") {
+                "${it.name}: ASR — ${it.asrCandidate}; TTS — ${it.ttsCandidate}; Translation — ${it.translationCandidate}"
+            } + "\\nये candidate models अभी इस APK में install नहीं हैं।"
+            textSize = 11f
+            setTextColor(0xFFB8C9D8.toInt())
+            setPadding(12, 12, 12, 12)
+            setBackgroundColor(0xFF102131.toInt())
+        })
         root.addView(sectionTitle("श्रीमद्भगवद्गीता  •  18 अध्याय"))
         val chapterCounts = listOf(47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 34, 27, 20, 24, 28, 78)
         val chapterNames = listOf(
