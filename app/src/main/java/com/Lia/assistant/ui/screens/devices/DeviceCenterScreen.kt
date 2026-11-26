@@ -105,6 +105,19 @@ fun DeviceCenterScreen(navController: NavController) {
     var outgoingFile by remember { mutableStateOf(DeviceFileTransferSender.pending(File(context.filesDir, "OutgoingTransfers")).firstOrNull()) }
     var outgoingProgress by remember { mutableStateOf(outgoingFile?.sentChunks ?: 0) }
     var outgoingSending by remember { mutableStateOf(false) }
+
+    fun flushCompletedIncomingReceipts(peerId: String) {
+        if (!connected || peers.none { it.id == peerId && it.online } || !DeviceLinkManager.isE2ETrusted(peerId)) return
+        DeviceFileTransferReceiver.completedReceipts(context, peerId).forEach { receipt ->
+            val queued = DeviceLinkManager.acknowledgeFileTransfer(
+                peerId, receipt.transferId, -1, complete = true, ok = true
+            )
+            if (queued && DeviceFileTransferReceiver.acknowledgeReceipt(context, peerId, receipt.transferId)) {
+                incomingTransferStatus = "PC को saved transfer completion confirm कर दिया: ${receipt.fileName}"
+            }
+        }
+    }
+
     val exportFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val source = pendingExportFile
         pendingExportFile = null
@@ -128,6 +141,10 @@ fun DeviceCenterScreen(navController: NavController) {
                 status = message
                 if (message.contains("Secure relay connected", ignoreCase = true) ||
                     message.startsWith("Connected •")) connected = true
+                if (message.startsWith("Peer fingerprint confirmed:")) {
+                    val trustedPeer = message.substringAfter("Peer fingerprint confirmed:").trim()
+                    flushCompletedIncomingReceipts(trustedPeer)
+                }
                 if (message.startsWith("Disconnected") ||
                     message.startsWith("Relay error") ||
                     message.contains("User disconnected", ignoreCase = true)) connected = false
@@ -149,14 +166,19 @@ fun DeviceCenterScreen(navController: NavController) {
                             )
                         }
                         if (selectedPeerId !in peers.map { it.id }) selectedPeerId = peers.firstOrNull()?.id.orEmpty()
+                        peers.filter { it.online }.forEach { flushCompletedIncomingReceipts(it.id) }
                     }
                     "device_revoked" -> {
                         val revoked = message.optString("deviceId")
                         peers = peers.filterNot { it.id == revoked }
                         if (selectedPeerId == revoked) selectedPeerId = peers.firstOrNull()?.id.orEmpty()
                     }
-                    "peer_status" -> status = message.optString("name", "Device") + ": " +
-                        if (message.optBoolean("online")) "online" else "offline"
+                    "peer_status" -> {
+                        val peerId = message.optString("deviceId")
+                        status = message.optString("name", "Device") + ": " +
+                            if (message.optBoolean("online")) "online" else "offline"
+                        if (message.optBoolean("online")) flushCompletedIncomingReceipts(peerId)
+                    }
                     "data_share_request" -> {
                         if (message.optString("category") == "documents" &&
                             message.optString("requestId").matches(Regex("[A-Za-z0-9_-]{12,64}"))) {
@@ -813,6 +835,7 @@ fun DeviceCenterScreen(navController: NavController) {
                 TextButton(onClick = {
                     val confirmed = DeviceLinkManager.confirmE2EPeer(peerId, fingerprint)
                     status = if (confirmed) "Local fingerprint confirmed. Waiting for peer confirmation." else "Fingerprint confirmation failed."
+                    if (confirmed) flushCompletedIncomingReceipts(peerId)
                     pendingFingerprint = null
                 }) { Text("Confirm fingerprint") }
             },
