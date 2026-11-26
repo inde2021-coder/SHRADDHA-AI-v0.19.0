@@ -117,8 +117,10 @@ class AkkpsRunnerActivity : Activity() {
                     return false
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (AkkpsWebsiteProfile.acceptsUrl(url))
+                    if (AkkpsWebsiteProfile.acceptsUrl(url)) {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
+                        applyRememberedCommonFields()
+                    }
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -206,6 +208,44 @@ class AkkpsRunnerActivity : Activity() {
             else " • Map container नहीं मिला"
             status.text = "पेज: " + obj.optString("title") + "\nFields: " + labels.take(22).joinToString(" • ") + mapSummary
             onReady?.invoke(obj)
+        }
+    }
+
+
+    /**
+     * Reuses only district/block/tehsil values from records already saved and reopened
+     * successfully. It never overwrites a field and never remembers farmer identity.
+     */
+    private fun applyRememberedCommonFields() {
+        val remembered = AkkpsLocalCommonFieldMemory.snapshot(this)
+        if (remembered.length() == 0 || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) return
+        web.evaluateJavascript("""
+            (function(memory){
+              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const fields=[...document.querySelectorAll('input,textarea,select')];
+              const used=[];
+              for(const e of fields){
+                if(e.disabled || e.type==='hidden' || e.type==='password' || e.type==='file' || (e.value||'').trim()) continue;
+                const labels=[...(e.labels||[])].map(x=>x.innerText||'');
+                const p=e.closest('label'); if(p) labels.push(p.innerText||'');
+                const keys=[e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm);
+                const match=Object.entries(memory).find(([key,value])=>value && keys.some(k=>k===norm(key)));
+                if(!match) continue;
+                if(e.tagName==='SELECT'){
+                  const option=[...e.options].find(o=>norm(o.text)===norm(match[1])||norm(o.value)===norm(match[1]));
+                  if(!option) continue;
+                  e.value=option.value;
+                } else e.value=match[1];
+                e.dispatchEvent(new Event('input',{bubbles:true}));
+                e.dispatchEvent(new Event('change',{bubbles:true}));
+                used.push(match[0]);
+              }
+              return JSON.stringify({filled:used});
+            })(__MEMORY__)
+        """.trimIndent().replace("__MEMORY__", remembered.toString())) { raw ->
+            val filled = runCatching { JSONObject(decode(raw)).optJSONArray("filled") }.getOrNull()
+            if (filled != null && filled.length() > 0)
+                status.text = "पहले सत्यापित सामान्य जानकारी के ${filled.length()} फील्ड खाली होने पर भरे गए। बाकी फील्ड नहीं बदले।"
         }
     }
 
@@ -473,10 +513,12 @@ Return JSON only."""
         """.trimIndent().replace("__EXPECTED__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
-            status.text = if (result?.optBoolean("matched") == true)
-                "AKKPS में सेव रिकॉर्ड दोबारा खुला। सभी दिए गए मान मिल गए; रिकॉर्ड सत्यापित है।"
-            else
-                "रिकॉर्ड पेज खुला, लेकिन सभी मान नहीं मिले। इसे सत्यापित नहीं माना गया; कृपया AKKPS रिकॉर्ड जाँचें।"
+            if (result?.optBoolean("matched") == true) {
+                AkkpsLocalCommonFieldMemory.rememberVerified(this, expectedValues)
+                status.text = "AKKPS में सेव रिकॉर्ड दोबारा खुला। सभी दिए गए मान मिल गए; सुरक्षित सामान्य जानकारी इसी डिवाइस पर याद रखी गई।"
+            } else {
+                status.text = "रिकॉर्ड पेज खुला, लेकिन सभी मान नहीं मिले। इसे सत्यापित नहीं माना गया; कृपया AKKPS रिकॉर्ड जाँचें।"
+            }
         }
     }
 
