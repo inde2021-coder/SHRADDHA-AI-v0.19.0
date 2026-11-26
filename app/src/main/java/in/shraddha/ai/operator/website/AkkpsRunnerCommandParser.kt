@@ -23,12 +23,12 @@ object AkkpsRunnerCommandParser {
 
     /** Submission intent must occupy a whole command segment, never appear inside a field value. */
     fun hasExplicitSubmitIntent(raw: String): Boolean =
-        raw.split(';', '\\n').any(::isSubmitCommandSegment)
+        raw.split(';', '\n').any(::isSubmitCommandSegment)
 
     fun parse(raw: String): AkkpsRunnerCommand {
         val assignments = mutableListOf<Pair<String, String>>()
         var submit = false
-        raw.split(';', '\\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+        raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
             if (isSubmitCommandSegment(part)) {
                 submit = true
             } else {
