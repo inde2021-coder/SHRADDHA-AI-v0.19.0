@@ -26,7 +26,7 @@ def parse_android_command(raw):
     match = re.match(r"^(?:type|लिखो|टाइप करो)\s+(.+)$", command, re.I)
     if match:
         text = match.group(1)
-        if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase)\b|पासवर्ड|ओटीपी|पिन", text):
+        if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase|seed phrase|mnemonic|api key|access token|secret key|private key|bearer token)\b|पासवर्ड|ओटीपी|पिन", text):
             raise ValueError("Sensitive password, OTP or PIN text cannot be typed remotely.")
         return {"kind": "type", "text": text}
     match = re.match(r"^(?:open file|open folder|फ़ाइल खोलो|फाइल खोलो|फ़ोल्डर खोलो|फोल्डर खोलो)\s+(.+)$", command, re.I)
