@@ -97,17 +97,33 @@ object DeviceFileTransferReceiver {
                     val state = Active(manifest, temp, received)
                     if (received.all { it }) {
                         if (sha256(temp).equals(hash, ignoreCase = true)) {
-                            val receipt = loadReceipt(context, id)
-                            val destination = receipt?.let { File(it.savedPath) } ?: uniqueDestination(directory, name)
+                            val previous = loadReceipt(context, id)
+                            var destination = previous?.let { File(it.savedPath) }
+                            if (destination == null || (destination.exists() &&
+                                    !(destination.isFile && !destination.isSymbolicLink() &&
+                                        destination.length() == size && sha256(destination).equals(hash, true)))) {
+                                destination = uniqueDestination(directory, name)
+                            }
                             require(!destination.isSymbolicLink() && destination.parentFile?.canonicalFile == directory.canonicalFile)
-                            if (persistReceipt(context, CompletedReceipt(peer, id, name, size, hash, destination.absolutePath)) &&
-                                (destination.isFile && destination.length() == size && sha256(destination).equals(hash, true) ||
-                                    temp.renameTo(destination))) {
-                                metadataFile(temp).delete()
-                            } else active[id] = state
+                            val pendingReceipt = CompletedReceipt(peer, id, name, size, hash, destination.absolutePath, published = false)
+                            if (!persistReceipt(context, pendingReceipt)) {
+                                active[id] = state
+                            } else {
+                                val alreadyPublished = destination.isFile && destination.length() == size &&
+                                    sha256(destination).equals(hash, ignoreCase = true)
+                                val published = alreadyPublished || temp.renameTo(destination)
+                                if (published) {
+                                    persistReceipt(context, pendingReceipt.copy(published = true))
+                                    metadataFile(temp).delete()
+                                } else {
+                                    deleteReceipt(context, id)
+                                    active[id] = state
+                                }
+                            }
                         } else {
                             temp.delete()
                             metadataFile(temp).delete()
+                            deleteReceipt(context, id)
                         }
                     } else {
                         active[id] = state
