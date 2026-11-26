@@ -31,7 +31,7 @@ class OfflineFirstRoutingPolicyTest {
         assertFalse(result.maySendUserContentToCloud)
     }
 
-    @Test fun localKnowledgeOutranksGenerativeModelForDocumentQuestions() {
+    @Test fun documentQaPrefersEncryptedKnowledgeOverLocalModel() {
         val result = OfflineFirstRoutingPolicy.choose(
             OfflineFirstRoutingPolicy.TaskKind.DOCUMENT_QA,
             state(model = true, knowledge = true)
@@ -49,12 +49,22 @@ class OfflineFirstRoutingPolicyTest {
         assertFalse(result.maySendUserContentToCloud)
     }
 
-    @Test fun localKnowledgeIsUsedBeforeCloud() {
+    @Test fun localKnowledgeIsUsedBeforeCloudWhenNoModelExists() {
         val result = OfflineFirstRoutingPolicy.choose(
-            OfflineFirstRoutingPolicy.TaskKind.DOCUMENT_QA,
+            OfflineFirstRoutingPolicy.TaskKind.GENERAL_CHAT,
             state(knowledge = true)
         )
         assertEquals(OfflineFirstRoutingPolicy.Route.LOCAL_KNOWLEDGE, result.route)
+        assertFalse(result.maySendUserContentToCloud)
+    }
+
+    @Test fun ordinaryQuestionMayUseFreeApiOnlyAsLastResort() {
+        val result = OfflineFirstRoutingPolicy.choose(
+            OfflineFirstRoutingPolicy.TaskKind.GENERAL_CHAT,
+            state()
+        )
+        assertEquals(OfflineFirstRoutingPolicy.Route.FREE_API, result.route)
+        assertTrue(result.maySendUserContentToCloud)
     }
 
     @Test fun liveInformationMayUseFreeApiOnlyWhenEnabledAndAvailable() {
@@ -75,19 +85,32 @@ class OfflineFirstRoutingPolicyTest {
         assertFalse(result.maySendUserContentToCloud)
     }
 
-    @Test fun disabledFreeApiDoesNotCallProvider() {
-        val result = OfflineFirstRoutingPolicy.choose(
-            OfflineFirstRoutingPolicy.TaskKind.LIVE_INFORMATION,
-            state(apiEnabled = false)
-        )
-        assertEquals(OfflineFirstRoutingPolicy.Route.EXPLAIN_OFFLINE_LIMIT, result.route)
+    @Test fun disabledFreeApiDoesNotCallProviderForOrdinaryOrSpecialTasks() {
+        listOf(
+            OfflineFirstRoutingPolicy.TaskKind.GENERAL_CHAT,
+            OfflineFirstRoutingPolicy.TaskKind.LIVE_INFORMATION
+        ).forEach { task ->
+            val result = OfflineFirstRoutingPolicy.choose(task, state(apiEnabled = false))
+            assertEquals(OfflineFirstRoutingPolicy.Route.EXPLAIN_OFFLINE_LIMIT, result.route)
+            assertFalse(result.maySendUserContentToCloud)
+        }
     }
 
     @Test fun exhaustedFreeQuotaDoesNotCallProvider() {
         val result = OfflineFirstRoutingPolicy.choose(
-            OfflineFirstRoutingPolicy.TaskKind.LIVE_INFORMATION,
+            OfflineFirstRoutingPolicy.TaskKind.GENERAL_CHAT,
             state(quota = false)
         )
         assertEquals(OfflineFirstRoutingPolicy.Route.EXPLAIN_OFFLINE_LIMIT, result.route)
+        assertFalse(result.maySendUserContentToCloud)
+    }
+
+    @Test fun specialOnlineTaskDoesNotPretendLocalModelCanProvideLiveData() {
+        val result = OfflineFirstRoutingPolicy.choose(
+            OfflineFirstRoutingPolicy.TaskKind.LIVE_INFORMATION,
+            state(model = true, knowledge = true, network = false)
+        )
+        assertEquals(OfflineFirstRoutingPolicy.Route.EXPLAIN_OFFLINE_LIMIT, result.route)
+        assertFalse(result.maySendUserContentToCloud)
     }
 }
