@@ -187,6 +187,14 @@ object VoiceSessionManager {
         val currentContext = appContext ?: return
         val currentEpoch = expectedEpoch ?: sessionEpoch.incrementAndGet()
         if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
+        if (!currentContext.getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
+                .getBoolean("allow_online_ai", false)) {
+            _lastError.value = "Online AI consent is off. The cloud voice session was stopped."
+            _state.value = NovaOrbState.ERROR
+            _statusText.value = "Online AI disabled"
+            stop()
+            return
+        }
         cancelToolJobs()
 
         synchronized(clientLock) {
@@ -222,6 +230,17 @@ object VoiceSessionManager {
                 _statusText.value = "Voice connection unavailable; retrying automatically"
                 retryAfterCurrentAttempt()
             }
+            return
+        }
+
+        // Recheck consent after the network token request. If the user switched
+        // Online AI off while it was in flight, do not create a WebSocket or reopen mic.
+        if (!currentContext.getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
+                .getBoolean("allow_online_ai", false)) {
+            _lastError.value = "Online AI consent was revoked during connection. Cloud voice was stopped."
+            _state.value = NovaOrbState.ERROR
+            _statusText.value = "Online AI disabled"
+            stop()
             return
         }
 

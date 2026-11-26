@@ -29,6 +29,13 @@ object ShraddhaSpeechClient {
         synthesize(context, text, language) { result ->
             result.fold(
                 onSuccess = { pcm ->
+                    val onlineAiAllowed = context.applicationContext
+                        .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
+                        .getBoolean("allow_online_ai", false)
+                    if (!onlineAiAllowed) {
+                        done(Result.failure(IllegalStateException("Online AI was disabled while speech was being prepared. Audio was not played.")))
+                        return@fold
+                    }
                     runCatching {
                         stopPlayback()
                         val track = AudioTrack.Builder()
@@ -145,6 +152,13 @@ object ShraddhaSpeechClient {
                         return
                     }
                     val bytes = it.body?.bytes() ?: ByteArray(0)
+                    val onlineAiStillAllowed = context.applicationContext
+                        .getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
+                        .getBoolean("allow_online_ai", false)
+                    if (!onlineAiStillAllowed) {
+                        done(Result.failure(IllegalStateException("Online AI was disabled while speech was in progress. The returned audio was discarded.")))
+                        return
+                    }
                     if (bytes.size !in 2..3_000_000 || bytes.size % 2 != 0) {
                         done(Result.failure(IllegalStateException("Voice server returned invalid PCM audio")))
                         return
