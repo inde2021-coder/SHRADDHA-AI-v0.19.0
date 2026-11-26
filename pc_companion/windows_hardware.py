@@ -6,6 +6,8 @@ unavailable rather than pretending to control unsupported hardware.
 import platform
 import subprocess
 import ctypes
+import json
+import shutil
 
 
 def _windows_only():
@@ -46,15 +48,56 @@ def get_hardware_status():
     except Exception:
         result["displays"] = []
     try:
-        completed = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=2, check=False, shell=False
-        )
-        if completed.returncode == 0 and completed.stdout.strip():
-            result["gpu"] = {"available": True, "summary": completed.stdout.strip()[:500]}
+        nvidia_smi = shutil.which("nvidia-smi")
+        if nvidia_smi:
+            completed = subprocess.run(
+                [nvidia_smi, "--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=2, check=False, shell=False
+            )
+            if completed.returncode == 0 and completed.stdout.strip():
+                result["gpu"] = {"available": True, "vendor": "NVIDIA",
+                                 "telemetry": "driver", "summary": completed.stdout.strip()[:500]}
     except (OSError, subprocess.TimeoutExpired):
         pass
+    if not result["gpu"].get("available"):
+        # AMD/Intel fallback: Windows WMI reports adapter identity, driver and
+        # the adapter RAM field. It does not provide reliable utilization data.
+        powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+        if powershell:
+            command = (
+                "$ErrorActionPreference='Stop'; "
+                "Get-CimInstance Win32_VideoController | "
+                "Select-Object Name,AdapterRAM,DriverVersion | ConvertTo-Json -Compress"
+            )
+            try:
+                completed = subprocess.run(
+                    [powershell, "-NoProfile", "-NonInteractive", "-Command", command],
+                    capture_output=True, text=True, timeout=3, check=False, shell=False
+                )
+                if completed.returncode == 0 and completed.stdout.strip():
+                    raw = json.loads(completed.stdout)
+                    adapters = raw if isinstance(raw, list) else [raw]
+                    clean = []
+                    for adapter in adapters[:8]:
+                        if not isinstance(adapter, dict) or not str(adapter.get("Name", "")).strip():
+                            continue
+                        name = str(adapter.get("Name"))[:160]
+                        ram = adapter.get("AdapterRAM")
+                        clean.append({
+                            "name": name,
+                            "adapter_ram_bytes_reported": ram if isinstance(ram, int) and ram > 0 else None,
+                            "driver_version": str(adapter.get("DriverVersion", ""))[:80]
+                        })
+                    if clean:
+                        result["gpu"] = {
+                            "available": True, "vendor": "AMD/Intel/Other",
+                            "telemetry": "Windows WMI adapter inventory",
+                            "adapters": clean, "utilization_available": False,
+                            "note": "WMI adapter RAM may be capped by the Windows driver; live GPU utilization is not reported."
+                        }
+            except (OSError, subprocess.TimeoutExpired, ValueError, TypeError):
+                pass
     # CPU temperature and fan speed are vendor/driver-specific. Do not invent values.
     return result
 
