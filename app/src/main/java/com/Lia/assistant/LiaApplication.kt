@@ -20,7 +20,7 @@ class LiaApplication : Application() {
                 val timestamp = sdf.format(Date())
                 val crashFile = File(getExternalFilesDir(null), "crash_$timestamp.txt")
                 crashFile.writeText(buildString {
-                    appendLine("=== Lia AI Crash Report ===")
+                    appendLine("=== Shraddha AI Crash Report ===")
                     appendLine("Thread: ${thread.name}")
                     appendLine("Exception: ${throwable::class.qualifiedName}")
                     appendLine("Message: ${throwable.message}")
