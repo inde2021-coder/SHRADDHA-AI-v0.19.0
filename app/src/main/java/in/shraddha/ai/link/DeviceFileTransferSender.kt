@@ -115,7 +115,7 @@ object DeviceFileTransferSender {
     private fun readMetadata(file: File): Prepared? = runCatching {
         val meta = metadataFile(file)
         require(meta.isFile && !file.isSymbolicLink())
-        val props = Properties().apply { FileInputStream(meta).use(::load) }
+        val props = Properties().apply { FileInputStream(meta).use { load(it) } }
         val size = props.getProperty("sizeBytes").toLong()
         val count = props.getProperty("chunkCount").toInt()
         val id = props.getProperty("transferId")
