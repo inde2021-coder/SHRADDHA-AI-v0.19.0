@@ -208,3 +208,99 @@ def load_outgoing_transfer_record(state_path):
                 "send_queue": [], "in_flight": set(), "awaiting_approval": False}
     except (OSError, ValueError, TypeError, KeyError):
         return None
+
+def save_completed_transfer_record(state_path, record):
+    """Durably retain an incoming-transfer completion receipt across the ACK crash window."""
+    from pathlib import Path
+    import json
+    import os
+    import time
+
+    if not isinstance(record, dict):
+        raise ValueError("Invalid completed transfer receipt.")
+    peer, transfer_id = record.get("peer"), record.get("transferId")
+    destination, part_path = Path(record.get("path", "")), Path(record.get("partPath", ""))
+    size, digest = record.get("size"), record.get("sha256")
+    if (not isinstance(peer, str) or not peer or len(peer) > 128 or
+            not isinstance(transfer_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or
+            type(size) is not int or not 1 <= size <= MAX_PC_FILE_BYTES or
+            not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest) or
+            destination.is_symlink() or part_path.is_symlink()):
+        raise ValueError("Completed transfer receipt failed validation.")
+    candidate = destination if destination.is_file() else part_path
+    if not candidate.is_file() or candidate.stat().st_size != size or sha256_file(candidate) != digest:
+        raise ValueError("Completed transfer file does not match its SHA-256 receipt.")
+    target = Path(state_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        current = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(current, dict):
+            current = {}
+    except (OSError, ValueError):
+        current = {}
+    current[transfer_id] = {
+        "peer": peer, "transferId": transfer_id, "path": str(destination),
+        "partPath": str(part_path), "size": size, "sha256": digest,
+        "completedAt": int(record.get("completedAt") or time.time())
+    }
+    # Keep a bounded, recent receipt ledger; receipts are idempotent ACK recovery.
+    current = dict(sorted(current.items(), key=lambda item: item[1].get("completedAt", 0))[-128:])
+    temp = target.with_suffix(".tmp")
+    try:
+        with temp.open("w", encoding="utf-8") as output:
+            output.write(json.dumps(current, separators=(",", ":")))
+            output.flush()
+            os.fsync(output.fileno())
+        temp.replace(target)
+    finally:
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return True
+
+
+def load_completed_transfer_records(state_path, max_age_seconds=30 * 24 * 60 * 60):
+    """Restore only verified completed files; finish a pending atomic publish if needed."""
+    from pathlib import Path
+    import json
+    import time
+
+    try:
+        raw = json.loads(Path(state_path).read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return {}
+    except (OSError, ValueError):
+        return {}
+    now = int(time.time())
+    restored = {}
+    for transfer_id, item in raw.items():
+        try:
+            if (not isinstance(item, dict) or item.get("transferId") != transfer_id or
+                    not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or
+                    not isinstance(item.get("peer"), str) or not item["peer"] or
+                    type(item.get("size")) is not int or
+                    not isinstance(item.get("sha256"), str) or
+                    not re.fullmatch(r"[a-f0-9]{64}", item["sha256"]) or
+                    type(item.get("completedAt")) is not int or
+                    now - item["completedAt"] > max_age_seconds or item["completedAt"] > now + 300):
+                continue
+            destination = Path(item.get("path", ""))
+            part_path = Path(item.get("partPath", ""))
+            if destination.is_symlink() or part_path.is_symlink():
+                continue
+            candidate = destination if destination.is_file() else part_path
+            if not candidate.is_file() or candidate.stat().st_size != item["size"] or sha256_file(candidate) != item["sha256"]:
+                continue
+            if candidate == part_path and not destination.exists():
+                publish_file_without_overwrite(part_path, destination)
+            if not destination.is_file() or destination.stat().st_size != item["size"] or sha256_file(destination) != item["sha256"]:
+                continue
+            restored[transfer_id] = {
+                "peer": item["peer"], "transferId": transfer_id, "path": str(destination),
+                "partPath": str(part_path), "size": item["size"], "sha256": item["sha256"],
+                "completedAt": item["completedAt"]
+            }
+        except (OSError, ValueError, TypeError):
+            continue
+    return restored
