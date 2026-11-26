@@ -106,8 +106,13 @@ class LanguageLabDialog:
         ttk.Entry(row2, textvariable=output).pack(side="left", fill="x", expand=True)
         ttk.Button(row2, text="Save WAV as", command=lambda: output.set(filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV audio", "*.wav")]))).pack(side="left", padx=6)
         def synthesize():
-            from language_runtime import IndicF5Runtime
-            if not output.get(): raise ValueError("Choose an output WAV path.")
-            return str(IndicF5Runtime().synthesize(text.get("1.0", "end").strip(), language.get(),
-                reference.get(), transcript.get(), output.get()))
-        ttk.Button(page, text="SYNTHESIZE OFFLINE", command=lambda: self._run(synthesize, lambda value: messagebox.showinfo("Shraddha AI", "Audio saved locally:\n" + value, parent=self.window))).pack(anchor="w", pady=8)
+            text_value, lang = text.get("1.0", "end").strip(), language.get()
+            reference_path, reference_text, output_path = reference.get(), transcript.get(), output.get()
+            if not output_path:
+                self.status.set("Choose an output WAV path.")
+                return
+            def task():
+                from language_runtime import IndicF5Runtime
+                return str(IndicF5Runtime().synthesize(text_value, lang, reference_path, reference_text, output_path))
+            self._run(task, lambda value: messagebox.showinfo("Shraddha AI", "Audio saved locally:\\n" + value, parent=self.window))
+        ttk.Button(page, text="SYNTHESIZE OFFLINE", command=synthesize).pack(anchor="w", pady=8)
