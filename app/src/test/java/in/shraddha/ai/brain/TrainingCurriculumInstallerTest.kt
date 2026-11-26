@@ -14,6 +14,12 @@ class TrainingCurriculumInstallerTest {
         assertTrue(catalog.all { it.assetPath.startsWith("training/") && it.assetPath.endsWith(".md") })
     }
 
+    @Test fun onlyManifestIdsAreRecognisedAsBundledTraining() {
+        assertTrue(TrainingCurriculumInstaller.isBundledPackId("curriculum_core_life_skills_hi_en_v1"))
+        assertTrue(!TrainingCurriculumInstaller.isBundledPackId("curriculum_user_private_document"))
+        assertTrue(!TrainingCurriculumInstaller.isBundledPackId("knowledge_private_document"))
+    }
+
     @Test fun catalogIncludesEveryRequestedLearningArea() {
         val ids = TrainingCurriculumInstaller.catalog.map { it.id }.toSet()
         assertTrue("Core ten domains", "curriculum_core_life_skills_hi_en_v1" in ids)
