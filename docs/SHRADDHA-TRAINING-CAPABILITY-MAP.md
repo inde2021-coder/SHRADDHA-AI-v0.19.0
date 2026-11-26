@@ -16,7 +16,7 @@ Scope: active Android source tree and canonical Windows companion. This map sepa
 
 | Capability | Existing source discovered | Current evidence / limitation | Direction |
 |---|---|---|---|
-| Local knowledge retrieval | `in/shraddha/ai/brain/LocalKnowledgeBase.kt`, `LocalKnowledgeDocumentStore.kt`, `TrainingCurriculumInstaller.kt` | Existing encrypted BM25 + deterministic hashed n-gram retrieval now installs eight signed-APK bundled starter curriculum packs on first Chat use, verifies SHA-256 and repairs missing/outdated packs. Private user documents remain local. This is not neural embedding search. | Keep one RAG store; add reviewed content packs and acceptance tests. |
+| Local knowledge retrieval | `in/shraddha/ai/brain/LocalKnowledgeBase.kt`, `LocalKnowledgeDocumentStore.kt`, `TrainingCurriculumInstaller.kt` | Existing encrypted BM25 + deterministic hashed n-gram retrieval now installs 27 signed-APK curriculum packs (nine foundational packs plus eighteen Gita chapter packs) on first Chat use, verifies SHA-256 and repairs missing/outdated packs. Private user documents remain local. This is not neural embedding search. | Keep one RAG store; add reviewed content packs and acceptance tests. |
 | Personal memory | `PersistentChatMemory.kt`, `PersonalKnowledgeStore.kt`, `SecureMemoryVault.kt`, `UnifiedMemoryRepository.kt` | Encrypted local recap, timeline/skill examples/routine proposals, optional explicit Firebase sync. Personal store comments say it does not execute routines or ingest sensors. | Audit screens, consent and CRUD end-to-end; add only missing memory categories to the existing repository. |
 | Offline text AI | `LocalOfflineLlm.kt`, `OfflineModelScreen.kt` | Existing LiteRT-LM local text path; model weights are imported separately. Not a complete offline voice stack. | Keep separate from knowledge packs; do not bundle model weights in APK. |
 | Commands and planning | `OfflineCommandEngine.kt`, `LiaToolCatalog.kt`, `LiaCapabilityPrompts.kt`, `VoiceToolActionJournal.kt` | Tool declarations and safety descriptions exist. Prompt documentation distinguishes local planning from execution; each command still needs implementation and result verification. | Maintain one canonical tool registry; audit each tool declaration against handler, permission and tests. |
@@ -42,7 +42,7 @@ These paths must not be treated as additional active Shraddha features. Before a
 
 ## Offline curriculum runtime integration
 
-Nine bundled Markdown packs are installed into the existing encrypted knowledge store before Chat's first local retrieval:
+Twenty-seven versioned packs are installed into the existing encrypted knowledge store before Chat's first local retrieval:
 
 1. Core ten domains — human interaction, education, civic/practical life, organisation, reasoning, technology, language, productivity, safety and professional skills.
 2. Bhagavad Gita, shloka, mantra and katha starter library.
@@ -53,13 +53,13 @@ Nine bundled Markdown packs are installed into the existing encrypted knowledge 
 7. Five-language text-learning specification and starter lessons (Hindi, English, Sanskrit, Marathi, Pawari).
 8. Full curriculum catalogue and product-wide safety/learning rules.
 
-Runtime path: signed APK assets → SHA-256 validation → TrainingCurriculumInstaller → existing encrypted LocalKnowledgeDocumentStore → source-labelled local retrieval → extractive local answer. If an imported on-device LiteRT-LM model is available, bundled curriculum excerpts are also supplied as context. If Online AI is explicitly enabled, only bundled curriculum excerpts may be added to the provider prompt; user-imported/private document excerpts are not silently uploaded.
+Runtime path: signed APK assets → SHA-256 validation → TrainingCurriculumInstaller → existing encrypted LocalKnowledgeDocumentStore → source-labelled local retrieval → extractive local answer. The 18 Gita JSON assets contain 700 canonical sequential verse references, source Sanskrit, speaker attribution, source transliteration and source-provided word glosses; chapter 13's 701st-edition opening question is preserved as a separately labelled variant. If an imported on-device LiteRT-LM model is available, bundled curriculum excerpts are also supplied as context. If Online AI is explicitly enabled, only bundled curriculum excerpts may be added to the provider prompt; user-imported/private document excerpts are not silently uploaded.
 
-Limitations: these are authored starter packs, not exhaustive subject corpora. Specialist clinical, education and Sanskrit review is still required. Five-language text content does not prove ASR/TTS/OCR/translation-model support for all five languages. Model-weight fine-tuning is not performed by this installer.
+Limitations: authored lesson coverage is still not exhaustive. Structural Gita counts are validated, but line-by-line Sanskrit scholar review remains pending. The Learning Library browser, per-verse/pack completion tracking, AES-GCM encrypted local progress and PIN-protected Guardian Mode with daily limits are implemented. Five-language text support does not prove offline ASR/TTS/translation: no such weights are currently integrated; see FIVE-LANGUAGE-SPEECH-MODEL-AUDIT.md.
 ## Ten training domains mapped to existing systems
 
 1. Human behaviour and everyday interaction → existing conversation memory, personality prompt and conversation quality tests; extend content and test behaviour, not a second personality engine.
-2. General knowledge and education → LocalKnowledgeDocumentStore + versioned content packs; nine bundled starter curriculum packs are now indexed offline; the broader corpus still needs expansion and review.
+2. General knowledge and education → LocalKnowledgeDocumentStore + versioned content packs; 27 curriculum packs are now indexed offline, including all 18 Gita chapters; subject-specific expert review and exhaustive content coverage remain outstanding.
 3. India, culture, civic and practical life → same knowledge-pack pipeline with official sources and freshness metadata.
 4. Personal assistant and organisation → PersonalKnowledgeStore, PersistentChatMemory, UnifiedMemoryRepository and existing reminder/routine/action paths; verify complete UI/CRUD before adding anything.
 5. Reasoning and decision support → OfflineCommandEngine and existing multi-role planning tool; planning is not equivalent to executing or verifying a task.
@@ -216,3 +216,12 @@ The detailed curriculum specification is now maintained in `docs/SHRADDHA-CURRIC
 
 ## Authored lesson library update (2026-11-26)
 Five substantive curriculum files were added under `docs/curriculum/`: Baby Care 0–2, Kids Foundation 3–10, Abacus eight-level course, Core ten domains practical lessons, and all 18 Mind Activities. These include lesson objectives, examples, practice, answer keys/rubrics, safety constraints and source/review gates. They are content in GitHub documentation, not yet bundled or loaded by the Android app. See the curriculum catalogue for exact paths and remaining integration work.
+
+
+## Current curriculum and language changes (2026-11-26)
+
+- 18 chapter assets were added for the 700-verse Bhagavad Gita corpus. The Android test validates chapter counts and sequential canonical references; the separate chapter-13 numbering variant is retained.
+- The new Learning Library Activity is reachable from Quick Actions. It browses Gita chapters/verses and the existing offline packs, records completed verses/lessons, and shows progress.
+- Learning progress is encrypted with an Android Keystore AES-GCM key. Guardian Mode uses a salted PBKDF2 PIN hash and supports a daily study-time limit; no child progress is synced to Firebase by this feature.
+- Five explicit language choices are available. Model candidates and current gaps are documented in `docs/curriculum/FIVE-LANGUAGE-SPEECH-MODEL-AUDIT.md`; the app refuses to route unsupported custom TTS languages through English.
+- Specialist review is tracked in `docs/curriculum/CURRICULUM-SPECIALIST-REVIEW-REGISTER.md`. No human expert sign-off has been recorded, so no curriculum pack is labelled expert-approved.
