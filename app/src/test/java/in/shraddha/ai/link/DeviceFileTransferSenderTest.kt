@@ -54,7 +54,8 @@ class DeviceFileTransferSenderTest {
             fileName = "invoice.pdf",
             sizeBytes = payload.size.toLong(),
             chunkCount = 1,
-            sha256 = "c".repeat(64)
+            sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(payload)
+                .joinToString("") { "%02x".format(it) }
         )
         val bound = DeviceFileTransferSender.bindPeer(prepared, "trusted-pc-01")
         DeviceFileTransferSender.updateProgress(bound, 1)
@@ -66,6 +67,22 @@ class DeviceFileTransferSenderTest {
         assertEquals(payload.size.toLong(), recovered.sizeBytes)
 
         DeviceFileTransferSender.cleanup(recovered)
+        assertTrue(DeviceFileTransferSender.pending(directory).isEmpty())
+    }
+
+    @Test fun pendingRecoveryRejectsStagedFileChangedAfterMetadataWasSaved() {
+        val directory = temporaryFolder.newFolder("tampered-outgoing")
+        val source = java.io.File(directory, "durable.part")
+        val payload = "trusted staged bytes".toByteArray()
+        source.writeBytes(payload)
+        val prepared = DeviceFileTransferSender.Prepared(
+            file = source, transferId = "transfer_654321", fileName = "notes.txt",
+            sizeBytes = payload.size.toLong(), chunkCount = 1,
+            sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(payload)
+                .joinToString("") { "%02x".format(it) }
+        )
+        DeviceFileTransferSender.bindPeer(prepared, "trusted-pc-02")
+        source.writeText("tampered bytes")
         assertTrue(DeviceFileTransferSender.pending(directory).isEmpty())
     }
 
