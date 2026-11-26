@@ -170,6 +170,34 @@ fun DeviceCenterScreen(navController: NavController) {
         DeviceLinkManager.onFileTransferMessage = { message ->
             mainHandler.post {
                 when (message.optString("type")) {
+                    "file_transfer_ack" -> {
+                        val item = outgoingFile
+                        val peerId = message.optString("fromDeviceId")
+                        if (item != null && peerId == selectedPeerId && message.optString("transferId") == item.transferId) {
+                            val index = message.optInt("index", -2)
+                            if (index == -1 && message.optBoolean("ok") && !message.optBoolean("complete")) {
+                                scope.launch {
+                                    outgoingSending = true
+                                    for (chunkIndex in 0 until item.chunkCount) {
+                                        val bytes = withContext(Dispatchers.IO) { DeviceFileTransferSender.readChunk(item, chunkIndex) }
+                                        val sent = DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes)
+                                        bytes.fill(0)
+                                        if (!sent) { incomingTransferStatus = "Chunk भेजना असफल।"; outgoingSending = false; return@launch }
+                                        outgoingProgress = chunkIndex + 1
+                                    }
+                                    incomingTransferStatus = "सभी chunks भेजे गए; PC verification की प्रतीक्षा…"
+                                }
+                            } else if (message.optBoolean("complete") && message.optBoolean("ok")) {
+                                DeviceFileTransferSender.cleanup(item)
+                                outgoingFile = null
+                                outgoingSending = false
+                                incomingTransferStatus = "फ़ाइल PC पर verify होकर save हो गई।"
+                            } else if (!message.optBoolean("ok")) {
+                                incomingTransferStatus = "PC ने transfer रोक दिया; retry आवश्यक है।"
+                                outgoingSending = false
+                            }
+                        }
+                    }
                     "file_transfer_start" -> {
                         val peerId = message.optString("fromDeviceId")
                         val manifest = DeviceFileTransferReceiver.parseManifest(peerId, message)
