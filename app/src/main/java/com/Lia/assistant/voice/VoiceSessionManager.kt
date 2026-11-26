@@ -87,8 +87,7 @@ object VoiceSessionManager {
     fun start(context: Context) {
         if (_isActive.value) return
         val application = context.applicationContext
-        if (!application.getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-                .getBoolean("allow_online_ai", false)) {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(application)) {
             appContext = application
             _lastError.value = "Online AI is disabled. Enable Allow Online AI in Settings > Connections before starting cloud voice."
             _statusText.value = "Enable Online AI in Settings"
@@ -187,8 +186,7 @@ object VoiceSessionManager {
         val currentContext = appContext ?: return
         val currentEpoch = expectedEpoch ?: sessionEpoch.incrementAndGet()
         if (!_isActive.value || sessionEpoch.get() != currentEpoch) return
-        if (!currentContext.getSharedPreferences("shraddha_network_ai", Context.MODE_PRIVATE)
-                .getBoolean("allow_online_ai", false)) {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(currentContext)) {
             _lastError.value = "Online AI consent is off. The cloud voice session was stopped."
             _state.value = NovaOrbState.ERROR
             _statusText.value = "Online AI disabled"
