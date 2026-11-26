@@ -7,11 +7,12 @@ import org.junit.Test
 class TrainingCurriculumInstallerTest {
     @Test fun curriculumCatalogHasUniqueIdsAndValidOfflineAssets() {
         val catalog = TrainingCurriculumInstaller.catalog
-        assertEquals(9, catalog.size)
+        assertEquals(27, catalog.size)
         assertEquals(catalog.size, catalog.map { it.id }.distinct().size)
         assertTrue(catalog.all { it.id.startsWith("curriculum_") })
         assertTrue(catalog.all { it.version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")) })
-        assertTrue(catalog.all { it.assetPath.startsWith("training/") && it.assetPath.endsWith(".md") })
+        assertTrue(catalog.all { it.assetPath.startsWith("training/") && (it.assetPath.endsWith(".md") || it.assetPath.endsWith(".json")) })
+        assertEquals(18, catalog.count { it.id.startsWith("curriculum_gita_chapter_") })
     }
 
     @Test fun onlyManifestIdsAreRecognisedAsBundledTraining() {
