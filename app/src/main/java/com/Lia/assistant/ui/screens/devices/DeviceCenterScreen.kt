@@ -175,9 +175,15 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                     "peer_status" -> {
                         val peerId = message.optString("deviceId")
-                        status = message.optString("name", "Device") + ": " +
-                            if (message.optBoolean("online")) "online" else "offline"
-                        if (message.optBoolean("online")) flushCompletedIncomingReceipts(peerId)
+                        val peerOnline = message.optBoolean("online")
+                        val peerName = message.optString("name", "Paired device")
+                        if (peerId.isNotBlank() && peerId != DeviceLinkManager.deviceId) {
+                            peers = if (peers.any { it.id == peerId }) {
+                                peers.map { if (it.id == peerId) it.copy(name = peerName, online = peerOnline) else it }
+                            } else peers + LinkedPeer(peerId, peerName, peerOnline)
+                        }
+                        status = peerName + ": " + if (peerOnline) "online" else "offline"
+                        if (peerOnline) flushCompletedIncomingReceipts(peerId)
                     }
                     "data_share_request" -> {
                         if (message.optString("category") == "documents" &&
