@@ -84,6 +84,20 @@ class DeviceE2ECrypto private constructor(private val pair: KeyPair) {
     }
 
     companion object {
+        fun confirmationProof(
+            key: ByteArray, sessionId: String, sourceDeviceId: String,
+            targetDeviceId: String, fingerprint: String
+        ): String {
+            require(key.size == 32 && sessionId.isNotBlank() && sessionId.length <= 128)
+            require(sourceDeviceId.length in 1..64 && targetDeviceId.length in 1..64 &&
+                sourceDeviceId != targetDeviceId && fingerprint.matches(Regex("[A-F0-9-]{19,40}")))
+            val context = "shraddha-device-e2e-confirm-v1|$sessionId|$sourceDeviceId|$targetDeviceId|$fingerprint"
+                .toByteArray(Charsets.UTF_8)
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(key, "HmacSHA256"))
+            return mac.doFinal(context).joinToString("") { "%02x".format(it) }
+        }
+
         fun visualFrameAad(
             sessionId: String,
             sourceDeviceId: String,
