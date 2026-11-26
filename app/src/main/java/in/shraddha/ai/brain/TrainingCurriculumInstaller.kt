@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.brain
 
 import android.content.Context
+import org.json.JSONObject
 import java.security.MessageDigest
 
 /**
@@ -108,7 +109,10 @@ object TrainingCurriculumInstaller {
             require(content.isNotBlank() && content.length <= MAX_PACK_CHARS) {
                 "Curriculum pack ${pack.id} is empty or exceeds the safe size limit."
             }
-            require(content.startsWith("# Shraddha AI") || content.startsWith("# ")) {
+            val isMarkdown = content.startsWith("# Shraddha AI") || content.startsWith("# ")
+            val isGitaJson = pack.assetPath.endsWith(".json") &&
+                runCatching { JSONObject(content).optString("schema") == "shraddha.gita.chapter.v1" }.getOrDefault(false)
+            require(isMarkdown || isGitaJson) {
                 "Curriculum pack ${pack.id} has an unexpected document format."
             }
             val digest = MessageDigest.getInstance("SHA-256")
