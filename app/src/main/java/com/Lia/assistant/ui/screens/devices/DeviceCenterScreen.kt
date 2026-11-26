@@ -128,6 +128,12 @@ fun DeviceCenterScreen(navController: NavController) {
                     }
                     "peer_status" -> status = message.optString("name", "Device") + ": " +
                         if (message.optBoolean("online")) "online" else "offline"
+                    "data_share_request" -> {
+                        if (message.optString("category") == "documents" &&
+                            message.optString("requestId").matches(Regex("[A-Za-z0-9_-]{12,64}"))) {
+                            pendingShareRequest = JSONObject(message.toString())
+                        }
+                    }
                     "remote_action_result" -> {
     lastPcResultOk = message.optBoolean("ok")
     lastPcResult = message.optString("result").take(12000)
@@ -473,6 +479,12 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         }
 
+        if (incomingTransferStatus.isNotBlank()) {
+            NovaGlassCard {
+                Text("PC → PHONE FILE TRANSFER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(incomingTransferStatus, color = colors.textPrimary, fontSize = 12.sp)
+            }
+        }
         if (lastPcResult.isNotBlank()) {
             NovaGlassCard {
                 Text(
