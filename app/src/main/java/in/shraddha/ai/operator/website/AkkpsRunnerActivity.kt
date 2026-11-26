@@ -221,7 +221,7 @@ class AkkpsRunnerActivity : Activity() {
         if (remembered.length() == 0 || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) return
         web.evaluateJavascript("""
             (function(memory){
-              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu,' ').trim();
               const fields=[...document.querySelectorAll('input,textarea,select')];
               const used=[];
               for(const e of fields){
@@ -269,7 +269,7 @@ class AkkpsRunnerActivity : Activity() {
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
-              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu,' ').trim();
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
