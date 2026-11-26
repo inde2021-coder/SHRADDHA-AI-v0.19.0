@@ -31,6 +31,7 @@ object PluginGatewayClient {
         val request = Request.Builder().url(config.baseUrl.trimEnd('/') + path)
             .header("Authorization", "Bearer " + config.gatewayToken)
             .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             val json = runCatching { JSONObject(raw) }.getOrElse { error("Gateway returned invalid JSON.") }
