@@ -827,7 +827,7 @@ fun DeviceCenterScreen(navController: NavController) {
             Text("PHONE TO PC FILE TRANSFER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text("Send a document to the trusted PC. The PC user must approve its save location. Maximum 100 MB.", color = colors.textSecondary, fontSize = 11.sp)
             NovaButton(text = "Choose file and send to PC", onClick = { sendFilePicker.launch(arrayOf("*/*")) },
-                modifier = Modifier.fillMaxWidth(), enabled = connected && selectedPeer?.online == true && selectedPeerId.isNotBlank() && peerTrusted && !outgoingSending && !outgoingPumpActive,
+                modifier = Modifier.fillMaxWidth(), enabled = connected && selectedPeer?.online == true && selectedPeerId.isNotBlank() && peerTrusted && outgoingFile == null && !outgoingSending && !outgoingPumpActive,
                 type = NovaButtonType.PRIMARY)
             outgoingFile?.let { item ->
                 Text("${item.fileName} • ${item.sizeBytes / 1024} KB • ${outgoingProgress}/${item.chunkCount} chunks", color = colors.textPrimary, fontSize = 11.sp)
