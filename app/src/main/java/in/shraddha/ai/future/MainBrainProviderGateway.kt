@@ -60,7 +60,7 @@ object MainBrainProviderGateway {
         }
         val apiKey = ApiKeyStore.getKey(context.applicationContext)
         require(apiKey.isNotBlank()) { "GEMINI API key is missing." }
-        val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(apiKey) }
+        val model = kotlinx.coroutines.runBlocking { GeminiTextClient.resolveModel(context.applicationContext, apiKey) }
         val modelEndpoint = if (model.startsWith("models/")) model else "models/$model"
         val url = "https://generativelanguage.googleapis.com/v1beta/$modelEndpoint:streamGenerateContent?alt=sse"
         val parts = JSONArray().put(JSONObject().put("text", systemPrompt.take(32_000)))
@@ -135,7 +135,7 @@ object MainBrainProviderGateway {
                 return ChatReplyResult.Error("Could not read the encrypted GEMINI API key: " + it.message)
             }
             if (key.isBlank()) ChatReplyResult.Error("GEMINI API key is missing.")
-            else GeminiTextClient.reply(key, systemInstruction.take(8_000), boundedHistory)
+            else GeminiTextClient.reply(context.applicationContext, key, systemInstruction.take(8_000), boundedHistory)
         } else {
             MultiProviderChatClient.reply(context, provider, systemInstruction.take(8_000), boundedHistory)
         }
