@@ -32,4 +32,16 @@ class AmbientIntelligencePolicyTest {
         assertTrue(prompt.contains("Do not invent sound"))
         assertTrue(prompt.contains("Earlier: table"))
     }
+    @Test fun cloudUploadRequiresPermissionSeparateConsentAndSecureBackend() {
+        assertFalse(AmbientIntelligencePolicy.mayAnalyzeCloudFrame(false, true, true, 8_000L, 0L))
+        assertFalse(AmbientIntelligencePolicy.mayAnalyzeCloudFrame(true, false, true, 8_000L, 0L))
+        assertFalse(AmbientIntelligencePolicy.mayAnalyzeCloudFrame(true, true, false, 8_000L, 0L))
+        assertTrue(AmbientIntelligencePolicy.mayAnalyzeCloudFrame(true, true, true, 8_000L, 0L))
+    }
+
+    @Test fun revokingCloudConsentBlocksNextFrameWhileLocalAnalysisCanContinue() {
+        assertTrue(AmbientIntelligencePolicy.shouldAnalyzeCloudFrame(8_000L, 0L))
+        assertFalse(AmbientIntelligencePolicy.mayAnalyzeCloudFrame(true, false, true, 8_000L, 0L))
+    }
+
 }
