@@ -106,10 +106,14 @@ fun OfflineModelScreen(navController: NavController) {
             working = false
             result.onSuccess { imported ->
                 val (path, digest) = imported
+                val saved = prefs.edit().putString(MODEL_PATH_KEY, path)
+                    .putString(MODEL_SHA256_KEY, digest).commit()
+                if (!saved) {
+                    status = "Model file was copied, but its integrity fingerprint could not be saved. Re-import before using it."
+                    return@onSuccess
+                }
                 modelPath = path
-                prefs.edit().putString(MODEL_PATH_KEY, path)
-                    .putString(MODEL_SHA256_KEY, digest).apply()
-                status = "Model imported into private app storage. Run the RAM/storage preflight before loading it."
+                status = "Model imported and integrity fingerprint saved. Run the RAM/storage preflight before loading it."
                 answer = ""
             }.onFailure { error ->
                 runCatching { File(context.filesDir, "offline-models/active.litertlm.part").delete() }
