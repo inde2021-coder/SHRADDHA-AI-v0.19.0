@@ -145,6 +145,10 @@ fun DeviceCenterScreen(navController: NavController) {
         scope.launch {
             var failedAt = -1
             for ((position, chunkIndex) in batch.withIndex()) {
+                if (!outgoingSending || outgoingFile?.transferId != item.transferId) {
+                    if (outgoingFile?.transferId == item.transferId) failedAt = position
+                    break
+                }
                 val bytes = try {
                     withContext(Dispatchers.IO) { DeviceFileTransferSender.readChunk(item, chunkIndex) }
                 } catch (_: Exception) {
@@ -158,7 +162,8 @@ fun DeviceCenterScreen(navController: NavController) {
                     break
                 }
             }
-            if (failedAt >= 0) {
+            val sameTransfer = outgoingFile?.transferId == item.transferId
+            if (failedAt >= 0 && sameTransfer) {
                 val unsent = batch.drop(failedAt)
                 outgoingInFlight = outgoingInFlight - unsent.toSet()
                 outgoingQueue = unsent + outgoingQueue
@@ -166,9 +171,9 @@ fun DeviceCenterScreen(navController: NavController) {
                 incomingTransferStatus = "Chunk भेजना रुक गया; भेजे गए chunks सुरक्षित हैं। Resume / Retry दबाएँ।"
             }
             outgoingPumpActive = false
-            if (outgoingSending && outgoingQueue.isNotEmpty() && outgoingInFlight.size < 8) {
+            if (sameTransfer && outgoingSending && outgoingQueue.isNotEmpty() && outgoingInFlight.size < 8) {
                 pumpOutgoingFile(peerId, item)
-            } else if (outgoingSending && outgoingQueue.isEmpty() && outgoingInFlight.isEmpty() &&
+            } else if (sameTransfer && outgoingSending && outgoingQueue.isEmpty() && outgoingInFlight.isEmpty() &&
                 outgoingAcked.size == item.chunkCount) {
                 outgoingSending = false
                 incomingTransferStatus = "सभी chunks PC ने स्वीकार किए; अंतिम SHA-256 verification की प्रतीक्षा…"
