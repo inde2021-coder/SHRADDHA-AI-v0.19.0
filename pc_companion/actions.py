@@ -309,6 +309,9 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
         if kind == "file_read":
             import json
             return True, json.dumps(read_user_text_file(action.get("path", "")), ensure_ascii=False, indent=2)[:14000]
+        if kind == "file_open":
+            import json
+            return True, json.dumps(open_user_path(action.get("path", "")), ensure_ascii=False, indent=2)[:12000]
         if kind == "tap":
             pyautogui.click(left + round(action["x"] * (width - 1)), top + round(action["y"] * (height - 1)))
             return True, "Mouse click completed."
