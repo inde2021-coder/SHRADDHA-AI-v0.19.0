@@ -38,4 +38,14 @@ class AkkpsBoundaryGeometryTest {
         val repeated = square.toMutableList().apply { add(1, square[0]) }
         assertTrue(runCatching { AkkpsBoundaryGeometry.measure(repeated) }.isFailure)
     }
+
+    @Test fun rejectsSelfIntersectingBowTiePolygon() {
+        val bowTie = listOf(
+            AkkpsGeoPoint(0.0, 0.0),
+            AkkpsGeoPoint(0.001, 0.001),
+            AkkpsGeoPoint(0.0, 0.001),
+            AkkpsGeoPoint(0.001, 0.0)
+        )
+        assertTrue(runCatching { AkkpsBoundaryGeometry.measure(bowTie) }.isFailure)
+    }
 }
