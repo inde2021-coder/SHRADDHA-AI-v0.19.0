@@ -193,7 +193,8 @@ object VoiceSessionManager {
 
     /** Starts an explicitly selected local Indic speech path. This method never checks or uses cloud consent. */
     fun startOffline(context: Context, language: IndicConformerRuntime.Language) {
-        if (_isActive.value) stop()
+        // Tear down any previous transport first so this path cannot inherit a cloud client.
+        stop()
         val application = context.applicationContext
         if (ContextCompat.checkSelfPermission(application, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             _lastError.value = "Microphone permission is required for offline voice."
