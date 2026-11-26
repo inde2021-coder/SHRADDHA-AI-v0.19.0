@@ -278,13 +278,13 @@ def open_user_path(relative_path):
         raise RuntimeError("Symbolic links cannot be opened remotely.")
     if target.is_dir():
         os.startfile(str(target))
-        return {"opened": str(target.relative_to(root)).replace("\\\\", "/") or ".", "type": "folder"}
+        return {"opened": str(target.relative_to(root)).replace("\\", "/") or ".", "type": "folder"}
     if not target.is_file() or target.suffix.casefold() not in _SAFE_OPEN_EXTENSIONS:
         raise RuntimeError("This file type is not allowed to open remotely.")
     if target.stat().st_size > 100 * 1024 * 1024:
         raise RuntimeError("Remote open is limited to files up to 100 MB.")
     os.startfile(str(target))
-    return {"opened": str(target.relative_to(root)).replace("\\\\", "/"), "type": "file"}
+    return {"opened": str(target.relative_to(root)).replace("\\", "/"), "type": "file"}
 
 
 def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=None,
