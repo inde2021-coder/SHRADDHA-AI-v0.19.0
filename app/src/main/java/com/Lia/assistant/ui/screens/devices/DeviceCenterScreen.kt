@@ -265,30 +265,49 @@ fun DeviceCenterScreen(navController: NavController) {
                     "file_transfer_ack" -> {
                         val item = outgoingFile
                         val peerId = message.optString("fromDeviceId")
-                        if (item != null && peerId == selectedPeerId && message.optString("transferId") == item.transferId) {
+                        if (item != null && peerId == item.peerId && message.optString("transferId") == item.transferId) {
                             val index = message.optInt("index", -2)
-                            if (index == -1 && message.optBoolean("ok") && !message.optBoolean("complete")) {
-                                scope.launch {
-                                    outgoingSending = true
-                                    for (chunkIndex in 0 until item.chunkCount) {
-                                        val bytes = withContext(Dispatchers.IO) { DeviceFileTransferSender.readChunk(item, chunkIndex) }
-                                        val sent = DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes)
-                                        bytes.fill(0)
-                                        if (!sent) { incomingTransferStatus = "Chunk भेजना असफल।"; outgoingSending = false; return@launch }
-                                        outgoingProgress = chunkIndex + 1
-                                        outgoingFile = withContext(Dispatchers.IO) { DeviceFileTransferSender.updateProgress(item, outgoingProgress) }
-                                    }
-                                    incomingTransferStatus = "सभी chunks भेजे गए; PC verification की प्रतीक्षा…"
-                                    outgoingSending = false
-                                }
-                            } else if (message.optBoolean("complete") && message.optBoolean("ok")) {
-                                DeviceFileTransferSender.cleanup(item)
+                            if (message.optBoolean("complete") && message.optBoolean("ok")) {
+                                scope.launch(Dispatchers.IO) { DeviceFileTransferSender.cleanup(item) }
                                 outgoingFile = null
+                                outgoingQueue = emptyList()
+                                outgoingInFlight = emptySet()
+                                outgoingAcked = emptySet()
+                                outgoingPumpActive = false
                                 outgoingSending = false
-                                incomingTransferStatus = "फ़ाइल PC पर verify होकर save हो गई।"
+                                outgoingProgress = 0
+                                incomingTransferStatus = "फ़ाइल PC पर SHA-256 verify होकर save हो गई।"
+                            } else if (index == -1 && message.optBoolean("ok")) {
+                                outgoingAcked = emptySet()
+                                outgoingInFlight = emptySet()
+                                outgoingQueue = (0 until item.chunkCount).toList()
+                                outgoingProgress = 0
+                                outgoingSending = true
+                                incomingTransferStatus = "PC ने फ़ाइल स्वीकार की; सुरक्षित window में chunks भेज रहे हैं…"
+                                pumpOutgoingFile(peerId, item)
+                            } else if (index in 0 until item.chunkCount && message.optBoolean("ok")) {
+                                if (index in outgoingInFlight) {
+                                    outgoingInFlight = outgoingInFlight - index
+                                    outgoingAcked = outgoingAcked + index
+                                    outgoingProgress = outgoingAcked.size
+                                    val progress = outgoingProgress
+                                    scope.launch {
+                                        val current = outgoingFile?.takeIf { it.transferId == item.transferId } ?: item
+                                        val updated = withContext(Dispatchers.IO) {
+                                            DeviceFileTransferSender.updateProgress(current, progress)
+                                        }
+                                        if (outgoingFile?.transferId == item.transferId &&
+                                            updated.sentChunks >= (outgoingFile?.sentChunks ?: 0)) outgoingFile = updated
+                                    }
+                                    pumpOutgoingFile(peerId, item)
+                                }
                             } else if (!message.optBoolean("ok")) {
-                                incomingTransferStatus = "PC ने transfer रोक दिया; retry आवश्यक है।"
+                                if (index in 0 until item.chunkCount) {
+                                    outgoingInFlight = outgoingInFlight - index
+                                    outgoingQueue = (listOf(index) + outgoingQueue).distinct()
+                                }
                                 outgoingSending = false
+                                incomingTransferStatus = "PC ने chunk रोक दिया; सुरक्षित रूप से paused। Resume / Retry दबाएँ।"
                             }
                         }
                     }
@@ -296,20 +315,19 @@ fun DeviceCenterScreen(navController: NavController) {
                         val item = outgoingFile
                         val peerId = message.optString("fromDeviceId")
                         val indexes = message.optJSONArray("missingIndexes")
-                        if (item != null && peerId == selectedPeerId && message.optString("transferId") == item.transferId && indexes != null) {
-                            scope.launch {
-                                outgoingSending = true
-                                for (position in 0 until indexes.length()) {
-                                    val chunkIndex = indexes.optInt(position, -1)
-                                    if (chunkIndex !in 0 until item.chunkCount) continue
-                                    val bytes = withContext(Dispatchers.IO) { DeviceFileTransferSender.readChunk(item, chunkIndex) }
-                                    val sent = DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes)
-                                    bytes.fill(0)
-                                    if (!sent) { incomingTransferStatus = "Retry chunk send failed."; outgoingSending = false; return@launch }
-                                    outgoingFile = withContext(Dispatchers.IO) { DeviceFileTransferSender.updateProgress(item, maxOf(item.sentChunks, chunkIndex + 1)) }
-                                }
-                                incomingTransferStatus = "Missing chunks resent; waiting for PC verification…"
-                                outgoingSending = false
+                        if (item != null && peerId == item.peerId && message.optString("transferId") == item.transferId && indexes != null) {
+                            val missing = (0 until indexes.length()).map { indexes.optInt(it, -1) }
+                                .filter { it in 0 until item.chunkCount }.distinct()
+                            outgoingInFlight = emptySet()
+                            outgoingQueue = missing
+                            outgoingAcked = (0 until item.chunkCount).filterNot { it in missing }.toSet()
+                            outgoingProgress = outgoingAcked.size
+                            outgoingSending = missing.isNotEmpty()
+                            if (missing.isEmpty()) {
+                                incomingTransferStatus = "PC ने कोई missing chunk नहीं बताया; अंतिम completion ACK की प्रतीक्षा…"
+                            } else {
+                                incomingTransferStatus = "${missing.size} missing chunks फिर से भेज रहे हैं…"
+                                pumpOutgoingFile(peerId, item)
                             }
                         }
                     }
