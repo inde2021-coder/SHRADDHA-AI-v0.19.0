@@ -163,7 +163,7 @@ fun ChatScreen(
             // Only app-bundled curriculum excerpts may enter an enabled cloud request.
             // User-imported/private documents remain local and are never silently uploaded.
             val bundledCurriculumContext = localKnowledgeHits
-                .filter { it.sourceLabel.startsWith("Shraddha AI built-in curriculum") }
+                .filter { TrainingCurriculumInstaller.isBundledPackId(it.documentId) }
                 .take(4)
                 .joinToString("\n\n") { hit ->
                     "[" + hit.title + " • " + hit.citation + "]\n" + hit.excerpt.take(900)
