@@ -56,13 +56,23 @@ class TrainingCurriculumInstallerInstrumentedTest {
                 val key = speakerKeys.next()
                 speakerTotals[key] = (speakerTotals[key] ?: 0) + chapterSpeakers.getInt(key)
             }
+            val observedSpeakers = mutableMapOf<String, Int>()
             for (i in 0 until verses.length()) {
                 val verse = verses.getJSONObject(i)
                 assertEquals("$chapter.${i + 1}", verse.getString("ref"))
+                val expectedSourceNumber = "$chapter.${i + 1 + if (chapter == 13) 1 else 0}"
+                assertEquals("Source edition numbering at $chapter.${i + 1}", expectedSourceNumber, verse.getString("sourceNumber"))
+                val speaker = verse.getString("speaker")
+                observedSpeakers[speaker] = (observedSpeakers[speaker] ?: 0) + 1
                 assertTrue(verse.getString("sanskrit").isNotBlank())
                 assertTrue(setOf("krishna", "arjuna", "sanjaya", "dhritarashtra").contains(verse.getString("speaker")))
                 assertTrue(verse.getString("transliteration").isNotBlank())
                 assertTrue(verse.getString("wordGloss").isNotBlank())
+            }
+            val declaredKeys = chapterSpeakers.keys().asSequence().toSet()
+            assertEquals("Speaker keys in chapter $chapter", declaredKeys, observedSpeakers.keys)
+            observedSpeakers.forEach { (speaker, count) ->
+                assertEquals("Speaker count for $speaker in chapter $chapter", count, chapterSpeakers.getInt(speaker))
             }
             total += verses.length()
         }
@@ -73,6 +83,14 @@ class TrainingCurriculumInstallerInstrumentedTest {
         assertEquals(1, speakerTotals["dhritarashtra"])
         val chapter13 = context.assets.open("training/gita/chapter-13-700-v1.json").bufferedReader().use { org.json.JSONObject(it.readText()) }
         assertEquals(1, chapter13.getJSONArray("editionVariants").length())
+        val openingQuestion = chapter13.getJSONArray("editionVariants").getJSONObject(0)
+        assertEquals("13.1", openingQuestion.getString("sourceNumber"))
+        assertEquals("arjuna", openingQuestion.getString("speaker"))
+        val finalVerse = context.assets.open("training/gita/chapter-18-700-v1.json").bufferedReader().use { org.json.JSONObject(it.readText()) }
+            .getJSONArray("verses").getJSONObject(77)
+        assertEquals("18.78", finalVerse.getString("ref"))
+        assertTrue("Final verse marker uses a recognised single-danda closing variant",
+            finalVerse.getString("sanskrit").trimEnd().endsWith("।।18.78।"))
     }
 
     @Test fun installerIsIdempotentAfterFirstSuccessfulInstall() {
