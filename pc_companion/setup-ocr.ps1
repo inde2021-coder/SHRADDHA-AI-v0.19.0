@@ -1,37 +1,59 @@
 $ErrorActionPreference = "Stop"
 
-# Install the Windows Tesseract engine if it is not already present.
+# Install Tesseract and both supported language packs for local OCR.
+$ProgramFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
 $Candidates = @(
-    "$env:ProgramFiles\Tesseract-OCR\tesseract.exe",
-    "$env:ProgramFiles(x86)\Tesseract-OCR\tesseract.exe"
-)
-$Tesseract = $Candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    (Join-Path $env:ProgramFiles "Tesseract-OCR\tesseract.exe"),
+    (Join-Path $ProgramFilesX86 "Tesseract-OCR\tesseract.exe")
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 
+$Tesseract = $Candidates | Select-Object -First 1
 if (-not $Tesseract) {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        throw "Windows Package Manager (winget) is required. Install Tesseract OCR, then rerun this script."
+    $Winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $Winget) {
+        throw "winget is unavailable. Install Windows App Installer, then rerun this script."
     }
-    winget install --id UB-Mannheim.TesseractOCR --exact --silent --accept-package-agreements --accept-source-agreements
-    $Tesseract = $Candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    & $Winget.Source install --id UB-Mannheim.TesseractOCR --exact --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        throw "Tesseract installation failed (winget exit code $LASTEXITCODE)."
+    }
+    $Tesseract = @(
+        (Join-Path $env:ProgramFiles "Tesseract-OCR\tesseract.exe"),
+        (Join-Path $ProgramFilesX86 "Tesseract-OCR\tesseract.exe")
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 }
-
 if (-not $Tesseract) {
-    throw "Tesseract installation was not found in the standard Program Files location."
+    throw "Tesseract was not found in Program Files after installation."
 }
 
-$Tessdata = Join-Path (Split-Path $Tesseract -Parent) "tessdata"
+$Tessdata = Join-Path (Split-Path -Parent $Tesseract) "tessdata"
 New-Item -ItemType Directory -Force -Path $Tessdata | Out-Null
 $Base = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main"
+
 foreach ($Language in @("eng", "hin")) {
     $Destination = Join-Path $Tessdata "$Language.traineddata"
-    if (-not (Test-Path $Destination) -or (Get-Item $Destination).Length -lt 100000) {
-        Invoke-WebRequest -Uri "$Base/$Language.traineddata" -OutFile "$Destination.tmp"
-        if ((Get-Item "$Destination.tmp").Length -lt 100000) {
-            Remove-Item "$Destination.tmp" -Force -ErrorAction SilentlyContinue
-            throw "Downloaded $Language OCR data is incomplete."
+    $Temporary = "$Destination.download"
+    if (-not (Test-Path -LiteralPath $Destination) -or (Get-Item -LiteralPath $Destination).Length -lt 100000) {
+        try {
+            Invoke-WebRequest -Uri "$Base/$Language.traineddata" -OutFile $Temporary
+            if ((Get-Item -LiteralPath $Temporary).Length -lt 100000) {
+                throw "Downloaded $Language trained-data file is incomplete."
+            }
+            Move-Item -LiteralPath $Temporary -Destination $Destination -Force
         }
-        Move-Item "$Destination.tmp" $Destination -Force
+        finally {
+            Remove-Item -LiteralPath $Temporary -Force -ErrorAction SilentlyContinue
+        }
     }
 }
-Write-Host "Shraddha OCR setup complete. Tesseract: $Tesseract"
-Write-Host "Installed language packs: English (eng), Hindi (hin)"
+
+$env:TESSDATA_PREFIX = $Tessdata
+& $Tesseract --list-langs
+if ($LASTEXITCODE -ne 0) {
+    throw "Tesseract could not load its language data."
+}
+Write-Host ""
+Write-Host "Shraddha local OCR setup completed successfully."
+Write-Host "Engine: $Tesseract"
+Write-Host "Language packs: English (eng), Hindi (hin)"
+Write-Host "Restart Shraddha AI PC Companion if it is already running."
