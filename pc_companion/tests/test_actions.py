@@ -211,6 +211,30 @@ class ActionTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("Documents/report.pdf", result)
         opener.assert_called_once_with("Documents/report.pdf")
+    def test_text_click_aborts_if_foreground_window_changes_before_click(self):
+        import sys
+        from types import SimpleNamespace
+        from pc_companion.actions import click_unique_text
+        clicked = []
+        class FakeControl:
+            element_info = SimpleNamespace(name="Save", control_type="Button")
+            def is_visible(self): return True
+            def is_enabled(self): return True
+            def click_input(self): clicked.append(True)
+        control = FakeControl()
+        root = SimpleNamespace(descendants=lambda: [control])
+        desktop = SimpleNamespace(get_active=lambda: root)
+        pywinauto = SimpleNamespace(Desktop=lambda backend: desktop)
+        before = SimpleNamespace(_hWnd=101)
+        after = SimpleNamespace(_hWnd=202)
+        with patch.dict(sys.modules, {"pywinauto": pywinauto}), patch(
+            "pc_companion.actions._active_window",
+            side_effect=[(before, "Notepad", (0, 0, 500, 300)),
+                         (after, "Bank - secure payment", (0, 0, 500, 300))]
+        ):
+            with self.assertRaisesRegex(RuntimeError, "active window changed"):
+                click_unique_text("Save")
+        self.assertEqual(clicked, [])
 
 if __name__ == "__main__":
     unittest.main()
