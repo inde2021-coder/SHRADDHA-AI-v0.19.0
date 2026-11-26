@@ -86,7 +86,19 @@ object DeviceFileTransferReceiver {
                         received[index] = true
                     }
                     val manifest = Manifest(peer, id, name, size, chunks, hash)
-                    active[id] = Active(manifest, temp, received)
+                    val state = Active(manifest, temp, received)
+                    if (received.all { it }) {
+                        if (sha256(temp).equals(hash, ignoreCase = true)) {
+                            val destination = uniqueDestination(directory, name)
+                            if (temp.renameTo(destination)) metadataFile(temp).delete()
+                            else active[id] = state
+                        } else {
+                            temp.delete()
+                            metadataFile(temp).delete()
+                        }
+                    } else {
+                        active[id] = state
+                    }
                 }
             }
         return pendingTransfers()
