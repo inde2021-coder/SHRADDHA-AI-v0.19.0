@@ -52,6 +52,9 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // Sherpa-ONNX and ONNX Runtime Java API both publish this shared runtime.
+            // Keep Sherpa's native runtime once while retaining ONNX Runtime's Java classes.
+            pickFirsts += "**/libonnxruntime.so"
         }
     }
 
@@ -133,6 +136,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
     // Optional on-device ASR runtime. Model weights remain downloadable and are not bundled.
     implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.5")
+    // Java inference API for consent-gated local face/speaker models.
+    // Its duplicate libonnxruntime.so is resolved above in favor of Sherpa's runtime.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
