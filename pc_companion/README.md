@@ -55,7 +55,7 @@ py -3.12 -m unittest discover -s pc_companion/tests -v
 py -3.12 -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --collect-all keyring pc_companion/agent.py
 ```
 
-The Windows GitHub Actions workflow builds and publishes the EXE as a separate artifact. The PC companion is not part of the Android APK.
+The Windows GitHub Actions workflow packages a ready-to-use release folder containing the EXE, this guide, and `setup-ocr.ps1`. Extract the artifact to a normal folder. Run the OCR setup script once from PowerShell, then launch `ShraddhaAI-PC-Companion.exe`. The PC companion is separate from the Android APK.
 
 
-CI verification is run on the work branch for the companion's protocol/action unit tests and Windows executable packaging; this does not replace paired physical-device testing.
+The Windows workflow is a manual packaging workflow; it does not run the deferred combined test pass. A successful EXE build also does not replace paired Android↔Windows physical-device verification.
