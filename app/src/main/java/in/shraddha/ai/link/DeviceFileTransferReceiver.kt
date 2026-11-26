@@ -200,7 +200,10 @@ object DeviceFileTransferReceiver {
     /** Keep receipts after ACK attempts: a relay may drop a queued ACK during disconnect. */
     @Synchronized fun acknowledgeReceipt(context: Context, peerId: String, transferId: String): Boolean {
         val receipt = loadReceipt(context, transferId) ?: return false
-        return receipt.peerId == peerId
+        if (receipt.peerId != peerId) return false
+        // Keep the receipt, but refresh its retention priority after an ACK attempt.
+        receiptFile(context, transferId).setLastModified(System.currentTimeMillis())
+        return true
     }
 
     private fun persistReceipt(context: Context, receipt: CompletedReceipt): Boolean = runCatching {
