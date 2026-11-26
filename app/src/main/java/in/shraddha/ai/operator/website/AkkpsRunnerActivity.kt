@@ -619,9 +619,10 @@ Return JSON only."""
             (function(){
               // Only create a uniquely named Shraddha draft overlay. Never reuse,
               // replace, clear, or update any AKKPS-owned layer/source.
+              // Do not activate AKKPS's native Draw mode: it could mutate the
+              // site's in-progress polygon. This listener is an isolated correction draft only.
               const drawButton=[...document.querySelectorAll('button,[role="button"]')]
                 .find(b=>(b.innerText||b.getAttribute('aria-label')||'').trim().toLowerCase()==='draw');
-              if(drawButton && !/active|selected/i.test(drawButton.className||'')) drawButton.click();
               const globals=Object.keys(window).filter(k=>/map/i.test(k)).map(k=>({name:k,value:window[k]}));
               const leaflet=globals.find(x=>x.value&&x.value._container&&typeof x.value.on==='function'&&typeof x.value.getCenter==='function');
               const google=globals.find(x=>x.value&&x.value.__gm&&typeof x.value.getCenter==='function');
