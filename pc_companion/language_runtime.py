@@ -72,9 +72,13 @@ class IndicConformerRuntime:
         )
 
     def transcribe_wav(self, wav_path: str | Path) -> str:
+        try:
+            import numpy as np
+        except ImportError as exc:
+            raise LanguageRuntimeError("NumPy is required by the Sherpa-ONNX runtime.") from exc
         audio, sample_rate = _read_pcm16_mono(Path(wav_path))
         stream = self._recognizer.create_stream()
-        stream.accept_waveform(sample_rate, audio)
+        stream.accept_waveform(sample_rate, np.asarray(audio, dtype="float32"))
         self._recognizer.decode_stream(stream)
         result = stream.result.text.strip()
         if not result:
