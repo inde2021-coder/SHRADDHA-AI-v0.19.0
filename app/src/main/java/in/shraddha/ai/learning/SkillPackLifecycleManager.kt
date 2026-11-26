@@ -244,13 +244,17 @@ class SkillPackLifecycleManager(context: Context) {
 
     private fun isTextPack(file: File, contentType: String): Boolean {
         if (contentType !in SUPPORTED_CONTENT_TYPES || file.length() > MAX_PACK_BYTES) return false
-        return FileInputStream(file).use { input ->
-            val buffer = ByteArray(4096)
-            val count = input.read(buffer)
-            count >= 0 && buffer.take(count).none { it == 0.toByte() }
+        var valid = true
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (buffer.take(count).any { it == 0.toByte() }) { valid = false; break }
+            }
         }
+        return valid
     }
-
     private fun writeMetadata(content: File, metadata: JSONObject) {
         File(content.parentFile, content.name + ".json").writeText(metadata.toString(), Charsets.UTF_8)
     }
