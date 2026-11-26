@@ -115,6 +115,15 @@ object ShraddhaSpeechClient {
             done(Result.failure(IllegalStateException("Online AI is disabled. Enable Allow Online AI in Settings > Connections to use cloud speech.")))
             return
         }
+        runCatching {
+            `in`.shraddha.ai.future.CouncilCostBudget.requireUsageCountersAvailable(
+                context.applicationContext,
+                "Custom Shraddha text-to-speech"
+            )
+        }.onFailure {
+            done(Result.failure(it))
+            return
+        }
         val config = com.Lia.assistant.data.VoiceGatewaySettings.get(context)
         if (config.readError != null) {
             done(Result.failure(IllegalStateException(config.readError)))
