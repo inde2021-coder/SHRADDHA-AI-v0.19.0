@@ -37,7 +37,7 @@ object LocalKnowledgeAnswer {
     }
 
     private fun tokens(value: String): List<String> =
-        Regex("[\\\\p{L}\\\\p{M}\\\\p{N}]+")
+        Regex("[\\p{L}\\p{M}\\p{N}]+")
             .findAll(value.lowercase())
             .map { it.value }
             .toList()
