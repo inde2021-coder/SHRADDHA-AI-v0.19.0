@@ -67,14 +67,14 @@ object IndicConformerRuntime {
         if (!tokens.isFile) return Status(language, Availability.TOKENS_MISSING, "Tokenizer file उपलब्ध नहीं है।")
         if (!sha256(model).equals(pack.modelSha256, true) || !sha256(tokens).equals(pack.tokensSha256, true))
             return Status(language, Availability.INVALID_MODEL, "SHA-256 जाँच विफल। Model इस्तेमाल नहीं होगा।")
-        return Status(language, Availability.READY, "Offline \${language.label} model verified और तैयार है।")
+        return Status(language, Availability.READY, "Offline ${language.label} model verified और तैयार है।")
     }
 
     /** Downloads only files with source-controlled SHA-256 pins; .part is verified before rename. */
     fun download(context: Context, language: Language, onProgress: (String) -> Unit = {}) {
         val pack = packs.getValue(language)
         require(pack.checksumsPinned) {
-            "\${language.label} model download blocked: model और tokenizer SHA-256 pin नहीं हैं।"
+            "${language.label} model download blocked: model और tokenizer SHA-256 pin नहीं हैं।"
         }
         val dir = modelDirectory(context, language)
         check(dir.exists() || dir.mkdirs()) { "Model storage folder could not be created." }
@@ -90,7 +90,7 @@ object IndicConformerRuntime {
         partial.delete()
         val request = Request.Builder().url(url).get().header("User-Agent", "ShraddhaAI-Offline-ASR").build()
         http.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Model download failed (HTTP \${response.code})." }
+            check(response.isSuccessful) { "Model download failed (HTTP ${response.code})." }
             val body = requireNotNull(response.body) { "Model download returned an empty response." }
             FileOutputStream(partial).buffered().use { output ->
                 body.byteStream().use { input ->
@@ -102,7 +102,7 @@ object IndicConformerRuntime {
                         total += read
                         check(total <= 350L * 1024L * 1024L) { "Model artifact exceeded the 350 MB safety limit." }
                         output.write(buffer, 0, read)
-                        onProgress("Downloaded \${total / (1024 * 1024)} MB")
+                        onProgress("Downloaded ${total / (1024 * 1024)} MB")
                     }
                     buffer.fill(0)
                 }
@@ -151,7 +151,7 @@ object IndicConformerRuntime {
     }
 
     private fun modelDirectory(context: Context, language: Language) =
-        File(context.noBackupFilesDir, "speech/indicconformer/\${language.code}")
+        File(context.noBackupFilesDir, "speech/indicconformer/${language.code}")
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
