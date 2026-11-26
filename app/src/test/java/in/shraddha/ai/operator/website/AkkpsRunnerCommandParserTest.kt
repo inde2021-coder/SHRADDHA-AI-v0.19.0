@@ -30,7 +30,7 @@ class AkkpsRunnerCommandParserTest {
     }
 
     @Test fun parsesNewlineSeparatedVoiceAssignments() {
-        val parsed = AkkpsRunnerCommandParser.parse("Farmer Name=Ram Kumar\\nVillage=Rampur\\nsubmit")
+        val parsed = AkkpsRunnerCommandParser.parse("Farmer Name=Ram Kumar\nVillage=Rampur\nsubmit")
         assertEquals(listOf("Farmer Name", "Village"), parsed.assignments.map { it.first })
         assertEquals(listOf("Ram Kumar", "Rampur"), parsed.assignments.map { it.second })
         assertTrue(parsed.submit)
