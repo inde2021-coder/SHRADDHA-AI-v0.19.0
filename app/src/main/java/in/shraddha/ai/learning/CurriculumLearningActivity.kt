@@ -87,6 +87,12 @@ class CurriculumLearningActivity : Activity() {
             setBackgroundColor(0xFF102131.toInt())
         })
         root.addView(sectionTitle("श्रीमद्भगवद्गीता  •  18 अध्याय"))
+        root.addView(TextView(this).apply {
+            text = "700 श्लोकों का स्रोत/संरचना सत्यापन किया गया है। संस्कृत विद्वान की पंक्ति-दर-पंक्ति समीक्षा अभी लंबित है।"
+            textSize = 11f
+            setTextColor(0xFFFFD38A.toInt())
+            setPadding(8, 4, 8, 10)
+        })
         val chapterCounts = listOf(47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 34, 27, 20, 24, 28, 78)
         val chapterNames = listOf(
             "अर्जुनविषाद योग", "सांख्य योग", "कर्म योग", "ज्ञान-कर्म-संन्यास योग",
@@ -109,7 +115,8 @@ class CurriculumLearningActivity : Activity() {
             .forEach { pack ->
                 val snapshot = progress.snapshot()
                 val completed = pack.id in snapshot.completedPacks
-                root.addView(actionButton(pack.title, if (completed) "पढ़ा गया ✓" else pack.audience) {
+                val review = CurriculumReviewRegistry.forPack(pack.id)?.statusLabel ?: "समीक्षा स्थिति उपलब्ध नहीं"
+                root.addView(actionButton(pack.title, if (completed) "पढ़ा गया ✓ • $review" else "${pack.audience} • $review") {
                     showLesson(pack.id, pack.title, pack.assetPath)
                 })
             }
