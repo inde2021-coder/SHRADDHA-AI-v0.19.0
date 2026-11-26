@@ -52,7 +52,10 @@ class LanguageLabDialog:
                 self.status.set("Choose a WAV recording first.")
                 return
             def task():
-                from language_runtime import IndicConformerRuntime
+                try:
+                    from .language_runtime import IndicConformerRuntime
+                except (ImportError, ValueError):
+                    from language_runtime import IndicConformerRuntime
                 return IndicConformerRuntime(lang).transcribe_wav(path)
             self._run(task, lambda value: (output.delete("1.0", "end"), output.insert("1.0", value)))
         ttk.Button(page, text="TRANSCRIBE OFFLINE", command=transcribe).pack(anchor="w", pady=6)
@@ -82,7 +85,10 @@ class LanguageLabDialog:
                 self.status.set("Enter text to translate.")
                 return
             def task():
-                from language_runtime import IndicTrans2Runtime
+                try:
+                    from .language_runtime import IndicTrans2Runtime
+                except (ImportError, ValueError):
+                    from language_runtime import IndicTrans2Runtime
                 return IndicTrans2Runtime(model_dir).translate(text_value, source_code, target_code)
             self._run(task, lambda value: (outgoing.delete("1.0", "end"), outgoing.insert("1.0", value)))
         ttk.Button(page, text="TRANSLATE OFFLINE", command=translate).pack(anchor="w", pady=6)
@@ -112,7 +118,10 @@ class LanguageLabDialog:
                 self.status.set("Choose an output WAV path.")
                 return
             def task():
-                from language_runtime import IndicF5Runtime
+                try:
+                    from .language_runtime import IndicF5Runtime
+                except (ImportError, ValueError):
+                    from language_runtime import IndicF5Runtime
                 return str(IndicF5Runtime().synthesize(text_value, lang, reference_path, reference_text, output_path))
             self._run(task, lambda value: messagebox.showinfo("Shraddha AI", "Audio saved locally:\\n" + value, parent=self.window))
         ttk.Button(page, text="SYNTHESIZE OFFLINE", command=synthesize).pack(anchor="w", pady=8)
