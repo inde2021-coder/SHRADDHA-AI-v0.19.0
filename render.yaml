@@ -27,3 +27,10 @@ services:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
+      # Custom voice engine runs on a persistent host with licensed models supplied separately.
+      - key: SHRADDHA_TTS_URL
+        sync: false
+      - key: SHRADDHA_TTS_TOKEN
+        sync: false
+      - key: SHRADDHA_TTS_VOICE
+        value: shraddha
