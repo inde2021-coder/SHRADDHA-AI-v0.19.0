@@ -1316,6 +1316,9 @@ class PcCompanionApp:
                 self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "reason": "recovery_state_unavailable"})
                 return
+            if len(existing["received"]) == existing["chunks"]:
+                self._finalize_pc_incoming(transfer_id, existing, peer_id)
+                return
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
             self.status_var.set(f"Resuming {Path(existing['path']).name}; saved chunks are retained.")
