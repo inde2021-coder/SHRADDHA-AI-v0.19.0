@@ -1085,6 +1085,10 @@ class PcCompanionApp:
             "Send to paired phone", "Enter the paired Android device ID:", parent=self.root)
         if not peer_id:
             return
+        peer_id = peer_id.strip()
+        if len(peer_id) > 80 or not self.is_e2e_trusted(peer_id):
+            self.status_var.set("File send blocked: select a paired Android device with a mutually verified fingerprint.")
+            return
         path = filedialog.askopenfilename(title="Choose a file to send to Android")
         if not path:
             return
