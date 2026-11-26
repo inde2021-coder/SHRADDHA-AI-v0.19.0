@@ -2,6 +2,7 @@ package `in`.shraddha.ai.brain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalKnowledgeAnswerTest {
@@ -17,7 +18,7 @@ class LocalKnowledgeAnswerTest {
         val result = LocalKnowledgeAnswer.build("Explain the solar system",
             listOf(hit("The solar system contains the Sun and the objects that orbit it.")))
         assertEquals(1, result?.citations?.size)
-        assert(result?.text?.contains("solar system") == true)
+        assertTrue(result?.text?.contains("solar system") == true)
     }
 
     @Test fun rejectsWeakSingleWordOverlapForMultiTermQuestion() {
@@ -31,7 +32,7 @@ class LocalKnowledgeAnswerTest {
     }
 
     @Test fun supportsDistinctiveSingleConceptQuestion() {
-        assert(LocalKnowledgeAnswer.build("Photosynthesis",
+        assertTrue(LocalKnowledgeAnswer.build("Photosynthesis",
             listOf(hit("Photosynthesis is how green plants use light to make sugars."))) != null)
     }
 
