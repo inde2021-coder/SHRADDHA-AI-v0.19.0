@@ -135,6 +135,7 @@ object VoiceGatewaySettings {
 
     /** Checks relay health and authenticates the saved token against provider status. */
     fun testConnection(context: Context): String {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Saved backend settings could not be read." }
         require(config.baseUrl.isNotBlank()) { "Backend URL is missing. Enter the HTTPS backend URL." }
@@ -148,6 +149,7 @@ object VoiceGatewaySettings {
         }
         val providerRequest = Request.Builder().url("$base/api/ai/providers")
             .header("Authorization", "Bearer ${config.gatewayToken}").get().build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(providerRequest).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
