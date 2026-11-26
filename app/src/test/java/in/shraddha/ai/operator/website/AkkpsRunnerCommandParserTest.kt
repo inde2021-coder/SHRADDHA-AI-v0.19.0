@@ -13,6 +13,13 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(parsed.submit)
     }
 
+    @Test fun submitIntentRequiresAStandaloneExplicitToken() {
+        assertTrue(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("name=Ram; submit"))
+        assertTrue(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("कृपया रिकॉर्ड जमा करें"))
+        assertFalse(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("please resubmit later"))
+        assertFalse(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("name=Submit"))
+    }
+
     @Test fun preservesCommasInsideValues() {
         val parsed = AkkpsRunnerCommandParser.parse("Address=Ward 4, Near School; Village=Rampur")
         assertEquals("Ward 4, Near School", parsed.assignments.first().second)
