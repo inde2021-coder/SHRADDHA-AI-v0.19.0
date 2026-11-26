@@ -105,4 +105,24 @@ class DeviceE2ECryptoTest {
         }
     }
 
+
+    @Test fun confirmationProofIsDirectionalAndBoundToFingerprint() {
+        val left = DeviceE2ECrypto.create()
+        val right = DeviceE2ECrypto.create()
+        val session = "session-123456789012"
+        val (leftKey, fingerprint) = left.derivePeerKey(right.publicKeyBase64(), session, "left", "right")
+        val (rightKey, _) = right.derivePeerKey(left.publicKeyBase64(), session, "right", "left")
+        val sentProof = DeviceE2ECrypto.confirmationProof(leftKey, session, "left", "right", fingerprint)
+        val expectedProof = DeviceE2ECrypto.confirmationProof(rightKey, session, "left", "right", fingerprint)
+        val reverseProof = DeviceE2ECrypto.confirmationProof(rightKey, session, "right", "left", fingerprint)
+        val changedFingerprint = DeviceE2ECrypto.confirmationProof(
+            rightKey, session, "left", "right", fingerprint.dropLast(1) + "0"
+        )
+        assertEquals(sentProof, expectedProof)
+        assertNotEquals(sentProof, reverseProof)
+        assertNotEquals(sentProof, changedFingerprint)
+        leftKey.fill(0)
+        rightKey.fill(0)
+    }
+
 }
