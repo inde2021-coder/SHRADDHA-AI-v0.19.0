@@ -4,6 +4,7 @@ Pair with an Android-created relay code. Remote control is opt-in on this PC and
 each control request requires a local approval dialog. No arbitrary shell commands.
 """
 import json
+import hmac
 import base64
 import struct
 import os
