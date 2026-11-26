@@ -87,5 +87,21 @@ class PawariDatasetValidatorTests(unittest.TestCase):
             result = validate_csv(path)
             self.assertTrue(any(e["code"] == "DUPLICATE_RECORD_ID" for e in result["errors"]))
 
+    def test_transcription_consent_no_blocks_training(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "data.csv"
+            self.write_csv(path, [sample(consent_transcription="NO")])
+            result = validate_csv(path)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["training_eligible_count"], 0)
+
+    def test_withdrawn_consent_blocks_training(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "data.csv"
+            self.write_csv(path, [sample(consent_public_release="WITHDRAWN")])
+            result = validate_csv(path)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["training_eligible_count"], 0)
+
 if __name__ == "__main__":
     unittest.main()
