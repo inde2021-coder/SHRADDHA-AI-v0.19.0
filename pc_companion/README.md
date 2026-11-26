@@ -32,7 +32,7 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - Android keyboard shortcuts use a strict allowlist (Enter, Escape, Tab, Ctrl+C/F/Z/S/A/V/X, Alt+Tab/Left/Right and Shift+Tab). Arbitrary key names and shell commands are rejected.
 - Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; the Windows companion persists the bounded receipt ledger so restarting the app does not immediately reopen replay of accepted actions. If receipt persistence fails, the remote action is rejected. Encrypted receipts carry explicit success/failure state.
 - PyAutoGUI's top-left fail-safe is enabled.
-- File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
+- File transfer is bidirectional: use **Send File to Phone** on Windows or **Choose file and send to PC** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Windows receiver persists received-chunk checkpoints. Android keeps the staged outgoing file in app cache and offers Resume / Retry while the active transfer state is retained; recovery after Android process death is not yet implemented.\n- The companion does not capture microphone audio, read files, or silently send messages.
 
 ## PC hardware agent
 
