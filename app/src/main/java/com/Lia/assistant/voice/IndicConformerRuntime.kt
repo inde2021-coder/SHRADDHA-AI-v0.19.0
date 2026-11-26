@@ -27,8 +27,9 @@ object IndicConformerRuntime {
     }
     data class Status(val language: Language, val availability: Availability, val detail: String)
 
-    // Hindi model digest is published in Hugging Face Xet file metadata.
-    // Shared tokenizer and other model digests are not guessed; those packs stay blocked.
+    // Hindi and Sanskrit digests are pinned from publisher Xet metadata; shared tokenizer
+    // digest is pinned from the byte-identical published multilingual vocabulary mirror.
+    // Marathi remains blocked until its exact ONNX SHA-256 is independently confirmed.
     private val packs = mapOf(
         Language.HINDI to Pack(
             Language.HINDI,
@@ -141,7 +142,7 @@ object IndicConformerRuntime {
         val recognizer = OfflineRecognizer(config = config)
         val stream = recognizer.createStream()
         return try {
-            stream.acceptWaveform(16_000, pcm16kMono)
+            stream.acceptWaveform(pcm16kMono, sampleRate = 16_000)
             recognizer.decode(stream)
             recognizer.getResult(stream).text.trim()
         } finally {
