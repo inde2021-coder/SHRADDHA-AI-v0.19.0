@@ -42,6 +42,7 @@ class TrainingCurriculumInstallerInstrumentedTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val expected = listOf(47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 34, 27, 20, 24, 28, 78)
         var total = 0
+        val speakerTotals = mutableMapOf<String, Int>()
         expected.forEachIndexed { index, count ->
             val chapter = index + 1
             val path = "training/gita/chapter-%02d-700-v1.json".format(chapter)
@@ -49,16 +50,29 @@ class TrainingCurriculumInstallerInstrumentedTest {
             assertEquals(chapter, json.getInt("chapter"))
             val verses = json.getJSONArray("verses")
             assertEquals("Chapter $chapter count", count, verses.length())
+            val chapterSpeakers = json.getJSONObject("speakerCounts")
+            val speakerKeys = chapterSpeakers.keys()
+            while (speakerKeys.hasNext()) {
+                val key = speakerKeys.next()
+                speakerTotals[key] = (speakerTotals[key] ?: 0) + chapterSpeakers.getInt(key)
+            }
             for (i in 0 until verses.length()) {
                 val verse = verses.getJSONObject(i)
                 assertEquals("$chapter.${i + 1}", verse.getString("ref"))
                 assertTrue(verse.getString("sanskrit").isNotBlank())
+                assertTrue(setOf("krishna", "arjuna", "sanjaya", "dhritarashtra").contains(verse.getString("speaker")))
                 assertTrue(verse.getString("transliteration").isNotBlank())
                 assertTrue(verse.getString("wordGloss").isNotBlank())
             }
             total += verses.length()
         }
         assertEquals(700, total)
+        assertEquals(574, speakerTotals["krishna"])
+        assertEquals(85, speakerTotals["arjuna"])
+        assertEquals(40, speakerTotals["sanjaya"])
+        assertEquals(1, speakerTotals["dhritarashtra"])
+        val chapter13 = context.assets.open("training/gita/chapter-13-700-v1.json").bufferedReader().use { org.json.JSONObject(it.readText()) }
+        assertEquals(1, chapter13.getJSONArray("editionVariants").length())
     }
 
     @Test fun installerIsIdempotentAfterFirstSuccessfulInstall() {
