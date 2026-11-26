@@ -36,7 +36,7 @@ object ShraddhaSpeechClient {
                         return@fold
                     }
                     runCatching {
-                        stopPlayback()
+                        stopAudioPlayback()
                         val track = AudioTrack.Builder()
                             .setAudioAttributes(
                                 AudioAttributes.Builder()
@@ -87,6 +87,10 @@ object ShraddhaSpeechClient {
         val pending = activeSynthesisCall
         activeSynthesisCall = null
         pending?.cancel()
+        stopAudioPlayback()
+    }
+
+    private fun stopAudioPlayback() {
         val current = playbackTrack
         playbackTrack = null
         if (current != null) {
