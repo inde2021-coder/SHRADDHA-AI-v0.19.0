@@ -13,11 +13,20 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(parsed.submit)
     }
 
+    @Test fun acceptsStandaloneHindiSubmitCommands() {
+        listOf("सबमिट", "जमा करें", "जमा", "भेजो", "भेज दें").forEach { token ->
+            val parsed = AkkpsRunnerCommandParser.parse("किसान का नाम=राम; $token")
+            assertTrue(token, parsed.submit)
+            assertTrue(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("किसान का नाम=राम; $token"))
+        }
+    }
+
     @Test fun submitIntentRequiresAStandaloneExplicitToken() {
         assertTrue(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("name=Ram; submit"))
         assertTrue(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("कृपया रिकॉर्ड जमा करें"))
         assertFalse(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("please resubmit later"))
         assertFalse(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("name=Submit"))
+        assertFalse(AkkpsRunnerCommandParser.hasExplicitSubmitIntent("remarks=जमा करें बाद में"))
     }
 
     @Test fun preservesCommasInsideValues() {
