@@ -658,11 +658,14 @@ class PcCompanionApp:
             self.status_var.set(f"Connected as {role} • {len(peers)} other paired device(s).")
         elif kind == "peer_status":
             peer_id = str(msg.get("deviceId", ""))
-            if msg.get("revoked"):
+            if msg.get("revoked") or (peer_id and not msg.get("online")):
                 with self.e2e_lock:
                     state = self.peer_keys.pop(peer_id, None)
                     if state:
                         state["key"][:] = b"\x00" * len(state["key"])
+                if peer_id == self.phone_control_peer:
+                    self.phone_control_grant_until = 0
+                self.control_grant_until = 0
             elif msg.get("online") and peer_id:
                 self._send_e2e_key_offer(peer_id)
             self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
@@ -841,7 +844,10 @@ class PcCompanionApp:
             self.status_var.set("Blocked plaintext remote action. E2E encryption is mandatory.")
         elif kind == "control_result":
             target_id = str(msg.get("targetDeviceId", ""))
-            if target_id != self.phone_control_peer:
+            responder_id = str(msg.get("fromDeviceId", ""))
+            if (target_id != self.config.get("deviceId") or responder_id != self.phone_control_peer or
+                    not self.is_e2e_trusted(responder_id)):
+                self.status_var.set("Ignored phone-control result from an unverified or unexpected device.")
                 return
             if msg.get("approved") is True:
                 minutes = max(1, min(5, int(msg.get("expiresInMinutes", 5))))
@@ -853,6 +859,9 @@ class PcCompanionApp:
         elif kind == "control_request":
             requester = str(msg.get("requesterName", "Paired device"))[:80]
             requester_id = str(msg.get("fromDeviceId", ""))[:80]
+            if not requester_id or not self.is_e2e_trusted(requester_id):
+                self.status_var.set("Blocked PC-control request from an unverified device.")
+                return
             minutes = max(1, min(5, int(msg.get("requestedMinutes", 5))))
             approved = messagebox.askyesno(
                 "Shraddha AI • Remote control request",
@@ -1130,7 +1139,8 @@ class PcCompanionApp:
         peer_id = str(msg.get("fromDeviceId", ""))[:80]
         request_id = str(msg.get("requestId", ""))
         category = str(msg.get("category", ""))
-        if not peer_id or category != "documents" or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", request_id):
+        if (not peer_id or not self.is_e2e_trusted(peer_id) or category != "documents" or
+                not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", request_id)):
             return
         approved = messagebox.askyesno(
             "Shraddha AI • Incoming file permission",
