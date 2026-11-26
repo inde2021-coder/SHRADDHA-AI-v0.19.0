@@ -320,6 +320,12 @@ fun VisualLensScreen(navController: NavController) {
                             context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, android.content.Context.MODE_PRIVATE)
                                 .edit().putBoolean(LiveEyesCameraService.PREF_CLOUD_ANALYSIS_ENABLED, true).apply()
                             answer = "Cloud scene analysis की अनुमति चालू है। इसे कभी भी बंद कर सकते हैं।"
+                            if (backgroundEyes) {
+                                runCatching {
+                                    startForegroundService(context, Intent(context, LiveEyesCameraService::class.java)
+                                        .setAction(LiveEyesCameraService.ACTION_START))
+                                }.onFailure { answer = "Cloud अनुमति सेव हुई, लेकिन Live Eyes restart नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
+                            }
                         }
                     } else {
                         cloudAnalysisConsent = false
