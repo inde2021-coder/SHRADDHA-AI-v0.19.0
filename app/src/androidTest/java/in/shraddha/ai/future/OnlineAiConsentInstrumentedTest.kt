@@ -15,9 +15,16 @@ class OnlineAiConsentInstrumentedTest {
         try {
             prefs.edit().remove("allow_online_ai").commit()
             assertFalse(OnlineAiConsent.isAllowed(context))
+            try {
+                OnlineAiConsent.requireAllowed(context)
+                throw AssertionError("Cloud requests must be rejected while consent is off")
+            } catch (_: IllegalStateException) {
+                // Expected fail-closed behavior.
+            }
 
             assertTrue(OnlineAiConsent.setAllowed(context, true))
             assertTrue(OnlineAiConsent.isAllowed(context))
+            OnlineAiConsent.requireAllowed(context)
             assertTrue(prefs.getBoolean("allow_online_ai", false))
 
             assertTrue(OnlineAiConsent.setAllowed(context, false))
