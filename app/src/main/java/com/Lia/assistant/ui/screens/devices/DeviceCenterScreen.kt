@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
+import java.io.File
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.layout.Arrangement
@@ -91,6 +94,19 @@ fun DeviceCenterScreen(navController: NavController) {
     var pendingShareRequest by remember { mutableStateOf<JSONObject?>(null) }
     var pendingIncomingFile by remember { mutableStateOf<DeviceFileTransferReceiver.Manifest?>(null) }
     var incomingTransferStatus by remember { mutableStateOf("") }
+    var receivedFiles by remember { mutableStateOf(DeviceFileTransferReceiver.listReceived(context)) }
+    var pendingExportFile by remember { mutableStateOf<File?>(null) }
+    val exportFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        val source = pendingExportFile
+        pendingExportFile = null
+        if (uri != null && source != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri, "w")?.use { output -> source.inputStream().use { input -> input.copyTo(output) } }
+                    ?: error("Downloads destination could not be opened.")
+            }.onSuccess { incomingTransferStatus = "फ़ाइल Downloads में export हो गई: ${source.name}" }
+                .onFailure { incomingTransferStatus = "Export असफल: ${it.message ?: "unknown error"}" }
+        }
+    }
 
     DisposableEffect(context) {
         DeviceLinkManager.initialize(context)
@@ -164,7 +180,7 @@ fun DeviceCenterScreen(navController: NavController) {
                         DeviceLinkManager.acknowledgeFileTransfer(peerId, message.optString("transferId"), result.index,
                             complete = result.complete, ok = result.ok)
                         incomingTransferStatus = when {
-                            result.complete -> "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}"
+                            result.complete -> { receivedFiles = DeviceFileTransferReceiver.listReceived(context); "फ़ाइल verify होकर सुरक्षित रूप से save हो गई: ${result.savedPath}" }
                             !result.ok -> result.error ?: "फ़ाइल chunk reject हुआ।"
                             else -> "फ़ाइल प्राप्त हो रही है… chunk ${result.index + 1}"
                         }
@@ -479,6 +495,40 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         }
 
+        receivedFiles = receivedFiles.filter { it.exists() }
+        NovaGlassCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text("RECEIVED FILES", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                TextButton(onClick = { receivedFiles = DeviceFileTransferReceiver.listReceived(context) }) { Text("Refresh") }
+            }
+            if (receivedFiles.isEmpty()) {
+                Text("अभी कोई received file नहीं है। PC से सुरक्षित transfer पूरा होने पर फ़ाइल यहाँ दिखेगी।", color = colors.textSecondary, fontSize = 12.sp)
+            } else {
+                receivedFiles.forEach { file ->
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text(file.name, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("${file.length() / 1024} KB • ${DeviceFileTransferReceiver.mimeType(file)}", color = colors.textSecondary, fontSize = 10.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            NovaButton(text = "Open", onClick = {
+                                runCatching {
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.lia.fileprovider", file)
+                                    val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, DeviceFileTransferReceiver.mimeType(file)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    context.startActivity(intent)
+                                }.onFailure { incomingTransferStatus = "फ़ाइल खोलने के लिए compatible app नहीं मिला: ${it.message ?: "unknown error"}" }
+                            }, modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                            NovaButton(text = "Share", onClick = {
+                                runCatching {
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.lia.fileprovider", file)
+                                    val intent = Intent(Intent.ACTION_SEND).setType(DeviceFileTransferReceiver.mimeType(file)).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    context.startActivity(Intent.createChooser(intent, "Share with…"))
+                                }.onFailure { incomingTransferStatus = "Share शुरू नहीं हो सका: ${it.message ?: "unknown error"}" }
+                            }, modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                            NovaButton(text = "Downloads", onClick = { pendingExportFile = file; exportFileLauncher.launch(file.name) }, modifier = Modifier.weight(1f), type = NovaButtonType.SECONDARY)
+                        }
+                    }
+                }
+            }
+        }
         if (incomingTransferStatus.isNotBlank()) {
             NovaGlassCard {
                 Text("PC → PHONE FILE TRANSFER", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
