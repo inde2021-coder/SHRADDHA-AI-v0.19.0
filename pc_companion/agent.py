@@ -1626,12 +1626,13 @@ class PcCompanionApp:
                     monitor = capture.monitors[self._selected_monitor_index()]
                     shot = capture.grab(monitor)
                 image = Image.frombytes("RGB", shot.size, shot.rgb)
+                jpeg = bytearray()
                 try:
                     image.thumbnail((1280, 720), Image.Resampling.LANCZOS)
                     from io import BytesIO
                     with BytesIO() as output:
                         image.save(output, format="JPEG", quality=55, optimize=True)
-                        jpeg = output.getvalue()
+                        jpeg.extend(output.getvalue())
                     if jpeg and len(jpeg) <= MAX_FRAME_BYTES:
                         source_id = str(self.config.get("deviceId", ""))
                         session_id = str(self.config.get("sessionId", ""))
@@ -1653,7 +1654,7 @@ class PcCompanionApp:
                                 current["send_sequence"] += 1
                                 key = bytes(current["key"])
                             aad = visual_frame_aad(session_id, source_id, peer_id, 1, sequence)
-                            nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, jpeg, aad)
+                            nonce_b64, ciphertext_b64 = DeviceE2ECrypto.encrypt(key, bytes(jpeg), aad)
                             nonce = base64.b64decode(nonce_b64 + "=" * ((4 - len(nonce_b64) % 4) % 4))
                             ciphertext = base64.b64decode(ciphertext_b64 + "=" * ((4 - len(ciphertext_b64) % 4) % 4))
                             packet = bytes((0x81, len(target_bytes))) + target_bytes + struct.pack(">Q", sequence) + nonce + ciphertext
@@ -1661,6 +1662,7 @@ class PcCompanionApp:
                                 if ws.sock and ws.sock.connected:
                                     ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
                 finally:
+                    jpeg[:] = b"\\x00" * len(jpeg)
                     image.close()
             except Exception as exc:
                 self.events.put(("status", f"Screen capture paused: {str(exc)[:120]}"))
