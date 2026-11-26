@@ -56,6 +56,79 @@ object AkkpsBoundaryGeometry {
             acres = squareMeters / 4_046.8564224
         )
     }
+    /**
+     * Returns false when the candidate touches or overlaps any protected existing
+     * parcel polygon. Existing polygons are inputs only and are never mutated.
+     * Coordinates must be WGS84 and each ring must be perimeter-ordered.
+     */
+    fun doesNotOverlapExisting(
+        candidate: List<AkkpsGeoPoint>,
+        existingBoundaries: List<List<AkkpsGeoPoint>>,
+        toleranceDegrees: Double = 1e-10
+    ): Boolean {
+        require(toleranceDegrees >= 0.0 && toleranceDegrees.isFinite())
+        require(candidate.size >= 3)
+        require(candidate.all { it.latitude.isFinite() && it.longitude.isFinite() &&
+            it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0 })
+        if (hasSelfIntersection(candidate)) return false
+
+        fun orient(a: AkkpsGeoPoint, b: AkkpsGeoPoint, p: AkkpsGeoPoint) =
+            (b.longitude - a.longitude) * (p.latitude - a.latitude) -
+                (b.latitude - a.latitude) * (p.longitude - a.longitude)
+
+        fun onSegment(a: AkkpsGeoPoint, b: AkkpsGeoPoint, p: AkkpsGeoPoint): Boolean {
+            val cross = abs(orient(a, b, p))
+            return cross <= toleranceDegrees &&
+                p.longitude >= minOf(a.longitude, b.longitude) - toleranceDegrees &&
+                p.longitude <= maxOf(a.longitude, b.longitude) + toleranceDegrees &&
+                p.latitude >= minOf(a.latitude, b.latitude) - toleranceDegrees &&
+                p.latitude <= maxOf(a.latitude, b.latitude) + toleranceDegrees
+        }
+
+        fun segmentsTouch(a: AkkpsGeoPoint, b: AkkpsGeoPoint, d: AkkpsGeoPoint, e: AkkpsGeoPoint): Boolean {
+            val o1 = orient(a, b, d); val o2 = orient(a, b, e)
+            val o3 = orient(d, e, a); val o4 = orient(d, e, b)
+            val cross = ((o1 > toleranceDegrees && o2 < -toleranceDegrees) ||
+                (o1 < -toleranceDegrees && o2 > toleranceDegrees)) &&
+                ((o3 > toleranceDegrees && o4 < -toleranceDegrees) ||
+                    (o3 < -toleranceDegrees && o4 > toleranceDegrees))
+            return cross || onSegment(a, b, d) || onSegment(a, b, e) ||
+                onSegment(d, e, a) || onSegment(d, e, b)
+        }
+
+        fun contains(ring: List<AkkpsGeoPoint>, point: AkkpsGeoPoint): Boolean {
+            var inside = false
+            var j = ring.lastIndex
+            for (i in ring.indices) {
+                val a = ring[i]; val b = ring[j]
+                if (onSegment(a, b, point)) return true
+                val crosses = (a.latitude > point.latitude) != (b.latitude > point.latitude) &&
+                    point.longitude < (b.longitude - a.longitude) *
+                    (point.latitude - a.latitude) / (b.latitude - a.latitude) + a.longitude
+                if (crosses) inside = !inside
+                j = i
+            }
+            return inside
+        }
+
+        for (protectedRing in existingBoundaries) {
+            if (protectedRing.size < 3 || protectedRing.any {
+                    !it.latitude.isFinite() || !it.longitude.isFinite() ||
+                        it.latitude !in -90.0..90.0 || it.longitude !in -180.0..180.0
+                } || hasSelfIntersection(protectedRing)) return false
+            for (i in candidate.indices) {
+                val a = candidate[i]; val b = candidate[(i + 1) % candidate.size]
+                for (j in protectedRing.indices) {
+                    val d = protectedRing[j]; val e = protectedRing[(j + 1) % protectedRing.size]
+                    if (segmentsTouch(a, b, d, e)) return false
+                }
+            }
+            if (contains(protectedRing, candidate.first()) ||
+                contains(candidate, protectedRing.first())) return false
+        }
+        return true
+    }
+
     /** Rejects crossing/touching non-adjacent edges before an area is accepted. */
     private fun hasSelfIntersection(points: List<AkkpsGeoPoint>): Boolean {
         fun orientation(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint): Double =
