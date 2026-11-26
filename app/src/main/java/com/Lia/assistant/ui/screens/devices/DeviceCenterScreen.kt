@@ -155,8 +155,10 @@ fun DeviceCenterScreen(navController: NavController) {
                     failedAt = position
                     break
                 }
-                val sent = try { DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes) }
-                    finally { bytes.fill(0) }
+                val sent = try {
+                    runCatching { DeviceLinkManager.sendFileTransferChunk(peerId, item.transferId, chunkIndex, bytes) }
+                        .getOrDefault(false)
+                } finally { bytes.fill(0) }
                 if (!sent) {
                     failedAt = position
                     break
