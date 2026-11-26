@@ -173,16 +173,24 @@ fun VisualLensScreen(navController: NavController) {
                         compressed.fill(0)
                         throw IllegalStateException("तस्वीर का आकार सुरक्षित सीमा से बड़ा है।")
                     }
+                    if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                        compressed.fill(0)
+                        throw IllegalStateException("तस्वीर तैयार होने के दौरान Online AI अनुमति बंद कर दी गई। तस्वीर भेजी नहीं गई।")
+                    }
                     val provider = NovaPreferences.getString(context, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
                     DeviceLinkManager.analyzeScreen(
                         config.baseUrl, config.gatewayToken, provider, prompt, compressed, "general"
                     ) { result ->
                         compressed.fill(0)
                         mainHandler.post {
-                            answer = result.fold(
-                                onSuccess = { it },
-                                onFailure = { "AI से दृश्य समझने में समस्या: ${it.message ?: "नेटवर्क या provider त्रुटि"}" }
-                            )
+                            answer = if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                                "Online AI अनुमति बंद है। दृश्य विश्लेषण का परिणाम दिखाया नहीं गया।"
+                            } else {
+                                result.fold(
+                                    onSuccess = { it },
+                                    onFailure = { "AI से दृश्य समझने में समस्या: ${it.message ?: "नेटवर्क या provider त्रुटि"}" }
+                                )
+                            }
                             busy = false
                         }
                     }
