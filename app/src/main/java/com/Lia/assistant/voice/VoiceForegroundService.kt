@@ -91,6 +91,16 @@ class VoiceForegroundService : Service() {
                     stopSelf(startId)
                     return START_NOT_STICKY
                 }
+                val language = runCatching {
+                    IndicConformerRuntime.Language.valueOf(intent.getStringExtra(EXTRA_OFFLINE_LANGUAGE) ?: "HINDI")
+                }.getOrDefault(IndicConformerRuntime.Language.HINDI)
+                val modelStatus = IndicConformerRuntime.status(this, language)
+                if (modelStatus.availability != IndicConformerRuntime.Availability.READY) {
+                    VoiceSessionManager.stop()
+                    OverlayEdgeGlowController.stop(this)
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
                 createNotificationChannel()
                 val notification = buildNotification()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -99,9 +109,6 @@ class VoiceForegroundService : Service() {
                     startForeground(NOTIFICATION_ID, notification)
                 }
                 OverlayEdgeGlowController.start(this)
-                val language = runCatching {
-                    IndicConformerRuntime.Language.valueOf(intent.getStringExtra(EXTRA_OFFLINE_LANGUAGE) ?: "HINDI")
-                }.getOrDefault(IndicConformerRuntime.Language.HINDI)
                 VoiceSessionManager.startOffline(this, language)
                 START_NOT_STICKY
             }
