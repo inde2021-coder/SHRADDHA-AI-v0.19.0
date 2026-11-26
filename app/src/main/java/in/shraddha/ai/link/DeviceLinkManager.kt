@@ -48,7 +48,7 @@ object DeviceLinkManager {
     @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
     @Volatile var onE2EVerification: ((String, String) -> Unit)? = null
-    private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
+    @Volatile private var e2eCrypto = DeviceE2ECrypto.create()
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
     // Reject duplicate authenticated actions for the same peer within this process/session.
@@ -149,6 +149,10 @@ object DeviceLinkManager {
         reconnectPending = false
         socket?.close(1000, "Replacing device session connection")
         socket = null
+        clearAllPeerE2EState()
+        // Fresh ephemeral ECDH keypair for every new relay connection prevents
+        // a captured confirmation proof from being replayed after reconnect.
+        e2eCrypto = DeviceE2ECrypto.create()
         lastBaseUrl = baseUrl
         lastPair = pair
         sessionId = pair.sessionId
@@ -261,11 +265,23 @@ object DeviceLinkManager {
                         }
                         "e2e_key_confirm" -> {
                             val peerId = msg.optString("fromDeviceId")
+                            val fingerprint = msg.optString("fingerprint")
                             val state = peerKeys[peerId]
-                            if (state != null && state.fingerprint == msg.optString("fingerprint")) {
+                            val expectedProof = state?.takeIf { it.fingerprint == fingerprint }?.let {
+                                runCatching {
+                                    DeviceE2ECrypto.confirmationProof(
+                                        it.key, sessionId.orEmpty(), peerId, deviceId.orEmpty(), fingerprint
+                                    )
+                                }.getOrNull()
+                            }
+                            val suppliedProof = msg.optString("proof")
+                            val proofValid = expectedProof != null && suppliedProof.matches(Regex("[a-f0-9]{64}")) &&
+                                MessageDigest.isEqual(expectedProof.toByteArray(Charsets.US_ASCII),
+                                    suppliedProof.toByteArray(Charsets.US_ASCII))
+                            if (state != null && proofValid) {
                                 state.remoteConfirmed = true
                                 onStatus?.invoke("Peer fingerprint confirmed: " + peerId)
-                            } else onStatus?.invoke("E2E fingerprint mismatch. Do not trust this peer.")
+                            } else onStatus?.invoke("E2E confirmation proof invalid. Peer remains untrusted.")
                         }
 
 
@@ -643,8 +659,11 @@ object DeviceLinkManager {
     fun confirmE2EPeer(peerId: String, fingerprint: String): Boolean {
         val state = peerKeys[peerId] ?: return false
         if (state.fingerprint != fingerprint) return false
+        val proof = runCatching {
+            DeviceE2ECrypto.confirmationProof(state.key, sessionId.orEmpty(), deviceId.orEmpty(), peerId, fingerprint)
+        }.getOrNull() ?: return false
         val sent = socket?.send(JSONObject().put("type", "e2e_key_confirm")
-            .put("targetDeviceId", peerId).put("fingerprint", fingerprint).toString()) == true
+            .put("targetDeviceId", peerId).put("fingerprint", fingerprint).put("proof", proof).toString()) == true
         state.localConfirmed = sent
         return sent
     }
