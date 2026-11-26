@@ -82,6 +82,7 @@ fun DeviceCenterScreen(navController: NavController) {
     var pendingFingerprint by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showClearPairing by remember { mutableStateOf(false) }
     var commandText by remember { mutableStateOf("") }
+    var pcFilePath by remember { mutableStateOf("") }
     var lastPcResult by remember { mutableStateOf("") }
     var lastPcResultOk by remember { mutableStateOf(false) }
 
@@ -358,6 +359,46 @@ fun DeviceCenterScreen(navController: NavController) {
                 }
                 Text(
                     "एक ही जगह बोलकर या लिखकर PC चलाएँ। उदाहरण: “desktop दिखाओ”, “Notepad खोलो”, “ऊपर scroll करो”, “type नमस्ते”, “volume 40”. हर control PC पर आपकी अनुमति के बाद ही चलेगा।",
+                    color = colors.textSecondary, fontSize = 10.sp
+                )
+                Text(
+                    "PC FILES • केवल आपके Windows user folder के अंदर",
+                    color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                )
+                NovaTextField(
+                    value = pcFilePath,
+                    onValueChange = { pcFilePath = it.take(500) },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = "Folder/file path, जैसे Documents या Documents/notes.txt"
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NovaButton(
+                        text = "List files",
+                        onClick = {
+                            lastPcResult = ""
+                            status = if (DeviceLinkManager.requestPcFileList(peer.id, pcFilePath)) {
+                                "PC folder list request भेजी गई। Windows पर exact action approve करें।"
+                            } else "File list request नहीं भेजी गई। Secure link और PC approval जाँचें।"
+                        },
+                        modifier = Modifier.weight(1f),
+                        type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted
+                    )
+                    NovaButton(
+                        text = "Preview text",
+                        onClick = {
+                            lastPcResult = ""
+                            status = if (DeviceLinkManager.requestPcTextPreview(peer.id, pcFilePath)) {
+                                "Text preview request भेजी गई। Windows पर exact action approve करें।"
+                            } else "Preview के लिए relative file path लिखें और secure link जाँचें।"
+                        },
+                        modifier = Modifier.weight(1f),
+                        type = NovaButtonType.SECONDARY,
+                        enabled = connected && peer.online && peerTrusted && pcFilePath.isNotBlank()
+                    )
+                }
+                Text(
+                    "सुरक्षा: hidden/credential folders, parent paths और binary files block हैं। केवल छोटे UTF-8 text files का preview मिलता है; हर request Windows PC पर अलग से approve होगी।",
                     color = colors.textSecondary, fontSize = 10.sp
                 )
             }
