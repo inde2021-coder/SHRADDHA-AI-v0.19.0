@@ -127,10 +127,7 @@ private fun SettingsScreenContent(
     }
     var screenOcrEnabled by remember { mutableStateOf(context.getSharedPreferences("shraddha_privacy", android.content.Context.MODE_PRIVATE).getBoolean("on_device_screen_ocr", false)) }
     var allowOnlineAi by remember {
-        mutableStateOf(
-            context.getSharedPreferences("shraddha_network_ai", android.content.Context.MODE_PRIVATE)
-                .getBoolean("allow_online_ai", false)
-        )
+        mutableStateOf(`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context))
     }
 
     var expandedSettingsGroup by remember { mutableStateOf<String?>(null) }
