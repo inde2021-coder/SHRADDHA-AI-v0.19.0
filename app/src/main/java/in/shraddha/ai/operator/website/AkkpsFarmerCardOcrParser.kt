@@ -23,14 +23,17 @@ object AkkpsFarmerCardOcrParser {
 
     fun parse(ocrText: String): Result {
         val found = linkedMapOf<String, String>()
-        ocrText.lineSequence().take(120).forEach { raw ->
-            val line = raw.replace(Regex("\\s+"), " ").trim().take(300)
-            if (line.isBlank()) return@forEach
-            labels.forEach { (key, aliases) ->
-                if (key in found) return@forEach
+        for (raw in ocrText.lineSequence().take(120)) {
+            val line = raw.replace(Regex("\\\\s+"), " ").trim().take(300)
+            if (line.isBlank()) continue
+            for ((key, aliases) in labels) {
+                if (key in found) continue
                 val alias = aliases.firstOrNull { label ->
-                    line.startsWith(label, ignoreCase = true)
-                } ?: return@forEach
+                    line.equals(label, ignoreCase = true) ||
+                        line.startsWith("$label:", ignoreCase = true) ||
+                        line.startsWith("$label ", ignoreCase = true) ||
+                        line.startsWith("$label-", ignoreCase = true)
+                } ?: continue
                 val value = line.substring(alias.length).trim().trimStart(':', '-', '—', '|').trim()
                 if (value.length in 2..100 && !value.contains(Regex("(?i)aadhaar|aadhar|आधार|otp|पासवर्ड|password"))) {
                     found[key] = value
