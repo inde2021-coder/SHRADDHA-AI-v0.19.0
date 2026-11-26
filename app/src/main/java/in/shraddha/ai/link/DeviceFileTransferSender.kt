@@ -77,7 +77,11 @@ object DeviceFileTransferSender {
 
     @Synchronized fun updateProgress(prepared: Prepared, sentChunks: Int): Prepared {
         require(sentChunks in 0..prepared.chunkCount) { "Invalid transfer progress." }
-        return prepared.copy(sentChunks = sentChunks).also(::persist)
+        val previous = runCatching {
+            Properties().apply { FileInputStream(metadataFile(prepared.file)).use { load(it) } }
+                .getProperty("sentChunks", "0").toInt()
+        }.getOrDefault(prepared.sentChunks).coerceIn(0, prepared.chunkCount)
+        return prepared.copy(sentChunks = maxOf(sentChunks, prepared.sentChunks, previous)).also(::persist)
     }
 
     fun pending(storageDir: File): List<Prepared> {
