@@ -51,6 +51,8 @@ object MainBrainProviderGateway {
         return VoiceGatewaySettings.fetchEphemeralToken(context.applicationContext)
     }
 
+    private const val MAX_STREAM_OUTPUT_CHARS = 64_000
+
     data class StreamingTextResult(val httpCode: Int, val text: String, val finishReason: String?)
 
     /** Streaming Gemini generation used by Website Forge; API keys and endpoint policy stay here. */
@@ -81,7 +83,8 @@ object MainBrainProviderGateway {
             .header("x-goog-api-key", apiKey)
             .post(body)
             .build()
-        GeminiTextClient.internalHttpClient.newCall(request).execute().use { response ->
+        val call = GeminiTextClient.internalHttpClient.newCall(request)
+        call.execute().use { response ->
             if (!response.isSuccessful) return StreamingTextResult(response.code, "", null)
             val input = response.body?.byteStream()
                 ?: return StreamingTextResult(response.code, "", null)
@@ -90,11 +93,21 @@ object MainBrainProviderGateway {
             var finishReason: String? = null
             var line: String? = reader.readLine()
             while (line != null) {
+                // Revoking Online AI during a long stream stops further cloud reads and
+                // prevents any additional generated text from reaching the UI.
+                if (!OnlineAiConsent.isAllowed(context)) {
+                    call.cancel()
+                    return StreamingTextResult(403, accumulated.toString(), "CONSENT_REVOKED")
+                }
                 val trimmed = line.trim()
                 if (trimmed.startsWith("data:")) {
                     val data = trimmed.substring(5).trim()
                     SseParser.extractFinishReason(data)?.let { finishReason = it }
                     SseParser.extractText(data)?.takeIf { it.isNotEmpty() }?.let { chunk ->
+                        if (accumulated.length + chunk.length > MAX_STREAM_OUTPUT_CHARS) {
+                            call.cancel()
+                            return StreamingTextResult(413, accumulated.toString(), "OUTPUT_LIMIT")
+                        }
                         accumulated.append(chunk)
                         onChunk(chunk)
                     }
