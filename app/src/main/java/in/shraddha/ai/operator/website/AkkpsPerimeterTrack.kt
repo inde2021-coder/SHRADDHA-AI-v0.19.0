@@ -1,4 +1,4 @@
-package \`in\`.shraddha.ai.operator.website
+package `in`.shraddha.ai.operator.website
 
 import kotlin.math.*
 
@@ -42,7 +42,7 @@ class AkkpsPerimeterTrack(
         require(accepted.size >= 4) { "खेत के किनारे कम-से-कम चार अच्छे GPS बिंदु रिकॉर्ड करें।" }
         val closure = distanceMeters(accepted.first(), accepted.last())
         require(closure <= maxClosureGapMeters) {
-            "सीमा का शुरुआती सिरा अभी \${closure.roundToInt()} मीटर दूर है। बाहर से लौटें; फसल के अंदर न जाएँ।"
+            "सीमा का शुरुआती सिरा अभी ${closure.roundToInt()} मीटर दूर है। बाहर से लौटें; फसल के अंदर न जाएँ।"
         }
         val ring = accepted.dropLast(1)
         AkkpsBoundaryGeometry.measure(ring)
