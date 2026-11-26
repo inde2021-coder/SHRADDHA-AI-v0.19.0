@@ -53,7 +53,6 @@ object TrainingCurriculumInstaller {
     fun install(context: Context): Result<InstallReport> = runCatching {
         if (checkedThisProcess) return@runCatching InstallReport(0, 0, catalog.size, catalog.size)
         val app = context.applicationContext
-        val prefs = app.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
         val store = LocalKnowledgeDocumentStore(app)
         val existing = store.listDocuments().getOrThrow().associateBy { it.id }
         var installed = 0
@@ -89,17 +88,11 @@ object TrainingCurriculumInstaller {
             }
         }
 
-        check(prefs.edit().putString(KEY_VERSION, BUNDLE_VERSION).commit()) {
-            "Could not persist the curriculum installation version."
-        }
         checkedThisProcess = true
         InstallReport(installed, updated, unchanged, catalog.size)
     }
 
     @Volatile private var checkedThisProcess = false
 
-    private const val PREFERENCES = "shraddha_curriculum_installer"
-    private const val KEY_VERSION = "installed_bundle_version"
-    private const val BUNDLE_VERSION = "2"
     private const val MAX_PACK_CHARS = 50_000
 }
