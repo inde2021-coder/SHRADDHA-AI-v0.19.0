@@ -29,6 +29,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var command: EditText
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var uploadAllowsMultiple = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -106,10 +107,14 @@ class AkkpsRunnerActivity : Activity() {
                 ): Boolean {
                     uploadCallback?.onReceiveValue(null)
                     uploadCallback = callback
+                    uploadAllowsMultiple = params.mode == FileChooserParams.MODE_OPEN_MULTIPLE
                     return try {
+                        val acceptedTypes = params.acceptTypes.filter { it.isNotBlank() }.distinct()
                         val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
-                            type = params.acceptTypes.firstOrNull { it.isNotBlank() } ?: "*/*"
+                            type = acceptedTypes.singleOrNull() ?: "*/*"
+                            if (acceptedTypes.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, acceptedTypes.toTypedArray())
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, uploadAllowsMultiple)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         startActivityForResult(pick, REQUEST_FILE)
@@ -390,8 +395,19 @@ Return exact JSON only. Do not include prose or markdown."""
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if(requestCode==REQUEST_FILE) {
-            val selected=if(resultCode==RESULT_OK) data?.data?.let { arrayOf(it) } else null
-            uploadCallback?.onReceiveValue(selected); uploadCallback=null
+            val selected = if (resultCode == RESULT_OK) {
+                val uris = linkedSetOf<Uri>()
+                if (uploadAllowsMultiple) {
+                    data?.clipData?.let { clip ->
+                        for (i in 0 until clip.itemCount) uris += clip.getItemAt(i).uri
+                    }
+                }
+                data?.data?.let { uris += it }
+                uris.takeIf { it.isNotEmpty() }?.toTypedArray()
+            } else null
+            uploadCallback?.onReceiveValue(selected)
+            uploadCallback = null
+            uploadAllowsMultiple = false
         }
     }
 
