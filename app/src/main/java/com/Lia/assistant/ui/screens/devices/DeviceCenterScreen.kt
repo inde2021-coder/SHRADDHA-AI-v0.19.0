@@ -74,6 +74,7 @@ fun DeviceCenterScreen(navController: NavController) {
     val context = LocalContext.current
     val colors = LocalNovaColors.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val scope = rememberCoroutineScope()
     val assistantName = NovaPreferences.getString(
         context, NovaPreferences.Keys.ASSISTANT_NAME, AssistantBrand.FULL_NAME
     ).trim().ifBlank { AssistantBrand.FULL_NAME }
@@ -235,6 +236,8 @@ fun DeviceCenterScreen(navController: NavController) {
             if (commandText.isBlank()) status = "आवाज़ समझ नहीं आई। फिर से बोलें या लिखें।"
         }
     }
+    val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }
+    val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
     val sendFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         val peer = selectedPeerId
         if (uri != null && peer.isNotBlank() && peerTrusted) {
@@ -257,8 +260,7 @@ fun DeviceCenterScreen(navController: NavController) {
             }
         } else if (uri != null) incomingTransferStatus = "पहले trusted PC चुनें।"
     }
-    val selectedPeer = peers.firstOrNull { it.id == selectedPeerId }
-    val peerTrusted = selectedPeerId.isNotBlank() && DeviceLinkManager.isE2ETrusted(selectedPeerId)
+
 
     Column(
         modifier = Modifier.fillMaxSize().nightSky()
