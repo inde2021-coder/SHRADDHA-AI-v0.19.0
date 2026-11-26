@@ -523,6 +523,7 @@ class PcCompanionApp:
                 screen = False
                 self.screen_var.set(False)
                 self.screen_target_peer = None
+                self.screen_event.clear()
                 self.status_var.set("Screen sharing blocked: enter and verify one Android device ID first.")
             else:
                 self.screen_target_peer = target
