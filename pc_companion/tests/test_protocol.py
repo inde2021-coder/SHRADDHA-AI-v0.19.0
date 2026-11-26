@@ -79,6 +79,17 @@ class ProtocolTests(unittest.TestCase):
         ):
             self.assertIsNone(validate_remote_action(action))
 
+    def test_pc_file_search_requires_bounded_query_and_safe_relative_path(self):
+        self.assertEqual(validate_remote_action({"kind": "file_search", "query": "invoice", "path": "Documents"}),
+                         {"kind": "file_search", "query": "invoice", "path": "Documents"})
+        for action in (
+            {"kind": "file_search", "query": "x", "path": ""},
+            {"kind": "file_search", "query": "invoice", "path": "../"},
+            {"kind": "file_search", "query": "invoice", "path": ".ssh"},
+            {"kind": "file_search", "query": "x" * 81, "path": ""},
+        ):
+            self.assertIsNone(validate_remote_action(action))
+
     def test_ocr_is_allowlisted_without_client_supplied_payload(self):
         self.assertEqual(validate_remote_action({"kind": "ocr"}), {"kind": "ocr"})
         self.assertIsNone(validate_remote_action({"kind": "ocr", "script": "arbitrary"}))
