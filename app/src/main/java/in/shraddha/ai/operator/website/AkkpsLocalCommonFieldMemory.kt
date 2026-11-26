@@ -18,7 +18,7 @@ internal object AkkpsLocalCommonFieldMemory {
     )
 
     fun normalize(value: String): String =
-        value.trim().lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+        value.trim().lowercase().replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
 
     fun isReusableCommonField(label: String): Boolean =
         normalize(label) in allowedKeys
