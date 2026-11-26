@@ -1412,7 +1412,7 @@ class PcCompanionApp:
                                  "transferId": transfer_id, "reason": "recovery_state_unavailable"})
                 return
             if len(existing["received"]) == existing["chunks"]:
-                self._finalize_pc_incoming(transfer_id, existing, peer_id)
+                self._enqueue_pc_finalize(transfer_id, peer_id)
                 return
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": -1, "complete": False, "ok": True})
@@ -1466,7 +1466,7 @@ class PcCompanionApp:
 
     def _enqueue_file_chunk(self, msg, peer_id):
         try:
-            self.file_chunk_queue.put_nowait((dict(msg), str(peer_id)))
+            self.file_chunk_queue.put_nowait(("chunk", dict(msg), str(peer_id)))
             return True
         except queue.Full:
             index = msg.get("index", -1)
@@ -1480,24 +1480,43 @@ class PcCompanionApp:
             self.events.put(("status", "Incoming transfer window is full; sender will retry this chunk."))
             return False
 
+    def _enqueue_pc_finalize(self, transfer_id, peer_id):
+        try:
+            self.file_chunk_queue.put_nowait(("finalize", str(transfer_id), str(peer_id)))
+            return True
+        except queue.Full:
+            self.events.put(("status", "Final verification queued behind incoming chunks; sender may retry Resume."))
+            return False
+
     def _file_chunk_worker(self):
         while not self.stop_event.is_set():
             try:
-                msg, peer_id = self.file_chunk_queue.get(timeout=0.25)
+                task = self.file_chunk_queue.get(timeout=0.25)
             except queue.Empty:
                 continue
+            kind = task[0]
             try:
-                self._handle_incoming_file_chunk(msg, peer_id)
+                if kind == "chunk":
+                    _, msg, peer_id = task
+                    self._handle_incoming_file_chunk(msg, peer_id)
+                elif kind == "finalize":
+                    _, transfer_id, peer_id = task
+                    with self.file_transfer_lock:
+                        transfer = self.pc_incoming.get(transfer_id)
+                        if transfer:
+                            self._finalize_pc_incoming(transfer_id, transfer, peer_id)
             except Exception as exc:
-                index = msg.get("index", -1)
-                if type(index) is not int:
-                    index = -1
-                self._send_json({
-                    "type": "file_transfer_ack", "targetDeviceId": peer_id,
-                    "transferId": str(msg.get("transferId", "")),
-                    "index": index, "complete": False, "ok": False
-                })
-                self.events.put(("status", f"Incoming file chunk failed safely: {str(exc)[:140]}"))
+                if kind == "chunk":
+                    _, msg, peer_id = task
+                    index = msg.get("index", -1)
+                    if type(index) is not int:
+                        index = -1
+                    self._send_json({
+                        "type": "file_transfer_ack", "targetDeviceId": peer_id,
+                        "transferId": str(msg.get("transferId", "")),
+                        "index": index, "complete": False, "ok": False
+                    })
+                self.events.put(("status", f"Incoming file worker failed safely: {str(exc)[:140]}"))
             finally:
                 self.file_chunk_queue.task_done()
 
@@ -1608,7 +1627,7 @@ class PcCompanionApp:
             if not peer_id or peer_id != incoming["peer"] or not self.is_e2e_trusted(peer_id):
                 return
             if len(incoming["received"]) == incoming["chunks"]:
-                self._finalize_pc_incoming(transfer_id, incoming, peer_id)
+                self._enqueue_pc_finalize(transfer_id, peer_id)
                 return
             missing = [i for i in range(incoming["chunks"]) if i not in incoming["received"]]
             self._send_json({"type": "file_transfer_resume", "targetDeviceId": peer_id,
