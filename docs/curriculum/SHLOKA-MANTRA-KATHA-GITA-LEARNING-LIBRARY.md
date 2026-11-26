@@ -108,6 +108,16 @@ Build themed, opt-in packs. For every mantra provide the exact source where veri
 - festival/occasion prayers with regional variants.
 Each pack must label tradition, source confidence, variant and permissions. Avoid mass scraping audio or lyrics.
 
+## 4A. Full verse corpus and edition policy
+
+The APK curriculum now includes 18 chapter JSON packs containing 700 numbered verses (traditional 700-verse numbering), source Sanskrit text, source transliteration and source-provided word glosses. Chapter counts are 47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 34, 27, 20, 24, 28 and 78.
+
+**Primary digital source:** `gita/gita`, `data/verse.json`, The Unlicense: https://github.com/gita/gita/blob/main/data/verse.json. The source contains 701 records because it numbers Arjuna's opening question in chapter 13 as 13.1. This build uses the common 700-verse numbering in which that question is not numbered separately and the following verse is 13.1. The source's original reference is retained in each entry as `sourceNumber`; the canonical app reference is retained as `ref`.
+
+**Independent cross-reference:** Hansi Gita Bhawan Trust publishes a 700-verse corpus and chapter counts, and states that its Sanskrit transcription was checked against multiple editions: https://gitabhawan.org.in/gita/research. Its translations are not copied into these packs. The Trust's English/Hindi translations may be used only with its stated attribution and terms; do not silently blend them into the Sanskrit source.
+
+**Review status:** Structural validation confirms 700 unique sequential canonical references and expected counts for all 18 chapters. This is not a substitute for a Sanskrit scholar's line-by-line review. Source transliteration and word glosses are labelled as source-provided, not certified phonetics or authoritative grammar. Padaccheda, anvaya, grammatical analysis, chapter summaries, teaching paraphrases, quizzes and tradition-specific commentaries must be separately authored/reviewed and must cite their reviewer and source. Where editions differ, show the edition/variant rather than silently correcting it.
+
 ## 5. Bhagavad Gita — full 18-chapter study programme
 Create 18 chapter packs. Each verse entry should have original Sanskrit, IAST, padaccheda where reviewed, word meanings, anvaya, literal gloss, neutral paraphrase, context, reflection, cross-references, quiz and source/reviewer metadata.
 
