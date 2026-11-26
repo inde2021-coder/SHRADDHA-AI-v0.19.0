@@ -1544,9 +1544,9 @@ class PcCompanionApp:
             self._persist_pc_incoming()
         finally:
             if isinstance(data, bytearray):
-                data[:] = b"\\x00" * len(data)
+                data[:] = b"\x00" * len(data)
             if isinstance(plain, bytearray):
-                plain[:] = b"\\x00" * len(plain)
+                plain[:] = b"\x00" * len(plain)
             if isinstance(payload, dict):
                 payload.clear()
 
