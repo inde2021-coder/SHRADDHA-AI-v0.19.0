@@ -1,6 +1,7 @@
 package `in`.shraddha.ai.link
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,4 +43,30 @@ class DeviceFileTransferSenderTest {
         DeviceFileTransferSender.cleanup(prepared)
         assertFalse(source.exists())
     }
+    @Test fun pendingTransferMetadataSurvivesReconstructionAndTracksProgress() {
+        val directory = temporaryFolder.newFolder("outgoing")
+        val source = java.io.File(directory, "durable.part")
+        val payload = ByteArray(1024) { (it % 251).toByte() }
+        source.writeBytes(payload)
+        val prepared = DeviceFileTransferSender.Prepared(
+            file = source,
+            transferId = "transfer_123456",
+            fileName = "invoice.pdf",
+            sizeBytes = payload.size.toLong(),
+            chunkCount = 1,
+            sha256 = "c".repeat(64)
+        )
+        val bound = DeviceFileTransferSender.bindPeer(prepared, "trusted-pc-01")
+        DeviceFileTransferSender.updateProgress(bound, 1)
+
+        val recovered = DeviceFileTransferSender.pending(directory).single()
+        assertEquals("trusted-pc-01", recovered.peerId)
+        assertEquals("invoice.pdf", recovered.fileName)
+        assertEquals(1, recovered.sentChunks)
+        assertEquals(payload.size.toLong(), recovered.sizeBytes)
+
+        DeviceFileTransferSender.cleanup(recovered)
+        assertTrue(DeviceFileTransferSender.pending(directory).isEmpty())
+    }
+
 }
