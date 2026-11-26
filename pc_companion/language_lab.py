@@ -47,12 +47,15 @@ class LanguageLabDialog:
         ttk.Entry(row, textvariable=wav).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Choose 16 kHz WAV", command=lambda: wav.set(filedialog.askopenfilename(filetypes=[("WAV audio", "*.wav")]))).pack(side="left", padx=6)
         def transcribe():
-            from language_runtime import IndicConformerRuntime
-            lang = language.get()
-            path = wav.get()
-            if not path: raise ValueError("Choose a WAV recording first.")
-            return IndicConformerRuntime(lang).transcribe_wav(path)
-        ttk.Button(page, text="TRANSCRIBE OFFLINE", command=lambda: self._run(transcribe, lambda value: (output.delete("1.0", "end"), output.insert("1.0", value)))).pack(anchor="w", pady=6)
+            lang, path = language.get(), wav.get()
+            if not path:
+                self.status.set("Choose a WAV recording first.")
+                return
+            def task():
+                from language_runtime import IndicConformerRuntime
+                return IndicConformerRuntime(lang).transcribe_wav(path)
+            self._run(task, lambda value: (output.delete("1.0", "end"), output.insert("1.0", value)))
+        ttk.Button(page, text="TRANSCRIBE OFFLINE", command=transcribe).pack(anchor="w", pady=6)
         output.pack(fill="both", expand=True, pady=8)
 
     def _build_translation(self, tabs):
@@ -68,12 +71,21 @@ class LanguageLabDialog:
         incoming = tk.Text(page, height=8, wrap="word"); incoming.pack(fill="both", expand=True, pady=6)
         outgoing = tk.Text(page, height=8, wrap="word"); outgoing.pack(fill="both", expand=True, pady=6)
         def translate():
-            from language_runtime import IndicTrans2Runtime
+            source_code, target_code = source.get(), target.get()
+            text_value = incoming.get("1.0", "end").strip()
             import os
             model_dir = os.environ.get("SHRADDHA_TRANSLATION_MODEL_DIR", "").strip()
-            if not model_dir: raise ValueError("Set SHRADDHA_TRANSLATION_MODEL_DIR to a local IndicTrans2 checkpoint.")
-            return IndicTrans2Runtime(model_dir).translate(incoming.get("1.0", "end").strip(), source.get(), target.get())
-        ttk.Button(page, text="TRANSLATE OFFLINE", command=lambda: self._run(translate, lambda value: (outgoing.delete("1.0", "end"), outgoing.insert("1.0", value)))).pack(anchor="w", pady=6)
+            if not model_dir:
+                self.status.set("Set SHRADDHA_TRANSLATION_MODEL_DIR to a local IndicTrans2 checkpoint.")
+                return
+            if not text_value:
+                self.status.set("Enter text to translate.")
+                return
+            def task():
+                from language_runtime import IndicTrans2Runtime
+                return IndicTrans2Runtime(model_dir).translate(text_value, source_code, target_code)
+            self._run(task, lambda value: (outgoing.delete("1.0", "end"), outgoing.insert("1.0", value)))
+        ttk.Button(page, text="TRANSLATE OFFLINE", command=translate).pack(anchor="w", pady=6)
 
     def _build_tts(self, tabs):
         page = ttk.Frame(tabs, padding=14)
