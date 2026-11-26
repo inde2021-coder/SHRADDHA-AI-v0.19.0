@@ -82,7 +82,7 @@ class ActionTests(unittest.TestCase):
     def test_ocr_action_returns_local_reader_result(self):
         ok, message = execute_action(
             {"kind": "ocr"}, self.gui, self.clipboard, lambda _name: False,
-            ocr_reader=lambda: "OCR • Notepad\\nNamaste Shraddha"
+            ocr_reader=lambda: "OCR • Notepad\nNamaste Shraddha"
         )
         self.assertTrue(ok)
         self.assertIn("Namaste Shraddha", message)
@@ -130,7 +130,7 @@ class ActionTests(unittest.TestCase):
         from pc_companion.actions import read_user_text_file
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "note.txt").write_text("नमस्ते Shraddha\\nOTP: 123456\\n654321\\nInvoice total 42", encoding="utf-8")
+            (root / "note.txt").write_text("नमस्ते Shraddha\nOTP: 123456\n654321\nInvoice total 42", encoding="utf-8")
             (root / "image.png").write_bytes(b"not text")
             with patch("pc_companion.actions.Path.home", return_value=root):
                 preview = read_user_text_file("note.txt")
