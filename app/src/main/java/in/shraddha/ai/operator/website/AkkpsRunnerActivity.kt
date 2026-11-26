@@ -640,7 +640,7 @@ Return JSON only."""
             }.toList()
             val measurement = runCatching { AkkpsBoundaryGeometry.measure(points) }.getOrNull()
             if (measurement == null) {
-                status.text = "कम-से-कम 3 अलग सही मैप पॉइंट लगाएँ; क्षेत्रफल नहीं निकाला गया।"
+                status.text = "सत्यापित AI satellite coordinates उपलब्ध नहीं हैं; क्षेत्रफल नहीं निकाला गया।"
             } else {
                 status.text = String.format(java.util.Locale.ROOT,
                     "बाउंड्री: %.2f m² • %.4f hectare • %.4f acre. पुष्टि के बाद ही AKKPS में सेव करें।",
