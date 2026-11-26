@@ -1,7 +1,7 @@
 # Shraddha AI — Five-language ASR, TTS and Translation Model Audit
 
-Audit date: 2026-11-26  
-Scope: Hindi, English, Sanskrit, Marathi and Pawari  
+Audit date: 2026-11-26
+Scope: Hindi, English, Sanskrit, Marathi and Pawari
 Result: language selection is now explicit, but none of the candidate offline speech/translation weights is integrated into the Android runtime yet. Do not present the following candidate models as already working in Shraddha.
 
 ## Current application reality
