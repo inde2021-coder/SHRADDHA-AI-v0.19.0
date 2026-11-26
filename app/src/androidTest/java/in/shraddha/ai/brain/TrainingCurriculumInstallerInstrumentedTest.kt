@@ -34,7 +34,7 @@ class TrainingCurriculumInstallerInstrumentedTest {
         val gitaHits = store.search("Bhagavad Gita shloka mantra Sanskrit", limit = 8).getOrThrow()
         val businessHits = store.search("cashbook receivables stock ledger business", limit = 8).getOrThrow()
         assertTrue("Baby-care lesson should be found locally", babyHits.any { it.documentId == "curriculum_baby_care_0_2_v1" })
-        assertTrue("Gita lesson should be found locally", gitaHits.any { it.documentId == "curriculum_gita_shloka_mantra_katha_v1" })
+        assertTrue("Gita corpus should be found locally", gitaHits.any { it.documentId.startsWith("curriculum_gita_chapter_") || it.documentId == "curriculum_gita_shloka_mantra_katha_v1" })
         assertTrue("Practical business lesson should be found locally", businessHits.any { it.documentId == "curriculum_advanced_practical_skills_v1" })
     }
 
