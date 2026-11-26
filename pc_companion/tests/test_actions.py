@@ -138,6 +138,19 @@ class ActionTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "text files"):
                     read_user_text_file("image.png")
 
+    def test_remote_file_open_rejects_executable_extensions(self):
+        import tempfile
+        from pathlib import Path
+        from pc_companion.actions import open_user_path
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "report.pdf").write_bytes(b"%PDF")
+            (root / "payload.exe").write_bytes(b"MZ")
+            with patch("pc_companion.actions.Path.home", return_value=root), patch("pc_companion.actions.os.startfile", create=True) as startfile:
+                with self.assertRaisesRegex(RuntimeError, "file type"):
+                    open_user_path("payload.exe")
+                startfile.assert_not_called()
+
     def test_ocr_language_selection_falls_back_to_installed_packs(self):
         from pc_companion.actions import select_ocr_languages
         self.assertEqual(select_ocr_languages(["eng", "hin"]), (["eng", "hin"], []))
