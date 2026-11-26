@@ -128,6 +128,8 @@ object GeminiTextClient {
         if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
             return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
         }
+        runCatching { `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, "GEMINI") }
+            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         if (apiKey.isBlank()) {
             return ChatReplyResult.Error("Gemini API key is missing. Please add it in Settings.")
         }
@@ -221,6 +223,11 @@ object GeminiTextClient {
                             val input = metadata.optLong("promptTokenCount", -1L)
                             val output = metadata.optLong("candidatesTokenCount", -1L)
                             if (input >= 0L && output >= 0L) ProviderTokenUsage("GEMINI", modelName.removePrefix("models/"), input, output) else null
+                        }
+                        if (usage == null) {
+                            `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, "GEMINI", modelName.removePrefix("models/"))
+                        } else {
+                            `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, usage)
                         }
                         return ChatReplyResult.Success(text, usage)
                     }
