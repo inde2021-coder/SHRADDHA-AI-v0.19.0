@@ -238,13 +238,21 @@ def save_completed_transfer_record(state_path, record):
             current = {}
     except (OSError, ValueError):
         current = {}
+    current = {
+        key: value for key, value in current.items()
+        if isinstance(key, str) and isinstance(value, dict) and
+        type(value.get("completedAt")) is int
+    }
+    completed_at = record.get("completedAt") or int(time.time())
+    if type(completed_at) is not int:
+        raise ValueError("Invalid completion timestamp.")
     current[transfer_id] = {
         "peer": peer, "transferId": transfer_id, "path": str(destination),
         "partPath": str(part_path), "size": size, "sha256": digest,
-        "completedAt": int(record.get("completedAt") or time.time())
+        "completedAt": completed_at
     }
     # Keep a bounded, recent receipt ledger; receipts are idempotent ACK recovery.
-    current = dict(sorted(current.items(), key=lambda item: item[1].get("completedAt", 0))[-128:])
+    current = dict(sorted(current.items(), key=lambda item: item[1]["completedAt"])[-128:])
     temp = target.with_suffix(".tmp")
     try:
         with temp.open("w", encoding="utf-8") as output:
@@ -278,7 +286,9 @@ def load_completed_transfer_records(state_path, max_age_seconds=30 * 24 * 60 * 6
         try:
             if (not isinstance(item, dict) or item.get("transferId") != transfer_id or
                     not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", transfer_id) or
-                    not isinstance(item.get("peer"), str) or not item["peer"] or
+                    not isinstance(item.get("peer"), str) or not item["peer"] or len(item["peer"]) > 128 or
+                    not isinstance(item.get("path"), str) or not 1 <= len(item["path"]) <= 4096 or
+                    not isinstance(item.get("partPath"), str) or not 1 <= len(item["partPath"]) <= 4096 or
                     type(item.get("size")) is not int or
                     not isinstance(item.get("sha256"), str) or
                     not re.fullmatch(r"[a-f0-9]{64}", item["sha256"]) or
