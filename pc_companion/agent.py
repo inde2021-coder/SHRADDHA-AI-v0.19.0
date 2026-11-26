@@ -113,6 +113,7 @@ class PcCompanionApp:
         self.ws_thread = None
         self.send_lock = threading.Lock()
         self.screen_event = threading.Event()
+        self.screen_target_peer = None
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
         self.control_grant_peer = None
@@ -209,7 +210,7 @@ class PcCompanionApp:
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
-        ttk.Checkbutton(frame, text="Share this PC screen with paired devices",
+        ttk.Checkbutton(frame, text="Share this PC screen with the selected verified Android device",
                         variable=self.screen_var, command=self._publish_permissions).pack(anchor="w", pady=4)
         monitor_row = ttk.Frame(frame)
         monitor_row.pack(fill="x", pady=(2, 6))
@@ -219,7 +220,7 @@ class PcCompanionApp:
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Label(frame, text="CONTROL PAIRED ANDROID").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_target_var).pack(fill="x", pady=3)
-        ttk.Label(frame, text="Android device ID • approve control on your phone").pack(anchor="w")
+        ttk.Label(frame, text="Verified Android device ID • screen sharing and remote control target").pack(anchor="w")
         ttk.Entry(frame, textvariable=self.remote_value_var).pack(fill="x", pady=3)
         ttk.Label(frame, text="Type a command: home, back, open Settings, scroll down, type Hello").pack(anchor="w")
         ttk.Button(frame, text="Request Phone Control", command=self.request_phone_control).pack(anchor="w", pady=3)
@@ -517,8 +518,17 @@ class PcCompanionApp:
             self.control_grant_until = 0
             self.control_grant_peer = None
         if screen:
-            self.screen_event.set()
+            target = self.remote_target_var.get().strip()
+            if not target or not self.is_e2e_trusted(target):
+                screen = False
+                self.screen_var.set(False)
+                self.screen_target_peer = None
+                self.status_var.set("Screen sharing blocked: enter and verify one Android device ID first.")
+            else:
+                self.screen_target_peer = target
+                self.screen_event.set()
         else:
+            self.screen_target_peer = None
             self.screen_event.clear()
         self._send_json({
             "type": "permission_update",
@@ -533,6 +543,15 @@ class PcCompanionApp:
                     self._schedule_reconnect()
                 elif kind == "status":
                     self.status_var.set(payload)
+                    if str(payload).startswith(("Disconnected", "Relay error", "Pairing failed")):
+                        self.remote_var.set(False)
+                        self.screen_var.set(False)
+                        self.screen_event.clear()
+                        self.screen_target_peer = None
+                        self.control_grant_until = 0
+                        self.control_grant_peer = None
+                        self.phone_control_grant_until = 0
+                        self.phone_control_peer = None
                 elif kind == "credential_rejected":
                     device_id = str(self.config.get("deviceId", ""))
                     if device_id:
@@ -670,6 +689,11 @@ class PcCompanionApp:
                     self.phone_control_grant_until = 0
                 self.control_grant_until = 0
                 self.control_grant_peer = None
+                if peer_id == self.screen_target_peer:
+                    self.screen_event.clear()
+                    self.screen_var.set(False)
+                    self.screen_target_peer = None
+                    self._publish_permissions()
             elif msg.get("online") and peer_id:
                 self._send_e2e_key_offer(peer_id)
             self.status_var.set(f"{msg.get('name', 'Device')}: {'online' if msg.get('online') else 'offline'}")
@@ -1613,7 +1637,8 @@ class PcCompanionApp:
                         with self.e2e_lock:
                             targets = [
                                 (peer_id, state) for peer_id, state in self.peer_keys.items()
-                                if state["local_confirmed"] and state["remote_confirmed"]
+                                if peer_id == self.screen_target_peer and
+                                state["local_confirmed"] and state["remote_confirmed"]
                             ]
                         for peer_id, state in targets:
                             target_bytes = peer_id.encode("utf-8")
@@ -1688,6 +1713,7 @@ class PcCompanionApp:
         self.screen_event.clear()
         self.remote_var.set(False)
         self.screen_var.set(False)
+        self.screen_target_peer = None
         self.control_grant_until = 0
         self.control_grant_peer = None
         self.phone_control_grant_until = 0
