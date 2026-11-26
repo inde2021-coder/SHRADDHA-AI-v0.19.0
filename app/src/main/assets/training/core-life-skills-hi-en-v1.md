@@ -140,3 +140,81 @@ For every lesson store:
 
 ## Source policy
 Prefer official and primary sources: NCERT/DIKSHA/Ministry of Education; WHO/UNICEF/MoHFW/NHM for health education; RBI/NPCI/SEBI/official banks for financial safety; ICAR/KVK/state agriculture universities for agriculture; CERT-In and official platform documentation for cybersecurity. Every changing claim must have a source date and expiry/recheck policy.
+
+## Expanded subject lesson pathways (version 1.1)
+
+The following units expand the starter examples into teachable pathways. They are authored curriculum outlines, not expert-certified advice. Every unit must be localised, source-checked and signed off by the reviewer role in the review register before it is advertised as specialist-approved.
+
+### Domain 1 — Human behaviour and everyday interaction
+- **1.3 Clear requests:** use context + need + specific request; practise turning “तुम कभी मदद नहीं करते” into a specific, respectful request.
+- **1.4 Listening and recall:** reflect the speaker's point, ask one clarifying question, summarise without adding assumptions; assess with a short role-play.
+- **1.5 Boundaries and consent:** distinguish preference, request and permission; practise accepting “no” without pressure.
+- **1.6 Teamwork:** define shared goal, roles, hand-off and check-in; assess whether every person knows their next action.
+- **1.7 Digital communication:** verify recipient, tone, attachments and privacy before sending; require explicit preview for external messages.
+
+### Domain 2 — General knowledge and education
+- **2.3 Scientific observation:** record what was seen, when and under what conditions; separate observation from explanation.
+- **2.4 Source literacy:** compare primary, official and secondary sources; record author, date, evidence and conflicts.
+- **2.5 Numeracy in daily life:** practise units, estimation, percentages and checking calculations with a second method.
+- **2.6 Reading comprehension:** identify main idea, supporting evidence, unknown vocabulary and author's point of view.
+- **2.7 Revision and retrieval:** spaced recall, mixed practice and error review; never equate one score with intelligence.
+
+### Domain 3 — India, culture, civic and practical life
+- **3.3 Local government:** explain Gram Panchayat, municipality, district administration and state/central responsibilities; verify current local contacts from official sources.
+- **3.4 Public documents:** read form labels, match source documents, check spelling and preview all entries before submission.
+- **3.5 Rights and responsibilities:** distinguish constitutional text, law, policy and personal opinion; cite current primary sources for legal changes.
+- **3.6 Cultural literacy:** describe regional variation respectfully; do not present one custom as universal for every family or community.
+- **3.7 Public information verification:** identify official domain, notification date, eligibility and grievance route; do not invent a helpline or scheme.
+
+### Domain 4 — Personal assistant and organisation
+- **4.3 Time planning:** break a goal into task, duration, dependency, owner and evidence of completion.
+- **4.4 Calendar and reminders:** resolve date, time zone and recurrence; ask before creating or changing external events.
+- **4.5 Files and notes:** name, classify, search and back up files; preview before moving or deleting.
+- **4.6 Meeting and call notes:** capture decisions, owners and due dates; mark uncertain statements and obtain approval before sharing.
+- **4.7 Routine review:** daily/weekly checklists, carry-over tasks and reflection without guilt or manipulative streaks.
+
+### Domain 5 — Reasoning and decision support
+- **5.3 Probability basics:** explain chance with frequencies and sample size; distinguish possibility from likelihood.
+- **5.4 Bias and uncertainty:** look for missing evidence, selection effects and alternative explanations.
+- **5.5 Risk comparison:** describe likelihood, impact, reversibility and mitigation; do not fabricate numeric scores.
+- **5.6 Decision journal:** record goal, options, evidence, assumptions and later outcome; update beliefs when evidence changes.
+- **5.7 Explain a conclusion:** show claim, evidence, reasoning and uncertainty in language suitable to the learner.
+
+### Domain 6 — Technical, Android, Windows and computer literacy
+- **6.3 Device permissions:** explain what each permission unlocks, request only when needed and provide a settings path to revoke it.
+- **6.4 Account security:** use unique passwords/passkeys, multi-factor authentication and recovery planning; never ask for OTPs or secrets.
+- **6.5 Backups and restore:** choose important folders, encrypted backup, verify restore on a test copy and document recovery steps.
+- **6.6 Network basics:** explain Wi-Fi, mobile data, DNS, HTTPS and local network; troubleshoot one variable at a time.
+- **6.7 Safe automation:** preview target/action, require confirmation for sending/deleting/purchasing and verify the resulting state.
+
+### Domain 7 — Languages and speech
+- **7.3 Vocabulary in context:** teach word meaning, part of speech, register and a natural example; retain dialect labels.
+- **7.4 Grammar through examples:** explain one rule, show a correct/incorrect pair and invite a learner-generated sentence.
+- **7.5 Translation choices:** distinguish literal, natural and formal translation; preserve names, numbers and culturally specific terms.
+- **7.6 Pronunciation:** model sound and syllable only where a reviewed voice exists; do not shame accents.
+- **7.7 Pawari community learning:** collect contributor-approved phrases and audio with consent; preserve region and variant; never generate unverified forms.
+
+### Domain 8 — Professional productivity
+- **8.3 Customer service:** listen, confirm the issue, state options and next step; do not promise a refund or outcome without authority.
+- **8.4 Spreadsheet formulas:** teach SUM, COUNT, IF and lookup concepts with a copy of the data; verify formula ranges and units.
+- **8.5 Presentations:** define audience and one key message per slide; check facts, contrast, readability and citations.
+- **8.6 Project planning:** define scope, milestone, dependency, owner, risk and acceptance evidence.
+- **8.7 Quality assurance:** use a checklist, reproduce defects, record expected/actual results and retest after a fix.
+
+### Domain 9 — Safety, security and privacy
+- **9.3 Scam recognition:** check urgency, sender, domain and payment request using a trusted independent channel.
+- **9.4 Personal data minimisation:** collect only what the task needs; explain local/cloud storage and deletion/export.
+- **9.5 Home and workshop safety:** identify heat, electricity, chemicals, sharp tools and child hazards; stop and refer when risk exceeds basic competence.
+- **9.6 Emergency response literacy:** prioritise immediate local emergency services for severe danger; do not delay for AI analysis.
+- **9.7 Child-safe interaction:** no hidden recording, open public chat, coercive engagement or unsupervised purchases; guardian controls remain visible.
+
+### Domain 10 — Practical and professional skills
+- **10.7 Agriculture planning:** compare crop calendars, water availability, labour and input costs using local extension advice; do not invent a pesticide dose.
+- **10.8 Business cash flow:** separate sales, collections, receivables, payables and cash balance; reconcile source records.
+- **10.9 Inventory control:** record opening, receipt, dispatch, return, damage and authorised adjustment separately; preserve audit trail.
+- **10.10 Household finance:** budget essentials, savings, debt and emergency funds; avoid personalised investment orders or guaranteed returns.
+- **10.11 Food planning:** hygiene, safe storage, allergy awareness and recipe scaling; refer clinical diets and preservation risks to qualified guidance.
+- **10.12 Repair triage:** identify model, symptoms and safe external checks; stop before mains, swollen batteries or high-voltage repair.
+
+### Lesson completion rubric
+For every lesson, Shraddha should record only a skill-level evidence note: **introduced**, **practised with help**, or **explained independently**. A learner may repeat, skip or change language. Do not infer IQ, diagnosis, character or permanent ability from lesson performance.
