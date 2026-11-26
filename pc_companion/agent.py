@@ -1488,11 +1488,12 @@ class PcCompanionApp:
         if transfer["peer"] != peer_id:
             return
         raw_index = msg.get("index", -1)
-        if not isinstance(raw_index, int) or isinstance(raw_index, bool):
+        if type(raw_index) is not int or not 0 <= raw_index < transfer["chunks"]:
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "invalid_chunk_index"})
+            self.events.put(("status", "Rejected invalid incoming file chunk index."))
             return
         index = raw_index
-        if not 0 <= index < transfer["chunks"]:
-            return
         try:
             with self.e2e_lock:
                 state = self.peer_keys.get(peer_id)
@@ -1525,7 +1526,7 @@ class PcCompanionApp:
             if len(transfer["received"]) == transfer["chunks"]:
                 self._finalize_pc_incoming(transfer_id, transfer, peer_id)
         except TransferPersistenceError as exc:
-            self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
+            self.events.put(("status", f"Incoming file paused safely: {str(exc)[:140]}"))
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": False})
         except Exception as exc:
