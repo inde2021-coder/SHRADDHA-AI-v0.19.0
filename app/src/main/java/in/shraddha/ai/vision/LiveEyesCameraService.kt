@@ -22,6 +22,7 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.link.DeviceLinkManager
+import `in`.shraddha.ai.future.OnlineAiConsent
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -55,6 +56,13 @@ class LiveEyesCameraService : Service() {
         // permission is absent. Check before startForeground so revocation fails closed
         // without crashing the process or briefly advertising an active camera session.
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            publishState(STATE_OFF)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // Live Eyes sends camera frames to the configured cloud vision gateway.
+        // Keep this service off unless the user has explicitly enabled Online AI.
+        if (!OnlineAiConsent.isAllowed(this)) {
             publishState(STATE_OFF)
             stopSelf()
             return START_NOT_STICKY
@@ -154,6 +162,15 @@ class LiveEyesCameraService : Service() {
                     if (!AmbientIntelligencePolicy.shouldAnalyzeCloudFrame(now, lastCloudAnalysisAt)) {
                         jpeg.fill(0)
                         requestInFlight.set(false)
+                        return@setOnImageAvailableListener
+                    }
+                    if (!OnlineAiConsent.isAllowed(this)) {
+                        jpeg.fill(0)
+                        requestInFlight.set(false)
+                        stopped = true
+                        publishState(STATE_OFF)
+                        closeCamera()
+                        stopSelf()
                         return@setOnImageAvailableListener
                     }
                     lastCloudAnalysisAt = now
