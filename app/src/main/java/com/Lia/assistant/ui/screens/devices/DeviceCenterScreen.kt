@@ -188,6 +188,7 @@ fun DeviceCenterScreen(navController: NavController) {
                                         outgoingFile = withContext(Dispatchers.IO) { DeviceFileTransferSender.updateProgress(item, outgoingProgress) }
                                     }
                                     incomingTransferStatus = "सभी chunks भेजे गए; PC verification की प्रतीक्षा…"
+                                    outgoingSending = false
                                 }
                             } else if (message.optBoolean("complete") && message.optBoolean("ok")) {
                                 DeviceFileTransferSender.cleanup(item)
@@ -217,6 +218,7 @@ fun DeviceCenterScreen(navController: NavController) {
                                     outgoingFile = withContext(Dispatchers.IO) { DeviceFileTransferSender.updateProgress(item, maxOf(item.sentChunks, chunkIndex + 1)) }
                                 }
                                 incomingTransferStatus = "Missing chunks resent; waiting for PC verification…"
+                                outgoingSending = false
                             }
                         }
                     }
