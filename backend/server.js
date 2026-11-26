@@ -3,7 +3,7 @@ import { extractBearerToken } from './auth-header.js';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validEncryptedTransferChunkEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer, validFileTransferManifest } from './relay-policy.js';
+import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer, validFileTransferManifest, resolveEncryptedFileTransferResume } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1175,26 +1175,10 @@ wss.on('connection', (ws, ctx) => {
           if (ok) transfer.chunks.set(index, true);
         }
       } else if (messageKind === 'file_transfer_resume') {
-        const chunkCount = msg.chunkCount;
-        const missing = msg.missingIndexes;
-        const localTransfer = device.incomingTransfers?.get(transferId);
-        if (localTransfer && localTransfer.fromDeviceId === targetId) {
-          // Receiver -> sender: this bitmap is authoritative because it came
-          // from the receiver's persisted file state.
-          if (localTransfer.expiresAt < Date.now() ||
-              !Number.isSafeInteger(chunkCount) || chunkCount !== localTransfer.chunkCount ||
-              !validMissingTransferIndexes(missing, chunkCount) ||
-              !recordPersistedFileTransferChunks(localTransfer, missing)) return;
-        } else {
-          // Sender -> receiver: empty bitmap is a resume probe. The receiver
-          // replies with its actual missing indexes; never let a sender invent
-          // or overwrite the receiver's persisted bitmap.
-          const remoteTransfer = target.incomingTransfers?.get(transferId);
-          if (!remoteTransfer || remoteTransfer.fromDeviceId !== deviceId ||
-              remoteTransfer.expiresAt < Date.now() ||
-              !Number.isSafeInteger(chunkCount) || chunkCount !== remoteTransfer.chunkCount ||
-              !Array.isArray(missing) || missing.length !== 0) return;
-        }
+        const resumeRole = resolveEncryptedFileTransferResume(
+          device, target, deviceId, targetId, transferId, msg.chunkCount, msg.missingIndexes, Date.now()
+        );
+        if (!resumeRole) return;
       } else if (messageKind === 'file_transfer_cancel') {
         const role = resolveFileTransferCancellation(device, target, deviceId, targetId, transferId, Date.now());
         if (!role) return;
