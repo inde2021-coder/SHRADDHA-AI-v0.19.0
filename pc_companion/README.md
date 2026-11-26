@@ -66,3 +66,9 @@ The Windows workflow is a manual packaging workflow; it does not run the deferre
 ### Remote file open
 
 From the paired Android Device Center, enter a relative path under the Windows user folder and request **Open file / folder on PC**. The Windows companion shows the exact path in its per-action local approval dialog before opening it. Hidden and credential folders, parent traversal, symbolic links, executable/script/shortcut/installer formats, unknown extensions, and files larger than 100 MB are blocked. Supported document and image formats are opened with the user's normal Windows default application. This action does not provide shell execution or delete/overwrite capability.
+
+
+### Incoming file safety
+- Received files are capped at 100 MB and verified against the advertised SHA-256 before publication.
+- Partial-transfer files are created with exclusive-create semantics; an existing `.shraddha-part` is never truncated.
+- Completed files are published with an atomic no-overwrite operation. If the destination name already exists or the filesystem cannot safely publish the file, the transfer fails closed rather than replacing user data.
