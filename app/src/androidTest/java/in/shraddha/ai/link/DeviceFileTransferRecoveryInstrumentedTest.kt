@@ -76,7 +76,14 @@ class DeviceFileTransferRecoveryInstrumentedTest {
             val receipts = DeviceFileTransferReceiver.completedReceipts(context, peerId)
             assertEquals(1, receipts.count { it.transferId == transferId })
             assertTrue(DeviceFileTransferReceiver.acknowledgeReceipt(context, peerId, transferId))
-            assertTrue(DeviceFileTransferReceiver.completedReceipts(context, peerId).none { it.transferId == transferId })
+            // Keep the receipt so a relay-dropped ACK can be repeated after another reconnect.
+            assertEquals(1, DeviceFileTransferReceiver.completedReceipts(context, peerId)
+                .count { it.transferId == transferId })
+            val duplicate = DeviceFileTransferReceiver.receiveChunk(context, peerId,
+                JSONObject().put("transferId", transferId).put("index", 0)
+                    .put("payload", Base64.encodeToString(payload, Base64.NO_WRAP)))
+            assertTrue(duplicate.ok)
+            assertTrue(duplicate.complete)
         } finally {
             DeviceFileTransferReceiver.reject(transferId)
             savedFile?.delete()
