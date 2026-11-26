@@ -3,7 +3,7 @@ import { extractBearerToken } from './auth-header.js';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { validateSharedFileEnvelope, matchesOneTimeShareGrant, isAllowedSharedPayloadType, isAllowedShareCategory, validEncryptedTransferChunkEnvelope } from './relay-file-validation.js';
 import { WebSocketServer, WebSocket } from 'ws';
-import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer } from './relay-policy.js';
+import { canShareVisualFrame, resolveControlApproval, consumeVisualFrameBudget, revokePairedDevice, ALLOWED_REMOTE_ACTION_KINDS, canUseRemoteControl, validMissingTransferIndexes, pruneExpiredDeviceState, resolveFileTransferCancellation, canQueueRelayPayload, canCompleteFileTransfer, recordPersistedFileTransferChunks, canStartFileTransfer, validFileTransferManifest } from './relay-policy.js';
 import { buildEphemeralTokenRequest } from './gemini-live-token.js';
 import { synthesizeShraddhaPcm } from './voice-synthesis.js';
 import { resolveProviderOrder, configuredProviderMap } from './provider-routing.js';
@@ -1115,9 +1115,10 @@ wss.on('connection', (ws, ctx) => {
       const messageKind = String(msg.messageKind || '');
       const nonce = String(msg.nonce || '');
       const ciphertext = String(msg.ciphertext || '');
-      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_chunk','clipboard_payload','data_share_payload','task_handoff','task_handoff_response'].includes(messageKind) ||
+      if (!target || targetId === deviceId || !['remote_action','remote_action_result','file_transfer_start','file_transfer_chunk','file_transfer_ack','file_transfer_resume','file_transfer_cancel','clipboard_payload','data_share_payload','task_handoff','task_handoff_response'].includes(messageKind) ||
           !/^[A-Za-z0-9+/]{16,24}={0,2}$/.test(nonce) || ciphertext.length < 22 || ciphertext.length > 3_400_000 ||
           !/^[A-Za-z0-9+/]+=*$/.test(ciphertext)) return;
+      const transferId = String(msg.transferId || '');
       if (messageKind === 'remote_action') {
         const actionId = String(msg.actionId || '');
         const actionKind = String(msg.actionKind || '');
@@ -1132,11 +1133,56 @@ wss.on('connection', (ws, ctx) => {
         if (!pending || pending.requesterId !== targetId || pending.expiresAt < Date.now() ||
             !canUseRemoteControl(session, targetId, deviceId, Date.now())) return;
         device.pendingRemoteActions.delete(String(msg.actionId));
+      } else if (messageKind === 'file_transfer_start') {
+        const sizeBytes = msg.sizeBytes;
+        const chunkCount = msg.chunkCount;
+        const sha256 = typeof msg.sha256 === 'string' ? msg.sha256.toLowerCase() : '';
+        const fileName = typeof msg.fileName === 'string'
+          ? msg.fileName.replace(/[\\/\\x00-\\x1f]/g, '_').slice(0, 120) : '';
+        if (!validFileTransferManifest(sizeBytes, chunkCount, sha256, transferId) || !fileName) return;
+        const existing = target.incomingTransfers.get(transferId);
+        if (existing) {
+          if (existing.fromDeviceId !== deviceId || existing.sizeBytes !== sizeBytes ||
+              existing.chunkCount !== chunkCount || existing.sha256 !== sha256 || existing.fileName !== fileName) return;
+        } else {
+          if (!canStartFileTransfer(target, transferId, 1)) return;
+          target.incomingTransfers.set(transferId, {
+            fromDeviceId: deviceId, fileName, sizeBytes, chunkCount, sha256,
+            chunks: new Map(), expiresAt: Date.now() + 30 * 60_000
+          });
+        }
       } else if (messageKind === 'file_transfer_chunk') {
-        const transfer = target.incomingTransfers?.get(String(msg.transferId || ''));
-        const index = Number(msg.index);
+        const transfer = target.incomingTransfers?.get(transferId);
+        const index = msg.index;
         if (!transfer || transfer.fromDeviceId !== deviceId || transfer.expiresAt < Date.now() ||
             !validEncryptedTransferChunkEnvelope(nonce, ciphertext, transfer.sizeBytes, transfer.chunkCount, index)) return;
+      } else if (messageKind === 'file_transfer_ack') {
+        const transfer = device.incomingTransfers?.get(transferId);
+        const index = msg.index;
+        const complete = msg.complete;
+        const ok = msg.ok;
+        if (!transfer || transfer.fromDeviceId !== targetId || transfer.expiresAt < Date.now() ||
+            !Number.isSafeInteger(index) || typeof ok !== 'boolean') return;
+        if (index === -1) {
+          if (complete === true && (!ok || !canCompleteFileTransfer(transfer, true))) return;
+          if (complete !== true && complete !== false) return;
+        } else {
+          if (index < 0 || index >= transfer.chunkCount || complete === true) return;
+          if (ok) transfer.chunks.set(index, true);
+        }
+      } else if (messageKind === 'file_transfer_resume') {
+        const transfer = device.incomingTransfers?.get(transferId);
+        const chunkCount = msg.chunkCount;
+        const missing = msg.missingIndexes;
+        if (!transfer || transfer.fromDeviceId !== targetId || transfer.expiresAt < Date.now() ||
+            !Number.isSafeInteger(chunkCount) || chunkCount !== transfer.chunkCount ||
+            !validMissingTransferIndexes(missing, chunkCount) ||
+            !recordPersistedFileTransferChunks(transfer, missing)) return;
+      } else if (messageKind === 'file_transfer_cancel') {
+        const role = resolveFileTransferCancellation(device, target, deviceId, targetId, transferId, Date.now());
+        if (!role) return;
+        if (role === 'sender') target.incomingTransfers.delete(transferId);
+        else device.incomingTransfers.delete(transferId);
       } else if (messageKind === 'clipboard_payload') {
         const category = 'clipboard';
         const grant = target.grants?.get(deviceId + ':' + category);
@@ -1163,9 +1209,16 @@ wss.on('connection', (ws, ctx) => {
         device.pendingTaskHandoffs.delete(requestId);
       }
       send(targetId, JSON.stringify({ type: 'e2e_message', fromDeviceId: deviceId, fromDeviceName: device.name, messageKind, actionId: String(msg.actionId || '').slice(0,64),
-        actionKind: String(msg.actionKind || '').slice(0,32), transferId: String(msg.transferId || '').slice(0,64),
-        category: String(msg.category || '').slice(0,32),
-        index: Number.isSafeInteger(Number(msg.index)) ? Number(msg.index) : -1, requestId: String(msg.requestId || '').slice(0,64), nonce, ciphertext }));
+        actionKind: String(msg.actionKind || '').slice(0,32), transferId: transferId.slice(0,64),
+        category: String(msg.category || '').slice(0,32), fileName: String(msg.fileName || '').slice(0,120),
+        sizeBytes: Number.isSafeInteger(msg.sizeBytes) ? msg.sizeBytes : 0,
+        chunkCount: Number.isSafeInteger(msg.chunkCount) ? msg.chunkCount : 0,
+        sha256: String(msg.sha256 || '').slice(0,64),
+        complete: msg.complete === true, ok: msg.ok === true,
+        missingIndexes: Array.isArray(msg.missingIndexes) ? msg.missingIndexes : [],
+        reason: String(msg.reason || '').slice(0,120),
+        index: Number.isSafeInteger(msg.index) ? msg.index : -1,
+        requestId: String(msg.requestId || '').slice(0,64), nonce, ciphertext }));
     } else if (msg.type === 'control_revoke') {
       const requestedId = String(msg.requesterDeviceId || '');
       const revokeIds = requestedId ? [requestedId] : [...new Set([
