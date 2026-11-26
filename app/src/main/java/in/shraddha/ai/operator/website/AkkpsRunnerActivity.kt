@@ -641,6 +641,15 @@ Return JSON only."""
               // Remove only our own temporary overlay, never an existing parcel boundary.
               const oldLayer=window.__shraddhaBoundaryLayer;
               if(oldLayer){try{if(oldLayer.remove)oldLayer.remove();else if(oldLayer.setMap)oldLayer.setMap(null);}catch(_){}}
+              const oldMap=previous?.map;
+              const oldLayers=window.__shraddhaBoundaryLayerIds||[];
+              const oldSource=window.__shraddhaBoundarySourceId;
+              if(oldMap&&oldSource&&String(oldSource).startsWith('shraddha-draft-')){
+                try{for(const id of oldLayers){if(oldMap.getLayer?.(id))oldMap.removeLayer(id);}}catch(_){}
+                try{if(oldMap.getSource?.(oldSource))oldMap.removeSource(oldSource);}catch(_){}
+              }
+              window.__shraddhaBoundaryLayerIds=[];
+              window.__shraddhaBoundarySourceId=null;
               window.__shraddhaBoundaryPoints=[];
               window.__shraddhaBoundaryLayer=null;
               const uid='shraddha-draft-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
@@ -721,6 +730,21 @@ Return JSON only."""
               const layer=window.__shraddhaBoundaryLayer;
               if(layer&&layer.remove)layer.remove();
               if(layer&&layer.setMap)layer.setMap(null);
+              const listener=window.__shraddhaBoundaryListener;
+              if(listener?.map&&listener?.handler){
+                try{
+                  if(listener.engine==='leaflet'||listener.engine==='mapbox-gl')listener.map.off('click',listener.handler);
+                  else if(listener.subscription)listener.subscription.remove();
+                }catch(_){}
+              }
+              const map=listener?.map,source=window.__shraddhaBoundarySourceId;
+              if(map&&source&&String(source).startsWith('shraddha-draft-')){
+                for(const id of (window.__shraddhaBoundaryLayerIds||[])){try{if(map.getLayer?.(id))map.removeLayer(id);}catch(_){}}
+                try{if(map.getSource?.(source))map.removeSource(source);}catch(_){}
+              }
+              window.__shraddhaBoundaryListener=null;
+              window.__shraddhaBoundaryLayerIds=[];
+              window.__shraddhaBoundarySourceId=null;
               window.__shraddhaBoundaryLayer=null;
               window.__shraddhaBoundaryPoints=[];
               return true;
