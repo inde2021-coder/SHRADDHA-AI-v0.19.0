@@ -117,6 +117,7 @@ fun PermissionsScreen(
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
             }
             "notification_listener" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            "write_settings" -> Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
             "app" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
             else -> return
         }
@@ -292,6 +293,7 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(special("accessibility", "Shraddha Device Control", "मुख्य on-screen control service. $accessibilityHelp", shraddhaAccessibility, "accessibility"))
         add(special("screen_reading", "Screen reading & capture", if (Build.VERSION.SDK_INT >= 30) "Android 11+ पर Shraddha Device Control चालू होने पर उपलब्ध; secure screens Android रोक सकता है" else "इस Android version पर Accessibility screenshot API समर्थित नहीं है", Build.VERSION.SDK_INT >= 30 && shraddhaAccessibility, "accessibility"))
         add(special("notification_listener", "Notification access", "Reads notifications only after special access is enabled", listener, "notification_listener"))
+        add(special("write_settings", "Modify system settings", "Required only for direct brightness changes; Android will ask you to approve this special access", Settings.System.canWrite(context), "write_settings"))
         add(declared(Manifest.permission.FOREGROUND_SERVICE, "Foreground services", "Android service runtime permission", Build.VERSION.SDK_INT >= 28))
         add(declared("android.permission.FOREGROUND_SERVICE_MICROPHONE", "Microphone foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
         add(declared("android.permission.FOREGROUND_SERVICE_CAMERA", "Camera foreground service", "Android 14+ service type permission", Build.VERSION.SDK_INT >= 34))
