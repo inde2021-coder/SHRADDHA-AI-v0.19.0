@@ -32,7 +32,7 @@ from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
 from command_parser import parse_android_command
-from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
+from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, publish_file_without_overwrite, TransferPersistenceError
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
 CONFIG_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "ShraddhaAI" / "pc-companion.json"
@@ -1077,8 +1077,20 @@ class PcCompanionApp:
             "peer": peer_id, "path": destination, "size": size, "chunks": chunks,
             "sha256": digest, "received": set()
         }
-        with open(destination + ".shraddha-part", "wb") as output:
-            output.truncate(size)
+        part_path = Path(destination + ".shraddha-part")
+        try:
+            # Never truncate a pre-existing partial file: it may belong to an
+            # interrupted transfer or contain unrelated user data.
+            descriptor = os.open(str(part_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(descriptor, "wb") as output:
+                output.truncate(size)
+                output.flush()
+                os.fsync(output.fileno())
+        except FileExistsError:
+            self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
+                             "transferId": transfer_id, "reason": "partial_destination_exists"})
+            self.status_var.set("Transfer blocked: a partial file already exists at the selected destination.")
+            return
         if not self._persist_pc_incoming():
             self.pc_incoming.pop(transfer_id, None)
             Path(destination + ".shraddha-part").unlink(missing_ok=True)
@@ -1130,7 +1142,12 @@ class PcCompanionApp:
                 digest = sha256_file(transfer["path"] + ".shraddha-part")
                 if digest != transfer["sha256"]:
                     raise ValueError("SHA-256 mismatch; refusing to save corrupted file")
-                os.replace(transfer["path"] + ".shraddha-part", transfer["path"])
+                # Publish atomically without replacing an existing destination.
+                # A hard link is same-volume and fails if the chosen name appeared
+                # after the save dialog; never fall back to overwrite semantics.
+                publish_file_without_overwrite(
+                    Path(transfer["path"] + ".shraddha-part"), Path(transfer["path"])
+                )
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
                 self.pc_incoming.pop(transfer_id, None)
