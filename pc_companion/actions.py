@@ -204,11 +204,14 @@ def list_user_files(relative_path=""):
         if item.name.startswith(".") or item.is_symlink() or item.name.casefold() in _SENSITIVE_PATH_PARTS:
             continue
         try:
+            resolved_item = item.resolve(strict=True)
+            resolved_item.relative_to(root)
             if item.is_dir():
                 entries.append({"name": item.name[:160], "type": "folder"})
             elif item.is_file():
                 entries.append({"name": item.name[:160], "type": "file", "sizeBytes": item.stat().st_size})
-        except OSError:
+        except (OSError, ValueError):
+            # Also rejects Windows junctions/reparse points that resolve outside home.
             continue
     return {"folder": str(folder.relative_to(root)).replace("\\", "/") or ".", "entries": entries, "truncated": len(children) > len(entries)}
 
@@ -226,6 +229,7 @@ def search_user_files(query, relative_path="", max_results=40, max_directories=5
     pending = [(folder, 0)]
     results = []
     visited_dirs = 0
+    visited_paths = {str(folder.resolve(strict=True)).casefold()}
     visited_files = 0
     truncated = False
     while pending:
@@ -245,19 +249,22 @@ def search_user_files(query, relative_path="", max_results=40, max_directories=5
             if item.is_symlink() or item.name.startswith(".") or item.name.casefold() in _SENSITIVE_PATH_PARTS:
                 continue
             try:
-                relative = item.relative_to(root)
+                resolved_item = item.resolve(strict=True)
+                relative = resolved_item.relative_to(root)
                 if any(part.casefold() in _SENSITIVE_PATH_PARTS or part.startswith(".") for part in relative.parts):
                     continue
                 if item.is_dir():
-                    if depth < 5:
-                        pending.append((item, depth + 1))
+                    resolved_key = str(resolved_item).casefold()
+                    if depth < 5 and resolved_key not in visited_paths:
+                        visited_paths.add(resolved_key)
+                        pending.append((resolved_item, depth + 1))
                     continue
                 if not item.is_file():
                     continue
                 visited_files += 1
                 if needle in item.name.casefold():
                     results.append({"name": item.name[:160], "path": str(relative).replace("\\", "/")[:500], "sizeBytes": item.stat().st_size})
-            except OSError:
+            except (OSError, ValueError):
                 continue
     return {"query": query.strip(), "location": str(folder.relative_to(root)).replace("\\", "/") or ".", "matches": results, "scannedFiles": visited_files, "truncated": truncated}
 
