@@ -1020,7 +1020,7 @@ class PcCompanionApp:
             temp.replace(path)
             return True
         except Exception as exc:
-            self.status_var.set(f"Could not save transfer recovery state: {str(exc)[:100]}")
+            self.events.put(("status", f"Could not save transfer recovery state: {str(exc)[:100]}"))
             return False
 
     def _pc_completed_state_path(self):
@@ -1035,7 +1035,7 @@ class PcCompanionApp:
             self.pc_completed[record["transferId"]] = dict(record)
             return True
         except Exception as exc:
-            self.status_var.set(f"Could not persist completed-transfer receipt: {str(exc)[:120]}")
+            self.events.put(("status", f"Could not persist completed-transfer receipt: {str(exc)[:120]}"))
             return False
 
     def _finalize_pc_incoming(self, transfer_id, transfer, peer_id):
@@ -1053,7 +1053,7 @@ class PcCompanionApp:
                 part_path.unlink(missing_ok=True)
                 self.pc_incoming.pop(transfer_id, None)
                 self._persist_pc_incoming()
-                self.status_var.set("Incoming file SHA-256 mismatch; corrupted partial data discarded.")
+                self.events.put(("status", "Incoming file SHA-256 mismatch; corrupted partial data discarded."))
                 return False
             completion_record = {
                 "peer": peer_id, "transferId": transfer_id, "path": transfer["path"],
@@ -1070,11 +1070,11 @@ class PcCompanionApp:
             self._persist_pc_incoming()
             sent = self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                     "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
-            self.status_var.set("Incoming file saved and SHA-256 verified." if sent else
-                                "Incoming file saved and verified; completion ACK will be retried after reconnect.")
+            self.events.put(("status", "Incoming file saved and SHA-256 verified." if sent else
+                             "Incoming file saved and verified; completion ACK will be retried after reconnect."))
             return True
         except TransferPersistenceError as exc:
-            self.status_var.set(f"Incoming file paused safely: {str(exc)[:140]}")
+            self.events.put(("status", f"Incoming file paused safely: {str(exc)[:140]}"))
             return False
         except Exception as exc:
             destination = Path(transfer["path"])
@@ -1090,10 +1090,10 @@ class PcCompanionApp:
                 self._persist_pc_incoming()
                 self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                                  "transferId": transfer_id, "index": -1, "complete": True, "ok": True})
-                self.status_var.set("Previously published file verified; completion ACK recovered.")
+                self.events.put(("status", "Previously published file verified; completion ACK recovered."))
                 return True
             self.pc_completed.pop(transfer_id, None)
-            self.status_var.set(f"Verified file could not be published safely: {str(exc)[:140]}")
+            self.events.put(("status", f"Verified file could not be published safely: {str(exc)[:140]}"))
             return False
 
     def _pc_outgoing_state_path(self):
@@ -1512,7 +1512,7 @@ class PcCompanionApp:
             self._send_json({"type": "file_transfer_ack", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "index": index, "complete": False, "ok": False})
         except Exception as exc:
-            self.status_var.set(f"Incoming file rejected: {str(exc)[:140]}")
+            self.events.put(("status", f"Incoming file rejected: {str(exc)[:140]}"))
             self._send_json({"type": "file_transfer_cancel", "targetDeviceId": peer_id,
                              "transferId": transfer_id, "reason": "integrity_or_protocol_error"})
             Path(transfer["path"] + ".shraddha-part").unlink(missing_ok=True)
