@@ -38,6 +38,29 @@ class TrainingCurriculumInstallerInstrumentedTest {
         assertTrue("Practical business lesson should be found locally", businessHits.any { it.documentId == "curriculum_advanced_practical_skills_v1" })
     }
 
+    @Test fun allSevenHundredGitaVersesHaveSequentialCanonicalReferences() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val expected = listOf(47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 34, 27, 20, 24, 28, 78)
+        var total = 0
+        expected.forEachIndexed { index, count ->
+            val chapter = index + 1
+            val path = "training/gita/chapter-%02d-700-v1.json".format(chapter)
+            val json = context.assets.open(path).bufferedReader().use { org.json.JSONObject(it.readText()) }
+            assertEquals(chapter, json.getInt("chapter"))
+            val verses = json.getJSONArray("verses")
+            assertEquals("Chapter $chapter count", count, verses.length())
+            for (i in 0 until verses.length()) {
+                val verse = verses.getJSONObject(i)
+                assertEquals("$chapter.${i + 1}", verse.getString("ref"))
+                assertTrue(verse.getString("sanskrit").isNotBlank())
+                assertTrue(verse.getString("transliteration").isNotBlank())
+                assertTrue(verse.getString("wordGloss").isNotBlank())
+            }
+            total += verses.length()
+        }
+        assertEquals(700, total)
+    }
+
     @Test fun installerIsIdempotentAfterFirstSuccessfulInstall() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         TrainingCurriculumInstaller.install(context).getOrThrow()
