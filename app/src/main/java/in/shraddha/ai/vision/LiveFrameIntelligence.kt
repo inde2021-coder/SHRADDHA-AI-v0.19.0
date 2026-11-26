@@ -39,7 +39,14 @@ object LiveFrameIntelligence {
     private val inFlight = AtomicBoolean(false)
 
     fun analyzeJpeg(jpeg: ByteArray, onResult: (Result<Observation>) -> Unit) {
-        if (jpeg.isEmpty() || jpeg.size > MAX_FRAME_BYTES || !inFlight.compareAndSet(false, true)) return
+        if (jpeg.isEmpty() || jpeg.size > MAX_FRAME_BYTES) return
+        val runtime = Runtime.getRuntime()
+        val pressure = RuntimePerformanceBudget.memoryPressure(runtime.totalMemory() - runtime.freeMemory(), runtime.maxMemory())
+        if (!RuntimePerformanceBudget.allowLocalInference(pressure)) {
+            onResult(Result.failure(IllegalStateException("On-device vision paused briefly to protect available memory.")))
+            return
+        }
+        if (!inFlight.compareAndSet(false, true)) return
         val frame = jpeg.copyOf()
         try {
             val image = InputImage.fromByteArray(frame, 0, frame.size, 0, ImageFormat.JPEG)
