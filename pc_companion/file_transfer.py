@@ -300,11 +300,16 @@ def load_completed_transfer_records(state_path, max_age_seconds=30 * 24 * 60 * 6
             if destination.is_symlink() or part_path.is_symlink():
                 continue
             candidate = destination if destination.is_file() else part_path
-            if not candidate.is_file() or candidate.stat().st_size != item["size"] or sha256_file(candidate) != item["sha256"]:
+            if not candidate.is_file() or candidate.stat().st_size != item["size"]:
                 continue
-            if candidate == part_path and not destination.exists():
-                publish_file_without_overwrite(part_path, destination)
-            if not destination.is_file() or destination.stat().st_size != item["size"] or sha256_file(destination) != item["sha256"]:
+            if candidate == part_path:
+                if sha256_file(part_path) != item["sha256"]:
+                    continue
+                if not destination.exists():
+                    publish_file_without_overwrite(part_path, destination)
+            # A destination receipt is written only after final SHA-256 verification;
+            # do not rehash up to 128 large user files on every PC startup.
+            if not destination.is_file() or destination.is_symlink() or destination.stat().st_size != item["size"]:
                 continue
             restored[transfer_id] = {
                 "peer": item["peer"], "transferId": transfer_id, "path": str(destination),
