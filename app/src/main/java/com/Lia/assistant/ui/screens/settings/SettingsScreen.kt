@@ -268,7 +268,7 @@ private fun SettingsScreenContent(
                     icon = Icons.Default.Security,
                     onClick = {
                         val current = VoiceGatewaySettings.get(context)
-                        gatewayUrlInput = current.baseUrl
+                        gatewayUrlInput = current.baseUrl.ifBlank { VoiceGatewaySettings.DEFAULT_BASE_URL }
                         gatewayTokenInput = current.gatewayToken
                         gatewaySaveError = current.readError
                         showGatewayDialog = true
@@ -584,11 +584,11 @@ private fun SettingsScreenContent(
     if (showGatewayDialog) {
         AlertDialog(
             onDismissRequest = { showGatewayDialog = false },
-            title = { Text(text = "Secure Gemini Live Backend", color = colors.textPrimary) },
+            title = { Text(text = "Secure Voice Backend", color = colors.textPrimary) },
             text = {
                 Column {
                     Text(
-                        text = "Voice sessions request a one-use, short-lived Gemini token from your HTTPS backend. Keep GATEWAY_TOKEN private. The permanent Gemini API key stays on the server.",
+                        text = "The HTTPS backend URL is prefilled. Enter the same GATEWAY_TOKEN configured on the server, then tap Test Backend. Gemini Live voice requires GEMINI_API_KEY on the server; Groq text chat alone does not provide the live voice session. Keep all server secrets private.",
                         fontSize = 13.sp,
                         color = colors.textSecondary
                     )
