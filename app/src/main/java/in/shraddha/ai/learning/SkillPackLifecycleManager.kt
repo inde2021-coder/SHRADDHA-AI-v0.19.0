@@ -12,6 +12,8 @@ import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 import java.security.MessageDigest
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 
 /**
  * Quarantine-first, non-executable knowledge pack lifecycle.
@@ -170,28 +172,62 @@ class SkillPackLifecycleManager(context: Context) {
 
     /** Requires an explicit review and every deterministic gate; no downloaded code is executed. */
     @Synchronized
-    fun approveAndActivate(pack: StagedPack, approval: Approval, automaticLearningEnabled: Boolean): Boolean {
-        require(pack.file.parentFile?.canonicalFile == quarantine.canonicalFile && pack.file.isFile)
+    fun approveAndActivate(\n        pack: StagedPack,\n        approval: Approval,\n        automaticLearningEnabled: Boolean,\n        trustedPublishers: Map<String, TrustedPublisher> = emptyMap()\n    ): Boolean {
+        require(validId(pack.packId) && validVersion(pack.version))
+        require(pack.file.canonicalFile.parentFile == quarantine.canonicalFile && pack.file.isFile)
+        require(pack.file.name == "${pack.packId}-${pack.version}.pack" ||
+            pack.file.name == "${pack.packId}-${pack.version}.import") {
+            "Staged pack path does not match its declared identity."
+        }
         require(approval.userReviewed && approval.contentSafetyPassed && approval.factualValidationPassed &&
             approval.regressionTestsPassed && approval.duplicateCheckPassed) {
             "Pack remains quarantined until human review and every independent validation gate passes."
         }
-        if (!pack.signedPublisher && automaticLearningEnabled) {
-            // User-imported packs are manual-only; automatic learning must not activate unsigned imports.
-            throw SecurityException("Unsigned user imports cannot be auto-activated.")
+        val sourceMetadata = File(quarantine, pack.file.name + ".json")
+        require(sourceMetadata.isFile) { "Pack provenance metadata is missing; activation is blocked." }
+        val metadata = JSONObject(sourceMetadata.readText(Charsets.UTF_8))
+        require(metadata.optString("packId") == pack.packId &&
+            metadata.optString("version") == pack.version) { "Pack metadata identity does not match the staged pack." }
+        val contentType = metadata.optString("contentType")
+        require(isTextPack(pack.file, contentType)) { "Only bounded UTF-8 text packs can be activated." }
+        require(sha256(pack.file).equals(metadata.optString("sha256"), true)) {
+            "Staged pack content changed after quarantine; activation is blocked."
+        }
+        val signed = metadata.optString("signature").isNotBlank() && metadata.optString("publisherKeyId").isNotBlank()
+        require(pack.signedPublisher == signed) { "Staged publisher state does not match signed provenance metadata." }
+        if (signed) {
+            val manifest = Manifest.parse(metadata.toString())
+            validateManifest(manifest)
+            val publisher = trustedPublishers[manifest.publisherKeyId]
+                ?: throw SecurityException("Publisher key is not pinned by this app release; activation is blocked.")
+            val contentUrl = URL(manifest.contentUrl)
+            val sourceUrl = URL(manifest.sourceUrl)
+            require(contentUrl.protocol.equals("https", true) && contentUrl.host.equals(publisher.allowedHost, true) &&
+                sourceUrl.protocol.equals("https", true) && sourceUrl.host.equals(publisher.allowedHost, true)) {
+                "Signed pack provenance no longer matches the pinned publisher host."
+            }
+            verifySignature(manifest, publisher)
+        } else {
+            require(metadata.optBoolean("signedPublisher", false).not() &&
+                metadata.optString("stage") == "USER_IMPORT_REVIEW") {
+                "Unsigned content must be an explicit user import in quarantine."
+            }
+            if (automaticLearningEnabled) {
+                throw SecurityException("Unsigned user imports cannot be auto-activated.")
+            }
         }
         val targetDir = File(installed, pack.packId).apply { mkdirs() }
         val target = File(targetDir, "${pack.version}.pack")
         if (target.exists()) throw IllegalStateException("This pack version is already installed.")
         val previous = readState().optJSONObject(pack.packId)?.optString("current", "").orEmpty()
-        val sourceMetadata = File(quarantine, pack.file.name + ".json")
         val targetMetadata = File(target.parentFile, target.name + ".json")
-        require(sourceMetadata.isFile) { "Pack provenance metadata is missing; activation is blocked." }
         check(pack.file.renameTo(target)) { "Could not atomically move the approved pack into installed storage." }
         if (!sourceMetadata.renameTo(targetMetadata)) {
             target.renameTo(pack.file)
             throw IllegalStateException("Could not move pack provenance metadata; pack remains quarantined.")
         }
+        metadata.put("stage", "ACTIVE")
+        targetMetadata.writeText(metadata.toString(), Charsets.UTF_8)
         val stateJson = readState()
         val entry = JSONObject().apply {
             put("current", pack.version)
@@ -210,7 +246,8 @@ class SkillPackLifecycleManager(context: Context) {
         val entry = stateJson.optJSONObject(packId) ?: return false
         val previous = entry.optString("previous", "")
         if (!validVersion(previous)) return false
-        if (!File(File(installed, packId), "$previous.pack").isFile) return false
+        val previousFile = File(File(installed, packId), "$previous.pack")
+        if (!isStoredPackValid(previousFile)) return false
         val current = entry.optString("current", "")
         entry.put("current", previous).put("previous", current).put("updatedAt", System.currentTimeMillis())
         writeState(stateJson)
@@ -221,7 +258,8 @@ class SkillPackLifecycleManager(context: Context) {
         if (!validId(packId)) return null
         val version = readState().optJSONObject(packId)?.optString("current").orEmpty()
         if (!validVersion(version)) return null
-        return File(File(installed, packId), "$version.pack").takeIf { it.isFile }
+        val active = File(File(installed, packId), "$version.pack")
+        return active.takeIf { isStoredPackValid(it) }
     }
 
     private fun validateManifest(m: Manifest) {
@@ -247,17 +285,30 @@ class SkillPackLifecycleManager(context: Context) {
     }
 
     private fun isTextPack(file: File, contentType: String): Boolean {
-        if (contentType !in SUPPORTED_CONTENT_TYPES || file.length() > MAX_PACK_BYTES) return false
-        var valid = true
-        FileInputStream(file).use { input ->
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                if (buffer.take(count).any { it == 0.toByte() }) { valid = false; break }
-            }
+        if (!file.isFile || contentType !in SUPPORTED_CONTENT_TYPES || file.length() !in 1..MAX_PACK_BYTES) return false
+        return try {
+            val decoder = Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+            val text = decoder.decode(ByteBuffer.wrap(file.readBytes())).toString()
+            text.none { ch -> ch == '\\u0000' || (ch < ' ' && ch != '\\n' && ch != '\\r' && ch != '\\t') }
+        } catch (_: Exception) {
+            false
         }
-        return valid
+    }
+
+    private fun isStoredPackValid(file: File): Boolean {
+        if (!file.isFile) return false
+        return runCatching {
+            val metadataFile = File(file.parentFile, file.name + ".json")
+            if (!metadataFile.isFile) return false
+            val metadata = JSONObject(metadataFile.readText(Charsets.UTF_8))
+            metadata.optString("stage") == "ACTIVE" &&
+                metadata.optString("packId") == file.parentFile.name &&
+                metadata.optString("version") == file.name.removeSuffix(".pack") &&
+                sha256(file).equals(metadata.optString("sha256"), true) &&
+                isTextPack(file, metadata.optString("contentType"))
+        }.getOrDefault(false)
     }
     private fun writeMetadata(content: File, metadata: JSONObject) {
         File(content.parentFile, content.name + ".json").writeText(metadata.toString(), Charsets.UTF_8)
