@@ -4,7 +4,7 @@
 
 | Curriculum | Required reviewer(s) | Review status |
 |---|---|---|
-| Bhagavad Gita 18 chapters | Sanskrit scholar; critical-edition text reviewer | Source structure checked; scholarly review pending |
+| Bhagavad Gita 18 chapters | Sanskrit scholar; critical-edition text reviewer; independent second reviewer | 700 records structurally checked; 700-verse scholarly review pending; Ch. 1.28 speaker-count discrepancy and Ch. 13 numbering variant explicitly queued |
 | Shloka, mantra and katha | Sanskrit scholar; tradition-aware religious-studies reviewer | Pending |
 | Baby care 0–2 | Indian paediatrician; child-health nurse | Pending clinical review |
 | Kids foundation 3–10 | Foundational-stage educator; child-safeguarding reviewer; accessibility educator | Pending |
