@@ -9,6 +9,7 @@ import java.util.Locale
 class LiaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        `in`.shraddha.ai.link.DeviceLinkManager.initialize(this)
         installCrashHandler()
     }
 
