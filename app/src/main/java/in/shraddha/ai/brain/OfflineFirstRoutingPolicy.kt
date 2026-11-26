@@ -1,8 +1,9 @@
 package `in`.shraddha.ai.brain
 
 /**
- * Free-first routing decision. This is a pure policy layer; callers still execute the selected
- * engine and must report its real result. It never selects a paid provider.
+ * Free-first routing decision. Callers execute the selected engine and report its real result.
+ * This policy never selects a paid provider and never authorizes cloud use unless the user
+ * enabled free API access and an eligible free quota is available.
  */
 object OfflineFirstRoutingPolicy {
     enum class TaskKind {
@@ -36,25 +37,58 @@ object OfflineFirstRoutingPolicy {
             task == TaskKind.CLOUD_ONLY_SPECIALIST
 
         if (!specialOnlineTask && state.deterministicSkillAvailable) {
-            return Decision(Route.LOCAL_DETERMINISTIC_SKILL, "A local deterministic skill can handle this task", false)
-        }
-        if (!specialOnlineTask && state.localModelAvailable) {
-            return Decision(Route.LOCAL_MODEL, "Prefer the on-device model to avoid API usage", false)
-        }
-        if (!specialOnlineTask && state.localKnowledgeAvailable) {
-            return Decision(Route.LOCAL_KNOWLEDGE, "Use locally stored, source-grounded knowledge", false)
+            return Decision(
+                Route.LOCAL_DETERMINISTIC_SKILL,
+                "A local deterministic skill can handle this task",
+                false
+            )
         }
 
-        if (specialOnlineTask && state.networkAvailable &&
-            state.freeApiEnabledByUser && state.freeQuotaAvailable) {
-            return Decision(Route.FREE_API, "This task needs an online capability; use an eligible free provider only", true)
+        // Document and personal-memory questions must prefer the encrypted local knowledge
+        // store over a generative model so that source-grounded private data stays on-device.
+        val knowledgeFirst = task == TaskKind.DOCUMENT_QA || task == TaskKind.PERSONAL_MEMORY
+        if (!specialOnlineTask && knowledgeFirst && state.localKnowledgeAvailable) {
+            return Decision(
+                Route.LOCAL_KNOWLEDGE,
+                "Use locally stored, source-grounded knowledge",
+                false
+            )
+        }
+
+        if (!specialOnlineTask && state.localModelAvailable) {
+            return Decision(
+                Route.LOCAL_MODEL,
+                "Prefer the on-device model to avoid API usage",
+                false
+            )
+        }
+        if (!specialOnlineTask && state.localKnowledgeAvailable) {
+            return Decision(
+                Route.LOCAL_KNOWLEDGE,
+                "Use locally stored, source-grounded knowledge",
+                false
+            )
+        }
+
+        // Free API is a last resort for every task, not just live tasks. Paid providers are
+        // never selected here. Cloud use requires network, explicit user opt-in, and free quota.
+        if (state.networkAvailable && state.freeApiEnabledByUser && state.freeQuotaAvailable) {
+            return Decision(
+                Route.FREE_API,
+                if (specialOnlineTask) {
+                    "This task needs an online capability; use an eligible free provider only"
+                } else {
+                    "No suitable local capability is available; use an eligible free provider only"
+                },
+                true
+            )
         }
 
         val reason = when {
-            specialOnlineTask && !state.networkAvailable -> "This task needs an internet connection"
-            specialOnlineTask && !state.freeApiEnabledByUser -> "Online provider use is disabled by the user"
-            specialOnlineTask && !state.freeQuotaAvailable -> "No eligible free API quota is available"
-            else -> "No suitable local capability is currently available"
+            !state.networkAvailable -> "No local capability is available and the device is offline"
+            !state.freeApiEnabledByUser -> "No local capability is available; online provider use is disabled"
+            !state.freeQuotaAvailable -> "No local capability is available and no eligible free API quota remains"
+            else -> "No suitable capability is currently available"
         }
         return Decision(Route.EXPLAIN_OFFLINE_LIMIT, reason, false)
     }
