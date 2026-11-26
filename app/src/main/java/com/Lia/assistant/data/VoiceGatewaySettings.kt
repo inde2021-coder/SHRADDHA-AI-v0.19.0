@@ -205,7 +205,7 @@ object VoiceGatewaySettings {
         systemInstruction: String,
         prompt: String
     ): AgentReply? {
-        in.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
@@ -242,7 +242,7 @@ object VoiceGatewaySettings {
 
     /** Requests a one-use, short-lived Gemini Live token. Must be called off the main thread. */
     fun fetchEphemeralToken(context: Context): String {
-        in.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Voice Gateway settings could not be read." }
         require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
