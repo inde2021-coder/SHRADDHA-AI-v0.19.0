@@ -628,7 +628,7 @@ Return JSON only."""
               const google=globals.find(x=>x.value&&x.value.__gm&&typeof x.value.getCenter==='function');
               const mapbox=globals.find(x=>x.value&&typeof x.value.addSource==='function'&&typeof x.value.on==='function');
               const map=leaflet?.value||google?.value||mapbox?.value;
-              if(!map) return JSON.stringify({ok:false,drawActivated:!!drawButton,
+              if(!map) return JSON.stringify({ok:false,drawButtonPresent:!!drawButton,
                 mapVisible:!!document.querySelector('.leaflet-container,.mapboxgl-map,.ol-viewport,canvas')});
 
               // Detach only the listener previously installed by this Shraddha draft.
@@ -703,7 +703,7 @@ Return JSON only."""
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             status.text = if (result?.optBoolean("ok") == true)
                 "केवल Shraddha का अलग अस्थायी Draft overlay बनाया गया है। पहले से बनी AKKPS सीमाएँ नहीं बदली जाएँगी। Satellite से dot-boundary की automatic पहचान अभी उपलब्ध नहीं; बिना पहचान के Save नहीं होगा।"
-            else if (result?.optBoolean("drawActivated") == true)
+            else if (result?.optBoolean("drawButtonPresent") == true)
                 "AKKPS Draw mode सक्रिय है, लेकिन map object उपलब्ध नहीं। पुरानी सीमाएँ सुरक्षित हैं; automatic पहचान के बिना कोई सीमा नहीं बनाई या Save की जाएगी।"
             else "AKKPS map object नहीं मिला। पुरानी सीमाएँ सुरक्षित हैं; automatic boundary extraction अभी उपलब्ध नहीं है।"
         }
