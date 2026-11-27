@@ -499,7 +499,7 @@ class AkkpsRunnerActivity : Activity() {
         }
         val js = """
             (function(){
-              const n=s=>String(s||'').replace(/\\s+/g,' ').trim().slice(0,120);
+              const n=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,120);
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
               const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
@@ -529,18 +529,18 @@ class AkkpsRunnerActivity : Activity() {
                 try{
                   const u=new URL(a.href,location.href);
                   if(u.origin!==location.origin) return null;
-                  const p=u.pathname.replace(/\\/$/,'')||'/';
+                  const p=u.pathname.replace(/\/$/,'')||'/';
                   let module='';
-                  if(/^\\/runner\\/?$/.test(p)) module='HOME';
-                  else if(/^\\/runner\\/farmers(?:\\/new|\\/[^/]+)?$/.test(p)) module='FARMERS';
-                  else if(/^\\/runner\\/plots(?:\\/new|\\/[^/]+)?$/.test(p)||p==='/plots/new') module='PLOTS';
-                  else if(/^\\/runner\\/awd-reports(?:\\/new|\\/[^/]+)?$/.test(p)||p==='/awd-reports/new') module='AWD_REPORTS';
+                  if(/^\/runner\/?$/.test(p)) module='HOME';
+                  else if(/^\/runner\/farmers(?:\/new|\/[^/]+)?$/.test(p)) module='FARMERS';
+                  else if(/^\/runner\/plots(?:\/new|\/[^/]+)?$/.test(p)||p==='/plots/new') module='PLOTS';
+                  else if(/^\/runner\/awd-reports(?:\/new|\/[^/]+)?$/.test(p)||p==='/awd-reports/new') module='AWD_REPORTS';
                   else if(p==='/runner/profile') module='PROFILE';
                   else if(p==='/runner/sync') module='SYNC';
                   return module?{label:n(a.innerText||a.getAttribute('aria-label')),module}:null;
                 }catch(_){return null}
               }).filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.module===v.module&&x.label===v.label)===i).slice(0,30);
-              const path=location.pathname.replace(/\\/$/,'')||'/';
+              const path=location.pathname.replace(/\/$/,'')||'/';
               let module='UNKNOWN';
               if(path==='/runner') module='HOME';
               else if(path.startsWith('/runner/farmers')) module='FARMERS';
