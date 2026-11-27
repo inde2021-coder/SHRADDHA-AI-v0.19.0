@@ -381,6 +381,11 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
+        val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
+        if (!explicitAssignment) {
+            requestAiMapping(raw)
+            return
+        }
         if (parsed.issues.isNotEmpty()) {
             status.text = parsed.issues.joinToString("\\n")
             return
@@ -388,9 +393,7 @@ class AkkpsRunnerActivity : Activity() {
         val wantsSubmit = parsed.submit
         val values = parsed.assignments
         if (values.isEmpty()) {
-            if (wantsSubmit) {
-                status.text = "Submit से पहले कम-से-कम एक स्पष्ट field=value assignment दें।"
-            } else requestAiMapping(raw)
+            status.text = "Submit से पहले कम-से-कम एक स्पष्ट field=value assignment दें।"
             return
         }
         fillValues(values, wantsSubmit)
