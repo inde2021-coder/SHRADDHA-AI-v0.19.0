@@ -1073,12 +1073,32 @@ Return exact JSON only. Do not include prose or markdown."""
                     AkkpsBoundaryGeometry.parseKml(String(bytes, Charsets.UTF_8)).getOrThrow()
                 } finally { bytes.fill(0) }
             }.onSuccess { boundary ->
-                boundaryPoints.clear()
-                boundaryPoints.addAll(boundary.points)
-                boundaryProvenance = null
-                gpsWalkSessionInitialized = false
-                gpsWalkPlotId = null
-                status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
+                val replaceImported = {
+                    boundaryPoints.clear()
+                    boundaryPoints.addAll(boundary.points)
+                    boundaryProvenance = boundary
+                    gpsWalkSessionInitialized = false
+                    gpsWalkPlotId = null
+                    status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Source: ${boundary.source ?: "KML"}। Plot ID चुनकर Local Save करें।"
+                }
+                if (boundaryPoints.isNotEmpty()) {
+                    val existingArea = runCatching {
+                        AkkpsBoundaryGeometry.areaSquareMeters(boundaryPoints) /
+                            AkkpsBoundaryGeometry.SQUARE_METERS_PER_ACRE
+                    }.getOrNull()
+                    AlertDialog.Builder(this)
+                        .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                        .setMessage(
+                            "Editor में पहले से ${boundaryPoints.size} points" +
+                                (existingArea?.let { " • ${"%.3f".format(java.util.Locale.US, it)} acres" } ?: "") +
+                                " हैं। KML import करने से ये points बदल जाएँगे। पहले Save/Export कर लें।"
+                        )
+                        .setPositiveButton("मौजूदा हटाकर KML लाएँ") { _, _ -> replaceImported() }
+                        .setNegativeButton("रद्द करें", null)
+                        .show()
+                } else {
+                    replaceImported()
+                }
             }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
         }
     }
