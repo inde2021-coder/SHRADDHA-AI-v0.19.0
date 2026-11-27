@@ -81,6 +81,7 @@ class PcCompanionApp:
         self.screen_event = threading.Event()
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
+        self.control_grant_peer = None
         self.phone_control_peer = None
         self.phone_control_grant_until = 0.0
         self.device_token = None
@@ -412,6 +413,7 @@ class PcCompanionApp:
         self._clear_peer_keys()
         self.screen_event.clear()
         self.control_grant_until = 0
+        self.control_grant_peer = None
         # A disconnected relay invalidates both directions of remote-control approval.
         self.phone_control_grant_until = 0
         self.phone_control_peer = None
@@ -688,7 +690,7 @@ class PcCompanionApp:
                 self.status_var.set("Blocked replayed remote action ID.")
                 self._send_e2e_message(peer_id, "remote_action_result", {"ok": False, "reason": "Duplicate action ID rejected."}, action_id, action_kind)
                 return
-            if not self.remote_var.get() or not control_grant_is_valid(peer_id, self.config.get("deviceId"), self.control_grant_until, time.time()):
+            if not self.remote_var.get() or not control_grant_is_valid(peer_id, self.control_grant_peer, self.control_grant_until, time.time()):
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "reason": "No active local PC approval."},
@@ -739,6 +741,7 @@ class PcCompanionApp:
                 "approved": bool(approved), "minutes": minutes
             })
             self.control_grant_until = time.time() + minutes * 60 if approved else 0
+            self.control_grant_peer = requester_id if approved else None
             self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
@@ -1386,6 +1389,7 @@ class PcCompanionApp:
         self.remote_var.set(False)
         self.screen_var.set(False)
         self.control_grant_until = 0
+        self.control_grant_peer = None
         self.phone_control_grant_until = 0
         self.phone_control_peer = None
         self.remote_target_var.set("")
