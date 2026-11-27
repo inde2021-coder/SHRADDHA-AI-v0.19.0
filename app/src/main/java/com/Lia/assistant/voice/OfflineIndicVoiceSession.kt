@@ -62,7 +62,7 @@ class OfflineIndicVoiceSession(
         )
         onStatus("Offline ${selectedLanguage.label} ready • microphone stays on-device")
         runCatching { audio?.startRecording() }.onFailure {
-            running.set(false)
+            stop()
             onError(it.localizedMessage ?: "Offline microphone could not start.")
         }
     }
@@ -91,6 +91,7 @@ class OfflineIndicVoiceSession(
             try {
                 if (!running.get() || sessionEpoch.get() != epoch) return@launch
                 val transcript = IndicConformerRuntime.transcribe(context, language, pcm).trim()
+                if (!running.get() || sessionEpoch.get() != epoch) return@launch
                 if (transcript.isBlank()) {
                     onStatus("No speech recognized • keep speaking")
                     return@launch
@@ -108,6 +109,7 @@ class OfflineIndicVoiceSession(
                     modelPath,
                     "User voice transcript (" + language.label + "): $transcript\nRespond naturally in the same language. This is local-only; do not claim device actions."
                 )
+                if (!running.get() || sessionEpoch.get() != epoch) return@launch
                 PersistentChatMemory.record(context, "Assistant", answer)
                 onBrainResponse(answer)
                 onStatus("Offline " + language.label + " • Brain response ready")
