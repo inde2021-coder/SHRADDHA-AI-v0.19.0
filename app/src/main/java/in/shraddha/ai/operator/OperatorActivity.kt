@@ -172,6 +172,9 @@ class OperatorActivity : Activity() {
         row(toolsCard,
             "AI Form Autofill" to { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) },
             "File Access" to { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
+        row(toolsCard,
+            "SMS / WhatsApp" to { startActivity(android.content.Intent(this, `com.Lia.assistant.action.MessageComposeActivity`::class.java)) },
+            "Message History" to { log.text = "भेजे गए messages की provider receipt history अभी अलग module में जोड़ी जानी है।" })
         page.addView(toolsCard)
 
         val recoveryCard = card("SAFETY & RECOVERY", "हर संवेदनशील कार्रवाई पर पुष्टि • कार्रवाई के बाद परिणाम जाँच")
