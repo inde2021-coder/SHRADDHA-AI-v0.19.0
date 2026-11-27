@@ -5,8 +5,8 @@ import org.junit.Test
 
 class AkkpsRunnerSearchCommandPolicyTest {
     @Test fun parsesExplicitEnglishSearchCommands() {
-        assertEquals("ram kumar", AkkpsRunnerSearchCommandPolicy.parse("search for Ram Kumar"))
-        assertEquals("plot 123", AkkpsRunnerSearchCommandPolicy.parse("find Plot 123"))
+        assertEquals("Ram Kumar", AkkpsRunnerSearchCommandPolicy.parse("search for Ram Kumar"))
+        assertEquals("Plot 123", AkkpsRunnerSearchCommandPolicy.parse("find Plot 123"))
     }
 
     @Test fun parsesHindiSearchCommands() {
@@ -27,4 +27,9 @@ class AkkpsRunnerSearchCommandPolicyTest {
         assertNull(AkkpsRunnerSearchCommandPolicy.parse("search " + "x".repeat(301)))
         assertNull(AkkpsRunnerSearchCommandPolicy.parse("search ram\nsubmit"))
     }
+    @Test fun preservesCaseSensitiveRecordIdentifiers() {
+        assertEquals("PLOT-AB12", AkkpsRunnerSearchCommandPolicy.parse("Search for PLOT-AB12"))
+        assertEquals("Farmer ID: FmR-008", AkkpsRunnerSearchCommandPolicy.parse("Find Farmer ID: FmR-008"))
+    }
+
 }
