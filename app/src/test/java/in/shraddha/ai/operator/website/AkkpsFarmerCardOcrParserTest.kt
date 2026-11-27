@@ -25,6 +25,17 @@ class AkkpsFarmerCardOcrParserTest {
         assertFalse(result.toRunnerCommand().contains("submit"))
     }
 
+    @Test fun extractedFieldsBecomeReviewOnlyRunnerAssignments() {
+        val parsed = AkkpsFarmerCardOcrParser.parse(
+            "Farmer Name: Ram Kumar\\nFarmer ID: MP-12345\\nVillage: Rampur\\nDistrict: Seoni"
+        )
+        val command = AkkpsRunnerCommandParser.parse(parsed.toRunnerCommand())
+        assertTrue(command.issues.isEmpty())
+        assertFalse(command.submit)
+        assertEquals("farmerName", command.assignments.first { it.first == "farmerName" }.first)
+        assertEquals("farmerId", command.assignments.first { it.first == "farmerId" }.first)
+    }
+
     @Test fun ignoresUnlabelledAndSensitiveValues() {
         val result = AkkpsFarmerCardOcrParser.parse("9876543210\nAadhaar: 123456789012\nPassword: secret")
         assertTrue(result.assignments.isEmpty())
