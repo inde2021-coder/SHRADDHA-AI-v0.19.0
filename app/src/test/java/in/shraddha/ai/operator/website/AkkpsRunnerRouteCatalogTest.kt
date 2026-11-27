@@ -49,4 +49,18 @@ class AkkpsRunnerRouteCatalogTest {
         )
         assertNull(AkkpsRunnerRouteCatalog.match("https://evil.example/runner/farmers"))
     }
+    @Test fun recognizesFarmerPlotAndAwdEditRoutesSeparately() {
+        listOf(
+            "/runner/farmers/farmer-1/edit" to AkkpsRunnerModule.FARMERS,
+            "/runner/plots/plot-1/edit" to AkkpsRunnerModule.PLOTS,
+            "/runner/awd-reports/report-1/edit" to AkkpsRunnerModule.AWD_REPORTS
+        ).forEach { (path, module) ->
+            val route = AkkpsRunnerRouteCatalog.match(path)
+            assertEquals(module, route?.module)
+            assertTrue(route?.isDetailRoute == true)
+            assertTrue(route?.isEditRoute == true)
+            assertFalse(route?.isCreateRoute == true)
+        }
+    }
+
 }
