@@ -72,7 +72,7 @@ object AkkpsWebsiteProfile {
             val uri = URI(rawUrl.trim())
             val rawPath = uri.rawPath.orEmpty()
             if (rawPath.length > 1024 ||
-                rawPath.contains('\\\\') ||
+                rawPath.contains('\\') ||
                 Regex("(?i)%2f|%5c|%2e").containsMatchIn(rawPath) ||
                 rawPath.contains("//")
             ) return false
