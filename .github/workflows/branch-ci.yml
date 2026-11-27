@@ -37,3 +37,8 @@ jobs:
       - name: Run backend unit tests when configured
         working-directory: backend
         run: npm test --if-present
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Test satellite model pack manifest and download safety
+        run: python -m unittest discover -s pc_companion/tests -p 'test_satellite_model_pack.py' -v
