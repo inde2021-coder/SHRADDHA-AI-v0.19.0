@@ -33,6 +33,18 @@ class AkkpsRunnerRouteCatalogTest {
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/awd-reports/report-123")?.isDetailRoute == true)
     }
 
+    @Test fun recognizesKnownEditSubroutesAsRecordDetailForms() {
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/farmer-123/edit")?.let {
+            it.module == AkkpsRunnerModule.FARMERS && it.isDetailRoute
+        } == true)
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/plots/plot-123/edit")?.let {
+            it.module == AkkpsRunnerModule.PLOTS && it.isDetailRoute
+        } == true)
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/awd-reports/report-123/edit")?.let {
+            it.module == AkkpsRunnerModule.AWD_REPORTS && it.isDetailRoute
+        } == true)
+    }
+
     @Test fun rejectsAdminCoordinatorAndLookalikePaths() {
         assertNull(AkkpsRunnerRouteCatalog.match("/admin/farmers"))
         assertNull(AkkpsRunnerRouteCatalog.match("/coordinator/farmers"))
