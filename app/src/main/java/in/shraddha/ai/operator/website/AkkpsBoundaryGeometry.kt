@@ -4,6 +4,8 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class AkkpsGeoPoint(val latitude: Double, val longitude: Double)
 data class AkkpsBoundary(val points: List<AkkpsGeoPoint>) {
@@ -64,6 +66,25 @@ object AkkpsBoundaryGeometry {
             }
         validate(points)?.let { error(it) }
         AkkpsBoundary(closeRing(points))
+    }
+
+    fun toJson(boundary: AkkpsBoundary): String {
+        validate(boundary.points)?.let { error(it) }
+        return JSONObject().put("version", 1).put("points", JSONArray().apply {
+            boundary.points.forEach { put(JSONObject().put("lat", it.latitude).put("lon", it.longitude)) }
+        }).toString()
+    }
+
+    fun fromJson(raw: String): AkkpsBoundary {
+        require(raw.length in 1..200_000) { "Saved boundary data size is invalid." }
+        val array = JSONObject(raw).getJSONArray("points")
+        require(array.length() in 3..MAX_POINTS) { "Saved boundary point count is invalid." }
+        val points = (0 until array.length()).map { index ->
+            val point = array.getJSONObject(index)
+            AkkpsGeoPoint(point.getDouble("lat"), point.getDouble("lon"))
+        }
+        validate(points)?.let { error(it) }
+        return AkkpsBoundary(points)
     }
 
     fun toKml(boundary: AkkpsBoundary, name: String = "AKKPS Plot Boundary"): String {
