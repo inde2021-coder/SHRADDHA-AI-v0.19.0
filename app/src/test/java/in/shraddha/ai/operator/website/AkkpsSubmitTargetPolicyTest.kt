@@ -15,4 +15,8 @@ class AkkpsSubmitTargetPolicyTest {
         assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Plot ID", " plot id ")))
         assertTrue(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Plot ID", "Village")))
     }
+
+    @Test fun rejectsUnicodeCompatibilityDuplicates() {
+        assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Ｐｌｏｔ ID", "plot id")))
+    }
 }
