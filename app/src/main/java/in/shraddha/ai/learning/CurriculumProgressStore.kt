@@ -41,6 +41,8 @@ class CurriculumProgressStore(context: Context) {
                 check(prefs.edit()
                     .putString(PIN_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
                     .putString(PIN_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
+                    .remove(PIN_FAILED_ATTEMPTS)
+                    .remove(PIN_LOCK_UNTIL)
                     .commit()) { "Could not save the guardian PIN." }
             } finally {
                 salt.fill(0)
@@ -51,15 +53,40 @@ class CurriculumProgressStore(context: Context) {
         }
     }
 
-    @Synchronized fun verifyGuardianPin(pin: CharArray): Boolean {
+    @Synchronized fun verifyGuardianPin(pin: CharArray): Boolean =
+        verifyGuardianPinAt(pin, System.currentTimeMillis())
+
+    /** Clock-injectable PIN verification for deterministic lockout tests. */
+    @Synchronized internal fun verifyGuardianPinAt(pin: CharArray, nowMillis: Long): Boolean {
         var salt: ByteArray? = null
         var expected: ByteArray? = null
         var actual: ByteArray? = null
         try {
+            require(nowMillis > 0L)
+            val lockedUntil = prefs.getLong(PIN_LOCK_UNTIL, 0L)
+            if (nowMillis < lockedUntil) return false
+            if (lockedUntil > 0L) {
+                check(prefs.edit().remove(PIN_LOCK_UNTIL).putInt(PIN_FAILED_ATTEMPTS, 0).commit()) {
+                    "Could not reset guardian PIN lockout state."
+                }
+            }
             salt = prefs.getString(PIN_SALT, null)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
             expected = prefs.getString(PIN_HASH, null)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
             actual = derivePinHash(pin, salt)
-            return MessageDigest.isEqual(expected, actual)
+            val matches = MessageDigest.isEqual(expected, actual)
+            if (matches) {
+                check(prefs.edit().remove(PIN_FAILED_ATTEMPTS).remove(PIN_LOCK_UNTIL).commit()) {
+                    "Could not clear guardian PIN failure state."
+                }
+            } else {
+                val attempts = prefs.getInt(PIN_FAILED_ATTEMPTS, 0) + 1
+                val editor = prefs.edit().putInt(PIN_FAILED_ATTEMPTS, attempts)
+                if (attempts >= MAX_PIN_ATTEMPTS) {
+                    editor.putLong(PIN_LOCK_UNTIL, nowMillis + PIN_LOCKOUT_MILLIS)
+                }
+                check(editor.commit()) { "Could not save guardian PIN failure state." }
+            }
+            return matches
         } finally {
             pin.fill('\u0000')
             salt?.fill(0)
@@ -215,5 +242,9 @@ class CurriculumProgressStore(context: Context) {
         private const val GCM_IV_BYTES = 12
         private const val PIN_ITERATIONS = 160_000
         private const val PIN_KEY_BITS = 256
+        private const val PIN_FAILED_ATTEMPTS = "guardian_pin_failed_attempts"
+        private const val PIN_LOCK_UNTIL = "guardian_pin_lock_until"
+        private const val MAX_PIN_ATTEMPTS = 5
+        private const val PIN_LOCKOUT_MILLIS = 60_000L
     }
 }
