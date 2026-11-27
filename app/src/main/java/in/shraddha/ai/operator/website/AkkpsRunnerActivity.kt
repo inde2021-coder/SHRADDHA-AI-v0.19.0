@@ -298,14 +298,16 @@ Return exact JSON only. Do not include prose or markdown."""
                     }
                     val missing = mapped.optJSONArray("missing") ?: JSONArray()
                     val missingItems = (0 until missing.length()).map { missing.optString(it).trim() }
-                        .filter { it.isNotBlank() }
-                    val duplicateFields = values.map { it.first.lowercase() }.let { it.size != it.distinct().size }
-                    if (duplicateFields) {
+                    if (AkkpsAiSubmitPolicy.hasDuplicateFields(values.map { it.first })) {
                         status.text = "AI mapping में एक ही फील्ड की duplicate entry मिली। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
                     val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
-                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit && missingItems.isEmpty()
+                    val shouldSubmit = AkkpsAiSubmitPolicy.maySubmit(
+                        aiRequested = mapped.optBoolean("submit"),
+                        userExplicitlyRequested = explicitSubmit,
+                        missing = missingItems
+                    )
                     val blockedReason = if (missingItems.isNotEmpty()) {
                         "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
                             missingItems.joinToString() + "। Submit रोका गया।"
