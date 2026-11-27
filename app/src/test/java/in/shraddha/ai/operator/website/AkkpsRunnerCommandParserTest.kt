@@ -19,10 +19,21 @@ class AkkpsRunnerCommandParserTest {
         assertFalse(parsed.submit)
     }
 
-    @Test fun ignoresMalformedAndDuplicateKeysWithoutGuessing() {
+    @Test fun reportsDuplicateKeysInsteadOfSilentlyChoosingOneValue() {
         val parsed = AkkpsRunnerCommandParser.parse("Name=First; Name=Second; broken; =empty; submit")
-        assertEquals(1, parsed.assignments.size)
-        assertEquals("First", parsed.assignments.first().second)
+        assertEquals(2, parsed.assignments.size)
+        assertTrue(parsed.hasDuplicateKeys)
         assertTrue(parsed.submit)
+    }
+
+    @Test fun recognizesHindiSubmitCommands() {
+        listOf("सबमिट", "जमा", "जमा करें", "भेजें", "भेज दें").forEach { token ->
+            assertTrue(AkkpsRunnerCommandParser.parse("Name=Ram; $token").submit)
+        }
+    }
+
+    @Test fun duplicateDetectionUsesUnicodeNormalizationAndIgnoresCase() {
+        val parsed = AkkpsRunnerCommandParser.parse("Plot ID=12; plot id=13")
+        assertTrue(parsed.hasDuplicateKeys)
     }
 }
