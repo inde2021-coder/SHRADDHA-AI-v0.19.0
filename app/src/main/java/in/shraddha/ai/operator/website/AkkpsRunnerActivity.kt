@@ -547,8 +547,26 @@ class AkkpsRunnerActivity : Activity() {
 
     /** Hindi + English OCR runs on-device only; candidates are placed in the command box for review. */
     private fun processFarmerCardImage(uri: Uri) {
+        val maxImageBytes = 15L * 1024L * 1024L
         val size = runCatching { contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L }.getOrDefault(-1L)
-        if (size !in 1..(15L * 1024L * 1024L)) {
+        val validSize = when {
+            size > maxImageBytes || size == 0L -> false
+            size > 0L -> true
+            else -> runCatching {
+                contentResolver.openInputStream(uri)?.use { stream ->
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > maxImageBytes) return@use false
+                    }
+                    total in 1..maxImageBytes
+                } ?: false
+            }.getOrDefault(false)
+        }
+        if (!validSize) {
             status.text = "Image file size invalid या 15 MB से बड़ी है। कोई data submit नहीं हुआ।"
             return
         }
@@ -560,10 +578,10 @@ class AkkpsRunnerActivity : Activity() {
         val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
         latin.process(input).addOnSuccessListener { latinResult ->
-            devanagari.process(input).addOnSuccessListener { devanagariResult ->
+            devanagari.process(input).addOnSuccessListener devanagariResult@ { devanagariResult ->
                 try {
                     val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\n" + devanagariResult.text)
-                    if (isFinishing || isDestroyed) return@addOnSuccessListener
+                    if (isFinishing || isDestroyed) return@devanagariResult
                     if (!parsed.readyForUserReview) {
                         status.text = "स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या जानकारी स्वयं भरें। कोई data submit नहीं हुआ।"
                     } else {
