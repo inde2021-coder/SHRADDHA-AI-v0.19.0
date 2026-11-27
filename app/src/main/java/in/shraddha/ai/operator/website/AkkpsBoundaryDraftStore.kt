@@ -9,26 +9,22 @@ data class AkkpsBoundaryDraft(
     val updatedAtEpochMillis: Long
 )
 
-/** Encrypted local storage for an unfinished GPS walk; never treated as a saved boundary. */
-class AkkpsBoundaryDraftStore(context: android.content.Context) {
-    private val encrypted = `in`.shraddha.ai.brain.EncryptedFeatureStore(context.applicationContext)
-
-    fun save(plotId: String, points: List<AkkpsGeoPoint>, bestAccuracyMeters: Float?) {
+object AkkpsBoundaryDraftCodec {
+    fun encode(points: List<AkkpsGeoPoint>, bestAccuracyMeters: Float?, updatedAtEpochMillis: Long): String {
         validatePoints(points)
         require(bestAccuracyMeters == null || (bestAccuracyMeters.isFinite() && bestAccuracyMeters in 0f..1_000f))
-        val json = JSONObject().put("version", 1)
-            .put("updatedAt", System.currentTimeMillis())
+        require(updatedAtEpochMillis > 0L && updatedAtEpochMillis <= System.currentTimeMillis() + 60_000L)
+        return JSONObject().put("version", 1)
+            .put("updatedAt", updatedAtEpochMillis)
             .put("points", JSONArray().apply {
                 points.forEach { put(JSONObject().put("lat", it.latitude).put("lon", it.longitude)) }
             })
             .apply { bestAccuracyMeters?.let { put("bestAccuracyMeters", it.toDouble()) } }
-        encrypted.put(key(plotId), json.toString()).getOrThrow()
+            .toString()
     }
 
-    fun load(plotId: String): AkkpsBoundaryDraft? {
-        val raw = encrypted.get(key(plotId)).getOrThrow()
-        if (raw.isBlank()) return null
-        require(raw.length <= 200_000) { "GPS draft data size is invalid." }
+    fun decode(raw: String): AkkpsBoundaryDraft {
+        require(raw.length in 1..200_000) { "GPS draft data size is invalid." }
         val json = JSONObject(raw)
         require(json.optInt("version") == 1) { "GPS draft version is unsupported." }
         val array = json.getJSONArray("points")
@@ -50,10 +46,6 @@ class AkkpsBoundaryDraftStore(context: android.content.Context) {
         return AkkpsBoundaryDraft(points, accuracy, updatedAt)
     }
 
-    fun delete(plotId: String) {
-        encrypted.remove(key(plotId))
-    }
-
     private fun validatePoints(points: List<AkkpsGeoPoint>) {
         require(points.size in 1..AkkpsBoundaryGeometry.MAX_POINTS) { "GPS draft point count is invalid." }
         require(points.all {
@@ -63,6 +55,26 @@ class AkkpsBoundaryDraftStore(context: android.content.Context) {
         require(points.zipWithNext().none { (a, b) -> a == b }) {
             "GPS draft contains duplicate adjacent points."
         }
+    }
+}
+
+/** Encrypted local storage for an unfinished GPS walk; never treated as a saved boundary. */
+class AkkpsBoundaryDraftStore(context: android.content.Context) {
+    private val encrypted = `in`.shraddha.ai.brain.EncryptedFeatureStore(context.applicationContext)
+
+    fun save(plotId: String, points: List<AkkpsGeoPoint>, bestAccuracyMeters: Float?) {
+        val payload = AkkpsBoundaryDraftCodec.encode(points, bestAccuracyMeters, System.currentTimeMillis())
+        encrypted.put(key(plotId), payload).getOrThrow()
+    }
+
+    fun load(plotId: String): AkkpsBoundaryDraft? {
+        val raw = encrypted.get(key(plotId)).getOrThrow()
+        if (raw.isBlank()) return null
+        return AkkpsBoundaryDraftCodec.decode(raw)
+    }
+
+    fun delete(plotId: String) {
+        encrypted.remove(key(plotId))
     }
 
     private fun key(plotId: String): String {
