@@ -154,7 +154,7 @@ class CommandExecutionJournal(context: Context) {
             val s = array.getJSONObject(i)
             CommandTaskStep(s.getString("id"), s.getString("capability"), s.getString("action"),
                 CommandStepState.valueOf(s.getString("state")), s.optInt("attempt"),
-                s.optString("resultCode"), s.optLong("updatedAt"))
+                safeCode(s.optString("resultCode")), s.optLong("updatedAt"))
         }
         require(steps.isNotEmpty() && steps.size <= MAX_STEPS && steps.all { validStep(it) })
         val id = o.getString("id")
