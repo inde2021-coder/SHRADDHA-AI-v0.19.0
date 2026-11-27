@@ -134,9 +134,11 @@ class AkkpsRunnerActivity : Activity() {
         if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS के सुरक्षित पेज पर जाएँ।"; return
         }
+        // Capture page structure only. Never read input values, cookies, passwords, OTPs or farmer records.
         val js = """
             (function(){
               const n=s=>(s||'').replace(/\s+/g,' ').trim();
+              const visible=e=>!!(e && (e.offsetWidth||e.offsetHeight||e.getClientRects().length));
               const fields=[...document.querySelectorAll('input,textarea,select')].map((e,i)=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
@@ -144,21 +146,35 @@ class AkkpsRunnerActivity : Activity() {
                   name:e.name||'',id:e.id||'',placeholder:e.placeholder||'',
                   aria:e.getAttribute('aria-label')||'',label:[...new Set(labels)].join(' / '),
                   required:!!e.required,disabled:!!e.disabled};
-              }).filter(x=>x.type!=='hidden' && x.type!=='password' && !x.disabled);
-              return JSON.stringify({title:document.title,url:location.href,fields});
+              }).filter(x=>x.type!=='hidden' && x.type!=='password' && x.type!=='file' && !x.disabled);
+              const modules=[...document.querySelectorAll('a[href]')].filter(visible).map(a=>{
+                try { const u=new URL(a.href,location.href); if(u.origin!==location.origin)return null;
+                  return {label:n(a.innerText||a.getAttribute('aria-label')||a.title).slice(0,100),
+                    path:u.pathname,active:a.getAttribute('aria-current')==='page'||a.classList.contains('active')};
+                } catch(_){return null;}
+              }).filter(x=>x && x.label && x.path && !x.path.startsWith('/admin') && !x.path.startsWith('/coordinator'))
+                .filter((x,i,a)=>a.findIndex(y=>y.path===x.path&&y.label===x.label)===i).slice(0,80);
+              const actions=[...document.querySelectorAll('button,input[type=submit],input[type=button],[role=button]')]
+                .filter(visible).map(e=>({label:n(e.innerText||e.value||e.getAttribute('aria-label')||e.title).slice(0,100),
+                  type:(e.type||e.tagName||'').toLowerCase(),disabled:!!e.disabled}))
+                .filter(x=>x.label).slice(0,80);
+              const forms=[...document.forms].filter(visible).map((f,i)=>({
+                index:i,method:(f.method||'get').toLowerCase(),
+                path:(()=>{try{return new URL(f.action||location.href,location.href).pathname}catch(_){return location.pathname}})(),
+                fieldCount:f.querySelectorAll('input:not([type=hidden]),textarea,select').length
+              })).slice(0,30);
+              const tables=[...document.querySelectorAll('table')].filter(visible).map((t,i)=>({
+                index:i,headers:[...t.querySelectorAll('thead th, thead td')].map(x=>n(x.innerText)).filter(Boolean).slice(0,30),
+                rowCount:t.querySelectorAll('tbody tr').length
+              })).slice(0,20);
+              return JSON.stringify({title:n(document.title),url:location.href,path:location.pathname,fields,modules,actions,forms,tables});
             })()
         """.trimIndent()
         web.evaluateJavascript(js) { raw ->
             val obj = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (obj == null) { status.text = "पेज की जानकारी नहीं पढ़ी जा सकी।"; return@evaluateJavascript }
-            val fields = obj.optJSONArray("fields") ?: JSONArray()
-            val labels = (0 until fields.length()).mapNotNull { i ->
-                val f = fields.optJSONObject(i) ?: return@mapNotNull null
-                val label = listOf("label", "name", "id", "placeholder", "aria")
-                    .map { f.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
-                label + if (f.optBoolean("required")) " *" else ""
-            }
-            status.text = "पेज: " + obj.optString("title") + "\nFields: " + labels.take(22).joinToString(" • ")
+            AkkpsPageInventory.save(this, obj)
+            status.text = AkkpsPageInventory.summary(obj)
             onReady?.invoke(obj)
         }
     }
