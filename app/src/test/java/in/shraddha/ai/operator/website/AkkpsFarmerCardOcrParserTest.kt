@@ -32,8 +32,8 @@ class AkkpsFarmerCardOcrParserTest {
         val command = AkkpsRunnerCommandParser.parse(parsed.toRunnerCommand())
         assertTrue(command.issues.isEmpty())
         assertFalse(command.submit)
-        assertEquals("farmerName", command.assignments.first { it.first == "farmerName" }.first)
-        assertEquals("farmerId", command.assignments.first { it.first == "farmerId" }.first)
+        assertEquals("Ram Kumar", command.assignments.first { it.first == "farmerName" }.second)
+        assertEquals("MP-12345", command.assignments.first { it.first == "farmerId" }.second)
     }
 
     @Test fun ignoresUnlabelledAndSensitiveValues() {
