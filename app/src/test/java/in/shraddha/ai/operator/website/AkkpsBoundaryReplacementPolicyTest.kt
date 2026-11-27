@@ -4,9 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AkkpsBoundaryReplacementPolicyTest {
-    @Test fun onlyAnEmptyEditorCanBeReplacedWithoutConfirmation() {
+    @Test fun emptyEditorCanAcceptAnImportWithoutReplacementPrompt() {
         assertFalse(AkkpsBoundaryReplacementPolicy.requiresConfirmation(0))
-        assertTrue(AkkpsBoundaryReplacementPolicy.requiresConfirmation(1))
-        assertTrue(AkkpsBoundaryReplacementPolicy.requiresConfirmation(500))
+    }
+
+    @Test fun anyExistingEditorPointsRequireExplicitReplacementConfirmation() {
+        listOf(1, 2, 3, 50, AkkpsBoundaryGeometry.MAX_POINTS).forEach {
+            assertTrue(AkkpsBoundaryReplacementPolicy.requiresConfirmation(it))
+        }
     }
 }
