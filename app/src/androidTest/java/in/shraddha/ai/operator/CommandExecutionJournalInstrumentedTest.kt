@@ -81,5 +81,7 @@ class CommandExecutionJournalInstrumentedTest {
             CommandTaskStep("same", "one", "send"), CommandTaskStep("same", "two", "save")
         )))
         assertNull(journal.createPlan("command", listOf(CommandTaskStep("", "one", "send"))))
+        assertNull(journal.createPlan("command", listOf(CommandTaskStep("step-1", "+919876543210", "send"))))
+        assertNull(journal.createPlan("command", listOf(CommandTaskStep("step-1", "messaging", "send_OTP_123456"))))
     }
 }
