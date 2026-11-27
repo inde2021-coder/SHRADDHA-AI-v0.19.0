@@ -33,22 +33,39 @@ class CurriculumProgressStore(context: Context) {
     @Synchronized fun hasGuardianPin(): Boolean = prefs.contains(PIN_HASH)
 
     @Synchronized fun setGuardianPin(pin: CharArray) {
-        require(pin.size in 4..12 && pin.all { it.isDigit() }) { "Parent PIN must be 4–12 digits." }
-        val salt = ByteArray(16).also(SecureRandom()::nextBytes)
-        val hash = derivePinHash(pin, salt)
-        prefs.edit()
-            .putString(PIN_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-            .putString(PIN_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
-            .apply()
-        pin.fill('\u0000')
+        try {
+            require(pin.size in 4..12 && pin.all { it.isDigit() }) { "Parent PIN must be 4–12 digits." }
+            val salt = ByteArray(16).also(SecureRandom()::nextBytes)
+            val hash = derivePinHash(pin, salt)
+            try {
+                check(prefs.edit()
+                    .putString(PIN_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                    .putString(PIN_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
+                    .commit()) { "Could not save the guardian PIN." }
+            } finally {
+                salt.fill(0)
+                hash.fill(0)
+            }
+        } finally {
+            pin.fill('\u0000')
+        }
     }
 
     @Synchronized fun verifyGuardianPin(pin: CharArray): Boolean {
-        val salt = prefs.getString(PIN_SALT, null)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
-        val expected = prefs.getString(PIN_HASH, null)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
-        val actual = derivePinHash(pin, salt)
-        pin.fill('\u0000')
-        return MessageDigest.isEqual(expected, actual)
+        var salt: ByteArray? = null
+        var expected: ByteArray? = null
+        var actual: ByteArray? = null
+        try {
+            salt = prefs.getString(PIN_SALT, null)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
+            expected = prefs.getString(PIN_HASH, null)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
+            actual = derivePinHash(pin, salt)
+            return MessageDigest.isEqual(expected, actual)
+        } finally {
+            pin.fill('\u0000')
+            salt?.fill(0)
+            expected?.fill(0)
+            actual?.fill(0)
+        }
     }
 
     @Synchronized fun snapshot(): Snapshot {
