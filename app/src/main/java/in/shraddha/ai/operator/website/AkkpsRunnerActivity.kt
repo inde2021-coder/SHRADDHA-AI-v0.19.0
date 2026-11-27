@@ -858,7 +858,7 @@ Return exact JSON only. Do not include prose or markdown."""
                         return@runOnUiThread
                     }
                     val missing = mapped.optJSONArray("missing") ?: JSONArray()
-                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+                    val explicitSubmit = AkkpsRunnerSubmitIntentPolicy.isExplicit(raw)
                     val aiRequestedSubmit = mapped.optBoolean("submit") && explicitSubmit
                     val shouldSubmit = AkkpsAiMappingPolicy.canSubmit(aiRequestedSubmit, missing.length())
                     val missingItems = (0 until missing.length()).map { missing.optString(it) }.filter { it.isNotBlank() }
