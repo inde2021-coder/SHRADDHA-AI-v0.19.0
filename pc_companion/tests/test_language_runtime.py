@@ -3,7 +3,10 @@ import unittest
 import wave
 from pathlib import Path
 
-from pc_companion.language_runtime import (\n    IndicConformerRuntime, LanguageRuntimeError, _read_pcm16_mono,\n    require_reference_voice_consent,\n)
+from pc_companion.language_runtime import (
+    IndicConformerRuntime, LanguageRuntimeError, _read_pcm16_mono,
+    require_reference_voice_consent,
+)
 
 
 class LanguageRuntimeTests(unittest.TestCase):
