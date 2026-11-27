@@ -173,7 +173,7 @@ class OperatorActivity : Activity() {
             "AI Form Autofill" to { startActivity(android.content.Intent(this, FormAutofillActivity::class.java)) },
             "File Access" to { startActivity(android.content.Intent(this, `in`.shraddha.ai.operator.files.FileAccessActivity::class.java)) })
         toolsCard.addView(chip("SMS / WhatsApp • Voice Message", true) {
-            startActivity(android.content.Intent(this, `com.Lia.assistant.action.MessageComposeActivity`::class.java))
+            startActivity(android.content.Intent(this, com.Lia.assistant.action.MessageComposeActivity::class.java))
         }, LinearLayout.LayoutParams(-1, dp(48)))
         page.addView(toolsCard)
 
