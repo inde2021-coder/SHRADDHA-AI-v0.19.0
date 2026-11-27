@@ -270,6 +270,19 @@ private fun buildPermissionRows(context: Context): List<PermissionRow> {
         add(runtime("microphone", "Microphone", "Voice input and live speech recognition", Manifest.permission.RECORD_AUDIO))
         add(runtime("camera", "Camera", "Visual Lens and biometric capture", Manifest.permission.CAMERA))
         add(runtime("contacts", "Contacts", "Resolve people by name", Manifest.permission.READ_CONTACTS))
+        add(runtime(
+            "precise_location",
+            "Precise location (GPS Walk)",
+            "Required only while recording the field edge for AKKPS boundary points. Background location is not requested.",
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ))
+        add(runtime(
+            "bluetooth_connect",
+            "Bluetooth device connection",
+            "Android 12+ permission for nearby PC/device pairing over Bluetooth when that transport is used.",
+            Manifest.permission.BLUETOOTH_CONNECT,
+            31
+        ))
         add(runtime("call", "Direct phone calls", "Place calls after user confirmation", Manifest.permission.CALL_PHONE))
         add(runtime(
             "sms",
