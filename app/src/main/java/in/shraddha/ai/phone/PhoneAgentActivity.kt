@@ -313,9 +313,23 @@ class PhoneAgentActivity : AppCompatActivity() {
             }
             1 -> {
                 val (name, number) = matches.first()
-                voiceStatus.text = "$name मिला। कॉल शुरू की जा रही है।"
-                tts?.speak("$name को कॉल लगा रही हूँ।", TextToSpeech.QUEUE_FLUSH, null, "calling-contact")
-                placeCall(number)
+                val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
+                if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
+                    voiceStatus.text = "$name मिला, लेकिन उसका फोन नंबर मान्य नहीं है। कॉल नहीं लगाई गई।"
+                    return
+                }
+                val masked = safeNumber.takeLast(4).padStart(safeNumber.length, '•')
+                voiceStatus.text = "$name मिला। कॉल लगाने से पहले पुष्टि आवश्यक है।"
+                tts?.speak("$name मिला है। क्या इस contact को कॉल लगाऊँ?", TextToSpeech.QUEUE_FLUSH, null, "confirm-contact-call")
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("कॉल की पुष्टि करें")
+                    .setMessage("$name\n$masked\n\nक्या अभी कॉल लगानी है?")
+                    .setPositiveButton("कॉल लगाएँ") { _, _ -> placeCall(safeNumber) }
+                    .setNegativeButton("रद्द करें") { _, _ ->
+                        voiceStatus.text = "कॉल रद्द कर दी गई।"
+                        tts?.speak("कॉल रद्द कर दी गई।", TextToSpeech.QUEUE_FLUSH, null, "call-cancelled")
+                    }
+                    .show()
             }
             else -> {
                 val names = matches.take(5).joinToString(", ") { it.first }
@@ -326,14 +340,18 @@ class PhoneAgentActivity : AppCompatActivity() {
     }
 
     private fun placeCall(number: String) {
-        if (number.isBlank()) return
+        val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
+        if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
+            voiceStatus.text = "फोन नंबर मान्य नहीं है; कॉल नहीं लगाई गई।"
+            return
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), callPermissionRequest)
             return
         }
         runCatching {
             val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
-            telecom.placeCall(Uri.fromParts("tel", number, null), Bundle())
+            telecom.placeCall(Uri.fromParts("tel", safeNumber, null), Bundle())
         }.onFailure {
             voiceStatus.text = "कॉल शुरू नहीं हो सकी: " + it.message
             status.text = voiceStatus.text
