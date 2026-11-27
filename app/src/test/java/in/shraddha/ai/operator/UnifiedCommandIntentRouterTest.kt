@@ -32,6 +32,13 @@ class UnifiedCommandIntentRouterTest {
         assertFalse(noAction.needsClarification)
     }
 
+    @Test fun explicitAppDomainWinsOverGenericPhoneChannel() {
+        val result = UnifiedCommandIntentRouter.classify("call on WhatsApp")
+        assertEquals(UnifiedCommandDomain.WHATSAPP, result.domain)
+        assertEquals(UnifiedCommandAction.CALL, result.action)
+        assertFalse(result.needsClarification)
+    }
+
     @Test fun highImpactActionsAreFlaggedButNeverAutoApproved() {
         val delete = UnifiedCommandIntentRouter.classify("delete this farmer record in AKKPS")
         assertTrue(delete.requiresHighImpactApproval)
