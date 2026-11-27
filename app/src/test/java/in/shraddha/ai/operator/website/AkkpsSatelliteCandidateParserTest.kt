@@ -100,6 +100,20 @@ class AkkpsSatelliteCandidateParserTest {
         assertTrue(AkkpsSatelliteCandidateParser.parse(feature(rings = rings)).isSuccess)
     }
 
+    @Test fun rejectsStringLongitudeOrLatitudeValues() {
+        val stringLongitude = """[[["78.0",23.0],[78.001,23.0],[78.001,23.001],[78.0,23.001],[78.0,23.0]]]"""
+        val stringLatitude = """[[[78.0,"23.0"],[78.001,23.0],[78.001,23.001],[78.0,23.001],[78.0,23.0]]]"""
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = stringLongitude)).isSuccess)
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = stringLatitude)).isSuccess)
+    }
+
+    @Test fun rejectsNonNumericOrNonFiniteAltitude() {
+        val stringAltitude = """[[[78.0,23.0,"high"],[78.001,23.0,0],[78.001,23.001,0],[78.0,23.001,0],[78.0,23.0,0]]]"""
+        val nullAltitude = """[[[78.0,23.0,null],[78.001,23.0,0],[78.001,23.001,0],[78.0,23.001,0],[78.0,23.0,0]]]"""
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = stringAltitude)).isSuccess)
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = nullAltitude)).isSuccess)
+    }
+
     @Test fun rejectsUnsupportedCrs() {
         val raw = feature().replace(
             "\"type\":\"Feature\"",
