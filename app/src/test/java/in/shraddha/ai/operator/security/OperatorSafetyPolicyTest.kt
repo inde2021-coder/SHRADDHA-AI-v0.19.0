@@ -37,6 +37,27 @@ class OperatorSafetyPolicyTest {
             OperatorSafetyPolicy.assess("scroll", "message list", "").risk)
     }
 
+    @Test fun blocksUnicodeCompatibilityAndZeroWidthObfuscation() {
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "Ｐａｓｓｗｏｒｄ", "sample").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "O\\u200BT\\u200BP", "123456").risk)
+    }
+
+    @Test fun blocksSeparatedHindiAndEnglishSecretLabels() {
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "O T P", "123456").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "ओ टी पी", "123456").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
+            OperatorSafetyPolicy.assess("TYPE", "P I N", "1234").risk)
+    }
+
+    @Test fun doesNotTreatOrdinaryWordsContainingSecretFragmentsAsSecrets() {
+        assertEquals(OperatorSafetyPolicy.Risk.LOW,
+            OperatorSafetyPolicy.assess("open", "Shipping history", "").risk)
+    }
+
 
     @Test fun blocksAlternateOneTimeCodeLabelsAndSensitivePostconditions() {
         assertEquals("generic Code label", OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Code", "123456", "Enter one time code").risk)
