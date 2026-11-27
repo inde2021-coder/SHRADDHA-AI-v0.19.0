@@ -12,7 +12,6 @@ data class CommandTaskStep(
     val id: String,
     val capability: String,
     val action: String,
-    val targetHint: String,
     val state: CommandStepState = CommandStepState.PENDING,
     val attempt: Int = 0,
     val resultCode: String = "",
@@ -46,7 +45,8 @@ class CommandExecutionJournal(context: Context) {
         if (command.isBlank() || command.length > MAX_COMMAND_CHARS || steps.isEmpty() || steps.size > MAX_STEPS) return null
         if (steps.any { !validStep(it) } || steps.map { it.id }.distinct().size != steps.size) return null
         val fingerprint = sha256(command.trim())
-        val existing = loadAll().firstOrNull { it.commandFingerprint == fingerprint && !it.isTerminal }
+        val now = System.currentTimeMillis()
+        val existing = loadAll().firstOrNull { it.commandFingerprint == fingerprint && now - it.createdAt <= DEDUP_WINDOW_MS }
         if (existing != null) return existing
         val plan = CommandTaskPlan(UUID.randomUUID().toString(), fingerprint, System.currentTimeMillis(),
             steps.map { it.copy(state = CommandStepState.PENDING, attempt = 0, resultCode = "") })
@@ -127,17 +127,21 @@ class CommandExecutionJournal(context: Context) {
 
     private fun persist(plan: CommandTaskPlan) {
         val all = loadAll().filterNot { it.id == plan.id }.toMutableList().apply { add(plan) }
-            .sortedByDescending { it.createdAt }.take(MAX_PLANS)
-        val encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
-        // apply() is durable across normal process restarts; keep a hard bound on local storage.
-        prefs.edit().putString(KEY_PLANS, encoded.take(MAX_STORAGE_CHARS)).apply()
+            .sortedByDescending { it.createdAt }.take(MAX_PLANS).toMutableList()
+        var encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
+        while (all.size > 1 && encoded.length > MAX_STORAGE_CHARS) {
+            all.removeAt(all.lastIndex)
+            encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
+        }
+        // Synchronous commit makes each state transition durable before the caller proceeds.
+        prefs.edit().putString(KEY_PLANS, encoded).commit()
     }
 
     private fun encode(plan: CommandTaskPlan) = JSONObject()
         .put("id", plan.id).put("fingerprint", plan.commandFingerprint).put("createdAt", plan.createdAt)
         .put("steps", JSONArray().apply { plan.steps.forEach { s ->
             put(JSONObject().put("id", s.id).put("capability", s.capability).put("action", s.action)
-                .put("targetHint", s.targetHint).put("state", s.state.name).put("attempt", s.attempt)
+                .put("state", s.state.name).put("attempt", s.attempt)
                 .put("resultCode", s.resultCode).put("updatedAt", s.updatedAt))
         } })
 
@@ -146,8 +150,8 @@ class CommandExecutionJournal(context: Context) {
         val steps = (0 until array.length()).map { i ->
             val s = array.getJSONObject(i)
             CommandTaskStep(s.getString("id"), s.getString("capability"), s.getString("action"),
-                s.optString("targetHint"), CommandStepState.valueOf(s.getString("state")),
-                s.optInt("attempt"), s.optString("resultCode"), s.optLong("updatedAt"))
+                CommandStepState.valueOf(s.getString("state")), s.optInt("attempt"),
+                s.optString("resultCode"), s.optLong("updatedAt"))
         }
         require(steps.size <= MAX_STEPS && steps.all { validStep(it) })
         return CommandTaskPlan(o.getString("id"), o.getString("fingerprint"), o.getLong("createdAt"), steps)
@@ -155,8 +159,7 @@ class CommandExecutionJournal(context: Context) {
 
     private fun validStep(step: CommandTaskStep): Boolean =
         step.id.length in 1..80 && step.capability.length in 1..60 &&
-            step.action.length in 1..60 && step.targetHint.length <= 100 &&
-            step.attempt in 0..3 && step.resultCode.length <= 80
+            step.action.length in 1..60 && step.attempt in 0..3 && step.resultCode.length <= 80
 
     private fun safeCode(value: String): String =
         value.filter { it.isLetterOrDigit() || it in "_-." }.take(80)
@@ -168,6 +171,7 @@ class CommandExecutionJournal(context: Context) {
         private const val PREFS = "shraddha_command_execution_journal"
         private const val KEY_PLANS = "plans_v1"
         private const val MAX_COMMAND_CHARS = 4_000
+        private const val DEDUP_WINDOW_MS = 5 * 60 * 1000L
         private const val MAX_STEPS = 50
         private const val MAX_PLANS = 100
         private const val MAX_STORAGE_CHARS = 256_000
