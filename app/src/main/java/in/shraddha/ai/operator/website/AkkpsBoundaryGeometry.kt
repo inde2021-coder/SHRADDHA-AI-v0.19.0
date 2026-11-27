@@ -59,17 +59,33 @@ object AkkpsBoundaryGeometry {
     /** Parse the outer KML coordinates tuple order: longitude,latitude[,altitude]. */
     fun parseKml(kml: String): Result<AkkpsBoundary> = runCatching {
         require(kml.length in 1..2_000_000) { "KML file size is invalid." }
-        val coordinateText = coordinatesTag.find(kml)?.groupValues?.get(1)
-            ?: error("KML में coordinates section नहीं मिला।")
-        val points = coordinateText.trim().split(Regex("\\s+"))
-            .filter { it.isNotBlank() }
-            .map { tuple ->
-                val values = tuple.split(',')
-                require(values.size >= 2) { "KML coordinate tuple अधूरा है।" }
-                val longitude = values[0].toDouble()
-                val latitude = values[1].toDouble()
-                AkkpsGeoPoint(latitude, longitude)
+        require(Regex("(?is)<Polygon\\b").findAll(kml).count() == 1) {
+            "KML में केवल एक Polygon स्वीकार है।"
+        }
+        require(!Regex("(?is)<innerBoundaryIs\\b").containsMatchIn(kml)) {
+            "KML में polygon holes अभी supported नहीं हैं।"
+        }
+        val coordinateMatches = coordinatesTag.findAll(kml).toList()
+        require(coordinateMatches.size == 1) {
+            "KML में ठीक एक outer coordinates section होना चाहिए।"
+        }
+        require(Regex("(?is)<outerBoundaryIs\\b").containsMatchIn(kml) &&
+            Regex("(?is)<LinearRing\\b").containsMatchIn(kml)) {
+            "KML में outer LinearRing नहीं मिला।"
+        }
+        val coordinateText = coordinateMatches.single().groupValues[1]
+        val tuples = coordinateText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        require(tuples.size in 4..(MAX_POINTS + 1)) { "KML coordinate count invalid है।" }
+        val points = tuples.map { tuple ->
+            val values = tuple.split(',')
+            require(values.size in 2..3) { "KML coordinate tuple में केवल lon,lat[,altitude] मान्य है।" }
+            val longitude = values[0].toDouble()
+            val latitude = values[1].toDouble()
+            if (values.size == 3) require(values[2].toDouble().isFinite()) {
+                "KML altitude invalid है।"
             }
+            AkkpsGeoPoint(latitude, longitude)
+        }
         validate(points)?.let { error(it) }
         fun metadata(name: String): String? {
             val pattern = Regex("(?is)<Data\\s+name=\"" + Regex.escape(name) + "\"\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
