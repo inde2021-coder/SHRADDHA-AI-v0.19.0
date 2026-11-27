@@ -194,7 +194,6 @@ class AkkpsRunnerActivity : Activity() {
                 const key=norm(item.key);
                 const found=all.filter(e=>{
                   const type=(e.type||'').toLowerCase();
-                  const allowedTypes=new Set(__ALLOWED_TYPES__);
                   if(e.disabled||e.readOnly||e.hidden||e.getAttribute('aria-disabled')==='true'||
                     e.closest('[aria-hidden="true"]')||
                     (e.tagName==='INPUT'&&!allowedTypes.has(type))||
@@ -346,6 +345,7 @@ Return exact JSON only. Do not include prose or markdown."""
         val js = """
             (function(keys){
               const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const allowedTypes=new Set(__ALLOWED_TYPES__);
               const all=[...document.querySelectorAll('input,textarea,select')];
               const forms=new Set(), normalized=keys.map(norm);
               if(!normalized.length||normalized.some(k=>!k)||new Set(normalized).size!==normalized.length)
