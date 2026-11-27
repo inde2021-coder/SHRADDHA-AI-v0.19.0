@@ -37,10 +37,9 @@ function containsSensitiveInput(parts) {
   const normalized = source.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
   if (SECRET_INPUT.test(normalized)) return true;
 
-  // Catch common voice/transcription spacing tricks such as "O T P" and "P I N".
-  const compactLatin = normalized.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (/(?:password|passcode|otp|onetimepassword|onetimecode|verificationcode|securitycode|secretkey|recoveryphrase|recoverycode|cvv|cvc|upipin|bankpin)/.test(compactLatin)) return true;
-  if (/(?:^|[^a-z])p\s*i\s*n(?:$|[^a-z])/i.test(normalized)) return true;
+  // Catch letter-by-letter voice transcription without matching substrings
+  // inside ordinary words (for example, "spinach" contains the letters "pin").
+  if (/(?:^|[^a-z])(?:o\s*t\s*p|p\s*i\s*n|c\s*v\s*v)(?:$|[^a-z])/i.test(normalized)) return true;
 
   const compactHindi = normalized.replace(/[^\u0900-\u097F]/g, '');
   return /(?:पासवर्ड|पासकोड|ओटीपी|वनटाइमपासवर्ड|सत्यापनकोड|सुरक्षाकोड|गुप्तकुंजी|रिकवरीवाक्यांश|रिकवरीकोड|सीवीवी|यूपीआईपिन|बैंकपिन|पिन)/.test(compactHindi);
