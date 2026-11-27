@@ -380,6 +380,7 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun importBoundaryKml() {
+        if (gpsWalkSessionInitialized) { status.text = "पहले अधूरी GPS Walk को Save करें या नई Walk चुनें।"; return }
         if (gpsWalkActive) { status.text = "KML Import से पहले GPS Walk रोकें।"; return }
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -389,6 +390,7 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun importSatelliteCandidate() {
+        if (gpsWalkSessionInitialized) { status.text = "पहले अधूरी GPS Walk को Save करें या नई Walk चुनें।"; return }
         if (gpsWalkActive) { status.text = "Candidate Import से पहले GPS Walk रोकें।"; return }
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
