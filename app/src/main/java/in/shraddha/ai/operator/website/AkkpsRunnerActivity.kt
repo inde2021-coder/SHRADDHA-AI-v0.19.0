@@ -922,7 +922,15 @@ Return exact JSON only. Do not include prose or markdown."""
             }
             status.text = "Submit request भेजी गई। AKKPS की प्रतिक्रिया जाँची जा रही है…"
             val eventStart = result?.optInt("eventStart") ?: 0
-            web.postDelayed({ verifySubmit(before, expectedValues, eventStart) }, 3000)
+            web.postDelayed({
+                if (submitVerificationPending) verifySubmit(before, expectedValues, eventStart)
+            }, 3000)
+            web.postDelayed({
+                if (submitVerificationPending) {
+                    submitVerificationPending = false
+                    status.text = "AKKPS verification timeout। दोबारा Submit न करें; पहले record list में जाँचें।"
+                }
+            }, 15_000)
         }
     }
 
@@ -947,6 +955,7 @@ Return exact JSON only. Do not include prose or markdown."""
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (!submitVerificationPending) return@evaluateJavascript
             submitVerificationPending = false
             status.text = when {
                 o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
