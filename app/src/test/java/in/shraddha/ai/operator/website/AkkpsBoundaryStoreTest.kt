@@ -137,4 +137,32 @@ class AkkpsBoundaryStoreTest {
         assertNotNull(AkkpsBoundaryGeometry.validate(repeated))
     }
 
+    @Test fun rejectsKmlWithInteriorPolygonHole() {
+        val kml = """
+            <kml><Placemark><Polygon>
+              <outerBoundaryIs><LinearRing><coordinates>
+                78.0,23.0,0 78.001,23.0,0 78.001,23.001,0 78.0,23.001,0 78.0,23.0,0
+              </coordinates></LinearRing></outerBoundaryIs>
+              <innerBoundaryIs><LinearRing><coordinates>
+                78.0002,23.0002 78.0003,23.0002 78.0003,23.0003 78.0002,23.0002
+              </coordinates></LinearRing></innerBoundaryIs>
+            </Polygon></Placemark></kml>
+        """.trimIndent()
+        assertTrue(AkkpsBoundaryGeometry.parseKml(kml).isFailure)
+    }
+
+    @Test fun rejectsKmlWithMultiplePolygonsOrMalformedCoordinateDimensions() {
+        val one = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val multi = one.replace("</Placemark>", one.substringAfter("<Placemark>").substringBefore("</Placemark>") + "</Placemark>")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(multi).isFailure)
+        val malformed = one.replace("78.0,23.0,0", "78.0,23.0,0,7")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
+    }
+
+    @Test fun rejectsNonFiniteKmlAltitude() {
+        val malformed = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+            .replace("78.0,23.0,0", "78.0,23.0,NaN")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
+    }
+
 }
