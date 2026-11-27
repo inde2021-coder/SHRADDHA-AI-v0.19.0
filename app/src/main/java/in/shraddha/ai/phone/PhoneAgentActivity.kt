@@ -351,7 +351,9 @@ class PhoneAgentActivity : AppCompatActivity() {
             return
         }
         val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
-        val accounts = runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList())
+        // SIM enumeration requires READ_PHONE_STATE. If it is not granted, let Android use its default SIM without prompting for a broader permission.
+        val canReadPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        val accounts = if (canReadPhoneState) runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList()) else emptyList()
         when (accounts.size) {
             0 -> launchCallWithAccount(safeNumber, null)
             1 -> launchCallWithAccount(safeNumber, accounts.first())
