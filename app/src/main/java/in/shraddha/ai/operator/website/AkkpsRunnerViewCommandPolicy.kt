@@ -4,7 +4,7 @@ import java.text.Normalizer
 import java.util.Locale
 
 internal object AkkpsRunnerViewCommandPolicy {
-    private val prefix = Regex("^(?:view|show record|open record|open|देखो|देखें|रिकॉर्ड खोलो|रिकॉर्ड खोलें|खोलो)\\s+(.+)$")
+    private val prefix = Regex("^(?:view|show record|open record|open|देखो|देखें|रिकॉर्ड खोलो|रिकॉर्ड खोलें|खोलो)(?:\\s*:\\s*|\\s+)(.+)$", RegexOption.IGNORE_CASE)
 
     fun parse(raw: String): String? {
         if (raw.isBlank() || raw.length > 300 || raw.contains('\n')) return null
