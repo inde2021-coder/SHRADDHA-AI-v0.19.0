@@ -70,4 +70,34 @@ class WorkflowEngineTest {
             fail("Approval must only be accepted when requested")
         } catch (_: IllegalArgumentException) { }
     }
+
+    @Test fun rejectsOversizedWorkflowAndInvalidIdentifiers() {
+        val tooMany = (0..256).map { WorkflowStep("step_$it", "Step $it", Risk.READ_ONLY) }
+        try {
+            engine.start(snapshot(tooMany))
+            fail("More than 256 steps must be rejected")
+        } catch (_: IllegalArgumentException) { }
+
+        try {
+            engine.start(snapshot(listOf(WorkflowStep("bad id", "Step", Risk.READ_ONLY))))
+            fail("Whitespace in step ID must be rejected")
+        } catch (_: IllegalArgumentException) { }
+
+        try {
+            engine.start(snapshot().copy(id = "bad/id"))
+            fail("Invalid workflow ID must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun rejectsOversizedTitlesAndMessages() {
+        try {
+            engine.start(snapshot().copy(title = "x".repeat(121)))
+            fail("Oversized workflow title must be rejected")
+        } catch (_: IllegalArgumentException) { }
+
+        try {
+            engine.start(snapshot().copy(message = "x".repeat(241)))
+            fail("Oversized workflow message must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
 }
