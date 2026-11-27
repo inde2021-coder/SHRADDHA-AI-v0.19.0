@@ -66,13 +66,19 @@ object AkkpsWebsiteProfile {
         WebsiteOperation.entries.map { operation ->
             WebsiteCapability(
                 operation = operation,
-                state = if (operation == WebsiteOperation.DISCOVER_SITE ||
-                    operation == WebsiteOperation.OBSERVE_PAGE ||
-                    operation == WebsiteOperation.NAVIGATE
-                ) CapabilityState.AVAILABLE else CapabilityState.UNKNOWN,
-                evidence = if (operation == WebsiteOperation.DISCOVER_SITE)
-                    "Public site origin configured; private dashboard not yet inspected."
-                else ""
+                state = when {
+                    !isRunnerOperationAllowed(operation) -> CapabilityState.UNAVAILABLE
+                    operation == WebsiteOperation.DISCOVER_SITE ||
+                        operation == WebsiteOperation.OBSERVE_PAGE ||
+                        operation == WebsiteOperation.NAVIGATE -> CapabilityState.AVAILABLE
+                    else -> CapabilityState.UNKNOWN
+                },
+                evidence = when {
+                    !isRunnerOperationAllowed(operation) -> "Blocked by AKKPS Runner data-entry scope"
+                    operation == WebsiteOperation.DISCOVER_SITE ->
+                        "Public site origin configured; private dashboard not yet inspected."
+                    else -> ""
+                }
             )
         }
 
