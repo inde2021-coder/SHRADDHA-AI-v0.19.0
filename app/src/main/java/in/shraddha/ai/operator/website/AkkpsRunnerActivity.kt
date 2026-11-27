@@ -767,10 +767,10 @@ class AkkpsRunnerActivity : Activity() {
             (function(items){
               const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const allowed=__ALLOWED_TYPES__;
-              const all=[...document.querySelectorAll('input,textarea')],out=[];
+              const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
-                (e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase()))&&
+                (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
                 !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               for(const item of items){
                 const key=norm(item.key);
@@ -782,11 +782,19 @@ class AkkpsRunnerActivity : Activity() {
                 });
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
-                e.value=item.value;
+                if(e.tagName==='SELECT'){
+                  const wanted=norm(item.value);
+                  const options=[...e.options].filter(o=>!o.disabled&&!(o.parentElement&&o.parentElement.disabled)&&
+                    (norm(o.value)===wanted||norm(o.textContent)===wanted));
+                  if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
+                  e.value=options[0].value;
+                }else{
+                  e.value=item.value;
+                }
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
-              const missing=[...document.querySelectorAll('input[required],textarea[required]')]
+              const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
                 .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
@@ -924,21 +932,24 @@ Return exact JSON only. Do not include prose or markdown."""
               const eventStart=window.__akkpsSubmitSequence||0;
               const allowed=__ALLOWED_TYPES__;
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
-                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&e.tagName!=='SELECT'&&
-                (e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase()))&&!!e.getClientRects().length&&
-                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
-              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea')].some(e=>editable(e)&&e.value));
+                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
+                (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
+                !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
                 const key=String(item.key||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-                const matches=[...f.querySelectorAll('input,textarea')].filter(e=>{
+                const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
                   if(!editable(e)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
                     .map(x=>String(x||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
                 });
-                if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
+                if(matches.length!==1) return JSON.stringify({status:'field_changed',field:item.key});
+                const actual=String(matches[0].value), expected=String(item.value);
+                const optionLabel=matches[0].tagName==='SELECT'?norm(matches[0].selectedOptions[0]?.textContent):'';
+                if(actual!==expected && optionLabel!==norm(expected)) return JSON.stringify({status:'field_changed',field:item.key});
               }
               const submitControls=[...f.querySelectorAll('button:not([type]),button[type=submit],input[type=submit]')]
                 .filter(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
