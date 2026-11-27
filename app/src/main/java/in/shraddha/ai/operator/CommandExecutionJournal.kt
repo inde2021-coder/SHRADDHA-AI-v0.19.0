@@ -177,6 +177,7 @@ class CommandExecutionJournal(context: Context) {
 
     private fun safeCode(value: String): String {
         val candidate = value.trim()
+        if (candidate.isEmpty()) return ""
         return if (candidate.matches(Regex("^[A-Za-z][A-Za-z_-]{0,79}$"))) {
             candidate.lowercase()
         } else {
