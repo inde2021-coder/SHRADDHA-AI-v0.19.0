@@ -21,6 +21,75 @@ class AkkpsBoundaryStoreTest {
         assertEquals(original.points, restored.points)
         assertEquals(original.areaAcres, restored.areaAcres, 0.0000001)
     }
+    @Test fun satelliteProvenanceSurvivesEncryptedStorePayloadRoundTrip() {
+        val candidate = AkkpsBoundary(
+            points = square,
+            source = "FTW Global 2025",
+            datasetYear = 2025,
+            confidence = 0.87,
+            sourceFeatureId = "field-42"
+        )
+        val restored = AkkpsBoundaryGeometry.fromJson(AkkpsBoundaryGeometry.toJson(candidate))
+        assertEquals(candidate.points, restored.points)
+        assertEquals(candidate.source, restored.source)
+        assertEquals(candidate.datasetYear, restored.datasetYear)
+        assertEquals(candidate.confidence!!, restored.confidence!!, 0.000001)
+        assertEquals(candidate.sourceFeatureId, restored.sourceFeatureId)
+    }
+
+    @Test fun legacyVersionOneBoundaryPayloadStillLoadsWithoutProvenance() {
+        val payload = """{"version":1,"points":[{"lat":23.0,"lon":78.0},{"lat":23.0,"lon":78.001},{"lat":23.001,"lon":78.001},{"lat":23.001,"lon":78.0}]}"""
+        val restored = AkkpsBoundaryGeometry.fromJson(payload)
+        assertEquals(square, restored.points)
+        assertNull(restored.source)
+        assertNull(restored.datasetYear)
+    }
+
+    @Test fun invalidSatelliteProvenanceIsRejectedOnSaveAndLoad() {
+        assertTrue(runCatching {
+            AkkpsBoundaryGeometry.toJson(AkkpsBoundary(square, source = "x".repeat(121)))
+        }.isFailure)
+        assertTrue(runCatching {
+            AkkpsBoundaryGeometry.toJson(AkkpsBoundary(square, datasetYear = 1800))
+        }.isFailure)
+        assertTrue(runCatching {
+            AkkpsBoundaryGeometry.toJson(AkkpsBoundary(square, confidence = 1.5))
+        }.isFailure)
+    }
+
+    @Test fun kmlRoundTripPreservesSatelliteProvenance() {
+        val original = AkkpsBoundary(
+            points = square,
+            source = "Field & Tree <Global>",
+            datasetYear = 2025,
+            confidence = 0.91,
+            sourceFeatureId = "field-42"
+        )
+        val kml = AkkpsBoundaryGeometry.toKml(original, "Plot & boundary")
+        val restored = AkkpsBoundaryGeometry.parseKml(kml).getOrThrow()
+        assertEquals(original.points, restored.points)
+        assertEquals(original.source, restored.source)
+        assertEquals(original.datasetYear, restored.datasetYear)
+        assertEquals(original.confidence!!, restored.confidence!!, 0.000001)
+        assertEquals(original.sourceFeatureId, restored.sourceFeatureId)
+        assertTrue(kml.contains("&amp;"))
+        assertTrue(kml.contains("&lt;"))
+    }
+
+    @Test fun kmlWithoutExtendedDataRemainsCompatible() {
+        val kml = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val restored = AkkpsBoundaryGeometry.parseKml(kml).getOrThrow()
+        assertEquals(square, restored.points)
+        assertNull(restored.source)
+        assertNull(restored.confidence)
+    }
+
+    @Test fun malformedKmlProvenanceIsRejected() {
+        val kml = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+            .replace("</Placemark>", "<ExtendedData><Data name=\"datasetYear\"><value>1800</value></Data></ExtendedData></Placemark>")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(kml).isFailure)
+    }
+
     @Test fun invalidCoordinatesAndTooFewPointsAreRejected() {
         assertNotNull(AkkpsBoundaryGeometry.validate(square.take(2)))
         assertNotNull(AkkpsBoundaryGeometry.validate(square + AkkpsGeoPoint(91.0, 78.0)))
@@ -29,4 +98,127 @@ class AkkpsBoundaryStoreTest {
         assertTrue(runCatching { AkkpsBoundaryGeometry.fromJson("x".repeat(200001)) }.isFailure)
         assertTrue(runCatching { AkkpsBoundaryGeometry.fromJson("{\"points\":[]}") }.isFailure)
     }
+    @Test fun rejectsBowTieSelfIntersection() {
+        val bowTie = listOf(
+            AkkpsGeoPoint(23.0, 78.0),
+            AkkpsGeoPoint(23.002, 78.002),
+            AkkpsGeoPoint(23.0, 78.002),
+            AkkpsGeoPoint(23.002, 78.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(bowTie))
+    }
+
+    @Test fun rejectsCollinearOverlappingNonAdjacentEdges() {
+        val overlap = listOf(
+            AkkpsGeoPoint(0.0, 0.0),
+            AkkpsGeoPoint(0.0, 4.0),
+            AkkpsGeoPoint(2.0, 4.0),
+            AkkpsGeoPoint(0.0, 1.0),
+            AkkpsGeoPoint(0.0, 3.0),
+            AkkpsGeoPoint(-2.0, 3.0),
+            AkkpsGeoPoint(-2.0, 0.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(overlap))
+    }
+
+    @Test fun rejectsNonAdjacentVertexTouchingAnotherEdge() {
+        val touch = listOf(
+            AkkpsGeoPoint(0.0, 0.0),
+            AkkpsGeoPoint(0.0, 4.0),
+            AkkpsGeoPoint(4.0, 4.0),
+            AkkpsGeoPoint(0.0, 2.0),
+            AkkpsGeoPoint(4.0, 0.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(touch))
+    }
+
+    @Test fun rejectsRepeatedNonAdjacentVertex() {
+        val repeated = square + square[1]
+        assertNotNull(AkkpsBoundaryGeometry.validate(repeated))
+    }
+
+    @Test fun rejectsKmlWithInteriorPolygonHole() {
+        val kml = """
+            <kml><Placemark><Polygon>
+              <outerBoundaryIs><LinearRing><coordinates>
+                78.0,23.0,0 78.001,23.0,0 78.001,23.001,0 78.0,23.001,0 78.0,23.0,0
+              </coordinates></LinearRing></outerBoundaryIs>
+              <innerBoundaryIs><LinearRing><coordinates>
+                78.0002,23.0002 78.0003,23.0002 78.0003,23.0003 78.0002,23.0002
+              </coordinates></LinearRing></innerBoundaryIs>
+            </Polygon></Placemark></kml>
+        """.trimIndent()
+        assertTrue(AkkpsBoundaryGeometry.parseKml(kml).isFailure)
+    }
+
+    @Test fun rejectsKmlWithMultiplePolygonsOrMalformedCoordinateDimensions() {
+        val one = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val multi = one.replace("</Placemark>", one.substringAfter("<Placemark>").substringBefore("</Placemark>") + "</Placemark>")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(multi).isFailure)
+        val malformed = one.replace("78.0,23.0,0", "78.0,23.0,0,7")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
+    }
+
+    @Test fun rejectsNonFiniteKmlAltitude() {
+        val malformed = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+            .replace("78.0,23.0,0", "78.0,23.0,NaN")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
+    }
+
+    @Test fun kmlImportPreservesSatelliteProvenanceMetadata() {
+        val boundary = AkkpsBoundary(
+            points = square + square.first(),
+            source = "Sentinel-2 / FTW",
+            datasetYear = 2025,
+            confidence = 0.87,
+            sourceFeatureId = "field-2025-17"
+        )
+        val kml = AkkpsBoundaryGeometry.toKml(boundary, "Plot 17")
+        val restored = AkkpsBoundaryGeometry.parseKml(kml).getOrThrow()
+        assertEquals(boundary.source, restored.source)
+        assertEquals(boundary.datasetYear, restored.datasetYear)
+        assertEquals(boundary.confidence!!, restored.confidence!!, 0.0001)
+        assertEquals(boundary.sourceFeatureId, restored.sourceFeatureId)
+        assertEquals(boundary.points, restored.points)
+    }
+
+    @Test fun kmlWithoutProvenanceDoesNotInventSourceMetadata() {
+        val boundary = AkkpsBoundary(points = square + square.first())
+        val restored = AkkpsBoundaryGeometry.parseKml(AkkpsBoundaryGeometry.toKml(boundary)).getOrThrow()
+        assertNull(restored.source)
+        assertNull(restored.datasetYear)
+        assertNull(restored.confidence)
+        assertNull(restored.sourceFeatureId)
+    }
+
+    @Test fun phoneGpsWalkSourceSurvivesBoundaryPersistence() {
+        val boundary = AkkpsBoundary(
+            points = square,
+            source = "Phone GNSS GPS Walk"
+        )
+        val restored = AkkpsBoundaryGeometry.fromJson(AkkpsBoundaryGeometry.toJson(boundary))
+        assertEquals("Phone GNSS GPS Walk", restored.source)
+        assertNull(restored.datasetYear)
+        assertNull(restored.confidence)
+    }
+
+    @Test fun rejectsKmlWithDocumentTypeOrCustomEntityDeclarations() {
+        val base = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val doctype = base.replace("<kml", "<!DOCTYPE kml [<!ENTITY x \"boom\">]><kml")
+        val entity = base.replace("<kml", "<!ENTITY x \"boom\"><kml")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(doctype).isFailure)
+        assertTrue(AkkpsBoundaryGeometry.parseKml(entity).isFailure)
+    }
+
+    @Test fun rejectsKmlCdataAndDuplicateProvenanceKeys() {
+        val base = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square, source = "FTW"))
+        val duplicate = base.replace(
+            "</ExtendedData>",
+            "<Data name=\"source\"><value>Other</value></Data></ExtendedData>"
+        )
+        val cdata = base.replace("78.0,23.0,0", "<![CDATA[78.0,23.0,0]]>")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(duplicate).isFailure)
+        assertTrue(AkkpsBoundaryGeometry.parseKml(cdata).isFailure)
+    }
+
 }
