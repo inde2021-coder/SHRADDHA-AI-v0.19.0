@@ -129,11 +129,13 @@ class CommandExecutionJournal(context: Context) {
     private fun persist(plan: CommandTaskPlan): Boolean {
         val all = loadAll().filterNot { it.id == plan.id }.toMutableList().apply { add(plan) }
             .sortedByDescending { it.createdAt }.take(MAX_PLANS).toMutableList()
+        if (all.none { it.id == plan.id }) return false
         var encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
         while (all.size > 1 && encoded.length > MAX_STORAGE_CHARS) {
             all.removeAt(all.lastIndex)
             encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
         }
+        if (all.none { it.id == plan.id } || encoded.length > MAX_STORAGE_CHARS) return false
         // Synchronous commit makes each state transition durable before the caller proceeds.
         return prefs.edit().putString(KEY_PLANS, encoded).commit()
     }
@@ -154,13 +156,20 @@ class CommandExecutionJournal(context: Context) {
                 CommandStepState.valueOf(s.getString("state")), s.optInt("attempt"),
                 s.optString("resultCode"), s.optLong("updatedAt"))
         }
-        require(steps.size <= MAX_STEPS && steps.all { validStep(it) })
-        return CommandTaskPlan(o.getString("id"), o.getString("fingerprint"), o.getLong("createdAt"), steps)
+        require(steps.isNotEmpty() && steps.size <= MAX_STEPS && steps.all { validStep(it) })
+        val id = o.getString("id")
+        val fingerprint = o.getString("fingerprint")
+        val createdAt = o.getLong("createdAt")
+        require(id.matches(Regex("^[A-Fa-f0-9-]{36}$")))
+        require(fingerprint.matches(Regex("^[a-f0-9]{64}$")) && createdAt > 0L)
+        return CommandTaskPlan(id, fingerprint, createdAt, steps)
     }
 
     private fun validStep(step: CommandTaskStep): Boolean =
-        step.id.length in 1..80 && step.capability.length in 1..60 &&
-            step.action.length in 1..60 && step.attempt in 0..3 && step.resultCode.length <= 80
+        step.id.matches(Regex("^[A-Za-z0-9_.-]{1,80}$")) &&
+            step.capability.matches(Regex("^[A-Za-z0-9_.-]{1,60}$")) &&
+            step.action.matches(Regex("^[A-Za-z0-9_.-]{1,60}$")) &&
+            step.attempt in 0..3 && step.resultCode.length <= 80
 
     private fun safeCode(value: String): String =
         value.filter { it.isLetterOrDigit() || it in "_-." }.take(80)
