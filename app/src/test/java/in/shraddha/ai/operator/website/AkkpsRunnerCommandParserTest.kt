@@ -83,4 +83,11 @@ class AkkpsRunnerCommandParserTest {
         assertEquals("surveyNumber", parsed.assignments.single().first)
     }
 
+    @Test fun mapsGenderAliasesToFarmerGenderForRadioGroupEntry() {
+        val parsed = AkkpsRunnerCommandParser.parse("Gender=Female")
+        assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+        assertEquals("farmerGender", parsed.assignments.single().first)
+        assertEquals("Female", parsed.assignments.single().second)
+    }
+
 }
