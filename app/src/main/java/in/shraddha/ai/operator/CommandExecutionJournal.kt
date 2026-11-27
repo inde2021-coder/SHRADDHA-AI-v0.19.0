@@ -114,7 +114,9 @@ class CommandExecutionJournal(context: Context) {
         if (index < 0) return null
         val next = transform(plan.steps[index]) ?: return null
         val steps = plan.steps.toMutableList().also { it[index] = next }
-        persist(plan.copy(steps = steps))
+        // Never report a transition as accepted unless the new state is durably committed.
+        // Callers use a non-null RUNNING claim as the gate before performing side effects.
+        if (!persist(plan.copy(steps = steps))) return null
         return next
     }
 
