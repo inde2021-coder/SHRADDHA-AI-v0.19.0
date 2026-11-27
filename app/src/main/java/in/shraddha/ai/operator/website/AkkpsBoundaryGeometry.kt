@@ -175,7 +175,7 @@ object AkkpsBoundaryGeometry {
     fun toKml(boundary: AkkpsBoundary, name: String = "AKKPS Plot Boundary"): String {
         validate(boundary.points)?.let { error(it) }
         validateProvenance(boundary)
-        val safeName = xmlEscape(name).take(100)
+        val safeName = xmlEscape(name.take(100))
         val coordinates = closeRing(boundary.points).joinToString(" ") { "${it.longitude},${it.latitude},0" }
         val metadata = buildString {
             boundary.source?.let { append("<Data name=\"source\"><value>${xmlEscape(it)}</value></Data>") }
