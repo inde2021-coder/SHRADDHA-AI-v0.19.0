@@ -74,7 +74,11 @@ class AkkpsBoundaryDraftStore(context: android.content.Context) {
     }
 
     fun delete(plotId: String) {
-        encrypted.remove(key(plotId))
+        val storageKey = key(plotId)
+        val existing = encrypted.get(storageKey).getOrThrow()
+        if (existing.isNotBlank()) {
+            check(encrypted.remove(storageKey)) { "GPS draft local delete failed." }
+        }
     }
 
     private fun key(plotId: String): String {
