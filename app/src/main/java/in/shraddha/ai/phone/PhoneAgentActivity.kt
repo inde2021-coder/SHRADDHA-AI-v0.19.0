@@ -2,6 +2,7 @@ package `in`.shraddha.ai.phone
 
 import android.app.role.RoleManager
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Context
 import android.net.Uri
 import android.provider.ContactsContract
