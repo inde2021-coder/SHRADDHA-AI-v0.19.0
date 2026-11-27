@@ -71,7 +71,20 @@ object AkkpsBoundaryGeometry {
                 AkkpsGeoPoint(latitude, longitude)
             }
         validate(points)?.let { error(it) }
-        AkkpsBoundary(closeRing(points))
+        fun metadata(name: String): String? {
+            val pattern = Regex("(?is)<Data\\s+name=[\\\"']" + Regex.escape(name) + "[\\\"']\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
+            return pattern.find(kml)?.groupValues?.get(1)?.let(::xmlUnescape)?.takeIf { it.isNotBlank() }
+        }
+        val source = metadata("source")
+        val yearText = metadata("datasetYear")
+        val year = yearText?.toIntOrNull()
+        require(yearText == null || year != null) { "KML dataset year is invalid." }
+        val confidenceText = metadata("confidence")
+        val confidence = confidenceText?.toDoubleOrNull()
+        require(confidenceText == null || confidence != null) { "KML confidence is invalid." }
+        val boundary = AkkpsBoundary(closeRing(points), source, year, confidence, metadata("sourceFeatureId"))
+        validateProvenance(boundary)
+        boundary
     }
 
     fun toJson(boundary: AkkpsBoundary): String {
@@ -108,6 +121,14 @@ object AkkpsBoundaryGeometry {
         return boundary
     }
 
+    private fun xmlEscape(value: String): String = value
+        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        .replace("\\"", "&quot;").replace("'", "&apos;")
+
+    private fun xmlUnescape(value: String): String = value
+        .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\\"")
+        .replace("&apos;", "'").replace("&amp;", "&")
+
     private fun validateProvenance(boundary: AkkpsBoundary) {
         require(boundary.source == null || (boundary.source.isNotBlank() && boundary.source.length <= 120)) {
             "Boundary source metadata is invalid."
@@ -125,10 +146,18 @@ object AkkpsBoundaryGeometry {
 
     fun toKml(boundary: AkkpsBoundary, name: String = "AKKPS Plot Boundary"): String {
         validate(boundary.points)?.let { error(it) }
-        val safeName = name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").take(100)
+        validateProvenance(boundary)
+        val safeName = xmlEscape(name).take(100)
         val coordinates = closeRing(boundary.points).joinToString(" ") { "${it.longitude},${it.latitude},0" }
+        val metadata = buildString {
+            boundary.source?.let { append("<Data name=\"source\"><value>${xmlEscape(it)}</value></Data>") }
+            boundary.datasetYear?.let { append("<Data name=\"datasetYear\"><value>$it</value></Data>") }
+            boundary.confidence?.let { append("<Data name=\"confidence\"><value>$it</value></Data>") }
+            boundary.sourceFeatureId?.let { append("<Data name=\"sourceFeatureId\"><value>${xmlEscape(it)}</value></Data>") }
+        }
+        val extendedData = if (metadata.isNotEmpty()) "<ExtendedData>$metadata</ExtendedData>" else ""
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-            "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><Placemark><name>$safeName</name>" +
+            "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><Placemark><name>$safeName</name>$extendedData" +
             "<Polygon><outerBoundaryIs><LinearRing><coordinates>$coordinates</coordinates></LinearRing></outerBoundaryIs></Polygon>" +
             "</Placemark></Document></kml>"
     }
