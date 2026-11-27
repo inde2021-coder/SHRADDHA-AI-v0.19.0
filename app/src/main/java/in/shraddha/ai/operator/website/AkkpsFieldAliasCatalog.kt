@@ -1,5 +1,8 @@
 package `in`.shraddha.ai.operator.website
 
+import java.text.Normalizer
+import java.util.Locale
+
 /** Canonical names and spoken aliases taken from the supplied AKKPS Runner screenshots. */
 object AkkpsFieldAliasCatalog {
     private val aliases = mapOf(
@@ -51,11 +54,16 @@ object AkkpsFieldAliasCatalog {
         "yield" to "yield", "yield kg acre" to "yield", "उपज" to "yield"
     )
 
+    fun normalizeLabel(raw: String): String =
+        Normalizer.normalize(raw, Normalizer.Form.NFKC)
+            .lowercase(Locale.ROOT)
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
     fun canonicalKey(raw: String): String {
-        val normalized = raw.trim().lowercase().replace(Regex("\\s+"), " ")
+        val normalized = normalizeLabel(raw)
         return aliases[normalized] ?: raw.trim()
     }
 
-    fun isKnownAlias(raw: String): Boolean =
-        raw.trim().lowercase().replace(Regex("\\s+"), " ") in aliases
+    fun isKnownAlias(raw: String): Boolean = normalizeLabel(raw) in aliases
 }

@@ -61,20 +61,67 @@ object AkkpsWebsiteProfile {
         }.getOrDefault(false)
     }
 
+    /**
+     * Validate top-level WebView navigation before allowing the authenticated Runner
+     * session to follow it. Reject encoded separators/dot segments and normalized
+     * traversal before checking restricted dashboard paths.
+     */
+    fun allowsRunnerNavigation(rawUrl: String): Boolean {
+        if (!acceptsUrl(rawUrl)) return false
+        return runCatching {
+            val uri = URI(rawUrl.trim())
+            val rawPath = uri.rawPath.orEmpty()
+            if (rawPath.length > 1024 ||
+                rawPath.contains('\\') ||
+                Regex("(?i)%2f|%5c|%2e").containsMatchIn(rawPath) ||
+                rawPath.contains("//")
+            ) return false
+            val segments = rawPath.split('/')
+            if (segments.any { it == "." || it == ".." }) return false
+            val path = uri.normalize().path.orEmpty().lowercase(Locale.ROOT)
+            val normalizedSegments = path.split('/').filter { it.isNotBlank() }
+            normalizedSegments.none { it == "admin" || it == "coordinator" }
+        }.getOrDefault(false)
+    }
+
     /** All private-site capabilities start unknown until observed and tested. */
     fun initialCapabilities(): List<WebsiteCapability> =
         WebsiteOperation.entries.map { operation ->
             WebsiteCapability(
                 operation = operation,
-                state = if (operation == WebsiteOperation.DISCOVER_SITE ||
-                    operation == WebsiteOperation.OBSERVE_PAGE ||
-                    operation == WebsiteOperation.NAVIGATE
-                ) CapabilityState.AVAILABLE else CapabilityState.UNKNOWN,
-                evidence = if (operation == WebsiteOperation.DISCOVER_SITE)
-                    "Public site origin configured; private dashboard not yet inspected."
-                else ""
+                state = when {
+                    !isRunnerOperationAllowed(operation) -> CapabilityState.UNAVAILABLE
+                    operation == WebsiteOperation.DISCOVER_SITE ||
+                        operation == WebsiteOperation.OBSERVE_PAGE ||
+                        operation == WebsiteOperation.NAVIGATE -> CapabilityState.AVAILABLE
+                    else -> CapabilityState.UNKNOWN
+                },
+                evidence = when {
+                    !isRunnerOperationAllowed(operation) -> "Blocked by AKKPS Runner data-entry scope"
+                    operation == WebsiteOperation.DISCOVER_SITE ->
+                        "Public site origin configured; private dashboard not yet inspected."
+                    else -> ""
+                }
             )
         }
+
+    /**
+     * Runner is intentionally limited to record lookup and Farmer/Plot/AWD data entry.
+     * Reporting exports, downloads, destructive actions and payments are out of scope.
+     */
+    fun isRunnerOperationAllowed(operation: WebsiteOperation): Boolean =
+        operation in setOf(
+            WebsiteOperation.DISCOVER_SITE,
+            WebsiteOperation.OBSERVE_PAGE,
+            WebsiteOperation.NAVIGATE,
+            WebsiteOperation.SEARCH_RECORDS,
+            WebsiteOperation.VIEW_RECORD,
+            WebsiteOperation.CREATE_RECORD,
+            WebsiteOperation.UPDATE_RECORD,
+            WebsiteOperation.SAVE_RECORD,
+            WebsiteOperation.SUBMIT_FORM,
+            WebsiteOperation.UPLOAD_DOCUMENT
+        )
 
     /**
      * High-impact operations always require a separate safety decision.
