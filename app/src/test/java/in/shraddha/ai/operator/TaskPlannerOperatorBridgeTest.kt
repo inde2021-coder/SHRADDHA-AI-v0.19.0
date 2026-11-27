@@ -167,4 +167,26 @@ class TaskPlannerOperatorBridgeTest {
         assertEquals(WorkflowStatus.COMPLETED, result.workflow.status)
     }
 
+
+    @Test fun rejectedReplacementPlanDoesNotEraseCurrentWorkflowAdapters() {
+        val executed = mutableListOf<String>()
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { step, _ ->
+            executed += step.target
+            true
+        })
+        bridge.createPlan("atomic-1", "Existing valid plan", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK, target = "original"))
+        ))
+        try {
+            bridge.createPlan("atomic-2", "Rejected secret plan", listOf(
+                PlannedOperatorAction("secret", "Enter OTP",
+                    OperatorStep(OperatorActionType.TYPE_TEXT, target = "OTP", value = "123456"))
+            ))
+            fail("Unsafe replacement plan should be rejected")
+        } catch (_: IllegalArgumentException) { }
+
+        val completed = bridge.start()
+        assertEquals(listOf("original"), executed)
+        assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
+    }
 }
