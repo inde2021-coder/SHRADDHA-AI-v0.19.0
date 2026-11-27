@@ -859,15 +859,18 @@ Return exact JSON only. Do not include prose or markdown."""
                     }
                     val items = mapped.optJSONArray("assignments") ?: JSONArray()
                     val missing = mapped.optJSONArray("missing") ?: JSONArray()
-                    val missingItems = (0 until missing.length()).map { missing.optString(it) }
+                    val missingItems = (0 until missing.length()).map { missing.opt(it) as? String ?: "" }
                     if (items.length() > 100 || !AkkpsAiMappingPolicy.hasValidMissingItems(missingItems)) {
                         status.text = "AI mapping response में फील्ड की संख्या या missing जानकारी की सीमा अमान्य है। कोई field नहीं भरी गई।"
                         return@runOnUiThread
                     }
                     val values = (0 until items.length()).mapNotNull { i ->
                         val item = items.optJSONObject(i) ?: return@mapNotNull null
-                        val key = item.optString("field").ifBlank { item.optString("key") }.trim()
-                        val value = item.optString("value").trim()
+                        val fieldValue = item.opt("field")
+                        val keyValue = item.opt("key")
+                        val rawValue = item.opt("value")
+                        val key = (fieldValue as? String).orEmpty().ifBlank { (keyValue as? String).orEmpty() }.trim()
+                        val value = (rawValue as? String).orEmpty().trim()
                         if (key.isBlank() || value.isBlank() || key.length > 160 || value.length > 500) null else key to value
                     }
                     if (values.size != items.length() ||
