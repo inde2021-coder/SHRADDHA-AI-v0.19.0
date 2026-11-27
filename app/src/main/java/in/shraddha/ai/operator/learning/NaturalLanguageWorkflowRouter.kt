@@ -95,9 +95,9 @@ object NaturalLanguageWorkflowRouter {
 
     private fun normalize(value: String): String {
         val tokens = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT)
-            .replace(Regex("(?i)[\\\\p{L}0-9_-][\\\\p{L}0-9_.-]*\\\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
-            .replace(Regex("[^\\\\p{L}\\\\p{M}\\\\p{N}]+"), " ")
-            .trim().split(Regex("\\\\s+")).filter { it.isNotBlank() }
+            .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
+            .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ")
+            .trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         return tokens.joinToString(" ") { canonicalAliases[it] ?: it }
     }
     private fun score(a: String, b: String): Float {
