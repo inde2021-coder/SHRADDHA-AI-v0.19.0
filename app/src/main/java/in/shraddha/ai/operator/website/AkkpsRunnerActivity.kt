@@ -124,6 +124,7 @@ class AkkpsRunnerActivity : Activity() {
         boundaryActions.addView(action("Save / Reopen") { saveOrReopenBoundary() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(boundaryActions)
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
@@ -264,6 +265,15 @@ class AkkpsRunnerActivity : Activity() {
                 }
             }
             .onFailure { status.text = "Saved boundary पढ़ी नहीं जा सकी: ${it.localizedMessage}" }
+    }
+
+    private fun importBoundaryKml() {
+        if (gpsWalkActive) { status.text = "KML Import से पहले GPS Walk रोकें।"; return }
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/vnd.google-earth.kml+xml"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }, REQUEST_KML_IMPORT)
     }
 
     private fun exportBoundaryKml() {
@@ -604,6 +614,33 @@ Return exact JSON only. Do not include prose or markdown."""
             }.onSuccess { status.text = "KML export तैयार है। इसे AKKPS Plot boundary upload में चुनें।" }
              .onFailure { status.text = "KML export failed: ${it.localizedMessage}" }
         }
+        if (requestCode == REQUEST_KML_IMPORT && resultCode == RESULT_OK) {
+            val uri = data?.data
+            if (uri != null) runCatching {
+                val input = contentResolver.openInputStream(uri) ?: error("KML file नहीं खुली।")
+                val bytes = input.use { stream ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 2_000_000) { "KML file 2 MB से बड़ी है।" }
+                        output.write(buffer, 0, count)
+                    }
+                    buffer.fill(0)
+                    output.toByteArray()
+                }
+                try {
+                    AkkpsBoundaryGeometry.parseKml(String(bytes, Charsets.UTF_8)).getOrThrow()
+                } finally { bytes.fill(0) }
+            }.onSuccess { boundary ->
+                boundaryPoints.clear()
+                boundaryPoints.addAll(boundary.points)
+                status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
+            }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
+        }
     }
 
     override fun onDestroy() {
@@ -619,5 +656,6 @@ Return exact JSON only. Do not include prose or markdown."""
         private const val REQUEST_LOCATION = 7315
         private const val REQUEST_GPS_WALK = 7316
         private const val REQUEST_KML_EXPORT = 7317
+        private const val REQUEST_KML_IMPORT = 7318
     }
 }
