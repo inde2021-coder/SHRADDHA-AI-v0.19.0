@@ -155,6 +155,10 @@ class AkkpsRunnerActivity : Activity() {
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
+        val candidateActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
+            LinearLayout.LayoutParams(0, dp(40), 1f))
+        root.addView(candidateActions)
         status = TextView(this).apply {
             text = "AKKPS वेबसाइट खुल रही है…"; textSize = 12f
             setTextColor(0xFFBBD8E2.toInt()); setPadding(dp(7), dp(7), dp(7), dp(7))
@@ -310,6 +314,15 @@ class AkkpsRunnerActivity : Activity() {
             type = "application/vnd.google-earth.kml+xml"
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }, REQUEST_KML_IMPORT)
+    }
+
+    private fun importSatelliteCandidate() {
+        if (gpsWalkActive) { status.text = "Candidate Import से पहले GPS Walk रोकें।"; return }
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/geo+json"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }, REQUEST_SATELLITE_CANDIDATE)
     }
 
     private fun exportBoundaryKml() {
@@ -746,6 +759,47 @@ Return exact JSON only. Do not include prose or markdown."""
             }.onSuccess { status.text = "KML export तैयार है। इसे AKKPS Plot boundary upload में चुनें।" }
              .onFailure { status.text = "KML export failed: ${it.localizedMessage}" }
         }
+        if (requestCode == REQUEST_SATELLITE_CANDIDATE && resultCode == RESULT_OK) {
+            val uri = data?.data
+            if (uri != null) runCatching {
+                val input = contentResolver.openInputStream(uri) ?: error("GeoJSON file नहीं खुली।")
+                val bytes = input.use { stream ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 2_000_000) { "GeoJSON file 2 MB से बड़ी है।" }
+                        output.write(buffer, 0, count)
+                    }
+                    buffer.fill(0)
+                    output.toByteArray()
+                }
+                try {
+                    AkkpsSatelliteCandidateParser.parse(String(bytes, Charsets.UTF_8)).getOrThrow()
+                } finally { bytes.fill(0) }
+            }.onSuccess { candidate ->
+                val confidenceLabel = candidate.confidence?.let { "${(it * 100).toInt()}%" } ?: "उपलब्ध नहीं"
+                val yearLabel = candidate.datasetYear?.toString() ?: "उपलब्ध नहीं"
+                AlertDialog.Builder(this)
+                    .setTitle("Satellite Boundary Candidate")
+                    .setMessage(
+                        "Source: ${candidate.source}\nDataset year: $yearLabel\nConfidence: $confidenceLabel\n" +
+                            "Points: ${candidate.boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, candidate.boundary.areaAcres)} acres\n\n" +
+                            "यह पहले से बना candidate polygon है—इस ऐप ने satellite image से खुद सीमा detect नहीं की। " +
+                            "इसे map/उपलब्ध खेत जानकारी से जाँचें। पुष्टि के बाद ही इसे boundary editor में लाया जाएगा; Local Save अलग से करना होगा।"
+                    )
+                    .setPositiveButton("जाँचकर Editor में लाएँ") { _, _ ->
+                        boundaryPoints.clear()
+                        boundaryPoints.addAll(candidate.boundary.points)
+                        status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
+                    }
+                    .setNegativeButton("रद्द करें", null)
+                    .show()
+            }.onFailure { status.text = "Satellite candidate import असफल: ${it.localizedMessage}" }
+        }
         if (requestCode == REQUEST_KML_IMPORT && resultCode == RESULT_OK) {
             val uri = data?.data
             if (uri != null) runCatching {
@@ -789,5 +843,6 @@ Return exact JSON only. Do not include prose or markdown."""
         private const val REQUEST_GPS_WALK = 7316
         private const val REQUEST_KML_EXPORT = 7317
         private const val REQUEST_KML_IMPORT = 7318
+        private const val REQUEST_SATELLITE_CANDIDATE = 7319
     }
 }
