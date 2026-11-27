@@ -58,10 +58,20 @@ object AkkpsSatelliteCandidateParser {
         val issue = AkkpsBoundaryGeometry.validate(points)
         require(issue == null) { issue ?: "Boundary अमान्य है।" }
         val properties = feature.optJSONObject("properties") ?: JSONObject()
-        val source = properties.optString("source", properties.optString("dataset", "Unknown dataset"))
-            .trim().take(MAX_SOURCE_LENGTH).ifBlank { "Unknown dataset" }
-        val yearValue = (properties.opt("year") ?: properties.opt("dataset_year"))
-            .takeUnless { it == org.json.JSONObject.NULL }
+        val sourceValue = listOf("source", "dataset", "provider")
+            .asSequence()
+            .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
+            .map { it.toString().trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?: error("Boundary candidate का source/dataset/provider बताना आवश्यक है।")
+        require(sourceValue.length <= MAX_SOURCE_LENGTH) {
+            "Boundary candidate source metadata 120 characters से लंबा है।"
+        }
+        val source = sourceValue
+        val yearValue = listOf("year", "dataset_year")
+            .asSequence()
+            .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
+            .firstOrNull()
         val year = yearValue?.let {
             it.toString().toIntOrNull()?.also { parsed ->
                 require(parsed in 1900..2100) { "Dataset year 1900 से 2100 के बीच होना चाहिए।" }
