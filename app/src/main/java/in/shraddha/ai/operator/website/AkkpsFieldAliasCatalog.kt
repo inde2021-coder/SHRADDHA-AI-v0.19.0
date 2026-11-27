@@ -3,7 +3,7 @@ package `in`.shraddha.ai.operator.website
 /** Canonical names and spoken aliases taken from the supplied AKKPS Runner screenshots. */
 object AkkpsFieldAliasCatalog {
     private val aliases = mapOf(
-        "survey number" to "surveyNumber", "survey no" to "surveyNumber", "खसरा नंबर" to "surveyNumber",
+        "survey number" to "surveyNumber", "survey no" to "surveyNumber", "खसरा नंबर" to "surveyNumber", "सर्वे नंबर" to "surveyNumber",
         "plot number" to "plotNumber", "plot no" to "plotNumber", "प्लॉट नंबर" to "plotNumber",
         "village" to "village", "village block" to "village", "गाँव" to "village", "गांव" to "village",
         "remarks" to "remarks", "टिप्पणी" to "remarks",
