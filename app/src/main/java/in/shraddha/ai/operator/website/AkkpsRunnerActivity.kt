@@ -710,6 +710,17 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            val createModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
+            if (createModule != null) {
+                val createRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
+                if (createRoute == null) {
+                    status.text = "इस AKKPS module में create route अभी verified नहीं है।"
+                } else {
+                    status.text = "${createModule.label} का नया form खोला जा रहा है। Save/Submit अलग confirmation से होगा।"
+                    web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + createRoute)
+                }
+                return
+            }
             val viewQuery = AkkpsRunnerViewCommandPolicy.parse(raw)
             if (viewQuery != null) {
                 val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
