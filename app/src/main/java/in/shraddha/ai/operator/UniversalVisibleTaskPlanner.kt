@@ -29,6 +29,9 @@ object UniversalVisibleTaskPlanner {
             if (expected.isNotBlank() && snapshot.elements.any { element ->
                     element.text.contains(expected, true) || element.description.contains(expected, true)
                 }) return Result(error = "Step $index का expected result पहले से स्क्रीन पर है; verification अनुमानित नहीं होगा।")
+            if (action == OperatorActionType.CLICK_TEXT && isHighImpactTarget(target)) {
+                return Result(error = "भुगतान, भेजने, प्रकाशित करने, हटाने या Submit करने वाले बटन universal planner से नहीं चलेंगे।")
+            }
             when (action) {
                 OperatorActionType.OPEN_APP -> {
                     if (target.isBlank() || !containsMention(userCommand, target)) return Result(error = "ऐप का नाम user command में स्पष्ट नहीं है।")
@@ -57,6 +60,16 @@ object UniversalVisibleTaskPlanner {
             steps += UniversalVisibleStep(action, target, value, expected)
         }
         return Result(steps = steps)
+    }
+
+    private fun isHighImpactTarget(value: String): Boolean {
+        val normalized = value.lowercase().trim()
+        val blocked = listOf(
+            "delete", "remove", "send", "pay", "transfer", "purchase", "buy",
+            "publish", "post", "submit", "confirm", "place order",
+            "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो", "सबमिट"
+        )
+        return blocked.any { normalized.contains(it) }
     }
 
     private fun containsMention(command: String, target: String): Boolean =
