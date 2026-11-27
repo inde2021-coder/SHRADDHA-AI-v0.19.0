@@ -72,7 +72,7 @@ object AkkpsBoundaryGeometry {
             }
         validate(points)?.let { error(it) }
         fun metadata(name: String): String? {
-            val pattern = Regex("(?is)<Data\\s+name=[\\\"']" + Regex.escape(name) + "[\\\"']\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
+            val pattern = Regex("(?is)<Data\\s+name=\"" + Regex.escape(name) + "\"\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
             return pattern.find(kml)?.groupValues?.get(1)?.let(::xmlUnescape)?.takeIf { it.isNotBlank() }
         }
         val source = metadata("source")
