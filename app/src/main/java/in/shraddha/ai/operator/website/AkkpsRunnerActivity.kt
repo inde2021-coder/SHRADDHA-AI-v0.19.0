@@ -499,16 +499,56 @@ class AkkpsRunnerActivity : Activity() {
         }
         val js = """
             (function(){
-              const n=s=>(s||'').replace(/\s+/g,' ').trim();
-              const fields=[...document.querySelectorAll('input,textarea,select')].map((e,i)=>{
+              const n=s=>String(s||'').replace(/\\s+/g,' ').trim().slice(0,120);
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
+                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())
+              ).map((e,i)=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
                 return {index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
-                  name:e.name||'',id:e.id||'',placeholder:e.placeholder||'',
-                  aria:e.getAttribute('aria-label')||'',label:[...new Set(labels)].join(' / '),
-                  required:!!e.required,disabled:!!e.disabled};
-              }).filter(x=>x.type!=='hidden' && x.type!=='password' && !x.disabled);
-              return JSON.stringify({title:document.title,url:location.href,fields});
+                  name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
+                  aria:n(e.getAttribute('aria-label')),label:[...new Set(labels)].join(' / '),
+                  required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly};
+              });
+              const forms=[...document.forms].filter(visible).map((f,i)=>({
+                index:i,name:n(f.getAttribute('name')),id:n(f.id),method:(f.method||'get').toUpperCase(),
+                fieldCount:[...f.querySelectorAll('input,textarea,select')].filter(visible).length,
+                requiredCount:[...f.querySelectorAll('input[required],textarea[required],select[required]')].filter(visible).length
+              }));
+              const tables=[...document.querySelectorAll('table')].filter(visible).slice(0,20).map((t,i)=>({
+                index:i,caption:n(t.caption?.innerText),
+                headers:[...t.querySelectorAll('thead th')].slice(0,20).map(x=>n(x.innerText)).filter(Boolean),
+                rowCount:t.querySelectorAll('tbody tr').length
+              }));
+              const actions=[...document.querySelectorAll('button,input[type=button],input[type=submit],[role=button]')]
+                .filter(visible).map(e=>n(e.innerText||e.value||e.getAttribute('aria-label')))
+                .filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).slice(0,40);
+              const navigation=[...document.querySelectorAll('a[href]')].filter(visible).map(a=>{
+                try{
+                  const u=new URL(a.href,location.href);
+                  if(u.origin!==location.origin) return null;
+                  const p=u.pathname.replace(/\\/$/,'')||'/';
+                  let module='';
+                  if(/^\\/runner\\/?$/.test(p)) module='HOME';
+                  else if(/^\\/runner\\/farmers(?:\\/new|\\/[^/]+)?$/.test(p)) module='FARMERS';
+                  else if(/^\\/runner\\/plots(?:\\/new|\\/[^/]+)?$/.test(p)||p==='/plots/new') module='PLOTS';
+                  else if(/^\\/runner\\/awd-reports(?:\\/new|\\/[^/]+)?$/.test(p)||p==='/awd-reports/new') module='AWD_REPORTS';
+                  else if(p==='/runner/profile') module='PROFILE';
+                  else if(p==='/runner/sync') module='SYNC';
+                  return module?{label:n(a.innerText||a.getAttribute('aria-label')),module}:null;
+                }catch(_){return null}
+              }).filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.module===v.module&&x.label===v.label)===i).slice(0,30);
+              const path=location.pathname.replace(/\\/$/,'')||'/';
+              let module='UNKNOWN';
+              if(path==='/runner') module='HOME';
+              else if(path.startsWith('/runner/farmers')) module='FARMERS';
+              else if(path.startsWith('/runner/plots')||path==='/plots/new') module='PLOTS';
+              else if(path.startsWith('/runner/awd-reports')||path==='/awd-reports/new') module='AWD_REPORTS';
+              else if(path==='/runner/profile') module='PROFILE';
+              else if(path==='/runner/sync') module='SYNC';
+              return JSON.stringify({title:document.title,module,forms,tables,actions,navigation,fields});
             })()
         """.trimIndent()
         web.evaluateJavascript(js) { raw ->
@@ -521,7 +561,13 @@ class AkkpsRunnerActivity : Activity() {
                     .map { f.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
                 label + if (f.optBoolean("required")) " *" else ""
             }
-            status.text = "पेज: " + obj.optString("title") + "\nFields: " + labels.take(22).joinToString(" • ")
+            val forms = obj.optJSONArray("forms")?.length() ?: 0
+            val tables = obj.optJSONArray("tables")?.length() ?: 0
+            val actions = obj.optJSONArray("actions") ?: JSONArray()
+            val actionLabels = (0 until minOf(actions.length(), 8)).map { actions.optString(it) }
+            val navigation = obj.optJSONArray("navigation")?.length() ?: 0
+            status.text = "Module: ${obj.optString("module")} • ${obj.optString("title")}\nForms: $forms • Tables: $tables • Navigation: $navigation\nActions: " +
+                actionLabels.joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
         }
     }
