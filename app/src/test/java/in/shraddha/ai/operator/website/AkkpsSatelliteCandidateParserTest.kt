@@ -107,4 +107,21 @@ class AkkpsSatelliteCandidateParserTest {
         )
         assertFalse(AkkpsSatelliteCandidateParser.parse(raw).isSuccess)
     }
+    @Test fun rejectsStringCoordinatesAndNonNumericAltitude() {
+        val stringCoordinates = "[[[\"78.0\",23.0],[78.001,23.0],[78.001,23.001],[78.0,23.001],[78.0,23.0]]]"
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = stringCoordinates)).isSuccess)
+
+        val stringAltitude = "[[[78.0,23.0,\"ground\"],[78.001,23.0,0],[78.001,23.001,0],[78.0,23.001,0],[78.0,23.0,0]]]"
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = stringAltitude)).isSuccess)
+    }
+
+    @Test fun rejectsObjectOrArraySourceMetadata() {
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":{"provider":"dataset"}}""")
+        ).isSuccess)
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":["dataset"]}""")
+        ).isSuccess)
+    }
+
 }
