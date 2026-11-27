@@ -61,6 +61,14 @@ object AkkpsWebsiteProfile {
         }.getOrDefault(false)
     }
 
+    /** Allow only AKKPS Runner web origins; block admin/coordinator routes and non-web redirects. */
+    fun acceptsRunnerNavigation(rawUrl: String): Boolean {
+        if (rawUrl == "about:blank") return true
+        if (!acceptsUrl(rawUrl)) return false
+        val path = runCatching { URI(rawUrl).path.orEmpty().lowercase(Locale.ROOT) }.getOrDefault("")
+        return !path.startsWith("/admin") && !path.startsWith("/coordinator")
+    }
+
     /** All private-site capabilities start unknown until observed and tested. */
     fun initialCapabilities(): List<WebsiteCapability> =
         WebsiteOperation.entries.map { operation ->
