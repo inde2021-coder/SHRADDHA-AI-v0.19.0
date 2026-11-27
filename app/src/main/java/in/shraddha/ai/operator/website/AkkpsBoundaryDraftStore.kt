@@ -74,7 +74,7 @@ class AkkpsBoundaryDraftStore(context: android.content.Context) {
     }
 
     fun delete(plotId: String) {
-        encrypted.remove(key(plotId))
+        check(encrypted.remove(key(plotId))) { "GPS draft local delete failed." }
     }
 
     private fun key(plotId: String): String {
