@@ -20,4 +20,10 @@ class AkkpsSubmitAttemptPolicyTest {
         assertFalse(AkkpsSubmitAttemptPolicy.canStart(false, listOf("x".repeat(161) to "v")))
         assertFalse(AkkpsSubmitAttemptPolicy.canStart(false, listOf("key" to "v".repeat(1_001))))
     }
+    @Test fun rejectsRetryUntilManualRecordReviewIsAcknowledged() {
+        val values = listOf("Farmer Name" to "Ramesh")
+        assertFalse(AkkpsSubmitAttemptPolicy.canStart(false, values, manualReviewRequired = true))
+        assertTrue(AkkpsSubmitAttemptPolicy.canStart(false, values, manualReviewRequired = false))
+    }
+
 }
