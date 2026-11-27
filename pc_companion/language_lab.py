@@ -67,7 +67,7 @@ class LanguageLabDialog:
         source, target = tk.StringVar(value="hi"), tk.StringVar(value="en")
         row = ttk.Frame(page); row.pack(fill="x", pady=4)
         ttk.Label(row, text="From").pack(side="left")
-        ttk.Combobox(row, textvariable=source, values=("hi", "en", "sa", "mr"), state="readonly", width=10).pack(side="left", padx=6)
+        ttk.Combobox(row, textvariable=source, values=("hi", "en", "mr"), state="readonly", width=10).pack(side="left", padx=6)
         ttk.Label(row, text="To").pack(side="left")
         ttk.Combobox(row, textvariable=target, values=("hi", "en", "sa", "mr"), state="readonly", width=10).pack(side="left", padx=6)
         ttk.Label(page, text="IndicTrans2 local checkpoint directory is configured in SHRADDHA_TRANSLATION_MODEL_DIR.").pack(anchor="w", pady=4)
