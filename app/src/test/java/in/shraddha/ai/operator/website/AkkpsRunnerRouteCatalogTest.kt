@@ -26,6 +26,7 @@ class AkkpsRunnerRouteCatalogTest {
     @Test fun identifiesCreateAndDetailRoutesWithoutAssumingMutationSucceeded() {
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/plots/new")?.let { it.module == AkkpsRunnerModule.PLOTS && it.isCreateRoute } == true)
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/awd-reports/new")?.let { it.module == AkkpsRunnerModule.AWD_REPORTS && it.isCreateRoute && !it.isDetailRoute } == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/plots/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/awd-reports/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/farmer-123")?.isDetailRoute == true)
@@ -48,4 +49,35 @@ class AkkpsRunnerRouteCatalogTest {
         )
         assertNull(AkkpsRunnerRouteCatalog.match("https://evil.example/runner/farmers"))
     }
+    @Test fun acceptsCanonicalRunnerPathsWithQueryAndTrailingSlash() {
+        assertEquals(AkkpsRunnerModule.PLOTS, AkkpsRunnerRouteCatalog.match("/runner/plots/?page=2")?.module)
+        assertEquals(AkkpsRunnerModule.FARMERS, AkkpsRunnerRouteCatalog.match("https://akkps.ngo/runner/farmers/new?from=dashboard")?.module)
+    }
+
+    @Test fun rejectsEncodedSeparatorsTraversalAndBackslash() {
+        listOf(
+            "/runner/plots%2fnew",
+            "/runner/plots/%2e%2e/farmers",
+            "/runner/plots/%252e%252e",
+            "/runner/plots%252fnew",
+            "/runner/plots\\\\new",
+            "/runner//plots",
+            "/runner/plots/../farmers"
+        ).forEach { assertNull(it, AkkpsRunnerRouteCatalog.match(it)) }
+    }
+
+    @Test fun rejectsUntrustedOriginsAndNonHttpsAbsoluteUrls() {
+        listOf(
+            "http://akkps.ngo/runner/plots",
+            "https://akkps.ngo.evil.example/runner/plots",
+            "https://user@akkps.ngo/runner/plots",
+            "https://evil.example/runner/plots"
+        ).forEach { assertNull(it, AkkpsRunnerRouteCatalog.match(it)) }
+    }
+
+    @Test fun rejectsRelativeAndOversizedRoutes() {
+        assertNull(AkkpsRunnerRouteCatalog.match("runner/plots"))
+        assertNull(AkkpsRunnerRouteCatalog.match("/" + "x".repeat(2048)))
+    }
+
 }
