@@ -36,7 +36,6 @@ class TaskPlannerOperatorBridge(
     fun createPlan(workflowId: String, title: String, planned: List<PlannedOperatorAction>): ShraddhaIntegrationHub.Session {
         require(planned.isNotEmpty() && planned.size <= 100)
         require(planned.map { it.id }.distinct().size == planned.size)
-        actions.clear()
         val normalized = planned.map { action ->
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
@@ -52,12 +51,15 @@ class TaskPlannerOperatorBridge(
                 requiresApproval = needsApproval
             )
         }
-        normalized.forEach { actions[it.id] = it }
-        verified.clear()
         val session = hub.createPlan(workflowId, title, normalized.map {
             ShraddhaIntegrationHub.Action(it.id, it.title, it.dependsOn, it.priority,
                 it.estimatedMinutes, it.risk, it.requiresApproval)
         })
+        // Publish the new adapter map only after the hub accepts the complete plan.
+        // A rejected plan must not erase the adapters for the still-active workflow.
+        actions.clear()
+        normalized.forEach { actions[it.id] = it }
+        verified.clear()
         audit("task_plan", "created", "workflow=$workflowId; steps=${planned.size}")
         return session
     }
