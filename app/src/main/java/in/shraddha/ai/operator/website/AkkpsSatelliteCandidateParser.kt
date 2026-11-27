@@ -84,15 +84,18 @@ object AkkpsSatelliteCandidateParser {
             "Boundary candidate source metadata 120 characters से लंबा है।"
         }
         val source = sourceValue
-        val yearValue = listOf("year", "dataset_year")
-            .asSequence()
+        val yearValues = listOf("year", "dataset_year")
             .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
-            .firstOrNull()
-        val year = yearValue?.let {
-            it.toString().toIntOrNull()?.also { parsed ->
-                require(parsed in 1900..2100) { "Dataset year 1900 से 2100 के बीच होना चाहिए।" }
-            } ?: error("Dataset year मान्य पूर्णांक नहीं है।")
+            .map { value ->
+                value.toString().toIntOrNull()?.also { parsed ->
+                    require(parsed in 1900..2100) { "Dataset year 1900 से 2100 के बीच होना चाहिए।" }
+                } ?: error("Dataset year मान्य पूर्णांक नहीं है।")
+            }
+            .distinct()
+        require(yearValues.size <= 1) {
+            "GeoJSON year और dataset_year metadata आपस में अलग हैं; provenance स्पष्ट करें।"
         }
+        val year = yearValues.singleOrNull()
         val confidenceValue = properties.opt("confidence").takeUnless { it == org.json.JSONObject.NULL }
         val confidence = confidenceValue?.let {
             it.toString().toDoubleOrNull()?.also { parsed ->
