@@ -64,4 +64,26 @@ class AkkpsAiMappingPolicyTest {
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(command, values))
     }
 
+    @Test fun rejectsPartialWordsFromMultiWordNamesAndAddresses() {
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Farmer name is Ram Kumar", listOf("Farmer Name" to "Ram")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Farmer name is Ram Kumar", listOf("Farmer Name" to "Kumar")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Address is Ward 4 Near School", listOf("Address" to "Ward 4")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Farmer Name is Ram", listOf("Farmer Name" to "Name")
+        ))
+    }
+
+    @Test fun acceptsCompleteMultiWordValuesFollowingFieldLabels() {
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Farmer name is Ram Kumar, village is Rampur",
+            listOf("Farmer Name" to "Ram Kumar", "Village" to "Rampur")
+        ))
+    }
+
 }
