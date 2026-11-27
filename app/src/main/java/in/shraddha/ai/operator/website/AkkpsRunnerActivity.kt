@@ -254,7 +254,8 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "GPS चालू करें। खेत के किनारे से Walk करें; फसल के अंदर जाने की जरूरत नहीं।"
             return
         }
-        if (boundaryPoints.isNotEmpty() && !gpsWalkSessionInitialized) {
+        when (AkkpsGpsWalkSessionPolicy.decide(boundaryPoints.size, gpsWalkSessionInitialized)) {
+            AkkpsGpsWalkSessionPolicy.Decision.CONFIRM_REPLACE -> {
             AlertDialog.Builder(this)
                 .setTitle("मौजूदा Boundary सुरक्षित रखें?")
                 .setMessage(
@@ -264,9 +265,11 @@ class AkkpsRunnerActivity : Activity() {
                 .setNegativeButton("रद्द करें", null)
                 .setPositiveButton("नई GPS Walk शुरू करें") { _, _ -> beginGpsWalk(manager, clearExisting = true) }
                 .show()
-            return
+                return
+            }
+            AkkpsGpsWalkSessionPolicy.Decision.START_NEW,
+            AkkpsGpsWalkSessionPolicy.Decision.RESUME -> beginGpsWalk(manager, clearExisting = false)
         }
-        beginGpsWalk(manager, clearExisting = false)
     }
 
     private fun beginGpsWalk(manager: LocationManager, clearExisting: Boolean) {
