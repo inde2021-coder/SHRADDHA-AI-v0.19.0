@@ -30,4 +30,38 @@ class AkkpsAiMappingPolicyTest {
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand("नाम=राम", emptyList()))
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand("नाम=", listOf("नाम" to " ")))
     }
+    @Test fun rejectsValueThatAppearsOnlyAsSubstringOfAnotherWordOrNumber() {
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "किसान का नाम=रामेश्वर", listOf("किसान का नाम" to "राम")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "मोबाइल नंबर=9876543210", listOf("मोबाइल नंबर" to "987")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "कुल भूमि क्षेत्र=12.50", listOf("कुल भूमि क्षेत्र" to "2.5")
+        ))
+    }
+
+    @Test fun acceptsWholeValueTokensBesideSeparatorsAndHindiPunctuation() {
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम: राम, गाँव=बरखेड़ा; मोबाइल=9876543210",
+            listOf("नाम" to "राम", "गाँव" to "बरखेड़ा", "मोबाइल" to "9876543210")
+        ))
+    }
+
+    @Test fun removesZeroWidthCharactersButKeepsTokenBoundaries() {
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम=रा\u200Bम", listOf("नाम" to "राम")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम=रामेश", listOf("नाम" to "राम")
+        ))
+    }
+
+    @Test fun rejectsMoreThanOneHundredAiAssignments() {
+        val values = (1..101).map { "field$it" to "value$it" }
+        val command = values.joinToString(";") { "${it.first}=${it.second}" }
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(command, values))
+    }
+
 }
