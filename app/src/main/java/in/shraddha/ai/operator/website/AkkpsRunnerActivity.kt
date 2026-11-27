@@ -342,8 +342,16 @@ class AkkpsRunnerActivity : Activity() {
         if (gpsWalkActive) { status.text = "KML Export से पहले GPS Walk रोकें।"; return }
         val plotId = plotIdInput.text.toString().trim()
         val boundary = runCatching {
-            if (boundaryPoints.size >= 3) AkkpsBoundary(boundaryPoints.toList())
-            else AkkpsBoundaryStore(this).load(plotId) ?: error("पहले boundary record करें या reopen करें।")
+            if (boundaryPoints.size >= 3) {
+                val metadata = boundaryProvenance
+                AkkpsBoundary(
+                    points = boundaryPoints.toList(),
+                    source = metadata?.source,
+                    datasetYear = metadata?.datasetYear,
+                    confidence = metadata?.confidence,
+                    sourceFeatureId = metadata?.sourceFeatureId
+                )
+            } else AkkpsBoundaryStore(this).load(plotId) ?: error("पहले boundary record करें या reopen करें।")
         }.getOrElse { status.text = it.localizedMessage ?: "Boundary उपलब्ध नहीं।"; return }
         val issue = AkkpsBoundaryGeometry.validate(boundary.points)
         if (issue != null) { status.text = issue; return }
