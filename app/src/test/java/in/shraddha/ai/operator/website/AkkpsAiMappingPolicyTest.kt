@@ -49,4 +49,24 @@ class AkkpsAiMappingPolicyTest {
         ))
     }
 
+    @Test fun boundsAssignmentCountFieldNamesAndValues() {
+        val tooMany = (1..101).map { "field$it" to "value$it" }
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            (1..101).joinToString(" ") { "value$it" }, tooMany
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "value", listOf("x".repeat(161) to "value")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "value", listOf("field" to "x".repeat(501))
+        ))
+    }
+
+    @Test fun boundsMissingFieldLabels() {
+        assertTrue(AkkpsAiMappingPolicy.hasValidMissingItems(listOf("Farmer Name", "Village")))
+        assertFalse(AkkpsAiMappingPolicy.hasValidMissingItems(listOf("x".repeat(121))))
+        assertFalse(AkkpsAiMappingPolicy.hasValidMissingItems((1..31).map { "field$it" }))
+        assertFalse(AkkpsAiMappingPolicy.hasValidMissingItems(listOf("")))
+    }
+
 }
