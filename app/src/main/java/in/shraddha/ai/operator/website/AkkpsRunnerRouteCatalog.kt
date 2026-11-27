@@ -34,6 +34,7 @@ object AkkpsRunnerRouteCatalog {
     private val createRoutes = mapOf(
         "/runner/farmers/new" to AkkpsRunnerModule.FARMERS,
         "/runner/plots/new" to AkkpsRunnerModule.PLOTS,
+        "/runner/awd-reports/new" to AkkpsRunnerModule.AWD_REPORTS,
         // Shared route aliases observed in the APK; AKKPS still enforces Runner access.
         "/plots/new" to AkkpsRunnerModule.PLOTS,
         "/awd-reports/new" to AkkpsRunnerModule.AWD_REPORTS
