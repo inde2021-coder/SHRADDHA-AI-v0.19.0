@@ -6,7 +6,8 @@ This is the persistence/safety foundation for Universal Command Automation (Issu
 - random task and step IDs;
 - SHA-256 fingerprint of the normalized command (not the command text);
 - adapter capability and action labels;
-- bounded state, attempt count, result code and timestamps.
+- bounded state, attempt count, safe result-code identifier and timestamps.
+- every state transition uses a synchronous durable commit; if persistence fails, the caller receives failure and must not perform the side effect.
 
 No raw command, message body, farmer field value, contact name, phone number, cookie, password, OTP or screen content is written to the journal.
 
@@ -14,7 +15,7 @@ No raw command, message body, farmer field value, contact name, phone number, co
 - PENDING may be claimed as RUNNING.
 - FAILED may be retried only within the bounded attempt count.
 - RUNNING may finish as SUCCEEDED, FAILED, UNCERTAIN, BLOCKED or SKIPPED.
-- UNCERTAIN is never automatically replayed. An adapter must independently inspect the remote side effect and call reconciliation.
+- UNCERTAIN is never automatically replayed. A recovered RUNNING step must be marked UNCERTAIN, then an adapter independently inspects the remote side effect and calls reconciliation.
 - SUCCEEDED, BLOCKED and SKIPPED are terminal.
 - Repeated identical commands within a short deduplication window reuse the existing plan instead of creating a second action.
 
