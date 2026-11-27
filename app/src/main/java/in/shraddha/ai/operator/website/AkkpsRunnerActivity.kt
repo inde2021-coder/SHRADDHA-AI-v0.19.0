@@ -710,6 +710,13 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            val module = AkkpsRunnerNavigationCommandPolicy.resolve(raw)
+            if (module != null) {
+                val route = AkkpsRunnerNavigationCommandPolicy.route(module)
+                status.text = "${module.label} module खोला जा रहा है…"
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + route)
+                return
+            }
             requestAiMapping(raw)
             return
         }
