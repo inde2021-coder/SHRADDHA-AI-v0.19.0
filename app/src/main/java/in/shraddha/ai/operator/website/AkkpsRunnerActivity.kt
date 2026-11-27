@@ -656,8 +656,11 @@ Return exact JSON only. Do not include prose or markdown."""
                         val value = item.optString("value").trim()
                         if (key.isBlank() || value.isBlank() || value.length > 500) null else key to value
                     }
-                    if (values.size != items.length() || values.any { (_, value) -> !raw.contains(value, ignoreCase = true) }) {
-                        status.text = "AI ने ऐसा मान दिया जो आपके बोले/लिखे command में मौजूद नहीं है। कोई field नहीं भरी गई। जानकारी स्पष्ट करके दोबारा बोलें।"
+                    if (values.size != items.length() ||
+                        !AkkpsSubmitTargetPolicy.hasValidKeys(values.map { it.first }) ||
+                        !AkkpsAiMappingPolicy.areValuesExplicitInCommand(raw, values)
+                    ) {
+                        status.text = "AI mapping में duplicate field या ऐसा मान मिला जो command में स्पष्ट नहीं है। कोई field नहीं भरी गई। जानकारी स्पष्ट करके दोबारा बोलें।"
                         return@runOnUiThread
                     }
                     if (values.isEmpty()) {
@@ -667,14 +670,15 @@ Return exact JSON only. Do not include prose or markdown."""
                         else "कमांड से कोई स्पष्ट फॉर्म मान नहीं मिला। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
-                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
-                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit
-                    fillValues(values, shouldSubmit)
                     val missing = mapped.optJSONArray("missing") ?: JSONArray()
+                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+                    val aiRequestedSubmit = mapped.optBoolean("submit") && explicitSubmit
+                    val shouldSubmit = aiRequestedSubmit && missing.length() == 0
+                    fillValues(values, shouldSubmit)
                     if (missing.length() > 0) {
                         status.text = "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
                             (0 until missing.length()).joinToString { missing.optString(it) } +
-                            if (shouldSubmit) "। Submit रोका गया।" else ""
+                            if (aiRequestedSubmit) "। Submit रोका गया; पहले missing जानकारी दें।" else ""
                     }
                 }
             }.start()
