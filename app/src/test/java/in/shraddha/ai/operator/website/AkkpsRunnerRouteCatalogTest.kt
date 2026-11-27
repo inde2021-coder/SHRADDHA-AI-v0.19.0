@@ -25,11 +25,12 @@ class AkkpsRunnerRouteCatalogTest {
 
     @Test fun identifiesCreateAndDetailRoutesWithoutAssumingMutationSucceeded() {
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/new")?.isCreateRoute == true)
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/plots/new")?.let { it.module == AkkpsRunnerModule.PLOTS && it.isCreateRoute } == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/plots/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/awd-reports/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/farmer-123")?.isDetailRoute == true)
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/plots/plot-123")?.let { it.module == AkkpsRunnerModule.PLOTS && it.isDetailRoute } == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/awd-reports/report-123")?.isDetailRoute == true)
-        assertNull(AkkpsRunnerRouteCatalog.match("/runner/plots/plot-123"))
     }
 
     @Test fun rejectsAdminCoordinatorAndLookalikePaths() {
