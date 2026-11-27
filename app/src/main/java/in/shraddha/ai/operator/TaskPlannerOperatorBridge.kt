@@ -41,7 +41,6 @@ class TaskPlannerOperatorBridge(
             require(action.title.isNotBlank() && action.title.length <= 120) { "Every action needs a short, non-empty title." }
         }
         validateDependencyGraph(planned)
-        actions.clear()
         val normalized = planned.map { action ->
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
@@ -57,13 +56,16 @@ class TaskPlannerOperatorBridge(
                 requiresApproval = needsApproval
             )
         }
-        normalized.forEach { actions[it.id] = it }
-        verified.clear()
         val session = hub.createPlan(workflowId, title, normalized.map {
             ShraddhaIntegrationHub.Action(it.id, it.title, it.dependsOn, it.priority,
                 it.estimatedMinutes, it.risk, it.requiresApproval)
         })
-        audit("task_plan", "created", "workflow=$workflowId; steps=${planned.size}")
+        // Publish adapters only after the hub accepts the complete replacement plan.
+        // Rejected plans must leave the active workflow and its adapters untouched.
+        actions.clear()
+        normalized.forEach { actions[it.id] = it }
+        verified.clear()
+        audit("task_plan", "created", "workflow=${workflowId}; steps=${planned.size}")
         return session
     }
 
