@@ -1129,7 +1129,7 @@ Return exact JSON only. Do not include prose or markdown."""
             status.text = when {
                 verifiedFailure -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
                 verifiedSuccess ->
-                    "AKKPS server ने success response और Record ID ${o.optString("recordId")} दिया। Server response verified।"
+                    "AKKPS server ने success response और Record ID ${o?.optString("recordId").orEmpty()} दिया। Server response verified।"
                 !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true -> {
                     requireManualSubmitReview()
                     "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save fully verified नहीं है।"
