@@ -83,6 +83,23 @@ class AkkpsSatelliteCandidateParserTest {
         assertEquals(2024, result.datasetYear)
     }
 
+    @Test fun rejectsGeoJsonLinearRingThatIsNotClosed() {
+        val rings = "[[[78.0,23.0],[78.001,23.0],[78.001,23.001],[78.0,23.001]]]"
+        val result = AkkpsSatelliteCandidateParser.parse(feature(rings = rings))
+        assertFalse(result.isSuccess)
+        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("पहला और आखिरी"))
+    }
+
+    @Test fun rejectsCoordinateTuplesWithUnexpectedDimensions() {
+        val rings = "[[[78.0,23.0,0,9],[78.001,23.0,0,9],[78.001,23.001,0,9],[78.0,23.001,0,9],[78.0,23.0,0,9]]]"
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = rings)).isSuccess)
+    }
+
+    @Test fun acceptsStandardThreeDimensionalClosedRing() {
+        val rings = "[[[78.0,23.0,0],[78.001,23.0,0],[78.001,23.001,0],[78.0,23.001,0],[78.0,23.0,0]]]"
+        assertTrue(AkkpsSatelliteCandidateParser.parse(feature(rings = rings)).isSuccess)
+    }
+
     @Test fun rejectsUnsupportedCrs() {
         val raw = feature().replace(
             "\"type\":\"Feature\"",
