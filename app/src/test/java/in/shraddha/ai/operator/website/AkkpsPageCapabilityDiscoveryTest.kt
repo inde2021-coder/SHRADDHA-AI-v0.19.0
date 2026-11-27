@@ -90,4 +90,34 @@ class AkkpsPageCapabilityDiscoveryTest {
         }
     }
 
+    @Test fun fieldOrNavigationLabelAloneDoesNotProveCreateAction() {
+        val result = AkkpsPageCapabilityDiscovery.discover(
+            formCount = 1,
+            tableCount = 0,
+            fieldTypes = listOf("text"),
+            fieldLabels = listOf("Create New Farmer"),
+            actionLabels = emptyList(),
+            navigationLabels = listOf("Add New Plot")
+        )
+        assertEquals(
+            CapabilityState.UNKNOWN,
+            result.first { it.operation == WebsiteOperation.CREATE_RECORD }.state
+        )
+    }
+
+    @Test fun explicitCreateActionLabelProvesCreateCapability() {
+        val result = AkkpsPageCapabilityDiscovery.discover(
+            formCount = 1,
+            tableCount = 0,
+            fieldTypes = emptyList(),
+            fieldLabels = emptyList(),
+            actionLabels = listOf("Create New Farmer"),
+            navigationLabels = emptyList()
+        )
+        assertEquals(
+            CapabilityState.AVAILABLE,
+            result.first { it.operation == WebsiteOperation.CREATE_RECORD }.state
+        )
+    }
+
 }
