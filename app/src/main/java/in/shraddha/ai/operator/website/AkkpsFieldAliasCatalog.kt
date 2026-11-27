@@ -67,4 +67,12 @@ object AkkpsFieldAliasCatalog {
     }
 
     fun isKnownAlias(raw: String): Boolean = normalize(raw) in aliases
+
+    /** True when a token is part of a known field label, not a supplied field value. */
+    fun isKnownAliasToken(raw: String): Boolean {
+        val token = normalize(raw)
+        return token.isNotBlank() && aliases.keys.any { alias ->
+            token == alias || token in alias.split(' ')
+        }
+    }
 }
