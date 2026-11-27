@@ -37,7 +37,7 @@ class AkkpsPageCapabilityDiscoveryTest {
         assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.CREATE_RECORD).state)
         assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.UPDATE_RECORD).state)
         assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.SUBMIT_FORM).state)
-        assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.DELETE_RECORD).state)
+        assertEquals(CapabilityState.UNAVAILABLE, result.getValue(WebsiteOperation.DELETE_RECORD).state)
     }
 
     @Test fun createAndDetailRoutesAreExplicitEvidence() {
