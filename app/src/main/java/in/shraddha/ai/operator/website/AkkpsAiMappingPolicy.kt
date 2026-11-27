@@ -7,6 +7,7 @@ import java.util.Locale
 internal object AkkpsAiMappingPolicy {
     private fun normalize(value: String): String =
         Normalizer.normalize(value, Normalizer.Form.NFKC)
+            .replace(Regex("[\\u200B-\\u200D\\uFEFF]"), "")
             .lowercase(Locale.ROOT).trim().replace(Regex("\\s+"), " ")
 
     fun canSubmit(aiRequestedSubmit: Boolean, missingRequiredInformation: Int): Boolean =
@@ -16,9 +17,12 @@ internal object AkkpsAiMappingPolicy {
         if (assignments.isEmpty()) return false
         val source = normalize(command)
         if (source.isBlank()) return false
+        if (assignments.size > 100) return false
         return assignments.all { (_, value) ->
             val candidate = normalize(value)
-            candidate.isNotBlank() && source.contains(candidate)
+            candidate.isNotBlank() && Regex(
+                "(?<![\\\\p{L}\\\\p{N}])" + Regex.escape(candidate) + "(?![\\\\p{L}\\\\p{N}])"
+            ).containsMatchIn(source)
         }
     }
 }
