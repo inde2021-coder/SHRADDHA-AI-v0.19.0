@@ -993,12 +993,13 @@ Return exact JSON only. Do not include prose or markdown."""
               const radioGroups=scope=>{
                 const groups=[];
                 for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
+                  if(!(r.name||r.id)) continue;
                   let g=groups.find(x=>x[0].form===r.form&&(x[0].name||x[0].id)===(r.name||r.id));
                   if(!g){g=[];groups.push(g);} g.push(r);
                 }
                 return groups;
               };
-              const optionLabel=r=>norm([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||'').join(' '));
+              const optionLabel=r=>norm([...new Set([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||''))].join(' '));
               const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
                 return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
               };
