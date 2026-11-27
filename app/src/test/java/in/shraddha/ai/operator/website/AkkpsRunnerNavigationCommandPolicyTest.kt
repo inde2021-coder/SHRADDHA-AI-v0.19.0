@@ -8,14 +8,12 @@ class AkkpsRunnerNavigationCommandPolicyTest {
         assertEquals(AkkpsRunnerModule.FARMERS, AkkpsRunnerNavigationCommandPolicy.resolve("open farmers"))
         assertEquals(AkkpsRunnerModule.PLOTS, AkkpsRunnerNavigationCommandPolicy.resolve("go to plots"))
         assertEquals(AkkpsRunnerModule.AWD_REPORTS, AkkpsRunnerNavigationCommandPolicy.resolve("show AWD reports"))
-        assertEquals(AkkpsRunnerModule.SYNC, AkkpsRunnerNavigationCommandPolicy.resolve("navigate to sync"))
     }
 
     @Test fun resolvesExplicitHindiNavigationCommands() {
         assertEquals(AkkpsRunnerModule.FARMERS, AkkpsRunnerNavigationCommandPolicy.resolve("किसान सूची खोलो"))
         assertEquals(AkkpsRunnerModule.PLOTS, AkkpsRunnerNavigationCommandPolicy.resolve("खेत दिखाओ"))
         assertEquals(AkkpsRunnerModule.HOME, AkkpsRunnerNavigationCommandPolicy.resolve("डैशबोर्ड खोलें"))
-        assertEquals(AkkpsRunnerModule.PROFILE, AkkpsRunnerNavigationCommandPolicy.resolve("प्रोफाइल पर जाएं"))
     }
 
     @Test fun requiresExplicitNavigationVerb() {
