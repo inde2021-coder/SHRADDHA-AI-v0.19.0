@@ -19,7 +19,7 @@ class MessageReviewActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var sendButton: Button
     private lateinit var fallbackButton: Button
-    private var fallbackChannel = "" 
+    private var fallbackChannel = ""
     private var fallbackRecipient = ""
     private var fallbackBody = ""
 
