@@ -18,7 +18,27 @@ internal object AkkpsAiMappingPolicy {
         if (source.isBlank()) return false
         return assignments.all { (_, value) ->
             val candidate = normalize(value)
-            candidate.isNotBlank() && source.contains(candidate)
+            candidate.isNotBlank() && containsWholeValue(source, candidate)
         }
+    }
+
+    private fun containsWholeValue(source: String, candidate: String): Boolean {
+        fun isWordCharacter(char: Char): Boolean {
+            val type = Character.getType(char)
+            return char.isLetterOrDigit() ||
+                type == Character.NON_SPACING_MARK.toInt() ||
+                type == Character.COMBINING_SPACING_MARK.toInt() ||
+                type == Character.ENCLOSING_MARK.toInt()
+        }
+
+        var index = source.indexOf(candidate)
+        while (index >= 0) {
+            val end = index + candidate.length
+            val leftBoundary = index == 0 || !isWordCharacter(source[index - 1])
+            val rightBoundary = end == source.length || !isWordCharacter(source[end])
+            if (leftBoundary && rightBoundary) return true
+            index = source.indexOf(candidate, index + 1)
+        }
+        return false
     }
 }
