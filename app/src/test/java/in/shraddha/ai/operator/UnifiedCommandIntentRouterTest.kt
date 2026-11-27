@@ -43,6 +43,8 @@ class UnifiedCommandIntentRouterTest {
         val embeddedVerb = UnifiedCommandIntentRouter.classify("अभेजें")
         assertEquals(UnifiedCommandAction.UNKNOWN, embeddedVerb.action)
         assertTrue(embeddedVerb.needsClarification)
+        val combiningMarkPrefix = UnifiedCommandIntentRouter.classify("ाभेजें")
+        assertEquals(UnifiedCommandAction.UNKNOWN, combiningMarkPrefix.action)
 
         val standaloneVerb = UnifiedCommandIntentRouter.classify("AKKPS में रिकॉर्ड भेजें")
         assertEquals(UnifiedCommandAction.SEND, standaloneVerb.action)
