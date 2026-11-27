@@ -24,19 +24,12 @@ class OfflineIndicVoiceSession(
     companion object {
         private const val MODEL_PREFS = "shraddha_offline_model"
         private const val MODEL_PATH_KEY = "active_model_path"
-        private const val MAX_SEGMENT_SAMPLES = 16_000 * 18
-        private const val SILENCE_CHUNKS_TO_END = 9
-        private const val SPEECH_RMS_THRESHOLD = 0.018f
-        private const val MIN_SPEECH_SAMPLES = 4_000
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = AtomicBoolean(false)
     private val decoding = AtomicBoolean(false)
-    private val lock = Any()
-    private val samples = ArrayList<Float>(16_000 * 5)
-    private var speechStarted = false
-    private var silentChunks = 0
+    private val segmenter = OfflineSpeechSegmenter()
     private var selectedLanguage = IndicConformerRuntime.Language.HINDI
     private var appContext: Context? = null
     private var audio: LiveAudioIO? = null
@@ -71,31 +64,8 @@ class OfflineIndicVoiceSession(
 
     private fun acceptPcm16(bytes: ByteArray) {
         if (!running.get() || decoding.get() || bytes.size < 2) return
-        val rms = LiveAudioIO.calculateRms(bytes)
-        var completed: FloatArray? = null
-        synchronized(lock) {
-            var i = 0
-            while (i + 1 < bytes.size) {
-                val sample = ((bytes[i + 1].toInt() shl 8) or (bytes[i].toInt() and 0xff)).toShort()
-                samples.add(sample / 32768.0f)
-                i += 2
-            }
-            if (rms >= SPEECH_RMS_THRESHOLD) {
-                speechStarted = true
-                silentChunks = 0
-            } else if (speechStarted) {
-                silentChunks++
-            }
-            if (speechStarted && (silentChunks >= SILENCE_CHUNKS_TO_END || samples.size >= MAX_SEGMENT_SAMPLES)) {
-                if (samples.size >= MIN_SPEECH_SAMPLES && decoding.compareAndSet(false, true)) {
-                    completed = samples.toFloatArray()
-                }
-                samples.clear()
-                speechStarted = false
-                silentChunks = 0
-            }
-        }
-        completed?.let(::decodeSegment)
+        val completed = segmenter.accept(bytes, LiveAudioIO.calculateRms(bytes))
+        if (completed != null && decoding.compareAndSet(false, true)) decodeSegment(completed)
     }
 
     private fun decodeSegment(pcm: FloatArray) {
@@ -140,11 +110,7 @@ class OfflineIndicVoiceSession(
         if (!running.getAndSet(false)) return
         runCatching { audio?.release() }
         audio = null
-        synchronized(lock) {
-            samples.clear()
-            speechStarted = false
-            silentChunks = 0
-        }
+        segmenter.reset()
         onStatus("Offline microphone stopped")
     }
 
