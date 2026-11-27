@@ -22,7 +22,10 @@ class AkkpsWebsiteProfileTest {
         assertTrue(capabilities.getValue(WebsiteOperation.OBSERVE_PAGE).state == CapabilityState.AVAILABLE)
         assertTrue(capabilities.getValue(WebsiteOperation.SEARCH_RECORDS).state == CapabilityState.UNKNOWN)
         assertTrue(capabilities.getValue(WebsiteOperation.CREATE_RECORD).state == CapabilityState.UNKNOWN)
-        assertTrue(capabilities.getValue(WebsiteOperation.EXPORT_REPORT).state == CapabilityState.UNKNOWN)
+        assertTrue(capabilities.getValue(WebsiteOperation.EXPORT_REPORT).state == CapabilityState.UNAVAILABLE)
+        assertTrue(capabilities.getValue(WebsiteOperation.DOWNLOAD_DOCUMENT).state == CapabilityState.UNAVAILABLE)
+        assertTrue(capabilities.getValue(WebsiteOperation.DELETE_RECORD).state == CapabilityState.UNAVAILABLE)
+        assertTrue(capabilities.getValue(WebsiteOperation.PAYMENT).state == CapabilityState.UNAVAILABLE)
     }
 
     @Test fun destructiveAndPaymentOperationsNeedHighImpactConfirmation() {
@@ -46,6 +49,28 @@ class AkkpsWebsiteProfileTest {
         assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("https://www.akkps.ngo/coordinator/plots"))
         assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("file:///sdcard/secret.html"))
         assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("intent://evil"))
+    }
+
+    @Test fun runnerScopeAllowsRecordLookupAndDataEntryOnly() {
+        listOf(
+            WebsiteOperation.SEARCH_RECORDS,
+            WebsiteOperation.VIEW_RECORD,
+            WebsiteOperation.CREATE_RECORD,
+            WebsiteOperation.UPDATE_RECORD,
+            WebsiteOperation.SAVE_RECORD,
+            WebsiteOperation.SUBMIT_FORM,
+            WebsiteOperation.UPLOAD_DOCUMENT
+        ).forEach { operation ->
+            assertTrue("$operation should be allowed", AkkpsWebsiteProfile.isRunnerOperationAllowed(operation))
+        }
+        listOf(
+            WebsiteOperation.DOWNLOAD_DOCUMENT,
+            WebsiteOperation.EXPORT_REPORT,
+            WebsiteOperation.DELETE_RECORD,
+            WebsiteOperation.PAYMENT
+        ).forEach { operation ->
+            assertFalse("$operation must remain out of scope", AkkpsWebsiteProfile.isRunnerOperationAllowed(operation))
+        }
     }
 
 }
