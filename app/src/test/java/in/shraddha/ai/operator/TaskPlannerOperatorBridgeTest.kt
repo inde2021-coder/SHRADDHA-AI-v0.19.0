@@ -143,4 +143,3 @@ class TaskPlannerOperatorBridgeTest {
         assertTrue(result.audit.any { it.event == "ACTION_DISPATCHED" })
     }
 }
-
