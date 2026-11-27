@@ -103,7 +103,8 @@ object AkkpsBoundaryGeometry {
         val confidenceText = metadata("confidence")
         val confidence = confidenceText?.toDoubleOrNull()
         require(confidenceText == null || confidence != null) { "KML confidence is invalid." }
-        val boundary = AkkpsBoundary(closeRing(points), source, year, confidence, metadata("sourceFeatureId"))
+        val canonicalPoints = if (points.size > 3 && points.first() == points.last()) points.dropLast(1) else points
+        val boundary = AkkpsBoundary(canonicalPoints, source, year, confidence, metadata("sourceFeatureId"))
         validateProvenance(boundary)
         boundary
     }
