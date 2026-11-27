@@ -547,7 +547,7 @@ class AkkpsRunnerActivity : Activity() {
               const all=[...document.querySelectorAll('input,textarea')],out=[];
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
-                allowed.includes(String(e.type||'').toLowerCase())&&
+                (e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase()))&&
                 !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               for(const item of items){
                 const key=norm(item.key);
@@ -693,7 +693,7 @@ Return exact JSON only. Do not include prose or markdown."""
               const allowed=__ALLOWED_TYPES__;
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&e.tagName!=='SELECT'&&
-                allowed.includes(String(e.type||'').toLowerCase())&&!!e.getClientRects().length&&
+                (e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase()))&&!!e.getClientRects().length&&
                 getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea')].some(e=>editable(e)&&e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
