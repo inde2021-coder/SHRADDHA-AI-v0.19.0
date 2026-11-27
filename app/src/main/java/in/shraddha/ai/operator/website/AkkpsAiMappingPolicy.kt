@@ -18,7 +18,11 @@ internal object AkkpsAiMappingPolicy {
         if (source.isBlank()) return false
         return assignments.all { (_, value) ->
             val candidate = normalize(value)
-            candidate.isNotBlank() && source.contains(candidate)
+            if (candidate.isBlank()) return@all false
+            val exactToken = Regex(
+                "(?<![\\\\p{L}\\\\p{N}])" + Regex.escape(candidate) + "(?![\\\\p{L}\\\\p{N}])"
+            )
+            exactToken.containsMatchIn(source)
         }
     }
 }
