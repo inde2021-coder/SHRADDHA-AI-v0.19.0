@@ -185,6 +185,14 @@ class AkkpsRunnerActivity : Activity() {
                     }
                     return false
                 }
+                @Deprecated("Deprecated by Android")
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                    if (!AkkpsWebsiteProfile.acceptsRunnerNavigation(url)) {
+                        status.text = "सुरक्षा: केवल AKKPS Runner कार्यों की अनुमति है।"
+                        return true
+                    }
+                    return false
+                }
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                     if (!AkkpsWebsiteProfile.acceptsRunnerNavigation(url)) {
                         status.text = "सुरक्षा: बाहरी redirect रोका गया। केवल AKKPS Runner origin स्वीकार है।"
