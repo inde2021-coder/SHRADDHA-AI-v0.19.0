@@ -231,7 +231,7 @@ class AkkpsRunnerActivity : Activity() {
                     (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit नहीं किया।"
                 return@evaluateJavascript
             }
-            submitForm()
+            submitForm(values.map { it.first })
         }
     }
 
@@ -310,22 +310,52 @@ Return exact JSON only. Do not include prose or markdown."""
         }
     }
 
-    private fun submitForm() {
+    private fun submitForm(fieldKeys: List<String>) {
+        val keys = JSONArray(fieldKeys)
         val js = """
-            (function(){
-              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
-              if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
-              const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
+            (function(keys){
+              const norm=s=>(s||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+              const all=[...document.querySelectorAll('input,textarea,select')];
+              const forms=new Set(), normalized=keys.map(norm);
+              if(!normalized.length||normalized.some(k=>!k)||new Set(normalized).size!==normalized.length)
+                return JSON.stringify({status:'invalid_field_keys'});
+              for(const key of normalized){
+                const found=all.filter(e=>{
+                  if(e.disabled||e.readOnly||e.getAttribute('aria-disabled')==='true'||
+                    e.closest('[aria-hidden="true"]')||['hidden','password','file','checkbox','radio','button','submit','reset','image'].includes((e.type||'').toLowerCase())||
+                    (e.tagName==='SELECT'&&e.multiple)) return false;
+                  const labels=[...(e.labels||[])].map(x=>x.innerText);
+                  const parent=e.closest('label'); if(parent) labels.push(parent.innerText);
+                  return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
+                    .map(norm).some(v=>v&&(v===key||v.includes(key)||key.includes(v)));
+                });
+                if(found.length!==1) return JSON.stringify({status:found.length?'ambiguous_field':'field_not_found'});
+                const field=found[0];
+                if(!field.value||!String(field.value).trim()) return JSON.stringify({status:'empty_filled_field'});
+                if(!field.form) return JSON.stringify({status:'field_without_form'});
+                forms.add(field.form);
+              }
+              if(forms.size!==1) return JSON.stringify({status:'form_not_unique'});
+              const f=[...forms][0];
+              if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               const b=f.querySelector('button[type=submit],input[type=submit]');
-              if(b)b.click();else f.requestSubmit();
+              if(b&&!b.disabled) f.requestSubmit(b); else f.requestSubmit();
               return JSON.stringify({status:'dispatched'});
-            })()
+            })(${keys.toString()})
         """.trimIndent()
         val before = web.url.orEmpty()
         web.evaluateJavascript(js) { raw ->
             val statusCode = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
             if (statusCode != "dispatched") {
-                status.text = if (statusCode == "invalid") "AKKPS validation अधूरी है।" else "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
+                status.text = when (statusCode) {
+                    "invalid" -> "AKKPS validation अधूरी है।"
+                    "ambiguous_field" -> "Submit रोक दिया: फील्ड का मिलान अस्पष्ट है।"
+                    "field_not_found" -> "Submit रोक दिया: भरी गई फील्ड अब नहीं मिली।"
+                    "empty_filled_field" -> "Submit रोक दिया: भरी गई फील्ड खाली है।"
+                    "invalid_field_keys" -> "Submit रोक दिया: फील्ड सूची अमान्य है।"
+                    "field_without_form", "form_not_unique" -> "एक स्पष्ट AKKPS form नहीं मिला; Submit नहीं किया।"
+                    else -> "फॉर्म की पुष्टि नहीं हुई; Submit नहीं किया।"
+                }
                 return@evaluateJavascript
             }
             status.text = "Submit request भेजी गई। AKKPS response जाँचा जा रहा है…"
