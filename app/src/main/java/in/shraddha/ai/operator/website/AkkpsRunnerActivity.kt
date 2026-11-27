@@ -318,7 +318,7 @@ Return exact JSON only. Do not include prose or markdown."""
         val keys = JSONArray(fieldKeys)
         val js = """
             (function(keys){
-              const norm=s=>(s||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const all=[...document.querySelectorAll('input,textarea,select')];
               const forms=new Set(), normalized=keys.map(norm);
               if(!normalized.length||normalized.some(k=>!k)||new Set(normalized).size!==normalized.length)
