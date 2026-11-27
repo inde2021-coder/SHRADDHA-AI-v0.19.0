@@ -55,4 +55,23 @@ class AkkpsPageCapabilityDiscoveryTest {
         assertTrue(AkkpsWebsiteProfile.requiresHighImpactConfirmation(WebsiteOperation.DELETE_RECORD))
         assertTrue(AkkpsWebsiteProfile.requiresHighImpactConfirmation(WebsiteOperation.PAYMENT))
     }
+    @Test fun observedDeleteAndPaymentButtonsDoNotExpandRunnerScope() {
+        val result = AkkpsPageCapabilityDiscovery.discover(
+            formCount = 1,
+            tableCount = 1,
+            fieldTypes = listOf("text"),
+            fieldLabels = listOf("Farmer Name"),
+            actionLabels = listOf("Delete record", "Make payment", "Export report", "Download"),
+            navigationLabels = listOf("Farmers")
+        ).associateBy { it.operation }
+        listOf(
+            WebsiteOperation.DELETE_RECORD,
+            WebsiteOperation.PAYMENT,
+            WebsiteOperation.EXPORT_REPORT,
+            WebsiteOperation.DOWNLOAD_DOCUMENT
+        ).forEach { operation ->
+            assertEquals(CapabilityState.UNAVAILABLE, result.getValue(operation).state)
+        }
+    }
+
 }
