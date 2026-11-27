@@ -40,11 +40,12 @@ class TaskPlannerOperatorBridge(
         val normalized = planned.map { action ->
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
+            validateOperatorStep(action.step)
             val safety = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value, action.step.expectedVisibleText)
             require(safety.risk != OperatorSafetyPolicy.Risk.BLOCK) {
                 "Operator plan contains an action blocked by safety policy: ${safety.reason}"
             }
-            val needsApproval = action.requiresApproval ||
+            val needsApproval = action.requiresApproval || action.step.requiresConfirmation ||
                 action.risk == Risk.SENSITIVE || action.risk == Risk.IRREVERSIBLE ||
                 safety.risk == OperatorSafetyPolicy.Risk.CONFIRM
             action.copy(
@@ -65,6 +66,24 @@ class TaskPlannerOperatorBridge(
         return session
     }
 
+    /** Enforce the Android Operator action contract before the hub accepts a plan. */
+    private fun validateOperatorStep(step: OperatorStep) {
+        require(step.target.length <= 160) { "Operator target is longer than 160 characters" }
+        require(step.value.length <= 1_000) { "Operator input is longer than 1,000 characters" }
+        require(step.expectedVisibleText.length <= 300) { "Expected verification text is too long" }
+        when (step.action) {
+            OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT ->
+                require(step.target.isNotBlank()) { "Action requires an explicit target" }
+            OperatorActionType.TYPE_TEXT -> {
+                require(step.target.isNotBlank()) { "TYPE_TEXT requires an explicit field target" }
+                require(step.value.isNotBlank()) { "TYPE_TEXT requires a non-empty value" }
+            }
+            OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD ->
+                require(step.target.isBlank() && step.value.isBlank()) {
+                    "Navigation actions do not accept a target or input value"
+                }
+        }
+    }
     /**
      * Validate the exact dependency graph before asking the hub to register the plan.
      * This gives the Operator bridge a fail-closed contract independent of planner ordering.
@@ -124,7 +143,7 @@ class TaskPlannerOperatorBridge(
             val approvalGranted = session.audit.any {
                 it.actionId == action.id && it.event == "STEP_APPROVED"
             }
-            val needsApproval = action.requiresApproval ||
+            val needsApproval = action.requiresApproval || action.step.requiresConfirmation ||
                 action.risk == Risk.SENSITIVE || action.risk == Risk.IRREVERSIBLE
             if (needsApproval && !approvalGranted) {
                 return hub.failCurrentStep("Sensitive action reached execution without step-specific approval")
