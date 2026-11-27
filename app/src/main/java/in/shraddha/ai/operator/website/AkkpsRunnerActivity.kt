@@ -537,7 +537,7 @@ class AkkpsRunnerActivity : Activity() {
         fillValues(values, wantsSubmit)
     }
 
-    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean) {
+    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, additionalMissing: List<String> = emptyList()) {
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
@@ -563,8 +563,8 @@ class AkkpsRunnerActivity : Activity() {
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
-              const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
-                .filter(e=>!e.disabled&&!e.value&&e.type!=='file')
+              const missing=[...document.querySelectorAll('input[required],textarea[required]')]
+                .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
@@ -584,7 +584,11 @@ class AkkpsRunnerActivity : Activity() {
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
-                status.text = out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।"
+                status.text = if (additionalMissing.isNotEmpty()) {
+                    out.length().toString() + " फील्ड भरे गए। अतिरिक्त जानकारी चाहिए: " + additionalMissing.joinToString() + "। Submit नहीं किया।"
+                } else {
+                    out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।"
+                }
                 return@evaluateJavascript
             }
             val missing = result.optJSONArray("missing") ?: JSONArray()
@@ -674,12 +678,8 @@ Return exact JSON only. Do not include prose or markdown."""
                     val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
                     val aiRequestedSubmit = mapped.optBoolean("submit") && explicitSubmit
                     val shouldSubmit = aiRequestedSubmit && missing.length() == 0
-                    fillValues(values, shouldSubmit)
-                    if (missing.length() > 0) {
-                        status.text = "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
-                            (0 until missing.length()).joinToString { missing.optString(it) } +
-                            if (aiRequestedSubmit) "। Submit रोका गया; पहले missing जानकारी दें।" else ""
-                    }
+                    val missingItems = (0 until missing.length()).map { missing.optString(it) }.filter { it.isNotBlank() }
+                    fillValues(values, shouldSubmit, missingItems)
                 }
             }.start()
         }
@@ -699,16 +699,16 @@ Return exact JSON only. Do not include prose or markdown."""
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
-                const key=(item.key||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+                const key=String(item.key||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
                 const matches=[...f.querySelectorAll('input,textarea')].filter(e=>{
                   if(!editable(e)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
-                    .map(x=>(x||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
+                    .map(x=>String(x||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
                 });
                 if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
               }
-              const b=f.querySelector('button[type=submit],input[type=submit]');
+              const b=[...f.querySelectorAll('button[type=submit],input[type=submit]')].find(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
               if(b)b.click();else f.requestSubmit();
               return JSON.stringify({status:'dispatched',eventStart});
             })(__EXPECTED__)
