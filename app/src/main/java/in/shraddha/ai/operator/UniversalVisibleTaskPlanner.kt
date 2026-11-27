@@ -26,6 +26,9 @@ object UniversalVisibleTaskPlanner {
             val value = item.optString("value")
             val expected = item.optString("expectedVisibleText").trim()
             if (target.length > 120 || value.length > 2000 || expected.length > 120) return Result(error = "Step $index की सीमा पार हुई।")
+            if (expected.isNotBlank() && snapshot.elements.any { element ->
+                    element.text.contains(expected, true) || element.description.contains(expected, true)
+                }) return Result(error = "Step $index का expected result पहले से स्क्रीन पर है; verification अनुमानित नहीं होगा।")
             when (action) {
                 OperatorActionType.OPEN_APP -> {
                     if (target.isBlank() || !containsMention(userCommand, target)) return Result(error = "ऐप का नाम user command में स्पष्ट नहीं है।")
