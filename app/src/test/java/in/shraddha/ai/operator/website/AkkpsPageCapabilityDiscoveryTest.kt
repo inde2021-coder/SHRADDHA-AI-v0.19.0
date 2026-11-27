@@ -20,8 +20,8 @@ class AkkpsPageCapabilityDiscoveryTest {
         assertEquals(CapabilityState.AVAILABLE, result.getValue(WebsiteOperation.SAVE_RECORD).state)
         assertEquals(CapabilityState.AVAILABLE, result.getValue(WebsiteOperation.SUBMIT_FORM).state)
         assertEquals(CapabilityState.AVAILABLE, result.getValue(WebsiteOperation.UPLOAD_DOCUMENT).state)
-        assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.DELETE_RECORD).state)
-        assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.PAYMENT).state)
+        assertEquals(CapabilityState.UNAVAILABLE, result.getValue(WebsiteOperation.DELETE_RECORD).state)
+        assertEquals(CapabilityState.UNAVAILABLE, result.getValue(WebsiteOperation.PAYMENT).state)
     }
 
     @Test fun missingControlsRemainUnknownRatherThanUnavailable() {
