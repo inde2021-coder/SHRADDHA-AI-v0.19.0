@@ -23,7 +23,8 @@ data class AkkpsRunnerRouteMatch(
     val module: AkkpsRunnerModule,
     val path: String,
     val isCreateRoute: Boolean = false,
-    val isDetailRoute: Boolean = false
+    val isDetailRoute: Boolean = false,
+    val isEditRoute: Boolean = false
 )
 
 /**
@@ -62,6 +63,15 @@ object AkkpsRunnerRouteCatalog {
 
         AkkpsRunnerModule.entries.firstOrNull { path == it.basePath }?.let {
             return AkkpsRunnerRouteMatch(it, path)
+        }
+
+        val editPatterns = listOf(
+            Regex("^/runner/farmers/[^/]+/edit$") to AkkpsRunnerModule.FARMERS,
+            Regex("^/runner/plots/[^/]+/edit$") to AkkpsRunnerModule.PLOTS,
+            Regex("^/runner/awd-reports/[^/]+/edit$") to AkkpsRunnerModule.AWD_REPORTS
+        )
+        editPatterns.firstOrNull { (pattern, _) -> pattern.matches(path) }?.let { (_, module) ->
+            return AkkpsRunnerRouteMatch(module, path, isDetailRoute = true, isEditRoute = true)
         }
 
         val detailPatterns = listOf(
