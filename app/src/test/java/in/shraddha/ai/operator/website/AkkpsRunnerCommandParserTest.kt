@@ -36,4 +36,9 @@ class AkkpsRunnerCommandParserTest {
         val parsed = AkkpsRunnerCommandParser.parse("Plot ID=12; plot id=13")
         assertTrue(parsed.hasDuplicateKeys)
     }
+
+    @Test fun duplicateDetectionMatchesPunctuationNormalizedBrowserLabels() {
+        val parsed = AkkpsRunnerCommandParser.parse("Plot-ID=12; plot id=13")
+        assertTrue(parsed.hasDuplicateKeys)
+    }
 }
