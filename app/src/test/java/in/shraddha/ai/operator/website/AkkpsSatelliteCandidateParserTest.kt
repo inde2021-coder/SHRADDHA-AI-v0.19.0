@@ -128,4 +128,16 @@ class AkkpsSatelliteCandidateParserTest {
         assertFalse(AkkpsSatelliteCandidateParser.parse(feature(id = longId)).isSuccess)
     }
 
+    @Test fun acceptsEquivalentYearAliasesButRejectsConflictingYears() {
+        val same = AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":"Dataset","year":2025,"dataset_year":"2025"}""")
+        ).getOrThrow()
+        assertEquals(2025, same.datasetYear)
+        val conflict = AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":"Dataset","year":2025,"dataset_year":2024}""")
+        )
+        assertFalse(conflict.isSuccess)
+        assertTrue(conflict.exceptionOrNull()?.message.orEmpty().contains("अलग"))
+    }
+
 }
