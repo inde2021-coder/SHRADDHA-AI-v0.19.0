@@ -78,3 +78,32 @@ test('operator expected-visible-text cannot carry secret field labels', () => {
   }]);
   assert.deepEqual(actions, []);
 });
+
+
+test('operator plans reject spaced, Unicode compatibility and Hindi secret labels', () => {
+  const unsafeValues = [
+    'O T P 123456',
+    'P I N 1234',
+    'one time password 1234',
+    'security code 1234',
+    'UPI PIN 1234',
+    '\\u200bOTP 123456',
+    'ＯＴＰ 123456',
+    'ओ टी पी 123456',
+    'यूपीआई पिन 1234',
+    'सुरक्षा कोड 1234'
+  ];
+  for (const [index, value] of unsafeValues.entries()) {
+    assert.deepEqual(normalizeOperatorActions([{
+      id: `secret-${index}`, title: 'Enter details', action: 'TYPE_TEXT', value
+    }]), [], value);
+  }
+});
+
+test('operator plan allows ordinary text that merely mentions a normal task', () => {
+  const actions = normalizeOperatorActions([{
+    id: 'ordinary', title: 'Search settings', action: 'TYPE_TEXT', value: 'open network settings'
+  }]);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].value, 'open network settings');
+});
