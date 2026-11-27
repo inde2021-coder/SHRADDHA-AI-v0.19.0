@@ -57,8 +57,7 @@ object AkkpsRunnerRouteCatalog {
 
         val rawPath = parsed.rawPath.orEmpty()
         if (rawPath.isBlank() || rawPath.length > 1024 ||
-            rawPath.contains('\\') ||
-            Regex("(?i)%2f|%5c|%2e").containsMatchIn(rawPath) ||
+            rawPath.contains('\\') || rawPath.contains('%') ||
             rawPath.contains("//")
         ) return null
         val path = parsed.path.orEmpty().trimEnd('/').ifBlank { "/" }
