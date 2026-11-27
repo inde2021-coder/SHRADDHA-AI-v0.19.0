@@ -623,7 +623,7 @@ class OperatorActivity : Activity() {
         }
         val controls = snapshot.elements.filter { (it.clickable || it.editable) && !it.password }.take(80).map { element ->
             JSONObject()
-                .put("id", element.id.take(100))
+                .put("id", safePlannerLabel(element.id).take(100))
                 .put("label", if (element.editable) "" else safePlannerLabel(element.text))
                 .put("description", if (element.editable) "" else safePlannerLabel(element.description))
                 .put("hint", element.hintText.take(120))
