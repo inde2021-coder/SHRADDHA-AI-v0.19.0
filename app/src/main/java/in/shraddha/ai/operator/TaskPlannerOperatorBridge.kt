@@ -9,7 +9,8 @@ import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
 /**
  * Connects dependency-ordered plans to the real accessibility Operator.
  * The supplied executor must observe, dispatch and independently verify one step.
- * This bridge never executes a step before the hub reports RUNNING.
+ * The hub moves to VERIFYING immediately before the side effect, so persisted state
+ * records that dispatch may have occurred if the process stops unexpectedly.
  */
 data class PlannedOperatorAction(
     val id: String,
@@ -103,6 +104,9 @@ class TaskPlannerOperatorBridge(
                 audit("operator_dispatch", "journal_failed", "workflow=${session.workflow.id}; step=${action.id}")
                 return hub.failCurrentStep("Secure action journal could not be committed; action was not executed")
             }
+            // Persist the in-flight transition BEFORE invoking an adapter that may cause
+            // an external side effect. A crash from this point is ambiguous and never replayed.
+            session = hub.markActionDispatched()
             val executed = runCatching { executeVerified(action.step, approvalGranted) }.getOrElse { false }
             val journalCommitted = runCatching { afterExecute(session.workflow.id, action, executed) }.getOrElse { false }
             if (!executed || !journalCommitted) {
@@ -110,7 +114,6 @@ class TaskPlannerOperatorBridge(
                 return hub.failCurrentStep(if (!executed) "Operator action failed or its screen result could not be verified" else "Action was verified but durable journal update failed; workflow stopped")
             }
             verified.add(action.id)
-            session = hub.markActionDispatched()
             session = hub.verifyCurrentStep(true)
             audit("operator_dispatch", "verified", "workflow=${session.workflow.id}; step=${action.id}")
             if (session.workflow.status == WorkflowStatus.COMPLETED) {
