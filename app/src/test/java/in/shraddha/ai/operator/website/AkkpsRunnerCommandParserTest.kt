@@ -42,4 +42,25 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(AkkpsRunnerCommandParser.parse("").issues.isNotEmpty())
         assertTrue(AkkpsRunnerCommandParser.parse("x".repeat(4001)).issues.isNotEmpty())
     }
+    @Test fun normalizesFullWidthSyntaxAndHindiAliases() {
+        val parsed = AkkpsRunnerCommandParser.parse("खसरा नंबर＝１２３； किसान का नाम＝राम कुमार； ｓｕｂｍｉｔ")
+        assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+        assertEquals(listOf("surveyNumber", "farmerName"), parsed.assignments.map { it.first })
+        assertEquals(listOf("123", "राम कुमार"), parsed.assignments.map { it.second })
+        assertTrue(parsed.submit)
+    }
+
+    @Test fun ignoresZeroWidthCharactersInFieldNamesAndSubmitToken() {
+        val parsed = AkkpsRunnerCommandParser.parse("Far\u200Bmer Name=Ram; sub\u200Bmit")
+        assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+        assertEquals("farmerName", parsed.assignments.single().first)
+        assertTrue(parsed.submit)
+    }
+
+    @Test fun unicodeNormalizationDoesNotTurnMalformedDuplicateKeysIntoValidAssignments() {
+        val parsed = AkkpsRunnerCommandParser.parse("Survey Number=123; ｓｕｒｖｅｙ ｎｕｍｂｅｒ=456")
+        assertTrue(parsed.assignments.isEmpty())
+        assertTrue(parsed.issues.isNotEmpty())
+    }
+
 }
