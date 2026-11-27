@@ -7,12 +7,12 @@ import org.junit.Test
 class AkkpsSubmitTargetPolicyTest {
     @Test fun requiresAtLeastOneNonBlankMappedField() {
         assertTrue(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("farmer name")))
-        assertFalse(validKeys(emptyList()))
-        assertFalse(validKeys(listOf(" ")))
+        assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(emptyList()))
+        assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(listOf(" ")))
     }
 
     @Test fun rejectsDuplicateMappedFieldKeys() {
-        assertFalse(validKeys(listOf("Plot ID", " plot id ")))
-        assertTrue(validKeys(listOf("Plot ID", "Village")))
+        assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Plot ID", " plot id ")))
+        assertTrue(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Plot ID", "Village")))
     }
 }
