@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pc_companion.language_runtime import (
     IndicConformerRuntime, LanguageRuntimeError, _read_pcm16_mono,
-    require_reference_voice_consent,
+    require_reference_voice_consent, SUPPORTED_TRANSLATION,
 )
 
 
@@ -17,6 +17,12 @@ class LanguageRuntimeTests(unittest.TestCase):
     def test_unknown_asr_language_fails_before_loading_models(self):
         with self.assertRaises(LanguageRuntimeError):
             IndicConformerRuntime("xx")
+
+    def test_unverified_sanskrit_translation_is_not_advertised(self):
+        self.assertIn("hi", SUPPORTED_TRANSLATION)
+        self.assertIn("mr", SUPPORTED_TRANSLATION)
+        self.assertNotIn("sa", SUPPORTED_TRANSLATION)
+        self.assertNotIn("pav", SUPPORTED_TRANSLATION)
 
     def test_voice_synthesis_requires_explicit_owner_consent(self):
         with self.assertRaises(LanguageRuntimeError):
