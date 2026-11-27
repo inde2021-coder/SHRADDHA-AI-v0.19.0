@@ -591,7 +591,7 @@ class AkkpsRunnerActivity : Activity() {
                   const candidates=[
                     parsed?.recordId,parsed?.plotId,parsed?.reportId,parsed?.farmerId,
                     parsed?.data?.recordId,parsed?.data?.plotId,parsed?.data?.reportId,
-                    parsed?.data?.farmerId,parsed?.data?.id,parsed?.data?._id,
+                    parsed?.data?.farmerId,
                     parsed?.result?.recordId,parsed?.result?.plotId,parsed?.result?.reportId,
                     parsed?.record?.id,parsed?.plot?.id,parsed?.report?.id
                   ];
