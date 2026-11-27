@@ -78,6 +78,9 @@ object ProviderMessageClient {
                 require(body.optString("recipient") == recipientE164 && body.optString("channel") == channel) {
                     "Provider receipt does not match the approved recipient and channel."
                 }
+                require(body.optString("messageId").isNotBlank()) {
+                    "Provider accepted the request but did not return a message ID; delivery is not verified."
+                }
                 Receipt(
                     provider = body.optString("provider"),
                     messageId = body.optString("messageId"),
