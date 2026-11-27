@@ -91,7 +91,7 @@ object AkkpsBoundaryGeometry {
             }
         validate(points)?.let { error(it) }
         fun metadata(name: String): String? {
-            val pattern = Regex("(?is)<Data\\s+name=\\"" + Regex.escape(name) + "\\"\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
+            val pattern = Regex("""(?is)<Data\s+name="${Regex.escape(name)}"\s*>\s*<value>(.*?)</value>\s*</Data>""")
             val matches = pattern.findAll(kml).toList()
             require(matches.size <= 1) { "KML metadata '$name' दोहराया गया है; import रोक दिया गया।" }
             return matches.singleOrNull()?.groupValues?.get(1)?.let(::xmlUnescape)?.takeIf { it.isNotBlank() }
