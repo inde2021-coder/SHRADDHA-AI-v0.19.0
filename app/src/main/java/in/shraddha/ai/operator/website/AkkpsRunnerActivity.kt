@@ -169,10 +169,6 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
-        if (parsed.issues.isNotEmpty()) {
-            status.text = parsed.issues.joinToString(" • ")
-            return
-        }
         val wantsSubmit = parsed.submit
         val values = parsed.assignments
         if (values.isEmpty()) {
