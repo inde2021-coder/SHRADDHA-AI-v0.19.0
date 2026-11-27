@@ -617,6 +617,10 @@ class OperatorActivity : Activity() {
      */
     private fun requestUniversalVisiblePlan(command: String, snapshot: ScreenSnapshot) {
         if (command.length > 3000) { log.text = "कमांड 3000 characters से छोटी रखें।"; return }
+        if (Regex("""(?i)password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase|bank account|पासवर्ड|ओटीपी|पिन|गुप्त कोड|बैंक खाता""").containsMatchIn(command)) {
+            log.text = "Password, OTP, PIN, CVV और banking secrets वाले commands को cloud planner तक नहीं भेजा जाएगा।"
+            return
+        }
         val controls = snapshot.elements.filter { (it.clickable || it.editable) && !it.password }.take(80).map { element ->
             JSONObject()
                 .put("id", element.id.take(100))
