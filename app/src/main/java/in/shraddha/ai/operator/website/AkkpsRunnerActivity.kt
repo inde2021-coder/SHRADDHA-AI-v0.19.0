@@ -448,14 +448,35 @@ class AkkpsRunnerActivity : Activity() {
         if (gpsWalkActive) { status.text = "Saved boundary खोलने से पहले GPS Walk रोकें।"; return }
         runCatching { AkkpsBoundaryStore(this).load(plotId) }
             .onSuccess { saved ->
-                if (saved == null) status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
-                else {
-                    boundaryPoints.clear()
-                    boundaryPoints.addAll(saved.points)
-                    boundaryProvenance = saved
-                    gpsWalkSessionInitialized = false
-                    gpsWalkPlotId = null
-                    status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
+                if (saved == null) {
+                    status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
+                } else {
+                    val applySaved = {
+                        boundaryPoints.clear()
+                        boundaryPoints.addAll(saved.points)
+                        boundaryProvenance = saved
+                        gpsWalkSessionInitialized = false
+                        gpsWalkPlotId = null
+                        status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
+                    }
+                    if (AkkpsBoundaryReplacementPolicy.requiresConfirmation(boundaryPoints.size)) {
+                        val currentArea = runCatching { AkkpsBoundary(boundaryPoints.toList()).areaAcres }.getOrNull()
+                        val currentSummary = currentArea?.takeIf { it.isFinite() && it > 0.0 }
+                            ?.let { "मौजूदा editor: ${boundaryPoints.size} points • ${"%.3f".format(java.util.Locale.US, it)} acres\\n" }
+                            .orEmpty()
+                        AlertDialog.Builder(this)
+                            .setTitle("Unsaved Boundary सुरक्षित रखें?")
+                            .setMessage(
+                                currentSummary + "Saved boundary: ${saved.points.size} points • " +
+                                    "${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। " +
+                                    "Reopen करने पर मौजूदा editor points हट जाएँगे। क्या आप स्पष्ट रूप से बदलना चाहते हैं?"
+                            )
+                            .setPositiveButton("Saved Boundary खोलें") { _, _ -> applySaved() }
+                            .setNegativeButton("रद्द करें", null)
+                            .show()
+                    } else {
+                        applySaved()
+                    }
                 }
             }
             .onFailure { status.text = "Saved boundary पढ़ी नहीं जा सकी: ${it.localizedMessage}" }
