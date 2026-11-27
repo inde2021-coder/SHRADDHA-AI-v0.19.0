@@ -1039,6 +1039,10 @@ class AkkpsRunnerActivity : Activity() {
 
     /** Uses the configured AI only after explicit consent because farmer data may be personal. */
     private fun requestAiMapping(raw: String) {
+        if (AkkpsRunnerSensitiveCommandPolicy.containsSensitiveData(raw)) {
+            status.text = "इस command में password/OTP/PIN या लंबा numeric identifier हो सकता है। सुरक्षा के लिए इसे Cloud AI को नहीं भेजा गया। स्थानीय field=value command इस्तेमाल करें।"
+            return
+        }
         val prefs = getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE)
         if (!prefs.getBoolean("cloud_command_consent", false)) {
             AlertDialog.Builder(this)
