@@ -213,6 +213,16 @@ class ShraddhaIntegrationHub(
                 item.getString("event"), item.getString("detail"), item.getLong("timestamp"))
         }.toMutableList()
         val workflowId = workflowJson.getString("id")
+        require(PersistedWorkflowIntegrityPolicy.isValid(
+            workflowId = workflowId,
+            plannedTaskIds = plan.ordered.map { it.id },
+            workflowStepIds = steps.map { it.id },
+            auditWorkflowIds = audit.map { it.workflowId },
+            auditActionIds = audit.mapNotNull { it.actionId },
+            auditEvents = audit.map { it.event },
+            auditDetails = audit.map { it.detail },
+            auditTimestamps = audit.map { it.timestamp }
+        )) { "Persisted workflow cross-references are inconsistent." }
         if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
             status = WorkflowStatus.FAILED
             message = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
