@@ -107,4 +107,11 @@ class AkkpsSatelliteCandidateParserTest {
         )
         assertFalse(AkkpsSatelliteCandidateParser.parse(raw).isSuccess)
     }
+    @Test fun rejectsQuotedStringAndBooleanCoordinates() {
+        val quotedLongitude = "[[[\"78.0\",23.0],[78.001,23.0],[78.001,23.001],[78.0,23.001],[78.0,23.0]]]"
+        val booleanLatitude = "[[[78.0,true],[78.001,23.0],[78.001,23.001],[78.0,23.001],[78.0,23.0]]]"
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = quotedLongitude)).isSuccess)
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = booleanLatitude)).isSuccess)
+    }
+
 }
