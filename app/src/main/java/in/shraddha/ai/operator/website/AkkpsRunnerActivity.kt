@@ -542,22 +542,24 @@ class AkkpsRunnerActivity : Activity() {
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
-              const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-              const all=[...document.querySelectorAll('input,textarea,select')],out=[];
+              const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const allowed=__ALLOWED_TYPES__;
+              const all=[...document.querySelectorAll('input,textarea')],out=[];
+              const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
+                allowed.includes(String(e.type||'').toLowerCase())&&
+                !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
-                  if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
+                  if(!editable(e)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && v===key);
                 });
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
-                if(e.tagName==='SELECT'){
-                  const o=[...e.options].find(x=>norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value));
-                  if(!o){out.push({key:item.key,status:'option_not_found'});continue;} e.value=o.value;
-                } else e.value=item.value;
+                e.value=item.value;
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
@@ -567,6 +569,7 @@ class AkkpsRunnerActivity : Activity() {
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
+            .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
@@ -683,12 +686,18 @@ Return exact JSON only. Do not include prose or markdown."""
         val js = """
             (function(expected){
               const eventStart=window.__akkpsSubmitSequence||0;
-              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
+              const allowed=__ALLOWED_TYPES__;
+              const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&e.tagName!=='SELECT'&&
+                allowed.includes(String(e.type||'').toLowerCase())&&!!e.getClientRects().length&&
+                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea')].some(e=>editable(e)&&e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
                 const key=(item.key||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
-                const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
+                const matches=[...f.querySelectorAll('input,textarea')].filter(e=>{
+                  if(!editable(e)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
                     .map(x=>(x||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
@@ -700,6 +709,7 @@ Return exact JSON only. Do not include prose or markdown."""
               return JSON.stringify({status:'dispatched',eventStart});
             })(__EXPECTED__)
         """.trimIndent().replace("__EXPECTED__", payload.toString())
+            .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         val before = web.url.orEmpty()
         web.evaluateJavascript(js) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
