@@ -18,10 +18,10 @@ class NaturalLanguageWorkflowRouterTest {
         )
     )
 
-    @Test fun hindiDeleteMatchesTrainedDeleteWorkflow() {
+    @Test fun hindiDeleteRequiresExplicitConfirmation() {
         val result = NaturalLanguageWorkflowRouter.route("ग्राहक हटाओ", profile)
-        assertNotNull(result.route)
-        assertEquals("Delete customer", result.route?.workflowName)
+        assertEquals(null, result.route)
+        org.junit.Assert.assertTrue(result.message.contains("high-impact"))
     }
 
     @Test fun hindiUpdateMatchesTrainedUpdateWorkflow() {
