@@ -45,8 +45,13 @@ object MultiProviderChatClient {
         systemInstruction: String,
         history: List<ChatTurn>
     ): ChatReplyResult {
+        if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+            return ChatReplyResult.Error("Online AI is disabled. Your content was not sent to a provider.")
+        }
         val selected = provider.uppercase()
         val cfg = config(selected) ?: return ChatReplyResult.Error("Unsupported AI provider.")
+        runCatching { `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, selected) }
+            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         val apiKey = runCatching { ProviderKeyStore.get(context, selected) }
             .getOrElse { return ChatReplyResult.Error("Could not read the encrypted $selected API key: ${it.message}") }
         if (apiKey.isBlank()) return ChatReplyResult.Error("$selected API key is missing. Add it in Settings.")
@@ -90,8 +95,12 @@ object MultiProviderChatClient {
         }
 
         return try {
+            `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
             http.newCall(builder.build()).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
+                if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                    return ChatReplyResult.Error("Online AI consent was revoked while the request was running. The response was discarded.")
+                }
                 if (!response.isSuccessful) {
                     val message = runCatching {
                         val json = JSONObject(raw)
@@ -102,7 +111,7 @@ object MultiProviderChatClient {
                 }
                 val json = JSONObject(raw)
                 val tokenUsage = parseTokenUsage(json, selected, cfg.model)
-                if (cfg.perplexityAgent) {
+                val parsedResult = if (cfg.perplexityAgent) {
                     when (val parsed = parsePerplexityAgentResponse(json)) {
                         is ChatReplyResult.Success -> parsed.copy(tokenUsage = tokenUsage)
                         is ChatReplyResult.Error -> parsed
@@ -119,6 +128,14 @@ object MultiProviderChatClient {
                     if (text.isBlank()) ChatReplyResult.Error("$selected returned an empty response.")
                     else ChatReplyResult.Success(text, tokenUsage)
                 }
+                if (parsedResult is ChatReplyResult.Success) {
+                    if (tokenUsage == null) {
+                        `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, selected, cfg.model.ifBlank { null })
+                    } else {
+                        `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, tokenUsage)
+                    }
+                }
+                parsedResult
             }
         } catch (_: IOException) {
             ChatReplyResult.Error("Couldn't reach $selected. Check the internet connection and try again.")
