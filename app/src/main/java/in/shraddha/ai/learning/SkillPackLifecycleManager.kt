@@ -189,6 +189,8 @@ class SkillPackLifecycleManager(context: Context) {
         val metadata = JSONObject(sourceMetadata.readText(Charsets.UTF_8))
         require(metadata.optString("packId") == pack.packId &&
             metadata.optString("version") == pack.version) { "Pack metadata identity does not match the staged pack." }
+        val licenceId = metadata.optString("licenceId")
+        require(licenceId in SUPPORTED_LICENSE_IDS) { "Pack licence is unknown or unsupported; activation is blocked." }
         val contentType = metadata.optString("contentType")
         require(isTextPack(pack.file, contentType)) { "Only bounded UTF-8 text packs can be activated." }
         require(sha256(pack.file).equals(metadata.optString("sha256"), true)) {
@@ -266,7 +268,7 @@ class SkillPackLifecycleManager(context: Context) {
     private fun validateManifest(m: Manifest) {
         require(validId(m.packId) && validVersion(m.version))
         require(m.title.isNotBlank() && m.title.length <= 120)
-        require(m.licenceId.isNotBlank() && m.licenceId.length <= 120)
+        require(m.licenceId in SUPPORTED_LICENSE_IDS) { "Pack licence is unknown or unsupported." }
         require(m.contentUrl.startsWith("https://") && m.sourceUrl.startsWith("https://"))
         require(m.sha256.matches(Regex("[a-fA-F0-9]{64}")))
         require(m.contentType in SUPPORTED_CONTENT_TYPES)
