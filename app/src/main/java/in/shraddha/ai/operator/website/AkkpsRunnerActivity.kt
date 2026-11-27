@@ -1124,7 +1124,10 @@ Return exact JSON only. Do not include prose or markdown."""
                 getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea')].some(e=>editable(e)&&e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
-              const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
+              const f=forms[0];
+              const action=new URL(f.action||location.href,location.href);
+              if(action.protocol!=='https:'||action.origin!==location.origin) return JSON.stringify({status:'unsafe_form_origin'});
+              if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
                 const key=String(item.key||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
                 const matches=[...f.querySelectorAll('input,textarea')].filter(e=>{
@@ -1150,6 +1153,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 status.text = when (code) {
                     "invalid" -> "AKKPS validation अधूरी है।"
                     "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
+                    "unsafe_form_origin" -> "Form का action AKKPS के सुरक्षित same-origin पर नहीं है; Submit रोक दिया।"
                     else -> "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
                 }
                 return@evaluateJavascript
