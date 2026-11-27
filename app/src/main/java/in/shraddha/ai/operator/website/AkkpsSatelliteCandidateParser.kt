@@ -54,6 +54,9 @@ object AkkpsSatelliteCandidateParser {
             val lon = pair.getDouble(0)
             val lat = pair.getDouble(1)
             require(lon.isFinite() && lat.isFinite()) { "GeoJSON coordinates finite numbers होने चाहिए।" }
+            if (pair.length() == 3) {
+                require(pair.getDouble(2).isFinite()) { "GeoJSON altitude finite number होना चाहिए।" }
+            }
             AkkpsGeoPoint(lat, lon)
         }
         require(points.first() == points.last()) {
@@ -66,11 +69,16 @@ object AkkpsSatelliteCandidateParser {
         val issue = AkkpsBoundaryGeometry.validate(openRing)
         require(issue == null) { issue ?: "Boundary अमान्य है।" }
         val properties = feature.optJSONObject("properties") ?: JSONObject()
-        val sourceValue = listOf("source", "dataset", "provider")
-            .asSequence()
+        val sourceValues = listOf("source", "dataset", "provider")
             .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
-            .map { it.toString().trim() }
-            .firstOrNull { it.isNotBlank() }
+        require(sourceValues.all { it is String }) {
+            "Boundary candidate source/dataset/provider text होना चाहिए।"
+        }
+        val normalizedSources = sourceValues.map { (it as String).trim() }.filter { it.isNotBlank() }.distinct()
+        require(normalizedSources.size <= 1) {
+            "GeoJSON source, dataset और provider metadata आपस में अलग हैं; provenance स्पष्ट करें।"
+        }
+        val sourceValue = normalizedSources.singleOrNull()
             ?: error("Boundary candidate का source/dataset/provider बताना आवश्यक है।")
         require(sourceValue.length <= MAX_SOURCE_LENGTH) {
             "Boundary candidate source metadata 120 characters से लंबा है।"
@@ -99,6 +107,9 @@ object AkkpsSatelliteCandidateParser {
             is String -> featureIdValue.trim().takeIf { it.isNotBlank() }
             is Number -> featureIdValue.toString()
             else -> error("GeoJSON Feature ID string या number होना चाहिए।")
+        }
+        require(featureId == null || featureId.length <= 120) {
+            "GeoJSON Feature ID 120 characters से लंबी नहीं हो सकती।"
         }
         AkkpsSatelliteBoundaryCandidate(
             boundary = AkkpsBoundary(
