@@ -676,6 +676,8 @@ class AkkpsRunnerActivity : Activity() {
                 return {index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
                   name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
                   aria:n(e.getAttribute('aria-label')),label:[...new Set(labels)].join(' / '),
+                  groupLabel:e.type==='radio'?n(e.closest('fieldset')?.querySelector('legend')?.innerText||
+                    e.closest('[role="radiogroup"]')?.getAttribute('aria-label')):'',
                   required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly};
               });
               const forms=[...document.forms].filter(visible).map((f,i)=>({
@@ -725,7 +727,8 @@ class AkkpsRunnerActivity : Activity() {
                 val f = fields.optJSONObject(i) ?: return@mapNotNull null
                 val label = listOf("label", "name", "id", "placeholder", "aria")
                     .map { f.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
-                label + if (f.optBoolean("required")) " *" else ""
+                listOf(label, f.optString("groupLabel")).filter { it.isNotBlank() }.distinct().joinToString(" / ") +
+                    if (f.optBoolean("required")) " *" else ""
             }
             val forms = obj.optJSONArray("forms")?.length() ?: 0
             val tables = obj.optJSONArray("tables")?.length() ?: 0
