@@ -30,15 +30,11 @@ class RemoteCameraService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (RemoteCameraCommandPolicy.resolve(intent?.action)) {
             RemoteCameraCommandPolicy.Command.STOP -> {
-            stopping = true
-            stopCamera()
-            getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().remove("active_target").remove("active_facing").apply()
-            if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
-            stopSelfResult(startId)
-            return START_NOT_STICKY
+                stopAndClear(startId)
+                return START_NOT_STICKY
             }
             RemoteCameraCommandPolicy.Command.REJECT -> {
-                stopSelfResult(startId)
+                stopAndClear(startId)
                 return START_NOT_STICKY
             }
             RemoteCameraCommandPolicy.Command.START -> Unit
@@ -50,7 +46,8 @@ class RemoteCameraService : Service() {
         val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
         // Validate current runtime grant and user consent before starting a camera foreground service.
         if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, target, facing)) {
-            stopSelf(); return START_NOT_STICKY
+            stopAndClear(startId)
+            return START_NOT_STICKY
         }
         createNotification()
         stopCamera()
@@ -180,6 +177,15 @@ class RemoteCameraService : Service() {
         handler: Handler
     ) {
         device.createCaptureSession(listOf(surface), callback, handler)
+    }
+
+    private fun stopAndClear(startId: Int) {
+        stopping = true
+        stopCamera()
+        getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit()
+            .remove("active_target").remove("active_facing").apply()
+        if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
+        stopSelfResult(startId)
     }
 
     private fun stopCamera() {
