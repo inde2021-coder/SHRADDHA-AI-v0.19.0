@@ -2,6 +2,7 @@ package `in`.shraddha.ai.operator.website
 
 import org.junit.Assert.*
 import org.junit.Test
+import java.util.Locale
 
 class AkkpsRunnerCommandParserTest {
     @Test fun mapsHindiAndEnglishAliasesToCanonicalFieldNames() {
@@ -42,4 +43,26 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(AkkpsRunnerCommandParser.parse("").issues.isNotEmpty())
         assertTrue(AkkpsRunnerCommandParser.parse("x".repeat(4001)).issues.isNotEmpty())
     }
+    @Test fun normalizesFullWidthEnglishAndUnicodeDuplicateAliases() {
+        val fullWidth = AkkpsRunnerCommandParser.parse("Ｆａｒｍｅｒ Ｎａｍｅ=Ram; Ｖｉｌｌａｇｅ=Rampur")
+        assertTrue(fullWidth.issues.toString(), fullWidth.issues.isEmpty())
+        assertEquals(listOf("farmerName", "village"), fullWidth.assignments.map { it.first })
+
+        val duplicate = AkkpsRunnerCommandParser.parse("Farmer Name=Ram; Ｆａｒｍｅｒ Ｎａｍｅ=Shyam")
+        assertTrue(duplicate.assignments.isEmpty())
+        assertTrue(duplicate.issues.isNotEmpty())
+    }
+
+    @Test fun aliasMatchingIsIndependentOfDeviceLocale() {
+        val previous = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("tr", "TR"))
+            val parsed = AkkpsRunnerCommandParser.parse("PHONE=9876543210")
+            assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+            assertEquals("phoneNumber", parsed.assignments.single().first)
+        } finally {
+            Locale.setDefault(previous)
+        }
+    }
+
 }
