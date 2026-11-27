@@ -175,8 +175,14 @@ class CommandExecutionJournal(context: Context) {
             value.matches(Regex("^[A-Za-z0-9_.-]+$")) &&
             !Regex("[0-9]{6,}").containsMatchIn(value)
 
-    private fun safeCode(value: String): String =
-        value.filter { it.isLetterOrDigit() || it in "_-." }.take(80)
+    private fun safeCode(value: String): String {
+        val candidate = value.trim()
+        return if (candidate.matches(Regex("^[A-Za-z][A-Za-z_-]{0,79}$"))) {
+            candidate.lowercase()
+        } else {
+            "redacted"
+        }
+    }
 
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
