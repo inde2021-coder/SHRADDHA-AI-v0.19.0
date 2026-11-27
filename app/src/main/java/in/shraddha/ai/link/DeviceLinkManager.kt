@@ -27,6 +27,17 @@ object DeviceLinkManager {
         .build()
     // Bound Visual Lens calls: a stalled HTTP response must not keep the camera analysis gate locked for OkHttp's default 10-minute read timeout.
     private val visionClient = buildVisionHttpClient(client)
+    private val activeAiCalls = ConcurrentHashMap.newKeySet<Call>()
+    private fun onlineAiAllowed(): Boolean = appContext?.let { `in`.shraddha.ai.future.OnlineAiConsent.isAllowed(it) } == true
+    private fun rejectIfOnlineAiDisabled(done: (Result<String>) -> Unit): Boolean {
+        if (onlineAiAllowed()) return false
+        done(Result.failure(IllegalStateException("Online AI permission is off. Enable it in Settings before sending data to a cloud AI provider.")))
+        return true
+    }
+    fun cancelAiRequests() {
+        activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
+        activeAiCalls.clear()
+    }
     private val reconnectHandler = Handler(Looper.getMainLooper())
     @Volatile private var appContext: Context? = null
     @Volatile private var lastBaseUrl: String? = null
@@ -398,6 +409,7 @@ object DeviceLinkManager {
     }
 
     fun askChat(baseUrl: String, gatewayToken: String, provider: String, prompt: String, done: (Result<String>) -> Unit) {
+        if (rejectIfOnlineAiDisabled(done)) return
         // This endpoint may carry a bearer token. Reuse the pairing URL policy so a
         // misconfigured HTTP URL can never leak gateway credentials over cleartext.
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
@@ -415,12 +427,16 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/chat")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        visionClient.newCall(builder.build()).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+        val aiCall = visionClient.newCall(builder.build())
+        activeAiCalls.add(aiCall)
+        aiCall.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    activeAiCalls.remove(call)
                     val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
+                    else if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
                     else done(runCatching { JSONObject(raw).let { body ->
                         val actual = body.optString("provider", provider)
                         val route = if (body.optString("routing") == "automatic_failover") "Auto route → $actual" else "Provider → $actual"
@@ -442,6 +458,10 @@ object DeviceLinkManager {
         onCall: ((Call) -> Unit)? = null,
         done: (Result<String>) -> Unit
     ): Call? {
+        if (!onlineAiAllowed()) {
+            done(Result.failure(IllegalStateException("Online AI permission is off. Social publishing was blocked.")))
+            return null
+        }
         val normalizedPlatform = platform.trim().lowercase()
         if (!userConfirmed || !confirmedPlatform.trim().equals(normalizedPlatform, true) || confirmedText != exactText) {
             done(Result.failure(IllegalStateException("Exact social post preview approval is required")))
@@ -464,13 +484,21 @@ object DeviceLinkManager {
     }
 
     fun providerStatus(baseUrl: String, gatewayToken: String, done: (Result<String>) -> Unit) {
+        if (rejectIfOnlineAiDisabled(done)) return
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return }
         val builder = Request.Builder().url("$safeBaseUrl/api/ai/providers").get()
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        requestClient.newCall(builder.build()).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
-            override fun onResponse(call: Call, response: Response) { response.use { val raw = it.body?.string().orEmpty(); if (!it.isSuccessful) done(Result.failure(IllegalStateException("HTTP ${it.code}"))) else done(Result.success(raw)) } }
+        val aiCall = requestClient.newCall(builder.build())
+        activeAiCalls.add(aiCall)
+        aiCall.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) { response.use {
+                activeAiCalls.remove(call)
+                val raw = it.body?.string().orEmpty()
+                if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
+                else if (!it.isSuccessful) done(Result.failure(IllegalStateException("HTTP ${it.code}"))) else done(Result.success(raw))
+            } }
         })
     }
 
@@ -504,19 +532,26 @@ object DeviceLinkManager {
         done: (Result<String>) -> Unit,
         onCall: ((Call) -> Unit)? = null
     ): Call? {
+        if (!onlineAiAllowed()) {
+            done(Result.failure(IllegalStateException("Online AI permission is off. Cloud request was blocked.")))
+            return null
+        }
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return null }
         val builder = Request.Builder().url("$safeBaseUrl$path")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
         val call = requestClient.newCall(builder.build())
+        activeAiCalls.add(call)
         onCall?.invoke(call)
         call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    activeAiCalls.remove(call)
                     val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(
+                    if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
+                    else if (!it.isSuccessful) done(Result.failure(IllegalStateException(
                         runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}")
                     ))) else done(Result.success(raw))
                 }
@@ -526,6 +561,7 @@ object DeviceLinkManager {
     }
 
     fun analyzeScreen(baseUrl: String, gatewayToken: String, provider: String, prompt: String, jpeg: ByteArray, mode: String = "general", done: (Result<String>) -> Unit) {
+        if (rejectIfOnlineAiDisabled(done)) return
         val safeBaseUrl = runCatching { normalizedRelayBaseUrl(baseUrl) }
             .getOrElse { done(Result.failure(it)); return }
         // The vision gateway currently supports Gemini, OpenAI and Anthropic,
@@ -551,12 +587,16 @@ object DeviceLinkManager {
         val builder = Request.Builder().url("$safeBaseUrl/api/vision")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
         if (gatewayToken.isNotBlank()) builder.header("Authorization", "Bearer $gatewayToken")
-        requestClient.newCall(builder.build()).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) { done(Result.failure(e)) }
+        val aiCall = requestClient.newCall(builder.build())
+        activeAiCalls.add(aiCall)
+        aiCall.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) { activeAiCalls.remove(call); done(Result.failure(e)) }
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    activeAiCalls.remove(call)
                     val raw = it.body?.string().orEmpty()
-                    if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
+                    if (!onlineAiAllowed()) done(Result.failure(IllegalStateException("Online AI consent was revoked. The response was discarded.")))
+                    else if (!it.isSuccessful) done(Result.failure(IllegalStateException(runCatching { JSONObject(raw).optString("error", "HTTP ${it.code}") }.getOrDefault("HTTP ${it.code}"))))
                     else done(runCatching { JSONObject(raw).let { body ->
                         val actual = body.optString("provider", provider)
                         val route = if (body.optString("routing") == "automatic_failover") "Auto vision route → $actual" else "Vision provider → $actual"
