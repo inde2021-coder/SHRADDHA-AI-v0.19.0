@@ -33,6 +33,13 @@ class UniversalVisibleTaskPlannerTest {
         val password = snapshot.copy(elements = snapshot.elements.map { if (it.id == "search") it.copy(password = true) else it })
         assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate(json, "type hello", password).error)
     }
+    @Test fun blocksHighImpactButtonsEvenWhenTheyAreVisible() {
+        val withDelete = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "delete", "Delete", "", "Button", Rect(0,100,100,140), true, false, false, false
+        ))
+        val json = """{"steps":[{"action":"CLICK_TEXT","target":"Delete"}]}"""
+        assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate(json, "delete this item", withDelete).error)
+    }
     @Test fun rejectsOversizedPlansAndUnsupportedActions() {
         assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate("x".repeat(20001), "do this", snapshot).error)
         val bad = """{"steps":[{"action":"DELETE","target":"file"}]}"""
