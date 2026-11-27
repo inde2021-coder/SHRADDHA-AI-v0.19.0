@@ -34,8 +34,29 @@ object AkkpsBoundaryGeometry {
         if (points.any { !it.latitude.isFinite() || !it.longitude.isFinite() || it.latitude !in -90.0..90.0 || it.longitude !in -180.0..180.0 })
             return "Boundary में invalid GPS coordinates हैं।"
         if (points.distinct().size < 3) return "कम-से-कम 3 अलग GPS points चाहिए।"
+        if (points.zipWithNext().any { it.first == it.second }) return "लगातार GPS points एक जैसे नहीं हो सकते।"
         if (areaSquareMeters(points) < 1.0) return "Boundary area शून्य या बहुत छोटा है।"
+        if (hasSelfIntersection(closeRing(points))) return "Boundary polygon आपस में cross कर रहा है; GPS path जाँचें।"
         return null
+    }
+
+    private fun hasSelfIntersection(closed: List<AkkpsGeoPoint>): Boolean {
+        val points = closed.dropLast(1)
+        fun orient(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint): Double =
+            (b.longitude - a.longitude) * (c.latitude - a.latitude) -
+                (b.latitude - a.latitude) * (c.longitude - a.longitude)
+        fun crosses(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint, d: AkkpsGeoPoint): Boolean {
+            val o1 = orient(a, b, c); val o2 = orient(a, b, d)
+            val o3 = orient(c, d, a); val o4 = orient(c, d, b)
+            return o1 * o2 < 0.0 && o3 * o4 < 0.0
+        }
+        for (i in points.indices) for (j in i + 1 until points.size) {
+            val nextI = (i + 1) % points.size
+            val nextJ = (j + 1) % points.size
+            if (i == j || nextI == j || nextJ == i) continue
+            if (crosses(points[i], points[nextI], points[j], points[nextJ])) return true
+        }
+        return false
     }
     fun toJson(boundary: AkkpsBoundary): String {
         validate(boundary.points)?.let { error(it) }
