@@ -107,9 +107,9 @@ class AkkpsRunnerActivity : Activity() {
         super.onCreate(savedInstanceState)
         val submitPrefs = getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE)
         val savedSubmitState = submitPrefs.getString("submit_state", "").orEmpty()
-        if (savedSubmitState == "VERIFYING" || savedSubmitState == "REVIEW_REQUIRED") {
+        if (AkkpsSubmitStatePolicy.requiresManualReview(savedSubmitState)) {
             submitNeedsManualReview = true
-            submitPrefs.edit().putString("submit_state", "REVIEW_REQUIRED").apply()
+            submitPrefs.edit().putString("submit_state", AkkpsSubmitStatePolicy.REVIEW_REQUIRED).apply()
         }
         CookieManager.getInstance().setAcceptCookie(true)
         val root = LinearLayout(this).apply {
@@ -993,7 +993,7 @@ Return exact JSON only. Do not include prose or markdown."""
         }
         submitVerificationPending = true
         getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE).edit()
-            .putString("submit_state", "VERIFYING").apply()
+            .putString("submit_state", AkkpsSubmitStatePolicy.VERIFYING).apply()
         val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
             (function(expected){
