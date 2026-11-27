@@ -16,3 +16,13 @@ class ControlSessionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_rejects_non_finite_and_boolean_timestamps(self):
+        import math
+        self.assertFalse(control_grant_is_valid("phone-1", "phone-1", math.inf, 1.0))
+        self.assertFalse(control_grant_is_valid("phone-1", "phone-1", 10.0, math.nan))
+        self.assertFalse(control_grant_is_valid("phone-1", "phone-1", True, 1.0))
+
+    def test_rejects_empty_or_missing_peer(self):
+        self.assertFalse(control_grant_is_valid("", "phone-1", 10.0, 1.0))
+        self.assertFalse(control_grant_is_valid("phone-1", None, 10.0, 1.0))
