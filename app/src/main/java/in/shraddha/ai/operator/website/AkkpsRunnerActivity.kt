@@ -689,6 +689,10 @@ Return exact JSON only. Do not include prose or markdown."""
                         status.text = "AI mapping में एक ही फील्ड की duplicate entry मिली। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
+                    if (values.isNotEmpty() && !AkkpsAiMappingPolicy.areValuesExplicitInCommand(raw, values)) {
+                        status.text = "AI mapping में ऐसे values मिले जो आपके command में स्पष्ट रूप से नहीं थे। कोई data नहीं भरा गया।"
+                        return@runOnUiThread
+                    }
                     val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
                     val shouldSubmit = AkkpsAiSubmitPolicy.maySubmit(
                         aiRequested = mapped.optBoolean("submit"),
