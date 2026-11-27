@@ -710,6 +710,16 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            val viewQuery = AkkpsRunnerViewCommandPolicy.parse(raw)
+            if (viewQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Record देखने के लिए पहले Farmers, Plots या AWD Reports list खोलें।"
+                } else {
+                    viewRecord(viewQuery, module!!)
+                }
+                return
+            }
             val searchQuery = AkkpsRunnerSearchCommandPolicy.parse(raw)
             if (searchQuery != null) {
                 val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
@@ -741,6 +751,47 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         fillValues(values, wantsSubmit)
+    }
+
+    /** Opens a record only through one exact table-cell match and one known detail-route link. */
+    private fun viewRecord(identifier: String, module: AkkpsRunnerModule) {
+        val js = """
+            (function(q,expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim().replace(/\\s+/g,' ');
+              const rows=[...document.querySelectorAll('table tr')].filter(visible);
+              const matches=rows.filter(row=>[...row.cells].some(cell=>norm(cell.innerText)===q));
+              if(matches.length!==1) return JSON.stringify({status:matches.length?'ambiguous_record':'record_not_found'});
+              const row=matches[0];
+              const links=[...row.querySelectorAll('a[href]')].filter(visible).filter(a=>{
+                try{
+                  const u=new URL(a.href,location.href);
+                  if(u.protocol!=='https:'||u.origin!==location.origin) return false;
+                  const p=u.pathname.replace(/\\/$/,'');
+                  if(expectedModule==='FARMERS') return /^\\/runner\\/farmers\\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='PLOTS') return /^\\/runner\\/plots\\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='AWD_REPORTS') return /^\\/runner\\/awd-reports\\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  return false;
+                }catch(_){return false}
+              });
+              const unique=[...new Map(links.map(a=>[a.href,a])).values()];
+              if(unique.length!==1) return JSON.stringify({status:unique.length?'ambiguous_detail_link':'detail_link_not_found'});
+              unique[0].click();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__,__MODULE__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(identifier))
+            .replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Record detail खोलने का request भेजा गया। Inspect से record page verify करें।"
+                "ambiguous_record" -> "एक से अधिक records मिले; कोई record नहीं खोला। Exact ID दें।"
+                "detail_link_not_found" -> "इस row में सुरक्षित Runner detail link नहीं मिला।"
+                "ambiguous_detail_link" -> "एक row में कई detail links मिले; कोई link नहीं चुना।"
+                else -> "इस exact ID/name का visible record नहीं मिला।"
+            }
+        }
     }
 
     /** Read-only search is allowed only through a unique visible search field in a same-origin GET form. */
