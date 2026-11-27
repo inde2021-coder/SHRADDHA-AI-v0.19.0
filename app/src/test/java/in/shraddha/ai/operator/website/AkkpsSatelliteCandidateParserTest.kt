@@ -52,11 +52,35 @@ class AkkpsSatelliteCandidateParserTest {
 
     @Test fun acceptsMissingOptionalMetadataWithoutInventingValues() {
         val result = AkkpsSatelliteCandidateParser.parse(
-            feature(properties = "{}", id = "null")
+            feature(properties = """{"source":"Imported dataset"}""", id = "null")
         ).getOrThrow()
         assertEquals(null, result.datasetYear)
         assertEquals(null, result.confidence)
         assertEquals(null, result.featureId)
+    }
+
+    @Test fun rejectsMissingOrBlankSourceProvenance() {
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"year":2025}""")
+        ).isSuccess)
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":"   "}""")
+        ).isSuccess)
+    }
+
+    @Test fun rejectsSourceMetadataThatWouldOtherwiseBeTruncated() {
+        val longSource = "x".repeat(121)
+        val properties = """{"source":"$longSource"}"""
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = properties)
+        ).isSuccess)
+    }
+
+    @Test fun fallsBackToDatasetYearWhenPrimaryYearIsExplicitNull() {
+        val result = AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":"Dataset","year":null,"dataset_year":2024}""")
+        ).getOrThrow()
+        assertEquals(2024, result.datasetYear)
     }
 
     @Test fun rejectsUnsupportedCrs() {
