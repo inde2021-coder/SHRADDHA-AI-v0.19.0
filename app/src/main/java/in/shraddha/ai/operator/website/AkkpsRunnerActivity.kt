@@ -157,7 +157,21 @@ class AkkpsRunnerActivity : Activity() {
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); boundaryProvenance = null; gpsWalkSessionInitialized = false; gpsWalkPlotId?.let { AkkpsBoundaryDraftStore(this).delete(it) }; gpsWalkPlotId = null; status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") {
+            val plotId = plotIdInput.text.toString().trim()
+            val reset = runCatching {
+                if (plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) AkkpsBoundaryDraftStore(this).delete(plotId)
+            }
+            if (reset.isFailure) {
+                status.text = "पुराना GPS draft हट नहीं पाया; मौजूदा boundary सुरक्षित रखी गई।"
+            } else {
+                boundaryPoints.clear()
+                boundaryProvenance = null
+                gpsWalkSessionInitialized = false
+                gpsWalkPlotId = null
+                status.text = "नई boundary walk के लिए तैयार।"
+            }
+        }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
         val candidateActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
@@ -334,10 +348,15 @@ class AkkpsRunnerActivity : Activity() {
     private fun beginGpsWalk(manager: LocationManager, clearExisting: Boolean) {
         if (gpsWalkActive) return
         if (clearExisting) {
+            val targetPlotId = plotIdInput.text.toString().trim()
+            val cleared = runCatching { AkkpsBoundaryDraftStore(this).delete(targetPlotId) }
+            if (cleared.isFailure) {
+                status.text = "पुराना GPS draft सुरक्षित रूप से हट नहीं पाया; नई Walk शुरू नहीं हुई।"
+                return
+            }
             boundaryPoints.clear()
             boundaryProvenance = null
-            gpsWalkPlotId?.let { AkkpsBoundaryDraftStore(this).delete(it) }
-            gpsWalkPlotId = plotIdInput.text.toString().trim()
+            gpsWalkPlotId = targetPlotId
             bestGpsAccuracyMeters = Float.MAX_VALUE
         } else if (gpsWalkPlotId.isNullOrBlank()) {
             gpsWalkPlotId = plotIdInput.text.toString().trim()
