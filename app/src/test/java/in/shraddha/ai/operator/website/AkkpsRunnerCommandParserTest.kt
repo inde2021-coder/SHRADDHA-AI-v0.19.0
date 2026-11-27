@@ -65,4 +65,22 @@ class AkkpsRunnerCommandParserTest {
         }
     }
 
+    @Test fun normalizesFullWidthEnglishAliasesBeforeMapping() {
+        val parsed = AkkpsRunnerCommandParser.parse("Ｆａｒｍｅｒ Ｎａｍｅ=Ram; Ｓｕｒｖｅｙ Ｎｕｍｂｅｒ=123")
+        assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+        assertEquals(listOf("farmerName", "surveyNumber"), parsed.assignments.map { it.first })
+    }
+
+    @Test fun duplicateUnicodeCompatibilityAliasesCannotOverwrite() {
+        val parsed = AkkpsRunnerCommandParser.parse("Farmer Name=Ram; Ｆａｒｍｅｒ Ｎａｍｅ=Shyam")
+        assertTrue(parsed.assignments.isEmpty())
+        assertTrue(parsed.issues.isNotEmpty())
+    }
+
+    @Test fun normalizesHindiCompatibilityWhitespaceForAliasLookup() {
+        val parsed = AkkpsRunnerCommandParser.parse("खसरा   नंबर=123")
+        assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+        assertEquals("surveyNumber", parsed.assignments.single().first)
+    }
+
 }
