@@ -19,6 +19,13 @@ class AkkpsAiMappingPolicyTest {
         ))
     }
 
+    @Test fun missingRequiredInformationAlwaysBlocksAiSubmit() {
+        assertTrue(AkkpsAiMappingPolicy.canSubmit(true, 0))
+        assertFalse(AkkpsAiMappingPolicy.canSubmit(true, 1))
+        assertFalse(AkkpsAiMappingPolicy.canSubmit(true, 3))
+        assertFalse(AkkpsAiMappingPolicy.canSubmit(false, 0))
+    }
+
     @Test fun rejectsEmptyAssignmentsAndEmptyValues() {
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand("नाम=राम", emptyList()))
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand("नाम=", listOf("नाम" to " ")))
