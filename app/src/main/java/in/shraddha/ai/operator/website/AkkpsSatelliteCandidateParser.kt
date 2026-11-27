@@ -51,8 +51,19 @@ object AkkpsSatelliteCandidateParser {
         val points = (0 until outer.length()).map { index ->
             val pair = outer.getJSONArray(index)
             require(pair.length() in 2..3) { "GeoJSON coordinate tuple में केवल longitude, latitude और optional altitude मान्य हैं।" }
-            val lon = pair.getDouble(0)
-            val lat = pair.getDouble(1)
+            val longitudeValue = pair.opt(0)
+            val latitudeValue = pair.opt(1)
+            require(longitudeValue is Number && latitudeValue is Number) {
+                "GeoJSON longitude/latitude JSON numeric values होने चाहिए; text स्वीकार नहीं है।"
+            }
+            if (pair.length() == 3) {
+                val altitude = pair.opt(2)
+                require(altitude is Number && altitude.toDouble().isFinite()) {
+                    "GeoJSON altitude finite numeric value होना चाहिए।"
+                }
+            }
+            val lon = (longitudeValue as Number).toDouble()
+            val lat = (latitudeValue as Number).toDouble()
             require(lon.isFinite() && lat.isFinite()) { "GeoJSON coordinates finite numbers होने चाहिए।" }
             AkkpsGeoPoint(lat, lon)
         }
@@ -66,10 +77,13 @@ object AkkpsSatelliteCandidateParser {
         val issue = AkkpsBoundaryGeometry.validate(openRing)
         require(issue == null) { issue ?: "Boundary अमान्य है।" }
         val properties = feature.optJSONObject("properties") ?: JSONObject()
-        val sourceValue = listOf("source", "dataset", "provider")
-            .asSequence()
+        val sourceCandidates = listOf("source", "dataset", "provider")
             .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
-            .map { it.toString().trim() }
+        require(sourceCandidates.all { it is String }) {
+            "Boundary source/dataset/provider metadata text होना चाहिए।"
+        }
+        val sourceValue = sourceCandidates.filterIsInstance<String>()
+            .map { it.trim() }
             .firstOrNull { it.isNotBlank() }
             ?: error("Boundary candidate का source/dataset/provider बताना आवश्यक है।")
         require(sourceValue.length <= MAX_SOURCE_LENGTH) {
