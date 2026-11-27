@@ -171,6 +171,10 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val wantsSubmit = parsed.submit
         val values = parsed.assignments
+        if (parsed.hasDuplicateKeys) {
+            status.text = "एक ही AKKPS फील्ड के लिए अलग-अलग मान मिले। कोई डेटा नहीं भरा गया।"
+            return
+        }
         if (values.isEmpty()) {
             requestAiMapping(raw)
             return
