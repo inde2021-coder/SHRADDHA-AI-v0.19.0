@@ -26,6 +26,7 @@ class AkkpsRunnerRouteCatalogTest {
     @Test fun identifiesCreateAndDetailRoutesWithoutAssumingMutationSucceeded() {
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/plots/new")?.let { it.module == AkkpsRunnerModule.PLOTS && it.isCreateRoute } == true)
+        assertTrue(AkkpsRunnerRouteCatalog.match("/runner/awd-reports/new")?.let { it.module == AkkpsRunnerModule.AWD_REPORTS && it.isCreateRoute && !it.isDetailRoute } == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/plots/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/awd-reports/new")?.isCreateRoute == true)
         assertTrue(AkkpsRunnerRouteCatalog.match("/runner/farmers/farmer-123")?.isDetailRoute == true)
