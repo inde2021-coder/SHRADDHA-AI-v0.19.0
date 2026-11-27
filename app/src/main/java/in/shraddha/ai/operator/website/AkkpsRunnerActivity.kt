@@ -743,8 +743,16 @@ class AkkpsRunnerActivity : Activity() {
                 });
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
+                const previousValue=e.value;
                 e.value=item.value;
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
+                if(!e.checkValidity()){
+                  const reason=String(e.validationMessage||'field validation failed').slice(0,120);
+                  e.value=previousValue;
+                  e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
+                  out.push({key:item.key,status:'invalid',reason});
+                  continue;
+                }
                 out.push({key:item.key,status:'filled'});
               }
               const missing=[...document.querySelectorAll('input[required],textarea[required]')]
@@ -760,7 +768,8 @@ class AkkpsRunnerActivity : Activity() {
             val out = result.optJSONArray("out") ?: JSONArray()
             val errors = (0 until out.length()).mapNotNull { i ->
                 out.optJSONObject(i)?.takeIf { it.optString("status") != "filled" }?.let {
-                    it.optString("key") + ": " + it.optString("status")
+                    val reason = it.optString("reason").takeIf(String::isNotBlank)?.let { value -> " ($value)" }.orEmpty()
+                    it.optString("key") + ": " + it.optString("status") + reason
                 }
             }
             if (errors.isNotEmpty()) {
