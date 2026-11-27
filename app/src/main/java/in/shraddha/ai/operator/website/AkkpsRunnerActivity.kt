@@ -981,25 +981,57 @@ Return exact JSON only. Do not include prose or markdown."""
             (function(expected){
               const eventStart=window.__akkpsSubmitSequence||0;
               const allowed=__ALLOWED_TYPES__;
+              const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
                 (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
                 !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
-              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value));
+              const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
+                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioGroups=scope=>{
+                const groups=[];
+                for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
+                  let g=groups.find(x=>x[0].form===r.form&&(x[0].name||x[0].id)===(r.name||r.id));
+                  if(!g){g=[];groups.push(g);} g.push(r);
+                }
+                return groups;
+              };
+              const optionLabel=r=>norm([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||'').join(' '));
+              const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
+              };
+              const forms=[...document.forms].filter(f=>
+                [...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value)||
+                radioGroups(f).some(g=>g.some(r=>r.checked))
+              );
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
-                const key=String(item.key||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+                const key=norm(item.key), wanted=norm(item.value);
                 const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
                   if(!editable(e)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
-                    .map(x=>String(x||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
+                    .map(norm).some(x=>x && x===key);
                 });
+                if(matches.length===0){
+                  const groups=radioGroups(f).filter(g=>{
+                    const labels=groupLabel(g);
+                    return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
+                  });
+                  if(groups.length!==1) return JSON.stringify({status:'field_changed',field:item.key});
+                  const selected=groups[0].filter(r=>r.checked);
+                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  if(selected.length!==1||options.length!==1||selected[0]!==options[0])
+                    return JSON.stringify({status:'field_changed',field:item.key});
+                  continue;
+                }
                 if(matches.length!==1) return JSON.stringify({status:'field_changed',field:item.key});
-                const actual=String(matches[0].value), expected=String(item.value);
-                const optionLabel=matches[0].tagName==='SELECT'?norm(matches[0].selectedOptions[0]?.textContent):'';
-                if(actual!==expected && optionLabel!==norm(expected)) return JSON.stringify({status:'field_changed',field:item.key});
+                const actual=String(matches[0].value);
+                const optionText=matches[0].tagName==='SELECT'?norm(matches[0].selectedOptions[0]?.textContent):'';
+                if(actual!==String(item.value)&&optionText!==wanted)
+                  return JSON.stringify({status:'field_changed',field:item.key});
               }
               const submitControls=[...f.querySelectorAll('button:not([type]),button[type=submit],input[type=submit]')]
                 .filter(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
