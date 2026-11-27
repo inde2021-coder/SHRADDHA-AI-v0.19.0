@@ -306,6 +306,14 @@ Return exact JSON only. Do not include prose or markdown."""
                         val value = item.optString("value").trim()
                         if (key.isBlank() || value.isBlank() || value.length > 500) null else key to value
                     }
+                    if (values.size != items.length()) {
+                        status.text = "AI mapping में अमान्य या अधूरी field entry मिली। कोई डेटा नहीं भरा गया।"
+                        return@runOnUiThread
+                    }
+                    if (!AkkpsAiMappingPolicy.areValuesExplicitInCommand(raw, values)) {
+                        status.text = "AI ने ऐसा मान दिया जो आपके कमांड में स्पष्ट रूप से नहीं था। कोई डेटा नहीं भरा गया।"
+                        return@runOnUiThread
+                    }
                     if (values.isEmpty()) {
                         val missing = mapped.optJSONArray("missing") ?: JSONArray()
                         status.text = if (missing.length() > 0)
