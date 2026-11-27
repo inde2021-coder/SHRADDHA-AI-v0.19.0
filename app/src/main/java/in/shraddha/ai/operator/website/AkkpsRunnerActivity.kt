@@ -311,6 +311,10 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     private fun submitForm(fieldKeys: List<String>) {
+        if (!AkkpsSubmitTargetPolicy.hasValidKeys(fieldKeys)) {
+            status.text = "Submit रोक दिया: फील्ड सूची अमान्य या duplicate है।"
+            return
+        }
         val keys = JSONArray(fieldKeys)
         val js = """
             (function(keys){
