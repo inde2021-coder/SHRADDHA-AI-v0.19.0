@@ -10,8 +10,8 @@ class AkkpsFarmerCardOcrParserTest {
         val result = AkkpsFarmerCardOcrParser.parse(
             "Farmer Name: Ram Kumar\nFarmer ID: MP-12345\nVillage: Rampur\nDistrict: Seoni\nAadhaar: 123456789012"
         )
-        assertEquals("Ram Kumar", result.assignments["name"])
-        assertEquals("MP-12345", result.assignments["farmer_id"])
+        assertEquals("Ram Kumar", result.assignments["farmerName"])
+        assertEquals("MP-12345", result.assignments["farmerId"])
         assertEquals("Rampur", result.assignments["village"])
         assertEquals("Seoni", result.assignments["district"])
         assertFalse(result.assignments.values.any { it.contains("123456789012") })
@@ -20,8 +20,8 @@ class AkkpsFarmerCardOcrParserTest {
 
     @Test fun reportsMissingFieldsAndNeverInventsValues() {
         val result = AkkpsFarmerCardOcrParser.parse("नाम: राम कुमार\nग्राम: पिपरिया")
-        assertEquals(setOf("name", "village"), result.assignments.keys)
-        assertEquals(listOf("farmer_id", "district"), result.missing)
+        assertEquals(setOf("farmerName", "village"), result.assignments.keys)
+        assertEquals(listOf("farmerId", "district"), result.missing)
         assertFalse(result.toRunnerCommand().contains("submit"))
     }
 
@@ -36,7 +36,7 @@ class AkkpsFarmerCardOcrParserTest {
         assertFalse(command.contains("; submit"))
         assertFalse(command.contains("submit="))
         assertFalse(command.contains("=now"))
-        assertTrue(command.contains("name=Ram submit now"))
+        assertTrue(command.contains("farmerName=Ram submit now"))
     }
 
 }
