@@ -411,6 +411,11 @@ class PcCompanionApp:
         self._clear_peer_keys()
         self.screen_event.clear()
         self.control_grant_until = 0
+        # A disconnected relay invalidates both directions of remote-control approval.
+        self.phone_control_grant_until = 0
+        self.phone_control_peer = None
+        self.remote_var.set(False)
+        self.screen_var.set(False)
         if code == 4003:
             self.events.put(("revoked", None))
         elif self._pending_pairing_auth:
@@ -1377,6 +1382,9 @@ class PcCompanionApp:
         self.remote_var.set(False)
         self.screen_var.set(False)
         self.control_grant_until = 0
+        self.phone_control_grant_until = 0
+        self.phone_control_peer = None
+        self.remote_target_var.set("")
         self._send_json({"type": "permission_update", "permissions": {"remote_control": False, "screen": False}})
         ws = self.ws_app
         if ws:
