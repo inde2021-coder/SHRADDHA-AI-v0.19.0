@@ -35,6 +35,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var command: EditText
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var pendingFileChooserParams: WebChromeClient.FileChooserParams? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
@@ -217,21 +218,28 @@ class AkkpsRunnerActivity : Activity() {
                 ): Boolean {
                     uploadCallback?.onReceiveValue(null)
                     uploadCallback = callback
+                    if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
+                        uploadCallback = null
+                        callback.onReceiveValue(null)
+                        return false
+                    }
                     return try {
-                        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = params.acceptTypes.firstOrNull { it.isNotBlank() } ?: "*/*"
+                        pendingFileChooserParams = params
+                        val pick = params.createIntent().apply {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         startActivityForResult(pick, REQUEST_FILE)
                         true
                     } catch (_: Exception) {
+                        pendingFileChooserParams = null
                         uploadCallback = null
+                        callback.onReceiveValue(null)
                         false
                     }
                 }
             }
         }
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
@@ -781,9 +789,13 @@ Return exact JSON only. Do not include prose or markdown."""
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if(requestCode==REQUEST_FILE) {
-            val selected=if(resultCode==RESULT_OK) data?.data?.let { arrayOf(it) } else null
-            uploadCallback?.onReceiveValue(selected); uploadCallback=null
+        if (requestCode == REQUEST_FILE) {
+            val selected = runCatching {
+                if (resultCode == RESULT_OK) FileChooserParams.parseResult(resultCode, data) else null
+            }.getOrNull()
+            uploadCallback?.onReceiveValue(selected)
+            uploadCallback = null
+            pendingFileChooserParams = null
         }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
@@ -890,7 +902,7 @@ Return exact JSON only. Do not include prose or markdown."""
 
     override fun onDestroy() {
         stopGpsWalk()
-        uploadCallback?.onReceiveValue(null); uploadCallback=null
+        uploadCallback?.onReceiveValue(null); uploadCallback=null; pendingFileChooserParams=null
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
         web.stopLoading(); web.destroy(); super.onDestroy()
