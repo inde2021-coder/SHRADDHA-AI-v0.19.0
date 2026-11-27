@@ -1,0 +1,31 @@
+package `in`.shraddha.ai.operator.website
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class AkkpsRunnerViewCommandPolicyTest {
+    @Test fun parsesExplicitEnglishViewCommands() {
+        assertEquals("farmer 123", AkkpsRunnerViewCommandPolicy.parse("view Farmer 123"))
+        assertEquals("plot-45", AkkpsRunnerViewCommandPolicy.parse("open record PLOT-45"))
+        assertEquals("report 7", AkkpsRunnerViewCommandPolicy.parse("show record Report 7"))
+    }
+
+    @Test fun parsesHindiViewCommands() {
+        assertEquals("किसान १२३", AkkpsRunnerViewCommandPolicy.parse("रिकॉर्ड खोलो किसान १२३"))
+        assertEquals("राम", AkkpsRunnerViewCommandPolicy.parse("देखो राम"))
+        assertEquals("खसरा ४५", AkkpsRunnerViewCommandPolicy.parse("खोलें खसरा ४५"))
+    }
+
+    @Test fun rejectsEmptyAmbiguousAndHighImpactCommands() {
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("view"))
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("open farmers"))
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("view payment record"))
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("view record submit"))
+    }
+
+    @Test fun enforcesLengthAndSingleLineBounds() {
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("view " + "x".repeat(101)))
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("view " + "x".repeat(301)))
+        assertNull(AkkpsRunnerViewCommandPolicy.parse("view farmer\n123"))
+    }
+}
