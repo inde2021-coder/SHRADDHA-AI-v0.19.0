@@ -281,7 +281,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         val plotId = plotIdInput.text.toString().trim()
-        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) {
+        if (!AkkpsPlotIdPolicy.isValid(plotId)) {
             status.text = "GPS Walk शुरू करने से पहले सही AKKPS Plot ID भरें।"
             return
         }
@@ -410,7 +410,7 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun saveBoundary() {
         val plotId = plotIdInput.text.toString().trim()
-        if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
+        if (!AkkpsPlotIdPolicy.isValid(plotId)) { status.text = "मान्य AKKPS Plot ID भरें (1–80 अक्षर, अंक, _ या -)।"; return }
         if (gpsWalkActive) { status.text = "पहले GPS Walk रोकें, फिर Save करें।"; return }
         if (boundaryPoints.size < 3) { status.text = "Save करने के लिए पहले कम-से-कम 3 GPS points रिकॉर्ड करें या KML Import करें।"; return }
         val metadata = boundaryProvenance
@@ -444,7 +444,7 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun reopenBoundary() {
         val plotId = plotIdInput.text.toString().trim()
-        if (plotId.isBlank()) { status.text = "पहले वही AKKPS Plot ID भरें।"; return }
+        if (!AkkpsPlotIdPolicy.isValid(plotId)) { status.text = "मान्य AKKPS Plot ID भरें (1–80 अक्षर, अंक, _ या -)।"; return }
         if (gpsWalkActive) { status.text = "Saved boundary खोलने से पहले GPS Walk रोकें।"; return }
         runCatching { AkkpsBoundaryStore(this).load(plotId) }
             .onSuccess { saved ->
