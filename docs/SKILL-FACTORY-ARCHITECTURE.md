@@ -166,3 +166,20 @@ Moving durable memory and large content packs off-device can reduce installed AP
 
 ## Authored curriculum content delivery
 Five lesson libraries have been authored under `docs/curriculum/` and indexed in `SHRADDHA-CURRICULUM-CATALOG.md`. They are not yet installed in the Android knowledge store. Ingestion must reuse `LocalKnowledgeDocumentStore` and `LocalKnowledgeBase`, preserve pack provenance/licence/version, and add retrieval tests. Do not create a parallel RAG store. Baby-care and health-related content requires specialist review before being exposed as advice. The Skill Factory must keep these packs in review/quarantine until trust, licence, safety and validation gates pass.
+
+
+## Android lifecycle implementation
+
+`SkillPackLifecycleManager.kt` provides a quarantine-first foundation:
+- HTTPS download with exact publisher-host matching, redirect rejection, bounded size, SHA-256 verification and RSA/SHA-256 signed-manifest verification.
+- Strict UTF-8 text-only Markdown/plain-text/JSON packs. Downloaded archives and executable payloads are rejected and never executed.
+- Explicit local-import consent, quarantine metadata, review gates, versioned activation and rollback.
+- Activation-state parsing fails closed rather than silently resetting corrupt state.
+
+**Trust-anchor limitation:** no verified publisher public-key registry is bundled by this change. Remote catalogue downloads must remain unavailable until an independently verified publisher key is pinned in an app release. Do not expose caller-controlled keys as trusted. The manager is not yet connected to a public marketplace UI or automatic discovery worker; this PR adds the storage and verification foundation only.
+
+`SkillDomainCatalog.kt` lists planned learning domains and marks catalogue-only areas separately from domains with existing source material. A catalogue entry is not proof that a verified pack is installed or complete.
+
+## AKKPS Farmer Card OCR
+
+The current AKKPS Runner adds an image-picker OCR entry point using on-device Latin and Devanagari ML Kit recognizers. The parser extracts only explicit labelled values for farmer name, farmer ID, village, block, district and state. It excludes Aadhaar/OTP/password labels, does not infer missing values, and sanitises command separators so OCR text cannot inject a submit instruction. Raw OCR text is not sent to a cloud endpoint or persisted. Candidate values appear in the Runner command box for user review; OCR never submits a record. The existing separate submit-confirmation workflow remains required.
