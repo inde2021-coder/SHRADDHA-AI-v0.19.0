@@ -224,22 +224,17 @@ class ShraddhaIntegrationHub(
             auditDetails = audit.map { it.detail },
             auditTimestamps = audit.map { it.timestamp }
         )) { "Persisted workflow cross-references are inconsistent." }
-        if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
-            status = WorkflowStatus.FAILED
-            message = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
-            val recoveredActionId = steps.getOrNull(workflowJson.getInt("currentStep"))?.id
-            val recoveredAudit = WorkflowAuditPolicy.append(audit, AuditEvent(workflowId, recoveredActionId,
-                "PROCESS_RESTARTED_REQUIRES_REVIEW", message, System.currentTimeMillis()))
-            return Session(plan, WorkflowSnapshot(
-                workflowId, workflowJson.getString("title"), status,
-                workflowJson.getInt("currentStep"), steps, message
-            ), recoveredAudit)
-        }
         val workflow = WorkflowSnapshot(
             workflowId, workflowJson.getString("title"), status,
             workflowJson.getInt("currentStep"), steps, message
         )
         require(workflow.currentStep in workflow.steps.indices)
-        return Session(plan, workflow, audit.toList())
+        if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
+            val recoveredMessage = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
+            val recoveredActionId = steps[workflow.currentStep].id
+            val recoveredAudit = WorkflowAuditPolicy.append(audit, AuditEvent(workflowId, recoveredActionId,
+                "PROCESS_RESTARTED_REQUIRES_REVIEW", recoveredMessage, System.currentTimeMillis()))
+            return Session(plan, workflow.copy(status = WorkflowStatus.FAILED, message = recoveredMessage), recoveredAudit)
+        }
     }
 }
