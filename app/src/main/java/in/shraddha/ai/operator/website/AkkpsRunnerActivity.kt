@@ -473,6 +473,7 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private var pendingKml: String? = null
+    private var submitVerificationPending = false
 
     private fun confirmAkkpsLocation(
         origin: String,
@@ -869,6 +870,17 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     private fun submitForm(expectedValues: List<Pair<String, String>>) {
+        if (submitVerificationPending) {
+            status.text = "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
+            return
+        }
+        if (expectedValues.isEmpty() || expectedValues.size > 100 ||
+            expectedValues.any { it.first.isBlank() || it.first.length > 160 || it.second.length > 1_000 }
+        ) {
+            status.text = "Submit data invalid है। कोई request नहीं भेजी गई।"
+            return
+        }
+        submitVerificationPending = true
         val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
             (function(expected){
@@ -902,6 +914,7 @@ Return exact JSON only. Do not include prose or markdown."""
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             val code = result?.optString("status").orEmpty()
             if (code != "dispatched") {
+                submitVerificationPending = false
                 status.text = when (code) {
                     "invalid" -> "AKKPS validation अधूरी है।"
                     "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
@@ -936,6 +949,7 @@ Return exact JSON only. Do not include prose or markdown."""
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            submitVerificationPending = false
             status.text = when {
                 o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
                 o?.optBoolean("serverSuccess") == true ->
