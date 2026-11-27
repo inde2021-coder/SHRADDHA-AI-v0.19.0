@@ -1,5 +1,8 @@
 package `in`.shraddha.ai.operator.learning
 
+import java.text.Normalizer
+import java.util.Locale
+
 /** Routes a command to a workflow the user has already taught; never invents unseen app actions. */
 object NaturalLanguageWorkflowRouter {
     data class Route(val profile: AppTrainingProfile, val workflowName: String, val confidence: Float, val values: Map<String, String>, val note: String)
@@ -25,6 +28,12 @@ object NaturalLanguageWorkflowRouter {
     fun route(command: String, profile: AppTrainingProfile): Result {
         val normalized = normalize(command)
         if (normalized.isBlank()) return Result(message = "कृपया बताएं कि कौन-सा काम करना है।")
+        if (containsHighImpactAction(normalized)) {
+            return Result(message = "यह Delete/Payment/Publish जैसा high-impact काम है। पहले अलग से स्पष्ट पुष्टि लें; सीखे हुए Workflow को अपने-आप नहीं चलाया गया।")
+        }
+        if (containsMultipleActionIntents(normalized)) {
+            return Result(message = "एक निर्देश में कई अलग काम हैं। कृपया उन्हें क्रम से अलग-अलग बताएं; Workflow अपने-आप नहीं चुना गया।")
+        }
         val ranked = profile.workflows.keys.map { name -> name to score(normalized, normalize(name)) }.sortedByDescending { it.second }
         val best = ranked.firstOrNull() ?: return Result(message = "इस ऐप के लिए कोई सिखाया हुआ Workflow नहीं है।")
         if (best.second < .22f) return Result(message = "इस निर्देश से मिलता हुआ सीखा Workflow नहीं मिला। पहले Training Lab में यह काम सिखाएँ।")
@@ -40,9 +49,47 @@ object NaturalLanguageWorkflowRouter {
         return Result(Route(profile, best.first, best.second, values, "सीखे हुए Workflow से निर्देश मिलाया गया; कोई नया ऐप व्यवहार अनुमान से नहीं बनाया गया।"), "Workflow चुना गया: ${best.first}")
     }
 
-    private fun normalize(value: String): String = value.lowercase()
+    private fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
+        .lowercase(Locale.ROOT)
         .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
         .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+        .replace(Regex("\\s+"), " ")
+
+    private fun containsHighImpactAction(value: String): Boolean {
+        val tokens = value.split(' ').filter { it.isNotBlank() }.toSet()
+        val highImpactTokens = setOf(
+            "delete", "remove", "erase", "trash", "pay", "payment", "purchase", "buy", "publish", "post",
+            "हटाओ", "हटाना", "हटाएं", "हटाएँ", "हटाइए", "हटा", "मिटाओ", "मिटाना", "मिटा",
+            "डिलीट", "भुगतान", "पेमेंट", "प्रकाशित", "पब्लिश", "पोस्ट",
+            "hata", "hatao", "hatana", "mita", "mitao", "mitana", "bhugtan", "bhugtaan",
+            "payment", "paisa", "paise", "pay", "publish", "post"
+        )
+        if (tokens.any { it in highImpactTokens }) return true
+        val phrases = listOf(
+            "हटा दो", "हटा दें", "हटा देना", "मिटा दो", "मिटा दें", "मिटा देना",
+            "hata do", "hata dena", "mita do", "mita dena",
+            "पैसे भेजो", "पैसा भेजो", "भुगतान करो", "पेमेंट करो",
+            "paise bhejo", "paisa bhejo", "bhugtan karo", "payment karo"
+        )
+        return phrases.any { value.contains(it) }
+    }
+
+    private fun containsMultipleActionIntents(value: String): Boolean {
+        val groups = listOf(
+            setOf("create", "add", "बनाओ", "बनाना", "जोड़ो", "banao", "jodo"),
+            setOf("search", "find", "खोजो", "ढूंढो", "सर्च", "khojo", "dhundo"),
+            setOf("update", "edit", "change", "अपडेट", "बदलो", "update", "badlo"),
+            setOf("send", "share", "forward", "भेजो", "भेजना", "सेंड", "bhejo", "bhejna"),
+            setOf("save", "submit", "सेव", "जमा", "सबमिट", "save", "jama"),
+            setOf("download", "export", "डाउनलोड", "download"),
+            setOf("upload", "attach", "अपलोड", "upload"),
+            setOf("delete", "remove", "हटाओ", "हटाना", "मिटाओ", "डिलीट", "hatao", "hata", "mitao"),
+            setOf("pay", "payment", "भुगतान", "पेमेंट", "paisa", "paise", "bhugtan"),
+            setOf("publish", "प्रकाशित", "पब्लिश", "पोस्ट", "publish", "post")
+        )
+        return groups.count { group -> value.split(' ').any { it in group } } > 1
+    }
+
     private fun score(a: String, b: String): Float {
         val at = a.split(" ").filter { it.length > 1 && it !in stopWords }.toSet(); val bt = b.split(" ").filter { it.length > 1 && it !in stopWords }.toSet()
         if (at.isEmpty() || bt.isEmpty()) return 0f
