@@ -196,6 +196,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # GitHub-hosted runners may contain a Microsoft apt source that returns
+          # HTTP 403 in some regions. It is unrelated to Android emulator packages.
+          for source in /etc/apt/sources.list.d/*; do
+            [[ -f "$source" ]] || continue
+            if grep -q "packages.microsoft.com" "$source"; then
+              echo "Disabling inaccessible Microsoft apt source: $source"
+              sudo mv "$source" "${source}.disabled"
+            fi
+          done
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libpulse0
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
