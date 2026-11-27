@@ -202,4 +202,23 @@ class AkkpsBoundaryStoreTest {
         assertNull(restored.confidence)
     }
 
+    @Test fun rejectsKmlWithDocumentTypeOrCustomEntityDeclarations() {
+        val base = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val doctype = base.replace("<kml", "<!DOCTYPE kml [<!ENTITY x \"boom\">]><kml")
+        val entity = base.replace("<kml", "<!ENTITY x \"boom\"><kml")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(doctype).isFailure)
+        assertTrue(AkkpsBoundaryGeometry.parseKml(entity).isFailure)
+    }
+
+    @Test fun rejectsKmlCdataAndDuplicateProvenanceKeys() {
+        val base = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square, source = "FTW"))
+        val duplicate = base.replace(
+            "</ExtendedData>",
+            "<Data name=\"source\"><value>Other</value></Data></ExtendedData>"
+        )
+        val cdata = base.replace("78.0,23.0,0", "<![CDATA[78.0,23.0,0]]>")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(duplicate).isFailure)
+        assertTrue(AkkpsBoundaryGeometry.parseKml(cdata).isFailure)
+    }
+
 }
