@@ -10,6 +10,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -29,8 +30,13 @@ object VoiceGatewaySettings {
     private const val PAYLOAD = "config_ciphertext"
     private const val IV = "config_iv"
     private const val ALIAS = "shraddha_voice_gateway_aes_v1"
-    private data class ProviderCache(val baseUrl: String, val tokenHash: Int, val fetchedAt: Long, val providers: Set<String>)
+    private data class ProviderCache(val baseUrl: String, val tokenFingerprint: String, val fetchedAt: Long, val providers: Set<String>)
     @Volatile private var providerCache: ProviderCache? = null
+    private fun tokenFingerprint(token: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(token.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
     private val http = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -135,6 +141,7 @@ object VoiceGatewaySettings {
 
     /** Checks relay health and authenticates the saved token against provider status. */
     fun testConnection(context: Context): String {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Saved backend settings could not be read." }
         require(config.baseUrl.isNotBlank()) { "Backend URL is missing. Enter the HTTPS backend URL." }
@@ -148,6 +155,7 @@ object VoiceGatewaySettings {
         }
         val providerRequest = Request.Builder().url("$base/api/ai/providers")
             .header("Authorization", "Bearer ${config.gatewayToken}").get().build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(providerRequest).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
@@ -170,18 +178,21 @@ object VoiceGatewaySettings {
 
     /** Returns server-side provider keys configured on the HTTPS gateway; null means no gateway. */
     fun configuredProviders(context: Context): Set<String>? {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
         val now = System.currentTimeMillis()
+        val fingerprint = tokenFingerprint(config.gatewayToken)
         val cached = providerCache
-        if (cached != null && cached.baseUrl == config.baseUrl && cached.tokenHash == config.gatewayToken.hashCode() && now - cached.fetchedAt < 30_000L) {
+        if (cached != null && cached.baseUrl == config.baseUrl && cached.tokenFingerprint == fingerprint && now - cached.fetchedAt < 30_000L) {
             return cached.providers
         }
         val request = Request.Builder()
             .url(config.baseUrl.trimEnd('/') + "/api/ai/providers")
             .header("Authorization", "Bearer " + config.gatewayToken)
             .get().build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
@@ -192,7 +203,7 @@ object VoiceGatewaySettings {
             val providers = listOf("GEMINI", "OPENAI", "GROQ", "CLAUDE", "PERPLEXITY")
                 .filter { provider -> flags.optBoolean(if (provider == "CLAUDE") "anthropic" else provider.lowercase()) }
                 .toSet()
-            providerCache = ProviderCache(config.baseUrl, config.gatewayToken.hashCode(), now, providers)
+            providerCache = ProviderCache(config.baseUrl, fingerprint, now, providers)
             return providers
         }
     }
@@ -205,11 +216,13 @@ object VoiceGatewaySettings {
         systemInstruction: String,
         prompt: String
     ): AgentReply? {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
         if (config.baseUrl.isBlank() || config.gatewayToken.isBlank()) return null
         val normalized = provider.uppercase()
         if (normalized !in configuredProviders(context).orEmpty()) return null
+        `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, normalized)
         val providerId = if (normalized == "CLAUDE") "anthropic" else normalized.lowercase()
         val combinedPrompt = "You are the " + role.take(40) + " agent in Shraddha AI.\n" +
             systemInstruction.take(1800) + "\n\n" + prompt.take(10_000)
@@ -222,6 +235,9 @@ object VoiceGatewaySettings {
             .post(body).build()
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                throw IllegalStateException("Online AI consent was revoked while the cloud request was running. The response was discarded.")
+            }
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw GatewayRequestException(response.code, message.ifBlank { "Cloud agent request failed (HTTP " + response.code + ")." })
@@ -232,15 +248,26 @@ object VoiceGatewaySettings {
             }
             val answer = json.optString("answer").takeIf { it.isNotBlank() }
                 ?: error("Cloud agent returned an empty response.")
-            val usage = json.optJSONObject("usage")
-            val inputTokens = usage?.takeIf { it.has("inputTokens") && !it.isNull("inputTokens") }?.optLong("inputTokens")?.takeIf { it >= 0L }
-            val outputTokens = usage?.takeIf { it.has("outputTokens") && !it.isNull("outputTokens") }?.optLong("outputTokens")?.takeIf { it >= 0L }
-            return AgentReply(answer, normalized, json.optString("model").takeIf { it.isNotBlank() }, inputTokens, outputTokens)
+            val usageJson = json.optJSONObject("usage")
+            val inputTokens = usageJson?.takeIf { it.has("inputTokens") && !it.isNull("inputTokens") }?.optLong("inputTokens")?.takeIf { it >= 0L }
+            val outputTokens = usageJson?.takeIf { it.has("outputTokens") && !it.isNull("outputTokens") }?.optLong("outputTokens")?.takeIf { it >= 0L }
+            val model = json.optString("model").takeIf { it.isNotBlank() }
+            val reply = AgentReply(answer, normalized, model, inputTokens, outputTokens)
+            val usage = if (inputTokens != null && outputTokens != null && model != null) {
+                runCatching { com.Lia.assistant.voice.ProviderTokenUsage(normalized, model, inputTokens, outputTokens) }.getOrNull()
+            } else null
+            if (usage == null) {
+                `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, normalized, model)
+            } else {
+                `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, usage)
+            }
+            return reply
         }
     }
 
     /** Requests a one-use, short-lived Gemini Live token. Must be called off the main thread. */
     fun fetchEphemeralToken(context: Context): String {
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val config = get(context)
         require(config.readError == null) { config.readError ?: "Voice Gateway settings could not be read." }
         require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
@@ -252,6 +279,7 @@ object VoiceGatewaySettings {
             .url(config.baseUrl.trimEnd('/') + "/api/ai/gemini-live-token")
             .header("Authorization", "Bearer ${config.gatewayToken}")
             .post(body).build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
