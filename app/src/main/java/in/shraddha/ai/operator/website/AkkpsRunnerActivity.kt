@@ -105,6 +105,12 @@ class AkkpsRunnerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val submitPrefs = getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE)
+        val savedSubmitState = submitPrefs.getString("submit_state", "").orEmpty()
+        if (savedSubmitState == "VERIFYING" || savedSubmitState == "REVIEW_REQUIRED") {
+            submitNeedsManualReview = true
+            submitPrefs.edit().putString("submit_state", "REVIEW_REQUIRED").apply()
+        }
         CookieManager.getInstance().setAcceptCookie(true)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -266,6 +272,9 @@ class AkkpsRunnerActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        if (submitNeedsManualReview) {
+            status.text = "पिछला AKKPS Submit अधूरा verify हुआ था। Record list जाँचें; blind retry बंद है।"
+        }
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
     }
 
@@ -983,6 +992,8 @@ Return exact JSON only. Do not include prose or markdown."""
             return
         }
         submitVerificationPending = true
+        getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE).edit()
+            .putString("submit_state", "VERIFYING").apply()
         val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
             (function(expected){
@@ -1055,11 +1066,20 @@ Return exact JSON only. Do not include prose or markdown."""
             val code = result?.optString("status").orEmpty()
             if (code != "dispatched") {
                 submitVerificationPending = false
-                status.text = when (code) {
-                    "invalid" -> "AKKPS validation अधूरी है।"
-                    "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
-                    "submit_control_not_unique" -> "Form में एक स्पष्ट Submit button नहीं मिला; कोई request नहीं भेजी गई।"
-                    else -> "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
+                val definitelyNotDispatched = code in setOf(
+                    "invalid", "field_changed", "submit_control_not_unique", "form_not_unique"
+                )
+                if (definitelyNotDispatched) {
+                    getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE).edit().remove("submit_state").apply()
+                    status.text = when (code) {
+                        "invalid" -> "AKKPS validation अधूरी है।"
+                        "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
+                        "submit_control_not_unique" -> "Form में एक स्पष्ट Submit button नहीं मिला; कोई request नहीं भेजी गई।"
+                        else -> "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
+                    }
+                } else {
+                    requireManualSubmitReview()
+                    status.text = "Submit dispatch का परिणाम स्पष्ट नहीं है। Duplicate रोकने के लिए record list जाँचें।"
                 }
                 return@evaluateJavascript
             }
@@ -1101,9 +1121,14 @@ Return exact JSON only. Do not include prose or markdown."""
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (!submitVerificationPending) return@evaluateJavascript
             submitVerificationPending = false
+            val verifiedFailure = o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true
+            val verifiedSuccess = o?.optBoolean("serverSuccess") == true
+            if (verifiedFailure || verifiedSuccess) {
+                getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE).edit().remove("submit_state").apply()
+            }
             status.text = when {
-                o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
-                o?.optBoolean("serverSuccess") == true ->
+                verifiedFailure -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
+                verifiedSuccess ->
                     "AKKPS server ने success response और Record ID ${o.optString("recordId")} दिया। Server response verified।"
                 !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true -> {
                     requireManualSubmitReview()
@@ -1127,6 +1152,8 @@ Return exact JSON only. Do not include prose or markdown."""
 
     private fun requireManualSubmitReview() {
         submitNeedsManualReview = true
+        getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE).edit()
+            .putString("submit_state", "REVIEW_REQUIRED").apply()
         AlertDialog.Builder(this)
             .setTitle("AKKPS Record की जाँच जरूरी")
             .setMessage(
@@ -1136,6 +1163,7 @@ Return exact JSON only. Do not include prose or markdown."""
             .setNegativeButton("अभी नहीं", null)
             .setPositiveButton("Record जाँच लिया; retry unlock करें") { _, _ ->
                 submitNeedsManualReview = false
+                getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE).edit().remove("submit_state").apply()
                 status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
             }
             .show()
