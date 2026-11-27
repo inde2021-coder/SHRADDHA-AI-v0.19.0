@@ -32,7 +32,23 @@ object AkkpsFieldAliasCatalog {
         "cultivation area" to "cultivationArea", "खेती का क्षेत्र" to "cultivationArea",
         "water saved" to "waterSaved", "बचाया गया पानी" to "waterSaved",
         "male laborers" to "maleLaborers", "पुरुष मजदूर" to "maleLaborers",
-        "female laborers" to "femaleLaborers", "महिला मजदूर" to "femaleLaborers"
+        "female laborers" to "femaleLaborers", "महिला मजदूर" to "femaleLaborers",
+        "farmer name" to "farmerName", "किसान का नाम" to "farmerName",
+        "father name" to "fatherName", "father's name" to "fatherName", "पिता का नाम" to "fatherName",
+        "mother name" to "motherName", "mother's name" to "motherName", "माता का नाम" to "motherName",
+        "phone number" to "phoneNumber", "mobile number" to "phoneNumber", "मोबाइल नंबर" to "phoneNumber",
+        "farmer gender" to "farmerGender", "gender" to "farmerGender", "लिंग" to "farmerGender",
+        "identity type" to "identityType", "पहचान का प्रकार" to "identityType",
+        "aadhaar number" to "aadhaarNumber", "आधार नंबर" to "aadhaarNumber",
+        "address" to "address", "पता" to "address",
+        "baseline practice continuous flooding" to "baselineContinuousFlooding", "क्या लगातार बाढ़ सिंचाई होती है" to "baselineContinuousFlooding",
+        "previous irrigation method" to "previousIrrigationMethod", "पिछली सिंचाई विधि" to "previousIrrigationMethod",
+        "kharif season water source" to "kharifWaterSource", "खरीफ जल स्रोत" to "kharifWaterSource",
+        "typical water depth" to "typicalWaterDepthCm", "सामान्य जल गहराई" to "typicalWaterDepthCm",
+        "irrigations per season" to "irrigationsPerSeason", "प्रति मौसम सिंचाई" to "irrigationsPerSeason",
+        "crop duration" to "cropDurationDays", "फसल अवधि" to "cropDurationDays",
+        "year" to "year", "वर्ष" to "year", "season" to "season", "मौसम" to "season",
+        "yield" to "yield", "yield kg acre" to "yield", "उपज" to "yield"
     )
 
     fun canonicalKey(raw: String): String {
