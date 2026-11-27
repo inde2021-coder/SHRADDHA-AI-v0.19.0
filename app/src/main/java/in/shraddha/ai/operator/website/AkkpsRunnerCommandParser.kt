@@ -42,7 +42,7 @@ object AkkpsRunnerCommandParser {
                 return@forEach
             }
             val suppliedKey = normalizedPart.substring(0, splitAt).trim()
-            val key = AkkpsFieldAliasCatalog.canonicalKey(suppliedKey)
+            val key = AkkpsFieldAliasCatalog.canonicalKey(normalizeSyntax(suppliedKey))
             val value = normalizedPart.substring(splitAt + 1).trim()
             if (key.length !in 1..MAX_KEY_CHARS || value.isBlank() || value.length > MAX_VALUE_CHARS) {
                 issues += "फील्ड नाम या मान की लंबाई अमान्य है।"
