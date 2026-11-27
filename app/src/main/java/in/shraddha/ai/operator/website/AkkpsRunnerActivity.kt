@@ -153,7 +153,7 @@ class AkkpsRunnerActivity : Activity() {
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") { resetBoundaryWalk() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
         status = TextView(this).apply {
             text = "AKKPS वेबसाइट खुल रही है…"; textSize = 12f
@@ -243,10 +243,9 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "GPS चालू करें। खेत के किनारे से Walk करें; फसल के अंदर जाने की जरूरत नहीं।"
             return
         }
-        boundaryPoints.clear()
+        // Keep previously captured edge points when resuming after a pause or weak GPS.
+        // The explicit "नई Walk" action is the only action that clears the current polygon.
         lastGpsAccuracyMeters = Float.MAX_VALUE
-        bestGpsAccuracyMeters = Float.MAX_VALUE
-        lastGpsElapsedRealtimeNanos = 0L
         locationManager = manager
         try {
             gpsWalkActive = true
@@ -266,6 +265,15 @@ class AkkpsRunnerActivity : Activity() {
         runCatching { locationManager?.removeUpdates(gpsListener) }
         locationManager = null
         status.text = "GPS Walk रुकी: ${boundaryPoints.size} points • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
+    }
+
+    private fun resetBoundaryWalk() {
+        if (gpsWalkActive) stopGpsWalk()
+        boundaryPoints.clear()
+        lastGpsAccuracyMeters = Float.MAX_VALUE
+        bestGpsAccuracyMeters = Float.MAX_VALUE
+        lastGpsElapsedRealtimeNanos = 0L
+        status.text = "नई boundary walk के लिए तैयार। पिछली unsaved points साफ कर दी गईं।"
     }
 
     private fun saveBoundary() {
