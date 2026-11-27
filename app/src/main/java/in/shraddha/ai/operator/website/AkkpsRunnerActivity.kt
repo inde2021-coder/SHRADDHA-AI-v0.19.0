@@ -722,10 +722,12 @@ class AkkpsRunnerActivity : Activity() {
         if (!explicitAssignment) {
             if (AkkpsRunnerEditCommandPolicy.isExplicit(raw)) {
                 val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
-                if (route == null || !route.isDetailRoute) {
-                    status.text = "पहले Farmer, Plot या AWD का एक record खोलें; फिर Edit command दें।"
-                } else {
-                    openEditForm(route.module)
+                when {
+                    route == null || !route.isDetailRoute ->
+                        status.text = "पहले Farmer, Plot या AWD का एक record खोलें; फिर Edit command दें।"
+                    route.isEditRoute ->
+                        status.text = "इस record का Edit form पहले से खुला है। अब field=value कमांड दें।"
+                    else -> openEditForm(route.module)
                 }
                 return
             }
