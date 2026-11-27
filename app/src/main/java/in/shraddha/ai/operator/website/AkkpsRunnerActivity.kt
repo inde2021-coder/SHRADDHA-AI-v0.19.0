@@ -884,21 +884,32 @@ Return exact JSON only. Do not include prose or markdown."""
             }.onSuccess { candidate ->
                 val confidenceLabel = candidate.confidence?.let { "${(it * 100).toInt()}%" } ?: "उपलब्ध नहीं"
                 val yearLabel = candidate.datasetYear?.toString() ?: "उपलब्ध नहीं"
-                AlertDialog.Builder(this)
-                    .setTitle("Satellite Boundary Candidate")
-                    .setMessage(
-                        "Source: ${candidate.source}\nDataset year: $yearLabel\nConfidence: $confidenceLabel\n" +
-                            "Points: ${candidate.boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, candidate.boundary.areaAcres)} acres\n\n" +
-                            "यह पहले से बना candidate polygon है—इस ऐप ने satellite image से खुद सीमा detect नहीं की। " +
-                            "इसे map/उपलब्ध खेत जानकारी से जाँचें। पुष्टि के बाद ही इसे boundary editor में लाया जाएगा; Local Save अलग से करना होगा।"
-                    )
-                    .setPositiveButton("जाँचकर Editor में लाएँ") { _, _ ->
-                        boundaryPoints.clear()
-                        boundaryPoints.addAll(candidate.boundary.points)
-                        status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
-                    }
-                    .setNegativeButton("रद्द करें", null)
-                    .show()
+                val applyCandidate = {
+                    boundaryPoints.clear()
+                    boundaryPoints.addAll(candidate.boundary.points)
+                    status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
+                }
+                val showCandidateConfirmation = {
+                    AlertDialog.Builder(this)
+                        .setTitle("Satellite Boundary Candidate")
+                        .setMessage(
+                            "Source: ${candidate.source}\nDataset year: $yearLabel\nConfidence: $confidenceLabel\n" +
+                                "Points: ${candidate.boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, candidate.boundary.areaAcres)} acres\n\n" +
+                                "यह पहले से बना candidate polygon है—इस ऐप ने satellite image से खुद सीमा detect नहीं की। " +
+                                "इसे map/उपलब्ध खेत जानकारी से जाँचें। पुष्टि के बाद ही इसे boundary editor में लाया जाएगा; Local Save अलग से करना होगा।"
+                        )
+                        .setPositiveButton("जाँचकर Editor में लाएँ") { _, _ -> applyCandidate() }
+                        .setNegativeButton("रद्द करें", null)
+                        .show()
+                }
+                if (AkkpsBoundaryReplacementPolicy.requiresConfirmation(boundaryPoints.size)) {
+                    AlertDialog.Builder(this)
+                        .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                        .setMessage("Editor में पहले से ${boundaryPoints.size} points हैं। Candidate लाने पर ये points हट जाएँगे। पहले मौजूदा boundary Save/Export करें या स्पष्ट रूप से बदलने की पुष्टि करें।")
+                        .setPositiveButton("मौजूदा हटाकर Candidate लाएँ") { _, _ -> showCandidateConfirmation() }
+                        .setNegativeButton("रद्द करें", null)
+                        .show()
+                } else showCandidateConfirmation()
             }.onFailure { status.text = "Satellite candidate import असफल: ${it.localizedMessage}" }
         }
         if (requestCode == REQUEST_KML_IMPORT && resultCode == RESULT_OK) {
@@ -923,9 +934,22 @@ Return exact JSON only. Do not include prose or markdown."""
                     AkkpsBoundaryGeometry.parseKml(String(bytes, Charsets.UTF_8)).getOrThrow()
                 } finally { bytes.fill(0) }
             }.onSuccess { boundary ->
-                boundaryPoints.clear()
-                boundaryPoints.addAll(boundary.points)
-                status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
+                val applyKml = {
+                    boundaryPoints.clear()
+                    boundaryPoints.addAll(boundary.points)
+                    status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
+                }
+                if (AkkpsBoundaryReplacementPolicy.requiresConfirmation(boundaryPoints.size)) {
+                    val existingArea = runCatching { AkkpsBoundary(boundaryPoints.toList()).areaAcres }.getOrNull()
+                    val areaLabel = existingArea?.takeIf { it.isFinite() && it > 0.0 }
+                        ?.let { "मौजूदा editor area: ${"%.3f".format(java.util.Locale.US, it)} acres\n" }.orEmpty()
+                    AlertDialog.Builder(this)
+                        .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                        .setMessage(areaLabel + "Editor में पहले से ${boundaryPoints.size} points हैं। KML import करने पर ये points हट जाएँगे। पहले Save/Export करें या स्पष्ट रूप से बदलने की पुष्टि करें।")
+                        .setPositiveButton("मौजूदा हटाकर KML लाएँ") { _, _ -> applyKml() }
+                        .setNegativeButton("रद्द करें", null)
+                        .show()
+                } else applyKml()
             }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
         }
     }
