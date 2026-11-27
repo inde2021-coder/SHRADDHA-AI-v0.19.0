@@ -354,16 +354,17 @@ class AkkpsRunnerActivity : Activity() {
               const record=(method,url,status,body)=>{
                 try {
                   const parsed=typeof body==='string'?JSON.parse(body):body;
-                  const id=parsed?.recordId||parsed?.id||parsed?.data?.recordId||parsed?.data?.id||'';
+                  const id=parsed?.recordId||parsed?.id||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.id||'';
                   const state=String(parsed?.status||'').toLowerCase();
-                  const success=parsed?.success===true||parsed?.ok===true||['success','created','saved'].includes(state);
+                  const message=String(parsed?.message||parsed?.error||'').slice(0,160);
+                  const success=parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message);
                   window.__akkpsSubmitEvents.push({
                     method:String(method||'').toUpperCase(),
                     path:new URL(url,location.href).pathname,
                     httpStatus:Number(status)||0,
                     success:!!success,
                     recordId:String(id||'').slice(0,100),
-                    message:String(parsed?.message||parsed?.error||'').slice(0,160),
+                    message,
                     at:Date.now()
                   });
                   if(window.__akkpsSubmitEvents.length>20) window.__akkpsSubmitEvents.shift();
@@ -602,6 +603,7 @@ Return exact JSON only. Do not include prose or markdown."""
         val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
             (function(expected){
+              const eventStart=(window.__akkpsSubmitEvents||[]).length;
               const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
@@ -616,7 +618,7 @@ Return exact JSON only. Do not include prose or markdown."""
               }
               const b=f.querySelector('button[type=submit],input[type=submit]');
               if(b)b.click();else f.requestSubmit();
-              return JSON.stringify({status:'dispatched'});
+              return JSON.stringify({status:'dispatched',eventStart});
             })(__EXPECTED__)
         """.trimIndent().replace("__EXPECTED__", payload.toString())
         val before = web.url.orEmpty()
@@ -632,14 +634,18 @@ Return exact JSON only. Do not include prose or markdown."""
                 return@evaluateJavascript
             }
             status.text = "Submit request भेजी गई। AKKPS की प्रतिक्रिया जाँची जा रही है…"
-            web.postDelayed({ verifySubmit(before, expectedValues) }, 2000)
+            val eventStart = result?.optInt("eventStart") ?: 0
+            web.postDelayed({ verifySubmit(before, expectedValues, eventStart) }, 3000)
         }
     }
 
-    private fun verifySubmit(beforeUrl: String, expectedValues: List<Pair<String, String>>) {
+    private fun verifySubmit(beforeUrl: String, expectedValues: List<Pair<String, String>>, eventStart: Int) {
         val expected = JSONArray().apply { expectedValues.forEach { put(it.second) } }
         val js = """
             (function(values){
+              const events=(window.__akkpsSubmitEvents||[]).slice(Math.max(0,__EVENT_START__));
+              const serverRecord=[...events].reverse().find(e=>e.httpStatus>=200&&e.httpStatus<300&&e.success&&e.recordId);
+              const serverFailure=events.some(e=>e.httpStatus>=400||/failed|error|invalid/i.test(e.message||''));
               const selectors='[role="alert"],[aria-live="polite"],[aria-live="assertive"],.alert-success,.toast,[data-sonner-toast]';
               const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean);
               const success=/\\b(saved|submitted|created successfully|record saved)\\b|सफलतापूर्वक|जमा हो गया/i;
@@ -649,15 +655,17 @@ Return exact JSON only. Do not include prose or markdown."""
               const body=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
               const identity=values.filter(v=>v && v.length>=3).every(v=>body.includes(v));
               const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\\/(plots|awd-reports)\\/[^/]+/i.test(a.getAttribute('href')||''));
-              return JSON.stringify({notice,failed,identity,recordLink});
+              return JSON.stringify({notice,failed,identity,recordLink,serverSuccess:!!serverRecord,recordId:serverRecord?.recordId||'',serverPath:serverRecord?.path||'',serverFailure});
             })(__VALUES__)
-        """.trimIndent().replace("__VALUES__", expected.toString())
+        """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
             status.text = when {
-                o?.optBoolean("failed") == true -> "AKKPS ने error notice दिया। Record saved नहीं माना गया।"
+                o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
+                o?.optBoolean("serverSuccess") == true ->
+                    "AKKPS server ने success response और Record ID ${o.optString("recordId")} दिया। Server response verified।"
                 !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true ->
-                    "AKKPS success notice और record values मिले। अंतिम पुष्टि के लिए Plot/AWD सूची में record ID जाँचें।"
+                    "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save अभी fully verified नहीं है।"
                 o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true ->
                     "Plot/AWD detail link और record values मिले। Record खोलकर ID जाँचें।"
                 web.url.orEmpty() != beforeUrl ->
