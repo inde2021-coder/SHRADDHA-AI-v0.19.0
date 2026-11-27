@@ -148,6 +148,9 @@ class TaskPlannerOperatorBridge(
                 audit("operator_dispatch", "journal_failed", "workflow=${session.workflow.id}; step=${action.id}")
                 return hub.failCurrentStep("Secure action journal could not be committed; action was not executed")
             }
+            // Persist the in-flight transition before invoking an adapter that may cause an external side effect.
+            // If the process stops from this point onward, recovery treats dispatch as ambiguous and never replays it.
+            session = hub.markActionDispatched()
             val executed = runCatching { executeVerified(action.step, approvalGranted) }.getOrElse { false }
             val journalCommitted = runCatching { afterExecute(session.workflow.id, action, executed) }.getOrElse { false }
             if (!executed || !journalCommitted) {
@@ -155,7 +158,6 @@ class TaskPlannerOperatorBridge(
                 return hub.failCurrentStep(if (!executed) "Operator action failed or its screen result could not be verified" else "Action was verified but durable journal update failed; workflow stopped")
             }
             verified.add(action.id)
-            session = hub.markActionDispatched()
             session = hub.verifyCurrentStep(true)
             audit("operator_dispatch", "verified", "workflow=${session.workflow.id}; step=${action.id}")
             if (session.workflow.status == WorkflowStatus.COMPLETED) {
