@@ -77,7 +77,7 @@ class RemoteCameraService : Service() {
     }
 
     private fun startCamera(facing: String, targetDeviceId: String) {
-        if (targetDeviceId.isBlank()) { stopSelf(); return }
+        if (targetDeviceId.isBlank()) { stopAndClear(); return }
         thread = HandlerThread("ShraddhaRemoteCamera").also { it.start() }
         val handler = Handler(thread!!.looper)
         try {
@@ -85,7 +85,7 @@ class RemoteCameraService : Service() {
             val wantedFacing = if (facing == "front") CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
             val id = manager.cameraIdList.firstOrNull { cameraId ->
                 manager.getCameraCharacteristics(cameraId).get(CameraCharacteristics.LENS_FACING) == wantedFacing
-            } ?: manager.cameraIdList.firstOrNull() ?: run { stopSelf(); return }
+            } ?: manager.cameraIdList.firstOrNull() ?: run { stopAndClear(); return }
             val chars = manager.getCameraCharacteristics(id)
             val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
             val size = map?.getOutputSizes(ImageFormat.JPEG)?.filter { it.width <= 640 && it.height <= 480 }?.maxByOrNull { it.width * it.height }
@@ -100,7 +100,7 @@ class RemoteCameraService : Service() {
                     val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
                     val consentEnabled = getSharedPreferences("shraddha_data_permissions", Context.MODE_PRIVATE).getBoolean("camera", false)
                     if (!RemoteCameraPolicy.mayStream(cameraGranted, consentEnabled, targetDeviceId, facing)) {
-                        stopSelf()
+                        stopAndClear()
                         return@setOnImageAvailableListener
                     }
                     val buffer = image.planes[0].buffer
@@ -179,13 +179,13 @@ class RemoteCameraService : Service() {
         device.createCaptureSession(listOf(surface), callback, handler)
     }
 
-    private fun stopAndClear(startId: Int) {
+    private fun stopAndClear(startId: Int? = null) {
         stopping = true
         stopCamera()
         getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit()
             .remove("active_target").remove("active_facing").apply()
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
-        stopSelfResult(startId)
+        if (startId == null) stopSelf() else stopSelfResult(startId)
     }
 
     private fun stopCamera() {
