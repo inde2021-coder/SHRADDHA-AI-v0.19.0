@@ -2,6 +2,8 @@ package `in`.shraddha.ai.operator.learning
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NaturalLanguageWorkflowRouterTest {
@@ -18,10 +20,10 @@ class NaturalLanguageWorkflowRouterTest {
         )
     )
 
-    @Test fun hindiDeleteMatchesTrainedDeleteWorkflow() {
+    @Test fun hindiDeleteRequiresExplicitConfirmation() {
         val result = NaturalLanguageWorkflowRouter.route("ग्राहक हटाओ", profile)
-        assertNotNull(result.route)
-        assertEquals("Delete customer", result.route?.workflowName)
+        assertNull(result.route)
+        assertTrue(result.message.contains("high-impact"))
     }
 
     @Test fun hindiUpdateMatchesTrainedUpdateWorkflow() {
