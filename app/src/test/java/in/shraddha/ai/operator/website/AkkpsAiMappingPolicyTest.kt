@@ -19,6 +19,18 @@ class AkkpsAiMappingPolicyTest {
         ))
     }
 
+    @Test fun rejectsPartialWordAndPartialNumberMatches() {
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम=Ramesh", listOf("नाम" to "Ram")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "मोबाइल=9876543210", listOf("मोबाइल" to "987654")
+        ))
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम=Ramesh", listOf("नाम" to "Ramesh")
+        ))
+    }
+
     @Test fun missingRequiredInformationAlwaysBlocksAiSubmit() {
         assertTrue(AkkpsAiMappingPolicy.canSubmit(true, 0))
         assertFalse(AkkpsAiMappingPolicy.canSubmit(true, 1))
