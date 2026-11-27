@@ -29,10 +29,10 @@ object OperatorSafetyPolicy {
     private fun containsSeparatedSecretLabel(value: String): Boolean {
         val tokens = value.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotBlank() }
         if (tokens.windowed(2, 1, partialWindows = false).any { pair ->
-                pair.all { it.length == 1 } && pair.joinToString("") in separatedSecretTokens
+                pair.joinToString("") in separatedSecretTokens
             }) return true
         if (tokens.windowed(3, 1, partialWindows = false).any { group ->
-                group.all { it.length == 1 } && group.joinToString("") in separatedSecretTokens
+                group.joinToString("") in separatedSecretTokens
             }) return true
         return false
     }
