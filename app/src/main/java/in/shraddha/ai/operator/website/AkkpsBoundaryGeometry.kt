@@ -25,6 +25,7 @@ object AkkpsBoundaryGeometry {
     const val EARTH_RADIUS_METERS = 6_378_137.0
     const val SQUARE_METERS_PER_ACRE = 4_046.8564224
     private val coordinatesTag = Regex("(?is)<coordinates\\b[^>]*>(.*?)</coordinates>")
+    private val outerBoundaryTag = Regex("(?is)<outerBoundaryIs\\b[^>]*>(.*?)</outerBoundaryIs>")
 
     fun validate(points: List<AkkpsGeoPoint>): String? {
         if (points.size !in 3..MAX_POINTS) return "Boundary में 3 से $MAX_POINTS points होने चाहिए।"
@@ -65,15 +66,20 @@ object AkkpsBoundaryGeometry {
         require(!Regex("(?is)<innerBoundaryIs\\b").containsMatchIn(kml)) {
             "KML में polygon holes अभी supported नहीं हैं।"
         }
+        val outerMatches = outerBoundaryTag.findAll(kml).toList()
+        require(outerMatches.size == 1) {
+            "KML में exactly one outerBoundaryIs section होना चाहिए।"
+        }
+        val outerContent = outerMatches.single().groupValues[1]
+        require(Regex("(?is)<LinearRing\\b").findAll(outerContent).count() == 1) {
+            "KML में exactly one outer LinearRing होना चाहिए।"
+        }
         val coordinateMatches = coordinatesTag.findAll(kml).toList()
-        require(coordinateMatches.size == 1) {
-            "KML में ठीक एक outer coordinates section होना चाहिए।"
+        val outerCoordinateMatches = coordinatesTag.findAll(outerContent).toList()
+        require(coordinateMatches.size == 1 && outerCoordinateMatches.size == 1) {
+            "KML में ठीक एक coordinates section होना चाहिए और वह outer ring के अंदर होना चाहिए।"
         }
-        require(Regex("(?is)<outerBoundaryIs\\b").containsMatchIn(kml) &&
-            Regex("(?is)<LinearRing\\b").containsMatchIn(kml)) {
-            "KML में outer LinearRing नहीं मिला।"
-        }
-        val coordinateText = coordinateMatches.single().groupValues[1]
+        val coordinateText = outerCoordinateMatches.single().groupValues[1]
         val tuples = coordinateText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         require(tuples.size in 4..(MAX_POINTS + 1)) { "KML coordinate count invalid है।" }
         val points = tuples.map { tuple ->
