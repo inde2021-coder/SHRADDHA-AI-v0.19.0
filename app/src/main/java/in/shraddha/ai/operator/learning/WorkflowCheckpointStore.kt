@@ -53,18 +53,14 @@ class WorkflowCheckpointStore(context: Context) {
         require(checkpoint.packageName == packageName && checkpoint.workflowName == workflowName) {
             "Workflow checkpoint identity mismatch; saved data was preserved."
         }
-        require(checkpoint.totalSteps in 1..100 && checkpoint.nextStep in 0..checkpoint.totalSteps) {
-            "Workflow checkpoint bounds are invalid; saved data was preserved."
-        }
-        require(checkpoint.state in setOf("READY", "PAUSED", "WAITING_CONFIRMATION", "EXECUTING", "FAILED")) {
-            "Workflow checkpoint state is invalid; saved data was preserved."
+        require(WorkflowCheckpointPolicy.isValid(checkpoint)) {
+            "Workflow checkpoint fields are invalid; saved data was preserved."
         }
         checkpoint
     }
 
     fun save(checkpoint: WorkflowCheckpoint): Boolean {
-        if (checkpoint.packageName.isBlank() || checkpoint.workflowName.isBlank()) return false
-        if (checkpoint.nextStep !in 0..checkpoint.totalSteps || checkpoint.totalSteps !in 1..100) return false
+        if (!WorkflowCheckpointPolicy.isValid(checkpoint)) return false
         val json = JSONObject()
             .put("packageName", checkpoint.packageName)
             .put("workflowName", checkpoint.workflowName)
@@ -103,5 +99,24 @@ internal object InterruptedStepRecovery {
             visible.contains(expected, ignoreCase = true)
         }
         return if (matched) Decision.VERIFIED_COMPLETE else Decision.AMBIGUOUS
+    }
+}
+
+
+/** Shared validation for encrypted checkpoint reads and writes. */
+internal object WorkflowCheckpointPolicy {
+    private val allowedStates = setOf("READY", "PAUSED", "WAITING_CONFIRMATION", "EXECUTING", "FAILED")
+
+    fun isValid(checkpoint: WorkflowCheckpoint): Boolean {
+        return checkpoint.packageName.matches(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")) &&
+            checkpoint.packageName.length <= 255 &&
+            checkpoint.workflowName.isNotBlank() && checkpoint.workflowName.length <= 120 &&
+            checkpoint.workflowHash.matches(Regex("[a-fA-F0-9]{64}")) &&
+            checkpoint.totalSteps in 1..100 &&
+            checkpoint.nextStep in 0..checkpoint.totalSteps &&
+            checkpoint.state in allowedStates &&
+            checkpoint.expectedText.length <= 300 &&
+            checkpoint.beforeScreenFingerprint.length <= 128 &&
+            checkpoint.updatedAt > 0L
     }
 }
