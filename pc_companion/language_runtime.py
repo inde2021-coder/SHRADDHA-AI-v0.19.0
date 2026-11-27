@@ -118,7 +118,7 @@ class IndicTrans2Runtime:
     def translate(self, text: str, source: str, target: str) -> str:
         source_code, target_code = SUPPORTED_TRANSLATION.get(source), SUPPORTED_TRANSLATION.get(target)
         if not source_code or not target_code:
-            raise LanguageRuntimeError("IndicTrans2 adapter supports Hindi, English, Sanskrit and Marathi only; Pawari is not supported.")
+            raise LanguageRuntimeError("IndicTrans2 adapter supports Hindi, English and Marathi only; Sanskrit and Pawari remain disabled until validated.")
         if not isinstance(text, str) or not text.strip() or len(text) > 5000:
             raise LanguageRuntimeError("Translation text must contain 1–5000 characters.")
         if source == target:
