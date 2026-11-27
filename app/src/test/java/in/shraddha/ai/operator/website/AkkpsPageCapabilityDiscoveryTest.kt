@@ -55,4 +55,39 @@ class AkkpsPageCapabilityDiscoveryTest {
         assertTrue(AkkpsWebsiteProfile.requiresHighImpactConfirmation(WebsiteOperation.DELETE_RECORD))
         assertTrue(AkkpsWebsiteProfile.requiresHighImpactConfirmation(WebsiteOperation.PAYMENT))
     }
+    @Test fun runnerScopeNeverAdvertisesDownloadsExportsDeletionOrPayments() {
+        val result = AkkpsPageCapabilityDiscovery.discover(
+            formCount = 1,
+            tableCount = 1,
+            fieldTypes = listOf("file"),
+            fieldLabels = listOf("Search"),
+            actionLabels = listOf("Download", "Export report", "Delete record", "Make payment"),
+            navigationLabels = listOf("Farmers")
+        ).associateBy { it.operation }
+
+        listOf(
+            WebsiteOperation.DOWNLOAD_DOCUMENT,
+            WebsiteOperation.EXPORT_REPORT,
+            WebsiteOperation.DELETE_RECORD,
+            WebsiteOperation.PAYMENT
+        ).forEach { operation ->
+            assertEquals(CapabilityState.UNAVAILABLE, result.getValue(operation).state)
+            assertTrue(result.getValue(operation).evidence.contains("data-entry scope"))
+        }
+    }
+
+    @Test fun runnerScopeAllowsFarmerPlotAwdDataEntryAndSupportingLookup() {
+        listOf(
+            WebsiteOperation.SEARCH_RECORDS,
+            WebsiteOperation.VIEW_RECORD,
+            WebsiteOperation.CREATE_RECORD,
+            WebsiteOperation.UPDATE_RECORD,
+            WebsiteOperation.SAVE_RECORD,
+            WebsiteOperation.SUBMIT_FORM,
+            WebsiteOperation.UPLOAD_DOCUMENT
+        ).forEach { operation ->
+            assertTrue("$operation should be in Runner scope", AkkpsWebsiteProfile.isRunnerOperationAllowed(operation))
+        }
+    }
+
 }
