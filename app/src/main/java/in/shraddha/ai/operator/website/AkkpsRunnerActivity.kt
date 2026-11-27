@@ -814,7 +814,8 @@ class AkkpsRunnerActivity : Activity() {
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
               const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-              const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible).filter(e=>{
+              const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible)
+                .filter(e=>!e.disabled&&e.getAttribute('aria-disabled')!=='true').filter(e=>{
                 const label=norm(e.innerText||e.getAttribute('aria-label')||e.title);
                 return ['edit','update','संपादित करें','संपादित करो','बदलें','रिकॉर्ड बदलें','रिकॉर्ड संपादित करें'].includes(label);
               });
