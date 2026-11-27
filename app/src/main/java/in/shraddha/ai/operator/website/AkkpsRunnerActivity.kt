@@ -226,16 +226,20 @@ class AkkpsRunnerActivity : Activity() {
                 ): Boolean {
                     uploadCallback?.onReceiveValue(null)
                     uploadCallback = callback
+                    if (!AkkpsWebsiteProfile.acceptsUrl(view.url.orEmpty())) {
+                        uploadCallback = null
+                        callback.onReceiveValue(null)
+                        return false
+                    }
                     return try {
-                        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = params.acceptTypes.firstOrNull { it.isNotBlank() } ?: "*/*"
+                        val pick = params.createIntent().apply {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         startActivityForResult(pick, REQUEST_FILE)
                         true
                     } catch (_: Exception) {
                         uploadCallback = null
+                        callback.onReceiveValue(null)
                         false
                     }
                 }
@@ -243,6 +247,7 @@ class AkkpsRunnerActivity : Activity() {
         }
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
     }
 
