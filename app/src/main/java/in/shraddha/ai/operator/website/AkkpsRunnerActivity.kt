@@ -870,14 +870,12 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     private fun submitForm(expectedValues: List<Pair<String, String>>) {
-        if (submitVerificationPending) {
-            status.text = "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
-            return
-        }
-        if (expectedValues.isEmpty() || expectedValues.size > 100 ||
-            expectedValues.any { it.first.isBlank() || it.first.length > 160 || it.second.length > 1_000 }
-        ) {
-            status.text = "Submit data invalid है। कोई request नहीं भेजी गई।"
+        if (!AkkpsSubmitAttemptPolicy.canStart(submitVerificationPending, expectedValues)) {
+            status.text = if (submitVerificationPending) {
+                "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
+            } else {
+                "Submit data invalid है। कोई request नहीं भेजी गई।"
+            }
             return
         }
         submitVerificationPending = true
