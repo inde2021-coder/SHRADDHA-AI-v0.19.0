@@ -67,8 +67,9 @@ class LocalKnowledgeDocumentStore(context: Context) {
             "Source URI must be HTTPS or an Android content URI."
         }
         val normalized = content.replace("\u0000", "").trim()
-        require(normalized.isNotEmpty() && normalized.length <= MAX_DOCUMENT_CHARS) {
-            "Imported text must contain 1-$MAX_DOCUMENT_CHARS characters."
+        val documentLimit = if (internalBundled) MAX_BUNDLED_DOCUMENT_CHARS else MAX_DOCUMENT_CHARS
+        require(normalized.isNotEmpty() && normalized.length <= documentLimit) {
+            "Imported text must contain 1-$documentLimit characters."
         }
         val index = readIndex().toMutableSet()
         require(id in index || index.size < MAX_DOCUMENTS) { "Knowledge document limit reached." }
@@ -97,7 +98,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         require(id.matches(Regex("curriculum_[a-z0-9_]{3,60}")))
         require(version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")))
         require(sha256.matches(Regex("[a-fA-F0-9]{64}")))
-        require(content.isNotBlank() && content.length <= MAX_DOCUMENT_CHARS)
+        require(content.isNotBlank() && content.length <= MAX_BUNDLED_DOCUMENT_CHARS)
         val actual = java.security.MessageDigest.getInstance("SHA-256")
             .digest(content.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -438,6 +439,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         private const val DOC_PREFIX = "knowledge_doc_"
         private const val MAX_DOCUMENTS = 100
         private const val MAX_DOCUMENT_CHARS = 50_000
+        private const val MAX_BUNDLED_DOCUMENT_CHARS = 100_000
         private const val CHUNK_CHARS = 1_200
         private const val CHUNK_OVERLAP = 160
         private const val MAX_CHUNKS_PER_DOCUMENT = 60
