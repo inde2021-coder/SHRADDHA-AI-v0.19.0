@@ -542,7 +542,7 @@ class AkkpsRunnerActivity : Activity() {
                 type = "image/*"
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }, REQUEST_FARMER_CARD)
-        }.onFailure { status.text = "Image picker उपलब्ध नहीं: \${it.localizedMessage ?: "error"}" }
+        }.onFailure { status.text = "Image picker उपलब्ध नहीं: ${it.localizedMessage ?: "error"}" }
     }
 
     /** Hindi + English OCR runs on-device only; candidates are placed in the command box for review. */
@@ -553,7 +553,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         val input = runCatching { InputImage.fromFilePath(this, uri) }.getOrElse {
-            status.text = "Image पढ़ी नहीं जा सकी: \${it.localizedMessage ?: "file error"}"
+            status.text = "Image पढ़ी नहीं जा सकी: ${it.localizedMessage ?: "file error"}"
             return
         }
         status.text = "Farmer Card का Hindi + English local OCR चल रहा है…"
@@ -569,18 +569,18 @@ class AkkpsRunnerActivity : Activity() {
                     } else {
                         command.setText(parsed.toRunnerCommand())
                         val missing = parsed.missing.joinToString()
-                        status.text = "Local OCR ने \${parsed.assignments.size} candidate fields पहचाने। " +
+                        status.text = "Local OCR ने ${parsed.assignments.size} candidate fields पहचाने। " +
                             (if (missing.isBlank()) "मुख्य fields मिलीं।" else "अभी जानकारी चाहिए: $missing।") +
                             " हर मान जाँचें/सुधारें; OCR अपने-आप submit नहीं करता।"
                     }
                 } finally { latin.close(); devanagari.close() }
             }.addOnFailureListener { error ->
                 latin.close(); devanagari.close()
-                if (!isFinishing && !isDestroyed) status.text = "Hindi OCR उपलब्ध नहीं: \${error.localizedMessage ?: "error"}। कोई data submit नहीं हुआ।"
+                if (!isFinishing && !isDestroyed) status.text = "Hindi OCR उपलब्ध नहीं: ${error.localizedMessage ?: "error"}। कोई data submit नहीं हुआ।"
             }
         }.addOnFailureListener { error ->
             latin.close(); devanagari.close()
-            if (!isFinishing && !isDestroyed) status.text = "OCR नहीं चल पाया: \${error.localizedMessage ?: "error"}। कोई data submit नहीं हुआ।"
+            if (!isFinishing && !isDestroyed) status.text = "OCR नहीं चल पाया: ${error.localizedMessage ?: "error"}। कोई data submit नहीं हुआ।"
         }
     }
 
