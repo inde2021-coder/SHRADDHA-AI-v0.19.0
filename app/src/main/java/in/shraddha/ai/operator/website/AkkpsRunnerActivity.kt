@@ -39,11 +39,16 @@ class AkkpsRunnerActivity : Activity() {
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
     private val boundaryPoints = mutableListOf<AkkpsGeoPoint>()
+    private var boundaryProvenance: AkkpsBoundary? = null
     private var locationManager: LocationManager? = null
     private var gpsWalkActive = false
+    private var gpsWalkSessionInitialized = false
+    private var gpsWalkPlotId: String? = null
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
+    private var submitVerificationPending = false
+    private var submitNeedsManualReview = false
     private val gpsListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             if (!gpsWalkActive || !location.hasAccuracy()) return
@@ -82,7 +87,18 @@ class AkkpsRunnerActivity : Activity() {
             lastGpsAccuracyMeters = location.accuracy
             bestGpsAccuracyMeters = minOf(bestGpsAccuracyMeters, location.accuracy)
             lastGpsElapsedRealtimeNanos = location.elapsedRealtimeNanos
-            status.text = "GPS Walk: ${boundaryPoints.size} points • Current ±${location.accuracy.toInt()} m • Best ±${bestGpsAccuracyMeters.toInt()} m"
+            val checkpointSaved = if (boundaryPoints.size % 5 == 0) {
+                gpsWalkPlotId?.let { id ->
+                    runCatching {
+                        AkkpsBoundaryDraftStore(this@AkkpsRunnerActivity).save(
+                            id, boundaryPoints.toList(),
+                            bestGpsAccuracyMeters.takeIf { it.isFinite() && it < Float.MAX_VALUE }
+                        )
+                    }.isSuccess
+                } ?: false
+            } else true
+            status.text = "GPS Walk: ${boundaryPoints.size} points • Current ±${location.accuracy.toInt()} m • Best ±${bestGpsAccuracyMeters.toInt()} m" +
+                if (!checkpointSaved) " • Draft save warning" else ""
         }
         @Deprecated("Deprecated by Android")
         override fun onStatusChanged(provider: String?, statusValue: Int, extras: Bundle?) = Unit
@@ -150,7 +166,7 @@ class AkkpsRunnerActivity : Activity() {
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); boundaryProvenance = null; gpsWalkSessionInitialized = false; gpsWalkPlotId?.let { AkkpsBoundaryDraftStore(this).delete(it) }; gpsWalkPlotId = null; status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
         val candidateActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
@@ -213,21 +229,26 @@ class AkkpsRunnerActivity : Activity() {
                 ): Boolean {
                     uploadCallback?.onReceiveValue(null)
                     uploadCallback = callback
+                    if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
+                        uploadCallback = null
+                        callback.onReceiveValue(null)
+                        return false
+                    }
                     return try {
-                        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = params.acceptTypes.firstOrNull { it.isNotBlank() } ?: "*/*"
+                        val pick = params.createIntent().apply {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         startActivityForResult(pick, REQUEST_FILE)
                         true
                     } catch (_: Exception) {
                         uploadCallback = null
+                        callback.onReceiveValue(null)
                         false
                     }
                 }
             }
         }
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
@@ -244,29 +265,126 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "GPS चालू करें। खेत के किनारे से Walk करें; फसल के अंदर जाने की जरूरत नहीं।"
             return
         }
-        boundaryPoints.clear()
+        val plotId = plotIdInput.text.toString().trim()
+        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) {
+            status.text = "GPS Walk शुरू करने से पहले सही AKKPS Plot ID भरें।"
+            return
+        }
+        if (gpsWalkSessionInitialized && gpsWalkPlotId != plotId) {
+            status.text = "रुकी हुई GPS Walk उसी Plot ID के साथ resume करें। Plot ID बदलने के लिए पहले Save या नई Walk चुनें।"
+            return
+        }
+        if (boundaryPoints.isEmpty() && !gpsWalkSessionInitialized) {
+            val draftResult = runCatching { AkkpsBoundaryDraftStore(this).load(plotId) }
+            if (draftResult.isFailure) {
+                status.text = "पुराना GPS draft पढ़ा नहीं जा सका: ${draftResult.exceptionOrNull()?.localizedMessage}"
+                return
+            }
+            val draft = draftResult.getOrNull()
+            if (draft != null) {
+                AlertDialog.Builder(this)
+                    .setTitle("पिछली GPS Walk मिली")
+                    .setMessage(
+                        "${draft.points.size} points का अधूरा draft मिला। Best accuracy: " +
+                            (draft.bestAccuracyMeters?.let { "±${it.toInt()} m" } ?: "उपलब्ध नहीं") +
+                            "। इसे resume करें या हटाकर नई Walk शुरू करें?"
+                    )
+                    .setNegativeButton("नई Walk") { _, _ ->
+                        AkkpsBoundaryDraftStore(this).delete(plotId)
+                        gpsWalkPlotId = plotId
+                        beginGpsWalk(manager, clearExisting = true)
+                    }
+                    .setPositiveButton("पुरानी Walk Resume") { _, _ ->
+                        boundaryPoints.clear()
+                        boundaryPoints.addAll(draft.points)
+                        boundaryProvenance = null
+                        bestGpsAccuracyMeters = draft.bestAccuracyMeters ?: Float.MAX_VALUE
+                        gpsWalkPlotId = plotId
+                        gpsWalkSessionInitialized = true
+                        beginGpsWalk(manager, clearExisting = false)
+                    }
+                    .show()
+                return
+            }
+        }
+        when (AkkpsGpsWalkSessionPolicy.decide(boundaryPoints.size, gpsWalkSessionInitialized)) {
+            AkkpsGpsWalkSessionPolicy.Decision.CONFIRM_REPLACE -> {
+            AlertDialog.Builder(this)
+                .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                .setMessage(
+                    "Editor में पहले से ${boundaryPoints.size} points हैं। नई GPS Walk शुरू करने पर ये points हट जाएँगे। " +
+                        "अगर यह रुकी हुई GPS Walk है तो इसी session को resume करें; अन्यथा नई Walk की पुष्टि करें।"
+                )
+                .setNegativeButton("रद्द करें", null)
+                .setPositiveButton("नई GPS Walk शुरू करें") { _, _ -> beginGpsWalk(manager, clearExisting = true) }
+                .show()
+                return
+            }
+            AkkpsGpsWalkSessionPolicy.Decision.START_NEW,
+            AkkpsGpsWalkSessionPolicy.Decision.RESUME -> beginGpsWalk(manager, clearExisting = false)
+        }
+    }
+
+    private fun beginGpsWalk(manager: LocationManager, clearExisting: Boolean) {
+        if (gpsWalkActive) return
+        if (clearExisting) {
+            boundaryPoints.clear()
+            boundaryProvenance = null
+            gpsWalkPlotId?.let { AkkpsBoundaryDraftStore(this).delete(it) }
+            gpsWalkPlotId = plotIdInput.text.toString().trim()
+            bestGpsAccuracyMeters = Float.MAX_VALUE
+        } else if (gpsWalkPlotId.isNullOrBlank()) {
+            gpsWalkPlotId = plotIdInput.text.toString().trim()
+        }
+        gpsWalkSessionInitialized = true
         lastGpsAccuracyMeters = Float.MAX_VALUE
-        bestGpsAccuracyMeters = Float.MAX_VALUE
         lastGpsElapsedRealtimeNanos = 0L
         locationManager = manager
         try {
             gpsWalkActive = true
             manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 2f, gpsListener, Looper.getMainLooper())
-            status.text = "GPS Walk चालू। खेत की बाहरी मेड़ के किनारे धीरे-धीरे चलें।"
+            status.text = if (boundaryPoints.isEmpty()) {
+                "GPS Walk चालू। खेत की बाहरी मेड़ के किनारे धीरे-धीरे चलें।"
+            } else {
+                "GPS Walk resume हुई। पुराने points सुरक्षित हैं; खेत की बाहरी मेड़ के किनारे जारी रखें।"
+            }
         } catch (_: SecurityException) {
             gpsWalkActive = false
+            locationManager = null
             status.text = "Precise location अनुमति नहीं मिली।"
         } catch (e: Exception) {
             gpsWalkActive = false
+            locationManager = null
             status.text = "GPS Walk शुरू नहीं हुई: ${e.localizedMessage ?: "GPS unavailable"}"
         }
     }
 
     private fun stopGpsWalk() {
+        val wasActive = gpsWalkActive
         gpsWalkActive = false
         runCatching { locationManager?.removeUpdates(gpsListener) }
         locationManager = null
-        status.text = "GPS Walk रुकी: ${boundaryPoints.size} points • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
+        if (!wasActive) return
+        val plotId = gpsWalkPlotId
+        if (boundaryPoints.isEmpty()) {
+            status.text = "GPS Walk रुकी। अभी कोई point रिकॉर्ड नहीं हुआ।"
+            return
+        }
+        if (plotId.isNullOrBlank()) {
+            status.text = "GPS Walk रुकी, लेकिन Plot ID नहीं होने से draft सुरक्षित नहीं हुआ।"
+            return
+        }
+        val saved = runCatching {
+            AkkpsBoundaryDraftStore(this).save(
+                plotId, boundaryPoints.toList(),
+                bestGpsAccuracyMeters.takeIf { it.isFinite() && it < Float.MAX_VALUE }
+            )
+        }
+        status.text = if (saved.isSuccess) {
+            "GPS Walk रुकी: ${boundaryPoints.size} points • Draft encrypted local save • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
+        } else {
+            "GPS Walk रुकी, लेकिन draft सुरक्षित नहीं हुआ: ${saved.exceptionOrNull()?.localizedMessage}"
+        }
     }
 
     private fun saveBoundary() {
@@ -274,16 +392,31 @@ class AkkpsRunnerActivity : Activity() {
         if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
         if (gpsWalkActive) { status.text = "पहले GPS Walk रोकें, फिर Save करें।"; return }
         if (boundaryPoints.size < 3) { status.text = "Save करने के लिए पहले कम-से-कम 3 GPS points रिकॉर्ड करें या KML Import करें।"; return }
-        val boundary = AkkpsBoundary(boundaryPoints.toList())
+        val metadata = boundaryProvenance
+        val boundary = AkkpsBoundary(
+            points = boundaryPoints.toList(),
+            source = metadata?.source,
+            datasetYear = metadata?.datasetYear,
+            confidence = metadata?.confidence,
+            sourceFeatureId = metadata?.sourceFeatureId
+        )
         val issue = AkkpsBoundaryGeometry.validate(boundary.points)
         if (issue != null) { status.text = issue; return }
+        val provenanceSummary = boundary.source?.let { source ->
+            "\nSource: $source\nDataset year: ${boundary.datasetYear ?: "उपलब्ध नहीं"}\nConfidence: ${boundary.confidence?.let { "${(it * 100).toInt()}%" } ?: "उपलब्ध नहीं"}"
+        }.orEmpty()
         AlertDialog.Builder(this)
             .setTitle("Boundary Save करें?")
-            .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres\n\nयह boundary इस फोन में encrypted local storage में save होगी। AKKPS server पर upload नहीं होगी।")
+            .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres$provenanceSummary\n\nयह boundary और उपलब्ध source जानकारी इस फोन में encrypted local storage में save होगी। AKKPS server पर upload नहीं होगी।")
             .setNegativeButton("रद्द करें", null)
             .setPositiveButton("Local Save") { _, _ ->
                 runCatching { AkkpsBoundaryStore(this).save(plotId, boundary) }
-                    .onSuccess { status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres" }
+                     .onSuccess {
+                        AkkpsBoundaryDraftStore(this).delete(plotId)
+                        gpsWalkSessionInitialized = false
+                        gpsWalkPlotId = null
+                        status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres"
+                    }
                     .onFailure { status.text = "Save failed: ${it.localizedMessage}" }
             }.show()
     }
@@ -298,6 +431,9 @@ class AkkpsRunnerActivity : Activity() {
                 else {
                     boundaryPoints.clear()
                     boundaryPoints.addAll(saved.points)
+                    boundaryProvenance = saved
+                    gpsWalkSessionInitialized = false
+                    gpsWalkPlotId = null
                     status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
                 }
             }
@@ -326,8 +462,16 @@ class AkkpsRunnerActivity : Activity() {
         if (gpsWalkActive) { status.text = "KML Export से पहले GPS Walk रोकें।"; return }
         val plotId = plotIdInput.text.toString().trim()
         val boundary = runCatching {
-            if (boundaryPoints.size >= 3) AkkpsBoundary(boundaryPoints.toList())
-            else AkkpsBoundaryStore(this).load(plotId) ?: error("पहले boundary record करें या reopen करें।")
+            if (boundaryPoints.size >= 3) {
+                val metadata = boundaryProvenance
+                AkkpsBoundary(
+                    points = boundaryPoints.toList(),
+                    source = metadata?.source,
+                    datasetYear = metadata?.datasetYear,
+                    confidence = metadata?.confidence,
+                    sourceFeatureId = metadata?.sourceFeatureId
+                )
+            } else AkkpsBoundaryStore(this).load(plotId) ?: error("पहले boundary record करें या reopen करें।")
         }.getOrElse { status.text = it.localizedMessage ?: "Boundary उपलब्ध नहीं।"; return }
         val issue = AkkpsBoundaryGeometry.validate(boundary.points)
         if (issue != null) { status.text = issue; return }
@@ -468,47 +612,102 @@ class AkkpsRunnerActivity : Activity() {
         if (!AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
             status.text = "AKKPS के सुरक्षित पेज पर जाएँ।"; return
         }
-        // Capture page structure only. Never read input values, cookies, passwords, OTPs or farmer records.
         val js = """
             (function(){
-              const n=s=>(s||'').replace(/\s+/g,' ').trim();
-              const visible=e=>!!(e && (e.offsetWidth||e.offsetHeight||e.getClientRects().length));
-              const fields=[...document.querySelectorAll('input,textarea,select')].map((e,i)=>{
+              const n=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,120);
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
+                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())
+              ).map((e,i)=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
                 return {index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
-                  name:e.name||'',id:e.id||'',placeholder:e.placeholder||'',
-                  aria:e.getAttribute('aria-label')||'',label:[...new Set(labels)].join(' / '),
-                  required:!!e.required,disabled:!!e.disabled};
-              }).filter(x=>x.type!=='hidden' && x.type!=='password' && x.type!=='file' && !x.disabled);
-              const modules=[...document.querySelectorAll('nav a[href],[role=navigation] a[href],header a[href],aside a[href]')].filter(visible).map(a=>{
-                try { const u=new URL(a.href,location.href); if(u.origin!==location.origin)return null;
-                  return {label:n(a.innerText||a.getAttribute('aria-label')||a.title).slice(0,100),
-                    path:u.pathname,active:a.getAttribute('aria-current')==='page'||a.classList.contains('active')};
-                } catch(_){return null;}
-              }).filter(x=>x && x.label && x.path && !x.path.startsWith('/admin') && !x.path.startsWith('/coordinator'))
-                .filter((x,i,a)=>a.findIndex(y=>y.path===x.path&&y.label===x.label)===i).slice(0,80);
-              const actions=[...document.querySelectorAll('form button,form input[type=submit],form input[type=button],form [role=button]')]
-                .filter(visible).map(e=>({label:n(e.innerText||e.value||e.getAttribute('aria-label')||e.title).slice(0,100),
-                  type:(e.type||e.tagName||'').toLowerCase(),disabled:!!e.disabled}))
-                .filter(x=>x.label).slice(0,80);
+                  name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
+                  aria:n(e.getAttribute('aria-label')),label:[...new Set(labels)].join(' / '),
+                  required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly};
+              });
               const forms=[...document.forms].filter(visible).map((f,i)=>({
-                index:i,method:(f.method||'get').toLowerCase(),
-                path:(()=>{try{return new URL(f.action||location.href,location.href).pathname}catch(_){return location.pathname}})(),
-                fieldCount:f.querySelectorAll('input:not([type=hidden]),textarea,select').length
-              })).slice(0,30);
-              const tables=[...document.querySelectorAll('table')].filter(visible).map((t,i)=>({
-                index:i,headers:[...t.querySelectorAll('thead th, thead td')].map(x=>n(x.innerText)).filter(Boolean).slice(0,30),
+                index:i,name:n(f.getAttribute('name')),id:n(f.id),method:(f.method||'get').toUpperCase(),
+                fieldCount:[...f.querySelectorAll('input,textarea,select')].filter(visible).length,
+                requiredCount:[...f.querySelectorAll('input[required],textarea[required],select[required]')].filter(visible).length
+              }));
+              const tables=[...document.querySelectorAll('table')].filter(visible).slice(0,20).map((t,i)=>({
+                index:i,caption:n(t.caption?.innerText),
+                headers:[...t.querySelectorAll('thead th')].slice(0,20).map(x=>n(x.innerText)).filter(Boolean),
                 rowCount:t.querySelectorAll('tbody tr').length
-              })).slice(0,20);
-              return JSON.stringify({title:n(document.title),url:location.href,path:location.pathname,fields,modules,actions,forms,tables});
+              }));
+              const actions=[...document.querySelectorAll('button,input[type=button],input[type=submit],[role=button]')]
+                .filter(visible).map(e=>n(e.innerText||e.value||e.getAttribute('aria-label')))
+                .filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).slice(0,40);
+              const navigation=[...document.querySelectorAll('a[href]')].filter(visible).map(a=>{
+                try{
+                  const u=new URL(a.href,location.href);
+                  if(u.origin!==location.origin) return null;
+                  const p=u.pathname.replace(/\/$/,'')||'/';
+                  let module='';
+                  if(/^\/runner\/?$/.test(p)) module='HOME';
+                  else if(/^\/runner\/farmers(?:\/new|\/[^/]+)?$/.test(p)) module='FARMERS';
+                  else if(/^\/runner\/plots(?:\/new|\/[^/]+)?$/.test(p)||p==='/plots/new') module='PLOTS';
+                  else if(/^\/runner\/awd-reports(?:\/new|\/[^/]+)?$/.test(p)||p==='/awd-reports/new') module='AWD_REPORTS';
+                  else if(p==='/runner/profile') module='PROFILE';
+                  else if(p==='/runner/sync') module='SYNC';
+                  return module?{label:n(a.innerText||a.getAttribute('aria-label')),module}:null;
+                }catch(_){return null}
+              }).filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.module===v.module&&x.label===v.label)===i).slice(0,30);
+              const path=location.pathname.replace(/\/$/,'')||'/';
+              let module='UNKNOWN';
+              if(path==='/runner') module='HOME';
+              else if(path.startsWith('/runner/farmers')) module='FARMERS';
+              else if(path.startsWith('/runner/plots')||path==='/plots/new') module='PLOTS';
+              else if(path.startsWith('/runner/awd-reports')||path==='/awd-reports/new') module='AWD_REPORTS';
+              else if(path==='/runner/profile') module='PROFILE';
+              else if(path==='/runner/sync') module='SYNC';
+              return JSON.stringify({title:document.title,module,forms,tables,actions,navigation,fields});
             })()
         """.trimIndent()
         web.evaluateJavascript(js) { raw ->
             val obj = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (obj == null) { status.text = "पेज की जानकारी नहीं पढ़ी जा सकी।"; return@evaluateJavascript }
-            AkkpsPageInventory.save(this, obj)
-            status.text = AkkpsPageInventory.summary(obj)
+            val fields = obj.optJSONArray("fields") ?: JSONArray()
+            val labels = (0 until fields.length()).mapNotNull { i ->
+                val f = fields.optJSONObject(i) ?: return@mapNotNull null
+                val label = listOf("label", "name", "id", "placeholder", "aria")
+                    .map { f.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
+                label + if (f.optBoolean("required")) " *" else ""
+            }
+            val forms = obj.optJSONArray("forms")?.length() ?: 0
+            val tables = obj.optJSONArray("tables")?.length() ?: 0
+            val actions = obj.optJSONArray("actions") ?: JSONArray()
+            val actionLabels = (0 until actions.length()).map { actions.optString(it) }
+            val navigationItems = obj.optJSONArray("navigation") ?: JSONArray()
+            val navigationLabels = (0 until navigationItems.length()).mapNotNull {
+                navigationItems.optJSONObject(it)?.optString("label")?.takeIf { label -> label.isNotBlank() }
+            }
+            val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
+            val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            val module = route?.module?.name ?: obj.optString("module")
+            val capabilities = AkkpsPageCapabilityDiscovery.discover(
+                formCount = forms,
+                tableCount = tables,
+                fieldTypes = fieldTypes,
+                fieldLabels = labels,
+                actionLabels = actionLabels,
+                navigationLabels = navigationLabels,
+                isCreateRoute = route?.isCreateRoute == true,
+                isDetailRoute = route?.isDetailRoute == true
+            )
+            val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
+                .map { it.operation.name.lowercase().replace('_', ' ') }
+            val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
+            val inspectedCount = runCatching {
+                AkkpsModuleInventoryStore(this).apply {
+                    if (module in AkkpsRunnerModule.entries.map { it.name }) record(module, capabilities)
+                }.load().size
+            }.getOrDefault(0)
+            status.text = "Module: $module • ${obj.optString("title")} • Inventory: $inspectedCount/6\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
+                "Observed: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
+                actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
         }
     }
@@ -521,7 +720,64 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            if (AkkpsRunnerEditCommandPolicy.isExplicit(raw)) {
+                val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+                if (route == null || !route.isDetailRoute) {
+                    status.text = "पहले Farmer, Plot या AWD का एक record खोलें; फिर Edit command दें।"
+                } else {
+                    openEditForm(route.module)
+                }
+                return
+            }
+            val createModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
+            if (createModule != null) {
+                val createRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
+                if (createRoute == null) {
+                    status.text = "इस AKKPS module में create route अभी verified नहीं है।"
+                } else {
+                    status.text = "${createModule.label} का नया form खोला जा रहा है। Save/Submit अलग confirmation से होगा।"
+                    web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + createRoute)
+                }
+                return
+            }
+            val viewQuery = AkkpsRunnerViewCommandPolicy.parse(raw)
+            if (viewQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Record देखने के लिए पहले Farmers, Plots या AWD Reports list खोलें।"
+                } else {
+                    viewRecord(viewQuery, module!!)
+                }
+                return
+            }
+            val searchQuery = AkkpsRunnerSearchCommandPolicy.parse(raw)
+            if (searchQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Search के लिए पहले Farmers, Plots या AWD Reports module खोलें।"
+                } else {
+                    searchRecords(searchQuery)
+                }
+                return
+            }
+            val module = AkkpsRunnerNavigationCommandPolicy.resolve(raw)
+            if (module != null) {
+                val route = AkkpsRunnerNavigationCommandPolicy.route(module)
+                status.text = "${module.label} module खोला जा रहा है…"
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + route)
+                return
+            }
+            val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            if (!isAllowedDataEntryRoute(currentRoute)) {
+                status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
+                return
+            }
             requestAiMapping(raw)
+            return
+        }
+        val dataEntryRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (!isAllowedDataEntryRoute(dataEntryRoute)) {
+            status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
             return
         }
         if (parsed.issues.isNotEmpty()) {
@@ -537,36 +793,203 @@ class AkkpsRunnerActivity : Activity() {
         fillValues(values, wantsSubmit)
     }
 
-    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean) {
+    private fun isAllowedDataEntryRoute(route: AkkpsRunnerRouteMatch?): Boolean =
+        route != null &&
+            route.module in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) &&
+            (route.isCreateRoute || route.isDetailRoute)
+
+    /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
+    private fun openEditForm(module: AkkpsRunnerModule) {
+        if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+            status.text = "इस module में AKKPS edit workflow अभी supported नहीं है."
+            return
+        }
+        val js = """
+            (function(expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
+              const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible).filter(e=>{
+                const label=norm(e.innerText||e.getAttribute('aria-label')||e.title);
+                return ['edit','update','संपादित करें','संपादित करो','बदलें','रिकॉर्ड बदलें','रिकॉर्ड संपादित करें'].includes(label);
+              });
+              if(controls.length!==1) return JSON.stringify({status:controls.length?'ambiguous_edit':'edit_control_not_found'});
+              const control=controls[0];
+              if(control.tagName==='A'){
+                const u=new URL(control.href,location.href);
+                const p=u.pathname.replace(/\/$/,'');
+                const valid=expectedModule==='FARMERS'?/^\/runner\/farmers\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='PLOTS'?/^\/runner\/plots\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='AWD_REPORTS'?/^\/runner\/awd-reports\/[^/]+(?:\/edit)?$/.test(p):false;
+                if(u.protocol!=='https:'||u.origin!==location.origin||!valid) return JSON.stringify({status:'unsafe_edit_origin'});
+              }
+              control.click();
+              return JSON.stringify({status:'dispatched'});
+            })(__MODULE__)
+        """.trimIndent().replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Edit form खोलने का request भेजा गया। Inspect करें; बदलाव अभी save नहीं हुए हैं।"
+                "ambiguous_edit" -> "एक से अधिक Edit controls मिले; कोई control नहीं चुना।"
+                "unsafe_edit_origin" -> "Edit link AKKPS के same-origin पर नहीं है; रोक दिया।"
+                else -> "इस record पर एक स्पष्ट Edit control नहीं मिला।"
+            }
+        }
+    }
+
+    /** Opens a record only through one exact table-cell match and one known detail-route link. */
+    private fun viewRecord(identifier: String, module: AkkpsRunnerModule) {
+        val js = """
+            (function(q,expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim().replace(/\s+/g,' ');
+              const rows=[...document.querySelectorAll('table tr')].filter(visible);
+              const matches=rows.filter(row=>[...row.cells].some(cell=>norm(cell.innerText)===q));
+              if(matches.length!==1) return JSON.stringify({status:matches.length?'ambiguous_record':'record_not_found'});
+              const row=matches[0];
+              const links=[...row.querySelectorAll('a[href]')].filter(visible).filter(a=>{
+                try{
+                  const u=new URL(a.href,location.href);
+                  if(u.protocol!=='https:'||u.origin!==location.origin) return false;
+                  const p=u.pathname.replace(/\/$/,'');
+                  if(expectedModule==='FARMERS') return /^\/runner\/farmers\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='PLOTS') return /^\/runner\/plots\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='AWD_REPORTS') return /^\/runner\/awd-reports\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  return false;
+                }catch(_){return false}
+              });
+              const unique=[...new Map(links.map(a=>[a.href,a])).values()];
+              if(unique.length!==1) return JSON.stringify({status:unique.length?'ambiguous_detail_link':'detail_link_not_found'});
+              unique[0].click();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__,__MODULE__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(identifier))
+            .replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Record detail खोलने का request भेजा गया। Inspect से record page verify करें।"
+                "ambiguous_record" -> "एक से अधिक records मिले; कोई record नहीं खोला। Exact ID दें।"
+                "detail_link_not_found" -> "इस row में सुरक्षित Runner detail link नहीं मिला।"
+                "ambiguous_detail_link" -> "एक row में कई detail links मिले; कोई link नहीं चुना।"
+                else -> "इस exact ID/name का visible record नहीं मिला।"
+            }
+        }
+    }
+
+    /** Read-only search is allowed only through a unique visible search field in a same-origin GET form. */
+    private fun searchRecords(query: String) {
+        val js = """
+            (function(q){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim();
+              const candidates=[...document.querySelectorAll('input')].filter(e=>{
+                if(!visible(e)||e.disabled||e.readOnly||['hidden','password','file','checkbox','radio','button','submit','reset'].includes(String(e.type||'').toLowerCase())) return false;
+                const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
+                const hints=[e.type,e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm).join(' ');
+                return String(e.type||'').toLowerCase()==='search'||/(search|find|खोज|ढूंढ|ढूँढ)/i.test(hints);
+              });
+              if(candidates.length!==1) return JSON.stringify({status:candidates.length?'ambiguous_search':'search_field_not_found'});
+              const input=candidates[0],form=input.form;
+              if(!form||String(form.method||'GET').toUpperCase()!=='GET') return JSON.stringify({status:'search_form_not_read_only'});
+              const action=new URL(form.action||location.href,location.href);
+              if(action.protocol!=='https:'||action.origin!==location.origin) return JSON.stringify({status:'unsafe_search_origin'});
+              input.value=q;
+              input.dispatchEvent(new Event('input',{bubbles:true}));
+              input.dispatchEvent(new Event('change',{bubbles:true}));
+              form.requestSubmit();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
+        web.evaluateJavascript(js) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            status.text = when (result?.optString("status")) {
+                "dispatched" -> "AKKPS read-only search request भेजी गई। परिणाम देखने के लिए Inspect करें; खोज सफल होने का दावा अभी नहीं किया गया।"
+                "ambiguous_search" -> "एक से अधिक search fields मिले; कोई search नहीं की गई।"
+                "search_form_not_read_only" -> "Search form GET/read-only नहीं है; सुरक्षा के लिए request रोकी गई।"
+                "unsafe_search_origin" -> "Search form AKKPS के उसी सुरक्षित origin पर नहीं है।"
+                else -> "इस पेज पर एक स्पष्ट visible search field नहीं मिला।"
+            }
+        }
+    }
+
+    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockedSubmitReason: String? = null) {
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
-              const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const allowed=__ALLOWED_TYPES__;
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
+              const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
+                (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
+                !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
+                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioGroups=scope=>{
+                const groups=[];
+                for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
+                  if(!(r.name||r.id)) continue;
+                  let g=groups.find(x=>x[0].form===r.form&&(x[0].name||x[0].id)===(r.name||r.id));
+                  if(!g){g=[];groups.push(g);} g.push(r);
+                }
+                return groups;
+              };
+              const optionLabel=r=>norm([...new Set([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||''))].join(' '));
+              const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
+              };
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
-                  if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
+                  if(!editable(e)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && v===key);
                 });
-                if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
+                if(found.length===0){
+                  const groups=radioGroups(document).filter(g=>{
+                    const labels=groupLabel(g);
+                    return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
+                  });
+                  if(groups.length!==1){out.push({key:item.key,status:groups.length?'ambiguous':'not_found'});continue;}
+                  const wanted=norm(item.value);
+                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
+                  options[0].checked=true;
+                  options[0].dispatchEvent(new Event('input',{bubbles:true}));
+                  options[0].dispatchEvent(new Event('change',{bubbles:true}));
+                  out.push({key:item.key,status:'filled'});
+                  continue;
+                }
+                if(found.length!==1){out.push({key:item.key,status:'ambiguous'});continue;}
                 const e=found[0];
                 if(e.tagName==='SELECT'){
-                  const o=[...e.options].find(x=>norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value));
-                  if(!o){out.push({key:item.key,status:'option_not_found'});continue;} e.value=o.value;
-                } else e.value=item.value;
+                  const wanted=norm(item.value);
+                  const options=[...e.options].filter(o=>!o.disabled&&!(o.parentElement&&o.parentElement.disabled)&&
+                    (norm(o.value)===wanted||norm(o.textContent)===wanted));
+                  if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
+                  e.value=options[0].value;
+                }else{
+                  e.value=item.value;
+                }
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
               const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
-                .filter(e=>!e.disabled&&!e.value&&e.type!=='file')
+                .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
+              const requiredRadios=radioGroups(document).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
+              requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
+            .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
@@ -578,6 +1001,10 @@ class AkkpsRunnerActivity : Activity() {
             }
             if (errors.isNotEmpty()) {
                 status.text = "इन फील्ड का सही मिलान नहीं हुआ: " + errors.joinToString() + "। अस्पष्ट फील्ड नहीं चुने गए।"
+                return@evaluateJavascript
+            }
+            if (blockedSubmitReason != null) {
+                status.text = out.length().toString() + " फील्ड भरे गए। " + blockedSubmitReason + " Submit नहीं किया।"
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
@@ -664,57 +1091,134 @@ Return exact JSON only. Do not include prose or markdown."""
                         else "कमांड से कोई स्पष्ट फॉर्म मान नहीं मिला। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
-                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
-                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit
-                    fillValues(values, shouldSubmit)
                     val missing = mapped.optJSONArray("missing") ?: JSONArray()
-                    if (missing.length() > 0) {
-                        status.text = "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
-                            (0 until missing.length()).joinToString { missing.optString(it) } +
-                            if (shouldSubmit) "। Submit रोका गया।" else ""
+                    val missingItems = (0 until missing.length()).map { missing.optString(it).trim() }
+                    if (AkkpsAiSubmitPolicy.hasDuplicateFields(values.map { it.first })) {
+                        status.text = "AI mapping में एक ही फील्ड की duplicate entry मिली। कोई डेटा नहीं भरा गया।"
+                        return@runOnUiThread
                     }
+                    if (values.isNotEmpty() && !AkkpsAiMappingPolicy.areValuesExplicitInCommand(raw, values)) {
+                        status.text = "AI mapping में ऐसे values मिले जो आपके command में स्पष्ट रूप से नहीं थे। कोई data नहीं भरा गया।"
+                        return@runOnUiThread
+                    }
+                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+                    val shouldSubmit = AkkpsAiSubmitPolicy.maySubmit(
+                        aiRequested = mapped.optBoolean("submit"),
+                        userExplicitlyRequested = explicitSubmit,
+                        missing = missingItems
+                    )
+                    val blockedReason = if (missingItems.any { it.isNotBlank() }) {
+                        "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
+                            missingItems.filter { it.isNotBlank() }.joinToString() + "। Submit रोका गया।"
+                    } else null
+                    fillValues(values, shouldSubmit, blockedReason)
                 }
             }.start()
         }
     }
 
     private fun submitForm(expectedValues: List<Pair<String, String>>) {
+        if (!AkkpsSubmitAttemptPolicy.canStart(submitVerificationPending, expectedValues, submitNeedsManualReview)) {
+            status.text = when {
+                submitVerificationPending -> "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
+                submitNeedsManualReview -> "पिछला Submit ambiguous है। Record list जाँचकर ही retry unlock करें।"
+                else -> "Submit data invalid है। कोई request नहीं भेजी गई।"
+            }
+            return
+        }
+        submitVerificationPending = true
         val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
             (function(expected){
               const eventStart=window.__akkpsSubmitSequence||0;
-              const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
+              const allowed=__ALLOWED_TYPES__;
+              const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
+                (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
+                !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
+                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioGroups=scope=>{
+                const groups=[];
+                for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
+                  if(!(r.name||r.id)) continue;
+                  let g=groups.find(x=>x[0].form===r.form&&(x[0].name||x[0].id)===(r.name||r.id));
+                  if(!g){g=[];groups.push(g);} g.push(r);
+                }
+                return groups;
+              };
+              const optionLabel=r=>norm([...new Set([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||''))].join(' '));
+              const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
+              };
+              const forms=[...document.forms].filter(f=>
+                [...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value)||
+                radioGroups(f).some(g=>g.some(r=>r.checked))
+              );
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
-                const key=(item.key||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+                const key=norm(item.key), wanted=norm(item.value);
                 const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
+                  if(!editable(e)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
-                    .map(x=>(x||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
+                    .map(norm).some(x=>x && x===key);
                 });
-                if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
+                if(matches.length===0){
+                  const groups=radioGroups(f).filter(g=>{
+                    const labels=groupLabel(g);
+                    return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
+                  });
+                  if(groups.length!==1) return JSON.stringify({status:'field_changed',field:item.key});
+                  const selected=groups[0].filter(r=>r.checked);
+                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  if(selected.length!==1||options.length!==1||selected[0]!==options[0])
+                    return JSON.stringify({status:'field_changed',field:item.key});
+                  continue;
+                }
+                if(matches.length!==1) return JSON.stringify({status:'field_changed',field:item.key});
+                const actual=String(matches[0].value);
+                const optionText=matches[0].tagName==='SELECT'?norm(matches[0].selectedOptions[0]?.textContent):'';
+                if(actual!==String(item.value)&&optionText!==wanted)
+                  return JSON.stringify({status:'field_changed',field:item.key});
               }
-              const b=f.querySelector('button[type=submit],input[type=submit]');
-              if(b)b.click();else f.requestSubmit();
+              const submitControls=[...f.querySelectorAll('button:not([type]),button[type=submit],input[type=submit]')]
+                .filter(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
+              if(submitControls.length!==1) return JSON.stringify({status:'submit_control_not_unique'});
+              submitControls[0].click();
               return JSON.stringify({status:'dispatched',eventStart});
             })(__EXPECTED__)
         """.trimIndent().replace("__EXPECTED__", payload.toString())
+            .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         val before = web.url.orEmpty()
         web.evaluateJavascript(js) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             val code = result?.optString("status").orEmpty()
             if (code != "dispatched") {
+                submitVerificationPending = false
                 status.text = when (code) {
                     "invalid" -> "AKKPS validation अधूरी है।"
                     "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
+                    "submit_control_not_unique" -> "Form में एक स्पष्ट Submit button नहीं मिला; कोई request नहीं भेजी गई।"
                     else -> "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
                 }
                 return@evaluateJavascript
             }
             status.text = "Submit request भेजी गई। AKKPS की प्रतिक्रिया जाँची जा रही है…"
             val eventStart = result?.optInt("eventStart") ?: 0
-            web.postDelayed({ verifySubmit(before, expectedValues, eventStart) }, 3000)
+            web.postDelayed({
+                if (submitVerificationPending) verifySubmit(before, expectedValues, eventStart)
+            }, 3000)
+            web.postDelayed({
+                if (submitVerificationPending) {
+                    submitVerificationPending = false
+                    status.text = "AKKPS verification timeout। दोबारा Submit न करें; पहले record list में जाँचें।"
+                    requireManualSubmitReview()
+                }
+            }, 15_000)
         }
     }
 
@@ -754,14 +1258,34 @@ Return exact JSON only. Do not include prose or markdown."""
         }
     }
 
+    private fun requireManualSubmitReview() {
+        submitNeedsManualReview = true
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS Record की जाँच जरूरी")
+            .setMessage(
+                "Server Record ID से Save confirm नहीं हुआ। पहले AKKPS की record list में देखें कि entry बन चुकी है या नहीं। " +
+                    "अगर entry मौजूद है तो दोबारा submit न करें। Retry तभी unlock करें जब आपने record list जाँच ली हो।"
+            )
+            .setNegativeButton("अभी नहीं", null)
+            .setPositiveButton("Record जाँच लिया; retry unlock करें") { _, _ ->
+                submitNeedsManualReview = false
+                status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
+            }
+            .show()
+    }
+
+
     private fun decode(raw: String?): String =
         runCatching { JSONTokener(raw ?: "null").nextValue() as? String ?: "" }.getOrDefault("")
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if(requestCode==REQUEST_FILE) {
-            val selected=if(resultCode==RESULT_OK) data?.data?.let { arrayOf(it) } else null
-            uploadCallback?.onReceiveValue(selected); uploadCallback=null
+        if (requestCode == REQUEST_FILE) {
+            val selected = runCatching {
+                if (resultCode == RESULT_OK) WebChromeClient.FileChooserParams.parseResult(resultCode, data) else null
+            }.getOrNull()
+            uploadCallback?.onReceiveValue(selected)
+            uploadCallback = null
         }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
@@ -805,9 +1329,34 @@ Return exact JSON only. Do not include prose or markdown."""
                             "इसे map/उपलब्ध खेत जानकारी से जाँचें। पुष्टि के बाद ही इसे boundary editor में लाया जाएगा; Local Save अलग से करना होगा।"
                     )
                     .setPositiveButton("जाँचकर Editor में लाएँ") { _, _ ->
-                        boundaryPoints.clear()
-                        boundaryPoints.addAll(candidate.boundary.points)
-                        status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
+                        val replaceCandidate = {
+                            boundaryPoints.clear()
+                            boundaryPoints.addAll(candidate.boundary.points)
+                            boundaryProvenance = candidate.boundary
+                            gpsWalkSessionInitialized = false
+                            gpsWalkPlotId = null
+                            status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
+                        }
+                        if (boundaryPoints.isNotEmpty()) {
+                            val existingArea = runCatching {
+                                AkkpsBoundary(boundaryPoints.toList()).areaAcres
+                            }.getOrNull()
+                            val existingSummary = existingArea?.takeIf { it.isFinite() && it > 0.0 }
+                                ?.let { "मौजूदा editor area: ${"%.3f".format(java.util.Locale.US, it)} acres\n" }
+                                .orEmpty()
+                            AlertDialog.Builder(this)
+                                .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                                .setMessage(
+                                    existingSummary +
+                                        "Editor में पहले से ${boundaryPoints.size} points हैं। Satellite candidate लाने पर ये points हट जाएँगे। " +
+                                        "पहले मौजूदा boundary Save/Export कर लें, या स्पष्ट रूप से बदलने की पुष्टि करें।"
+                                )
+                                .setPositiveButton("मौजूदा हटाकर Candidate लाएँ") { _, _ -> replaceCandidate() }
+                                .setNegativeButton("रद्द करें", null)
+                                .show()
+                        } else {
+                            replaceCandidate()
+                        }
                     }
                     .setNegativeButton("रद्द करें", null)
                     .show()
@@ -837,9 +1386,17 @@ Return exact JSON only. Do not include prose or markdown."""
             }.onSuccess { boundary ->
                 boundaryPoints.clear()
                 boundaryPoints.addAll(boundary.points)
+                boundaryProvenance = null
+                gpsWalkSessionInitialized = false
+                gpsWalkPlotId = null
                 status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
             }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
         }
+    }
+
+    override fun onPause() {
+        if (gpsWalkActive) stopGpsWalk()
+        super.onPause()
     }
 
     override fun onDestroy() {
