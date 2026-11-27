@@ -556,13 +556,17 @@ class AkkpsRunnerActivity : Activity() {
                 contentResolver.openInputStream(uri)?.use { stream ->
                     val buffer = ByteArray(8192)
                     var total = 0L
-                    while (true) {
-                        val count = stream.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        if (total > maxImageBytes) return@use false
+                    try {
+                        while (true) {
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > maxImageBytes) return@use false
+                        }
+                        total in 1..maxImageBytes
+                    } finally {
+                        buffer.fill(0)
                     }
-                    total in 1..maxImageBytes
                 } ?: false
             }.getOrDefault(false)
         }
