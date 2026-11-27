@@ -126,4 +126,21 @@ class TaskPlannerOperatorBridgeTest {
         assertTrue(failed.workflow.message.contains("journal", ignoreCase = true))
     }
 
+
+    @Test fun hubPersistsVerifyingStateBeforeExecutorCanCauseSideEffect() {
+        lateinit var bridge: TaskPlannerOperatorBridge
+        var stateAtDispatch: WorkflowStatus? = null
+        bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ ->
+            stateAtDispatch = bridge.current()?.workflow?.status
+            true
+        })
+        bridge.createPlan("dispatch-state", "Record dispatch first", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK))
+        ))
+        val result = bridge.start()
+        assertEquals(WorkflowStatus.VERIFYING, stateAtDispatch)
+        assertEquals(WorkflowStatus.COMPLETED, result.workflow.status)
+        assertTrue(result.audit.any { it.event == "ACTION_DISPATCHED" })
+    }
 }
+
