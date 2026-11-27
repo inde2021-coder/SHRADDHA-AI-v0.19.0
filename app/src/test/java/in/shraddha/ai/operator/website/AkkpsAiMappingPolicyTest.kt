@@ -13,6 +13,18 @@ class AkkpsAiMappingPolicyTest {
         ))
     }
 
+    @Test fun rejectsPartialWordMatchesThatWereNotSuppliedAsValues() {
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "गाँव=Rampur", listOf("गाँव" to "Ram")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम=Ramesh", listOf("नाम" to "Ram")
+        ))
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "नाम=Ram, गाँव=Rampur", listOf("नाम" to "Ram", "गाँव" to "Rampur")
+        ))
+    }
+
     @Test fun unicodeCompatibilityAndWhitespaceAreNormalized() {
         assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
             "नाम = ＲＡＭ", listOf("नाम" to "ram")
