@@ -86,6 +86,12 @@ object AkkpsBoundaryGeometry {
             }
             AkkpsGeoPoint(latitude, longitude)
         }
+        require(points.first() == points.last()) {
+            "KML LinearRing का पहला और आखिरी coordinate समान होना चाहिए।"
+        }
+        require(points.dropLast(1).distinct().size >= 3) {
+            "KML में कम-से-कम 3 अलग boundary points चाहिए।"
+        }
         validate(points)?.let { error(it) }
         fun metadata(name: String): String? {
             val pattern = Regex("(?is)<Data\\s+name=\"" + Regex.escape(name) + "\"\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
