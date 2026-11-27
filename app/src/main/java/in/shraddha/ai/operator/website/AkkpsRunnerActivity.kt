@@ -766,14 +766,21 @@ class AkkpsRunnerActivity : Activity() {
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
             val out = result.optJSONArray("out") ?: JSONArray()
-            val errors = (0 until out.length()).mapNotNull { i ->
-                out.optJSONObject(i)?.takeIf { it.optString("status") != "filled" }?.let {
-                    val reason = it.optString("reason").takeIf(String::isNotBlank)?.let { value -> " ($value)" }.orEmpty()
-                    it.optString("key") + ": " + it.optString("status") + reason
+            val failedRows = (0 until out.length()).mapNotNull { out.optJSONObject(it) }
+                .filter { it.optString("status") != "filled" }
+            if (failedRows.isNotEmpty()) {
+                val invalidRows = failedRows.filter { it.optString("status") == "invalid" }
+                val unresolvedRows = failedRows - invalidRows.toSet()
+                val invalidSummary = invalidRows.joinToString { row ->
+                    row.optString("key") + ": " + row.optString("reason", "browser validation failed")
                 }
-            }
-            if (errors.isNotEmpty()) {
-                status.text = "इन फील्ड का सही मिलान नहीं हुआ: " + errors.joinToString() + "। अस्पष्ट फील्ड नहीं चुने गए।"
+                val unresolvedSummary = unresolvedRows.joinToString { row ->
+                    row.optString("key") + ": " + row.optString("status")
+                }
+                status.text = buildList {
+                    if (invalidSummary.isNotBlank()) add("Browser validation failed; पुराने values restore किए गए: $invalidSummary")
+                    if (unresolvedSummary.isNotBlank()) add("Exact field match नहीं मिला; कोई ambiguous field नहीं चुनी: $unresolvedSummary")
+                }.joinToString("\\n")
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
