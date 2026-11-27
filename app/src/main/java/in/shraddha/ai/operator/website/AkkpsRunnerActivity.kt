@@ -540,6 +540,8 @@ class AkkpsRunnerActivity : Activity() {
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean) {
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
+        val allowedInputTypes = JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString()
+        val allowSingleSelect = AkkpsRunnerFieldPolicy.isAllowedSelect(multiple = false, disabled = false)
         val js = """
             (function(items){
               const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -547,12 +549,12 @@ class AkkpsRunnerActivity : Activity() {
               const visible=e=>!!(e && (e.offsetWidth||e.offsetHeight||e.getClientRects().length) &&
                 getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden' &&
                 !e.closest('[aria-hidden="true"]'));
-              const allowed=new Set(['text','number','tel','email','date','search','url','']);
+              const allowed=new Set(__ALLOWED_INPUT_TYPES__);
               const sensitive=e=>/password|one.?time|otp|cvv|security.?code/i.test(
                 [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),e.autocomplete].join(' '));
               const eligible=e=>{
                 if(!visible(e)||e.disabled||e.readOnly) return false;
-                if(e.tagName==='SELECT') return !e.multiple;
+                if(e.tagName==='SELECT') return __ALLOW_SINGLE_SELECT__ && !e.multiple;
                 if(e.tagName==='TEXTAREA') return true;
                 if(e.tagName!=='INPUT') return false;
                 const type=(e.type||'text').toLowerCase();
@@ -580,7 +582,10 @@ class AkkpsRunnerActivity : Activity() {
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
-        """.trimIndent().replace("__PAYLOAD__", payload.toString())
+        """.trimIndent()
+            .replace("__PAYLOAD__", payload.toString())
+            .replace("__ALLOWED_INPUT_TYPES__", allowedInputTypes)
+            .replace("__ALLOW_SINGLE_SELECT__", allowSingleSelect.toString())
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
