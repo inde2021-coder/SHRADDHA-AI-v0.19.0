@@ -930,6 +930,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 if (submitVerificationPending) {
                     submitVerificationPending = false
                     status.text = "AKKPS verification timeout। दोबारा Submit न करें; पहले record list में जाँचें।"
+                    requireManualSubmitReview()
                 }
             }, 15_000)
         }
