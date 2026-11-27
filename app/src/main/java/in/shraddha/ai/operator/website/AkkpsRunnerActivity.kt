@@ -393,7 +393,7 @@ class AkkpsRunnerActivity : Activity() {
                   const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
                   const state=String(parsed?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||'').slice(0,160);
-                  const recordWrite=/\\b(plot|plots|farmer|farmers|awd|report|records|boundary)\\b/i.test(path);
+                  const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary)\b/i.test(path);
                   const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
@@ -651,11 +651,11 @@ Return exact JSON only. Do not include prose or markdown."""
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
-                const key=(item.key||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+                const key=(item.key||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
                 const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
-                    .map(x=>(x||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
+                    .map(x=>(x||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
                 });
                 if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
               }
@@ -690,14 +690,14 @@ Return exact JSON only. Do not include prose or markdown."""
               const serverRecord=[...events].reverse().find(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&e.httpStatus>=200&&e.httpStatus<300&&e.success&&e.recordId);
               const serverFailure=events.some(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&(e.httpStatus>=400||/failed|error|invalid/i.test(e.message||'')));
               const selectors='[role="alert"],[aria-live="polite"],[aria-live="assertive"],.alert-success,.toast,[data-sonner-toast]';
-              const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean);
-              const success=/\\b(saved|submitted|created successfully|record saved)\\b|सफलतापूर्वक|जमा हो गया/i;
-              const failure=/\\b(failed|error|invalid|unable to|try again)\\b|त्रुटि|असफल/i;
+              const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+              const success=/\b(saved|submitted|created successfully|record saved)\b|सफलतापूर्वक|जमा हो गया/i;
+              const failure=/\b(failed|error|invalid|unable to|try again)\b|त्रुटि|असफल/i;
               const notice=notices.find(x=>success.test(x))||'';
               const failed=notices.some(x=>failure.test(x));
-              const body=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+              const body=(document.body?.innerText||'').replace(/\s+/g,' ').trim();
               const identity=values.filter(v=>v && v.length>=3).every(v=>body.includes(v));
-              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\\/(plots|awd-reports)\\/[^/]+/i.test(a.getAttribute('href')||''));
+              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\/(plots|awd-reports)\/[^/]+/i.test(a.getAttribute('href')||''));
               return JSON.stringify({notice,failed,identity,recordLink,serverSuccess:!!serverRecord,recordId:serverRecord?.recordId||'',serverPath:serverRecord?.path||'',serverFailure});
             })(__VALUES__)
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
