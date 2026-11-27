@@ -184,7 +184,7 @@ class AkkpsRunnerActivity : Activity() {
         val js = """
             (function(items){
               const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-              const blockedTypes=new Set(["hidden","password","file","checkbox","radio","button","submit","reset","image"]);
+              const blockedTypes=new Set(${JSONArray(AkkpsRunnerFieldPolicy.blockedInputTypes.toList()).toString()});
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
