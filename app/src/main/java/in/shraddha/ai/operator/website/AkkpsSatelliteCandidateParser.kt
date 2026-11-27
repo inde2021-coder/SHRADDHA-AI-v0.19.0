@@ -50,12 +50,20 @@ object AkkpsSatelliteCandidateParser {
         }
         val points = (0 until outer.length()).map { index ->
             val pair = outer.getJSONArray(index)
-            require(pair.length() >= 2) { "GeoJSON coordinate tuple अधूरा है।" }
+            require(pair.length() in 2..3) { "GeoJSON coordinate tuple में केवल longitude, latitude और optional altitude मान्य हैं।" }
             val lon = pair.getDouble(0)
             val lat = pair.getDouble(1)
+            require(lon.isFinite() && lat.isFinite()) { "GeoJSON coordinates finite numbers होने चाहिए।" }
             AkkpsGeoPoint(lat, lon)
         }
-        val issue = AkkpsBoundaryGeometry.validate(points)
+        require(points.first() == points.last()) {
+            "GeoJSON Polygon linear ring का पहला और आखिरी coordinate समान होना चाहिए।"
+        }
+        val openRing = points.dropLast(1)
+        require(openRing.size in 3..AkkpsBoundaryGeometry.MAX_POINTS) {
+            "Polygon में 3 से ${AkkpsBoundaryGeometry.MAX_POINTS} अलग boundary points होने चाहिए।"
+        }
+        val issue = AkkpsBoundaryGeometry.validate(openRing)
         require(issue == null) { issue ?: "Boundary अमान्य है।" }
         val properties = feature.optJSONObject("properties") ?: JSONObject()
         val sourceValue = listOf("source", "dataset", "provider")
