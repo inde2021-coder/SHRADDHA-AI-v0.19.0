@@ -437,6 +437,7 @@ class PcCompanionApp:
         self._save_config()
         if not remote:
             self.control_grant_until = 0
+            self.control_grant_peer = None
         if screen:
             self.screen_event.set()
         else:
@@ -455,6 +456,11 @@ class PcCompanionApp:
                 elif kind == "session_closed":
                     self.remote_var.set(False)
                     self.screen_var.set(False)
+                    self.control_grant_until = 0
+                    self.control_grant_peer = None
+                    self.phone_control_grant_until = 0
+                    self.phone_control_peer = None
+                    self.screen_event.clear()
                     self.remote_target_var.set("")
                 elif kind == "status":
                     self.status_var.set(payload)
