@@ -757,7 +757,17 @@ class AkkpsRunnerActivity : Activity() {
                 web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + route)
                 return
             }
+            val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            if (!isAllowedDataEntryRoute(currentRoute)) {
+                status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
+                return
+            }
             requestAiMapping(raw)
+            return
+        }
+        val dataEntryRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (!isAllowedDataEntryRoute(dataEntryRoute)) {
+            status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
             return
         }
         if (parsed.issues.isNotEmpty()) {
@@ -772,6 +782,11 @@ class AkkpsRunnerActivity : Activity() {
         }
         fillValues(values, wantsSubmit)
     }
+
+    private fun isAllowedDataEntryRoute(route: AkkpsRunnerRouteMatch?): Boolean =
+        route != null &&
+            route.module in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) &&
+            (route.isCreateRoute || route.isDetailRoute)
 
     /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
     private fun openEditForm(module: AkkpsRunnerModule) {
