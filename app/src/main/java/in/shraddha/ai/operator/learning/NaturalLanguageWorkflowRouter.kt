@@ -40,9 +40,25 @@ object NaturalLanguageWorkflowRouter {
         return Result(Route(profile, best.first, best.second, values, "सीखे हुए Workflow से निर्देश मिलाया गया; कोई नया ऐप व्यवहार अनुमान से नहीं बनाया गया।"), "Workflow चुना गया: ${best.first}")
     }
 
-    private fun normalize(value: String): String = value.lowercase()
-        .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
-        .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+    private val canonicalAliases = linkedMapOf(
+        "ग्राहक" to "customer", "कस्टमर" to "customer",
+        "हटाओ" to "delete", "हटाना" to "delete", "मिटाओ" to "delete", "डिलीट" to "delete",
+        "अपडेट" to "update", "बदलो" to "update", "बदलना" to "update",
+        "भेजो" to "send", "भेजना" to "send", "सेंड" to "send",
+        "डाउनलोड" to "download", "उतारो" to "download",
+        "रिपोर्ट" to "report", "इनवॉइस" to "invoice", "इनवॉयस" to "invoice",
+        "सेव" to "save", "सहेज" to "save", "जमा" to "submit",
+        "अपलोड" to "upload", "दस्तावेज़" to "document", "दस्तावेज" to "document"
+    )
+
+    private fun normalize(value: String): String {
+        var normalized = value.lowercase()
+            .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
+        canonicalAliases.forEach { (alias, canonical) ->
+            normalized = normalized.replace(alias, canonical)
+        }
+        return normalized.replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+    }
     private fun score(a: String, b: String): Float {
         val at = a.split(" ").filter { it.length > 1 && it !in stopWords }.toSet(); val bt = b.split(" ").filter { it.length > 1 && it !in stopWords }.toSet()
         if (at.isEmpty() || bt.isEmpty()) return 0f
