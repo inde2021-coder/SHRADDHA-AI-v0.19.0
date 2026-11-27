@@ -25,6 +25,12 @@ object NaturalLanguageWorkflowRouter {
     fun route(command: String, profile: AppTrainingProfile): Result {
         val normalized = normalize(command)
         if (normalized.isBlank()) return Result(message = "कृपया बताएं कि कौन-सा काम करना है।")
+        if (containsHighImpactAction(normalized)) {
+            return Result(message = "यह Delete/Payment/Publish जैसा high-impact काम है। पहले अलग से स्पष्ट पुष्टि लें; सीखे हुए Workflow को अपने-आप चलाया नहीं गया।")
+        }
+        if (containsMultipleActionIntents(normalized)) {
+            return Result(message = "एक निर्देश में कई अलग काम हैं। कृपया उन्हें क्रम से अलग-अलग बताएं; एक Workflow को गलत तरीके से नहीं चुना गया।")
+        }
         val ranked = profile.workflows.keys.map { name -> name to score(normalized, normalize(name)) }.sortedByDescending { it.second }
         val best = ranked.firstOrNull() ?: return Result(message = "इस ऐप के लिए कोई सिखाया हुआ Workflow नहीं है।")
         if (best.second < .22f) return Result(message = "इस निर्देश से मिलता हुआ सीखा Workflow नहीं मिला। पहले Training Lab में यह काम सिखाएँ।")
@@ -38,6 +44,31 @@ object NaturalLanguageWorkflowRouter {
             if (folder.isNotBlank()) values["__file_folder"] = folder
         }
         return Result(Route(profile, best.first, best.second, values, "सीखे हुए Workflow से निर्देश मिलाया गया; कोई नया ऐप व्यवहार अनुमान से नहीं बनाया गया।"), "Workflow चुना गया: ${best.first}")
+    }
+
+    private fun containsHighImpactAction(value: String): Boolean {
+        val tokens = value.split(' ').toSet()
+        val highImpact = setOf(
+            "delete", "remove", "erase", "trash", "pay", "payment", "purchase", "publish",
+            "हटाओ", "हटाना", "मिटाओ", "डिलीट", "भुगतान", "पेमेंट", "खरीदो", "प्रकाशित", "पब्लिश"
+        )
+        return tokens.any { it in highImpact }
+    }
+
+    private fun containsMultipleActionIntents(value: String): Boolean {
+        val actionGroups = listOf(
+            setOf("create", "add", "बनाओ", "बनाना", "जोड़ो"),
+            setOf("search", "find", "खोजो", "ढूंढो", "सर्च"),
+            setOf("update", "edit", "change", "अपडेट", "बदलो"),
+            setOf("send", "share", "forward", "भेजो", "भेजना"),
+            setOf("save", "submit", "सेव", "जमा", "सबमिट"),
+            setOf("download", "export", "डाउनलोड"),
+            setOf("upload", "attach", "अपलोड"),
+            setOf("delete", "remove", "हटाओ", "डिलीट"),
+            setOf("pay", "payment", "भुगतान", "पेमेंट"),
+            setOf("publish", "प्रकाशित", "पब्लिश")
+        )
+        return actionGroups.count { group -> value.split(' ').any { it in group } } > 1
     }
 
     private val canonicalAliases = linkedMapOf(
