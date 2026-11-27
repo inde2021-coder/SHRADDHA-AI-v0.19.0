@@ -536,9 +536,17 @@ class AkkpsRunnerActivity : Activity() {
                 try {
                   const parsed=typeof body==='string'?JSON.parse(body):body;
                   const path=new URL(url,location.href).pathname;
-                  const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
-                  const state=String(parsed?.status||'').toLowerCase();
-                  const message=String(parsed?.message||parsed?.error||'').slice(0,160);
+                  const candidates=[
+                    parsed?.recordId,parsed?.plotId,parsed?.reportId,parsed?.farmerId,
+                    parsed?.id,parsed?._id,
+                    parsed?.data?.recordId,parsed?.data?.plotId,parsed?.data?.reportId,
+                    parsed?.data?.farmerId,parsed?.data?.id,parsed?.data?._id,
+                    parsed?.result?.recordId,parsed?.result?.plotId,parsed?.result?.reportId,
+                    parsed?.result?.id,parsed?.record?.id,parsed?.plot?.id,parsed?.report?.id
+                  ];
+                  const id=candidates.find(v=>(typeof v==='string'||typeof v==='number')&&String(v).trim()&&String(v).length<=100)||'';
+                  const state=String(parsed?.status||parsed?.data?.status||parsed?.result?.status||'').toLowerCase();
+                  const message=String(parsed?.message||parsed?.data?.message||parsed?.result?.message||parsed?.error||'').slice(0,160);
                   const recordWrite=/\\b(plot|plots|farmer|farmers|awd|report|records|boundary)\\b/i.test(path);
                   const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
