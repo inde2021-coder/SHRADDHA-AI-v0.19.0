@@ -994,7 +994,14 @@ class AkkpsRunnerActivity : Activity() {
             (function(items){
               const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const allowed=__ALLOWED_TYPES__;
-              const all=[...document.querySelectorAll('input,textarea')],out=[];
+              const out=[];
+              const hasVisibleField=f=>[...f.querySelectorAll('input,textarea')].some(e=>
+                !!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden');
+              const forms=[...document.forms].filter(hasVisibleField);
+              if(forms.length!==1) return JSON.stringify({
+                out:[{key:'FORM',status:forms.length?'form_not_unique':'form_not_found'}],missing:[]
+              });
+              const form=forms[0],all=[...form.querySelectorAll('input,textarea')];
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
                 (e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase()))&&
@@ -1021,7 +1028,7 @@ class AkkpsRunnerActivity : Activity() {
                 }
                 out.push({key:item.key,status:'filled'});
               }
-              const missing=[...document.querySelectorAll('input[required],textarea[required]')]
+              const missing=[...form.querySelectorAll('input[required],textarea[required]')]
                 .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
