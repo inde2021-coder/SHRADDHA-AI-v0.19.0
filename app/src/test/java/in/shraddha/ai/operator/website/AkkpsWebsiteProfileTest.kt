@@ -22,7 +22,10 @@ class AkkpsWebsiteProfileTest {
         assertTrue(capabilities.getValue(WebsiteOperation.OBSERVE_PAGE).state == CapabilityState.AVAILABLE)
         assertTrue(capabilities.getValue(WebsiteOperation.SEARCH_RECORDS).state == CapabilityState.UNKNOWN)
         assertTrue(capabilities.getValue(WebsiteOperation.CREATE_RECORD).state == CapabilityState.UNKNOWN)
-        assertTrue(capabilities.getValue(WebsiteOperation.EXPORT_REPORT).state == CapabilityState.UNKNOWN)
+        assertTrue(capabilities.getValue(WebsiteOperation.EXPORT_REPORT).state == CapabilityState.UNAVAILABLE)
+        assertTrue(capabilities.getValue(WebsiteOperation.DOWNLOAD_DOCUMENT).state == CapabilityState.UNAVAILABLE)
+        assertTrue(capabilities.getValue(WebsiteOperation.DELETE_RECORD).state == CapabilityState.UNAVAILABLE)
+        assertTrue(capabilities.getValue(WebsiteOperation.PAYMENT).state == CapabilityState.UNAVAILABLE)
     }
 
     @Test fun destructiveAndPaymentOperationsNeedHighImpactConfirmation() {
