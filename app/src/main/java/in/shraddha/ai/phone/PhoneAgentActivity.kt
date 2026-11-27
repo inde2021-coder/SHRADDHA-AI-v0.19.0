@@ -2,6 +2,7 @@ package `in`.shraddha.ai.phone
 
 import android.annotation.SuppressLint
 
+import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.Manifest
 import android.content.Context
@@ -15,6 +16,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.telecom.TelecomManager
+import android.telecom.PhoneAccountHandle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -355,7 +357,7 @@ class PhoneAgentActivity : AppCompatActivity() {
         val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
         // SIM enumeration requires READ_PHONE_STATE. If it is not granted, let Android use its default SIM without prompting for a broader permission.
         val canReadPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-        val accounts = if (canReadPhoneState) runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList()) else emptyList()
+        val accounts: List<PhoneAccountHandle> = if (canReadPhoneState) runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList()) else emptyList()
         when (accounts.size) {
             0 -> launchCallWithAccount(safeNumber, null)
             1 -> launchCallWithAccount(safeNumber, accounts.first())
