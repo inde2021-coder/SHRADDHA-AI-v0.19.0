@@ -729,7 +729,7 @@ private fun SettingsScreenContent(
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
-                        "Set a monthly USD ceiling. The council records provider-reported tokens after each response and stops before starting another provider call when the estimated spend crosses the limit. A zero/blank limit disables enforcement.",
+                        "Set an estimated monthly USD spend ceiling for metered Main Brain text-provider calls. Provider-reported tokens are priced after each response; once the estimate reaches the limit, further metered calls are blocked. The response that crosses the limit may already have been billed. Calls without reliable token counters (including Live voice and custom TTS) are blocked while a limit is enabled. A zero/blank limit disables enforcement. This is not a provider-side hard spending cap.",
                         color = colors.textSecondary,
                         fontSize = 12.sp
                     )
