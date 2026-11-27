@@ -44,8 +44,8 @@ object ProviderMessageClient {
             require(Regex("^[A-Za-z0-9_-]{16,80}$").matches(requestId)) { "Message request ID is invalid." }
             val config = VoiceGatewaySettings.get(context.applicationContext)
             require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
-            require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
-                "Configure the HTTPS Voice Gateway to use provider-based messaging."
+            require(config.baseUrl.startsWith("https://", ignoreCase = true) && config.gatewayToken.isNotBlank()) {
+                "Configure a secure HTTPS Voice Gateway to use provider-based messaging."
             }
             require(approval.consume(channel, recipientE164, exactMessage, requestId, System.currentTimeMillis())) {
                 "A fresh, exact, one-time user confirmation is required for this recipient and message."
