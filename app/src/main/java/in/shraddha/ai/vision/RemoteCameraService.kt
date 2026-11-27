@@ -120,14 +120,14 @@ class RemoteCameraService : Service() {
                             facing
                         )) {
                         runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "relay_unavailable", "camera_stopped_fail_closed") }
-                        stopSelf()
+                        stopAndClear()
                         return@setOnImageAvailableListener
                     }
                     lastFrameAt = now
                 } catch (_: Exception) {
                     runCatching { `in`.shraddha.ai.future.LocalAuditTrail(applicationContext).append("camera_share_frame", "failed", "camera_stopped_on_exception") }
                     // Any capture, encoding, encryption, or relay exception fails closed.
-                    stopSelf()
+                    stopAndClear()
                 }
                 finally { image.close() }
             }, handler)
@@ -135,7 +135,7 @@ class RemoteCameraService : Service() {
                 override fun onOpened(device: CameraDevice) {
                     if (stopping) { device.close(); return }
                     camera = device
-                    val surface = reader?.surface ?: run { stopSelf(); return }
+                    val surface = reader?.surface ?: run { stopAndClear(); return }
                     try {
                         val callback = object : CameraCaptureSession.StateCallback() {
                             override fun onConfigured(session: CameraCaptureSession) {
@@ -145,9 +145,9 @@ class RemoteCameraService : Service() {
                                         set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
                                     }.build()
                                     session.setRepeatingRequest(request, null, handler)
-                                } catch (_: Exception) { stopSelf() }
+                                } catch (_: Exception) { stopAndClear() }
                             }
-                            override fun onConfigureFailed(session: CameraCaptureSession) { stopSelf() }
+                            override fun onConfigureFailed(session: CameraCaptureSession) { stopAndClear() }
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                             val configuration = SessionConfiguration(
@@ -160,13 +160,13 @@ class RemoteCameraService : Service() {
                         } else {
                             createLegacyCaptureSession(device, surface, callback, handler)
                         }
-                    } catch (_: Exception) { stopSelf() }
+                    } catch (_: Exception) { stopAndClear() }
                 }
-                override fun onDisconnected(device: CameraDevice) { device.close(); if (camera === device) camera = null; stopSelf() }
-                override fun onError(device: CameraDevice, error: Int) { device.close(); if (camera === device) camera = null; stopSelf() }
+                override fun onDisconnected(device: CameraDevice) { device.close(); if (camera === device) camera = null; stopAndClear() }
+                override fun onError(device: CameraDevice, error: Int) { device.close(); if (camera === device) camera = null; stopAndClear() }
             }, handler)
-        } catch (_: SecurityException) { stopSelf() }
-        catch (_: Exception) { stopSelf() }
+        } catch (_: SecurityException) { stopAndClear() }
+        catch (_: Exception) { stopAndClear() }
     }
 
     @Suppress("DEPRECATION")
