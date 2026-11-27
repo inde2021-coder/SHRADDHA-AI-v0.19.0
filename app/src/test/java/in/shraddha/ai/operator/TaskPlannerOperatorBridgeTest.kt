@@ -127,6 +127,54 @@ class TaskPlannerOperatorBridgeTest {
     }
 
 
+    @Test fun stepLevelConfirmationCannotBeDowngradedByPlannerRisk() {
+        val executed = mutableListOf<String>()
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { step, confirmed ->
+            executed += "${step.target}:$confirmed"
+            true
+        })
+        bridge.createPlan("step-confirmation", "Confirm step", listOf(
+            PlannedOperatorAction(
+                "click", "Click protected control",
+                OperatorStep(OperatorActionType.CLICK_TEXT, target = "Continue", requiresConfirmation = true),
+                risk = Risk.READ_ONLY,
+                requiresApproval = false
+            )
+        ))
+        val waiting = bridge.start()
+        assertEquals(WorkflowStatus.WAITING_FOR_APPROVAL, waiting.workflow.status)
+        assertTrue(executed.isEmpty())
+        val completed = bridge.approveCurrentStep(true)
+        assertEquals(listOf("Continue:true"), executed)
+        assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun clickWithoutExplicitTargetIsRejected() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid action must not execute"); false })
+        bridge.createPlan("missing-target", "Missing target", listOf(
+            PlannedOperatorAction("click", "Click", OperatorStep(OperatorActionType.CLICK_TEXT))
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun typeWithoutValueIsRejected() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid action must not execute"); false })
+        bridge.createPlan("missing-value", "Missing value", listOf(
+            PlannedOperatorAction("type", "Type", OperatorStep(OperatorActionType.TYPE_TEXT, target = "Name"))
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun oversizedOperatorInputIsRejected() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid action must not execute"); false })
+        bridge.createPlan("oversized-input", "Oversized input", listOf(
+            PlannedOperatorAction("type", "Type", OperatorStep(
+                OperatorActionType.TYPE_TEXT, target = "Name", value = "x".repeat(1_001)
+            ))
+        ))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun missingDependencyIsRejectedBeforeHubRegistration() {
         val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
@@ -163,7 +211,7 @@ class TaskPlannerOperatorBridgeTest {
             true
         })
         bridge.createPlan("atomic-1", "Existing valid plan", listOf(
-            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK, target = "original"))
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.OPEN_APP, target = "original"))
         ))
         try {
             bridge.createPlan("atomic-2", "Rejected secret plan", listOf(
