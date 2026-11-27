@@ -32,7 +32,8 @@ object ProviderMessageClient {
         channel: String,
         recipientE164: String,
         exactMessage: String,
-        requestId: String
+        requestId: String,
+        approval: MessageSendApproval
     ): Result<Receipt> = withContext(Dispatchers.IO) {
         runCatching {
             require(channel == "sms" || channel == "whatsapp") { "Unsupported message channel." }
@@ -41,6 +42,9 @@ object ProviderMessageClient {
             }
             require(exactMessage.isNotBlank() && exactMessage.length <= 4000) { "Message length is invalid." }
             require(Regex("^[A-Za-z0-9_-]{16,80}$").matches(requestId)) { "Message request ID is invalid." }
+            require(approval.consume(channel, recipientE164, exactMessage, requestId, System.currentTimeMillis())) {
+                "A fresh, exact, one-time user confirmation is required for this recipient and message."
+            }
             val config = VoiceGatewaySettings.get(context.applicationContext)
             require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
             require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
