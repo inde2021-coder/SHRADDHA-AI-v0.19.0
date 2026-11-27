@@ -818,7 +818,10 @@ class AkkpsRunnerActivity : Activity() {
                     .map(norm).some(v=>v && v===key);
                 });
                 if(found.length===0){
-                  const groups=radioGroups(document).filter(g=>groupLabel(g).includes(key));
+                  const groups=radioGroups(document).filter(g=>{
+                    const labels=groupLabel(g);
+                    return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
+                  });
                   if(groups.length!==1){out.push({key:item.key,status:groups.length?'ambiguous':'not_found'});continue;}
                   const wanted=norm(item.value);
                   const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
