@@ -25,6 +25,10 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.VoiceGatewaySettings
 import java.net.URI
@@ -140,6 +144,8 @@ class AkkpsRunnerActivity : Activity() {
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
+        root.addView(action("Farmer Card OCR (Local)") { chooseFarmerCardImage() },
+            LinearLayout.LayoutParams(-1, dp(42)))
         val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(
             "Farmers" to "/runner/farmers",
@@ -525,6 +531,56 @@ class AkkpsRunnerActivity : Activity() {
         } else {
             callback.invoke(origin, false, false)
             status.text = "GPS Walk के लिए Precise location अनुमति नहीं मिली; Draw mode अभी भी उपलब्ध है।"
+        }
+    }
+
+    private fun chooseFarmerCardImage() {
+        if (gpsWalkActive) { status.text = "Farmer Card OCR से पहले GPS Walk रोकें।"; return }
+        runCatching {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }, REQUEST_FARMER_CARD)
+        }.onFailure { status.text = "Image picker उपलब्ध नहीं: \${it.localizedMessage ?: "error"}" }
+    }
+
+    /** Hindi + English OCR runs on-device only; candidates are placed in the command box for review. */
+    private fun processFarmerCardImage(uri: Uri) {
+        val size = runCatching { contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L }.getOrDefault(-1L)
+        if (size !in 1..(15L * 1024L * 1024L)) {
+            status.text = "Image file size invalid या 15 MB से बड़ी है। कोई data submit नहीं हुआ।"
+            return
+        }
+        val input = runCatching { InputImage.fromFilePath(this, uri) }.getOrElse {
+            status.text = "Image पढ़ी नहीं जा सकी: \${it.localizedMessage ?: "file error"}"
+            return
+        }
+        status.text = "Farmer Card का Hindi + English local OCR चल रहा है…"
+        val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
+        latin.process(input).addOnSuccessListener { latinResult ->
+            devanagari.process(input).addOnSuccessListener { devanagariResult ->
+                try {
+                    val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\n" + devanagariResult.text)
+                    if (isFinishing || isDestroyed) return@addOnSuccessListener
+                    if (!parsed.readyForUserReview) {
+                        status.text = "स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या जानकारी स्वयं भरें। कोई data submit नहीं हुआ।"
+                    } else {
+                        command.setText(parsed.toRunnerCommand())
+                        val missing = parsed.missing.joinToString()
+                        status.text = "Local OCR ने \${parsed.assignments.size} candidate fields पहचाने। " +
+                            (if (missing.isBlank()) "मुख्य fields मिलीं।" else "अभी जानकारी चाहिए: $missing।") +
+                            " हर मान जाँचें/सुधारें; OCR अपने-आप submit नहीं करता।"
+                    }
+                } finally { latin.close(); devanagari.close() }
+            }.addOnFailureListener { error ->
+                latin.close(); devanagari.close()
+                if (!isFinishing && !isDestroyed) status.text = "Hindi OCR उपलब्ध नहीं: \${error.localizedMessage ?: "error"}। कोई data submit नहीं हुआ।"
+            }
+        }.addOnFailureListener { error ->
+            latin.close(); devanagari.close()
+            if (!isFinishing && !isDestroyed) status.text = "OCR नहीं चल पाया: \${error.localizedMessage ?: "error"}। कोई data submit नहीं हुआ।"
         }
     }
 
@@ -1280,6 +1336,11 @@ Return exact JSON only. Do not include prose or markdown."""
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_FARMER_CARD) {
+            if (resultCode == RESULT_OK) data?.data?.let(::processFarmerCardImage)
+            else status.text = "Farmer Card OCR रद्द किया गया; कोई data नहीं पढ़ा गया।"
+            return
+        }
         if (requestCode == REQUEST_FILE) {
             val selected = runCatching {
                 if (resultCode == RESULT_OK) WebChromeClient.FileChooserParams.parseResult(resultCode, data) else null
@@ -1414,5 +1475,6 @@ Return exact JSON only. Do not include prose or markdown."""
         private const val REQUEST_KML_EXPORT = 7317
         private const val REQUEST_KML_IMPORT = 7318
         private const val REQUEST_SATELLITE_CANDIDATE = 7319
+        private const val REQUEST_FARMER_CARD = 7320
     }
 }
