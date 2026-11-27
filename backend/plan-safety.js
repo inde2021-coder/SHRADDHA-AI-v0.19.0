@@ -30,7 +30,20 @@ export function normalizePlanSteps(rawSteps, allowedTools = TOOLS) {
 }
 
 const OPERATOR_ACTIONS = new Set(['OPEN_APP', 'CLICK_TEXT', 'TYPE_TEXT', 'BACK', 'HOME', 'SCROLL_FORWARD']);
-const SECRET_INPUT = /(?:password|passcode|otp|one.time code|pin|cvv|security code|recovery phrase|पासवर्ड|ओटीपी|पिन)/i;
+const SECRET_INPUT = /(?:\b(?:password|passcode|otp|one\s*time(?:\s*(?:password|code|pin))?|verification\s*code|security\s*code|secret\s*key|recovery\s*(?:phrase|code)|cvv|cvc|upi\s*pin|bank\s*pin|pin)\b|पासवर्ड|पासकोड|ओटीपी|ओ टी पी|वन टाइम पासवर्ड|सत्यापन कोड|सुरक्षा कोड|गुप्त कुंजी|रिकवरी वाक्यांश|रिकवरी कोड|सीवीवी|यूपीआई पिन|बैंक पिन|पिन)/i;
+
+function containsSensitiveInput(parts) {
+  const source = parts.map(value => String(value ?? '')).join(' ');
+  const normalized = source.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
+  if (SECRET_INPUT.test(normalized)) return true;
+
+  // Catch letter-by-letter voice transcription without matching substrings
+  // inside ordinary words (for example, "spinach" contains the letters "pin").
+  if (/(?:^|[^a-z])(?:o\s*t\s*p|p\s*i\s*n|c\s*v\s*v)(?:$|[^a-z])/i.test(normalized)) return true;
+
+  const compactHindi = normalized.replace(/[^\u0900-\u097F]/g, '');
+  return /(?:पासवर्ड|पासकोड|ओटीपी|वनटाइमपासवर्ड|सत्यापनकोड|सुरक्षाकोड|गुप्तकुंजी|रिकवरीवाक्यांश|रिकवरीकोड|सीवीवी|यूपीआईपिन|बैंकपिन|पिन)/.test(compactHindi);
+}
 
 /** Convert untrusted model JSON into a tiny, explicit Android accessibility action vocabulary. */
 export function normalizeOperatorActions(rawSteps) {
@@ -48,7 +61,7 @@ export function normalizeOperatorActions(rawSteps) {
     if (!/^[A-Za-z0-9_-]{1,48}$/.test(id) || seen.has(id)) continue;
     if (!OPERATOR_ACTIONS.has(action) || !title || title.length > 100) continue;
     if (target.length > 120 || value.length > 500 || expectedVisibleText.length > 120) continue;
-    if (SECRET_INPUT.test(`${title} ${target} ${value} ${expectedVisibleText}`)) continue;
+    if (containsSensitiveInput([title, target, value, expectedVisibleText])) continue;
     if (action === 'OPEN_APP' && (!target || value)) continue;
     if (action === 'CLICK_TEXT' && (!target || value)) continue;
     if (action === 'TYPE_TEXT' && (!value.trim() || target)) continue;
