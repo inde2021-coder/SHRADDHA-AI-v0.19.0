@@ -449,6 +449,7 @@ private fun SettingsScreenContent(
                                 com.Lia.assistant.voice.VoiceSessionManager.stop()
                                 com.Lia.assistant.voice.VoiceForegroundService.stop(context)
                                 com.Lia.assistant.voice.ShraddhaSpeechClient.stopPlayback()
+                                `in`.shraddha.ai.link.DeviceLinkManager.cancelAiRequests()
                                 context.stopService(android.content.Intent(context, `in`.shraddha.ai.vision.LiveEyesCameraService::class.java))
                             }
                         } else {
