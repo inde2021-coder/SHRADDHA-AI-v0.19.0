@@ -720,7 +720,64 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            if (AkkpsRunnerEditCommandPolicy.isExplicit(raw)) {
+                val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+                if (route == null || !route.isDetailRoute) {
+                    status.text = "पहले Farmer, Plot या AWD का एक record खोलें; फिर Edit command दें।"
+                } else {
+                    openEditForm(route.module)
+                }
+                return
+            }
+            val createModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
+            if (createModule != null) {
+                val createRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
+                if (createRoute == null) {
+                    status.text = "इस AKKPS module में create route अभी verified नहीं है।"
+                } else {
+                    status.text = "${createModule.label} का नया form खोला जा रहा है। Save/Submit अलग confirmation से होगा।"
+                    web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + createRoute)
+                }
+                return
+            }
+            val viewQuery = AkkpsRunnerViewCommandPolicy.parse(raw)
+            if (viewQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Record देखने के लिए पहले Farmers, Plots या AWD Reports list खोलें।"
+                } else {
+                    viewRecord(viewQuery, module!!)
+                }
+                return
+            }
+            val searchQuery = AkkpsRunnerSearchCommandPolicy.parse(raw)
+            if (searchQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Search के लिए पहले Farmers, Plots या AWD Reports module खोलें।"
+                } else {
+                    searchRecords(searchQuery)
+                }
+                return
+            }
+            val module = AkkpsRunnerNavigationCommandPolicy.resolve(raw)
+            if (module != null) {
+                val route = AkkpsRunnerNavigationCommandPolicy.route(module)
+                status.text = "${module.label} module खोला जा रहा है…"
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + route)
+                return
+            }
+            val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            if (!isAllowedDataEntryRoute(currentRoute)) {
+                status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
+                return
+            }
             requestAiMapping(raw)
+            return
+        }
+        val dataEntryRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (!isAllowedDataEntryRoute(dataEntryRoute)) {
+            status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
             return
         }
         if (parsed.issues.isNotEmpty()) {
@@ -734,6 +791,129 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         fillValues(values, wantsSubmit)
+    }
+
+    private fun isAllowedDataEntryRoute(route: AkkpsRunnerRouteMatch?): Boolean =
+        route != null &&
+            route.module in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) &&
+            (route.isCreateRoute || route.isDetailRoute)
+
+    /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
+    private fun openEditForm(module: AkkpsRunnerModule) {
+        if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+            status.text = "इस module में AKKPS edit workflow अभी supported नहीं है."
+            return
+        }
+        val js = """
+            (function(expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
+              const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible).filter(e=>{
+                const label=norm(e.innerText||e.getAttribute('aria-label')||e.title);
+                return ['edit','update','संपादित करें','संपादित करो','बदलें','रिकॉर्ड बदलें','रिकॉर्ड संपादित करें'].includes(label);
+              });
+              if(controls.length!==1) return JSON.stringify({status:controls.length?'ambiguous_edit':'edit_control_not_found'});
+              const control=controls[0];
+              if(control.tagName==='A'){
+                const u=new URL(control.href,location.href);
+                const p=u.pathname.replace(/\/$/,'');
+                const valid=expectedModule==='FARMERS'?/^\/runner\/farmers\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='PLOTS'?/^\/runner\/plots\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='AWD_REPORTS'?/^\/runner\/awd-reports\/[^/]+(?:\/edit)?$/.test(p):false;
+                if(u.protocol!=='https:'||u.origin!==location.origin||!valid) return JSON.stringify({status:'unsafe_edit_origin'});
+              }
+              control.click();
+              return JSON.stringify({status:'dispatched'});
+            })(__MODULE__)
+        """.trimIndent().replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Edit form खोलने का request भेजा गया। Inspect करें; बदलाव अभी save नहीं हुए हैं।"
+                "ambiguous_edit" -> "एक से अधिक Edit controls मिले; कोई control नहीं चुना।"
+                "unsafe_edit_origin" -> "Edit link AKKPS के same-origin पर नहीं है; रोक दिया।"
+                else -> "इस record पर एक स्पष्ट Edit control नहीं मिला।"
+            }
+        }
+    }
+
+    /** Opens a record only through one exact table-cell match and one known detail-route link. */
+    private fun viewRecord(identifier: String, module: AkkpsRunnerModule) {
+        val js = """
+            (function(q,expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim().replace(/\s+/g,' ');
+              const rows=[...document.querySelectorAll('table tr')].filter(visible);
+              const matches=rows.filter(row=>[...row.cells].some(cell=>norm(cell.innerText)===q));
+              if(matches.length!==1) return JSON.stringify({status:matches.length?'ambiguous_record':'record_not_found'});
+              const row=matches[0];
+              const links=[...row.querySelectorAll('a[href]')].filter(visible).filter(a=>{
+                try{
+                  const u=new URL(a.href,location.href);
+                  if(u.protocol!=='https:'||u.origin!==location.origin) return false;
+                  const p=u.pathname.replace(/\/$/,'');
+                  if(expectedModule==='FARMERS') return /^\/runner\/farmers\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='PLOTS') return /^\/runner\/plots\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='AWD_REPORTS') return /^\/runner\/awd-reports\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  return false;
+                }catch(_){return false}
+              });
+              const unique=[...new Map(links.map(a=>[a.href,a])).values()];
+              if(unique.length!==1) return JSON.stringify({status:unique.length?'ambiguous_detail_link':'detail_link_not_found'});
+              unique[0].click();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__,__MODULE__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(identifier))
+            .replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Record detail खोलने का request भेजा गया। Inspect से record page verify करें।"
+                "ambiguous_record" -> "एक से अधिक records मिले; कोई record नहीं खोला। Exact ID दें।"
+                "detail_link_not_found" -> "इस row में सुरक्षित Runner detail link नहीं मिला।"
+                "ambiguous_detail_link" -> "एक row में कई detail links मिले; कोई link नहीं चुना।"
+                else -> "इस exact ID/name का visible record नहीं मिला।"
+            }
+        }
+    }
+
+    /** Read-only search is allowed only through a unique visible search field in a same-origin GET form. */
+    private fun searchRecords(query: String) {
+        val js = """
+            (function(q){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim();
+              const candidates=[...document.querySelectorAll('input')].filter(e=>{
+                if(!visible(e)||e.disabled||e.readOnly||['hidden','password','file','checkbox','radio','button','submit','reset'].includes(String(e.type||'').toLowerCase())) return false;
+                const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
+                const hints=[e.type,e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm).join(' ');
+                return String(e.type||'').toLowerCase()==='search'||/(search|find|खोज|ढूंढ|ढूँढ)/i.test(hints);
+              });
+              if(candidates.length!==1) return JSON.stringify({status:candidates.length?'ambiguous_search':'search_field_not_found'});
+              const input=candidates[0],form=input.form;
+              if(!form||String(form.method||'GET').toUpperCase()!=='GET') return JSON.stringify({status:'search_form_not_read_only'});
+              const action=new URL(form.action||location.href,location.href);
+              if(action.protocol!=='https:'||action.origin!==location.origin) return JSON.stringify({status:'unsafe_search_origin'});
+              input.value=q;
+              input.dispatchEvent(new Event('input',{bubbles:true}));
+              input.dispatchEvent(new Event('change',{bubbles:true}));
+              form.requestSubmit();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
+        web.evaluateJavascript(js) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            status.text = when (result?.optString("status")) {
+                "dispatched" -> "AKKPS read-only search request भेजी गई। परिणाम देखने के लिए Inspect करें; खोज सफल होने का दावा अभी नहीं किया गया।"
+                "ambiguous_search" -> "एक से अधिक search fields मिले; कोई search नहीं की गई।"
+                "search_form_not_read_only" -> "Search form GET/read-only नहीं है; सुरक्षा के लिए request रोकी गई।"
+                "unsafe_search_origin" -> "Search form AKKPS के उसी सुरक्षित origin पर नहीं है।"
+                else -> "इस पेज पर एक स्पष्ट visible search field नहीं मिला।"
+            }
+        }
     }
 
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, additionalMissing: List<String> = emptyList()) {
