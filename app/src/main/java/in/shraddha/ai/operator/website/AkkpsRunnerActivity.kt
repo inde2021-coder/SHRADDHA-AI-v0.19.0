@@ -1118,7 +1118,7 @@ Return exact JSON only. Do not include prose or markdown."""
             }.onSuccess { boundary ->
                 boundaryPoints.clear()
                 boundaryPoints.addAll(boundary.points)
-                boundaryProvenance = null
+                boundaryProvenance = boundary
                 gpsWalkSessionInitialized = false
                 gpsWalkPlotId = null
                 status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
