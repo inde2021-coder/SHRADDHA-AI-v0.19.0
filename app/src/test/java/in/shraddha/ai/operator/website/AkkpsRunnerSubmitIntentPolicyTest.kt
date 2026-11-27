@@ -5,7 +5,7 @@ import org.junit.Test
 
 class AkkpsRunnerSubmitIntentPolicyTest {
     @Test fun acceptsExplicitTrailingEnglishSubmitCommands() {
-        listOf("Fill farmer details, submit", "नाम राम; save", "send", "submit now", "record save").forEach {
+        listOf("Fill farmer details, submit", "नाम राम; save", "send", "submit now", "save record").forEach {
             assertTrue(it, AkkpsRunnerSubmitIntentPolicy.isExplicit(it))
         }
     }
