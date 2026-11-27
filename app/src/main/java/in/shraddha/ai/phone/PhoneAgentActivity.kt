@@ -293,7 +293,7 @@ class PhoneAgentActivity : AppCompatActivity() {
                 val number = cursor.getString(numberIndex).orEmpty()
                 val normalizedName = normalizeContactText(name)
                 if (name.isNotBlank() && number.isNotBlank() &&
-                    (normalizedName == query || normalizedName.contains(query) || query.contains(normalizedName))) {
+                    (normalizedName == query)) {
                     matches.add(name to number)
                 }
             }
@@ -313,9 +313,23 @@ class PhoneAgentActivity : AppCompatActivity() {
             }
             1 -> {
                 val (name, number) = matches.first()
-                voiceStatus.text = "$name मिला। कॉल शुरू की जा रही है।"
-                tts?.speak("$name को कॉल लगा रही हूँ।", TextToSpeech.QUEUE_FLUSH, null, "calling-contact")
-                placeCall(number)
+                val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
+                if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
+                    voiceStatus.text = "$name मिला, लेकिन उसका फोन नंबर मान्य नहीं है। कॉल नहीं लगाई गई।"
+                    return
+                }
+                val masked = safeNumber.takeLast(4).padStart(safeNumber.length, '•')
+                voiceStatus.text = "$name मिला। कॉल लगाने से पहले पुष्टि आवश्यक है।"
+                tts?.speak("$name मिला है। क्या इस contact को कॉल लगाऊँ?", TextToSpeech.QUEUE_FLUSH, null, "confirm-contact-call")
+                AlertDialog.Builder(this)
+                    .setTitle("कॉल की पुष्टि करें")
+                    .setMessage("$name\\n$masked\\n\\nक्या अभी कॉल लगानी है?")
+                    .setPositiveButton("कॉल लगाएँ") { _, _ -> placeCall(safeNumber) }
+                    .setNegativeButton("रद्द करें") { _, _ ->
+                        voiceStatus.text = "कॉल रद्द कर दी गई।"
+                        tts?.speak("कॉल रद्द कर दी गई।", TextToSpeech.QUEUE_FLUSH, null, "call-cancelled")
+                    }
+                    .show()
             }
             else -> {
                 val names = matches.take(5).joinToString(", ") { it.first }
