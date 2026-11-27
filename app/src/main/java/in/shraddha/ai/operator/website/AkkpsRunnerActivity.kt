@@ -41,6 +41,8 @@ class AkkpsRunnerActivity : Activity() {
     private val boundaryPoints = mutableListOf<AkkpsGeoPoint>()
     private var locationManager: LocationManager? = null
     private var gpsWalkActive = false
+    private var gpsWalkSessionInitialized = false
+    private var gpsWalkPlotId: String? = null
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
@@ -150,7 +152,7 @@ class AkkpsRunnerActivity : Activity() {
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") { val id = gpsWalkPlotId ?: plotIdInput.text.toString().trim(); if (gpsWalkActive) stopGpsWalk(); if (id.isNotBlank()) runCatching { AkkpsBoundaryDraftStore(this).delete(id) }; boundaryPoints.clear(); gpsWalkSessionInitialized = false; gpsWalkPlotId = null; bestGpsAccuracyMeters = Float.MAX_VALUE; status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
         val candidateActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
@@ -235,6 +237,19 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun startGpsWalk() {
         if (gpsWalkActive) return
+        val plotId = plotIdInput.text.toString().trim()
+        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) {
+            status.text = "GPS Walk शुरू करने से पहले सही AKKPS Plot ID भरें।"
+            return
+        }
+        if (gpsWalkSessionInitialized && gpsWalkPlotId != plotId) {
+            status.text = "रुकी हुई GPS Walk उसी Plot ID के साथ resume करें। Plot ID बदलने के लिए पहले Save या नई Walk चुनें।"
+            return
+        }
+        if (!gpsWalkSessionInitialized && boundaryPoints.isNotEmpty()) {
+            status.text = "मौजूदा boundary points सुरक्षित हैं। पहले Save/Export करें या स्पष्ट रूप से नई Walk चुनें।"
+            return
+        }
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_GPS_WALK)
             return
@@ -244,9 +259,50 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "GPS चालू करें। खेत के किनारे से Walk करें; फसल के अंदर जाने की जरूरत नहीं।"
             return
         }
-        boundaryPoints.clear()
+        if (!gpsWalkSessionInitialized && boundaryPoints.isEmpty()) {
+            val draftResult = runCatching { AkkpsBoundaryDraftStore(this).load(plotId) }
+            if (draftResult.isFailure) {
+                status.text = "पुराना GPS draft पढ़ा नहीं जा सका: ${draftResult.exceptionOrNull()?.localizedMessage}"
+                return
+            }
+            val draft = draftResult.getOrNull()
+            if (draft != null) {
+                AlertDialog.Builder(this)
+                    .setTitle("पिछली GPS Walk मिली")
+                    .setMessage("${draft.points.size} points का अधूरा draft मिला। Best accuracy: " +
+                        (draft.bestAccuracyMeters?.let { "±${it.toInt()} m" } ?: "उपलब्ध नहीं") +
+                        "। इसे resume करें या हटाकर नई Walk शुरू करें?")
+                    .setNegativeButton("नई Walk") { _, _ ->
+                        AkkpsBoundaryDraftStore(this).delete(plotId)
+                        gpsWalkPlotId = plotId
+                        beginGpsWalk(manager, clearExisting = true)
+                    }
+                    .setPositiveButton("पुरानी Walk Resume") { _, _ ->
+                        boundaryPoints.clear()
+                        boundaryPoints.addAll(draft.points)
+                        bestGpsAccuracyMeters = draft.bestAccuracyMeters ?: Float.MAX_VALUE
+                        gpsWalkPlotId = plotId
+                        gpsWalkSessionInitialized = true
+                        beginGpsWalk(manager, clearExisting = false)
+                    }
+                    .show()
+                return
+            }
+        }
+        beginGpsWalk(manager, clearExisting = !gpsWalkSessionInitialized)
+    }
+
+    private fun beginGpsWalk(manager: LocationManager, clearExisting: Boolean) {
+        if (gpsWalkActive) return
+        if (clearExisting) {
+            boundaryPoints.clear()
+            gpsWalkPlotId = plotIdInput.text.toString().trim()
+            bestGpsAccuracyMeters = Float.MAX_VALUE
+        } else if (gpsWalkPlotId.isNullOrBlank()) {
+            gpsWalkPlotId = plotIdInput.text.toString().trim()
+        }
+        gpsWalkSessionInitialized = true
         lastGpsAccuracyMeters = Float.MAX_VALUE
-        bestGpsAccuracyMeters = Float.MAX_VALUE
         lastGpsElapsedRealtimeNanos = 0L
         locationManager = manager
         try {
@@ -263,12 +319,30 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun stopGpsWalk() {
+        val wasActive = gpsWalkActive
+        if (!wasActive) return
         gpsWalkActive = false
         runCatching { locationManager?.removeUpdates(gpsListener) }
         locationManager = null
-        status.text = "GPS Walk रुकी: ${boundaryPoints.size} points • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
+        val plotId = gpsWalkPlotId
+        if (boundaryPoints.isEmpty()) {
+            status.text = "GPS Walk रुकी। अभी कोई point रिकॉर्ड नहीं हुआ।"
+            return
+        }
+        if (plotId.isNullOrBlank()) {
+            status.text = "GPS Walk रुकी, लेकिन Plot ID नहीं होने से draft सुरक्षित नहीं हुआ।"
+            return
+        }
+        val saved = runCatching {
+            AkkpsBoundaryDraftStore(this).save(plotId, boundaryPoints.toList(),
+                bestGpsAccuracyMeters.takeIf { it.isFinite() && it < Float.MAX_VALUE })
+        }
+        status.text = if (saved.isSuccess) {
+            "GPS Walk रुकी: ${boundaryPoints.size} points • Draft encrypted local save • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
+        } else {
+            "GPS Walk रुकी, लेकिन draft सुरक्षित नहीं हुआ: ${saved.exceptionOrNull()?.localizedMessage}"
+        }
     }
-
     private fun saveBoundary() {
         val plotId = plotIdInput.text.toString().trim()
         if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
@@ -283,7 +357,7 @@ class AkkpsRunnerActivity : Activity() {
             .setNegativeButton("रद्द करें", null)
             .setPositiveButton("Local Save") { _, _ ->
                 runCatching { AkkpsBoundaryStore(this).save(plotId, boundary) }
-                    .onSuccess { status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres" }
+                    .onSuccess { AkkpsBoundaryDraftStore(this).delete(plotId); gpsWalkSessionInitialized = false; gpsWalkPlotId = null; status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres" }
                     .onFailure { status.text = "Save failed: ${it.localizedMessage}" }
             }.show()
     }
@@ -292,6 +366,7 @@ class AkkpsRunnerActivity : Activity() {
         val plotId = plotIdInput.text.toString().trim()
         if (plotId.isBlank()) { status.text = "पहले वही AKKPS Plot ID भरें।"; return }
         if (gpsWalkActive) { status.text = "Saved boundary खोलने से पहले GPS Walk रोकें।"; return }
+        if (gpsWalkSessionInitialized) { status.text = "पहले अधूरी GPS Walk को Save करें या नई Walk चुनें।"; return }
         runCatching { AkkpsBoundaryStore(this).load(plotId) }
             .onSuccess { saved ->
                 if (saved == null) status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
@@ -842,8 +917,13 @@ Return exact JSON only. Do not include prose or markdown."""
         }
     }
 
+    override fun onPause() {
+        if (gpsWalkActive) stopGpsWalk()
+        super.onPause()
+    }
+
     override fun onDestroy() {
-        stopGpsWalk()
+        if (gpsWalkActive) stopGpsWalk()
         uploadCallback?.onReceiveValue(null); uploadCallback=null
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
