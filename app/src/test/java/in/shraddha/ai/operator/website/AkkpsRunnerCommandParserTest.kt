@@ -63,4 +63,22 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(parsed.issues.isNotEmpty())
     }
 
+    @Test fun capsAssignmentsAndNormalizedCommandExpansion() {
+        val tooMany = (1..101).joinToString(";") { "field$it=value" }
+        val parsed = AkkpsRunnerCommandParser.parse(tooMany)
+        assertTrue(parsed.assignments.isEmpty())
+        assertTrue(parsed.issues.any { it.contains("अधिकतम 100") })
+
+        val expanded = "ﬃ".repeat(1_400)
+        assertTrue(AkkpsRunnerCommandParser.parse(expanded).issues.any { it.contains("बहुत लंबी") })
+    }
+
+    @Test fun recognizesExplicitSaveAndSubmitPhrases() {
+        listOf("save record", "submit now", "जमा कर दें").forEach { phrase ->
+            val parsed = AkkpsRunnerCommandParser.parse("Farmer Name=Ram; $phrase")
+            assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+            assertTrue(phrase, parsed.submit)
+        }
+    }
+
 }
