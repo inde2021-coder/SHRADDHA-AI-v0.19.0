@@ -37,7 +37,8 @@ object AkkpsRunnerCommandParser {
                 issues += "यह हिस्सा समझ नहीं आया: ${part.take(60)}"
                 return@forEach
             }
-            val key = part.substring(0, splitAt).trim()
+            val suppliedKey = part.substring(0, splitAt).trim()
+            val key = AkkpsFieldAliasCatalog.canonicalKey(suppliedKey)
             val value = part.substring(splitAt + 1).trim()
             if (key.length !in 1..MAX_KEY_CHARS || value.isBlank() || value.length > MAX_VALUE_CHARS) {
                 issues += "फील्ड नाम या मान की लंबाई अमान्य है।"
