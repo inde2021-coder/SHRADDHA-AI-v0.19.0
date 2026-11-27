@@ -109,7 +109,7 @@ class IndicTrans2Runtime:
             # Never execute Python code shipped inside a downloaded model repository.
             self.tokenizer = AutoTokenizer.from_pretrained(str(self.model_dir), local_files_only=True)
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
-                str(self.model_dir), local_files_only=True
+                str(self.model_dir), local_files_only=True, use_safetensors=True
             ).to(self.device)
             self.processor = IndicProcessor(inference=True)
         except Exception as exc:
@@ -154,7 +154,7 @@ class IndicF5Runtime:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             # Remote model code is not trusted or executed by the desktop companion.
             self.model = AutoModel.from_pretrained(
-                model_id, local_files_only=True
+                model_id, local_files_only=True, use_safetensors=True
             ).to(self.device)
         except Exception as exc:
             raise LanguageRuntimeError(
