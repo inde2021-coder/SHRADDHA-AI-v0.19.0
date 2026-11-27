@@ -21,7 +21,7 @@ internal object AkkpsAiMappingPolicy {
         return assignments.all { (_, value) ->
             val candidate = normalize(value)
             candidate.isNotBlank() && Regex(
-                "(?<![\\\\p{L}\\\\p{N}])" + Regex.escape(candidate) + "(?![\\\\p{L}\\\\p{N}])"
+                "(?<![\\p{L}\\p{N}])" + Regex.escape(candidate) + "(?![\\p{L}\\p{N}])"
             ).containsMatchIn(source)
         }
     }
