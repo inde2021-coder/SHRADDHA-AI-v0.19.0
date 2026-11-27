@@ -41,7 +41,9 @@ object AkkpsSatelliteCandidateParser {
             "केवल Polygon candidate स्वीकार है; MultiPolygon/LineString अभी समर्थित नहीं।"
         }
         val rings = geometry.optJSONArray("coordinates") ?: error("Polygon coordinates नहीं मिले।")
-        require(rings.length() >= 1) { "Polygon outer ring खाली है।" }
+        require(rings.length() == 1) {
+            "Polygon में interior holes हैं; holes-aware area calculation आने तक इसे import नहीं किया जाएगा।"
+        }
         val outer = rings.getJSONArray(0)
         require(outer.length() in 4..(AkkpsBoundaryGeometry.MAX_POINTS + 1)) {
             "Polygon outer ring में points की संख्या अमान्य है।"
@@ -59,15 +61,32 @@ object AkkpsSatelliteCandidateParser {
         val source = properties.optString("source", properties.optString("dataset", "Unknown dataset"))
             .trim().take(MAX_SOURCE_LENGTH).ifBlank { "Unknown dataset" }
         val yearValue = properties.opt("year") ?: properties.opt("dataset_year")
-        val year = yearValue?.toString()?.toIntOrNull()?.takeIf { it in 1900..2100 }
+        val year = yearValue?.let {
+            it.toString().toIntOrNull()?.also { parsed ->
+                require(parsed in 1900..2100) { "Dataset year 1900 से 2100 के बीच होना चाहिए।" }
+            } ?: error("Dataset year मान्य पूर्णांक नहीं है।")
+        }
         val confidenceValue = properties.opt("confidence")
-        val confidence = confidenceValue?.toString()?.toDoubleOrNull()?.takeIf { it.isFinite() && it in 0.0..1.0 }
+        val confidence = confidenceValue?.let {
+            it.toString().toDoubleOrNull()?.also { parsed ->
+                require(parsed.isFinite() && parsed in 0.0..1.0) {
+                    "Confidence 0.0 से 1.0 के बीच होना चाहिए।"
+                }
+            } ?: error("Confidence संख्या मान्य नहीं है।")
+        }
+        val featureIdValue = feature.opt("id")
+        val featureId = when (featureIdValue) {
+            null, org.json.JSONObject.NULL -> null
+            is String -> featureIdValue.trim().takeIf { it.isNotBlank() }
+            is Number -> featureIdValue.toString()
+            else -> error("GeoJSON Feature ID string या number होना चाहिए।")
+        }
         AkkpsSatelliteBoundaryCandidate(
             boundary = AkkpsBoundary(AkkpsBoundaryGeometry.closeRing(points)),
             source = source,
             datasetYear = year,
             confidence = confidence,
-            featureId = feature.optString("id").takeIf { it.isNotBlank() }
+            featureId = featureId
         )
     }
 }
