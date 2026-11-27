@@ -9,6 +9,7 @@ import android.provider.ContactsContract
 import android.speech.RecognizerIntent
 import android.view.Gravity
 import android.widget.*
+import com.Lia.assistant.data.NovaPreferences
 import java.util.Locale
 
 /** Compose surface: pick a contact or enter E.164, dictate the body, then open final review. */
