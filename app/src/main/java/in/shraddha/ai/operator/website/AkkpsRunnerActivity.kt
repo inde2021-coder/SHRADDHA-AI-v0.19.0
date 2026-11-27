@@ -780,10 +780,10 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         val js = """
-            (function(){
+            (function(expectedModule){
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
-              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\\s+/g,' ').trim();
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
               const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible).filter(e=>{
                 const label=norm(e.innerText||e.getAttribute('aria-label')||e.title);
                 return ['edit','update','संपादित करें','संपादित करो','बदलें','रिकॉर्ड बदलें','रिकॉर्ड संपादित करें'].includes(label);
@@ -792,12 +792,16 @@ class AkkpsRunnerActivity : Activity() {
               const control=controls[0];
               if(control.tagName==='A'){
                 const u=new URL(control.href,location.href);
-                if(u.protocol!=='https:'||u.origin!==location.origin) return JSON.stringify({status:'unsafe_edit_origin'});
+                const p=u.pathname.replace(/\/$/,'');
+                const valid=expectedModule==='FARMERS'?/^\/runner\/farmers\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='PLOTS'?/^\/runner\/plots\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='AWD_REPORTS'?/^\/runner\/awd-reports\/[^/]+(?:\/edit)?$/.test(p):false;
+                if(u.protocol!=='https:'||u.origin!==location.origin||!valid) return JSON.stringify({status:'unsafe_edit_origin'});
               }
               control.click();
               return JSON.stringify({status:'dispatched'});
-            })()
-        """.trimIndent()
+            })(__MODULE__)
+        """.trimIndent().replace("__MODULE__", JSONObject.quote(module.name))
         web.evaluateJavascript(js) { raw ->
             val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
             status.text = when (code) {
