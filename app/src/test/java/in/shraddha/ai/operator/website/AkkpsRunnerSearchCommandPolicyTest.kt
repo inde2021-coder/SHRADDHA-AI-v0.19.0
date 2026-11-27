@@ -32,4 +32,9 @@ class AkkpsRunnerSearchCommandPolicyTest {
         assertEquals("Farmer ID: FmR-008", AkkpsRunnerSearchCommandPolicy.parse("Find Farmer ID: FmR-008"))
     }
 
+    @Test fun acceptsColonSeparatedSearchSyntaxAndPreservesExactId() {
+        assertEquals("PLOT-AB12", AkkpsRunnerSearchCommandPolicy.parse("Search for: PLOT-AB12"))
+        assertEquals("FmR-008", AkkpsRunnerSearchCommandPolicy.parse("find: FmR-008"))
+    }
+
 }
