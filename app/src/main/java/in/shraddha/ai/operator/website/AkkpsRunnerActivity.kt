@@ -381,10 +381,16 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
+        if (parsed.issues.isNotEmpty()) {
+            status.text = parsed.issues.joinToString("\\n")
+            return
+        }
         val wantsSubmit = parsed.submit
         val values = parsed.assignments
         if (values.isEmpty()) {
-            requestAiMapping(raw)
+            if (wantsSubmit) {
+                status.text = "Submit से पहले कम-से-कम एक स्पष्ट field=value assignment दें।"
+            } else requestAiMapping(raw)
             return
         }
         fillValues(values, wantsSubmit)
