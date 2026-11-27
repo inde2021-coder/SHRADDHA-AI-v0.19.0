@@ -42,13 +42,13 @@ object ProviderMessageClient {
             }
             require(exactMessage.isNotBlank() && exactMessage.length <= 4000) { "Message length is invalid." }
             require(Regex("^[A-Za-z0-9_-]{16,80}$").matches(requestId)) { "Message request ID is invalid." }
-            require(approval.consume(channel, recipientE164, exactMessage, requestId, System.currentTimeMillis())) {
-                "A fresh, exact, one-time user confirmation is required for this recipient and message."
-            }
             val config = VoiceGatewaySettings.get(context.applicationContext)
             require(config.readError == null) { config.readError ?: "Gateway settings could not be read." }
             require(config.baseUrl.isNotBlank() && config.gatewayToken.isNotBlank()) {
                 "Configure the HTTPS Voice Gateway to use provider-based messaging."
+            }
+            require(approval.consume(channel, recipientE164, exactMessage, requestId, System.currentTimeMillis())) {
+                "A fresh, exact, one-time user confirmation is required for this recipient and message."
             }
             val payload = JSONObject()
                 .put("channel", channel)
