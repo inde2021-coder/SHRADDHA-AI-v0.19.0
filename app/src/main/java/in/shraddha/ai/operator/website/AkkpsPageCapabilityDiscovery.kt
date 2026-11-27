@@ -18,12 +18,12 @@ object AkkpsPageCapabilityDiscovery {
         isDetailRoute: Boolean = false
     ): List<WebsiteCapability> {
         require(formCount >= 0 && tableCount >= 0)
-        val all = (fieldLabels + actionLabels + navigationLabels).map {
+        val controls = (fieldLabels + actionLabels).map {
             it.lowercase(Locale.ROOT).trim()
         }.filter { it.isNotBlank() }
         val actions = actionLabels.map { it.lowercase(Locale.ROOT).trim() }
         val types = fieldTypes.map { it.lowercase(Locale.ROOT).trim() }
-        fun evidence(pattern: Regex): String? = all.firstOrNull { pattern.containsMatchIn(it) }
+        fun evidence(pattern: Regex): String? = controls.firstOrNull { pattern.containsMatchIn(it) }
         fun actionEvidence(pattern: Regex): String? = actions.firstOrNull { pattern.containsMatchIn(it) }
         fun capability(operation: WebsiteOperation, found: String?): WebsiteCapability {
             if (!AkkpsWebsiteProfile.isRunnerOperationAllowed(operation)) {
@@ -41,8 +41,8 @@ object AkkpsPageCapabilityDiscovery {
         val create = evidence(Regex("create|add new|new record|नया|नई|जोड़|जोड़|बनाएं|बनाये"))
             ?: if (isCreateRoute) "observed create route" else null
         val update = actionEvidence(Regex("edit|update|modify|संपादित|बदलें|बदलना"))
-        val save = actionEvidence(Regex("save|सहेज|सेव"))
-        val submit = actionEvidence(Regex("submit|send|जमा|भेजें|सबमिट"))
+        val save = if (formCount > 0) actionEvidence(Regex("save|सहेज|सेव")) else null
+        val submit = if (formCount > 0) actionEvidence(Regex("submit|send|जमा|भेजें|सबमिट")) else null
         val upload = if (types.any { it == "file" } || actionEvidence(Regex("upload|attach|अपलोड|संलग्न")) != null)
             "visible file input/upload action" else null
         val download = actionEvidence(Regex("download|डाउनलोड"))
