@@ -190,3 +190,11 @@ A detailed five-language specification has been added at `docs/curriculum/FIVE-L
 
 ## K. Shloka, Mantra, Katha and Bhagavad Gita learning
 Added `docs/curriculum/SHLOKA-MANTRA-KATHA-GITA-LEARNING-LIBRARY.md`. It includes a staged Sanskrit/shloka course, a source-labelled starter set of mantras, a complete 18-chapter Bhagavad Gita study map, katha/Itihasa/Purana story-pack design, cross-language requirements for Hindi/English/Sanskrit/Marathi and community-reviewed Pawari, voice/recitation and offline-pack requirements, exercises and review gates. It clearly separates original scripture, transliteration, literal gloss, paraphrase, commentary and creative retelling; protects modern translation/audio copyrights; treats interpretations respectfully; and does not present recitation as medical treatment. This is a substantive curriculum specification and starter content, not a complete verse-by-verse corpus or shipped APK feature. Scholar, educator, community, copyright, runtime and end-to-end review remain required.
+
+## Android Learning Library integration (2026-11-27)
+
+The Android app now includes 27 signed-APK lesson packs: 9 general curriculum libraries and 18 Bhagavad Gita chapter files containing 700 sequential verse entries. On first use, the installer verifies each asset's SHA-256 and imports it into the existing encrypted `LocalKnowledgeDocumentStore`; it does not create a second RAG store and does not send lesson content to a cloud provider. Quick Actions exposes the Learning Library, with offline search, chapter/lesson browsing and local progress.
+
+Learning progress is AES-GCM encrypted with an Android Keystore key. Guardian Mode uses a salted PBKDF2 PIN, a 5-attempt/60-second lockout, and a daily study-time limit. The PIN and progress remain on the device; this feature does not sync child progress to Firebase.
+
+**Review status:** `CurriculumReviewRegistry` deliberately marks all packs as pending the relevant specialist, educator, source or community review. The Gita corpus has structural count/reference checks, but not yet full Sanskrit-scholar review or independent Trust-corpus comparison. Baby-care and child-learning packs are educational starter material, not clinical or developmental advice. No pack is labelled expert-approved or production-approved.
