@@ -107,3 +107,11 @@ test('operator plan allows ordinary text that merely mentions a normal task', ()
   assert.equal(actions.length, 1);
   assert.equal(actions[0].value, 'open network settings');
 });
+
+test('operator plan does not mistake secret substrings inside ordinary words', () => {
+  const actions = normalizeOperatorActions([{
+    id: 'ordinary-food', title: 'Enter grocery item', action: 'TYPE_TEXT', value: 'spinach'
+  }]);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].value, 'spinach');
+});
