@@ -90,6 +90,41 @@ class AkkpsBoundaryStoreTest {
         assertTrue(AkkpsBoundaryGeometry.parseKml(kml).isFailure)
     }
 
+    @Test fun rejectsNonAdjacentRepeatedVertices() {
+        val repeated = listOf(
+            AkkpsGeoPoint(23.0, 78.0),
+            AkkpsGeoPoint(23.0, 78.002),
+            AkkpsGeoPoint(23.002, 78.002),
+            AkkpsGeoPoint(23.0, 78.002),
+            AkkpsGeoPoint(23.002, 78.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(repeated))
+    }
+
+    @Test fun rejectsCollinearOverlapBetweenNonAdjacentEdges() {
+        val overlapping = listOf(
+            AkkpsGeoPoint(23.0, 78.0),
+            AkkpsGeoPoint(23.0, 78.004),
+            AkkpsGeoPoint(23.001, 78.004),
+            AkkpsGeoPoint(23.001, 78.001),
+            AkkpsGeoPoint(23.0, 78.001),
+            AkkpsGeoPoint(23.0, 78.003),
+            AkkpsGeoPoint(22.999, 78.003),
+            AkkpsGeoPoint(22.999, 78.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(overlapping))
+    }
+
+    @Test fun rejectsSelfCrossingPolygon() {
+        val bowTie = listOf(
+            AkkpsGeoPoint(23.0, 78.0),
+            AkkpsGeoPoint(23.002, 78.002),
+            AkkpsGeoPoint(23.0, 78.002),
+            AkkpsGeoPoint(23.002, 78.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(bowTie))
+    }
+
     @Test fun invalidCoordinatesAndTooFewPointsAreRejected() {
         assertNotNull(AkkpsBoundaryGeometry.validate(square.take(2)))
         assertNotNull(AkkpsBoundaryGeometry.validate(square + AkkpsGeoPoint(91.0, 78.0)))
