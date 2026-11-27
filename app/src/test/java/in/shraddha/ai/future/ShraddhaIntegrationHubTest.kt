@@ -111,4 +111,3 @@ class ShraddhaIntegrationHubTest {
         assertEquals(WorkflowStatus.DRAFT, next.workflow.status)
     }
 }
-
