@@ -9,6 +9,9 @@ internal object AkkpsAiMappingPolicy {
         Normalizer.normalize(value, Normalizer.Form.NFKC)
             .lowercase(Locale.ROOT).trim().replace(Regex("\\s+"), " ")
 
+    fun canSubmit(aiRequestedSubmit: Boolean, missingRequiredInformation: Int): Boolean =
+        aiRequestedSubmit && missingRequiredInformation == 0
+
     fun areValuesExplicitInCommand(command: String, assignments: List<Pair<String, String>>): Boolean {
         if (assignments.isEmpty()) return false
         val source = normalize(command)
