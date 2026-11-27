@@ -28,7 +28,7 @@ class SkillPackLifecycleSecurityInstrumentedTest {
         )
         var rejected = false
         try {
-            manager.downloadAndQuarantine(manifest, emptyMap())
+            manager.downloadAndQuarantine(manifest)
         } catch (_: SecurityException) {
             rejected = true
         }
