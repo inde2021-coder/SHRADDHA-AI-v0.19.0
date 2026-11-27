@@ -289,9 +289,12 @@ class AkkpsRunnerActivity : Activity() {
         )
         val issue = AkkpsBoundaryGeometry.validate(boundary.points)
         if (issue != null) { status.text = issue; return }
+        val provenanceSummary = boundary.source?.let { source ->
+            "\nSource: $source\nDataset year: ${boundary.datasetYear ?: "उपलब्ध नहीं"}\nConfidence: ${boundary.confidence?.let { "${(it * 100).toInt()}%" } ?: "उपलब्ध नहीं"}"
+        }.orEmpty()
         AlertDialog.Builder(this)
             .setTitle("Boundary Save करें?")
-            .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres\n\nयह boundary इस फोन में encrypted local storage में save होगी। AKKPS server पर upload नहीं होगी।")
+            .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres$provenanceSummary\n\nयह boundary और उपलब्ध source जानकारी इस फोन में encrypted local storage में save होगी। AKKPS server पर upload नहीं होगी।")
             .setNegativeButton("रद्द करें", null)
             .setPositiveButton("Local Save") { _, _ ->
                 runCatching { AkkpsBoundaryStore(this).save(plotId, boundary) }
