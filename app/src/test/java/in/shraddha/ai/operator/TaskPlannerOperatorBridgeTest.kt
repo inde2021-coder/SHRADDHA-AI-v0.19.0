@@ -167,4 +167,42 @@ class TaskPlannerOperatorBridgeTest {
         assertEquals(WorkflowStatus.COMPLETED, result.workflow.status)
     }
 
+
+    @Test fun rejectedReplacementPlanDoesNotEraseCurrentWorkflowAdapters() {
+        val executed = mutableListOf<String>()
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { step, _ ->
+            executed += step.target
+            true
+        })
+        bridge.createPlan("atomic-1", "Existing valid plan", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK, target = "original"))
+        ))
+        try {
+            bridge.createPlan("atomic-2", "Rejected secret plan", listOf(
+                PlannedOperatorAction("secret", "Enter OTP",
+                    OperatorStep(OperatorActionType.TYPE_TEXT, target = "OTP", value = "123456"))
+            ))
+            fail("Unsafe replacement plan should be rejected")
+        } catch (_: IllegalArgumentException) { }
+
+        val completed = bridge.start()
+        assertEquals(listOf("original"), executed)
+        assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
+    }
+
+    @Test fun hubPersistsVerifyingStateBeforeExecutorCanCauseSideEffect() {
+        lateinit var bridge: TaskPlannerOperatorBridge
+        var stateAtDispatch: WorkflowStatus? = null
+        bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ ->
+            stateAtDispatch = bridge.current()?.workflow?.status
+            true
+        })
+        bridge.createPlan("dispatch-state", "Record dispatch first", listOf(
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK))
+        ))
+        val result = bridge.start()
+        assertEquals(WorkflowStatus.VERIFYING, stateAtDispatch)
+        assertEquals(WorkflowStatus.COMPLETED, result.workflow.status)
+        assertTrue(result.audit.any { it.event == "ACTION_DISPATCHED" })
+    }
 }
