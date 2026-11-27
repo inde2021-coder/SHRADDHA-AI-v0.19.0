@@ -98,4 +98,17 @@ class AkkpsBoundaryStoreTest {
         assertTrue(runCatching { AkkpsBoundaryGeometry.fromJson("x".repeat(200001)) }.isFailure)
         assertTrue(runCatching { AkkpsBoundaryGeometry.fromJson("{\"points\":[]}") }.isFailure)
     }
+    @Test fun rejectsMultipleKmlOuterBoundarySections() {
+        val one = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val ring = one.substringAfter("<outerBoundaryIs>").substringBefore("</outerBoundaryIs>")
+        val duplicate = one.replace("</Polygon>", "<outerBoundaryIs>$ring</outerBoundaryIs></Polygon>")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(duplicate).isFailure)
+    }
+
+    @Test fun rejectsCoordinatesOutsideKmlOuterBoundary() {
+        val one = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square))
+        val malformed = one.replace("<outerBoundaryIs>", "").replace("</outerBoundaryIs>", "")
+        assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
+    }
+
 }
