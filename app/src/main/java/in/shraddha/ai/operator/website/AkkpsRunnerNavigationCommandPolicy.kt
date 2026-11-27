@@ -12,9 +12,7 @@ internal object AkkpsRunnerNavigationCommandPolicy {
         AkkpsRunnerModule.HOME to listOf("home", "dashboard", "होम", "डैशबोर्ड"),
         AkkpsRunnerModule.FARMERS to listOf("farmers", "farmer", "kisan", "किसान", "किसान सूची", "किसानों"),
         AkkpsRunnerModule.PLOTS to listOf("plots", "plot", "land", "khet", "खेत", "प्लॉट", "खसरा"),
-        AkkpsRunnerModule.AWD_REPORTS to listOf("awd reports", "awd report", "awd", "reports", "रिपोर्ट", "एडब्ल्यूडी"),
-        AkkpsRunnerModule.PROFILE to listOf("profile", "प्रोफाइल"),
-        AkkpsRunnerModule.SYNC to listOf("sync", "सिंक", "डेटा सिंक")
+        AkkpsRunnerModule.AWD_REPORTS to listOf("awd reports", "awd report", "awd", "reports", "रिपोर्ट", "एडब्ल्यूडी")
     )
 
     fun resolve(raw: String): AkkpsRunnerModule? {
