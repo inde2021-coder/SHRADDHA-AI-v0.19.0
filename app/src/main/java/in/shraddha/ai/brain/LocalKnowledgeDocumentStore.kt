@@ -442,7 +442,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
         private const val MAX_BUNDLED_DOCUMENT_CHARS = 100_000
         private const val CHUNK_CHARS = 1_200
         private const val CHUNK_OVERLAP = 160
-        private const val MAX_CHUNKS_PER_DOCUMENT = 60
+        private const val MAX_CHUNKS_PER_DOCUMENT = 100
         private val ID_PATTERN = Regex("[A-Za-z0-9_-]{1,64}")
     }
 }
