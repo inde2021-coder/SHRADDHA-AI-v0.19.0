@@ -6,6 +6,17 @@ object NaturalLanguageWorkflowRouter {
     data class Result(val route: Route? = null, val message: String)
 
     private val stopWords = setOf("please", "karo", "kar", "do", "folder", "from", "in", "inside", "se", "ko", "mein", "में", "से", "को", "करो", "कर", "दो", "फोल्डर", "downloads", "pictures", "picture", "documents", "document", "dcim")
+    private val canonicalAliases = mapOf(
+        "ग्राहक" to "customer", "कस्टमर" to "customer",
+        "हटाओ" to "delete", "हटाना" to "delete", "मिटाओ" to "delete", "डिलीट" to "delete",
+        "अपडेट" to "update", "बदलो" to "update", "बदलना" to "update",
+        "भेजो" to "send", "भेजना" to "send", "सेंड" to "send",
+        "डाउनलोड" to "download", "उतारो" to "download",
+        "रिपोर्ट" to "report", "इनवॉइस" to "invoice", "इनवॉयस" to "invoice",
+        "सेव" to "save", "सहेज" to "save", "जमा" to "submit",
+        "अपलोड" to "upload", "दस्तावेज़" to "document", "दस्तावेज" to "document"
+    )
+
     private val synonymGroups = listOf(
         setOf("add", "create", "new", "जोड़", "बनाओ", "बनाना", "नया"),
         setOf("customer", "client", "contact", "ग्राहक", "कस्टमर"),
@@ -40,9 +51,13 @@ object NaturalLanguageWorkflowRouter {
         return Result(Route(profile, best.first, best.second, values, "सीखे हुए Workflow से निर्देश मिलाया गया; कोई नया ऐप व्यवहार अनुमान से नहीं बनाया गया।"), "Workflow चुना गया: ${best.first}")
     }
 
-    private fun normalize(value: String): String = value.lowercase()
-        .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
-        .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+    private fun normalize(value: String): String {
+        val tokens = value.lowercase()
+            .replace(Regex("(?i)[\\\\p{L}0-9_-][\\\\p{L}0-9_.-]*\\\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
+            .replace(Regex("[^\\\\p{L}\\\\p{M}\\\\p{N}]+"), " ")
+            .trim().split(Regex("\\\\s+")).filter { it.isNotBlank() }
+        return tokens.joinToString(" ") { canonicalAliases[it] ?: it }
+    }
     private fun score(a: String, b: String): Float {
         val at = a.split(" ").filter { it.length > 1 && it !in stopWords }.toSet(); val bt = b.split(" ").filter { it.length > 1 && it !in stopWords }.toSet()
         if (at.isEmpty() || bt.isEmpty()) return 0f
