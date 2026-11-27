@@ -792,9 +792,31 @@ Return exact JSON only. Do not include prose or markdown."""
                             "इसे map/उपलब्ध खेत जानकारी से जाँचें। पुष्टि के बाद ही इसे boundary editor में लाया जाएगा; Local Save अलग से करना होगा।"
                     )
                     .setPositiveButton("जाँचकर Editor में लाएँ") { _, _ ->
-                        boundaryPoints.clear()
-                        boundaryPoints.addAll(candidate.boundary.points)
-                        status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
+                        val replaceCandidate = {
+                            boundaryPoints.clear()
+                            boundaryPoints.addAll(candidate.boundary.points)
+                            status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
+                        }
+                        if (boundaryPoints.isNotEmpty()) {
+                            val existingArea = runCatching {
+                                AkkpsBoundary(boundaryPoints.toList()).areaAcres
+                            }.getOrNull()
+                            val existingSummary = existingArea?.takeIf { it.isFinite() && it > 0.0 }
+                                ?.let { "मौजूदा editor area: ${"%.3f".format(java.util.Locale.US, it)} acres\n" }
+                                .orEmpty()
+                            AlertDialog.Builder(this)
+                                .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                                .setMessage(
+                                    existingSummary +
+                                        "Editor में पहले से ${boundaryPoints.size} points हैं। Satellite candidate लाने पर ये points हट जाएँगे। " +
+                                        "पहले मौजूदा boundary Save/Export कर लें, या स्पष्ट रूप से बदलने की पुष्टि करें।"
+                                )
+                                .setPositiveButton("मौजूदा हटाकर Candidate लाएँ") { _, _ -> replaceCandidate() }
+                                .setNegativeButton("रद्द करें", null)
+                                .show()
+                        } else {
+                            replaceCandidate()
+                        }
                     }
                     .setNegativeButton("रद्द करें", null)
                     .show()
