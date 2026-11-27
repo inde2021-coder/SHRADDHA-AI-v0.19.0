@@ -74,9 +74,10 @@ object AkkpsSatelliteCandidateParser {
         val sourceValue = listOf("source", "dataset", "provider")
             .asSequence()
             .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
-            .map { it.toString().trim() }
+            .filterIsInstance<String>()
+            .map { it.trim() }
             .firstOrNull { it.isNotBlank() }
-            ?: error("Boundary candidate का source/dataset/provider बताना आवश्यक है।")
+            ?: error("Boundary candidate का source/dataset/provider एक non-empty text value होना आवश्यक है।")
         require(sourceValue.length <= MAX_SOURCE_LENGTH) {
             "Boundary candidate source metadata 120 characters से लंबा है।"
         }
