@@ -49,11 +49,11 @@ class OperatorEngine(
         val ok = when (step.action) {
             OperatorActionType.OPEN_APP -> ShraddhaAccessibilityService.openApp(step.target)
             OperatorActionType.CLICK_TEXT -> {
-                val match = before.elements.firstOrNull { e ->
-                    e.clickable && (e.text.equals(step.target, true) || e.description.equals(step.target, true))
-                } ?: before.elements.firstOrNull { e ->
-                    e.clickable && (e.text.contains(step.target, true) || e.description.contains(step.target, true))
-                }
+                val match = OperatorTargetResolutionPolicy.selectUnique(
+                    step.target,
+                    before.elements.filter { it.clickable }
+                ) { element -> listOf(element.text, element.description) }
+                // Refuse ambiguous labels instead of selecting the first visible match.
                 match != null && ShraddhaAccessibilityService.clickVisibleText(step.target)
             }
             OperatorActionType.TYPE_TEXT -> {
