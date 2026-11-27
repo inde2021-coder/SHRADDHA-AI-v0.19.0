@@ -796,52 +796,77 @@ class AkkpsRunnerActivity : Activity() {
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockedSubmitReason: String? = null) {
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
-        val allowedInputTypes = JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString()
-        val allowSingleSelect = AkkpsRunnerFieldPolicy.isAllowedSelect(multiple = false, disabled = false)
         val js = """
             (function(items){
-              const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const allowed=__ALLOWED_TYPES__;
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
-              const visible=e=>!!(e && (e.offsetWidth||e.offsetHeight||e.getClientRects().length) &&
-                getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden' &&
-                !e.closest('[aria-hidden="true"]'));
-              const allowed=new Set(__ALLOWED_INPUT_TYPES__);
-              const sensitive=e=>/password|one.?time|otp|cvv|security.?code/i.test(
-                [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),e.autocomplete].join(' '));
-              const eligible=e=>{
-                if(!visible(e)||e.disabled||e.readOnly) return false;
-                if(e.tagName==='SELECT') return __ALLOW_SINGLE_SELECT__ && !e.multiple;
-                if(e.tagName==='TEXTAREA') return true;
-                if(e.tagName!=='INPUT') return false;
-                const type=(e.type||'text').toLowerCase();
-                return allowed.has(type)&&!sensitive(e);
+              const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
+                (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
+                !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
+                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioGroups=scope=>{
+                const groups=[];
+                for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
+                  if(!(r.name||r.id)) continue;
+                  let g=groups.find(x=>x[0].form===r.form&&(x[0].name||x[0].id)===(r.name||r.id));
+                  if(!g){g=[];groups.push(g);} g.push(r);
+                }
+                return groups;
+              };
+              const optionLabel=r=>norm([...new Set([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||''))].join(' '));
+              const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
               };
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
-                  if(!eligible(e)) return false;
+                  if(!editable(e)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && v===key);
                 });
-                if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
+                if(found.length===0){
+                  const groups=radioGroups(document).filter(g=>{
+                    const labels=groupLabel(g);
+                    return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
+                  });
+                  if(groups.length!==1){out.push({key:item.key,status:groups.length?'ambiguous':'not_found'});continue;}
+                  const wanted=norm(item.value);
+                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
+                  options[0].checked=true;
+                  options[0].dispatchEvent(new Event('input',{bubbles:true}));
+                  options[0].dispatchEvent(new Event('change',{bubbles:true}));
+                  out.push({key:item.key,status:'filled'});
+                  continue;
+                }
+                if(found.length!==1){out.push({key:item.key,status:'ambiguous'});continue;}
                 const e=found[0];
                 if(e.tagName==='SELECT'){
-                  const o=[...e.options].find(x=>!x.disabled&&(norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value)));
-                  if(!o){out.push({key:item.key,status:'option_not_found'});continue;} e.value=o.value;
-                } else e.value=item.value;
+                  const wanted=norm(item.value);
+                  const options=[...e.options].filter(o=>!o.disabled&&!(o.parentElement&&o.parentElement.disabled)&&
+                    (norm(o.value)===wanted||norm(o.textContent)===wanted));
+                  if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
+                  e.value=options[0].value;
+                }else{
+                  e.value=item.value;
+                }
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
-                out.push({key:item.key,status:e.value===String(item.value)||e.tagName==='SELECT'?'filled':'rejected'});
+                out.push({key:item.key,status:'filled'});
               }
               const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
-                .filter(e=>visible(e)&&!e.disabled&&!e.value&&e.type!=='file')
+                .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
+              const requiredRadios=radioGroups(document).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
+              requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
-        """.trimIndent()
-            .replace("__PAYLOAD__", payload.toString())
-            .replace("__ALLOWED_INPUT_TYPES__", allowedInputTypes)
-            .replace("__ALLOW_SINGLE_SELECT__", allowSingleSelect.toString())
+        """.trimIndent().replace("__PAYLOAD__", payload.toString())
+            .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
@@ -855,8 +880,12 @@ class AkkpsRunnerActivity : Activity() {
                 status.text = "इन फील्ड का सही मिलान नहीं हुआ: " + errors.joinToString() + "। अस्पष्ट फील्ड नहीं चुने गए।"
                 return@evaluateJavascript
             }
+            if (blockedSubmitReason != null) {
+                status.text = out.length().toString() + " फील्ड भरे गए। " + blockedSubmitReason + " Submit नहीं किया।"
+                return@evaluateJavascript
+            }
             if (!wantsSubmit) {
-                status.text = blockedSubmitReason ?: (out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।")
+                status.text = out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।"
                 return@evaluateJavascript
             }
             val missing = result.optJSONArray("missing") ?: JSONArray()
