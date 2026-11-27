@@ -121,5 +121,7 @@
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.lia.fileprovider" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/lia_file_paths" />
         </provider>
-    </application>
+            <activity android:name="com.Lia.assistant.action.MessageReviewActivity" android:exported="false" android:excludeFromRecents="true" android:label="Shraddha AI Message Review" />
+        <activity android:name="com.Lia.assistant.action.MessageComposeActivity" android:exported="false" android:label="Shraddha AI Message Composer" />
+</application>
 </manifest>
