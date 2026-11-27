@@ -59,7 +59,7 @@ object AkkpsPageCapabilityDiscovery {
             capability(WebsiteOperation.CREATE_RECORD, create),
             capability(WebsiteOperation.UPDATE_RECORD, update),
             capability(WebsiteOperation.SAVE_RECORD, save),
-            capability(WebsiteOperation.SUBMIT_FORM, if (formCount > 0) submit ?: "visible form" else null),
+            capability(WebsiteOperation.SUBMIT_FORM, submit),
             capability(WebsiteOperation.UPLOAD_DOCUMENT, upload),
             capability(WebsiteOperation.DOWNLOAD_DOCUMENT, download),
             capability(WebsiteOperation.EXPORT_REPORT, export),
