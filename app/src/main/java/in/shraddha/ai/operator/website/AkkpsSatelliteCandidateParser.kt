@@ -101,7 +101,13 @@ object AkkpsSatelliteCandidateParser {
             else -> error("GeoJSON Feature ID string या number होना चाहिए।")
         }
         AkkpsSatelliteBoundaryCandidate(
-            boundary = AkkpsBoundary(AkkpsBoundaryGeometry.closeRing(points)),
+            boundary = AkkpsBoundary(
+                points = AkkpsBoundaryGeometry.closeRing(points),
+                source = source,
+                datasetYear = year,
+                confidence = confidence,
+                sourceFeatureId = featureId
+            ),
             source = source,
             datasetYear = year,
             confidence = confidence,
