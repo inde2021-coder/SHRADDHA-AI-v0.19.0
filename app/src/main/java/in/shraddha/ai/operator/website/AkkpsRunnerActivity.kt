@@ -623,7 +623,7 @@ class AkkpsRunnerActivity : Activity() {
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
               const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
-                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())
+                visible(e)&&!e.disabled&&!['hidden','password'].includes(String(e.type||'').toLowerCase())
               ).map((e,i)=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
