@@ -940,8 +940,10 @@ Return exact JSON only. Do not include prose or markdown."""
                 });
                 if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
               }
-              const b=[...f.querySelectorAll('button[type=submit],input[type=submit]')].find(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
-              if(b)b.click();else f.requestSubmit();
+              const submitControls=[...f.querySelectorAll('button:not([type]),button[type=submit],input[type=submit]')]
+                .filter(x=>!x.disabled&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden'&&getComputedStyle(x).display!=='none');
+              if(submitControls.length!==1) return JSON.stringify({status:'submit_control_not_unique'});
+              submitControls[0].click();
               return JSON.stringify({status:'dispatched',eventStart});
             })(__EXPECTED__)
         """.trimIndent().replace("__EXPECTED__", payload.toString())
@@ -955,6 +957,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 status.text = when (code) {
                     "invalid" -> "AKKPS validation अधूरी है।"
                     "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
+                    "submit_control_not_unique" -> "Form में एक स्पष्ट Submit button नहीं मिला; कोई request नहीं भेजी गई।"
                     else -> "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
                 }
                 return@evaluateJavascript
