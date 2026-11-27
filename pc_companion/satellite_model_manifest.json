@@ -1,0 +1,16 @@
+{
+  "model_id": "india-fractal-resunet-zenodo-7315090",
+  "file_name": "india_Airbus_SPOT_model.params",
+  "download_url": "https://zenodo.org/records/7315090/files/india_Airbus_SPOT_model.params?download=1",
+  "published_size_bytes": 269169459,
+  "published_md5": "d4e67c9c8061d17f7b78b5ade6e0a948",
+  "license": "CC-BY-4.0",
+  "attribution": "Wang, S., Waldner, F., & Lobell, D. B. (2022), DOI: 10.5281/zenodo.7315090",
+  "architecture": "FracTAL-ResUNet",
+  "framework": "MXNet 1.6.0",
+  "trained_imagery_source": "Airbus SPOT",
+  "training_ground_sample_distance_m": 1.5,
+  "android_apk_bundled": false,
+  "automatic_inference_enabled": false,
+  "status": "optional-desktop-model-pack-only; target-region inference not yet validated"
+}

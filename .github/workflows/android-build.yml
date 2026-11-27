@@ -92,6 +92,8 @@ jobs:
 
       - name: Validate custom voice engine Python syntax
         run: python -m py_compile voice-engine/app.py
+      - name: Test satellite model pack manifest and download safety
+        run: python -m unittest discover -s pc_companion/tests -p 'test_satellite_model_pack.py' -v
 
       - name: Check patch whitespace
         run: git diff --check
