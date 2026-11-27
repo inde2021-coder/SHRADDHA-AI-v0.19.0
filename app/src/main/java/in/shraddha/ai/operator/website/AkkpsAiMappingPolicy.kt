@@ -7,7 +7,7 @@ import java.util.Locale
 internal object AkkpsAiMappingPolicy {
     private fun normalize(value: String): String =
         Normalizer.normalize(value, Normalizer.Form.NFKC)
-            .lowercase(Locale.ROOT).trim().replace(Regex("\s+"), " ")
+            .lowercase(Locale.ROOT).trim().replace(Regex("\\s+"), " ")
 
     fun canSubmit(aiRequestedSubmit: Boolean, missingRequiredInformation: Int): Boolean =
         aiRequestedSubmit && missingRequiredInformation == 0
