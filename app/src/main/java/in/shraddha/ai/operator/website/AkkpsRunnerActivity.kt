@@ -35,7 +35,6 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var command: EditText
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
-    private var pendingFileChooserParams: WebChromeClient.FileChooserParams? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
@@ -224,14 +223,12 @@ class AkkpsRunnerActivity : Activity() {
                         return false
                     }
                     return try {
-                        pendingFileChooserParams = params
                         val pick = params.createIntent().apply {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         startActivityForResult(pick, REQUEST_FILE)
                         true
                     } catch (_: Exception) {
-                        pendingFileChooserParams = null
                         uploadCallback = null
                         callback.onReceiveValue(null)
                         false
@@ -791,7 +788,7 @@ Return exact JSON only. Do not include prose or markdown."""
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_FILE) {
             val selected = runCatching {
-                if (resultCode == RESULT_OK) FileChooserParams.parseResult(resultCode, data) else null
+                if (resultCode == RESULT_OK) WebChromeClient.FileChooserParams.parseResult(resultCode, data) else null
             }.getOrNull()
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
@@ -902,7 +899,7 @@ Return exact JSON only. Do not include prose or markdown."""
 
     override fun onDestroy() {
         stopGpsWalk()
-        uploadCallback?.onReceiveValue(null); uploadCallback=null; pendingFileChooserParams=null
+        uploadCallback?.onReceiveValue(null); uploadCallback=null
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
         web.stopLoading(); web.destroy(); super.onDestroy()
