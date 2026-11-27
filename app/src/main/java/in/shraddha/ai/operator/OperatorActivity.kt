@@ -621,6 +621,10 @@ class OperatorActivity : Activity() {
             log.text = "Password, OTP, PIN, CVV और banking secrets वाले commands को cloud planner तक नहीं भेजा जाएगा।"
             return
         }
+        if (Regex("""(?i)delete|remove|send|pay|transfer|purchase|buy|publish|post|submit|place order|हटाओ|मिटाओ|भुगतान|पैसे भेज|खरीद|पोस्ट करो|भेजो|पुष्टि करो|जमा करो|सबमिट""").containsMatchIn(command)) {
+            log.text = "Delete, payment, send, publish और Submit जैसे high-impact commands universal planner में blocked हैं।"
+            return
+        }
         val controls = snapshot.elements.filter { (it.clickable || it.editable) && !it.password }.take(80).map { element ->
             JSONObject()
                 .put("id", safePlannerLabel(element.id).take(100))
