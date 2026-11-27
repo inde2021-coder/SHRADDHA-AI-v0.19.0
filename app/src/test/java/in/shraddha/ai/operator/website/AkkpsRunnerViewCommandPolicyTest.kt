@@ -28,4 +28,9 @@ class AkkpsRunnerViewCommandPolicyTest {
         assertNull(AkkpsRunnerViewCommandPolicy.parse("view " + "x".repeat(301)))
         assertNull(AkkpsRunnerViewCommandPolicy.parse("view farmer\n123"))
     }
+    @Test fun acceptsColonSeparatedRecordViewCommands() {
+        assertEquals("FmR-008", AkkpsRunnerViewCommandPolicy.parse("open record: FmR-008"))
+        assertEquals("Plot-AB12", AkkpsRunnerViewCommandPolicy.parse("view: Plot-AB12"))
+    }
+
 }
