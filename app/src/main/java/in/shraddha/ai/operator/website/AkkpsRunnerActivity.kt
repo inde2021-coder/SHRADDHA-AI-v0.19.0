@@ -271,6 +271,7 @@ class AkkpsRunnerActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        restoreSubmitAttemptGuard()
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
     }
 
@@ -1170,6 +1171,12 @@ Return exact JSON only. Do not include prose or markdown."""
                 submitNeedsManualReview -> "पिछला Submit ambiguous है। Record list जाँचकर ही retry unlock करें।"
                 else -> "Submit data invalid है। कोई request नहीं भेजी गई।"
             }
+            if (submitNeedsManualReview) requireManualSubmitReview()
+            return
+        }
+        val persistedPending = runCatching { AkkpsSubmitAttemptStore(this).markPending() }
+        if (persistedPending.isFailure) {
+            status.text = "Encrypted duplicate-submit guard सुरक्षित नहीं हुआ। कोई Submit request नहीं भेजी गई।"
             return
         }
         submitVerificationPending = true
@@ -1210,6 +1217,11 @@ Return exact JSON only. Do not include prose or markdown."""
             val code = result?.optString("status").orEmpty()
             if (code != "dispatched") {
                 submitVerificationPending = false
+                if (!clearSubmitAttemptGuard()) {
+                    requireManualSubmitReview()
+                    status.text = "Submit dispatch नहीं हुआ, लेकिन local safety guard clear नहीं हुआ। पहले record list जाँचें।"
+                    return@evaluateJavascript
+                }
                 status.text = when (code) {
                     "invalid" -> "AKKPS validation अधूरी है।"
                     "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
@@ -1257,6 +1269,13 @@ Return exact JSON only. Do not include prose or markdown."""
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (!submitVerificationPending) return@evaluateJavascript
             submitVerificationPending = false
+            val definitiveOutcome = o?.optBoolean("serverSuccess") == true ||
+                o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true
+            if (definitiveOutcome && !clearSubmitAttemptGuard()) {
+                requireManualSubmitReview()
+                status.text = "AKKPS response मिला, लेकिन local safety guard clear नहीं हुआ। Record list जाँचें; retry अभी बंद है।"
+                return@evaluateJavascript
+            }
             status.text = when {
                 o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
                 o?.optBoolean("serverSuccess") == true ->
@@ -1281,8 +1300,17 @@ Return exact JSON only. Do not include prose or markdown."""
         }
     }
 
+    private fun restoreSubmitAttemptGuard() {
+        val restored = runCatching { AkkpsSubmitAttemptStore(this).load() }
+        submitNeedsManualReview = restored.isFailure || restored.getOrNull() != null
+    }
+
+    private fun clearSubmitAttemptGuard(): Boolean =
+        runCatching { AkkpsSubmitAttemptStore(this).clear() }.isSuccess
+
     private fun requireManualSubmitReview() {
         submitNeedsManualReview = true
+        runCatching { AkkpsSubmitAttemptStore(this).markReviewRequired() }
         AlertDialog.Builder(this)
             .setTitle("AKKPS Record की जाँच जरूरी")
             .setMessage(
@@ -1291,8 +1319,13 @@ Return exact JSON only. Do not include prose or markdown."""
             )
             .setNegativeButton("अभी नहीं", null)
             .setPositiveButton("Record जाँच लिया; retry unlock करें") { _, _ ->
-                submitNeedsManualReview = false
-                status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
+                if (!clearSubmitAttemptGuard()) {
+                    submitNeedsManualReview = true
+                    status.text = "Encrypted safety guard clear नहीं हुआ। Retry अभी बंद है।"
+                } else {
+                    submitNeedsManualReview = false
+                    status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
+                }
             }
             .show()
     }
