@@ -222,17 +222,44 @@ class AkkpsRunnerActivity : Activity() {
                         callback.onReceiveValue(null)
                         return false
                     }
-                    return try {
-                        val pick = params.createIntent().apply {
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    val acceptedTypes = params.acceptTypes
+                        .filter { it.isNotBlank() }
+                        .take(5)
+                        .joinToString(", ")
+                        .take(120)
+                        .ifBlank { "AKKPS form द्वारा स्वीकार की गई फाइलें" }
+                    AlertDialog.Builder(this@AkkpsRunnerActivity)
+                        .setTitle("AKKPS दस्तावेज़ अपलोड की अनुमति")
+                        .setMessage(
+                            "AKKPS वेबसाइट आपसे दस्तावेज़ चुनने को कह रही है। केवल वही फाइल चुनें जिसे इस Plot/Farmer record में अपलोड करना चाहते हैं।\\n" +
+                                "स्वीकार्य प्रकार: $acceptedTypes"
+                        )
+                        .setPositiveButton("फाइल चुनें") { _, _ ->
+                            if (uploadCallback !== callback || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
+                                uploadCallback = null
+                                callback.onReceiveValue(null)
+                                return@setPositiveButton
+                            }
+                            try {
+                                val pick = params.createIntent().apply {
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                startActivityForResult(pick, REQUEST_FILE)
+                            } catch (_: Exception) {
+                                uploadCallback = null
+                                callback.onReceiveValue(null)
+                            }
                         }
-                        startActivityForResult(pick, REQUEST_FILE)
-                        true
-                    } catch (_: Exception) {
-                        uploadCallback = null
-                        callback.onReceiveValue(null)
-                        false
-                    }
+                        .setNegativeButton("रद्द करें") { _, _ ->
+                            if (uploadCallback === callback) uploadCallback = null
+                            callback.onReceiveValue(null)
+                        }
+                        .setOnCancelListener {
+                            if (uploadCallback === callback) uploadCallback = null
+                            callback.onReceiveValue(null)
+                        }
+                        .show()
+                    return true
                 }
             }
         }
