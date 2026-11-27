@@ -31,6 +31,7 @@ from protocol import valid_pairing_ids, validate_remote_action, validate_remote_
 from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
+from control_session import control_grant_is_valid
 from command_parser import parse_android_command
 from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
@@ -687,7 +688,7 @@ class PcCompanionApp:
                 self.status_var.set("Blocked replayed remote action ID.")
                 self._send_e2e_message(peer_id, "remote_action_result", {"ok": False, "reason": "Duplicate action ID rejected."}, action_id, action_kind)
                 return
-            if not self.remote_var.get() or time.time() > self.control_grant_until:
+            if not self.remote_var.get() or not control_grant_is_valid(peer_id, self.config.get("deviceId"), self.control_grant_until, time.time()):
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "reason": "No active local PC approval."},
@@ -756,7 +757,7 @@ class PcCompanionApp:
 
     def send_remote_action_to_phone(self):
         peer_id = self.remote_target_var.get().strip()
-        if peer_id != self.phone_control_peer or time.time() >= self.phone_control_grant_until:
+        if not control_grant_is_valid(peer_id, self.phone_control_peer, self.phone_control_grant_until, time.time()):
             self.status_var.set("First request Phone Control and approve the session on Android.")
             return
         if not peer_id or not self.is_e2e_trusted(peer_id):
