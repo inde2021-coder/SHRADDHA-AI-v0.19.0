@@ -58,6 +58,12 @@ class ShraddhaIntegrationHub(
         require(actions.isNotEmpty() && actions.size <= 256) { "A workflow must contain 1-256 actions." }
         require(workflowId.matches(Regex("[A-Za-z0-9_-]{1,64}")))
         require(title.isNotBlank() && title.length <= 120)
+        val previous = active
+        require(previous == null || previous.workflow.status in setOf(
+            WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED
+        )) {
+            "An unfinished workflow already exists (" + previous?.workflow?.status + "). Finish, cancel, or review it before creating another plan."
+        }
         val planned = AutonomousTaskPlanner.plan(actions.map {
             AutonomousTaskPlanner.Task(it.id, it.title, it.dependsOn, it.priority, it.estimatedMinutes)
         })
@@ -67,7 +73,7 @@ class ShraddhaIntegrationHub(
             WorkflowStep(action.id, action.title, action.risk, action.requiresApproval)
         }
         val snapshot = WorkflowSnapshot(workflowId, title.trim(), WorkflowStatus.DRAFT, 0, steps, "Plan ready; no action has run")
-        val session = Session(planned, snapshot, listOf(AuditEvent(workflowId, null, "PLAN_CREATED", "${steps.size} ordered action(s)", now)))
+        val session = Session(planned, snapshot, WorkflowAuditPolicy.append(emptyList(), AuditEvent(workflowId, null, "PLAN_CREATED", "${steps.size} ordered action(s)", now)))
         return store(session)
     }
 
@@ -122,10 +128,10 @@ class ShraddhaIntegrationHub(
         val review = SelfReviewEngine.review(checks)
         val next = if (review.passed) current.workflow.copy(message = "All steps verified; final review passed (${review.scorePercent}%)")
             else current.workflow.copy(status = WorkflowStatus.FAILED, message = "Final review failed (${review.scorePercent}%): ${review.summary}")
-        return store(current.copy(workflow = next, audit = current.audit + AuditEvent(
+        return store(current.copy(workflow = next, audit = WorkflowAuditPolicy.append(current.audit, AuditEvent(
             current.workflow.id, null, if (review.passed) "FINAL_REVIEW_PASSED" else "FINAL_REVIEW_FAILED",
             review.summary, now
-        )))
+        ))))
     }
 
     @Synchronized
@@ -135,9 +141,9 @@ class ShraddhaIntegrationHub(
         val current = requireSession()
         val step = current.workflow.steps.getOrNull(current.workflow.currentStep)
         val next = transform(current.workflow)
-        return store(current.copy(workflow = next, audit = current.audit + AuditEvent(
+        return store(current.copy(workflow = next, audit = WorkflowAuditPolicy.append(current.audit, AuditEvent(
             current.workflow.id, step?.id, event, next.message, now
-        )))
+        ))))
     }
 
     private fun requireSession(): Session = active ?: error("Create a task plan before starting a workflow")
@@ -206,18 +212,46 @@ class ShraddhaIntegrationHub(
         var status = WorkflowStatus.valueOf(workflowJson.getString("status"))
         var message = workflowJson.getString("message")
         val auditArray = root.getJSONArray("audit")
-        require(auditArray.length() in 1..2_000) { "Persisted workflow audit is malformed." }
-        val audit = (0 until auditArray.length()).map { index ->
+        require(auditArray.length() in 1..10_000) { "Persisted workflow audit is malformed." }
+        val parsedAudit = (0 until auditArray.length()).map { index ->
             val item = auditArray.getJSONObject(index)
             AuditEvent(item.getString("workflowId"), item.optString("actionId").takeIf { it.isNotBlank() },
                 item.getString("event"), item.getString("detail"), item.getLong("timestamp"))
-        }.toMutableList()
+        }
+        val audit = parsedAudit.map { item -> item.copy(
+            event = item.event.take(WorkflowAuditPolicy.MAX_EVENT_LENGTH),
+            detail = item.detail.take(WorkflowAuditPolicy.MAX_DETAIL_LENGTH)
+        ) }.takeLast(WorkflowAuditPolicy.MAX_EVENTS)
         val workflowId = workflowJson.getString("id")
+        validateRecoveredIdentity(
+            workflowId,
+            plan.ordered.map { it.id },
+            steps.map { it.id },
+            audit.map { it.workflowId }
+        )
+        require(PersistedWorkflowIntegrityPolicy.isValid(
+            workflowId = workflowId,
+            plannedTaskIds = plan.ordered.map { it.id },
+            workflowStepIds = steps.map { it.id },
+            auditWorkflowIds = audit.map { it.workflowId },
+            auditActionIds = audit.mapNotNull { it.actionId },
+            auditEvents = audit.map { it.event },
+            auditDetails = audit.map { it.detail },
+            auditTimestamps = audit.map { it.timestamp }
+        )) { "Persisted workflow cross-references are inconsistent." }
         if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
             status = WorkflowStatus.FAILED
             message = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
-            audit += AuditEvent(workflowId, steps.getOrNull(workflowJson.getInt("currentStep"))?.id,
-                "PROCESS_RESTARTED_REQUIRES_REVIEW", message, System.currentTimeMillis())
+            val actionId = steps.getOrNull(workflowJson.getInt("currentStep"))?.id
+            val recoveredAudit = WorkflowAuditPolicy.append(audit, AuditEvent(
+                workflowId, actionId, "PROCESS_RESTARTED_REQUIRES_REVIEW", message, System.currentTimeMillis()
+            ))
+            val workflow = WorkflowSnapshot(
+                workflowId, workflowJson.getString("title"), status,
+                workflowJson.getInt("currentStep"), steps, message
+            )
+            require(workflow.currentStep in workflow.steps.indices)
+            return Session(plan, workflow, recoveredAudit)
         }
         val workflow = WorkflowSnapshot(
             workflowId, workflowJson.getString("title"), status,
@@ -225,5 +259,26 @@ class ShraddhaIntegrationHub(
         )
         require(workflow.currentStep in workflow.steps.indices)
         return Session(plan, workflow, audit.toList())
+    }
+
+    companion object {
+        /** Rejects mixed or tampered records before any recovered step can be presented. */
+        internal fun validateRecoveredIdentity(
+            workflowId: String,
+            plannedStepIds: List<String>,
+            persistedStepIds: List<String>,
+            auditWorkflowIds: List<String>
+        ) {
+            require(workflowId.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Persisted workflow ID is invalid." }
+            require(plannedStepIds.isNotEmpty() && plannedStepIds.distinct().size == plannedStepIds.size) {
+                "Persisted plan step IDs are invalid."
+            }
+            require(persistedStepIds == plannedStepIds) {
+                "Persisted plan and workflow steps do not match; recovery requires manual review."
+            }
+            require(auditWorkflowIds.isNotEmpty() && auditWorkflowIds.all { it == workflowId }) {
+                "Persisted audit belongs to a different workflow; recovery requires manual review."
+            }
+        }
     }
 }
