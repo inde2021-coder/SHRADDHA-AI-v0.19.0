@@ -31,6 +31,10 @@ from protocol import valid_pairing_ids, validate_remote_action, validate_remote_
 from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
+try:
+    from .control_session import control_grant_is_valid
+except ImportError:  # Running agent.py directly from the companion folder.
+    from control_session import control_grant_is_valid
 from command_parser import parse_android_command
 from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
@@ -80,6 +84,7 @@ class PcCompanionApp:
         self.screen_event = threading.Event()
         self.stop_event = threading.Event()
         self.control_grant_until = 0.0
+        self.control_grant_peer = None
         self.phone_control_peer = None
         self.phone_control_grant_until = 0.0
         self.device_token = None
@@ -411,6 +416,11 @@ class PcCompanionApp:
         self._clear_peer_keys()
         self.screen_event.clear()
         self.control_grant_until = 0
+        self.control_grant_peer = None
+        # A disconnected relay invalidates both directions of remote-control approval.
+        self.phone_control_grant_until = 0
+        self.phone_control_peer = None
+        self.events.put(("session_closed", None))
         if code == 4003:
             self.events.put(("revoked", None))
         elif self._pending_pairing_auth:
@@ -427,6 +437,7 @@ class PcCompanionApp:
         self._save_config()
         if not remote:
             self.control_grant_until = 0
+            self.control_grant_peer = None
         if screen:
             self.screen_event.set()
         else:
@@ -442,6 +453,15 @@ class PcCompanionApp:
                 kind, payload = self.events.get_nowait()
                 if kind == "schedule_reconnect":
                     self._schedule_reconnect()
+                elif kind == "session_closed":
+                    self.remote_var.set(False)
+                    self.screen_var.set(False)
+                    self.control_grant_until = 0
+                    self.control_grant_peer = None
+                    self.phone_control_grant_until = 0
+                    self.phone_control_peer = None
+                    self.screen_event.clear()
+                    self.remote_target_var.set("")
                 elif kind == "status":
                     self.status_var.set(payload)
                 elif kind == "credential_rejected":
@@ -679,7 +699,7 @@ class PcCompanionApp:
                 self.status_var.set("Blocked replayed remote action ID.")
                 self._send_e2e_message(peer_id, "remote_action_result", {"ok": False, "reason": "Duplicate action ID rejected."}, action_id, action_kind)
                 return
-            if not self.remote_var.get() or time.time() > self.control_grant_until:
+            if not self.remote_var.get() or not control_grant_is_valid(peer_id, self.control_grant_peer, self.control_grant_until, time.time()):
                 self.status_var.set("Ignored action: no active local PC approval.")
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "reason": "No active local PC approval."},
@@ -730,6 +750,7 @@ class PcCompanionApp:
                 "approved": bool(approved), "minutes": minutes
             })
             self.control_grant_until = time.time() + minutes * 60 if approved else 0
+            self.control_grant_peer = requester_id if approved else None
             self.status_var.set("Remote control approved." if approved else "Remote control request denied.")
         elif kind == "permission_status":
             self.status_var.set("Peer permissions updated.")
@@ -748,7 +769,7 @@ class PcCompanionApp:
 
     def send_remote_action_to_phone(self):
         peer_id = self.remote_target_var.get().strip()
-        if peer_id != self.phone_control_peer or time.time() >= self.phone_control_grant_until:
+        if not control_grant_is_valid(peer_id, self.phone_control_peer, self.phone_control_grant_until, time.time()):
             self.status_var.set("First request Phone Control and approve the session on Android.")
             return
         if not peer_id or not self.is_e2e_trusted(peer_id):
@@ -1377,6 +1398,10 @@ class PcCompanionApp:
         self.remote_var.set(False)
         self.screen_var.set(False)
         self.control_grant_until = 0
+        self.control_grant_peer = None
+        self.phone_control_grant_until = 0
+        self.phone_control_peer = None
+        self.remote_target_var.set("")
         self._send_json({"type": "permission_update", "permissions": {"remote_control": False, "screen": False}})
         ws = self.ws_app
         if ws:
