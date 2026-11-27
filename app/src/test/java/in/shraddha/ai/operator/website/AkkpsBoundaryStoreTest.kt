@@ -179,7 +179,7 @@ class AkkpsBoundaryStoreTest {
         assertEquals(boundary.datasetYear, restored.datasetYear)
         assertEquals(boundary.confidence!!, restored.confidence!!, 0.0001)
         assertEquals(boundary.sourceFeatureId, restored.sourceFeatureId)
-        assertEquals(boundary.points, restored.points)
+        assertEquals(square, restored.points)
     }
 
     @Test fun kmlWithoutProvenanceDoesNotInventSourceMetadata() {
