@@ -67,7 +67,7 @@ class ShraddhaIntegrationHub(
             WorkflowStep(action.id, action.title, action.risk, action.requiresApproval)
         }
         val snapshot = WorkflowSnapshot(workflowId, title.trim(), WorkflowStatus.DRAFT, 0, steps, "Plan ready; no action has run")
-        val session = Session(planned, snapshot, listOf(AuditEvent(workflowId, null, "PLAN_CREATED", "${steps.size} ordered action(s)", now)))
+        val session = Session(planned, snapshot, WorkflowAuditPolicy.append(emptyList(), AuditEvent(workflowId, null, "PLAN_CREATED", "${steps.size} ordered action(s)", now)))
         return store(session)
     }
 
@@ -122,10 +122,10 @@ class ShraddhaIntegrationHub(
         val review = SelfReviewEngine.review(checks)
         val next = if (review.passed) current.workflow.copy(message = "All steps verified; final review passed (${review.scorePercent}%)")
             else current.workflow.copy(status = WorkflowStatus.FAILED, message = "Final review failed (${review.scorePercent}%): ${review.summary}")
-        return store(current.copy(workflow = next, audit = current.audit + AuditEvent(
+        return store(current.copy(workflow = next, audit = WorkflowAuditPolicy.append(current.audit, AuditEvent(
             current.workflow.id, null, if (review.passed) "FINAL_REVIEW_PASSED" else "FINAL_REVIEW_FAILED",
             review.summary, now
-        )))
+        ))))
     }
 
     @Synchronized
@@ -135,9 +135,9 @@ class ShraddhaIntegrationHub(
         val current = requireSession()
         val step = current.workflow.steps.getOrNull(current.workflow.currentStep)
         val next = transform(current.workflow)
-        return store(current.copy(workflow = next, audit = current.audit + AuditEvent(
+        return store(current.copy(workflow = next, audit = WorkflowAuditPolicy.append(current.audit, AuditEvent(
             current.workflow.id, step?.id, event, next.message, now
-        )))
+        ))))
     }
 
     private fun requireSession(): Session = active ?: error("Create a task plan before starting a workflow")
@@ -206,13 +206,14 @@ class ShraddhaIntegrationHub(
         var status = WorkflowStatus.valueOf(workflowJson.getString("status"))
         var message = workflowJson.getString("message")
         val auditArray = root.getJSONArray("audit")
-        require(auditArray.length() in 1..2_000) { "Persisted workflow audit is malformed." }
-        val audit = (0 until auditArray.length()).map { index ->
+        require(auditArray.length() in 1..10_000) { "Persisted workflow audit is malformed." }
+        val parsedAudit = (0 until auditArray.length()).map { index ->
             val item = auditArray.getJSONObject(index)
             AuditEvent(item.getString("workflowId"), item.optString("actionId").takeIf { it.isNotBlank() },
                 item.getString("event"), item.getString("detail"), item.getLong("timestamp"))
         }.toMutableList()
         val workflowId = workflowJson.getString("id")
+        val audit = parsedAudit.takeLast(WorkflowAuditPolicy.MAX_EVENTS)
         require(PersistedWorkflowIntegrityPolicy.isValid(
             workflowId = workflowId,
             plannedTaskIds = plan.ordered.map { it.id },
@@ -226,8 +227,13 @@ class ShraddhaIntegrationHub(
         if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
             status = WorkflowStatus.FAILED
             message = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
-            audit += AuditEvent(workflowId, steps.getOrNull(workflowJson.getInt("currentStep"))?.id,
-                "PROCESS_RESTARTED_REQUIRES_REVIEW", message, System.currentTimeMillis())
+            val recoveredActionId = steps.getOrNull(workflowJson.getInt("currentStep"))?.id
+            val recoveredAudit = WorkflowAuditPolicy.append(audit, AuditEvent(workflowId, recoveredActionId,
+                "PROCESS_RESTARTED_REQUIRES_REVIEW", message, System.currentTimeMillis()))
+            return Session(plan, WorkflowSnapshot(
+                workflowId, workflowJson.getString("title"), status,
+                workflowJson.getInt("currentStep"), steps, message
+            ), recoveredAudit)
         }
         val workflow = WorkflowSnapshot(
             workflowId, workflowJson.getString("title"), status,
