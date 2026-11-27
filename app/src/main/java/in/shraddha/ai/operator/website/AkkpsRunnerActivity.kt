@@ -409,15 +409,23 @@ class AkkpsRunnerActivity : Activity() {
                   if(window.__akkpsSubmitEvents.length>20) window.__akkpsSubmitEvents.shift();
                 } catch(_){}
               };
+              // AKKPS may serve its authenticated API from an official subdomain.
+              // Observe only HTTPS endpoints on the exact akkps.ngo domain tree;
+              // never inspect unrelated third-party analytics/payment origins.
+              const isAkkpsEndpoint=url=>{
+                try{
+                  const u=new URL(url,location.href),host=u.hostname.toLowerCase();
+                  return u.protocol==='https:'&&(host==='akkps.ngo'||host.endsWith('.akkps.ngo'));
+                }catch(_){return false}
+              };
               const originalFetch=window.fetch;
               if(originalFetch) window.fetch=function(input,init){
                 const url=typeof input==='string'?input:(input?.url||'');
                 const method=String(init?.method||input?.method||'GET').toUpperCase();
-                const sameOrigin=(()=>{try{return new URL(url,location.href).origin===location.origin}catch(_){return false}})();
+                if(!isAkkpsEndpoint(url)||!['POST','PUT','PATCH'].includes(method))
+                  return originalFetch.apply(this,arguments);
                 return originalFetch.apply(this,arguments).then(response=>{
-                  if(sameOrigin&&['POST','PUT','PATCH'].includes(method)){
-                    response.clone().text().then(body=>record(method,url,response.status,body)).catch(()=>{});
-                  }
+                  response.clone().text().then(body=>record(method,url,response.status,body)).catch(()=>{});
                   return response;
                 });
               };
@@ -431,8 +439,10 @@ class AkkpsRunnerActivity : Activity() {
               XMLHttpRequest.prototype.send=function(){
                 try{
                   const xhr=this;
-                  const sameOrigin=new URL(xhr.__akkpsUrl,location.href).origin===location.origin;
-                  if(sameOrigin&&['POST','PUT','PATCH'].includes(xhr.__akkpsMethod)){
+                  const endpoint=new URL(xhr.__akkpsUrl,location.href);
+                  const host=endpoint.hostname.toLowerCase();
+                  const akkpsEndpoint=endpoint.protocol==='https:'&&(host==='akkps.ngo'||host.endsWith('.akkps.ngo'));
+                  if(akkpsEndpoint&&['POST','PUT','PATCH'].includes(xhr.__akkpsMethod)){
                     xhr.addEventListener('load',()=>record(xhr.__akkpsMethod,xhr.__akkpsUrl,xhr.status,xhr.responseText),{once:true});
                   }
                 }catch(_){}
