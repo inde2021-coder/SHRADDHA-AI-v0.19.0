@@ -28,17 +28,20 @@ class RemoteCameraService : Service() {
     @Volatile private var stopping = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
+        when (RemoteCameraCommandPolicy.resolve(intent?.action)) {
+            RemoteCameraCommandPolicy.Command.STOP -> {
             stopping = true
             stopCamera()
             getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().remove("active_target").remove("active_facing").apply()
             if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
             stopSelfResult(startId)
             return START_NOT_STICKY
-        }
-        if (intent?.action != null && intent.action != ACTION_START) {
-            stopSelfResult(startId)
-            return START_NOT_STICKY
+            }
+            RemoteCameraCommandPolicy.Command.REJECT -> {
+                stopSelfResult(startId)
+                return START_NOT_STICKY
+            }
+            RemoteCameraCommandPolicy.Command.START -> Unit
         }
         stopping = false
         val facing = intent?.getStringExtra(EXTRA_FACING) ?: "back"
