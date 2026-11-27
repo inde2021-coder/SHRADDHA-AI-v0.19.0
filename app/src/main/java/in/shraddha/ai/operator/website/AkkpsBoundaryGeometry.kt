@@ -59,15 +59,28 @@ object AkkpsBoundaryGeometry {
     /** Parse the outer KML coordinates tuple order: longitude,latitude[,altitude]. */
     fun parseKml(kml: String): Result<AkkpsBoundary> = runCatching {
         require(kml.length in 1..2_000_000) { "KML file size is invalid." }
-        val coordinateText = coordinatesTag.find(kml)?.groupValues?.get(1)
-            ?: error("KML में coordinates section नहीं मिला।")
+        require(Regex("(?is)<\\s*Polygon\\b").findAll(kml).count() == 1) {
+            "KML में केवल एक Polygon स्वीकार है; MultiGeometry/MultiPolygon import नहीं होगा।"
+        }
+        require(!Regex("(?is)<\\s*innerBoundaryIs\\b").containsMatchIn(kml)) {
+            "KML Polygon में interior holes हैं; holes-aware area calculation आने तक import नहीं होगा।"
+        }
+        require(Regex("(?is)<\\s*outerBoundaryIs\\b").findAll(kml).count() == 1) {
+            "KML में एक स्पष्ट outer boundary ring होना चाहिए।"
+        }
+        val coordinateMatches = coordinatesTag.findAll(kml).toList()
+        require(coordinateMatches.size == 1) { "KML में exactly one coordinates ring होना चाहिए।" }
+        val coordinateText = coordinateMatches.single().groupValues[1]
         val points = coordinateText.trim().split(Regex("\\s+"))
             .filter { it.isNotBlank() }
             .map { tuple ->
                 val values = tuple.split(',')
-                require(values.size >= 2) { "KML coordinate tuple अधूरा है।" }
+                require(values.size in 2..3) { "KML coordinate tuple में longitude, latitude और optional altitude ही मान्य हैं।" }
                 val longitude = values[0].toDouble()
                 val latitude = values[1].toDouble()
+                if (values.size == 3 && values[2].isNotBlank()) {
+                    require(values[2].toDouble().isFinite()) { "KML altitude finite number होना चाहिए।" }
+                }
                 AkkpsGeoPoint(latitude, longitude)
             }
         validate(points)?.let { error(it) }
