@@ -31,6 +31,11 @@ class AkkpsKmlImportValidationTest {
         assertTrue(AkkpsBoundaryGeometry.parseKml(withoutOuter).isFailure)
     }
 
+    @Test fun rejectsAnUnclosedLinearRing() {
+        val open = "78.0,23.0,0 78.001,23.0,0 78.001,23.001,0 78.0,23.001,0"
+        assertTrue(AkkpsBoundaryGeometry.parseKml(kml(open)).isFailure)
+    }
+
     @Test fun rejectsExtraDimensionsAndNonFiniteAltitude() {
         assertTrue(AkkpsBoundaryGeometry.parseKml(kml(
             "78,23,0,9 78.001,23,0,9 78.001,23.001,0,9 78,23.001,0,9 78,23,0,9"
