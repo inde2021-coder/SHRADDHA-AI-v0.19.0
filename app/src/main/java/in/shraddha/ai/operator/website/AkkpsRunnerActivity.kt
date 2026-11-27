@@ -710,6 +710,15 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            if (AkkpsRunnerEditCommandPolicy.isExplicit(raw)) {
+                val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+                if (route == null || !route.isDetailRoute) {
+                    status.text = "पहले Farmer, Plot या AWD का एक record खोलें; फिर Edit command दें।"
+                } else {
+                    openEditForm(route.module)
+                }
+                return
+            }
             val createModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
             if (createModule != null) {
                 val createRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
@@ -762,6 +771,42 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         fillValues(values, wantsSubmit)
+    }
+
+    /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
+    private fun openEditForm(module: AkkpsRunnerModule) {
+        if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+            status.text = "इस module में AKKPS edit workflow अभी supported नहीं है."
+            return
+        }
+        val js = """
+            (function(){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\\s+/g,' ').trim();
+              const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible).filter(e=>{
+                const label=norm(e.innerText||e.getAttribute('aria-label')||e.title);
+                return ['edit','update','संपादित करें','संपादित करो','बदलें','रिकॉर्ड बदलें','रिकॉर्ड संपादित करें'].includes(label);
+              });
+              if(controls.length!==1) return JSON.stringify({status:controls.length?'ambiguous_edit':'edit_control_not_found'});
+              const control=controls[0];
+              if(control.tagName==='A'){
+                const u=new URL(control.href,location.href);
+                if(u.protocol!=='https:'||u.origin!==location.origin) return JSON.stringify({status:'unsafe_edit_origin'});
+              }
+              control.click();
+              return JSON.stringify({status:'dispatched'});
+            })()
+        """.trimIndent()
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Edit form खोलने का request भेजा गया। Inspect करें; बदलाव अभी save नहीं हुए हैं।"
+                "ambiguous_edit" -> "एक से अधिक Edit controls मिले; कोई control नहीं चुना।"
+                "unsafe_edit_origin" -> "Edit link AKKPS के same-origin पर नहीं है; रोक दिया।"
+                else -> "इस record पर एक स्पष्ट Edit control नहीं मिला।"
+            }
+        }
     }
 
     /** Opens a record only through one exact table-cell match and one known detail-route link. */
