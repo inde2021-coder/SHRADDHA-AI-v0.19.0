@@ -39,6 +39,16 @@ class UnifiedCommandIntentRouterTest {
         assertFalse(result.needsClarification)
     }
 
+    @Test fun HindiActionTermsRequireUnicodeTokenBoundaries() {
+        val embeddedVerb = UnifiedCommandIntentRouter.classify("अभेजें")
+        assertEquals(UnifiedCommandAction.UNKNOWN, embeddedVerb.action)
+        assertTrue(embeddedVerb.needsClarification)
+
+        val standaloneVerb = UnifiedCommandIntentRouter.classify("AKKPS में रिकॉर्ड भेजें")
+        assertEquals(UnifiedCommandAction.SEND, standaloneVerb.action)
+        assertEquals(UnifiedCommandDomain.AKKPS, standaloneVerb.domain)
+    }
+
     @Test fun highImpactActionsAreFlaggedButNeverAutoApproved() {
         val delete = UnifiedCommandIntentRouter.classify("delete this farmer record in AKKPS")
         assertTrue(delete.requiresHighImpactApproval)
