@@ -414,8 +414,7 @@ class PcCompanionApp:
         # A disconnected relay invalidates both directions of remote-control approval.
         self.phone_control_grant_until = 0
         self.phone_control_peer = None
-        self.remote_var.set(False)
-        self.screen_var.set(False)
+        self.events.put(("session_closed", None))
         if code == 4003:
             self.events.put(("revoked", None))
         elif self._pending_pairing_auth:
@@ -447,6 +446,10 @@ class PcCompanionApp:
                 kind, payload = self.events.get_nowait()
                 if kind == "schedule_reconnect":
                     self._schedule_reconnect()
+                elif kind == "session_closed":
+                    self.remote_var.set(False)
+                    self.screen_var.set(False)
+                    self.remote_target_var.set("")
                 elif kind == "status":
                     self.status_var.set(payload)
                 elif kind == "credential_rejected":
