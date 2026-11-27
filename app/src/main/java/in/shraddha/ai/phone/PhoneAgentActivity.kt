@@ -379,6 +379,7 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun launchCallWithAccount(number: String, account: android.telecom.PhoneAccountHandle?) {
         runCatching {
             val extras = Bundle()
