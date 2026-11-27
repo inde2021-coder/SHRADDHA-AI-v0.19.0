@@ -210,9 +210,21 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
                 return fail("कार्रवाई के बाद foreground ऐप बदल गया। सुरक्षा के लिए workflow रोक दिया गया।")
             }
-            if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) {
+            val expectedWasAbsentBefore = step.expectedText.isNotBlank() &&
+                before.elements.none { element ->
+                    element.text.contains(step.expectedText, true) ||
+                        element.description.contains(step.expectedText, true)
+                }
+            val verification = WorkflowStepResultVerification.assess(
+                expectedText = step.expectedText,
+                expectedTextAbsentBefore = expectedWasAbsentBefore,
+                beforeFingerprint = recoveryFingerprint(before),
+                currentFingerprint = recoveryFingerprint(after),
+                visibleText = after.elements.flatMap { listOf(it.text, it.description) }
+            )
+            if (verification != WorkflowStepResultVerification.Decision.VERIFIED) {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
-                return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
+                return fail("चरण ${index + 1} का स्वतंत्र परिणाम प्रमाण नहीं मिला। कोई अगला चरण execute नहीं होगा।")
             }
             val next = index + 1
             if (!checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, next, steps.size, "READY"))) {
