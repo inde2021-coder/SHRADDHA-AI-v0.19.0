@@ -166,10 +166,14 @@ class CommandExecutionJournal(context: Context) {
     }
 
     private fun validStep(step: CommandTaskStep): Boolean =
-        step.id.matches(Regex("^[A-Za-z0-9_.-]{1,80}$")) &&
-            step.capability.matches(Regex("^[A-Za-z0-9_.-]{1,60}$")) &&
-            step.action.matches(Regex("^[A-Za-z0-9_.-]{1,60}$")) &&
+        safeIdentifier(step.id, 80) && safeIdentifier(step.capability, 60) &&
+            safeIdentifier(step.action, 60) &&
             step.attempt in 0..3 && step.resultCode.length <= 80
+
+    private fun safeIdentifier(value: String, maxLength: Int): Boolean =
+        value.length in 1..maxLength &&
+            value.matches(Regex("^[A-Za-z0-9_.-]+$")) &&
+            !Regex("[0-9]{6,}").containsMatchIn(value)
 
     private fun safeCode(value: String): String =
         value.filter { it.isLetterOrDigit() || it in "_-." }.take(80)
