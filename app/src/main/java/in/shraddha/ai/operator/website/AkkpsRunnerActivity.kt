@@ -580,6 +580,10 @@ Return exact JSON only. Do not include prose or markdown."""
                         val value = item.optString("value").trim()
                         if (key.isBlank() || value.isBlank() || value.length > 500) null else key to value
                     }
+                    if (values.size != items.length() || values.any { (_, value) -> !raw.contains(value, ignoreCase = true) }) {
+                        status.text = "AI ने ऐसा मान दिया जो आपके बोले/लिखे command में मौजूद नहीं है। कोई field नहीं भरी गई। जानकारी स्पष्ट करके दोबारा बोलें।"
+                        return@runOnUiThread
+                    }
                     if (values.isEmpty()) {
                         val missing = mapped.optJSONArray("missing") ?: JSONArray()
                         status.text = if (missing.length() > 0)
