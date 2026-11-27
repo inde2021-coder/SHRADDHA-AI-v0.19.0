@@ -393,7 +393,7 @@ class AkkpsRunnerActivity : Activity() {
                   if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
-                    .map(norm).some(v=>v && (v===key||v.includes(key)||key.includes(v)));
+                    .map(norm).some(v=>v && v===key);
                 });
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
@@ -433,7 +433,12 @@ class AkkpsRunnerActivity : Activity() {
                     (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit नहीं किया।"
                 return@evaluateJavascript
             }
-            submitForm()
+            AlertDialog.Builder(this)
+                .setTitle("AKKPS रिकॉर्ड Submit करें?")
+                .setMessage("${out.length()} fields भरी गई हैं। AKKPS form एक बार देख लें। आपकी स्पष्ट अनुमति के बाद ही Submit होगा।")
+                .setNegativeButton("अभी नहीं", null)
+                .setPositiveButton("Confirm Submit") { _, _ -> submitForm(values) }
+                .show()
         }
     }
 
@@ -512,44 +517,71 @@ Return exact JSON only. Do not include prose or markdown."""
         }
     }
 
-    private fun submitForm() {
+    private fun submitForm(expectedValues: List<Pair<String, String>>) {
+        val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
-            (function(){
+            (function(expected){
               const forms=[...document.forms].filter(f=>[...f.querySelectorAll('input,textarea,select')].some(e=>!e.disabled && e.type!=='hidden' && e.type!=='password' && e.value));
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
+              for(const item of expected){
+                const key=(item.key||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+                const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
+                  const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
+                  return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
+                    .map(x=>(x||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim()).some(x=>x && x===key);
+                });
+                if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
+              }
               const b=f.querySelector('button[type=submit],input[type=submit]');
               if(b)b.click();else f.requestSubmit();
               return JSON.stringify({status:'dispatched'});
-            })()
-        """.trimIndent()
+            })(__EXPECTED__)
+        """.trimIndent().replace("__EXPECTED__", payload.toString())
         val before = web.url.orEmpty()
         web.evaluateJavascript(js) { raw ->
-            val statusCode = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
-            if (statusCode != "dispatched") {
-                status.text = if (statusCode == "invalid") "AKKPS validation अधूरी है।" else "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            val code = result?.optString("status").orEmpty()
+            if (code != "dispatched") {
+                status.text = when (code) {
+                    "invalid" -> "AKKPS validation अधूरी है।"
+                    "field_changed" -> "Submit से पहले field बदल गई; दोबारा जाँचें।"
+                    else -> "एक स्पष्ट form नहीं मिला; Submit नहीं किया।"
+                }
                 return@evaluateJavascript
             }
-            status.text = "Submit request भेजी गई। AKKPS response जाँचा जा रहा है…"
-            web.postDelayed({ verifySubmit(before) }, 1500)
+            status.text = "Submit request भेजी गई। AKKPS की प्रतिक्रिया जाँची जा रही है…"
+            web.postDelayed({ verifySubmit(before, expectedValues) }, 2000)
         }
     }
 
-    private fun verifySubmit(beforeUrl: String) {
+    private fun verifySubmit(beforeUrl: String, expectedValues: List<Pair<String, String>>) {
+        val expected = JSONArray().apply { expectedValues.forEach { put(it.second) } }
         val js = """
-            (function(){
-              const t=(document.body?.innerText||'').replace(/\s+/g,' ').trim();
-              return JSON.stringify({success:/success|submitted|saved successfully|created successfully|record saved|सफलतापूर्वक|जमा हो गया/i.test(t),
-                error:/failed|error|invalid|unable to|try again|त्रुटि|असफल/i.test(t)});
-            })()
-        """.trimIndent()
+            (function(values){
+              const selectors='[role="alert"],[aria-live="polite"],[aria-live="assertive"],.alert-success,.toast,[data-sonner-toast]';
+              const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean);
+              const success=/\\b(saved|submitted|created successfully|record saved)\\b|सफलतापूर्वक|जमा हो गया/i;
+              const failure=/\\b(failed|error|invalid|unable to|try again)\\b|त्रुटि|असफल/i;
+              const notice=notices.find(x=>success.test(x))||'';
+              const failed=notices.some(x=>failure.test(x));
+              const body=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+              const identity=values.filter(v=>v && v.length>=3).every(v=>body.includes(v));
+              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\\/(plots|awd-reports)\\/[^/]+/i.test(a.getAttribute('href')||''));
+              return JSON.stringify({notice,failed,identity,recordLink});
+            })(__VALUES__)
+        """.trimIndent().replace("__VALUES__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
             status.text = when {
-                o?.optBoolean("success") == true -> "AKKPS पेज पर सफलता संदेश मिला। Submit की पुष्टि दिखाई दे रही है।"
-                o?.optBoolean("error") == true -> "AKKPS ने त्रुटि दिखाई। Submit सफल नहीं माना गया।"
-                web.url.orEmpty() != beforeUrl -> "पेज बदल गया, लेकिन स्पष्ट सफलता संदेश नहीं मिला। रिकॉर्ड सूची में जाँचें।"
-                else -> "स्पष्ट सफलता प्रमाण नहीं मिला। Submit को सफल नहीं माना गया।"
+                o?.optBoolean("failed") == true -> "AKKPS ने error notice दिया। Record saved नहीं माना गया।"
+                !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true ->
+                    "AKKPS success notice और record values मिले। अंतिम पुष्टि के लिए Plot/AWD सूची में record ID जाँचें।"
+                o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true ->
+                    "Plot/AWD detail link और record values मिले। Record खोलकर ID जाँचें।"
+                web.url.orEmpty() != beforeUrl ->
+                    "AKKPS ने पेज बदला, लेकिन स्पष्ट record confirmation नहीं मिला। Submit verified नहीं है।"
+                else -> "स्पष्ट Save/Submit पुष्टि नहीं मिली। दोबारा Submit न करें; पहले सूची में record खोजें।"
             }
         }
     }
