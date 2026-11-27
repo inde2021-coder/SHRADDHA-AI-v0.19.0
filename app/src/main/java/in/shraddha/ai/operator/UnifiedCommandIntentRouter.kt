@@ -77,10 +77,14 @@ object UnifiedCommandIntentRouter {
             position?.let { it to action }
         }.sortedBy { it.first }
 
+        val explicitDomainMatches = domainMatches.filter { it.second != UnifiedCommandDomain.PHONE }
         val domain = when {
             // An explicit Windows/PC destination controls the domain even when the object
             // is a file; "file on Windows PC" must route to the PC adapter.
-            domainMatches.any { it.second == UnifiedCommandDomain.PC } -> UnifiedCommandDomain.PC
+            explicitDomainMatches.any { it.second == UnifiedCommandDomain.PC } -> UnifiedCommandDomain.PC
+            // Prefer a named app/service (WhatsApp, email, AKKPS, etc.) over the generic
+            // phone channel when both appear, e.g. "call on WhatsApp".
+            explicitDomainMatches.isNotEmpty() -> explicitDomainMatches.first().second
             else -> domainMatches.firstOrNull()?.second ?: UnifiedCommandDomain.UNKNOWN
         }
         // Multiple distinct verbs in one clause are ambiguous. The planner should split
