@@ -87,8 +87,8 @@ The **Offline Language Lab** button opens three local-only adapters. It does not
    - `SHRADDHA_ASR_MODEL_HI`, `SHRADDHA_ASR_MODEL_MR`, `SHRADDHA_ASR_MODEL_SA`, `SHRADDHA_ASR_MODEL_EN`
    - `SHRADDHA_ASR_TOKENS_INDIC` for IndicConformer and `SHRADDHA_ASR_TOKENS_EN` for English.
    The community model repository documents approximately 190 MB per Indic model and approximately 170 MB for English; download only the languages needed and verify their published checksums and licences before use.
-2. **Translation:** the local IndicTrans2 adapter loads a pre-staged Transformers checkpoint from `SHRADDHA_TRANSLATION_MODEL_DIR`, with `local_files_only=True`. It supports Hindi, English, Sanskrit and Marathi language codes. It does not support Pawari and will reject Pawari requests rather than substitute Hindi.
-3. **TTS:** the local IndicF5 adapter supports Hindi and Marathi, requires a locally selected reference audio clip and its exact transcript, and saves a WAV file locally. Do not use another person's reference voice unless they have explicitly consented to voice synthesis. IndicF5 is reference-guided and is not a unique Shraddha identity by itself.
+2. **Translation:** the local IndicTrans2 adapter loads a pre-staged Transformers checkpoint from `SHRADDHA_TRANSLATION_MODEL_DIR`, with `local_files_only=True`. It currently enables Hindi, English and Marathi only. Sanskrit and Pawari translation remain disabled until the exact checkpoint and language quality are verified; the adapter never substitutes Hindi for Pawari. Remote model code execution is disabled and only safetensors checkpoints are accepted.
+3. **TTS:** the local IndicF5 adapter supports Hindi and Marathi, requires a locally selected reference audio clip, its exact transcript, and an explicit in-app checkbox confirming permission from the reference voice owner; it saves a WAV file locally. The runtime rejects synthesis unless that consent is explicitly checked. IndicF5 is reference-guided and is not a unique Shraddha identity by itself.
 
 Install optional packages separately (the base companion build intentionally excludes multi-GB ML stacks):
 
