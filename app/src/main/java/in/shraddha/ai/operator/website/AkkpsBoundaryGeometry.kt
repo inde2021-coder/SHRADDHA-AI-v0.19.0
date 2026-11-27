@@ -164,18 +164,46 @@ object AkkpsBoundaryGeometry {
 
     private fun hasSelfIntersection(closed: List<AkkpsGeoPoint>): Boolean {
         val points = closed.dropLast(1)
+        val scale = maxOf(
+            1.0,
+            points.maxOf { abs(it.latitude) },
+            points.maxOf { abs(it.longitude) }
+        )
+        val epsilon = 1e-10 * scale
+
         fun orient(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint): Double =
-            (b.longitude - a.longitude) * (c.latitude - a.latitude) - (b.latitude - a.latitude) * (c.longitude - a.longitude)
+            (b.longitude - a.longitude) * (c.latitude - a.latitude) -
+                (b.latitude - a.latitude) * (c.longitude - a.longitude)
+
+        fun onSegment(a: AkkpsGeoPoint, b: AkkpsGeoPoint, p: AkkpsGeoPoint): Boolean =
+            p.longitude >= minOf(a.longitude, b.longitude) - epsilon &&
+                p.longitude <= maxOf(a.longitude, b.longitude) + epsilon &&
+                p.latitude >= minOf(a.latitude, b.latitude) - epsilon &&
+                p.latitude <= maxOf(a.latitude, b.latitude) + epsilon
+
         fun intersects(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint, d: AkkpsGeoPoint): Boolean {
-            val o1 = orient(a, b, c); val o2 = orient(a, b, d)
-            val o3 = orient(c, d, a); val o4 = orient(c, d, b)
-            return o1 * o2 < 0.0 && o3 * o4 < 0.0
+            val o1 = orient(a, b, c)
+            val o2 = orient(a, b, d)
+            val o3 = orient(c, d, a)
+            val o4 = orient(c, d, b)
+            val proper = ((o1 > epsilon && o2 < -epsilon) || (o1 < -epsilon && o2 > epsilon)) &&
+                ((o3 > epsilon && o4 < -epsilon) || (o3 < -epsilon && o4 > epsilon))
+            if (proper) return true
+            if (abs(o1) <= epsilon && onSegment(a, b, c)) return true
+            if (abs(o2) <= epsilon && onSegment(a, b, d)) return true
+            if (abs(o3) <= epsilon && onSegment(c, d, a)) return true
+            if (abs(o4) <= epsilon && onSegment(c, d, b)) return true
+            return false
         }
-        for (i in points.indices) for (j in i + 1 until points.size) {
+
+        for (i in points.indices) {
             val iNext = (i + 1) % points.size
-            val jNext = (j + 1) % points.size
-            if (i == j || iNext == j || jNext == i) continue
-            if (intersects(points[i], points[iNext], points[j], points[jNext])) return true
+            for (j in i + 1 until points.size) {
+                val jNext = (j + 1) % points.size
+                // Consecutive edges share an expected polygon vertex.
+                if (i == j || iNext == j || jNext == i) continue
+                if (intersects(points[i], points[iNext], points[j], points[jNext])) return true
+            }
         }
         return false
     }
