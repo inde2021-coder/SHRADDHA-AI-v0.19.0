@@ -182,7 +182,7 @@ class AkkpsRunnerActivity : Activity() {
         fillValues(values, wantsSubmit)
     }
 
-    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean) {
+    private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockSubmitReason: String? = null) {
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
@@ -233,6 +233,10 @@ class AkkpsRunnerActivity : Activity() {
             }
             if (errors.isNotEmpty()) {
                 status.text = "इन फील्ड का सही मिलान नहीं हुआ: " + errors.joinToString() + "। अस्पष्ट फील्ड नहीं चुने गए।"
+                return@evaluateJavascript
+            }
+            if (blockSubmitReason != null) {
+                status.text = out.length().toString() + " फील्ड भरे गए। " + blockSubmitReason + " Submit नहीं किया।"
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
@@ -310,15 +314,24 @@ Return exact JSON only. Do not include prose or markdown."""
                         else "कमांड से कोई स्पष्ट फॉर्म मान नहीं मिला। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
-                    val explicitSubmit = Regex("submit|सबमिट|जमा|भेजो|भेज दें|जमा करें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
-                    val shouldSubmit = mapped.optBoolean("submit") && explicitSubmit
-                    fillValues(values, shouldSubmit)
-                    val missing = mapped.optJSONArray("missing") ?: JSONArray()
-                    if (missing.length() > 0) {
-                        status.text = "AI ने " + values.size + " फील्ड पहचाने। अतिरिक्त जानकारी चाहिए: " +
-                            (0 until missing.length()).joinToString { missing.optString(it) } +
-                            if (shouldSubmit) "। Submit रोका गया।" else ""
+                    val assignmentKeys = values.map { it.first }
+                    if (!AkkpsSubmitTargetPolicy.hasValidKeys(assignmentKeys)) {
+                        status.text = "AI mapping में duplicate या अमान्य फील्ड नाम मिले। कोई डेटा नहीं भरा गया।"
+                        return@runOnUiThread
                     }
+                    val explicitSubmit = Regex("submit|सबमिट|जमा|जमा करें|भेजें|भेज दें", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+                    val missing = mapped.optJSONArray("missing") ?: JSONArray()
+                    val missingMessage = if (missing.length() > 0)
+                        "अतिरिक्त जानकारी चाहिए: " + (0 until missing.length()).joinToString { missing.optString(it) }
+                    else null
+                    val aiConfirmedSubmit = mapped.optBoolean("submit")
+                    val blockSubmitReason = when {
+                        missingMessage != null -> missingMessage
+                        explicitSubmit && !aiConfirmedSubmit -> "AI ने Submit intent की पुष्टि नहीं की।"
+                        else -> null
+                    }
+                    val shouldSubmit = explicitSubmit && aiConfirmedSubmit && blockSubmitReason == null
+                    fillValues(values, shouldSubmit, blockSubmitReason)
                 }
             }.start()
         }
