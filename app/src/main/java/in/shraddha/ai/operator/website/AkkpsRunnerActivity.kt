@@ -84,7 +84,18 @@ class AkkpsRunnerActivity : Activity() {
             lastGpsAccuracyMeters = location.accuracy
             bestGpsAccuracyMeters = minOf(bestGpsAccuracyMeters, location.accuracy)
             lastGpsElapsedRealtimeNanos = location.elapsedRealtimeNanos
-            status.text = "GPS Walk: ${boundaryPoints.size} points • Current ±${location.accuracy.toInt()} m • Best ±${bestGpsAccuracyMeters.toInt()} m"
+            val checkpointSaved = if (boundaryPoints.size % 5 == 0) {
+                gpsWalkPlotId?.let { id ->
+                    runCatching {
+                        AkkpsBoundaryDraftStore(this@AkkpsRunnerActivity).save(
+                            id, boundaryPoints.toList(),
+                            bestGpsAccuracyMeters.takeIf { it.isFinite() && it < Float.MAX_VALUE }
+                        )
+                    }.isSuccess
+                } ?: false
+            } else true
+            status.text = "GPS Walk: ${boundaryPoints.size} points • Current ±${location.accuracy.toInt()} m • Best ±${bestGpsAccuracyMeters.toInt()} m" +
+                if (!checkpointSaved) " • Draft save warning" else ""
         }
         @Deprecated("Deprecated by Android")
         override fun onStatusChanged(provider: String?, statusValue: Int, extras: Bundle?) = Unit
