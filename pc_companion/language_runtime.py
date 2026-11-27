@@ -177,6 +177,8 @@ class IndicF5Runtime:
         target = Path(output_wav).expanduser().resolve()
         if target.suffix.lower() != ".wav":
             raise LanguageRuntimeError("Offline voice output must use a .wav filename.")
+        if target == reference:
+            raise LanguageRuntimeError("Output WAV must not overwrite the reference voice recording.")
         try:
             import numpy as np
             import soundfile as sf
