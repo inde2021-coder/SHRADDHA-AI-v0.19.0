@@ -41,7 +41,7 @@ class OperatorSafetyPolicyTest {
         assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
             OperatorSafetyPolicy.assess("TYPE", "Ｐａｓｓｗｏｒｄ", "sample").risk)
         assertEquals(OperatorSafetyPolicy.Risk.BLOCK,
-            OperatorSafetyPolicy.assess("TYPE", "O\\u200BT\\u200BP", "123456").risk)
+            OperatorSafetyPolicy.assess("TYPE", "O\u200BT\u200BP", "123456").risk)
     }
 
     @Test fun blocksSeparatedHindiAndEnglishSecretLabels() {
