@@ -42,6 +42,7 @@ class AkkpsRunnerActivity : Activity() {
     private var boundaryProvenance: AkkpsBoundary? = null
     private var locationManager: LocationManager? = null
     private var gpsWalkActive = false
+    private var gpsWalkSessionInitialized = false
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
@@ -154,7 +155,7 @@ class AkkpsRunnerActivity : Activity() {
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); boundaryProvenance = null; status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); boundaryProvenance = null; gpsWalkSessionInitialized = false; status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
         val candidateActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
@@ -253,8 +254,28 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "GPS चालू करें। खेत के किनारे से Walk करें; फसल के अंदर जाने की जरूरत नहीं।"
             return
         }
-        boundaryPoints.clear()
-        boundaryProvenance = null
+        if (boundaryPoints.isNotEmpty() && !gpsWalkSessionInitialized) {
+            AlertDialog.Builder(this)
+                .setTitle("मौजूदा Boundary सुरक्षित रखें?")
+                .setMessage(
+                    "Editor में पहले से ${boundaryPoints.size} points हैं। नई GPS Walk शुरू करने पर ये points हट जाएँगे। " +
+                        "अगर यह रुकी हुई GPS Walk है तो इसी session को resume करें; अन्यथा नई Walk की पुष्टि करें।"
+                )
+                .setNegativeButton("रद्द करें", null)
+                .setPositiveButton("नई GPS Walk शुरू करें") { _, _ -> beginGpsWalk(manager, clearExisting = true) }
+                .show()
+            return
+        }
+        beginGpsWalk(manager, clearExisting = false)
+    }
+
+    private fun beginGpsWalk(manager: LocationManager, clearExisting: Boolean) {
+        if (gpsWalkActive) return
+        if (clearExisting) {
+            boundaryPoints.clear()
+            boundaryProvenance = null
+        }
+        gpsWalkSessionInitialized = true
         lastGpsAccuracyMeters = Float.MAX_VALUE
         bestGpsAccuracyMeters = Float.MAX_VALUE
         lastGpsElapsedRealtimeNanos = 0L
@@ -262,12 +283,18 @@ class AkkpsRunnerActivity : Activity() {
         try {
             gpsWalkActive = true
             manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 2f, gpsListener, Looper.getMainLooper())
-            status.text = "GPS Walk चालू। खेत की बाहरी मेड़ के किनारे धीरे-धीरे चलें।"
+            status.text = if (boundaryPoints.isEmpty()) {
+                "GPS Walk चालू। खेत की बाहरी मेड़ के किनारे धीरे-धीरे चलें।"
+            } else {
+                "GPS Walk resume हुई। पुराने points सुरक्षित हैं; खेत की बाहरी मेड़ के किनारे जारी रखें।"
+            }
         } catch (_: SecurityException) {
             gpsWalkActive = false
+            locationManager = null
             status.text = "Precise location अनुमति नहीं मिली।"
         } catch (e: Exception) {
             gpsWalkActive = false
+            locationManager = null
             status.text = "GPS Walk शुरू नहीं हुई: ${e.localizedMessage ?: "GPS unavailable"}"
         }
     }
@@ -319,6 +346,7 @@ class AkkpsRunnerActivity : Activity() {
                     boundaryPoints.clear()
                     boundaryPoints.addAll(saved.points)
                     boundaryProvenance = saved
+                    gpsWalkSessionInitialized = false
                     status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
                 }
             }
@@ -905,6 +933,7 @@ Return exact JSON only. Do not include prose or markdown."""
                             boundaryPoints.clear()
                             boundaryPoints.addAll(candidate.boundary.points)
                             boundaryProvenance = candidate.boundary
+                            gpsWalkSessionInitialized = false
                             status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
                         }
                         if (boundaryPoints.isNotEmpty()) {
@@ -957,6 +986,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 boundaryPoints.clear()
                 boundaryPoints.addAll(boundary.points)
                 boundaryProvenance = null
+                gpsWalkSessionInitialized = false
                 status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
             }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
         }
