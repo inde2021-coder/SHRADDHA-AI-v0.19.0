@@ -18,21 +18,21 @@ fun Modifier.nightSky(): Modifier = this.drawBehind {
     drawRect(
         brush = Brush.verticalGradient(
             colors = listOf(
-                Color(0xFFF9F6FF),
-                Color(0xFFF0E9FF),
-                Color(0xFFF7F4FF)
+                Color(0xFF090D16),
+                Color(0xFF111827),
+                Color(0xFF090D16)
             )
         )
     )
-    // Soft lavender light blooms echo the LIA reference interface without
+    // Soft lavender light blooms echo the Shraddha AI interface without
     // adding noisy stars or reducing contrast behind screen content.
     drawCircle(
-        color = Color(0x167C3AED),
+        color = Color(0x247B61D1),
         radius = size.minDimension * 0.42f,
         center = Offset(size.width * 0.98f, size.height * 0.04f)
     )
     drawCircle(
-        color = Color(0x108B5CF6),
+        color = Color(0x1878D6E8),
         radius = size.minDimension * 0.34f,
         center = Offset(size.width * 0.02f, size.height * 0.62f)
     )

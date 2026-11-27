@@ -74,7 +74,7 @@ fun AboutScreen(navController: NavController, modifier: Modifier = Modifier) {
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
             }
-            Text("About & Developer", color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("About Shraddha AI", color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(12.dp))

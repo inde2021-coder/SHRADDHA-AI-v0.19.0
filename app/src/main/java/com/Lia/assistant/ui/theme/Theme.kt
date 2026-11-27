@@ -93,6 +93,8 @@ fun NovaTheme(
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
             window.decorView.setBackgroundColor(novaColors.background.toArgb())
+            window.statusBarColor = novaColors.background.toArgb()
+            window.navigationBarColor = novaColors.background.toArgb()
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !isDark
             insetsController.isAppearanceLightNavigationBars = !isDark
@@ -109,4 +111,11 @@ fun NovaTheme(
             content = content
         )
     }
+}
+
+
+/** Canonical app theme; the legacy reference theme is not used by the Shraddha launcher. */
+@Composable
+fun ShraddhaTheme(content: @Composable () -> Unit) {
+    NovaTheme(mode = "DARK", content = content)
 }
