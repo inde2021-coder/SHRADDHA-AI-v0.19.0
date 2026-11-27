@@ -52,6 +52,9 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // Sherpa-ONNX and ONNX Runtime both publish this native library.
+            // Keep one copy in the APK; runtime smoke tests validate the selected ABI.
+            pickFirsts += "**/libonnxruntime.so"
         }
     }
 
@@ -143,6 +146,8 @@ dependencies {
         // The Android AAR already contains the JNI-backed Kotlin API; avoid its duplicate JVM jar.
         exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
     }
+    // Java API used by consent-gated local biometric ONNX models.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.27.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
