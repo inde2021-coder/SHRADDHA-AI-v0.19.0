@@ -30,4 +30,23 @@ class AkkpsAiMappingPolicyTest {
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand("नाम=राम", emptyList()))
         assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand("नाम=", listOf("नाम" to " ")))
     }
+    @Test fun rejectsValuesThatAreOnlySubstringsOfLongerWords() {
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Farmer Name=Ramesh", listOf("Farmer Name" to "Ram")
+        ))
+        assertFalse(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Village=Rampur", listOf("Village" to "pur")
+        ))
+    }
+
+    @Test fun acceptsWholeLiteralTokensWithPunctuationBoundaries() {
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "Address=Ward 4, Near School; Phone=9876543210",
+            listOf("Address" to "Ward 4, Near School", "Phone" to "9876543210")
+        ))
+        assertTrue(AkkpsAiMappingPolicy.areValuesExplicitInCommand(
+            "किसान का नाम: राम कुमार।", listOf("नाम" to "राम कुमार")
+        ))
+    }
+
 }
