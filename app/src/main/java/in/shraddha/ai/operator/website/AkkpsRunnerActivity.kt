@@ -395,7 +395,7 @@ class AkkpsRunnerActivity : Activity() {
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
-              const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
@@ -535,7 +535,7 @@ Return exact JSON only. Do not include prose or markdown."""
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
               for(const item of expected){
-                const key=(item.key||'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+                const key=(item.key||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
                 const matches=[...f.querySelectorAll('input,textarea,select')].filter(e=>{
                   const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
