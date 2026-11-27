@@ -694,6 +694,7 @@ class AkkpsRunnerActivity : Activity() {
             }
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
             val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            val module = route?.module?.name ?: obj.optString("module")
             val capabilities = AkkpsPageCapabilityDiscovery.discover(
                 formCount = forms,
                 tableCount = tables,
@@ -707,7 +708,12 @@ class AkkpsRunnerActivity : Activity() {
             val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
                 .map { it.operation.name.lowercase().replace('_', ' ') }
             val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
-            status.text = "Module: ${obj.optString("module")} • ${obj.optString("title")}\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
+            val inspectedCount = runCatching {
+                AkkpsModuleInventoryStore(this).apply {
+                    if (module in AkkpsRunnerModule.entries.map { it.name }) record(module, capabilities)
+                }.load().size
+            }.getOrDefault(0)
+            status.text = "Module: $module • ${obj.optString("title")} • Inventory: $inspectedCount/6\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
                 "Observed: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
                 actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
