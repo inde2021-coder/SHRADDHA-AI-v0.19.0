@@ -74,12 +74,9 @@ class SkillPackLifecycleManager(context: Context) {
     )
     data class StagedPack(val packId: String, val version: String, val file: File, val signedPublisher: Boolean)
 
-    fun downloadAndQuarantine(
-        manifest: Manifest,
-        trustedPublishers: Map<String, TrustedPublisher>
-    ): StagedPack {
+    fun downloadAndQuarantine(manifest: Manifest): StagedPack {
         validateManifest(manifest)
-        val publisher = trustedPublishers[manifest.publisherKeyId]
+        val publisher = PINNED_PUBLISHERS[manifest.publisherKeyId]
             ?: throw SecurityException("Publisher key is not pinned by this app release.")
         val url = URL(manifest.contentUrl)
         val source = URL(manifest.sourceUrl)
@@ -175,8 +172,7 @@ class SkillPackLifecycleManager(context: Context) {
     fun approveAndActivate(
         pack: StagedPack,
         approval: Approval,
-        automaticLearningEnabled: Boolean,
-        trustedPublishers: Map<String, TrustedPublisher> = emptyMap()
+        automaticLearningEnabled: Boolean
     ): Boolean {
         require(validId(pack.packId) && validVersion(pack.version))
         require(pack.file.canonicalFile.parentFile == quarantine.canonicalFile && pack.file.isFile)
@@ -203,7 +199,7 @@ class SkillPackLifecycleManager(context: Context) {
         if (signed) {
             val manifest = Manifest.parse(metadata.toString())
             validateManifest(manifest)
-            val publisher = trustedPublishers[manifest.publisherKeyId]
+            val publisher = PINNED_PUBLISHERS[manifest.publisherKeyId]
                 ?: throw SecurityException("Publisher key is not pinned by this app release; activation is blocked.")
             val contentUrl = URL(manifest.contentUrl)
             val sourceUrl = URL(manifest.sourceUrl)
