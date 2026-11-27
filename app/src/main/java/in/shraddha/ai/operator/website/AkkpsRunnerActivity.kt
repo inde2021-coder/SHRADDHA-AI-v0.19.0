@@ -222,7 +222,7 @@ class AkkpsRunnerActivity : Activity() {
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
-                status.text = out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।"
+                status.text = blockedSubmitReason ?: (out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।")
                 return@evaluateJavascript
             }
             val missing = result.optJSONArray("missing") ?: JSONArray()
