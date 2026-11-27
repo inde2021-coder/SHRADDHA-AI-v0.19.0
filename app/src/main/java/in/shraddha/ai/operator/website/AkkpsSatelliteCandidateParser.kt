@@ -51,8 +51,19 @@ object AkkpsSatelliteCandidateParser {
         val points = (0 until outer.length()).map { index ->
             val pair = outer.getJSONArray(index)
             require(pair.length() in 2..3) { "GeoJSON coordinate tuple में केवल longitude, latitude और optional altitude मान्य हैं।" }
-            val lon = pair.getDouble(0)
-            val lat = pair.getDouble(1)
+            val longitudeValue = pair.opt(0)
+            val latitudeValue = pair.opt(1)
+            require(longitudeValue is Number && latitudeValue is Number) {
+                "GeoJSON longitude/latitude JSON numeric values होने चाहिए; text स्वीकार नहीं है।"
+            }
+            if (pair.length() == 3) {
+                val altitude = pair.opt(2)
+                require(altitude is Number && altitude.toDouble().isFinite()) {
+                    "GeoJSON altitude finite numeric value होना चाहिए।"
+                }
+            }
+            val lon = (longitudeValue as Number).toDouble()
+            val lat = (latitudeValue as Number).toDouble()
             require(lon.isFinite() && lat.isFinite()) { "GeoJSON coordinates finite numbers होने चाहिए।" }
             AkkpsGeoPoint(lat, lon)
         }
