@@ -6,6 +6,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AkkpsRunnerCommandParserTest {
+    @Test fun mapsHindiAndEnglishAliasesToCanonicalFieldNames() {
+        val command = AkkpsRunnerCommandParser.parse("खसरा नंबर=123; Total Land Area=2.5; धान की किस्म=IR64")
+        assertTrue(command.issues.isEmpty())
+        assertEquals(listOf("surveyNumber", "totalLandAreaAcres", "riceVariety"), command.assignments.map { it.first })
+    }
+
+    @Test fun duplicateAliasesCannotSilentlyOverwriteSameField() {
+        val command = AkkpsRunnerCommandParser.parse("खसरा नंबर=123; Survey Number=456")
+        assertTrue(command.assignments.isEmpty())
+        assertTrue(command.issues.isNotEmpty())
+    }
+
     @Test fun parsesAssignmentsAndSubmitInOneCommand() {
         val parsed = AkkpsRunnerCommandParser.parse("Farmer Name=Ram Kumar; Village=Rampur; Phone=9876543210; submit")
         assertEquals(listOf("Farmer Name", "Village", "Phone"), parsed.assignments.map { it.first })
