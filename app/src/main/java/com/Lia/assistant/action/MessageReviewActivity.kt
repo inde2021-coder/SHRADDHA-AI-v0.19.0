@@ -2,6 +2,8 @@ package com.Lia.assistant.action
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
+import android.net.Uri
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
@@ -16,6 +18,10 @@ class MessageReviewActivity : Activity() {
     private var sending = false
     private lateinit var status: TextView
     private lateinit var sendButton: Button
+    private lateinit var fallbackButton: Button
+    private var fallbackChannel = "" 
+    private var fallbackRecipient = ""
+    private var fallbackBody = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,7 +90,11 @@ class MessageReviewActivity : Activity() {
                                     status.text = "Provider receipt: ${receipt.status.ifBlank { "accepted" }} • ID: ${receipt.messageId.take(32)}"
                                     sendButton.isEnabled = false
                                 }.onFailure { error ->
-                                    status.text = "संदेश भेजना पुष्ट नहीं हुआ: ${error.localizedMessage ?: "network/provider error"}"
+                                    status.text = "Provider से भेजना पुष्ट नहीं हुआ: ${error.localizedMessage ?: "network/provider error"}"
+                                    fallbackChannel = channel
+                                    fallbackRecipient = recipient
+                                    fallbackBody = body
+                                    fallbackButton.visibility = android.view.View.VISIBLE
                                     sendButton.isEnabled = true
                                     sending = false
                                 }
@@ -94,11 +104,44 @@ class MessageReviewActivity : Activity() {
             }
         }
         root.addView(sendButton)
+        fallbackButton = Button(this).apply {
+            text = "फोन के ऐप में खोलें"
+            visibility = android.view.View.GONE
+            setOnClickListener { openNativeComposer(fallbackChannel, fallbackRecipient, fallbackBody) }
+        }
+        root.addView(fallbackButton)
         root.addView(Button(this).apply {
             text = "रद्द करें"
             setOnClickListener { finish() }
         })
         setContentView(root)
+    }
+
+    private fun openNativeComposer(channel: String, recipient: String, body: String) {
+        if (!MessageApprovalPolicy.isValidE164(recipient) || body.isBlank() || body.length > 4000) {
+            status.text = "Fallback के लिए recipient/message मान्य नहीं है।"
+            return
+        }
+        val intent = when (channel) {
+            "sms" -> Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$recipient")).apply {
+                putExtra("sms_body", body)
+            }
+            "whatsapp" -> {
+                val digits = recipient.removePrefix("+")
+                val url = "https://wa.me/$digits?text=" + Uri.encode(body)
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            }
+            else -> {
+                status.text = "इस channel का native fallback उपलब्ध नहीं है।"
+                return
+            }
+        }
+        runCatching {
+            startActivity(Intent.createChooser(intent, if (channel == "sms") "SMS ऐप चुनें" else "WhatsApp में खोलें"))
+            status.text = "संदेश ऐप खुला है। भेजने से पहले recipient और पूरा message जाँचकर स्वयं Send दबाएँ।"
+        }.onFailure {
+            status.text = "संदेश ऐप नहीं खुला: ${it.localizedMessage ?: "app unavailable"}"
+        }
     }
 
     private fun finishWithError(message: String) {
