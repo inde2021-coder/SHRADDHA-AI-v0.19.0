@@ -488,6 +488,7 @@ class AkkpsRunnerActivity : Activity() {
 
     private var pendingKml: String? = null
     private var submitVerificationPending = false
+    private var submitNeedsManualReview = false
 
     private fun confirmAkkpsLocation(
         origin: String,
@@ -900,11 +901,11 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     private fun submitForm(expectedValues: List<Pair<String, String>>) {
-        if (!AkkpsSubmitAttemptPolicy.canStart(submitVerificationPending, expectedValues)) {
-            status.text = if (submitVerificationPending) {
-                "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
-            } else {
-                "Submit data invalid है। कोई request नहीं भेजी गई।"
+        if (!AkkpsSubmitAttemptPolicy.canStart(submitVerificationPending, expectedValues, submitNeedsManualReview)) {
+            status.text = when {
+                submitVerificationPending -> "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
+                submitNeedsManualReview -> "पिछला Submit ambiguous है। Record list जाँचकर ही retry unlock करें।"
+                else -> "Submit data invalid है। कोई request नहीं भेजी गई।"
             }
             return
         }
@@ -952,7 +953,16 @@ Return exact JSON only. Do not include prose or markdown."""
             }
             status.text = "Submit request भेजी गई। AKKPS की प्रतिक्रिया जाँची जा रही है…"
             val eventStart = result?.optInt("eventStart") ?: 0
-            web.postDelayed({ verifySubmit(before, expectedValues, eventStart) }, 3000)
+            web.postDelayed({
+                if (submitVerificationPending) verifySubmit(before, expectedValues, eventStart)
+            }, 3000)
+            web.postDelayed({
+                if (submitVerificationPending) {
+                    submitVerificationPending = false
+                    status.text = "AKKPS verification timeout। दोबारा Submit न करें; पहले record list में जाँचें।"
+                    requireManualSubmitReview()
+                }
+            }, 15_000)
         }
     }
 
@@ -977,20 +987,46 @@ Return exact JSON only. Do not include prose or markdown."""
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (!submitVerificationPending) return@evaluateJavascript
             submitVerificationPending = false
             status.text = when {
                 o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
                 o?.optBoolean("serverSuccess") == true ->
                     "AKKPS server ने success response और Record ID ${o.optString("recordId")} दिया। Server response verified।"
-                !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true ->
-                    "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save अभी fully verified नहीं है।"
-                o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true ->
+                !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true -> {
+                    requireManualSubmitReview()
+                    "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save fully verified नहीं है।"
+                }
+                o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true -> {
+                    requireManualSubmitReview()
                     "Plot/AWD detail link और record values मिले। Record खोलकर ID जाँचें।"
-                web.url.orEmpty() != beforeUrl ->
+                }
+                web.url.orEmpty() != beforeUrl -> {
+                    requireManualSubmitReview()
                     "AKKPS ने पेज बदला, लेकिन स्पष्ट record confirmation नहीं मिला। Submit verified नहीं है।"
-                else -> "स्पष्ट Save/Submit पुष्टि नहीं मिली। दोबारा Submit न करें; पहले सूची में record खोजें।"
+                }
+                else -> {
+                    requireManualSubmitReview()
+                    "स्पष्ट Save/Submit पुष्टि नहीं मिली। पहले record list में खोजें; duplicate Submit न करें।"
+                }
             }
         }
+    }
+
+    private fun requireManualSubmitReview() {
+        submitNeedsManualReview = true
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS Record की जाँच जरूरी")
+            .setMessage(
+                "Server Record ID से Save confirm नहीं हुआ। पहले AKKPS की record list में देखें कि entry बन चुकी है या नहीं। " +
+                    "अगर entry मौजूद है तो दोबारा submit न करें। Retry तभी unlock करें जब आपने record list जाँच ली हो।"
+            )
+            .setNegativeButton("अभी नहीं", null)
+            .setPositiveButton("Record जाँच लिया; retry unlock करें") { _, _ ->
+                submitNeedsManualReview = false
+                status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
+            }
+            .show()
     }
 
     private fun decode(raw: String?): String =
