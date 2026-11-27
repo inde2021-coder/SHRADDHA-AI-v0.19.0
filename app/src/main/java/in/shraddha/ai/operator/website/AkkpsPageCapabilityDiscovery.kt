@@ -25,9 +25,16 @@ object AkkpsPageCapabilityDiscovery {
         val types = fieldTypes.map { it.lowercase(Locale.ROOT).trim() }
         fun evidence(pattern: Regex): String? = all.firstOrNull { pattern.containsMatchIn(it) }
         fun actionEvidence(pattern: Regex): String? = actions.firstOrNull { pattern.containsMatchIn(it) }
-        fun capability(operation: WebsiteOperation, found: String?): WebsiteCapability =
-            WebsiteCapability(operation, if (found == null) CapabilityState.UNKNOWN else CapabilityState.AVAILABLE,
-                found.orEmpty().take(120))
+        fun capability(operation: WebsiteOperation, found: String?): WebsiteCapability {
+            if (!AkkpsWebsiteProfile.isRunnerOperationAllowed(operation)) {
+                return WebsiteCapability(operation, CapabilityState.UNAVAILABLE, "Blocked by AKKPS Runner data-entry scope")
+            }
+            return WebsiteCapability(
+                operation,
+                if (found == null) CapabilityState.UNKNOWN else CapabilityState.AVAILABLE,
+                found.orEmpty().take(120)
+            )
+        }
 
         val search = evidence(Regex("search|find|filter|खोज|ढूंढ|ढूँढ"))
             ?: if (types.any { it == "search" }) "visible search field" else null
