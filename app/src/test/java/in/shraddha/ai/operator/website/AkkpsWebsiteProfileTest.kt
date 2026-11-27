@@ -41,4 +41,20 @@ class AkkpsWebsiteProfileTest {
         assertTrue(AkkpsWebsiteProfile.canReportSuccess(WebsiteOperation.SAVE_RECORD, true, true))
         assertFalse(AkkpsWebsiteProfile.canReportSuccess(WebsiteOperation.NAVIGATE, true, true))
     }
+    @Test fun runnerNavigationRejectsRestrictedAndTraversalPaths() {
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/admin/users"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/coordinator/plots"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/../admin"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/%2e%2e/admin"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner%2f..%2fadmin"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner\\\\..\\\\admin"))
+    }
+
+    @Test fun runnerNavigationAllowsCanonicalSiteAndNonRestrictedModules() {
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://akkps.ngo/runner/plots?page=2"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/administrator-help"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("http://www.akkps.ngo/runner"))
+    }
+
 }
