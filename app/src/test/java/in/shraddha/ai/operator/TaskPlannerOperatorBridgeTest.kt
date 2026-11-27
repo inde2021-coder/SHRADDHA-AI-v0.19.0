@@ -175,7 +175,7 @@ class TaskPlannerOperatorBridgeTest {
             true
         })
         bridge.createPlan("atomic-1", "Existing valid plan", listOf(
-            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.BACK, target = "original"))
+            PlannedOperatorAction("back", "Go back", OperatorStep(OperatorActionType.OPEN_APP, target = "original"))
         ))
         try {
             bridge.createPlan("atomic-2", "Rejected secret plan", listOf(
