@@ -628,7 +628,10 @@ class AkkpsRunnerActivity : Activity() {
                   const host=endpoint.hostname.toLowerCase();
                   const akkpsEndpoint=endpoint.protocol==='https:'&&(host==='akkps.ngo'||host.endsWith('.akkps.ngo'));
                   if(akkpsEndpoint&&['POST','PUT','PATCH'].includes(xhr.__akkpsMethod)){
-                    xhr.addEventListener('load',()=>record(xhr.__akkpsMethod,xhr.__akkpsUrl,xhr.status,xhr.responseText),{once:true});
+                    xhr.addEventListener('load',()=>record(
+                      xhr.__akkpsMethod,xhr.__akkpsUrl,xhr.status,
+                      xhr.responseType==='json'?xhr.response:xhr.responseText
+                    ),{once:true});
                   }
                 }catch(_){}
                 return originalSend.apply(this,arguments);
