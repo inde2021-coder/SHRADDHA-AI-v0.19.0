@@ -36,6 +36,11 @@ class TaskPlannerOperatorBridge(
     fun createPlan(workflowId: String, title: String, planned: List<PlannedOperatorAction>): ShraddhaIntegrationHub.Session {
         require(planned.isNotEmpty() && planned.size <= 100)
         require(planned.map { it.id }.distinct().size == planned.size)
+        planned.forEach { action ->
+            require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Invalid action ID: ${action.id}" }
+            require(action.title.isNotBlank() && action.title.length <= 120) { "Every action needs a short, non-empty title." }
+        }
+        validateDependencyGraph(planned)
         actions.clear()
         val normalized = planned.map { action ->
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
@@ -60,6 +65,44 @@ class TaskPlannerOperatorBridge(
         })
         audit("task_plan", "created", "workflow=$workflowId; steps=${planned.size}")
         return session
+    }
+
+    /**
+     * Validate the complete dependency graph before creating a session or dispatching work.
+     * Missing references and cycles are rejected rather than silently treated as ready steps.
+     */
+    private fun validateDependencyGraph(planned: List<PlannedOperatorAction>) {
+        val ids = planned.map { it.id }.toSet()
+        planned.forEach { action ->
+            require(action.id !in action.dependsOn) {
+                "Action ${action.id} cannot depend on itself."
+            }
+            val missing = action.dependsOn - ids
+            require(missing.isEmpty()) {
+                "Action ${action.id} references missing dependencies: ${missing.joinToString()}"
+            }
+        }
+        val remaining = planned.associate { it.id to it.dependsOn.size }.toMutableMap()
+        val dependents = mutableMapOf<String, MutableList<String>>()
+        planned.forEach { action ->
+            action.dependsOn.forEach { dependency ->
+                dependents.getOrPut(dependency) { mutableListOf() }.add(action.id)
+            }
+        }
+        val ready = remaining.filterValues { it == 0 }.keys.toMutableList()
+        var visited = 0
+        while (ready.isNotEmpty()) {
+            val completed = ready.removeAt(0)
+            visited++
+            dependents[completed].orEmpty().forEach { dependent ->
+                val next = (remaining[dependent] ?: 0) - 1
+                remaining[dependent] = next
+                if (next == 0) ready.add(dependent)
+            }
+        }
+        require(visited == planned.size) {
+            "Workflow dependencies contain a cycle. No action was started."
+        }
     }
 
     /** Starts the plan and automatically runs only steps that do not require user approval. */

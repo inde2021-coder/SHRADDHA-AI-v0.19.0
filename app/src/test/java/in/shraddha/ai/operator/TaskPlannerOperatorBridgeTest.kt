@@ -126,4 +126,45 @@ class TaskPlannerOperatorBridgeTest {
         assertTrue(failed.workflow.message.contains("journal", ignoreCase = true))
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun missingDependencyIsRejectedBeforePlanCreation() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must never execute"); false })
+        bridge.createPlan("missing-dependency", "Invalid dependency", listOf(
+            PlannedOperatorAction("child", "Child action", OperatorStep(OperatorActionType.BACK), dependsOn = setOf("does-not-exist"))
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun selfDependencyIsRejectedBeforePlanCreation() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must never execute"); false })
+        bridge.createPlan("self-dependency", "Self dependency", listOf(
+            PlannedOperatorAction("loop", "Loop action", OperatorStep(OperatorActionType.BACK), dependsOn = setOf("loop"))
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun cyclicDependenciesAreRejectedBeforePlanCreation() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must never execute"); false })
+        bridge.createPlan("cyclic-plan", "Cyclic dependency", listOf(
+            PlannedOperatorAction("first", "First action", OperatorStep(OperatorActionType.BACK), dependsOn = setOf("second")),
+            PlannedOperatorAction("second", "Second action", OperatorStep(OperatorActionType.HOME), dependsOn = setOf("first"))
+        ))
+    }
+
+    @Test fun validMultiDependencyGraphStillExecutesInDependencyOrder() {
+        val executed = mutableListOf<String>()
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { step, _ ->
+            executed += step.target
+            true
+        })
+        bridge.createPlan("multi-dependency", "Valid graph", listOf(
+            PlannedOperatorAction("a", "A", OperatorStep(OperatorActionType.OPEN_APP, target = "A")),
+            PlannedOperatorAction("b", "B", OperatorStep(OperatorActionType.OPEN_APP, target = "B")),
+            PlannedOperatorAction("c", "C", OperatorStep(OperatorActionType.BACK), dependsOn = setOf("a", "b"))
+        ))
+        val result = bridge.start()
+        assertEquals(listOf("A", "B", ""), executed)
+        assertEquals(WorkflowStatus.COMPLETED, result.workflow.status)
+    }
+
 }
