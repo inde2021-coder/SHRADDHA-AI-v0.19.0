@@ -147,7 +147,7 @@ dependencies {
         exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
     }
     // Java API used by consent-gated local biometric ONNX models.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.27.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.28.2")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
