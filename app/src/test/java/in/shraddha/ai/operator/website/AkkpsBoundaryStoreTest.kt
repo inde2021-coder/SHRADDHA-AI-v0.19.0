@@ -191,4 +191,15 @@ class AkkpsBoundaryStoreTest {
         assertNull(restored.sourceFeatureId)
     }
 
+    @Test fun phoneGpsWalkSourceSurvivesBoundaryPersistence() {
+        val boundary = AkkpsBoundary(
+            points = square,
+            source = "Phone GNSS GPS Walk"
+        )
+        val restored = AkkpsBoundaryGeometry.fromJson(AkkpsBoundaryGeometry.toJson(boundary))
+        assertEquals("Phone GNSS GPS Walk", restored.source)
+        assertNull(restored.datasetYear)
+        assertNull(restored.confidence)
+    }
+
 }
