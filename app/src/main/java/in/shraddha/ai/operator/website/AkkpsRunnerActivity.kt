@@ -858,11 +858,17 @@ Return exact JSON only. Do not include prose or markdown."""
                         return@runOnUiThread
                     }
                     val items = mapped.optJSONArray("assignments") ?: JSONArray()
+                    val missing = mapped.optJSONArray("missing") ?: JSONArray()
+                    val missingItems = (0 until missing.length()).map { missing.optString(it) }
+                    if (items.length() > 100 || !AkkpsAiMappingPolicy.hasValidMissingItems(missingItems)) {
+                        status.text = "AI mapping response में फील्ड की संख्या या missing जानकारी की सीमा अमान्य है। कोई field नहीं भरी गई।"
+                        return@runOnUiThread
+                    }
                     val values = (0 until items.length()).mapNotNull { i ->
                         val item = items.optJSONObject(i) ?: return@mapNotNull null
                         val key = item.optString("field").ifBlank { item.optString("key") }.trim()
                         val value = item.optString("value").trim()
-                        if (key.isBlank() || value.isBlank() || value.length > 500) null else key to value
+                        if (key.isBlank() || value.isBlank() || key.length > 160 || value.length > 500) null else key to value
                     }
                     if (values.size != items.length() ||
                         !AkkpsSubmitTargetPolicy.hasValidKeys(values.map { it.first }) ||
@@ -872,17 +878,14 @@ Return exact JSON only. Do not include prose or markdown."""
                         return@runOnUiThread
                     }
                     if (values.isEmpty()) {
-                        val missing = mapped.optJSONArray("missing") ?: JSONArray()
-                        status.text = if (missing.length() > 0)
-                            "जानकारी अधूरी है: " + (0 until missing.length()).joinToString { missing.optString(it) }
+                        status.text = if (missingItems.isNotEmpty())
+                            "जानकारी अधूरी है: " + missingItems.joinToString()
                         else "कमांड से कोई स्पष्ट फॉर्म मान नहीं मिला। कोई डेटा नहीं भरा गया।"
                         return@runOnUiThread
                     }
-                    val missing = mapped.optJSONArray("missing") ?: JSONArray()
                     val explicitSubmit = AkkpsRunnerSubmitIntentPolicy.isExplicit(raw)
                     val aiRequestedSubmit = mapped.optBoolean("submit") && explicitSubmit
                     val shouldSubmit = AkkpsAiMappingPolicy.canSubmit(aiRequestedSubmit, missing.length())
-                    val missingItems = (0 until missing.length()).map { missing.optString(it) }.filter { it.isNotBlank() }
                     fillValues(values, shouldSubmit, missingItems)
                 }
             }.start()
