@@ -720,7 +720,10 @@ class AkkpsRunnerActivity : Activity() {
             status.text = "AKKPS में Login करें और field=value कमांड दें।"; return
         }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
-        val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
+        val isSearchCommand = AkkpsRunnerSearchCommandPolicy.parse(raw) != null
+        val isViewCommand = AkkpsRunnerViewCommandPolicy.parse(raw) != null
+        val explicitAssignment = raw.contains('=') || parsed.submit ||
+            (raw.contains(':') && !isSearchCommand && !isViewCommand)
         if (!explicitAssignment) {
             if (AkkpsRunnerEditCommandPolicy.isExplicit(raw)) {
                 val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
