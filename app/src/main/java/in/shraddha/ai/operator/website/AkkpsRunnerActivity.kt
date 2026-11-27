@@ -871,11 +871,11 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     private fun submitForm(expectedValues: List<Pair<String, String>>) {
-        if (!AkkpsSubmitAttemptPolicy.canStart(submitVerificationPending, expectedValues)) {
-            status.text = if (submitVerificationPending) {
-                "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
-            } else {
-                "Submit data invalid है। कोई request नहीं भेजी गई।"
+        if (!AkkpsSubmitAttemptPolicy.canStart(submitVerificationPending, expectedValues, submitNeedsManualReview)) {
+            status.text = when {
+                submitVerificationPending -> "पिछला AKKPS Submit अभी verify हो रहा है। दोबारा Submit न करें; पहले record status जाँचें।"
+                submitNeedsManualReview -> "पिछला Submit ambiguous है। Record list जाँचकर ही retry unlock करें।"
+                else -> "Submit data invalid है। कोई request नहीं भेजी गई।"
             }
             return
         }
