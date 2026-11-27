@@ -77,6 +77,24 @@ object AkkpsWebsiteProfile {
         }
 
     /**
+     * Runner is intentionally limited to record lookup and Farmer/Plot/AWD data entry.
+     * Reporting exports, downloads, destructive actions and payments are out of scope.
+     */
+    fun isRunnerOperationAllowed(operation: WebsiteOperation): Boolean =
+        operation in setOf(
+            WebsiteOperation.DISCOVER_SITE,
+            WebsiteOperation.OBSERVE_PAGE,
+            WebsiteOperation.NAVIGATE,
+            WebsiteOperation.SEARCH_RECORDS,
+            WebsiteOperation.VIEW_RECORD,
+            WebsiteOperation.CREATE_RECORD,
+            WebsiteOperation.UPDATE_RECORD,
+            WebsiteOperation.SAVE_RECORD,
+            WebsiteOperation.SUBMIT_FORM,
+            WebsiteOperation.UPLOAD_DOCUMENT
+        )
+
+    /**
      * High-impact operations always require a separate safety decision.
      * Ordinary record viewing/searching/navigation does not.
      */
