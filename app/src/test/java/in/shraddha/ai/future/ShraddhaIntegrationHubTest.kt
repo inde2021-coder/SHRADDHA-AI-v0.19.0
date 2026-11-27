@@ -83,4 +83,29 @@ class ShraddhaIntegrationHubTest {
             ShraddhaIntegrationHub.Action("x", "Duplicate")
         ))
     }
+
+    @Test fun recoveredWorkflowRejectsMismatchedPlanAndStepIds() {
+        try {
+            ShraddhaIntegrationHub.validateRecoveredIdentity("wf-1", listOf("a", "b"), listOf("a", "other"), listOf("wf-1"))
+            fail("Mismatched recovered step identities must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun recoveredWorkflowRejectsAuditFromAnotherWorkflow() {
+        try {
+            ShraddhaIntegrationHub.validateRecoveredIdentity("wf-1", listOf("a"), listOf("a"), listOf("wf-1", "wf-2"))
+            fail("Foreign audit entries must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun recoveredWorkflowRejectsDuplicatePlannedStepIds() {
+        try {
+            ShraddhaIntegrationHub.validateRecoveredIdentity("wf-1", listOf("a", "a"), listOf("a", "a"), listOf("wf-1"))
+            fail("Duplicate planned step identities must be rejected")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun recoveredWorkflowAcceptsMatchingPlanStepAndAuditIdentity() {
+        ShraddhaIntegrationHub.validateRecoveredIdentity("wf-1", listOf("a", "b"), listOf("a", "b"), listOf("wf-1", "wf-1"))
+    }
 }
