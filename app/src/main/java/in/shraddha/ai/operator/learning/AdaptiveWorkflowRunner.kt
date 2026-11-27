@@ -55,6 +55,8 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         stopped = false
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty() || steps.size > 100) return fail("वर्कफ़्लो खाली है या निर्धारित सीमा से बड़ा है।")
+        val preflight = WorkflowPlanValidator.validate(profile.packageName, workflowName, steps, values)
+        if (!preflight.valid) return fail(preflight.message)
         val fingerprint = checkpoints.fingerprint(steps)
         var saved = checkpoints.getResult(profile.packageName, workflowName).getOrElse {
             return fail("Encrypted workflow checkpoint could not be read. Existing checkpoint data was preserved; no workflow action was started.")
@@ -210,9 +212,21 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
                 return fail("कार्रवाई के बाद foreground ऐप बदल गया। सुरक्षा के लिए workflow रोक दिया गया।")
             }
-            if (step.expectedText.isNotBlank() && after.elements.none { it.text.contains(step.expectedText, true) || it.description.contains(step.expectedText, true) }) {
+            val expectedWasAbsentBefore = step.expectedText.isNotBlank() &&
+                before.elements.none { element ->
+                    element.text.contains(step.expectedText, true) ||
+                        element.description.contains(step.expectedText, true)
+                }
+            val verification = WorkflowStepResultVerification.assess(
+                expectedText = step.expectedText,
+                expectedTextAbsentBefore = expectedWasAbsentBefore,
+                beforeFingerprint = recoveryFingerprint(before),
+                currentFingerprint = recoveryFingerprint(after),
+                visibleText = after.elements.flatMap { listOf(it.text, it.description) }
+            )
+            if (verification != WorkflowStepResultVerification.Decision.VERIFIED) {
                 checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, index, steps.size, "FAILED"))
-                return fail("चरण ${index + 1} के बाद अपेक्षित परिणाम नहीं मिला; वर्कफ़्लो रोक दिया गया।")
+                return fail("चरण ${index + 1} का स्वतंत्र परिणाम प्रमाण नहीं मिला। कोई अगला चरण execute नहीं होगा।")
             }
             val next = index + 1
             if (!checkpoints.save(WorkflowCheckpoint(profile.packageName, workflowName, stepsHash, next, steps.size, "READY"))) {
