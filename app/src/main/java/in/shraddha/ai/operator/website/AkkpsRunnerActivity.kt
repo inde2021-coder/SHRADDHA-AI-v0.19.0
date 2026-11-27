@@ -100,8 +100,6 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    companion object {
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -1073,7 +1071,6 @@ Return exact JSON only. Do not include prose or markdown."""
             }.getOrNull()
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
-            pendingFileChooserParams = null
         }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
