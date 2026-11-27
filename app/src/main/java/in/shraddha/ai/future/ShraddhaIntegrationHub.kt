@@ -213,7 +213,7 @@ class ShraddhaIntegrationHub(
                 item.getString("event"), item.getString("detail"), item.getLong("timestamp"))
         }.toMutableList()
         val workflowId = workflowJson.getString("id")
-        val audit = parsedAudit.takeLast(WorkflowAuditPolicy.MAX_EVENTS)
+        val audit = parsedAudit.map { item -> item.copy(\n            event = item.event.take(WorkflowAuditPolicy.MAX_EVENT_LENGTH),\n            detail = item.detail.take(WorkflowAuditPolicy.MAX_DETAIL_LENGTH)\n        ) }.takeLast(WorkflowAuditPolicy.MAX_EVENTS)
         require(PersistedWorkflowIntegrityPolicy.isValid(
             workflowId = workflowId,
             plannedTaskIds = plan.ordered.map { it.id },
