@@ -65,4 +65,11 @@ class AkkpsRunnerCommandParserTest {
         }
     }
 
+    @Test fun rejectsMoreThanOneHundredAssignmentsBeforeFormFill() {
+        val command = (1..101).joinToString("; ") { "field$it=value$it" }
+        val parsed = AkkpsRunnerCommandParser.parse(command)
+        assertTrue(parsed.assignments.isEmpty())
+        assertTrue(parsed.issues.any { it.contains("100") })
+    }
+
 }
