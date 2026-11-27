@@ -180,6 +180,10 @@ class RemoteCameraService : Service() {
     }
 
     private fun stopAndClear(startId: Int? = null) {
+        if (stopping) {
+            if (startId == null) stopSelf() else stopSelfResult(startId)
+            return
+        }
         stopping = true
         stopCamera()
         getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit()
