@@ -53,4 +53,21 @@ class NaturalLanguageWorkflowRouterTest {
         assertNotNull(result.route)
         assertEquals("Upload document", result.route?.workflowName)
     }
+
+    @Test fun highImpactDeleteIsNotAutomaticallyRouted() {
+        val result = NaturalLanguageWorkflowRouter.route("ग्राहक हटाओ", profile)
+        assertEquals(null, result.route)
+        org.junit.Assert.assertTrue(result.message.contains("high-impact"))
+    }
+
+    @Test fun paymentAndPublishAreNotAutomaticallyRouted() {
+        assertEquals(null, NaturalLanguageWorkflowRouter.route("pay invoice", profile).route)
+        assertEquals(null, NaturalLanguageWorkflowRouter.route("publish report", profile).route)
+    }
+
+    @Test fun mixedActionInstructionRequiresSeparateSteps() {
+        val result = NaturalLanguageWorkflowRouter.route("search customer and send invoice", profile)
+        assertEquals(null, result.route)
+        org.junit.Assert.assertTrue(result.message.contains("कई अलग काम"))
+    }
 }
