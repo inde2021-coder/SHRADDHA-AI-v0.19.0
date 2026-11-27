@@ -712,8 +712,15 @@ class AkkpsRunnerActivity : Activity() {
             val actions = obj.optJSONArray("actions") ?: JSONArray()
             val actionLabels = (0 until actions.length()).map { actions.optString(it) }
             val navigationItems = obj.optJSONArray("navigation") ?: JSONArray()
-            val navigationLabels = (0 until navigationItems.length()).mapNotNull {
-                navigationItems.optJSONObject(it)?.optString("label")?.takeIf { label -> label.isNotBlank() }
+            val navigationLabels = (0 until navigationItems.length()).mapNotNull { index ->
+                val item = navigationItems.optJSONObject(index) ?: return@mapNotNull null
+                val allowedModule = item.optString("module") in setOf(
+                    AkkpsRunnerModule.HOME.name,
+                    AkkpsRunnerModule.FARMERS.name,
+                    AkkpsRunnerModule.PLOTS.name,
+                    AkkpsRunnerModule.AWD_REPORTS.name
+                )
+                item.optString("label").takeIf { allowedModule && it.isNotBlank() }
             }
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
             val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
