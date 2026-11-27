@@ -759,7 +759,7 @@ class AkkpsRunnerActivity : Activity() {
             (function(q,expectedModule){
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
-              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim().replace(/\\s+/g,' ');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim().replace(/\s+/g,' ');
               const rows=[...document.querySelectorAll('table tr')].filter(visible);
               const matches=rows.filter(row=>[...row.cells].some(cell=>norm(cell.innerText)===q));
               if(matches.length!==1) return JSON.stringify({status:matches.length?'ambiguous_record':'record_not_found'});
@@ -768,10 +768,10 @@ class AkkpsRunnerActivity : Activity() {
                 try{
                   const u=new URL(a.href,location.href);
                   if(u.protocol!=='https:'||u.origin!==location.origin) return false;
-                  const p=u.pathname.replace(/\\/$/,'');
-                  if(expectedModule==='FARMERS') return /^\\/runner\\/farmers\\/[^/]+$/.test(p)&&!p.endsWith('/new');
-                  if(expectedModule==='PLOTS') return /^\\/runner\\/plots\\/[^/]+$/.test(p)&&!p.endsWith('/new');
-                  if(expectedModule==='AWD_REPORTS') return /^\\/runner\\/awd-reports\\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  const p=u.pathname.replace(/\/$/,'');
+                  if(expectedModule==='FARMERS') return /^\/runner\/farmers\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='PLOTS') return /^\/runner\/plots\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='AWD_REPORTS') return /^\/runner\/awd-reports\/[^/]+$/.test(p)&&!p.endsWith('/new');
                   return false;
                 }catch(_){return false}
               });
