@@ -1,6 +1,6 @@
 package `in`.shraddha.ai.operator.website
 
-/** Only ordinary, visible, editable single-value text controls may be auto-filled. */
+/** Allowlist for ordinary text inputs; selects and radio groups use separate exact-match policies. */
 internal object AkkpsRunnerFieldPolicy {
     val allowedInputTypes = setOf("text", "number", "tel", "email", "date", "search", "url", "")
     val blockedInputTypes = setOf(
