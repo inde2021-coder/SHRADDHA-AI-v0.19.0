@@ -123,11 +123,12 @@ object AkkpsBoundaryGeometry {
 
     private fun xmlEscape(value: String): String = value
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        .replace("\\\"", "&quot;").replace("'", "&apos;")
+        .replace("\"", "&quot;").replace("'", "&apos;")
 
     private fun xmlUnescape(value: String): String = value
-        .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\\\"")
+        .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
         .replace("&apos;", "'").replace("&amp;", "&")
+
     private fun validateProvenance(boundary: AkkpsBoundary) {
         require(boundary.source == null || (boundary.source.isNotBlank() && boundary.source.length <= 120)) {
             "Boundary source metadata is invalid."
