@@ -332,6 +332,12 @@ class AkkpsRunnerActivity : Activity() {
         } else if (gpsWalkPlotId.isNullOrBlank()) {
             gpsWalkPlotId = plotIdInput.text.toString().trim()
         }
+        if (boundaryPoints.isEmpty() && boundaryProvenance == null) {
+            boundaryProvenance = AkkpsBoundary(
+                points = emptyList(),
+                source = "Phone GNSS GPS Walk"
+            )
+        }
         gpsWalkSessionInitialized = true
         lastGpsAccuracyMeters = Float.MAX_VALUE
         lastGpsElapsedRealtimeNanos = 0L
