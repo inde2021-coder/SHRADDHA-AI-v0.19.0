@@ -107,4 +107,25 @@ class AkkpsSatelliteCandidateParserTest {
         )
         assertFalse(AkkpsSatelliteCandidateParser.parse(raw).isSuccess)
     }
+    @Test fun rejectsNonFiniteAltitudeInThreeDimensionalCoordinates() {
+        val rings = "[[[78.0,23.0,1e999],[78.001,23.0,0],[78.001,23.001,0],[78.0,23.001,0],[78.0,23.0,0]]]"
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = rings)).isSuccess)
+    }
+
+    @Test fun rejectsConflictingSourceDatasetAndProviderValues() {
+        val properties = """{"source":"Dataset A","dataset":"Dataset B","provider":"Dataset A"}"""
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(properties = properties)).isSuccess)
+    }
+
+    @Test fun rejectsNonTextSourceProvenance() {
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":42}""")
+        ).isSuccess)
+    }
+
+    @Test fun rejectsOversizedFeatureIdentifier() {
+        val longId = "\"" + "x".repeat(121) + "\""
+        assertFalse(AkkpsSatelliteCandidateParser.parse(feature(id = longId)).isSuccess)
+    }
+
 }
