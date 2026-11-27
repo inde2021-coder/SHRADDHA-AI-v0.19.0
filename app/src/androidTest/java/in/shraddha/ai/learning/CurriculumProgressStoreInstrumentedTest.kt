@@ -25,6 +25,20 @@ class CurriculumProgressStoreInstrumentedTest {
         store.endSession()
     }
 
+    @Test fun guardianPinRateLimitsRepeatedFailuresAndUnlocksAfterCooldown() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = CurriculumProgressStore(context)
+        store.setGuardianPin("5831".toCharArray())
+        val start = System.currentTimeMillis()
+        repeat(5) {
+            assertFalse(store.verifyGuardianPinAt("0000".toCharArray(), start + it))
+        }
+        assertFalse("Correct PIN must be blocked during cooldown",
+            store.verifyGuardianPinAt("5831".toCharArray(), start + 10_000L))
+        assertTrue("Correct PIN is accepted after cooldown",
+            store.verifyGuardianPinAt("5831".toCharArray(), start + 61_000L))
+    }
+
     @Test fun guardianPinAndProgressPersistLocallyWithEncryptedState() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CurriculumProgressStore(context)
