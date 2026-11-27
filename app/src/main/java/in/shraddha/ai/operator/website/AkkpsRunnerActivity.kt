@@ -47,6 +47,8 @@ class AkkpsRunnerActivity : Activity() {
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
+    private var submitVerificationPending = false
+    private var submitNeedsManualReview = false
     private val gpsListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             if (!gpsWalkActive || !location.hasAccuracy()) return
@@ -110,9 +112,6 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    companion object {
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -1259,6 +1258,23 @@ Return exact JSON only. Do not include prose or markdown."""
         }
     }
 
+    private fun requireManualSubmitReview() {
+        submitNeedsManualReview = true
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS Record की जाँच जरूरी")
+            .setMessage(
+                "Server Record ID से Save confirm नहीं हुआ। पहले AKKPS की record list में देखें कि entry बन चुकी है या नहीं। " +
+                    "अगर entry मौजूद है तो दोबारा submit न करें। Retry तभी unlock करें जब आपने record list जाँच ली हो।"
+            )
+            .setNegativeButton("अभी नहीं", null)
+            .setPositiveButton("Record जाँच लिया; retry unlock करें") { _, _ ->
+                submitNeedsManualReview = false
+                status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
+            }
+            .show()
+    }
+
+
     private fun decode(raw: String?): String =
         runCatching { JSONTokener(raw ?: "null").nextValue() as? String ?: "" }.getOrDefault("")
 
@@ -1270,7 +1286,6 @@ Return exact JSON only. Do not include prose or markdown."""
             }.getOrNull()
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
-            pendingFileChooserParams = null
         }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
