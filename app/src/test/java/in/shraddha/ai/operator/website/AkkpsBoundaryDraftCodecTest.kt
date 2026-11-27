@@ -14,7 +14,7 @@ class AkkpsBoundaryDraftCodecTest {
         val raw = AkkpsBoundaryDraftCodec.encode(points, 4.5f, timestamp)
         val restored = AkkpsBoundaryDraftCodec.decode(raw)
         assertEquals(points, restored.points)
-        assertEquals(4.5f, restored.bestAccuracyMeters!!)
+        assertEquals(4.5f, restored.bestAccuracyMeters!!, 0.001f)
         assertEquals(timestamp, restored.updatedAtEpochMillis)
     }
 
