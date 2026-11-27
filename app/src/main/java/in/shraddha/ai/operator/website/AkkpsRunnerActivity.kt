@@ -801,9 +801,7 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun isAllowedDataEntryRoute(route: AkkpsRunnerRouteMatch?): Boolean =
-        route != null &&
-            route.module in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) &&
-            (route.isCreateRoute || route.isEditRoute || (route.isDetailRoute && editFormSessionAuthorized))
+        AkkpsRunnerDataEntryRoutePolicy.isAllowed(route, editFormSessionAuthorized)
 
     /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
     private fun openEditForm(module: AkkpsRunnerModule) {
