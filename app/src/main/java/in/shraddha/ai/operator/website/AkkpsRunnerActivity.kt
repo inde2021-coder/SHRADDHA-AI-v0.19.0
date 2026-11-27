@@ -2,7 +2,9 @@ package `in`.shraddha.ai.operator.website
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -29,6 +31,8 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var command: EditText
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
+    private var pendingGeolocationOrigin: String? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -83,6 +87,7 @@ class AkkpsRunnerActivity : Activity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = true
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.setGeolocationEnabled(true)
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val targetUrl = request.url.toString()
@@ -100,6 +105,24 @@ class AkkpsRunnerActivity : Activity() {
                 }
             }
             webChromeClient = object : WebChromeClient() {
+                override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
+                    if (!AkkpsWebsiteProfile.acceptsUrl(origin)) {
+                        callback.invoke(origin, false, false)
+                        return
+                    }
+                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        confirmAkkpsLocation(origin, callback)
+                    } else {
+                        pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
+                        pendingGeolocationCallback = callback
+                        pendingGeolocationOrigin = origin
+                        requestPermissions(
+                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                            REQUEST_LOCATION
+                        )
+                    }
+                }
+
                 override fun onShowFileChooser(
                     view: WebView, callback: android.webkit.ValueCallback<Array<Uri>>,
                     params: FileChooserParams
@@ -124,6 +147,45 @@ class AkkpsRunnerActivity : Activity() {
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
+    }
+
+    private fun confirmAkkpsLocation(
+        origin: String,
+        callback: android.webkit.GeolocationPermissions.Callback
+    ) {
+        if (!AkkpsWebsiteProfile.acceptsUrl(origin)) {
+            callback.invoke(origin, false, false)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("AKKPS GPS Walk")
+            .setMessage("AKKPS को खेत की boundary walk के दौरान इस फोन की precise location चाहिए। Location केवल इस वेबसाइट request के लिए दी जाएगी; background location नहीं माँगी जाएगी।")
+            .setPositiveButton("इस बार अनुमति दें") { _, _ -> callback.invoke(origin, true, false) }
+            .setNegativeButton("अनुमति न दें") { _, _ -> callback.invoke(origin, false, false) }
+            .setOnCancelListener { callback.invoke(origin, false, false) }
+            .show()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_LOCATION) return
+        val origin = pendingGeolocationOrigin.orEmpty()
+        val callback = pendingGeolocationCallback
+        pendingGeolocationOrigin = null
+        pendingGeolocationCallback = null
+        if (callback == null) return
+        if (AkkpsWebsiteProfile.acceptsUrl(origin) &&
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        ) {
+            confirmAkkpsLocation(origin, callback)
+        } else {
+            callback.invoke(origin, false, false)
+            status.text = "GPS Walk के लिए Precise location अनुमति नहीं मिली; Draw mode अभी भी उपलब्ध है।"
+        }
     }
 
     private fun action(label: String, click: () -> Unit) = Button(this).apply {
@@ -365,8 +427,13 @@ Return exact JSON only. Do not include prose or markdown."""
 
     override fun onDestroy() {
         uploadCallback?.onReceiveValue(null); uploadCallback=null
+        pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
+        pendingGeolocationCallback = null; pendingGeolocationOrigin = null
         web.stopLoading(); web.destroy(); super.onDestroy()
     }
 
-    companion object { private const val REQUEST_FILE=7314 }
+    companion object {
+        private const val REQUEST_FILE = 7314
+        private const val REQUEST_LOCATION = 7315
+    }
 }
