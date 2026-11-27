@@ -46,7 +46,10 @@ class CommandExecutionJournal(context: Context) {
         if (steps.any { !validStep(it) } || steps.map { it.id }.distinct().size != steps.size) return null
         val fingerprint = sha256(command.trim())
         val now = System.currentTimeMillis()
-        val existing = loadAll().firstOrNull {\n            val age = now - it.createdAt\n            it.commandFingerprint == fingerprint && age in 0..DEDUP_WINDOW_MS\n        }
+        val existing = loadAll().firstOrNull {
+            val age = now - it.createdAt
+            it.commandFingerprint == fingerprint && age in 0..DEDUP_WINDOW_MS
+        }
         if (existing != null) return existing
         val plan = CommandTaskPlan(UUID.randomUUID().toString(), fingerprint, System.currentTimeMillis(),
             steps.map { it.copy(state = CommandStepState.PENDING, attempt = 0, resultCode = "") })
