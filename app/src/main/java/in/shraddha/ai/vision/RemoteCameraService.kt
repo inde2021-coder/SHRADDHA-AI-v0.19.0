@@ -25,8 +25,22 @@ class RemoteCameraService : Service() {
     private var camera: CameraDevice? = null
     private var reader: ImageReader? = null
     private var lastFrameAt = 0L
+    @Volatile private var stopping = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopping = true
+            stopCamera()
+            getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().remove("active_target").remove("active_facing").apply()
+            if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+        if (intent?.action != null && intent.action != ACTION_START) {
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+        stopping = false
         val facing = intent?.getStringExtra(EXTRA_FACING) ?: "back"
         val target = intent?.getStringExtra(EXTRA_TARGET).orEmpty()
         val cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -50,10 +64,14 @@ class RemoteCameraService : Service() {
             val channel = NotificationChannel(channelId, "$assistantName remote camera", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
+        val stopIntent = Intent(this, RemoteCameraService::class.java).setAction(ACTION_STOP)
+        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
+        val stopPendingIntent = PendingIntent.getService(this, 43, stopIntent, pendingFlags)
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("$assistantName camera sharing is active")
-            .setContentText("Your camera is being shared with paired devices. Stop it in $assistantName.")
-            .setSmallIcon(android.R.drawable.ic_menu_camera).setOngoing(true).build()
+            .setContentText("Camera stream is limited to the selected paired device.")
+            .setSmallIcon(android.R.drawable.ic_menu_camera).setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "STOP", stopPendingIntent).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(42, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         else startForeground(42, notification)
     }
@@ -74,6 +92,7 @@ class RemoteCameraService : Service() {
                 ?: android.util.Size(640, 480)
             reader = ImageReader.newInstance(size.width, size.height, ImageFormat.JPEG, 2)
             reader?.setOnImageAvailableListener({ source ->
+                if (stopping) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
                 val now = android.os.SystemClock.elapsedRealtime()
                 if (now - lastFrameAt < 250) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
@@ -114,6 +133,7 @@ class RemoteCameraService : Service() {
             }, handler)
             manager.openCamera(id, object : CameraDevice.StateCallback() {
                 override fun onOpened(device: CameraDevice) {
+                    if (stopping) { device.close(); return }
                     camera = device
                     val surface = reader?.surface ?: run { stopSelf(); return }
                     try {
@@ -167,10 +187,17 @@ class RemoteCameraService : Service() {
     }
 
     override fun onDestroy() {
+        stopping = true
         stopCamera()
+        getSharedPreferences("shraddha_remote_camera", Context.MODE_PRIVATE).edit().remove("active_target").remove("active_facing").apply()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-    companion object { const val EXTRA_FACING = "cameraFacing"; const val EXTRA_TARGET = "targetDeviceId" }
+    companion object {
+        const val ACTION_START = "in.shraddha.ai.vision.REMOTE_CAMERA_START"
+        const val ACTION_STOP = "in.shraddha.ai.vision.REMOTE_CAMERA_STOP"
+        const val EXTRA_FACING = "cameraFacing"
+        const val EXTRA_TARGET = "targetDeviceId"
+    }
 }
