@@ -194,6 +194,7 @@ class AkkpsRunnerActivity : Activity() {
                     return false
                 }
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    editFormSessionAuthorized = false
                     if (!AkkpsWebsiteProfile.acceptsRunnerNavigation(url)) {
                         status.text = "सुरक्षा: बाहरी redirect रोका गया। केवल AKKPS Runner origin स्वीकार है।"
                         view.stopLoading()
@@ -488,6 +489,7 @@ class AkkpsRunnerActivity : Activity() {
 
     private var pendingKml: String? = null
     private var submitVerificationPending = false
+    private var editFormSessionAuthorized = false
     private var submitNeedsManualReview = false
 
     private fun confirmAkkpsLocation(
@@ -798,7 +800,7 @@ class AkkpsRunnerActivity : Activity() {
     private fun isAllowedDataEntryRoute(route: AkkpsRunnerRouteMatch?): Boolean =
         route != null &&
             route.module in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) &&
-            (route.isCreateRoute || route.isDetailRoute)
+            (route.isCreateRoute || route.isEditRoute || (route.isDetailRoute && editFormSessionAuthorized))
 
     /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
     private fun openEditForm(module: AkkpsRunnerModule) {
@@ -829,13 +831,29 @@ class AkkpsRunnerActivity : Activity() {
               return JSON.stringify({status:'dispatched'});
             })(__MODULE__)
         """.trimIndent().replace("__MODULE__", JSONObject.quote(module.name))
+        editFormSessionAuthorized = false
         web.evaluateJavascript(js) { raw ->
             val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
-            status.text = when (code) {
-                "dispatched" -> "Edit form खोलने का request भेजा गया। Inspect करें; बदलाव अभी save नहीं हुए हैं।"
-                "ambiguous_edit" -> "एक से अधिक Edit controls मिले; कोई control नहीं चुना।"
-                "unsafe_edit_origin" -> "Edit link AKKPS के same-origin पर नहीं है; रोक दिया।"
-                else -> "इस record पर एक स्पष्ट Edit control नहीं मिला।"
+            when (code) {
+                "dispatched" -> web.postDelayed({
+                    inspectPage { page ->
+                        val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+                        val forms = page.optJSONArray("forms")?.length() ?: 0
+                        val fields = page.optJSONArray("fields")?.length() ?: 0
+                        editFormSessionAuthorized = route != null &&
+                            route.module == module &&
+                            route.isDetailRoute &&
+                            forms > 0 && fields > 0
+                        status.text = if (editFormSessionAuthorized) {
+                            "Edit form खुला और Inspect में fields मिलीं। अब field=value कमांड दे सकते हैं; Save/Submit अलग confirmation से होगा।"
+                        } else {
+                            "Edit control क्लिक हुआ, लेकिन verified edit form नहीं मिला। Auto-fill बंद है; पेज manually जाँचें।"
+                        }
+                    }
+                }, 800)
+                "ambiguous_edit" -> status.text = "एक से अधिक Edit controls मिले; कोई control नहीं चुना।"
+                "unsafe_edit_origin" -> status.text = "Edit link AKKPS के same-origin पर नहीं है; रोक दिया।"
+                else -> status.text = "इस record पर एक स्पष्ट Edit control नहीं मिला।"
             }
         }
     }
