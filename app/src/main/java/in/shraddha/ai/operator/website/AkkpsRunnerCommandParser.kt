@@ -55,6 +55,10 @@ object AkkpsRunnerCommandParser {
             }
         }
 
+        if (values.size > MAX_ASSIGNMENTS) {
+            issues += "एक कमांड में अधिकतम $MAX_ASSIGNMENTS फील्ड ही स्वीकार हैं।"
+        }
+
         return AkkpsRunnerCommand(
             assignments = if (issues.isEmpty()) values.values.toList() else emptyList(),
             submit = submit,
@@ -65,4 +69,5 @@ object AkkpsRunnerCommandParser {
     private const val MAX_COMMAND_CHARS = 4_000
     private const val MAX_KEY_CHARS = 70
     private const val MAX_VALUE_CHARS = 500
+    private const val MAX_ASSIGNMENTS = 100
 }
