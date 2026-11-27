@@ -11,15 +11,15 @@ object AkkpsFarmerCardOcrParser {
     }
 
     private val labels = linkedMapOf(
-        "name" to listOf("farmer name", "name", "किसान का नाम", "कृषक का नाम", "नाम"),
-        "farmer_id" to listOf("farmer id", "farmer code", "registration no", "registration number", "किसान आईडी", "पंजीयन क्रमांक", "पंजीयन संख्या"),
+        "farmerName" to listOf("farmer name", "name", "किसान का नाम", "कृषक का नाम", "नाम"),
+        "farmerId" to listOf("farmer id", "farmer code", "registration no", "registration number", "किसान आईडी", "पंजीयन क्रमांक", "पंजीयन संख्या"),
         "village" to listOf("village", "gram", "ग्राम", "गांव", "गाँव"),
         "block" to listOf("block", "विकासखंड", "तहसील"),
         "district" to listOf("district", "जिला"),
         "state" to listOf("state", "राज्य")
     )
 
-    private val required = listOf("name", "farmer_id", "village", "district")
+    private val required = listOf("farmerName", "farmerId", "village", "district")
 
     fun parse(ocrText: String): Result {
         val found = linkedMapOf<String, String>()
