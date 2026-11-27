@@ -18,10 +18,10 @@ class NaturalLanguageWorkflowRouterTest {
         )
     )
 
-    @Test fun hindiDeleteMatchesTrainedDeleteWorkflow() {
+    @Test fun hindiDeleteDoesNotAutomaticallyRouteToDestructiveWorkflow() {
         val result = NaturalLanguageWorkflowRouter.route("ग्राहक हटाओ", profile)
-        assertNotNull(result.route)
-        assertEquals("Delete customer", result.route?.workflowName)
+        assertEquals(null, result.route)
+        org.junit.Assert.assertTrue(result.message.contains("high-impact"))
     }
 
     @Test fun hindiUpdateMatchesTrainedUpdateWorkflow() {
@@ -67,6 +67,36 @@ class NaturalLanguageWorkflowRouterTest {
 
     @Test fun mixedActionInstructionRequiresSeparateSteps() {
         val result = NaturalLanguageWorkflowRouter.route("search customer and send invoice", profile)
+        assertEquals(null, result.route)
+        org.junit.Assert.assertTrue(result.message.contains("कई अलग काम"))
+    }
+
+    @Test fun commonHindiDeleteInflectionsAndHinglishPhrasesAreBlocked() {
+        listOf("ग्राहक हटा दो", "ग्राहक हटा दें", "ग्राहक मिटा देना", "customer hata do", "customer mita do")
+            .forEach { command ->
+                val result = NaturalLanguageWorkflowRouter.route(command, profile)
+                assertEquals(command, null, result.route)
+                org.junit.Assert.assertTrue(command, result.message.contains("high-impact"))
+            }
+    }
+
+    @Test fun paymentAndPublishHinglishPhrasesAreBlocked() {
+        listOf("invoice ka payment karo", "paise bhejo", "report publish karo", "report post")
+            .forEach { command ->
+                val result = NaturalLanguageWorkflowRouter.route(command, profile)
+                assertEquals(command, null, result.route)
+                org.junit.Assert.assertTrue(command, result.message.contains("high-impact"))
+            }
+    }
+
+    @Test fun fullWidthEnglishHighImpactWordsAreNormalizedBeforeRouting() {
+        val result = NaturalLanguageWorkflowRouter.route("ｐａｙ invoice", profile)
+        assertEquals(null, result.route)
+        org.junit.Assert.assertTrue(result.message.contains("high-impact"))
+    }
+
+    @Test fun mixedHindiActionsRequireSeparateInstructions() {
+        val result = NaturalLanguageWorkflowRouter.route("ग्राहक खोजो और इनवॉइस भेजो", profile)
         assertEquals(null, result.route)
         org.junit.Assert.assertTrue(result.message.contains("कई अलग काम"))
     }
