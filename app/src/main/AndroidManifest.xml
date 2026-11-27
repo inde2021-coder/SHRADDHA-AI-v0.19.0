@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -19,6 +21,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -119,14 +123,7 @@
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.lia.fileprovider" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/lia_file_paths" />
         </provider>
-            <activity
-            android:name="com.Lia.assistant.action.MessageReviewActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:label="Shraddha AI Message Review" />
-        <activity
-            android:name="com.Lia.assistant.action.MessageComposeActivity"
-            android:exported="false"
-            android:label="Shraddha AI Message Composer" />
+            <activity android:name="com.Lia.assistant.action.MessageReviewActivity" android:exported="false" android:excludeFromRecents="true" android:label="Shraddha AI Message Review" />
+        <activity android:name="com.Lia.assistant.action.MessageComposeActivity" android:exported="false" android:label="Shraddha AI Message Composer" />
 </application>
 </manifest>
