@@ -27,7 +27,7 @@ object AkkpsRunnerCommandParser {
         var submit = false
 
         raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
-            val normalized = part.lowercase().replace(Regex("\\s+"), " ").trim()
+            val normalized = AkkpsFieldAliasCatalog.normalizeLabel(part)
             if (normalized in submitAliases) {
                 submit = true
                 return@forEach
@@ -44,7 +44,7 @@ object AkkpsRunnerCommandParser {
                 issues += "फील्ड नाम या मान की लंबाई अमान्य है।"
                 return@forEach
             }
-            val identity = key.lowercase().replace(Regex("\\s+"), " ")
+            val identity = AkkpsFieldAliasCatalog.normalizeLabel(key)
             val previous = values[identity]
             if (previous != null) {
                 if (previous.second != value) issues += "एक ही फील्ड के लिए अलग-अलग मान दिए गए हैं: $key"
