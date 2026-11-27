@@ -156,7 +156,7 @@ class TaskPlannerOperatorBridge(
             val approvalGranted = session.audit.any {
                 it.actionId == action.id && it.event == "STEP_APPROVED"
             }
-            val needsApproval = action.requiresApproval ||
+            val needsApproval = action.requiresApproval || action.step.requiresConfirmation ||
                 action.risk == Risk.SENSITIVE || action.risk == Risk.IRREVERSIBLE
             if (needsApproval && !approvalGranted) {
                 return hub.failCurrentStep("Sensitive action reached execution without step-specific approval")
