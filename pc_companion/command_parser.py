@@ -1,14 +1,33 @@
 """Small allow-listed text command parser for PC-to-Android control."""
 import re
+import unicodedata
+
+
+# Remote typing must never be used to enter authentication or payment secrets.
+# Include common Hindi spellings and English transliterations used in voice commands.
+_SENSITIVE_INPUT = re.compile(
+    r"(?i)(?:"
+    r"\b(?:pass(?:word|code)?|pass\s*word|otp|one[- ]?time\s*(?:password|code|pin)?|"
+    r"verification\s*code|security\s*code|secret\s*key|recovery\s*(?:phrase|code)|"
+    r"cvv|cvc|bank\s*pin|upi\s*pin|pin)\b"
+    r"|पासवर्ड|पासकोड|ओटीपी|ओ टी पी|वन टाइम पासवर्ड|सत्यापन कोड|सुरक्षा कोड|"
+    r"गुप्त कुंजी|रिकवरी वाक्यांश|रिकवरी कोड|सीवीवी|यूपीआई पिन|बैंक पिन|पिन"
+    r")"
+)
+
+
+def _normalise_command(raw):
+    # NFKC makes visually equivalent full-width/compatibility characters consistent.
+    return " ".join(unicodedata.normalize("NFKC", str(raw)).strip().split())
 
 
 def parse_android_command(raw):
-    command = " ".join(str(raw).strip().split())
+    command = _normalise_command(raw)
     if not command:
         raise ValueError("Type a command first.")
     if len(command) > 500:
         raise ValueError("Command is too long.")
-    lower = command.lower()
+    lower = command.casefold()
     if lower in {"home", "होम", "home screen"}:
         return {"kind": "home"}
     if lower in {"back", "go back", "वापस", "पीछे जाओ"}:
@@ -20,16 +39,20 @@ def parse_android_command(raw):
     match = re.match(r"^(?:open|launch|खोलो|खोल)\s+(.+)$", command, re.I)
     if match:
         name = match.group(1).strip()
-        if len(name) > 80 or any(ch in name for ch in "\\/:") or ".." in name:
+        if len(name) > 80 or any(ch in name for ch in "\\\\/:") or ".." in name:
             raise ValueError("App name is invalid.")
         return {"kind": "open_app", "appName": name}
-    match = re.match(r"^(?:type|लिखो|टाइप करो)\s+(.+)$", command, re.I)
+    match = re.match(r"^(?:type|लिखो|टाइप करो|लिख दो|टाइप)\s+(.+)$", command, re.I)
     if match:
         text = match.group(1)
-        if re.search(r"(?i)\b(password|passcode|otp|one[- ]time code|pin|cvv|recovery phrase)\b|पासवर्ड|ओटीपी|पिन", text):
-            raise ValueError("Sensitive password, OTP or PIN text cannot be typed remotely.")
+        if _SENSITIVE_INPUT.search(text):
+            raise ValueError("Sensitive password, OTP, PIN or security text cannot be typed remotely.")
         return {"kind": "type", "text": text}
-    if lower in {"read screen", "read this screen", "screen ocr", "ocr", "स्क्रीन पढ़ो", "स्क्रीन का टेक्स्ट पढ़ो", "स्क्रीन से टेक्स्ट निकालो"}:
+    if lower in {
+        "read screen", "read this screen", "screen ocr", "ocr",
+        "स्क्रीन पढ़ो", "स्क्रीन का टेक्स्ट पढ़ो", "स्क्रीन से टेक्स्ट निकालो",
+        "स्क्रीन पर क्या लिखा है", "यह स्क्रीन पढ़ो"
+    }:
         return {"kind": "ocr"}
     match = re.match(r"^(?:click text|click button|press button|बटन दबाओ|टेक्स्ट पर क्लिक करो)\s+(.+)$", command, re.I)
     if match:
