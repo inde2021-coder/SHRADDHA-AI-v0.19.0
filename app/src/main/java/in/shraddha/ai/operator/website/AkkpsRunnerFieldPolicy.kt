@@ -9,4 +9,7 @@ internal object AkkpsRunnerFieldPolicy {
     )
 
     fun isAllowedInputType(type: String): Boolean = type.trim().lowercase() in allowedInputTypes
+
+    /** Only ordinary single-select controls may be filled; multi-select is always blocked. */
+    fun isAllowedSelect(multiple: Boolean, disabled: Boolean): Boolean = !multiple && !disabled
 }
