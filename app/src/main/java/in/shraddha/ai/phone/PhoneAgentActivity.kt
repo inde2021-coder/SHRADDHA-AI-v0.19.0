@@ -1,5 +1,7 @@
 package `in`.shraddha.ai.phone
 
+import android.annotation.SuppressLint
+
 import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.Manifest
@@ -340,6 +342,7 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun placeCall(number: String) {
         val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
         if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
