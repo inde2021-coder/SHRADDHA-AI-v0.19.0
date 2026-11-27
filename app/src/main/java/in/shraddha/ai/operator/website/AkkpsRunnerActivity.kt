@@ -147,7 +147,8 @@ class AkkpsRunnerActivity : Activity() {
         val boundaryActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         boundaryActions.addView(action("GPS Walk शुरू") { startGpsWalk() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         boundaryActions.addView(action("Walk रोकें") { stopGpsWalk() }, LinearLayout.LayoutParams(0, dp(44), 1f))
-        boundaryActions.addView(action("Save / Reopen") { saveOrReopenBoundary() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        boundaryActions.addView(action("Save Boundary") { saveBoundary() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        boundaryActions.addView(action("Reopen Saved") { reopenBoundary() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(boundaryActions)
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
@@ -267,32 +268,36 @@ class AkkpsRunnerActivity : Activity() {
         status.text = "GPS Walk रुकी: ${boundaryPoints.size} points • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
     }
 
-    private fun saveOrReopenBoundary() {
+    private fun saveBoundary() {
         val plotId = plotIdInput.text.toString().trim()
         if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
         if (gpsWalkActive) { status.text = "पहले GPS Walk रोकें, फिर Save करें।"; return }
-        val store = AkkpsBoundaryStore(this)
-        if (boundaryPoints.size >= 3) {
-            val boundary = AkkpsBoundary(boundaryPoints.toList())
-            val issue = AkkpsBoundaryGeometry.validate(boundary.points)
-            if (issue != null) { status.text = issue; return }
-            AlertDialog.Builder(this)
-                .setTitle("Boundary Save करें?")
-                .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres\n\nयह boundary इस फोन में locally save होगी। AKKPS server पर upload नहीं होगी।")
-                .setNegativeButton("रद्द करें", null)
-                .setPositiveButton("Local Save") { _, _ ->
-                    runCatching { store.save(plotId, boundary) }
-                        .onSuccess { status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres" }
-                        .onFailure { status.text = "Save failed: ${it.localizedMessage}" }
-                }.show()
-            return
-        }
-        runCatching { store.load(plotId) }
+        if (boundaryPoints.size < 3) { status.text = "Save करने के लिए पहले कम-से-कम 3 GPS points रिकॉर्ड करें या KML Import करें।"; return }
+        val boundary = AkkpsBoundary(boundaryPoints.toList())
+        val issue = AkkpsBoundaryGeometry.validate(boundary.points)
+        if (issue != null) { status.text = issue; return }
+        AlertDialog.Builder(this)
+            .setTitle("Boundary Save करें?")
+            .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres\n\nयह boundary इस फोन में encrypted local storage में save होगी। AKKPS server पर upload नहीं होगी।")
+            .setNegativeButton("रद्द करें", null)
+            .setPositiveButton("Local Save") { _, _ ->
+                runCatching { AkkpsBoundaryStore(this).save(plotId, boundary) }
+                    .onSuccess { status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres" }
+                    .onFailure { status.text = "Save failed: ${it.localizedMessage}" }
+            }.show()
+    }
+
+    private fun reopenBoundary() {
+        val plotId = plotIdInput.text.toString().trim()
+        if (plotId.isBlank()) { status.text = "पहले वही AKKPS Plot ID भरें।"; return }
+        if (gpsWalkActive) { status.text = "Saved boundary खोलने से पहले GPS Walk रोकें।"; return }
+        runCatching { AkkpsBoundaryStore(this).load(plotId) }
             .onSuccess { saved ->
                 if (saved == null) status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
                 else {
-                    boundaryPoints.clear(); boundaryPoints.addAll(saved.points)
-                    status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres"
+                    boundaryPoints.clear()
+                    boundaryPoints.addAll(saved.points)
+                    status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
                 }
             }
             .onFailure { status.text = "Saved boundary पढ़ी नहीं जा सकी: ${it.localizedMessage}" }
