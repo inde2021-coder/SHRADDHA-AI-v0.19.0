@@ -201,7 +201,7 @@ class AkkpsRunnerActivity : Activity() {
                     (e.tagName==='SELECT'&&e.multiple)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
-                    .map(norm).some(v=>v && (v===key||v.includes(key)||key.includes(v)));
+                    .map(norm).some(v=>v && v===key);
                 });
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
@@ -213,7 +213,10 @@ class AkkpsRunnerActivity : Activity() {
                 out.push({key:item.key,status:'filled'});
               }
               const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
-                .filter(e=>!e.disabled&&!e.value&&e.type!=='file')
+                .filter(e=>!e.disabled&&!e.readOnly&&!e.hidden&&e.getAttribute('aria-disabled')!=='true'&&
+                  !e.closest('[aria-hidden="true"]')&&
+                  (e.tagName!=='INPUT'||allowedTypes.has((e.type||'').toLowerCase()))&&
+                  !(e.tagName==='SELECT'&&e.multiple)&&!String(e.value||'').trim())
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
@@ -344,7 +347,7 @@ Return exact JSON only. Do not include prose or markdown."""
                   const labels=[...(e.labels||[])].map(x=>x.innerText);
                   const parent=e.closest('label'); if(parent) labels.push(parent.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels]
-                    .map(norm).some(v=>v&&(v===key||v.includes(key)||key.includes(v)));
+                    .map(norm).some(v=>v&&v===key);
                 });
                 if(found.length!==1) return JSON.stringify({status:found.length?'ambiguous_field':'field_not_found'});
                 const field=found[0];
