@@ -74,4 +74,18 @@ class AkkpsPageCapabilityDiscoveryTest {
         }
     }
 
+    @Test fun doesNotInferSearchSaveOrSubmitFromNavigationLabelsOrButtonsWithoutForm() {
+        val result = AkkpsPageCapabilityDiscovery.discover(
+            formCount = 0,
+            tableCount = 0,
+            fieldTypes = emptyList(),
+            fieldLabels = emptyList(),
+            actionLabels = listOf("Save", "Submit"),
+            navigationLabels = listOf("Search", "Find records")
+        ).associateBy { it.operation }
+        assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.SEARCH_RECORDS).state)
+        assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.SAVE_RECORD).state)
+        assertEquals(CapabilityState.UNKNOWN, result.getValue(WebsiteOperation.SUBMIT_FORM).state)
+    }
+
 }
