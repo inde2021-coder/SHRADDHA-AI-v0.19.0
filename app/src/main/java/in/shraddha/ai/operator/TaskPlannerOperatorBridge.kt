@@ -36,6 +36,7 @@ class TaskPlannerOperatorBridge(
     fun createPlan(workflowId: String, title: String, planned: List<PlannedOperatorAction>): ShraddhaIntegrationHub.Session {
         require(planned.isNotEmpty() && planned.size <= 100)
         require(planned.map { it.id }.distinct().size == planned.size)
+        validateDependencies(planned)
         val normalized = planned.map { action ->
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
@@ -62,6 +63,35 @@ class TaskPlannerOperatorBridge(
         verified.clear()
         audit("task_plan", "created", "workflow=$workflowId; steps=${planned.size}")
         return session
+    }
+
+    /**
+     * Validate the exact dependency graph before asking the hub to register the plan.
+     * This gives the Operator bridge a fail-closed contract independent of planner ordering.
+     */
+    private fun validateDependencies(planned: List<PlannedOperatorAction>) {
+        val ids = planned.map { it.id }.toSet()
+        planned.forEach { action ->
+            require(action.dependsOn.none { it == action.id }) {
+                "Action ${action.id} cannot depend on itself"
+            }
+            val missing = action.dependsOn - ids
+            require(missing.isEmpty()) {
+                "Action ${action.id} references unknown dependencies: ${missing.sorted().joinToString()}"
+            }
+        }
+
+        val dependencies = planned.associate { it.id to it.dependsOn }
+        val visiting = mutableSetOf<String>()
+        val visited = mutableSetOf<String>()
+        fun visit(id: String) {
+            if (id in visited) return
+            require(visiting.add(id)) { "Operator plan contains a dependency cycle at action $id" }
+            dependencies[id].orEmpty().forEach(::visit)
+            visiting.remove(id)
+            visited.add(id)
+        }
+        planned.forEach { visit(it.id) }
     }
 
     /** Starts the plan and automatically runs only steps that do not require user approval. */
