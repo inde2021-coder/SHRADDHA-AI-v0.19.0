@@ -59,6 +59,12 @@ object AkkpsBoundaryGeometry {
     /** Parse the outer KML coordinates tuple order: longitude,latitude[,altitude]. */
     fun parseKml(kml: String): Result<AkkpsBoundary> = runCatching {
         require(kml.length in 1..2_000_000) { "KML file size is invalid." }
+        require(!Regex("(?is)<!\\s*(DOCTYPE|ENTITY)\\b").containsMatchIn(kml)) {
+            "KML में DTD या custom entity declarations स्वीकार नहीं हैं।"
+        }
+        require(!Regex("(?is)<!\\[CDATA\\[").containsMatchIn(kml)) {
+            "KML में CDATA sections स्वीकार नहीं हैं।"
+        }
         require(Regex("(?is)<\\s*Polygon\\b").findAll(kml).count() == 1) {
             "KML में केवल एक Polygon स्वीकार है; MultiGeometry/MultiPolygon import नहीं होगा।"
         }
@@ -85,8 +91,10 @@ object AkkpsBoundaryGeometry {
             }
         validate(points)?.let { error(it) }
         fun metadata(name: String): String? {
-            val pattern = Regex("(?is)<Data\\s+name=\"" + Regex.escape(name) + "\"\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
-            return pattern.find(kml)?.groupValues?.get(1)?.let(::xmlUnescape)?.takeIf { it.isNotBlank() }
+            val pattern = Regex("(?is)<Data\\s+name=\\"" + Regex.escape(name) + "\\"\\s*>\\s*<value>(.*?)</value>\\s*</Data>")
+            val matches = pattern.findAll(kml).toList()
+            require(matches.size <= 1) { "KML metadata '$name' दोहराया गया है; import रोक दिया गया।" }
+            return matches.singleOrNull()?.groupValues?.get(1)?.let(::xmlUnescape)?.takeIf { it.isNotBlank() }
         }
         val source = metadata("source")
         val yearText = metadata("datasetYear")
