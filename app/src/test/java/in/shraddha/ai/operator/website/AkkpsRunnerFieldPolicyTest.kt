@@ -14,4 +14,11 @@ class AkkpsRunnerFieldPolicyTest {
         listOf("hidden", "password", "file", "checkbox", "radio", "button", "submit", "reset", "image", "color", "range", "select-multiple")
             .forEach { assertFalse("$it must not be auto-filled", AkkpsRunnerFieldPolicy.isAllowedInputType(it)) }
     }
+    @Test fun allowsOnlyEnabledSingleSelectControls() {
+        assertTrue(AkkpsRunnerFieldPolicy.isAllowedSelect(multiple = false, disabled = false))
+        assertFalse(AkkpsRunnerFieldPolicy.isAllowedSelect(multiple = true, disabled = false))
+        assertFalse(AkkpsRunnerFieldPolicy.isAllowedSelect(multiple = false, disabled = true))
+        assertFalse(AkkpsRunnerFieldPolicy.isAllowedSelect(multiple = true, disabled = true))
+    }
+
 }
