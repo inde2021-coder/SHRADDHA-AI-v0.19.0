@@ -15,7 +15,8 @@ data class AkkpsRunnerCommand(
  */
 object AkkpsRunnerCommandParser {
     private val submitAliases = setOf(
-        "submit", "save", "send", "जमा", "जमा करें", "जमा करो", "सबमिट", "सबमिट करें",
+        "submit", "submit now", "save", "save record", "send",
+        "जमा", "जमा करें", "जमा करो", "जमा कर दें", "सबमिट", "सबमिट करें",
         "भेजो", "भेज दें", "भेजें", "सहेजें", "सेव", "सेव करें"
     )
 
@@ -24,18 +25,22 @@ object AkkpsRunnerCommandParser {
         if (raw.length > MAX_COMMAND_CHARS) {
             return AkkpsRunnerCommand(emptyList(), false, listOf("कमांड बहुत लंबी है; अधिकतम $MAX_COMMAND_CHARS अक्षर।"))
         }
+        val normalizedCommand = Normalizer.normalize(raw, Normalizer.Form.NFKC)
+        if (normalizedCommand.length > MAX_COMMAND_CHARS) {
+            return AkkpsRunnerCommand(emptyList(), false, listOf("Unicode normalization के बाद कमांड बहुत लंबी है।"))
+        }
 
         val values = linkedMapOf<String, Pair<String, String>>()
         val issues = mutableListOf<String>()
         var submit = false
 
-        raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+        normalizedCommand.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
             val normalized = normalizeSyntax(part)
             if (normalized in submitAliases) {
                 submit = true
                 return@forEach
             }
-            val normalizedPart = Normalizer.normalize(part, Normalizer.Form.NFKC)
+            val normalizedPart = part
             val splitAt = normalizedPart.indexOf('=').takeIf { it >= 0 } ?: normalizedPart.indexOf(':')
             if (splitAt <= 0) {
                 issues += "यह हिस्सा समझ नहीं आया: ${part.take(60)}"
@@ -49,6 +54,10 @@ object AkkpsRunnerCommandParser {
                 return@forEach
             }
             val identity = normalizeSyntax(key)
+            if (identity !in values && values.size >= MAX_ASSIGNMENTS) {
+                issues += "एक कमांड में अधिकतम $MAX_ASSIGNMENTS फील्ड ही दी जा सकती हैं।"
+                return@forEach
+            }
             val previous = values[identity]
             if (previous != null) {
                 if (previous.second != value) issues += "एक ही फील्ड के लिए अलग-अलग मान दिए गए हैं: $key"
@@ -74,6 +83,7 @@ object AkkpsRunnerCommandParser {
             .trim()
 
     private const val MAX_COMMAND_CHARS = 4_000
+    private const val MAX_ASSIGNMENTS = 100
     private const val MAX_KEY_CHARS = 70
     private const val MAX_VALUE_CHARS = 500
 }
