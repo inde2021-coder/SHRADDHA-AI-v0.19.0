@@ -287,7 +287,10 @@ class AkkpsRunnerActivity : Activity() {
                     .setPositiveButton("पुरानी Walk Resume") { _, _ ->
                         boundaryPoints.clear()
                         boundaryPoints.addAll(draft.points)
-                        boundaryProvenance = null
+                        boundaryProvenance = AkkpsBoundary(
+                            points = emptyList(),
+                            source = "Phone GNSS GPS Walk"
+                        )
                         bestGpsAccuracyMeters = draft.bestAccuracyMeters ?: Float.MAX_VALUE
                         gpsWalkPlotId = plotId
                         gpsWalkSessionInitialized = true
@@ -319,7 +322,10 @@ class AkkpsRunnerActivity : Activity() {
         if (gpsWalkActive) return
         if (clearExisting) {
             boundaryPoints.clear()
-            boundaryProvenance = null
+            boundaryProvenance = AkkpsBoundary(
+                points = emptyList(),
+                source = "Phone GNSS GPS Walk"
+            )
             gpsWalkPlotId?.let { AkkpsBoundaryDraftStore(this).delete(it) }
             gpsWalkPlotId = plotIdInput.text.toString().trim()
             bestGpsAccuracyMeters = Float.MAX_VALUE
