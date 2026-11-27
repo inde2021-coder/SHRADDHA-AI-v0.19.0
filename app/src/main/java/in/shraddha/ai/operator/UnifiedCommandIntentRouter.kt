@@ -115,7 +115,7 @@ object UnifiedCommandIntentRouter {
     private fun termPosition(text: String, term: String): Int {
         // Apply Unicode-aware token boundaries to Hindi as well as Latin terms.
         // A verb fragment inside a longer Hindi word must not trigger an action.
-        val pattern = Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(term) + "(?![\\p{L}\\p{N}])")
+        val pattern = Regex("(?<![\\p{L}\\p{M}\\p{N}])" + Regex.escape(term) + "(?![\\p{L}\\p{M}\\p{N}])")
         return pattern.find(text)?.range?.first ?: -1
     }
 
