@@ -26,6 +26,7 @@ object AkkpsBoundaryGeometry {
         val ring = closeRing(points)
         val open = ring.dropLast(1)
         if (open.distinct().size < 3) return "कम-से-कम 3 अलग boundary points चाहिए।"
+        if (open.distinct().size != open.size) return "Boundary में कोई point दोबारा आया है; polygon अमान्य है।"
         if (open.zipWithNext().any { (a, b) -> a == b }) return "लगातार दो boundary points एक जैसे नहीं हो सकते।"
         if (areaSquareMeters(ring) < 1.0) return "Boundary का area बहुत छोटा या शून्य है।"
         if (hasSelfIntersection(ring)) return "Boundary polygon आपस में cross कर रहा है।"
@@ -99,19 +100,41 @@ object AkkpsBoundaryGeometry {
 
     private fun hasSelfIntersection(closed: List<AkkpsGeoPoint>): Boolean {
         val points = closed.dropLast(1)
+        val epsilon = 1e-12
+
         fun orient(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint): Double =
-            (b.longitude - a.longitude) * (c.latitude - a.latitude) - (b.latitude - a.latitude) * (c.longitude - a.longitude)
+            (b.longitude - a.longitude) * (c.latitude - a.latitude) -
+                (b.latitude - a.latitude) * (c.longitude - a.longitude)
+
+        fun onSegment(a: AkkpsGeoPoint, b: AkkpsGeoPoint, p: AkkpsGeoPoint): Boolean =
+            p.longitude >= minOf(a.longitude, b.longitude) - epsilon &&
+                p.longitude <= maxOf(a.longitude, b.longitude) + epsilon &&
+                p.latitude >= minOf(a.latitude, b.latitude) - epsilon &&
+                p.latitude <= maxOf(a.latitude, b.latitude) + epsilon
+
         fun intersects(a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint, d: AkkpsGeoPoint): Boolean {
-            val o1 = orient(a, b, c); val o2 = orient(a, b, d)
-            val o3 = orient(c, d, a); val o4 = orient(c, d, b)
-            return o1 * o2 < 0.0 && o3 * o4 < 0.0
+            val o1 = orient(a, b, c)
+            val o2 = orient(a, b, d)
+            val o3 = orient(c, d, a)
+            val o4 = orient(c, d, b)
+            val properCrossing = ((o1 > epsilon && o2 < -epsilon) || (o1 < -epsilon && o2 > epsilon)) &&
+                ((o3 > epsilon && o4 < -epsilon) || (o3 < -epsilon && o4 > epsilon))
+            if (properCrossing) return true
+            // Also reject collinear overlap and non-adjacent endpoint touches.
+            return (abs(o1) <= epsilon && onSegment(a, b, c)) ||
+                (abs(o2) <= epsilon && onSegment(a, b, d)) ||
+                (abs(o3) <= epsilon && onSegment(c, d, a)) ||
+                (abs(o4) <= epsilon && onSegment(c, d, b))
         }
+
         for (i in points.indices) for (j in i + 1 until points.size) {
             val iNext = (i + 1) % points.size
             val jNext = (j + 1) % points.size
+            // Consecutive edges share their intended polygon vertex.
             if (i == j || iNext == j || jNext == i) continue
             if (intersects(points[i], points[iNext], points[j], points[jNext])) return true
         }
         return false
     }
+}
 }
