@@ -44,3 +44,5 @@ jobs:
         run: |
           python -m unittest discover -s pc_companion/tests -p 'test_language_runtime.py' -v
           python -m unittest discover -s tests -p 'test_pawari_dataset_validator.py' -v
+      - name: Compile local multilingual runtime and Language Lab
+        run: python -m py_compile pc_companion/language_runtime.py pc_companion/language_lab.py
