@@ -552,7 +552,7 @@ class AkkpsRunnerActivity : Activity() {
                 try {
                   const parsed=typeof body==='string'?JSON.parse(body):body;
                   const path=new URL(url,location.href).pathname;
-                  const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
+                  const id=parsed?.recordId||parsed?.farmerId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.farmerId||parsed?.data?.plotId||parsed?.data?.reportId||'';
                   const state=String(parsed?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||'').slice(0,160);
                   const recordWrite=/\\b(plot|plots|farmer|farmers|awd|report|records|boundary)\\b/i.test(path);
@@ -1183,8 +1183,9 @@ Return exact JSON only. Do not include prose or markdown."""
               const notice=notices.find(x=>success.test(x))||'';
               const failed=notices.some(x=>failure.test(x));
               const body=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
-              const identity=values.filter(v=>v && v.length>=3).every(v=>body.includes(v));
-              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\\/(plots|awd-reports)\\/[^/]+/i.test(a.getAttribute('href')||''));
+              const identityValues=values.filter(v=>v && v.length>=3);
+              const identity=identityValues.length>0&&identityValues.every(v=>body.includes(v));
+              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\\/(farmers|plots|awd-reports)\\/[^/]+/i.test(a.getAttribute('href')||''));
               return JSON.stringify({notice,failed,identity,recordLink,serverSuccess:!!serverRecord,recordId:serverRecord?.recordId||'',serverPath:serverRecord?.path||'',serverFailure});
             })(__VALUES__)
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
