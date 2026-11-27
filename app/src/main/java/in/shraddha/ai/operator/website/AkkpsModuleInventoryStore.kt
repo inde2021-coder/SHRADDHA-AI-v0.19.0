@@ -17,7 +17,7 @@ object AkkpsModuleInventoryCodec {
         require(entries.all { (key, entry) ->
             key == entry.module && key in allowedModules &&
                 entry.observedAtEpochMillis > 0L &&
-                entry.capabilities.keys.all { it in WebsiteOperation.entries.map(WebsiteOperation::name) }
+                entry.capabilities.keys.all { it in WebsiteOperation.entries.map { it.name } }
         }) { "AKKPS module inventory contains unsupported values." }
         return JSONObject().put("version", 1).put("modules", JSONArray().apply {
             entries.values.sortedBy { it.module }.forEach { entry ->
