@@ -94,11 +94,15 @@ class WorkflowEngine {
     }
 
     private fun validate(s: WorkflowSnapshot) {
-        require(s.id.isNotBlank()) { "Workflow ID is required" }
-        require(s.title.isNotBlank()) { "Workflow title is required" }
-        require(s.steps.isNotEmpty()) { "Workflow must contain at least one step" }
+        require(s.id.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Workflow ID is invalid" }
+        require(s.title.isNotBlank() && s.title.length <= 120) { "Workflow title is invalid" }
+        require(s.message.length <= 240) { "Workflow message is too long" }
+        require(s.steps.isNotEmpty() && s.steps.size <= 256) { "Workflow must contain 1-256 steps" }
         require(s.currentStep in s.steps.indices) { "Current step is outside the workflow" }
-        require(s.steps.all { it.id.isNotBlank() && it.title.isNotBlank() }) { "Every step needs an ID and title" }
+        require(s.steps.all {
+            it.id.matches(Regex("[A-Za-z0-9_-]{1,64}")) &&
+                it.title.isNotBlank() && it.title.length <= 120
+        }) { "Every step needs a valid ID and title" }
         require(s.steps.map { it.id }.distinct().size == s.steps.size) { "Workflow step IDs must be unique" }
     }
     fun markFailed(s: WorkflowSnapshot, reason: String): WorkflowSnapshot {
