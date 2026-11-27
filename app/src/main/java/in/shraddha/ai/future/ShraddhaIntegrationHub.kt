@@ -213,6 +213,12 @@ class ShraddhaIntegrationHub(
                 item.getString("event"), item.getString("detail"), item.getLong("timestamp"))
         }.toMutableList()
         val workflowId = workflowJson.getString("id")
+        validateRecoveredIdentity(
+            workflowId,
+            plan.ordered.map { it.id },
+            steps.map { it.id },
+            audit.map { it.workflowId }
+        )
         if (status == WorkflowStatus.RUNNING || status == WorkflowStatus.VERIFYING) {
             status = WorkflowStatus.FAILED
             message = "Process restarted during an action. No action was replayed; inspect the target app and create a new approved run."
@@ -225,5 +231,26 @@ class ShraddhaIntegrationHub(
         )
         require(workflow.currentStep in workflow.steps.indices)
         return Session(plan, workflow, audit.toList())
+    }
+
+    companion object {
+        /** Rejects mixed or tampered records before any recovered step can be presented. */
+        internal fun validateRecoveredIdentity(
+            workflowId: String,
+            plannedStepIds: List<String>,
+            persistedStepIds: List<String>,
+            auditWorkflowIds: List<String>
+        ) {
+            require(workflowId.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Persisted workflow ID is invalid." }
+            require(plannedStepIds.isNotEmpty() && plannedStepIds.distinct().size == plannedStepIds.size) {
+                "Persisted plan step IDs are invalid."
+            }
+            require(persistedStepIds == plannedStepIds) {
+                "Persisted plan and workflow steps do not match; recovery requires manual review."
+            }
+            require(auditWorkflowIds.isNotEmpty() && auditWorkflowIds.all { it == workflowId }) {
+                "Persisted audit belongs to a different workflow; recovery requires manual review."
+            }
+        }
     }
 }
