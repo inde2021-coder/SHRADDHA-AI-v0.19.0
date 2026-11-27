@@ -127,6 +127,35 @@ class TaskPlannerOperatorBridgeTest {
     }
 
 
+    @Test(expected = IllegalArgumentException::class)
+    fun missingDependencyIsRejectedBeforeHubRegistration() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
+        bridge.createPlan("missing-dependency", "Missing dependency", listOf(
+            PlannedOperatorAction("step-a", "Step A", OperatorStep(OperatorActionType.BACK),
+                dependsOn = setOf("does-not-exist"))
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun selfDependencyIsRejectedBeforeHubRegistration() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
+        bridge.createPlan("self-dependency", "Self dependency", listOf(
+            PlannedOperatorAction("step-a", "Step A", OperatorStep(OperatorActionType.BACK),
+                dependsOn = setOf("step-a"))
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun dependencyCycleIsRejectedBeforeHubRegistration() {
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
+        bridge.createPlan("cycle", "Dependency cycle", listOf(
+            PlannedOperatorAction("step-a", "Step A", OperatorStep(OperatorActionType.BACK),
+                dependsOn = setOf("step-b")),
+            PlannedOperatorAction("step-b", "Step B", OperatorStep(OperatorActionType.HOME),
+                dependsOn = setOf("step-a"))
+        ))
+    }
+
     @Test fun rejectedReplacementPlanDoesNotEraseCurrentWorkflowAdapters() {
         val executed = mutableListOf<String>()
         val bridge = TaskPlannerOperatorBridge(executeVerified = { step, _ ->
