@@ -5,14 +5,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AkkpsSubmitTargetPolicyTest {
-    private fun validKeys(keys: List<String>): Boolean {
-        val normalized = keys.map { it.trim().lowercase() }
-        return normalized.isNotEmpty() && normalized.none { it.isBlank() } &&
-            normalized.distinct().size == normalized.size
-    }
-
     @Test fun requiresAtLeastOneNonBlankMappedField() {
-        assertTrue(validKeys(listOf("farmer name")))
+        assertTrue(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("farmer name")))
         assertFalse(validKeys(emptyList()))
         assertFalse(validKeys(listOf(" ")))
     }
