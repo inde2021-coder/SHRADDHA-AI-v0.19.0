@@ -1,5 +1,7 @@
 package `in`.shraddha.ai.phone
 
+import android.annotation.SuppressLint
+
 import android.app.role.RoleManager
 import android.Manifest
 import android.content.Context
@@ -293,7 +295,7 @@ class PhoneAgentActivity : AppCompatActivity() {
                 val number = cursor.getString(numberIndex).orEmpty()
                 val normalizedName = normalizeContactText(name)
                 if (name.isNotBlank() && number.isNotBlank() &&
-                    (normalizedName == query || normalizedName.contains(query) || query.contains(normalizedName))) {
+                    (normalizedName == query)) {
                     matches.add(name to number)
                 }
             }
@@ -313,9 +315,23 @@ class PhoneAgentActivity : AppCompatActivity() {
             }
             1 -> {
                 val (name, number) = matches.first()
-                voiceStatus.text = "$name मिला। कॉल शुरू की जा रही है।"
-                tts?.speak("$name को कॉल लगा रही हूँ।", TextToSpeech.QUEUE_FLUSH, null, "calling-contact")
-                placeCall(number)
+                val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
+                if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
+                    voiceStatus.text = "$name मिला, लेकिन उसका फोन नंबर मान्य नहीं है। कॉल नहीं लगाई गई।"
+                    return
+                }
+                val masked = safeNumber.takeLast(4).padStart(safeNumber.length, '•')
+                voiceStatus.text = "$name मिला। कॉल लगाने से पहले पुष्टि आवश्यक है।"
+                tts?.speak("$name मिला है। क्या इस contact को कॉल लगाऊँ?", TextToSpeech.QUEUE_FLUSH, null, "confirm-contact-call")
+                AlertDialog.Builder(this)
+                    .setTitle("कॉल की पुष्टि करें")
+                    .setMessage("$name\\n$masked\\n\\nक्या अभी कॉल लगानी है?")
+                    .setPositiveButton("कॉल लगाएँ") { _, _ -> placeCall(safeNumber) }
+                    .setNegativeButton("रद्द करें") { _, _ ->
+                        voiceStatus.text = "कॉल रद्द कर दी गई।"
+                        tts?.speak("कॉल रद्द कर दी गई।", TextToSpeech.QUEUE_FLUSH, null, "call-cancelled")
+                    }
+                    .show()
             }
             else -> {
                 val names = matches.take(5).joinToString(", ") { it.first }
@@ -325,17 +341,53 @@ class PhoneAgentActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun placeCall(number: String) {
-        if (number.isBlank()) return
+        val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
+        if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
+            voiceStatus.text = "फोन नंबर मान्य नहीं है; कॉल नहीं लगाई गई।"
+            return
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), callPermissionRequest)
             return
         }
+        val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
+        // SIM enumeration requires READ_PHONE_STATE. If it is not granted, let Android use its default SIM without prompting for a broader permission.
+        val canReadPhoneState = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        val accounts = if (canReadPhoneState) runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList()) else emptyList()
+        when (accounts.size) {
+            0 -> launchCallWithAccount(safeNumber, null)
+            1 -> launchCallWithAccount(safeNumber, accounts.first())
+            else -> {
+                val labels = accounts.mapIndexed { index, handle ->
+                    val account = telecom.getPhoneAccount(handle)
+                    val label = account?.label?.toString()?.takeIf { it.isNotBlank() } ?: "SIM ${index + 1}"
+                    val numberHint = account?.address?.schemeSpecificPart?.takeLast(4)
+                        ?.takeIf { it.isNotBlank() }?.let { " ••••$it" }.orEmpty()
+                    "$label$numberHint"
+                }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("किस SIM से कॉल लगानी है?")
+                    .setItems(labels) { _, which ->
+                        accounts.getOrNull(which)?.let { launchCallWithAccount(safeNumber, it) }
+                    }
+                    .setNegativeButton("रद्द करें", null)
+                    .show()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun launchCallWithAccount(number: String, account: android.telecom.PhoneAccountHandle?) {
         runCatching {
+            val extras = Bundle()
+            if (account != null) extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, account)
             val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
-            telecom.placeCall(Uri.fromParts("tel", number, null), Bundle())
+            telecom.placeCall(Uri.fromParts("tel", number, null), extras)
+            voiceStatus.text = "चुनी गई SIM से कॉल शुरू करने का अनुरोध भेजा गया।"
         }.onFailure {
-            voiceStatus.text = "कॉल शुरू नहीं हो सकी: " + it.message
+            voiceStatus.text = "कॉल शुरू नहीं हो सकी: ${it.message}"
             status.text = voiceStatus.text
         }
     }
