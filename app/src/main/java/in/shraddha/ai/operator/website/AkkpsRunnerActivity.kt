@@ -47,21 +47,31 @@ class AkkpsRunnerActivity : Activity() {
     private val gpsListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             if (!gpsWalkActive || !location.hasAccuracy()) return
-            if (location.accuracy > MAX_GPS_ACCURACY_METERS) {
-                status.text = "GPS signal कमजोर (±${location.accuracy.toInt()} m)। Boundary point नहीं लिया; खुले आसमान में रुककर बेहतर signal की प्रतीक्षा करें।"
-                return
-            }
-            val point = AkkpsGeoPoint(location.latitude, location.longitude)
             val previous = boundaryPoints.lastOrNull()
-            if (previous != null) {
+            val point = AkkpsGeoPoint(location.latitude, location.longitude)
+            val distance = previous?.let {
                 val results = FloatArray(1)
-                Location.distanceBetween(previous.latitude, previous.longitude, point.latitude, point.longitude, results)
-                val elapsedSeconds = ((location.elapsedRealtimeNanos - lastGpsElapsedRealtimeNanos).coerceAtLeast(0L)) / 1_000_000_000.0
-                if (results[0] < MIN_GPS_POINT_DISTANCE_METERS) return
-                if (elapsedSeconds > 0.0 && results[0] / elapsedSeconds > MAX_WALK_SPEED_METERS_PER_SECOND) {
-                    status.text = "GPS jump मिला (${results[0].toInt()} m)। संदिग्ध point छोड़ दिया; Walk जारी है।"
+                Location.distanceBetween(it.latitude, it.longitude, point.latitude, point.longitude, results)
+                results[0].toDouble()
+            }
+            val elapsed = if (previous != null && lastGpsElapsedRealtimeNanos > 0L) {
+                (location.elapsedRealtimeNanos - lastGpsElapsedRealtimeNanos) / 1_000_000_000.0
+            } else null
+            when (AkkpsGpsFixPolicy.evaluate(location.accuracy, distance, elapsed)) {
+                AkkpsGpsFixPolicy.Decision.INACCURATE -> {
+                    status.text = "GPS signal कमजोर (±${location.accuracy.toInt()} m)। Point नहीं लिया; बेहतर signal की प्रतीक्षा करें।"
                     return
                 }
+                AkkpsGpsFixPolicy.Decision.TOO_CLOSE -> return
+                AkkpsGpsFixPolicy.Decision.IMPLAUSIBLE_JUMP -> {
+                    status.text = "GPS jump मिला। संदिग्ध point छोड़ दिया; Walk जारी है।"
+                    return
+                }
+                AkkpsGpsFixPolicy.Decision.INVALID_TIME -> {
+                    status.text = "GPS timestamp असंगत है। Point छोड़ दिया; अगला fix लिया जाएगा।"
+                    return
+                }
+                AkkpsGpsFixPolicy.Decision.ACCEPT -> Unit
             }
             if (boundaryPoints.size >= AkkpsBoundaryGeometry.MAX_POINTS) {
                 stopGpsWalk()
@@ -88,9 +98,6 @@ class AkkpsRunnerActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
-        private const val MAX_GPS_ACCURACY_METERS = 15f
-        private const val MIN_GPS_POINT_DISTANCE_METERS = 2.0f
-        private const val MAX_WALK_SPEED_METERS_PER_SECOND = 5.5
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
