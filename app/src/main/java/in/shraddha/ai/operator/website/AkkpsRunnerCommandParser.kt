@@ -13,7 +13,8 @@ data class AkkpsRunnerCommand(
 object AkkpsRunnerCommandParser {
     private fun normalizedKey(value: String): String =
         Normalizer.normalize(value, Normalizer.Form.NFKC)
-            .trim().lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ")\n            .replace(Regex("\\s+"), " ")
+            .trim().lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+            .replace(Regex("\\s+"), " ")
 
     private val submitCommands = setOf("submit", "सबमिट", "जमा", "जमा करें", "भेजें", "भेज दें")
 
