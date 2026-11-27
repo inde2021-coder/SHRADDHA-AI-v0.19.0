@@ -53,8 +53,7 @@ class CommandExecutionJournal(context: Context) {
         if (existing != null) return existing
         val plan = CommandTaskPlan(UUID.randomUUID().toString(), fingerprint, System.currentTimeMillis(),
             steps.map { it.copy(state = CommandStepState.PENDING, attempt = 0, resultCode = "") })
-        persist(plan)
-        return plan
+        return if (persist(plan)) plan else null
     }
 
     @Synchronized
@@ -106,8 +105,7 @@ class CommandExecutionJournal(context: Context) {
                 state = CommandStepState.SKIPPED, resultCode = "cancelled", updatedAt = System.currentTimeMillis()
             ) else step
         })
-        persist(updated)
-        return true
+        return persist(updated)
     }
 
     private fun updateStep(planId: String, stepId: String, transform: (CommandTaskStep) -> CommandTaskStep?): CommandTaskStep? {
