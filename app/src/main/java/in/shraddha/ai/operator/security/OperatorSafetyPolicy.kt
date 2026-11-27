@@ -27,7 +27,7 @@ object OperatorSafetyPolicy {
             .lowercase(Locale.ROOT)
 
     private fun containsSeparatedSecretLabel(value: String): Boolean {
-        val tokens = value.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotBlank() }
+        val tokens = value.split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.isNotBlank() }
         if (tokens.windowed(2, 1, partialWindows = false).any { pair ->
                 pair.joinToString("") in separatedSecretTokens
             }) return true
