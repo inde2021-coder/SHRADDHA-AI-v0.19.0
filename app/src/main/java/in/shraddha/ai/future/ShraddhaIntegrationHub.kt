@@ -236,5 +236,6 @@ class ShraddhaIntegrationHub(
                 "PROCESS_RESTARTED_REQUIRES_REVIEW", recoveredMessage, System.currentTimeMillis()))
             return Session(plan, workflow.copy(status = WorkflowStatus.FAILED, message = recoveredMessage), recoveredAudit)
         }
+        return Session(plan, workflow, audit)
     }
 }
