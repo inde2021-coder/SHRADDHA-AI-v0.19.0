@@ -106,9 +106,10 @@ class IndicTrans2Runtime:
             ) from exc
         try:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.tokenizer = AutoTokenizer.from_pretrained(str(self.model_dir), trust_remote_code=True, local_files_only=True)
+            # Never execute Python code shipped inside a downloaded model repository.
+            self.tokenizer = AutoTokenizer.from_pretrained(str(self.model_dir), local_files_only=True)
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
-                str(self.model_dir), trust_remote_code=True, local_files_only=True
+                str(self.model_dir), local_files_only=True
             ).to(self.device)
             self.processor = IndicProcessor(inference=True)
         except Exception as exc:
@@ -151,8 +152,9 @@ class IndicF5Runtime:
             raise LanguageRuntimeError("Install the optional IndicF5 dependencies first.") from exc
         try:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Remote model code is not trusted or executed by the desktop companion.
             self.model = AutoModel.from_pretrained(
-                model_id, trust_remote_code=True, local_files_only=True
+                model_id, local_files_only=True
             ).to(self.device)
         except Exception as exc:
             raise LanguageRuntimeError(
@@ -160,15 +162,18 @@ class IndicF5Runtime:
             ) from exc
 
     def synthesize(self, text: str, language: str, reference_audio: str | Path,
-                   reference_transcript: str, output_wav: str | Path) -> Path:
+                   reference_transcript: str, output_wav: str | Path,
+                   explicit_reference_voice_consent: bool = False) -> Path:
+        require_reference_voice_consent(explicit_reference_voice_consent)
         language = language.lower()
         if language not in SUPPORTED_INDICF5_TTS:
             raise LanguageRuntimeError("IndicF5 in this integration is validated only for Hindi and Marathi; it does not provide English, Sanskrit or Pawari TTS.")
         if not isinstance(text, str) or not text.strip() or len(text) > 3000:
             raise LanguageRuntimeError("TTS text must contain 1–3000 characters.")
         reference = Path(reference_audio).expanduser().resolve()
-        if not reference.is_file() or not reference_transcript.strip():
-            raise LanguageRuntimeError("A locally stored, consented reference voice clip and its exact transcript are required.")
+        if (not reference.is_file() or not reference_transcript.strip()
+                or len(reference_transcript.strip()) > 1000):
+            raise LanguageRuntimeError("A local reference voice clip and its exact transcript (1–1000 characters) are required.")
         try:
             import numpy as np
             import soundfile as sf
@@ -191,3 +196,8 @@ class IndicF5Runtime:
             raise
         except Exception as exc:
             raise LanguageRuntimeError(f"IndicF5 synthesis failed: {exc}") from exc
+
+
+def require_reference_voice_consent(consented: bool) -> None:
+    if consented is not True:
+        raise LanguageRuntimeError("Explicit permission from the reference voice owner is required before voice synthesis.")
