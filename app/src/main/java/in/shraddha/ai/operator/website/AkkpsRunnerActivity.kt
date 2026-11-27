@@ -111,6 +111,8 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    companion object {
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -188,7 +190,9 @@ class AkkpsRunnerActivity : Activity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val targetUrl = request.url.toString()
-                    if (!AkkpsWebsiteProfile.allowsRunnerNavigation(targetUrl)) {
+                    val path = runCatching { URI(targetUrl).path.orEmpty().lowercase() }.getOrDefault("")
+                    if (!AkkpsWebsiteProfile.acceptsUrl(targetUrl) ||
+                        path.startsWith("/admin") || path.startsWith("/coordinator")) {
                         runOnUiThread { status.text = "सुरक्षा: केवल AKKPS Runner कार्यों की अनुमति है।" }
                         return true
                     }
@@ -231,44 +235,17 @@ class AkkpsRunnerActivity : Activity() {
                         callback.onReceiveValue(null)
                         return false
                     }
-                    val acceptedTypes = params.acceptTypes
-                        .filter { it.isNotBlank() }
-                        .take(5)
-                        .joinToString(", ")
-                        .take(120)
-                        .ifBlank { "AKKPS form द्वारा स्वीकार की गई फाइलें" }
-                    AlertDialog.Builder(this@AkkpsRunnerActivity)
-                        .setTitle("AKKPS दस्तावेज़ अपलोड की अनुमति")
-                        .setMessage(
-                            "AKKPS वेबसाइट आपसे दस्तावेज़ चुनने को कह रही है। केवल वही फाइल चुनें जिसे इस Plot/Farmer record में अपलोड करना चाहते हैं।\\n" +
-                                "स्वीकार्य प्रकार: $acceptedTypes"
-                        )
-                        .setPositiveButton("फाइल चुनें") { _, _ ->
-                            if (uploadCallback !== callback || !AkkpsWebsiteProfile.acceptsUrl(web.url.orEmpty())) {
-                                uploadCallback = null
-                                callback.onReceiveValue(null)
-                                return@setPositiveButton
-                            }
-                            try {
-                                val pick = params.createIntent().apply {
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                startActivityForResult(pick, REQUEST_FILE)
-                            } catch (_: Exception) {
-                                uploadCallback = null
-                                callback.onReceiveValue(null)
-                            }
+                    return try {
+                        val pick = params.createIntent().apply {
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
-                        .setNegativeButton("रद्द करें") { _, _ ->
-                            if (uploadCallback === callback) uploadCallback = null
-                            callback.onReceiveValue(null)
-                        }
-                        .setOnCancelListener {
-                            if (uploadCallback === callback) uploadCallback = null
-                            callback.onReceiveValue(null)
-                        }
-                        .show()
-                    return true
+                        startActivityForResult(pick, REQUEST_FILE)
+                        true
+                    } catch (_: Exception) {
+                        uploadCallback = null
+                        callback.onReceiveValue(null)
+                        false
+                    }
                 }
             }
         }
@@ -290,7 +267,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         val plotId = plotIdInput.text.toString().trim()
-        if (!AkkpsPlotIdPolicy.isValid(plotId)) {
+        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) {
             status.text = "GPS Walk शुरू करने से पहले सही AKKPS Plot ID भरें।"
             return
         }
@@ -321,10 +298,7 @@ class AkkpsRunnerActivity : Activity() {
                     .setPositiveButton("पुरानी Walk Resume") { _, _ ->
                         boundaryPoints.clear()
                         boundaryPoints.addAll(draft.points)
-                        boundaryProvenance = AkkpsBoundary(
-                            points = emptyList(),
-                            source = "Phone GNSS GPS Walk"
-                        )
+                        boundaryProvenance = null
                         bestGpsAccuracyMeters = draft.bestAccuracyMeters ?: Float.MAX_VALUE
                         gpsWalkPlotId = plotId
                         gpsWalkSessionInitialized = true
@@ -356,10 +330,7 @@ class AkkpsRunnerActivity : Activity() {
         if (gpsWalkActive) return
         if (clearExisting) {
             boundaryPoints.clear()
-            boundaryProvenance = AkkpsBoundary(
-                points = emptyList(),
-                source = "Phone GNSS GPS Walk"
-            )
+            boundaryProvenance = null
             gpsWalkPlotId?.let { AkkpsBoundaryDraftStore(this).delete(it) }
             gpsWalkPlotId = plotIdInput.text.toString().trim()
             bestGpsAccuracyMeters = Float.MAX_VALUE
@@ -419,7 +390,7 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun saveBoundary() {
         val plotId = plotIdInput.text.toString().trim()
-        if (!AkkpsPlotIdPolicy.isValid(plotId)) { status.text = "मान्य AKKPS Plot ID भरें (1–80 अक्षर, अंक, _ या -)।"; return }
+        if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
         if (gpsWalkActive) { status.text = "पहले GPS Walk रोकें, फिर Save करें।"; return }
         if (boundaryPoints.size < 3) { status.text = "Save करने के लिए पहले कम-से-कम 3 GPS points रिकॉर्ड करें या KML Import करें।"; return }
         val metadata = boundaryProvenance
@@ -453,39 +424,18 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun reopenBoundary() {
         val plotId = plotIdInput.text.toString().trim()
-        if (!AkkpsPlotIdPolicy.isValid(plotId)) { status.text = "मान्य AKKPS Plot ID भरें (1–80 अक्षर, अंक, _ या -)।"; return }
+        if (plotId.isBlank()) { status.text = "पहले वही AKKPS Plot ID भरें।"; return }
         if (gpsWalkActive) { status.text = "Saved boundary खोलने से पहले GPS Walk रोकें।"; return }
         runCatching { AkkpsBoundaryStore(this).load(plotId) }
             .onSuccess { saved ->
-                if (saved == null) {
-                    status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
-                } else {
-                    val applySaved = {
-                        boundaryPoints.clear()
-                        boundaryPoints.addAll(saved.points)
-                        boundaryProvenance = saved
-                        gpsWalkSessionInitialized = false
-                        gpsWalkPlotId = null
-                        status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
-                    }
-                    if (AkkpsBoundaryReplacementPolicy.requiresConfirmation(boundaryPoints.size)) {
-                        val currentArea = runCatching { AkkpsBoundary(boundaryPoints.toList()).areaAcres }.getOrNull()
-                        val currentSummary = currentArea?.takeIf { it.isFinite() && it > 0.0 }
-                            ?.let { "मौजूदा editor: ${boundaryPoints.size} points • ${"%.3f".format(java.util.Locale.US, it)} acres\\n" }
-                            .orEmpty()
-                        AlertDialog.Builder(this)
-                            .setTitle("Unsaved Boundary सुरक्षित रखें?")
-                            .setMessage(
-                                currentSummary + "Saved boundary: ${saved.points.size} points • " +
-                                    "${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। " +
-                                    "Reopen करने पर मौजूदा editor points हट जाएँगे। क्या आप स्पष्ट रूप से बदलना चाहते हैं?"
-                            )
-                            .setPositiveButton("Saved Boundary खोलें") { _, _ -> applySaved() }
-                            .setNegativeButton("रद्द करें", null)
-                            .show()
-                    } else {
-                        applySaved()
-                    }
+                if (saved == null) status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
+                else {
+                    boundaryPoints.clear()
+                    boundaryPoints.addAll(saved.points)
+                    boundaryProvenance = saved
+                    gpsWalkSessionInitialized = false
+                    gpsWalkPlotId = null
+                    status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
                 }
             }
             .onFailure { status.text = "Saved boundary पढ़ी नहीं जा सकी: ${it.localizedMessage}" }
@@ -534,8 +484,6 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private var pendingKml: String? = null
-    private var submitVerificationPending = false
-    private var submitNeedsManualReview = false
 
     private fun confirmAkkpsLocation(
         origin: String,
@@ -597,16 +545,9 @@ class AkkpsRunnerActivity : Activity() {
                 try {
                   const parsed=typeof body==='string'?JSON.parse(body):body;
                   const path=new URL(url,location.href).pathname;
-                  const candidates=[
-                    parsed?.recordId,parsed?.plotId,parsed?.reportId,parsed?.farmerId,
-                    parsed?.data?.recordId,parsed?.data?.plotId,parsed?.data?.reportId,
-                    parsed?.data?.farmerId,
-                    parsed?.result?.recordId,parsed?.result?.plotId,parsed?.result?.reportId,
-                    parsed?.record?.id,parsed?.plot?.id,parsed?.report?.id
-                  ];
-                  const id=candidates.find(v=>(typeof v==='string'||typeof v==='number')&&String(v).trim()&&String(v).length<=100)||'';
-                  const state=String(parsed?.status||parsed?.data?.status||parsed?.result?.status||'').toLowerCase();
-                  const message=String(parsed?.message||parsed?.data?.message||parsed?.result?.message||parsed?.error||'').slice(0,160);
+                  const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
+                  const state=String(parsed?.status||'').toLowerCase();
+                  const message=String(parsed?.message||parsed?.error||'').slice(0,160);
                   const recordWrite=/\\b(plot|plots|farmer|farmers|awd|report|records|boundary)\\b/i.test(path);
                   const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
@@ -678,15 +619,13 @@ class AkkpsRunnerActivity : Activity() {
               const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
                 getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
               const fields=[...document.querySelectorAll('input,textarea,select')].filter(e=>
-                visible(e)&&!e.disabled&&!['hidden','password'].includes(String(e.type||'').toLowerCase())
+                visible(e)&&!e.disabled&&!['hidden','password','file'].includes(String(e.type||'').toLowerCase())
               ).map((e,i)=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
                 return {index:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
                   name:n(e.name),id:n(e.id),placeholder:n(e.placeholder),
                   aria:n(e.getAttribute('aria-label')),label:[...new Set(labels)].join(' / '),
-                  groupLabel:e.type==='radio'?n(e.closest('fieldset')?.querySelector('legend')?.innerText||
-                    e.closest('[role="radiogroup"]')?.getAttribute('aria-label')):'',
                   required:!!e.required,disabled:!!e.disabled,readOnly:!!e.readOnly};
               });
               const forms=[...document.forms].filter(visible).map((f,i)=>({
@@ -736,8 +675,7 @@ class AkkpsRunnerActivity : Activity() {
                 val f = fields.optJSONObject(i) ?: return@mapNotNull null
                 val label = listOf("label", "name", "id", "placeholder", "aria")
                     .map { f.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
-                listOf(label, f.optString("groupLabel")).filter { it.isNotBlank() }.distinct().joinToString(" / ") +
-                    if (f.optBoolean("required")) " *" else ""
+                label + if (f.optBoolean("required")) " *" else ""
             }
             val forms = obj.optJSONArray("forms")?.length() ?: 0
             val tables = obj.optJSONArray("tables")?.length() ?: 0
@@ -749,6 +687,7 @@ class AkkpsRunnerActivity : Activity() {
             }
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
             val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            val module = route?.module?.name ?: obj.optString("module")
             val capabilities = AkkpsPageCapabilityDiscovery.discover(
                 formCount = forms,
                 tableCount = tables,
@@ -762,7 +701,12 @@ class AkkpsRunnerActivity : Activity() {
             val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
                 .map { it.operation.name.lowercase().replace('_', ' ') }
             val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
-            status.text = "Module: ${obj.optString("module")} • ${obj.optString("title")}\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
+            val inspectedCount = runCatching {
+                AkkpsModuleInventoryStore(this).apply {
+                    if (module in AkkpsRunnerModule.entries.map { it.name }) record(module, capabilities)
+                }.load().size
+            }.getOrDefault(0)
+            status.text = "Module: $module • ${obj.optString("title")} • Inventory: $inspectedCount/6\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
                 "Observed: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
                 actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
@@ -777,7 +721,64 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            if (AkkpsRunnerEditCommandPolicy.isExplicit(raw)) {
+                val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+                if (route == null || !route.isDetailRoute) {
+                    status.text = "पहले Farmer, Plot या AWD का एक record खोलें; फिर Edit command दें।"
+                } else {
+                    openEditForm(route.module)
+                }
+                return
+            }
+            val createModule = AkkpsRunnerCreateCommandPolicy.resolve(raw)
+            if (createModule != null) {
+                val createRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
+                if (createRoute == null) {
+                    status.text = "इस AKKPS module में create route अभी verified नहीं है।"
+                } else {
+                    status.text = "${createModule.label} का नया form खोला जा रहा है। Save/Submit अलग confirmation से होगा।"
+                    web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + createRoute)
+                }
+                return
+            }
+            val viewQuery = AkkpsRunnerViewCommandPolicy.parse(raw)
+            if (viewQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Record देखने के लिए पहले Farmers, Plots या AWD Reports list खोलें।"
+                } else {
+                    viewRecord(viewQuery, module!!)
+                }
+                return
+            }
+            val searchQuery = AkkpsRunnerSearchCommandPolicy.parse(raw)
+            if (searchQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Search के लिए पहले Farmers, Plots या AWD Reports module खोलें।"
+                } else {
+                    searchRecords(searchQuery)
+                }
+                return
+            }
+            val module = AkkpsRunnerNavigationCommandPolicy.resolve(raw)
+            if (module != null) {
+                val route = AkkpsRunnerNavigationCommandPolicy.route(module)
+                status.text = "${module.label} module खोला जा रहा है…"
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + route)
+                return
+            }
+            val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            if (!isAllowedDataEntryRoute(currentRoute)) {
+                status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
+                return
+            }
             requestAiMapping(raw)
+            return
+        }
+        val dataEntryRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (!isAllowedDataEntryRoute(dataEntryRoute)) {
+            status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
             return
         }
         if (parsed.issues.isNotEmpty()) {
@@ -791,6 +792,129 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         fillValues(values, wantsSubmit)
+    }
+
+    private fun isAllowedDataEntryRoute(route: AkkpsRunnerRouteMatch?): Boolean =
+        route != null &&
+            route.module in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS) &&
+            (route.isCreateRoute || route.isDetailRoute)
+
+    /** Opens edit mode only through one explicit visible Edit control on a known Runner detail page. */
+    private fun openEditForm(module: AkkpsRunnerModule) {
+        if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+            status.text = "इस module में AKKPS edit workflow अभी supported नहीं है."
+            return
+        }
+        val js = """
+            (function(expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
+              const controls=[...document.querySelectorAll('button,a,[role=button]')].filter(visible).filter(e=>{
+                const label=norm(e.innerText||e.getAttribute('aria-label')||e.title);
+                return ['edit','update','संपादित करें','संपादित करो','बदलें','रिकॉर्ड बदलें','रिकॉर्ड संपादित करें'].includes(label);
+              });
+              if(controls.length!==1) return JSON.stringify({status:controls.length?'ambiguous_edit':'edit_control_not_found'});
+              const control=controls[0];
+              if(control.tagName==='A'){
+                const u=new URL(control.href,location.href);
+                const p=u.pathname.replace(/\/$/,'');
+                const valid=expectedModule==='FARMERS'?/^\/runner\/farmers\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='PLOTS'?/^\/runner\/plots\/[^/]+(?:\/edit)?$/.test(p):
+                  expectedModule==='AWD_REPORTS'?/^\/runner\/awd-reports\/[^/]+(?:\/edit)?$/.test(p):false;
+                if(u.protocol!=='https:'||u.origin!==location.origin||!valid) return JSON.stringify({status:'unsafe_edit_origin'});
+              }
+              control.click();
+              return JSON.stringify({status:'dispatched'});
+            })(__MODULE__)
+        """.trimIndent().replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Edit form खोलने का request भेजा गया। Inspect करें; बदलाव अभी save नहीं हुए हैं।"
+                "ambiguous_edit" -> "एक से अधिक Edit controls मिले; कोई control नहीं चुना।"
+                "unsafe_edit_origin" -> "Edit link AKKPS के same-origin पर नहीं है; रोक दिया।"
+                else -> "इस record पर एक स्पष्ट Edit control नहीं मिला।"
+            }
+        }
+    }
+
+    /** Opens a record only through one exact table-cell match and one known detail-route link. */
+    private fun viewRecord(identifier: String, module: AkkpsRunnerModule) {
+        val js = """
+            (function(q,expectedModule){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim().replace(/\s+/g,' ');
+              const rows=[...document.querySelectorAll('table tr')].filter(visible);
+              const matches=rows.filter(row=>[...row.cells].some(cell=>norm(cell.innerText)===q));
+              if(matches.length!==1) return JSON.stringify({status:matches.length?'ambiguous_record':'record_not_found'});
+              const row=matches[0];
+              const links=[...row.querySelectorAll('a[href]')].filter(visible).filter(a=>{
+                try{
+                  const u=new URL(a.href,location.href);
+                  if(u.protocol!=='https:'||u.origin!==location.origin) return false;
+                  const p=u.pathname.replace(/\/$/,'');
+                  if(expectedModule==='FARMERS') return /^\/runner\/farmers\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='PLOTS') return /^\/runner\/plots\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  if(expectedModule==='AWD_REPORTS') return /^\/runner\/awd-reports\/[^/]+$/.test(p)&&!p.endsWith('/new');
+                  return false;
+                }catch(_){return false}
+              });
+              const unique=[...new Map(links.map(a=>[a.href,a])).values()];
+              if(unique.length!==1) return JSON.stringify({status:unique.length?'ambiguous_detail_link':'detail_link_not_found'});
+              unique[0].click();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__,__MODULE__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(identifier))
+            .replace("__MODULE__", JSONObject.quote(module.name))
+        web.evaluateJavascript(js) { raw ->
+            val code = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
+            status.text = when (code) {
+                "dispatched" -> "Record detail खोलने का request भेजा गया। Inspect से record page verify करें।"
+                "ambiguous_record" -> "एक से अधिक records मिले; कोई record नहीं खोला। Exact ID दें।"
+                "detail_link_not_found" -> "इस row में सुरक्षित Runner detail link नहीं मिला।"
+                "ambiguous_detail_link" -> "एक row में कई detail links मिले; कोई link नहीं चुना।"
+                else -> "इस exact ID/name का visible record नहीं मिला।"
+            }
+        }
+    }
+
+    /** Read-only search is allowed only through a unique visible search field in a same-origin GET form. */
+    private fun searchRecords(query: String) {
+        val js = """
+            (function(q){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim();
+              const candidates=[...document.querySelectorAll('input')].filter(e=>{
+                if(!visible(e)||e.disabled||e.readOnly||['hidden','password','file','checkbox','radio','button','submit','reset'].includes(String(e.type||'').toLowerCase())) return false;
+                const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
+                const hints=[e.type,e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm).join(' ');
+                return String(e.type||'').toLowerCase()==='search'||/(search|find|खोज|ढूंढ|ढूँढ)/i.test(hints);
+              });
+              if(candidates.length!==1) return JSON.stringify({status:candidates.length?'ambiguous_search':'search_field_not_found'});
+              const input=candidates[0],form=input.form;
+              if(!form||String(form.method||'GET').toUpperCase()!=='GET') return JSON.stringify({status:'search_form_not_read_only'});
+              const action=new URL(form.action||location.href,location.href);
+              if(action.protocol!=='https:'||action.origin!==location.origin) return JSON.stringify({status:'unsafe_search_origin'});
+              input.value=q;
+              input.dispatchEvent(new Event('input',{bubbles:true}));
+              input.dispatchEvent(new Event('change',{bubbles:true}));
+              form.requestSubmit();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
+        web.evaluateJavascript(js) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            status.text = when (result?.optString("status")) {
+                "dispatched" -> "AKKPS read-only search request भेजी गई। परिणाम देखने के लिए Inspect करें; खोज सफल होने का दावा अभी नहीं किया गया।"
+                "ambiguous_search" -> "एक से अधिक search fields मिले; कोई search नहीं की गई।"
+                "search_form_not_read_only" -> "Search form GET/read-only नहीं है; सुरक्षा के लिए request रोकी गई।"
+                "unsafe_search_origin" -> "Search form AKKPS के उसी सुरक्षित origin पर नहीं है।"
+                else -> "इस पेज पर एक स्पष्ट visible search field नहीं मिला।"
+            }
+        }
     }
 
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockedSubmitReason: String? = null) {
@@ -1120,46 +1244,19 @@ Return exact JSON only. Do not include prose or markdown."""
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
         web.evaluateJavascript(js) { raw ->
             val o = runCatching { JSONObject(decode(raw)) }.getOrNull()
-            if (!submitVerificationPending) return@evaluateJavascript
-            submitVerificationPending = false
             status.text = when {
                 o?.optBoolean("serverFailure") == true || o?.optBoolean("failed") == true -> "AKKPS API/UI ने error दिया। Record saved नहीं माना गया।"
                 o?.optBoolean("serverSuccess") == true ->
                     "AKKPS server ने success response और Record ID ${o.optString("recordId")} दिया। Server response verified।"
-                !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true -> {
-                    requireManualSubmitReview()
-                    "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save fully verified नहीं है।"
-                }
-                o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true -> {
-                    requireManualSubmitReview()
+                !o?.optString("notice").isNullOrBlank() && o?.optBoolean("identity") == true ->
+                    "AKKPS UI success notice और record values दिखे, लेकिन server Record ID नहीं मिला। Save अभी fully verified नहीं है।"
+                o?.optBoolean("recordLink") == true && o?.optBoolean("identity") == true ->
                     "Plot/AWD detail link और record values मिले। Record खोलकर ID जाँचें।"
-                }
-                web.url.orEmpty() != beforeUrl -> {
-                    requireManualSubmitReview()
+                web.url.orEmpty() != beforeUrl ->
                     "AKKPS ने पेज बदला, लेकिन स्पष्ट record confirmation नहीं मिला। Submit verified नहीं है।"
-                }
-                else -> {
-                    requireManualSubmitReview()
-                    "स्पष्ट Save/Submit पुष्टि नहीं मिली। पहले record list में खोजें; duplicate Submit न करें।"
-                }
+                else -> "स्पष्ट Save/Submit पुष्टि नहीं मिली। दोबारा Submit न करें; पहले सूची में record खोजें।"
             }
         }
-    }
-
-    private fun requireManualSubmitReview() {
-        submitNeedsManualReview = true
-        AlertDialog.Builder(this)
-            .setTitle("AKKPS Record की जाँच जरूरी")
-            .setMessage(
-                "Server Record ID से Save confirm नहीं हुआ। पहले AKKPS की record list में देखें कि entry बन चुकी है या नहीं। " +
-                    "अगर entry मौजूद है तो दोबारा submit न करें। Retry तभी unlock करें जब आपने record list जाँच ली हो।"
-            )
-            .setNegativeButton("अभी नहीं", null)
-            .setPositiveButton("Record जाँच लिया; retry unlock करें") { _, _ ->
-                submitNeedsManualReview = false
-                status.text = "Retry unlock हुआ। Submit से पहले सभी fields फिर से जाँचें।"
-            }
-            .show()
     }
 
     private fun decode(raw: String?): String =
@@ -1173,6 +1270,7 @@ Return exact JSON only. Do not include prose or markdown."""
             }.getOrNull()
             uploadCallback?.onReceiveValue(selected)
             uploadCallback = null
+            pendingFileChooserParams = null
         }
         if (requestCode == REQUEST_KML_EXPORT) {
             val uri = if (resultCode == RESULT_OK) data?.data else null
@@ -1224,7 +1322,7 @@ Return exact JSON only. Do not include prose or markdown."""
                             gpsWalkPlotId = null
                             status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
                         }
-                        if (AkkpsBoundaryReplacementPolicy.requiresConfirmation(boundaryPoints.size)) {
+                        if (boundaryPoints.isNotEmpty()) {
                             val existingArea = runCatching {
                                 AkkpsBoundary(boundaryPoints.toList()).areaAcres
                             }.getOrNull()
@@ -1271,32 +1369,12 @@ Return exact JSON only. Do not include prose or markdown."""
                     AkkpsBoundaryGeometry.parseKml(String(bytes, Charsets.UTF_8)).getOrThrow()
                 } finally { bytes.fill(0) }
             }.onSuccess { boundary ->
-                val applyKml = {
-                    boundaryPoints.clear()
-                    boundaryPoints.addAll(boundary.points)
-                    boundaryProvenance = boundary
-                    gpsWalkSessionInitialized = false
-                    gpsWalkPlotId = null
-                    status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
-                }
-                if (boundaryPoints.isNotEmpty()) {
-                    val existingArea = runCatching {
-                        AkkpsBoundary(boundaryPoints.toList()).areaAcres
-                    }.getOrNull()
-                    val areaLabel = existingArea?.takeIf { it.isFinite() && it > 0.0 }
-                        ?.let { "मौजूदा editor area: ${"%.3f".format(java.util.Locale.US, it)} acres\n" }.orEmpty()
-                    AlertDialog.Builder(this)
-                        .setTitle("मौजूदा Boundary सुरक्षित रखें?")
-                        .setMessage(
-                            areaLabel + "Editor में पहले से ${boundaryPoints.size} points हैं। KML import करने पर ये points हट जाएँगे। " +
-                                "पहले मौजूदा boundary Save/Export कर लें, या स्पष्ट रूप से बदलने की पुष्टि करें।"
-                        )
-                        .setPositiveButton("मौजूदा हटाकर KML लाएँ") { _, _ -> applyKml() }
-                        .setNegativeButton("रद्द करें", null)
-                        .show()
-                } else {
-                    applyKml()
-                }
+                boundaryPoints.clear()
+                boundaryPoints.addAll(boundary.points)
+                boundaryProvenance = null
+                gpsWalkSessionInitialized = false
+                gpsWalkPlotId = null
+                status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
             }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
         }
     }
