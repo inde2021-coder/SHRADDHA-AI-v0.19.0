@@ -61,6 +61,29 @@ object AkkpsWebsiteProfile {
         }.getOrDefault(false)
     }
 
+    /**
+     * Validate top-level WebView navigation before allowing the authenticated Runner
+     * session to follow it. Reject encoded separators/dot segments and normalized
+     * traversal before checking restricted dashboard paths.
+     */
+    fun allowsRunnerNavigation(rawUrl: String): Boolean {
+        if (!acceptsUrl(rawUrl)) return false
+        return runCatching {
+            val uri = URI(rawUrl.trim())
+            val rawPath = uri.rawPath.orEmpty()
+            if (rawPath.length > 1024 ||
+                rawPath.contains('\\\\') ||
+                Regex("(?i)%2f|%5c|%2e").containsMatchIn(rawPath) ||
+                rawPath.contains("//")
+            ) return false
+            val segments = rawPath.split('/')
+            if (segments.any { it == "." || it == ".." }) return false
+            val path = uri.normalize().path.orEmpty().lowercase(Locale.ROOT)
+            val normalizedSegments = path.split('/').filter { it.isNotBlank() }
+            normalizedSegments.none { it == "admin" || it == "coordinator" }
+        }.getOrDefault(false)
+    }
+
     /** All private-site capabilities start unknown until observed and tested. */
     fun initialCapabilities(): List<WebsiteCapability> =
         WebsiteOperation.entries.map { operation ->
