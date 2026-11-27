@@ -98,4 +98,43 @@ class AkkpsBoundaryStoreTest {
         assertTrue(runCatching { AkkpsBoundaryGeometry.fromJson("x".repeat(200001)) }.isFailure)
         assertTrue(runCatching { AkkpsBoundaryGeometry.fromJson("{\"points\":[]}") }.isFailure)
     }
+    @Test fun rejectsBowTieSelfIntersection() {
+        val bowTie = listOf(
+            AkkpsGeoPoint(23.0, 78.0),
+            AkkpsGeoPoint(23.002, 78.002),
+            AkkpsGeoPoint(23.0, 78.002),
+            AkkpsGeoPoint(23.002, 78.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(bowTie))
+    }
+
+    @Test fun rejectsCollinearOverlappingNonAdjacentEdges() {
+        val overlap = listOf(
+            AkkpsGeoPoint(0.0, 0.0),
+            AkkpsGeoPoint(0.0, 4.0),
+            AkkpsGeoPoint(2.0, 4.0),
+            AkkpsGeoPoint(0.0, 1.0),
+            AkkpsGeoPoint(0.0, 3.0),
+            AkkpsGeoPoint(-2.0, 3.0),
+            AkkpsGeoPoint(-2.0, 0.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(overlap))
+    }
+
+    @Test fun rejectsNonAdjacentVertexTouchingAnotherEdge() {
+        val touch = listOf(
+            AkkpsGeoPoint(0.0, 0.0),
+            AkkpsGeoPoint(0.0, 4.0),
+            AkkpsGeoPoint(4.0, 4.0),
+            AkkpsGeoPoint(0.0, 2.0),
+            AkkpsGeoPoint(4.0, 0.0)
+        )
+        assertNotNull(AkkpsBoundaryGeometry.validate(touch))
+    }
+
+    @Test fun rejectsRepeatedNonAdjacentVertex() {
+        val repeated = square + square[1]
+        assertNotNull(AkkpsBoundaryGeometry.validate(repeated))
+    }
+
 }
