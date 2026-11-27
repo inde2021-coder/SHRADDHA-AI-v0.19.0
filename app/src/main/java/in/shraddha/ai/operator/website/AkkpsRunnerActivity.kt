@@ -389,14 +389,17 @@ class AkkpsRunnerActivity : Activity() {
               const record=(method,url,status,body)=>{
                 try {
                   const parsed=typeof body==='string'?JSON.parse(body):body;
-                  const id=parsed?.recordId||parsed?.id||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.id||'';
+                  const path=new URL(url,location.href).pathname;
+                  const id=parsed?.recordId||parsed?.plotId||parsed?.reportId||parsed?.data?.recordId||parsed?.data?.plotId||parsed?.data?.reportId||'';
                   const state=String(parsed?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||'').slice(0,160);
-                  const success=parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message);
+                  const recordWrite=/\\b(plot|plots|farmer|farmers|awd|report|records|boundary)\\b/i.test(path);
+                  const success=recordWrite&&(parsed?.success===true||parsed?.ok===true||['success','created','saved','ok'].includes(state)||/saved successfully|submitted successfully|record created/i.test(message));
                   window.__akkpsSubmitEvents.push({
                     sequence:++window.__akkpsSubmitSequence,
                     method:String(method||'').toUpperCase(),
-                    path:new URL(url,location.href).pathname,
+                    path,
+                    recordWrite,
                     httpStatus:Number(status)||0,
                     success:!!success,
                     recordId:String(id||'').slice(0,100),
@@ -684,8 +687,8 @@ Return exact JSON only. Do not include prose or markdown."""
         val js = """
             (function(values){
               const events=(window.__akkpsSubmitEvents||[]).filter(e=>e.sequence>Math.max(0,__EVENT_START__));
-              const serverRecord=[...events].reverse().find(e=>e.httpStatus>=200&&e.httpStatus<300&&e.success&&e.recordId);
-              const serverFailure=events.some(e=>e.httpStatus>=400||/failed|error|invalid/i.test(e.message||''));
+              const serverRecord=[...events].reverse().find(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&e.httpStatus>=200&&e.httpStatus<300&&e.success&&e.recordId);
+              const serverFailure=events.some(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&(e.httpStatus>=400||/failed|error|invalid/i.test(e.message||'')));
               const selectors='[role="alert"],[aria-live="polite"],[aria-live="assertive"],.alert-success,.toast,[data-sonner-toast]';
               const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean);
               const success=/\\b(saved|submitted|created successfully|record saved)\\b|सफलतापूर्वक|जमा हो गया/i;
