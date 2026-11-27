@@ -129,6 +129,7 @@ class AkkpsRunnerActivity : Activity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("Inspect") { inspectPage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        actions.addView(action("AI Privacy") { showCloudAiPrivacySettings() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
         val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(
@@ -1051,6 +1052,30 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         runAiMapping(raw)
+    }
+
+    private fun showCloudAiPrivacySettings() {
+        val prefs = getSharedPreferences("akkps_runner_preferences", MODE_PRIVATE)
+        val enabled = prefs.getBoolean("cloud_command_consent", false)
+        AlertDialog.Builder(this)
+            .setTitle(if (enabled) "Cloud AI permission चालू है" else "Cloud AI permission बंद है")
+            .setMessage(
+                if (enabled) {
+                    "AI mapping के समय आपका command और AKKPS form के visible field labels चुने हुए AI provider को भेजे जा सकते हैं। " +
+                        "Form के current values, password और OTP निरीक्षण में शामिल नहीं होते। चाहें तो permission अभी revoke करें।"
+                } else {
+                    "Cloud AI mapping अभी बंद है। AI command mapping पहली बार उपयोग करने पर अलग अनुमति माँगी जाएगी। " +
+                        "आप स्थानीय field=value commands इस्तेमाल कर सकते हैं।"
+                }
+            )
+            .setNegativeButton(if (enabled) "बंद करें" else "ठीक है") { _, _ ->
+                if (enabled) {
+                    prefs.edit().putBoolean("cloud_command_consent", false).apply()
+                    status.text = "Cloud AI permission revoke कर दी गई। अगली बार अनुमति के बिना कोई command AI को नहीं भेजा जाएगा।"
+                }
+            }
+            .setPositiveButton(if (enabled) "चालू रहने दें" else "समझ गया") { _, _ -> }
+            .show()
     }
 
     private fun runAiMapping(raw: String) {
