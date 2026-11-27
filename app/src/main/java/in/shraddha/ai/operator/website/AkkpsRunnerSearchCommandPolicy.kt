@@ -3,7 +3,7 @@ package `in`.shraddha.ai.operator.website
 import java.text.Normalizer
 
 internal object AkkpsRunnerSearchCommandPolicy {
-    private val prefix = Regex("^(?:search(?:\\s+for)?|find|खोजो|खोजें|ढूंढो|ढूँढो|ढूंढें|ढूँढें)\\s+(.+)$", RegexOption.IGNORE_CASE)
+    private val prefix = Regex("^(?:search(?:\\s+for)?|find|खोजो|खोजें|ढूंढो|ढूँढो|ढूंढें|ढूँढें)(?:\\s*:\\s*|\\s+)(.+)$", RegexOption.IGNORE_CASE)
 
     fun parse(raw: String): String? {
         if (raw.isBlank() || raw.length > 300 || raw.contains('\n')) return null
