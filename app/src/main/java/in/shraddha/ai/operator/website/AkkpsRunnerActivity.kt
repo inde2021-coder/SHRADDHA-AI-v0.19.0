@@ -188,12 +188,13 @@ class AkkpsRunnerActivity : Activity() {
         val js = """
             (function(items){
               const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-              const allowedTypes=new Set(["text","number","tel","email","date","search","url",""]);
+              const allowedTypes=new Set(__ALLOWED_TYPES__);
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
                   const type=(e.type||'').toLowerCase();
+                  const allowedTypes=new Set(__ALLOWED_TYPES__);
                   if(e.disabled||e.readOnly||e.hidden||e.getAttribute('aria-disabled')==='true'||
                     e.closest('[aria-hidden="true"]')||
                     (e.tagName==='INPUT'&&!allowedTypes.has(type))||
@@ -217,6 +218,7 @@ class AkkpsRunnerActivity : Activity() {
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
+            .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
@@ -337,7 +339,7 @@ Return exact JSON only. Do not include prose or markdown."""
                   const type=(e.type||'').toLowerCase();
                   if(e.disabled||e.readOnly||e.hidden||e.getAttribute('aria-disabled')==='true'||
                     e.closest('[aria-hidden="true"]')||
-                    (e.tagName==='INPUT'&&!["text","number","tel","email","date","search","url",""].includes(type))||
+                    (e.tagName==='INPUT'&&!allowedTypes.has(type))||
                     (e.tagName==='SELECT'&&e.multiple)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText);
                   const parent=e.closest('label'); if(parent) labels.push(parent.innerText);
@@ -357,7 +359,7 @@ Return exact JSON only. Do not include prose or markdown."""
               if(b&&!b.disabled) f.requestSubmit(b); else f.requestSubmit();
               return JSON.stringify({status:'dispatched'});
             })(${keys.toString()})
-        """.trimIndent()
+        """.trimIndent().replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
         val before = web.url.orEmpty()
         web.evaluateJavascript(js) { raw ->
             val statusCode = runCatching { JSONObject(decode(raw)).optString("status") }.getOrDefault("")
