@@ -63,17 +63,22 @@ class LiveEyesCameraService : Service() {
         publishState(STATE_STARTING)
         val assistantName = assistantName()
         startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
+        val cloudEnabled = getSharedPreferences(AMBIENT_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false)
         val config = VoiceGatewaySettings.get(this)
-        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
-            updateNotification((config.readError ?: "पहले Settings में सुरक्षित AI backend जोड़ें").take(120))
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        val backendReady = config.readError == null && config.baseUrl.startsWith("https://") && config.gatewayToken.isNotBlank()
+        // A missing cloud gateway must never disable the local-first camera path.
+        // Cloud frames are independently gated below; local OCR/object tracking remains active.
         closeCamera()
         previousObservation = ""
         lastAnnouncedAt = 0L
         lastCloudAnalysisAt = 0L
-        openHeadlessCamera(config.baseUrl, config.gatewayToken)
+        updateNotification(
+            if (cloudEnabled && backendReady) "Live Eyes active • local + consented cloud understanding"
+            else if (cloudEnabled) "Live Eyes active • local-only (secure cloud backend unavailable)"
+            else "Live Eyes active • on-device OCR and object tracking only"
+        )
+        openHeadlessCamera(if (backendReady) config.baseUrl else "", if (backendReady) config.gatewayToken else "")
         return START_NOT_STICKY
     }
 
@@ -132,6 +137,10 @@ class LiveEyesCameraService : Service() {
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
                     val now = android.os.SystemClock.elapsedRealtime()
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                        stopSelf()
+                        return@setOnImageAvailableListener
+                    }
                     if (now - lastAnalysisAt < ANALYSIS_INTERVAL_MS || !requestInFlight.compareAndSet(false, true)) return@setOnImageAvailableListener
                     val buffer = image.planes[0].buffer
                     val jpeg = ByteArray(buffer.remaining()).also { buffer.get(it) }
@@ -151,7 +160,16 @@ class LiveEyesCameraService : Service() {
                             }
                         }
                     }
-                    if (!AmbientIntelligencePolicy.shouldAnalyzeCloudFrame(now, lastCloudAnalysisAt)) {
+                    val cloudConsent = getSharedPreferences(AMBIENT_PREFS, Context.MODE_PRIVATE)
+                        .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false)
+                    val backendReadyNow = baseUrl.startsWith("https://") && token.isNotBlank()
+                    if (!AmbientIntelligencePolicy.mayAnalyzeCloudFrame(
+                            cameraPermissionGranted = true,
+                            cloudAnalysisConsentEnabled = cloudConsent,
+                            secureBackendReady = backendReadyNow,
+                            nowMs = now,
+                            lastAnalysisMs = lastCloudAnalysisAt
+                        )) {
                         jpeg.fill(0)
                         requestInFlight.set(false)
                         return@setOnImageAvailableListener
@@ -253,6 +271,7 @@ class LiveEyesCameraService : Service() {
         private const val PREFS_NAME = "shraddha_live_eyes_state"
         const val AMBIENT_PREFS = "shraddha_ambient_settings"
         const val PREF_PROACTIVE_COMPANION = "proactive_companion_enabled"
+        const val PREF_CLOUD_ANALYSIS_ENABLED = "cloud_scene_analysis_consent"
         private const val PREF_STATE = "state"
         private const val PREF_PID = "pid"
         private const val PREF_OBSERVATION = "latest_observation"

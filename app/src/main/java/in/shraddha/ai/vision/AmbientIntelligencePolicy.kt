@@ -12,6 +12,22 @@ object AmbientIntelligencePolicy {
     fun shouldAnalyzeCloudFrame(nowMs: Long, lastAnalysisMs: Long): Boolean =
         nowMs >= lastAnalysisMs && nowMs - lastAnalysisMs >= CLOUD_ANALYSIS_INTERVAL_MS
 
+
+    /**
+     * Cloud frame upload is a separate opt-in from camera permission and Live Eyes.
+     * Local OCR/object tracking may continue when this returns false.
+     */
+    fun mayAnalyzeCloudFrame(
+        cameraPermissionGranted: Boolean,
+        cloudAnalysisConsentEnabled: Boolean,
+        secureBackendReady: Boolean,
+        nowMs: Long,
+        lastAnalysisMs: Long
+    ): Boolean = cameraPermissionGranted &&
+        cloudAnalysisConsentEnabled &&
+        secureBackendReady &&
+        shouldAnalyzeCloudFrame(nowMs, lastAnalysisMs)
+
     fun cleanObservation(value: String): String =
         value.replace(Regex("\\s+"), " ").trim().take(MAX_OBSERVATION_CHARS)
 

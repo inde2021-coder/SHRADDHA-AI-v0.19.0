@@ -84,6 +84,10 @@ fun VisualLensScreen(navController: NavController) {
     var answer by remember { mutableStateOf("कैमरे को किसी वस्तु, जगह, लिखावट या समस्या की ओर करें और Shraddha से पूछें।") }
     var busy by remember { mutableStateOf(false) }
     var backgroundEyes by remember { mutableStateOf(LiveEyesCameraService.getState(context) == LiveEyesCameraService.STATE_ACTIVE) }
+    var cloudAnalysisConsent by remember {
+        mutableStateOf(context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, android.content.Context.MODE_PRIVATE)
+            .getBoolean(LiveEyesCameraService.PREF_CLOUD_ANALYSIS_ENABLED, false))
+    }
 
     val controller = remember(context) {
         LifecycleCameraController(context).apply {
@@ -270,26 +274,64 @@ fun VisualLensScreen(navController: NavController) {
                     if (enabled && !cameraGranted) {
                         permissionLauncher.launch(Manifest.permission.CAMERA)
                     } else if (enabled) {
-                        val config = VoiceGatewaySettings.get(context)
-                        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
-                            answer = "Background Live Eyes के लिए पहले सुरक्षित HTTPS AI backend और gateway token सेट करें।"
-                        } else {
-                            // Release CameraX synchronously; Compose effects run after this click handler.
-                            // Starting Camera2 before this unbind completes can fail with CAMERA_IN_USE.
-                            controller.unbind()
-                            backgroundEyes = true
-                            runCatching {
-                                startForegroundService(context, Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_START))
-                            }.onFailure {
-                                backgroundEyes = false
-                                answer = "Live Eyes शुरू नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि")
-                            }
+                        // Local OCR/object tracking works without an internet connection.
+                        // Cloud upload is separately controlled below.
+                        controller.unbind()
+                        backgroundEyes = true
+                        runCatching {
+                            startForegroundService(context, Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_START))
+                        }.onFailure {
+                            backgroundEyes = false
+                            answer = "Live Eyes शुरू नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि")
                         }
                     } else {
                         backgroundEyes = false
                         runCatching {
                             context.startService(Intent(context, LiveEyesCameraService::class.java).setAction(LiveEyesCameraService.ACTION_STOP))
                         }.onFailure { answer = "Live Eyes बंद नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
+                    }
+                }
+            )
+        }
+
+
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(Color(0x661B2030)).padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Cloud scene analysis • separate consent", color = colors.textPrimary)
+                Text(
+                    if (cloudAnalysisConsent) "Selected camera frames may be sent to your configured HTTPS AI backend."
+                    else "Off: camera OCR and object tracking stay on this device; no background frames are uploaded.",
+                    color = colors.textSecondary
+                )
+            }
+            Switch(
+                checked = cloudAnalysisConsent,
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        val config = VoiceGatewaySettings.get(context)
+                        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
+                            answer = "Cloud analysis चालू करने से पहले सुरक्षित HTTPS AI backend सेट करें।"
+                        } else {
+                            cloudAnalysisConsent = true
+                            context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean(LiveEyesCameraService.PREF_CLOUD_ANALYSIS_ENABLED, true).apply()
+                            answer = "Cloud scene analysis की अनुमति चालू है। इसे कभी भी बंद कर सकते हैं।"
+                            if (backgroundEyes) {
+                                runCatching {
+                                    startForegroundService(context, Intent(context, LiveEyesCameraService::class.java)
+                                        .setAction(LiveEyesCameraService.ACTION_START))
+                                }.onFailure { answer = "Cloud अनुमति सेव हुई, लेकिन Live Eyes restart नहीं हो पाईं: " + (it.message ?: "अनजान त्रुटि") }
+                            }
+                        }
+                    } else {
+                        cloudAnalysisConsent = false
+                        context.getSharedPreferences(LiveEyesCameraService.AMBIENT_PREFS, android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean(LiveEyesCameraService.PREF_CLOUD_ANALYSIS_ENABLED, false).apply()
+                        answer = "Cloud analysis बंद है। Live Eyes केवल on-device OCR और object tracking करेंगी।"
                     }
                 }
             )
