@@ -39,6 +39,7 @@ class AkkpsRunnerActivity : Activity() {
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
     private val boundaryPoints = mutableListOf<AkkpsGeoPoint>()
+    private var boundaryProvenance: AkkpsBoundary? = null
     private var locationManager: LocationManager? = null
     private var gpsWalkActive = false
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
@@ -153,7 +154,7 @@ class AkkpsRunnerActivity : Activity() {
         val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         exportActions.addView(action("KML Import") { importBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
         exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); boundaryProvenance = null; status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
         root.addView(exportActions)
         val candidateActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         candidateActions.addView(action("Satellite Candidate Import") { importSatelliteCandidate() },
@@ -248,6 +249,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         boundaryPoints.clear()
+        boundaryProvenance = null
         lastGpsAccuracyMeters = Float.MAX_VALUE
         bestGpsAccuracyMeters = Float.MAX_VALUE
         lastGpsElapsedRealtimeNanos = 0L
@@ -277,7 +279,14 @@ class AkkpsRunnerActivity : Activity() {
         if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
         if (gpsWalkActive) { status.text = "पहले GPS Walk रोकें, फिर Save करें।"; return }
         if (boundaryPoints.size < 3) { status.text = "Save करने के लिए पहले कम-से-कम 3 GPS points रिकॉर्ड करें या KML Import करें।"; return }
-        val boundary = AkkpsBoundary(boundaryPoints.toList())
+        val metadata = boundaryProvenance
+        val boundary = AkkpsBoundary(
+            points = boundaryPoints.toList(),
+            source = metadata?.source,
+            datasetYear = metadata?.datasetYear,
+            confidence = metadata?.confidence,
+            sourceFeatureId = metadata?.sourceFeatureId
+        )
         val issue = AkkpsBoundaryGeometry.validate(boundary.points)
         if (issue != null) { status.text = issue; return }
         AlertDialog.Builder(this)
@@ -301,6 +310,7 @@ class AkkpsRunnerActivity : Activity() {
                 else {
                     boundaryPoints.clear()
                     boundaryPoints.addAll(saved.points)
+                    boundaryProvenance = saved
                     status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres। Plot ID: $plotId"
                 }
             }
@@ -795,6 +805,7 @@ Return exact JSON only. Do not include prose or markdown."""
                         val replaceCandidate = {
                             boundaryPoints.clear()
                             boundaryPoints.addAll(candidate.boundary.points)
+                            boundaryProvenance = candidate.boundary
                             status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
                         }
                         if (boundaryPoints.isNotEmpty()) {
@@ -846,6 +857,7 @@ Return exact JSON only. Do not include prose or markdown."""
             }.onSuccess { boundary ->
                 boundaryPoints.clear()
                 boundaryPoints.addAll(boundary.points)
+                boundaryProvenance = null
                 status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
             }.onFailure { status.text = "KML import असफल: ${it.localizedMessage}" }
         }
