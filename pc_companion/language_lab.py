@@ -136,5 +136,5 @@ class LanguageLabDialog:
                     text_value, lang, reference_path, reference_text, output_path,
                     explicit_reference_voice_consent=consented
                 ))
-            self._run(task, lambda value: messagebox.showinfo("Shraddha AI", "Audio saved locally:\\n" + value, parent=self.window))
+            self._run(task, lambda value: messagebox.showinfo("Shraddha AI", "Audio saved locally:\n" + value, parent=self.window))
         ttk.Button(page, text="SYNTHESIZE OFFLINE", command=synthesize).pack(anchor="w", pady=8)
