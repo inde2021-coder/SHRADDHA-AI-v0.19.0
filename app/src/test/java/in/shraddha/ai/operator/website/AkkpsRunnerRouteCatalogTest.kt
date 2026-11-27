@@ -49,4 +49,33 @@ class AkkpsRunnerRouteCatalogTest {
         )
         assertNull(AkkpsRunnerRouteCatalog.match("https://evil.example/runner/farmers"))
     }
+    @Test fun acceptsCanonicalRunnerPathsWithQueryAndTrailingSlash() {
+        assertEquals(AkkpsRunnerModule.PLOTS, AkkpsRunnerRouteCatalog.match("/runner/plots/?page=2")?.module)
+        assertEquals(AkkpsRunnerModule.FARMERS, AkkpsRunnerRouteCatalog.match("https://akkps.ngo/runner/farmers/new?from=dashboard")?.module)
+    }
+
+    @Test fun rejectsEncodedSeparatorsTraversalAndBackslash() {
+        listOf(
+            "/runner/plots%2fnew",
+            "/runner/plots/%2e%2e/farmers",
+            "/runner/plots\\\\new",
+            "/runner//plots",
+            "/runner/plots/../farmers"
+        ).forEach { assertNull(it, AkkpsRunnerRouteCatalog.match(it)) }
+    }
+
+    @Test fun rejectsUntrustedOriginsAndNonHttpsAbsoluteUrls() {
+        listOf(
+            "http://akkps.ngo/runner/plots",
+            "https://akkps.ngo.evil.example/runner/plots",
+            "https://user@akkps.ngo/runner/plots",
+            "https://evil.example/runner/plots"
+        ).forEach { assertNull(it, AkkpsRunnerRouteCatalog.match(it)) }
+    }
+
+    @Test fun rejectsRelativeAndOversizedRoutes() {
+        assertNull(AkkpsRunnerRouteCatalog.match("runner/plots"))
+        assertNull(AkkpsRunnerRouteCatalog.match("/" + "x".repeat(2048)))
+    }
+
 }
