@@ -60,13 +60,14 @@ object AkkpsSatelliteCandidateParser {
         val properties = feature.optJSONObject("properties") ?: JSONObject()
         val source = properties.optString("source", properties.optString("dataset", "Unknown dataset"))
             .trim().take(MAX_SOURCE_LENGTH).ifBlank { "Unknown dataset" }
-        val yearValue = properties.opt("year") ?: properties.opt("dataset_year")
+        val yearValue = (properties.opt("year") ?: properties.opt("dataset_year"))
+            .takeUnless { it == org.json.JSONObject.NULL }
         val year = yearValue?.let {
             it.toString().toIntOrNull()?.also { parsed ->
                 require(parsed in 1900..2100) { "Dataset year 1900 से 2100 के बीच होना चाहिए।" }
             } ?: error("Dataset year मान्य पूर्णांक नहीं है।")
         }
-        val confidenceValue = properties.opt("confidence")
+        val confidenceValue = properties.opt("confidence").takeUnless { it == org.json.JSONObject.NULL }
         val confidence = confidenceValue?.let {
             it.toString().toDoubleOrNull()?.also { parsed ->
                 require(parsed.isFinite() && parsed in 0.0..1.0) {
