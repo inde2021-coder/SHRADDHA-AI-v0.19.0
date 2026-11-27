@@ -25,12 +25,6 @@ object NaturalLanguageWorkflowRouter {
     fun route(command: String, profile: AppTrainingProfile): Result {
         val normalized = normalize(command)
         if (normalized.isBlank()) return Result(message = "कृपया बताएं कि कौन-सा काम करना है।")
-        if (containsHighImpactAction(normalized)) {
-            return Result(message = "यह Delete/Payment/Publish जैसा high-impact काम है। पहले अलग से स्पष्ट पुष्टि लें; सीखे हुए Workflow को अपने-आप चलाया नहीं गया।")
-        }
-        if (containsMultipleActionIntents(normalized)) {
-            return Result(message = "एक निर्देश में कई अलग काम हैं। कृपया उन्हें क्रम से अलग-अलग बताएं; एक Workflow को गलत तरीके से नहीं चुना गया।")
-        }
         val ranked = profile.workflows.keys.map { name -> name to score(normalized, normalize(name)) }.sortedByDescending { it.second }
         val best = ranked.firstOrNull() ?: return Result(message = "इस ऐप के लिए कोई सिखाया हुआ Workflow नहीं है।")
         if (best.second < .22f) return Result(message = "इस निर्देश से मिलता हुआ सीखा Workflow नहीं मिला। पहले Training Lab में यह काम सिखाएँ।")
@@ -46,34 +40,24 @@ object NaturalLanguageWorkflowRouter {
         return Result(Route(profile, best.first, best.second, values, "सीखे हुए Workflow से निर्देश मिलाया गया; कोई नया ऐप व्यवहार अनुमान से नहीं बनाया गया।"), "Workflow चुना गया: ${best.first}")
     }
 
-    private fun containsHighImpactAction(value: String): Boolean {
-        val tokens = value.split(' ').toSet()
-        val highImpact = setOf(
-            "delete", "remove", "erase", "trash", "pay", "payment", "purchase", "publish",
-            "हटाओ", "हटाना", "मिटाओ", "डिलीट", "भुगतान", "पेमेंट", "खरीदो", "प्रकाशित", "पब्लिश"
-        )
-        return tokens.any { it in highImpact }
-    }
+    private val canonicalAliases = linkedMapOf(
+        "ग्राहक" to "customer", "कस्टमर" to "customer",
+        "हटाओ" to "delete", "हटाना" to "delete", "मिटाओ" to "delete", "डिलीट" to "delete",
+        "अपडेट" to "update", "बदलो" to "update", "बदलना" to "update",
+        "भेजो" to "send", "भेजना" to "send", "सेंड" to "send",
+        "डाउनलोड" to "download", "उतारो" to "download",
+        "रिपोर्ट" to "report", "इनवॉइस" to "invoice", "इनवॉयस" to "invoice",
+        "सेव" to "save", "सहेज" to "save", "जमा" to "submit",
+        "अपलोड" to "upload", "दस्तावेज़" to "document", "दस्तावेज" to "document"
+    )
 
-    private fun containsMultipleActionIntents(value: String): Boolean {
-        val actionGroups = listOf(
-            setOf("create", "add", "बनाओ", "बनाना", "जोड़ो"),
-            setOf("search", "find", "खोजो", "ढूंढो", "सर्च"),
-            setOf("update", "edit", "change", "अपडेट", "बदलो"),
-            setOf("send", "share", "forward", "भेजो", "भेजना"),
-            setOf("save", "submit", "सेव", "जमा", "सबमिट"),
-            setOf("download", "export", "डाउनलोड"),
-            setOf("upload", "attach", "अपलोड"),
-            setOf("delete", "remove", "हटाओ", "डिलीट"),
-            setOf("pay", "payment", "भुगतान", "पेमेंट"),
-            setOf("publish", "प्रकाशित", "पब्लिश")
-        )
-        return actionGroups.count { group -> value.split(' ').any { it in group } } > 1
+    private fun normalize(value: String): String {
+        val tokens = value.lowercase()
+            .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
+            .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ")
+            .trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        return tokens.joinToString(" ") { canonicalAliases[it] ?: it }
     }
-
-    private fun normalize(value: String): String = value.lowercase()
-        .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
-        .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
     private fun score(a: String, b: String): Float {
         val at = a.split(" ").filter { it.length > 1 && it !in stopWords }.toSet(); val bt = b.split(" ").filter { it.length > 1 && it !in stopWords }.toSet()
         if (at.isEmpty() || bt.isEmpty()) return 0f
