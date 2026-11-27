@@ -29,7 +29,7 @@ class CurriculumLearningActivity : Activity() {
         override fun run() {
             if (!isFinishing && ::dashboard.isInitialized) {
                 refreshDashboard()
-                uiHandler.postDelayed(this, 30_000L)
+                uiHandler.postDelayed(this, 5_000L)
             }
         }
     }
@@ -53,7 +53,7 @@ class CurriculumLearningActivity : Activity() {
         else startStudySession()
         refreshDashboard()
         uiHandler.removeCallbacks(progressTicker)
-        uiHandler.postDelayed(progressTicker, 30_000L)
+        uiHandler.postDelayed(progressTicker, 5_000L)
     }
 
     override fun onPause() {
