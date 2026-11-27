@@ -5,9 +5,9 @@ import org.junit.Test
 
 class AkkpsRunnerViewCommandPolicyTest {
     @Test fun parsesExplicitEnglishViewCommands() {
-        assertEquals("farmer 123", AkkpsRunnerViewCommandPolicy.parse("view Farmer 123"))
-        assertEquals("plot-45", AkkpsRunnerViewCommandPolicy.parse("open record PLOT-45"))
-        assertEquals("report 7", AkkpsRunnerViewCommandPolicy.parse("show record Report 7"))
+        assertEquals("Farmer 123", AkkpsRunnerViewCommandPolicy.parse("view Farmer 123"))
+        assertEquals("PLOT-45", AkkpsRunnerViewCommandPolicy.parse("open record PLOT-45"))
+        assertEquals("Report 7", AkkpsRunnerViewCommandPolicy.parse("show record Report 7"))
     }
 
     @Test fun parsesHindiViewCommands() {
