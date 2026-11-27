@@ -399,10 +399,7 @@ object ActionExecutor {
                 val channel = if (isWhatsApp) "whatsapp" else "sms"
                 val gateway = VoiceGatewaySettings.get(context)
                 if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
-                    val providerResult = ProviderMessageClient.send(
-                        context, channel, phoneNumber, messageText, requestId,
-                        approval = MessageSendApproval.afterExplicitConfirmation(channel, phoneNumber, messageText, requestId)
-                    )
+                    val providerResult = ProviderMessageClient.send(context, channel, phoneNumber, messageText, requestId)
                     providerResult.onSuccess { receipt ->
                         result.put("status", "accepted")
                         result.put("action", "provider_message_accepted")
@@ -821,10 +818,7 @@ object ActionExecutor {
                             } else {
                                 val gateway = VoiceGatewaySettings.get(context)
                                 if (gateway.baseUrl.isNotBlank() && gateway.gatewayToken.isNotBlank()) {
-                                    ProviderMessageClient.send(
-                                        context, "whatsapp", number, message, requestId,
-                                        approval = MessageSendApproval.afterExplicitConfirmation("whatsapp", number, message, requestId)
-                                    )
+                                    ProviderMessageClient.send(context, "whatsapp", number, message, requestId)
                                         .onSuccess { receipt ->
                                             result.put("status", "accepted").put("action", "provider_message_accepted")
                                                 .put("provider", receipt.provider).put("provider_message_id", receipt.messageId)
