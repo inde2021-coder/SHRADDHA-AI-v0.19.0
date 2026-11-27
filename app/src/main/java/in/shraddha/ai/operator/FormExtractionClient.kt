@@ -70,6 +70,9 @@ object FormExtractionClient {
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
+            if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                throw IllegalStateException("Online AI consent was revoked while extraction was running. The response was discarded.")
+            }
             if (!response.isSuccessful) {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw IllegalStateException(message.ifBlank { "Form extraction failed (HTTP ${response.code})" })
