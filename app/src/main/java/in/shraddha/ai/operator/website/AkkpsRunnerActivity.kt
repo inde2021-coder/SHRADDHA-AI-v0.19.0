@@ -184,11 +184,16 @@ class AkkpsRunnerActivity : Activity() {
         val js = """
             (function(items){
               const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const allowedTypes=new Set(["text","number","tel","email","date","search","url",""]);
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
-                  if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
+                  const type=(e.type||'').toLowerCase();
+                  if(e.disabled||e.readOnly||e.hidden||e.getAttribute('aria-disabled')==='true'||
+                    e.closest('[aria-hidden="true"]')||
+                    (e.tagName==='INPUT'&&!allowedTypes.has(type))||
+                    (e.tagName==='SELECT'&&e.multiple)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && (v===key||v.includes(key)||key.includes(v)));
@@ -325,8 +330,10 @@ Return exact JSON only. Do not include prose or markdown."""
                 return JSON.stringify({status:'invalid_field_keys'});
               for(const key of normalized){
                 const found=all.filter(e=>{
-                  if(e.disabled||e.readOnly||e.getAttribute('aria-disabled')==='true'||
-                    e.closest('[aria-hidden="true"]')||['hidden','password','file','checkbox','radio','button','submit','reset','image'].includes((e.type||'').toLowerCase())||
+                  const type=(e.type||'').toLowerCase();
+                  if(e.disabled||e.readOnly||e.hidden||e.getAttribute('aria-disabled')==='true'||
+                    e.closest('[aria-hidden="true"]')||
+                    (e.tagName==='INPUT'&&!["text","number","tel","email","date","search","url",""].includes(type))||
                     (e.tagName==='SELECT'&&e.multiple)) return false;
                   const labels=[...(e.labels||[])].map(x=>x.innerText);
                   const parent=e.closest('label'); if(parent) labels.push(parent.innerText);
