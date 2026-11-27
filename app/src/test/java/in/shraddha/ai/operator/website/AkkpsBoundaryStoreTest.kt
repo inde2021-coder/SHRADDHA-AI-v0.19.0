@@ -165,4 +165,30 @@ class AkkpsBoundaryStoreTest {
         assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
     }
 
+    @Test fun kmlImportPreservesSatelliteProvenanceMetadata() {
+        val boundary = AkkpsBoundary(
+            points = square + square.first(),
+            source = "Sentinel-2 / FTW",
+            datasetYear = 2025,
+            confidence = 0.87,
+            sourceFeatureId = "field-2025-17"
+        )
+        val kml = AkkpsBoundaryGeometry.toKml(boundary, "Plot 17")
+        val restored = AkkpsBoundaryGeometry.parseKml(kml).getOrThrow()
+        assertEquals(boundary.source, restored.source)
+        assertEquals(boundary.datasetYear, restored.datasetYear)
+        assertEquals(boundary.confidence!!, restored.confidence!!, 0.0001)
+        assertEquals(boundary.sourceFeatureId, restored.sourceFeatureId)
+        assertEquals(boundary.points, restored.points)
+    }
+
+    @Test fun kmlWithoutProvenanceDoesNotInventSourceMetadata() {
+        val boundary = AkkpsBoundary(points = square + square.first())
+        val restored = AkkpsBoundaryGeometry.parseKml(AkkpsBoundaryGeometry.toKml(boundary)).getOrThrow()
+        assertNull(restored.source)
+        assertNull(restored.datasetYear)
+        assertNull(restored.confidence)
+        assertNull(restored.sourceFeatureId)
+    }
+
 }
