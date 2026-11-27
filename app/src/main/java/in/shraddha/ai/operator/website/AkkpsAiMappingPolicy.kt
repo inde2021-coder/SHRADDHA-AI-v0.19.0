@@ -9,14 +9,18 @@ internal object AkkpsAiMappingPolicy {
         Normalizer.normalize(value, Normalizer.Form.NFKC)
             .lowercase(Locale.ROOT).trim().replace(Regex("\\s+"), " ")
 
+    fun hasValidMissingItems(items: List<String>): Boolean =
+        items.size <= 30 && items.all { it.isNotBlank() && it.length <= 120 }
+
     fun canSubmit(aiRequestedSubmit: Boolean, missingRequiredInformation: Int): Boolean =
         aiRequestedSubmit && missingRequiredInformation == 0
 
     fun areValuesExplicitInCommand(command: String, assignments: List<Pair<String, String>>): Boolean {
-        if (assignments.isEmpty()) return false
+        if (assignments.isEmpty() || assignments.size > 100) return false
         val source = normalize(command)
         if (source.isBlank()) return false
-        return assignments.all { (_, value) ->
+        return assignments.all { (key, value) ->
+            if (key.isBlank() || key.length > 160 || value.length > 500) return@all false
             val candidate = normalize(value)
             if (candidate.isBlank()) return@all false
             val literal = Regex(
