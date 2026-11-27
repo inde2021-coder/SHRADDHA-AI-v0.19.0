@@ -27,8 +27,8 @@ object AkkpsBoundaryGeometry {
         val open = ring.dropLast(1)
         if (open.distinct().size < 3) return "कम-से-कम 3 अलग boundary points चाहिए।"
         if (open.zipWithNext().any { (a, b) -> a == b }) return "लगातार दो boundary points एक जैसे नहीं हो सकते।"
-        if (areaSquareMeters(ring) < 1.0) return "Boundary का area बहुत छोटा या शून्य है।"
         if (hasSelfIntersection(ring)) return "Boundary polygon आपस में cross कर रहा है।"
+        if (areaSquareMeters(ring) < 1.0) return "Boundary का area बहुत छोटा या शून्य है।"
         return null
     }
 
