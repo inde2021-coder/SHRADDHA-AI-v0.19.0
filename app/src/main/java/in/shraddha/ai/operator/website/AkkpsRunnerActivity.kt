@@ -147,14 +147,14 @@ class AkkpsRunnerActivity : Activity() {
                   aria:e.getAttribute('aria-label')||'',label:[...new Set(labels)].join(' / '),
                   required:!!e.required,disabled:!!e.disabled};
               }).filter(x=>x.type!=='hidden' && x.type!=='password' && x.type!=='file' && !x.disabled);
-              const modules=[...document.querySelectorAll('a[href]')].filter(visible).map(a=>{
+              const modules=[...document.querySelectorAll('nav a[href],[role=navigation] a[href],header a[href],aside a[href]')].filter(visible).map(a=>{
                 try { const u=new URL(a.href,location.href); if(u.origin!==location.origin)return null;
                   return {label:n(a.innerText||a.getAttribute('aria-label')||a.title).slice(0,100),
                     path:u.pathname,active:a.getAttribute('aria-current')==='page'||a.classList.contains('active')};
                 } catch(_){return null;}
               }).filter(x=>x && x.label && x.path && !x.path.startsWith('/admin') && !x.path.startsWith('/coordinator'))
                 .filter((x,i,a)=>a.findIndex(y=>y.path===x.path&&y.label===x.label)===i).slice(0,80);
-              const actions=[...document.querySelectorAll('button,input[type=submit],input[type=button],[role=button]')]
+              const actions=[...document.querySelectorAll('form button,form input[type=submit],form input[type=button],form [role=button]')]
                 .filter(visible).map(e=>({label:n(e.innerText||e.value||e.getAttribute('aria-label')||e.title).slice(0,100),
                   type:(e.type||e.tagName||'').toLowerCase(),disabled:!!e.disabled}))
                 .filter(x=>x.label).slice(0,80);
