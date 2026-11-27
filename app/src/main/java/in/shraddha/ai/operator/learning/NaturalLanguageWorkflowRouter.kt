@@ -1,5 +1,8 @@
 package `in`.shraddha.ai.operator.learning
 
+import java.text.Normalizer
+import java.util.Locale
+
 /** Routes a command to a workflow the user has already taught; never invents unseen app actions. */
 object NaturalLanguageWorkflowRouter {
     data class Route(val profile: AppTrainingProfile, val workflowName: String, val confidence: Float, val values: Map<String, String>, val note: String)
@@ -47,33 +50,56 @@ object NaturalLanguageWorkflowRouter {
     }
 
     private fun containsHighImpactAction(value: String): Boolean {
-        val tokens = value.split(' ').toSet()
+        val tokens = value.split(' ').filter { it.isNotBlank() }.toSet()
         val highImpact = setOf(
-            "delete", "remove", "erase", "trash", "pay", "payment", "purchase", "publish",
-            "हटाओ", "हटाना", "मिटाओ", "डिलीट", "भुगतान", "पेमेंट", "खरीदो", "प्रकाशित", "पब्लिश"
+            "delete", "remove", "erase", "trash", "pay", "payment", "purchase", "buy", "publish", "post",
+            "हटाओ", "हटाना", "हटाएं", "हटाएँ", "हटाइए", "हटा", "मिटाओ", "मिटाना", "मिटा", "डिलीट",
+            "भुगतान", "पेमेंट", "खरीदो", "प्रकाशित", "पब्लिश", "पोस्ट",
+            "hata", "hatao", "hatana", "mita", "mitao", "mitana", "bhugtan", "bhugtaan",
+            "paisa", "paise"
         )
-        return tokens.any { it in highImpact }
+        if (tokens.any { it in highImpact }) return true
+        val phrases = listOf(
+            "हटा दो", "हटा दें", "हटा देना", "मिटा दो", "मिटा दें", "मिटा देना",
+            "hata do", "hata dena", "mita do", "mita dena",
+            "पैसे भेजो", "पैसा भेजो", "भुगतान करो", "पेमेंट करो",
+            "paise bhejo", "paisa bhejo", "bhugtan karo", "payment karo"
+        )
+        return phrases.any { value.contains(it) }
     }
-
     private fun containsMultipleActionIntents(value: String): Boolean {
-        val actionGroups = listOf(
-            setOf("create", "add", "बनाओ", "बनाना", "जोड़ो"),
-            setOf("search", "find", "खोजो", "ढूंढो", "सर्च"),
-            setOf("update", "edit", "change", "अपडेट", "बदलो"),
-            setOf("send", "share", "forward", "भेजो", "भेजना"),
-            setOf("save", "submit", "सेव", "जमा", "सबमिट"),
-            setOf("download", "export", "डाउनलोड"),
-            setOf("upload", "attach", "अपलोड"),
-            setOf("delete", "remove", "हटाओ", "डिलीट"),
-            setOf("pay", "payment", "भुगतान", "पेमेंट"),
-            setOf("publish", "प्रकाशित", "पब्लिश")
+        val groups = listOf(
+            setOf("create", "add", "बनाओ", "बनाना", "जोड़ो", "banao", "jodo"),
+            setOf("search", "find", "खोजो", "ढूंढो", "सर्च", "khojo", "dhundo"),
+            setOf("update", "edit", "change", "अपडेट", "बदलो", "update", "badlo"),
+            setOf("send", "share", "forward", "भेजो", "भेजना", "सेंड", "bhejo", "bhejna"),
+            setOf("save", "submit", "सेव", "जमा", "सबमिट", "save", "jama"),
+            setOf("download", "export", "डाउनलोड", "download"),
+            setOf("upload", "attach", "अपलोड", "upload"),
+            setOf("delete", "remove", "हटाओ", "हटाना", "मिटाओ", "डिलीट", "hatao", "hata", "mitao"),
+            setOf("pay", "payment", "भुगतान", "पेमेंट", "paisa", "paise", "bhugtan"),
+            setOf("publish", "प्रकाशित", "पब्लिश", "पोस्ट", "publish", "post")
         )
-        return actionGroups.count { group -> value.split(' ').any { it in group } } > 1
+        return groups.count { group -> value.split(' ').any { it in group } } > 1
     }
+    private val canonicalAliases = linkedMapOf(
+        "ग्राहक" to "customer", "कस्टमर" to "customer",
+        "हटाओ" to "delete", "हटाना" to "delete", "मिटाओ" to "delete", "डिलीट" to "delete",
+        "अपडेट" to "update", "बदलो" to "update", "बदलना" to "update",
+        "भेजो" to "send", "भेजना" to "send", "सेंड" to "send",
+        "डाउनलोड" to "download", "उतारो" to "download",
+        "रिपोर्ट" to "report", "इनवॉइस" to "invoice", "इनवॉयस" to "invoice",
+        "सेव" to "save", "सहेज" to "save", "जमा" to "submit",
+        "अपलोड" to "upload", "दस्तावेज़" to "document", "दस्तावेज" to "document"
+    )
 
-    private fun normalize(value: String): String = value.lowercase()
-        .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
-        .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+    private fun normalize(value: String): String {
+        val tokens = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT)
+            .replace(Regex("(?i)[\\\\p{L}0-9_-][\\\\p{L}0-9_.-]*\\\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
+            .replace(Regex("[^\\\\p{L}\\\\p{M}\\\\p{N}]+"), " ")
+            .trim().split(Regex("\\\\s+")).filter { it.isNotBlank() }
+        return tokens.joinToString(" ") { canonicalAliases[it] ?: it }
+    }
     private fun score(a: String, b: String): Float {
         val at = a.split(" ").filter { it.length > 1 && it !in stopWords }.toSet(); val bt = b.split(" ").filter { it.length > 1 && it !in stopWords }.toSet()
         if (at.isEmpty() || bt.isEmpty()) return 0f
