@@ -286,6 +286,9 @@ object VoiceGatewaySettings {
                 val message = runCatching { JSONObject(raw).optString("error") }.getOrDefault("")
                 throw IllegalStateException(message.ifBlank { "Gemini Live token request failed (HTTP ${response.code})" })
             }
+            if (!`in`.shraddha.ai.future.OnlineAiConsent.isAllowed(context)) {
+                throw IllegalStateException("Online AI consent was revoked while requesting the Live token. The token was discarded.")
+            }
             val token = JSONObject(raw).optString("token")
             require(token.startsWith("auth_tokens/")) { "Backend returned an invalid Gemini Live token." }
             return token
