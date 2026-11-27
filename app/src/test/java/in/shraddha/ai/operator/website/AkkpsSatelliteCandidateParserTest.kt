@@ -114,4 +114,14 @@ class AkkpsSatelliteCandidateParserTest {
         assertFalse(AkkpsSatelliteCandidateParser.parse(feature(rings = booleanLatitude)).isSuccess)
     }
 
+    @Test fun rejectsNonTextSourceMetadataAndAcceptsTextDatasetFallback() {
+        assertFalse(AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":{"provider":"unknown"}}""")
+        ).isSuccess)
+        val fallback = AkkpsSatelliteCandidateParser.parse(
+            feature(properties = """{"source":"","dataset":"Surveyed field boundaries"}""")
+        ).getOrThrow()
+        assertEquals("Surveyed field boundaries", fallback.source)
+    }
+
 }
