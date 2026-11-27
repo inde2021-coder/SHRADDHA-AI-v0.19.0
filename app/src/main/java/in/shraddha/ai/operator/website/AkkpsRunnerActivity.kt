@@ -780,7 +780,7 @@ class AkkpsRunnerActivity : Activity() {
                 status.text = buildList {
                     if (invalidSummary.isNotBlank()) add("Browser validation failed; पुराने values restore किए गए: $invalidSummary")
                     if (unresolvedSummary.isNotBlank()) add("Exact field match नहीं मिला; कोई ambiguous field नहीं चुनी: $unresolvedSummary")
-                }.joinToString("\\n")
+                }.joinToString("\n")
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
