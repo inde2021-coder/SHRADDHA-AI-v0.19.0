@@ -38,4 +38,14 @@ class AkkpsWebsiteProfileTest {
         assertTrue(AkkpsWebsiteProfile.canReportSuccess(WebsiteOperation.SAVE_RECORD, true, true))
         assertFalse(AkkpsWebsiteProfile.canReportSuccess(WebsiteOperation.NAVIGATE, true, true))
     }
+    @Test fun topLevelRunnerNavigationBlocksExternalAndPrivilegedRedirects() {
+        assertTrue(AkkpsWebsiteProfile.acceptsRunnerNavigation("about:blank"))
+        assertTrue(AkkpsWebsiteProfile.acceptsRunnerNavigation("https://www.akkps.ngo/runner/farmers"))
+        assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("https://evil.example/runner/farmers"))
+        assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("https://www.akkps.ngo/admin/farmers"))
+        assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("https://www.akkps.ngo/coordinator/plots"))
+        assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("file:///sdcard/secret.html"))
+        assertFalse(AkkpsWebsiteProfile.acceptsRunnerNavigation("intent://evil"))
+    }
+
 }
