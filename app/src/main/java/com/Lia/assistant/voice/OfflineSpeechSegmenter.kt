@@ -59,6 +59,7 @@ internal class OfflineSpeechSegmenter(
     internal fun bufferedSampleCount(): Int = samples.size
 
     private fun resetInternal() {
+        for (index in samples.indices) samples[index] = 0f
         samples.clear()
         speechStarted = false
         silentChunks = 0
