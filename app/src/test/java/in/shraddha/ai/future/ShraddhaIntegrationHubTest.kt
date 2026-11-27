@@ -108,4 +108,31 @@ class ShraddhaIntegrationHubTest {
     @Test fun recoveredWorkflowAcceptsMatchingPlanStepAndAuditIdentity() {
         ShraddhaIntegrationHub.validateRecoveredIdentity("wf-1", listOf("a", "b"), listOf("a", "b"), listOf("wf-1", "wf-1"))
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun cannotReplaceAnUnstartedPlan() {
+        val hub = ShraddhaIntegrationHub()
+        hub.createPlan("first-plan", "Keep this plan", listOf(ShraddhaIntegrationHub.Action("a", "First")))
+        hub.createPlan("replacement", "Do not replace", listOf(ShraddhaIntegrationHub.Action("b", "Second")))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun cannotReplaceAWorkflowWhileAnActionIsInFlight() {
+        val hub = ShraddhaIntegrationHub()
+        hub.createPlan("in-flight", "Action running", listOf(ShraddhaIntegrationHub.Action("a", "First")))
+        hub.start()
+        hub.markActionDispatched()
+        hub.createPlan("replacement", "Do not replace", listOf(ShraddhaIntegrationHub.Action("b", "Second")))
+    }
+
+    @Test fun terminalWorkflowCanBeReplacedByANewPlan() {
+        val hub = ShraddhaIntegrationHub()
+        hub.createPlan("finished", "Finished task", listOf(ShraddhaIntegrationHub.Action("a", "First")))
+        hub.start()
+        hub.markActionDispatched()
+        hub.verifyCurrentStep(true)
+        val next = hub.createPlan("next-task", "Next task", listOf(ShraddhaIntegrationHub.Action("b", "Second")))
+        assertEquals("next-task", next.workflow.id)
+        assertEquals(WorkflowStatus.DRAFT, next.workflow.status)
+    }
 }
