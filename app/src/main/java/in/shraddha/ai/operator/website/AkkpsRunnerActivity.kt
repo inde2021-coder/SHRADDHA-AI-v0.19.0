@@ -1075,7 +1075,7 @@ Return exact JSON only. Do not include prose or markdown."""
                             gpsWalkPlotId = null
                             status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
                         }
-                        if (boundaryPoints.isNotEmpty()) {
+                        if (AkkpsBoundaryReplacementPolicy.requiresConfirmation(boundaryPoints.size)) {
                             val existingArea = runCatching {
                                 AkkpsBoundary(boundaryPoints.toList()).areaAcres
                             }.getOrNull()
