@@ -46,7 +46,7 @@ class CommandExecutionJournal(context: Context) {
         if (steps.any { !validStep(it) } || steps.map { it.id }.distinct().size != steps.size) return null
         val fingerprint = sha256(command.trim())
         val now = System.currentTimeMillis()
-        val existing = loadAll().firstOrNull { it.commandFingerprint == fingerprint && now - it.createdAt <= DEDUP_WINDOW_MS }
+        val existing = loadAll().firstOrNull {\n            val age = now - it.createdAt\n            it.commandFingerprint == fingerprint && age in 0..DEDUP_WINDOW_MS\n        }
         if (existing != null) return existing
         val plan = CommandTaskPlan(UUID.randomUUID().toString(), fingerprint, System.currentTimeMillis(),
             steps.map { it.copy(state = CommandStepState.PENDING, attempt = 0, resultCode = "") })
@@ -125,7 +125,7 @@ class CommandExecutionJournal(context: Context) {
         }
     }
 
-    private fun persist(plan: CommandTaskPlan) {
+    private fun persist(plan: CommandTaskPlan): Boolean {
         val all = loadAll().filterNot { it.id == plan.id }.toMutableList().apply { add(plan) }
             .sortedByDescending { it.createdAt }.take(MAX_PLANS).toMutableList()
         var encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
@@ -134,7 +134,7 @@ class CommandExecutionJournal(context: Context) {
             encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
         }
         // Synchronous commit makes each state transition durable before the caller proceeds.
-        prefs.edit().putString(KEY_PLANS, encoded).commit()
+        return prefs.edit().putString(KEY_PLANS, encoded).commit()
     }
 
     private fun encode(plan: CommandTaskPlan) = JSONObject()
