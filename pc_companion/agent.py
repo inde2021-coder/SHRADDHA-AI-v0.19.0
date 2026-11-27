@@ -31,7 +31,10 @@ from protocol import valid_pairing_ids, validate_remote_action, validate_remote_
 from e2e_crypto import DeviceE2ECrypto, visual_frame_aad
 from windows_hardware import get_hardware_status, execute_hardware_action
 from reconnect import reconnect_delay_ms
-from control_session import control_grant_is_valid
+try:
+    from .control_session import control_grant_is_valid
+except ImportError:  # Running agent.py directly from the companion folder.
+    from control_session import control_grant_is_valid
 from command_parser import parse_android_command
 from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
