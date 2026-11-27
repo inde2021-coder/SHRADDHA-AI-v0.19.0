@@ -19,8 +19,12 @@ object PersistentChatMemory {
             .getBoolean(ENABLED_KEY, false)
 
     fun setEnabled(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(ENABLED_KEY, enabled).apply()
+        synchronized(lock) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(ENABLED_KEY, enabled).commit()
+            // Turning consent off also erases the retained recap, rather than merely hiding it.
+            if (!enabled) SecureMemoryVault(context.applicationContext).clear()
+        }
     }
 
     fun recap(context: Context): String? {
@@ -35,7 +39,8 @@ object PersistentChatMemory {
         if (safeText.isEmpty() || !isEnabled(context)) return@runCatching
         synchronized(lock) {
             val vault = SecureMemoryVault(context.applicationContext)
-            val existing = vault.load().getOrElse { "" }
+            // Never replace unreadable/corrupt encrypted data with a fresh recap.
+            val existing = vault.load().getOrThrow()
             vault.save(mergeRecap(existing, role, safeText)).getOrThrow()
         }
     }
@@ -53,6 +58,7 @@ object PersistentChatMemory {
         SecureMemoryVault(context.applicationContext).save(safe).getOrThrow()
     }
 
-    fun clear(context: Context): Boolean =
+    fun clear(context: Context): Boolean = synchronized(lock) {
         SecureMemoryVault(context.applicationContext).clear()
+    }
 }
