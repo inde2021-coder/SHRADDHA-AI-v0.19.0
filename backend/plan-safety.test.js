@@ -87,7 +87,7 @@ test('operator plans reject spaced, Unicode compatibility and Hindi secret label
     'one time password 1234',
     'security code 1234',
     'UPI PIN 1234',
-    '\\u200bOTP 123456',
+    '\u200bOTP 123456',
     'ＯＴＰ 123456',
     'ओ टी पी 123456',
     'यूपीआई पिन 1234',
