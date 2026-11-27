@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /** Local-only Indic microphone pipeline; no network client or cloud fallback exists here. */
 class OfflineIndicVoiceSession(
@@ -29,6 +30,9 @@ class OfflineIndicVoiceSession(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = AtomicBoolean(false)
     private val decoding = AtomicBoolean(false)
+    private val sessionEpoch = AtomicLong(0)
+    private val segmentLock = Any()
+    private var pendingSegment: FloatArray? = null
     private val segmenter = OfflineSpeechSegmenter()
     private var selectedLanguage = IndicConformerRuntime.Language.HINDI
     private var appContext: Context? = null
@@ -39,6 +43,7 @@ class OfflineIndicVoiceSession(
             "Microphone permission is required for offline voice."
         }
         if (!running.compareAndSet(false, true)) return
+        val epoch = sessionEpoch.incrementAndGet()
         appContext = context.applicationContext
         selectedLanguage = language
         val status = IndicConformerRuntime.status(context, language)
@@ -48,7 +53,7 @@ class OfflineIndicVoiceSession(
             return
         }
         audio = LiveAudioIO(
-            onMicChunk = ::acceptPcm16,
+            onMicChunk = { bytes -> acceptPcm16(bytes, epoch) },
             onMicAmplitude = { },
             onRecordingError = { message ->
                 stop()
@@ -62,21 +67,30 @@ class OfflineIndicVoiceSession(
         }
     }
 
-    private fun acceptPcm16(bytes: ByteArray) {
-        if (!running.get() || decoding.get() || bytes.size < 2) return
-        val completed = segmenter.accept(bytes, LiveAudioIO.calculateRms(bytes))
-        if (completed != null && decoding.compareAndSet(false, true)) decodeSegment(completed)
+    private fun acceptPcm16(bytes: ByteArray, epoch: Long) {
+        if (!running.get() || sessionEpoch.get() != epoch || bytes.size < 2) return
+        val completed = segmenter.accept(bytes, LiveAudioIO.calculateRms(bytes)) ?: return
+        val startNow = synchronized(segmentLock) {
+            when {
+                !running.get() || sessionEpoch.get() != epoch -> false
+                decoding.compareAndSet(false, true) -> true
+                pendingSegment == null -> { pendingSegment = completed; false }
+                else -> { completed.fill(0f); false }
+            }
+        }
+        if (startNow) decodeSegment(completed, epoch, selectedLanguage)
     }
 
-    private fun decodeSegment(pcm: FloatArray) {
+    private fun decodeSegment(pcm: FloatArray, epoch: Long, language: IndicConformerRuntime.Language) {
         val context = appContext ?: run {
             pcm.fill(0f)
-            decoding.set(false)
+            synchronized(segmentLock) { if (sessionEpoch.get() == epoch) decoding.set(false) }
             return
         }
         scope.launch {
             try {
-                val transcript = IndicConformerRuntime.transcribe(context, selectedLanguage, pcm).trim()
+                if (!running.get() || sessionEpoch.get() != epoch) return@launch
+                val transcript = IndicConformerRuntime.transcribe(context, language, pcm).trim()
                 if (transcript.isBlank()) {
                     onStatus("No speech recognized • keep speaking")
                     return@launch
@@ -92,22 +106,43 @@ class OfflineIndicVoiceSession(
                 val answer = LocalOfflineLlm.generate(
                     context,
                     modelPath,
-                    "User voice transcript (${selectedLanguage.label}): $transcript\nRespond naturally in the same language. This is local-only; do not claim device actions."
+                    "User voice transcript (" + language.label + "): $transcript\nRespond naturally in the same language. This is local-only; do not claim device actions."
                 )
                 PersistentChatMemory.record(context, "Assistant", answer)
                 onBrainResponse(answer)
-                onStatus("Offline ${selectedLanguage.label} • Brain response ready")
+                onStatus("Offline " + language.label + " • Brain response ready")
             } catch (error: Exception) {
                 onError(error.localizedMessage ?: "Offline speech processing failed.")
             } finally {
                 pcm.fill(0f)
-                decoding.set(false)
+                val next = synchronized(segmentLock) {
+                    if (!running.get() || sessionEpoch.get() != epoch) {
+                        if (sessionEpoch.get() == epoch) {
+                            pendingSegment?.fill(0f)
+                            pendingSegment = null
+                            decoding.set(false)
+                        }
+                        null
+                    } else {
+                        val queued = pendingSegment
+                        pendingSegment = null
+                        if (queued == null) decoding.set(false)
+                        queued
+                    }
+                }
+                if (next != null) decodeSegment(next, epoch, language)
             }
         }
     }
 
     fun stop() {
         if (!running.getAndSet(false)) return
+        sessionEpoch.incrementAndGet()
+        synchronized(segmentLock) {
+            pendingSegment?.fill(0f)
+            pendingSegment = null
+            decoding.set(false)
+        }
         runCatching { audio?.release() }
         audio = null
         segmenter.reset()
