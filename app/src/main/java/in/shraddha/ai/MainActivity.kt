@@ -173,6 +173,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         activeOrb?.setReducedMotion(NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false))
         activeOrb?.setOrbStyle(NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name)))
+        // Returning from Android Settings must refresh the live permission snapshot.
+        if (currentPage == "permissions" && ::pageRoot.isInitialized) showPage("permissions")
     }
 
     override fun onNewIntent(intent: Intent) {
