@@ -83,12 +83,11 @@ object NaturalLanguageWorkflowRouter {
     )
 
     private fun normalize(value: String): String {
-        var normalized = value.lowercase()
-            .replace(Regex("(?i)[\\p{L}0-9_-][\\p{L}0-9_.-]*\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
-        canonicalAliases.forEach { (alias, canonical) ->
-            normalized = normalized.replace(alias, canonical)
-        }
-        return normalized.replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+        val tokens = value.lowercase()
+            .replace(Regex("(?i)[\\\\p{L}0-9_-][\\\\p{L}0-9_.-]*\\\\.(?:jpg|jpeg|png|webp|pdf|docx?|xlsx?|txt)"), " ")
+            .replace(Regex("[^\\\\p{L}\\\\p{M}\\\\p{N}]+"), " ")
+            .trim().split(Regex("\\\\s+")).filter { it.isNotBlank() }
+        return tokens.joinToString(" ") { canonicalAliases[it] ?: it }
     }
     private fun score(a: String, b: String): Float {
         val at = a.split(" ").filter { it.length > 1 && it !in stopWords }.toSet(); val bt = b.split(" ").filter { it.length > 1 && it !in stopWords }.toSet()
