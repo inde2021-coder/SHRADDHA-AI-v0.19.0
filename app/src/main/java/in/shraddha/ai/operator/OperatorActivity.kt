@@ -596,7 +596,10 @@ class OperatorActivity : Activity() {
         }
         val result = NaturalLanguageWorkflowRouter.route(command, profile)
         val route = result.route
-        if (route == null) { log.text = result.message; return }
+        if (route == null) {
+            requestUniversalVisiblePlan(command, snapshot)
+            return
+        }
         val variables = field("अन्य मान: customer_name=Rahul, phone=...")
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
         android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
