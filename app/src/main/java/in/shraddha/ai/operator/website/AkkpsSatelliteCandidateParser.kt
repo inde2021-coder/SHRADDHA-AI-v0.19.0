@@ -41,33 +41,91 @@ object AkkpsSatelliteCandidateParser {
             "केवल Polygon candidate स्वीकार है; MultiPolygon/LineString अभी समर्थित नहीं।"
         }
         val rings = geometry.optJSONArray("coordinates") ?: error("Polygon coordinates नहीं मिले।")
-        require(rings.length() >= 1) { "Polygon outer ring खाली है।" }
+        require(rings.length() == 1) {
+            "Polygon में interior holes हैं; holes-aware area calculation आने तक इसे import नहीं किया जाएगा।"
+        }
         val outer = rings.getJSONArray(0)
         require(outer.length() in 4..(AkkpsBoundaryGeometry.MAX_POINTS + 1)) {
             "Polygon outer ring में points की संख्या अमान्य है।"
         }
         val points = (0 until outer.length()).map { index ->
             val pair = outer.getJSONArray(index)
-            require(pair.length() >= 2) { "GeoJSON coordinate tuple अधूरा है।" }
+            require(pair.length() in 2..3) { "GeoJSON coordinate tuple में केवल longitude, latitude और optional altitude मान्य हैं।" }
             val lon = pair.getDouble(0)
             val lat = pair.getDouble(1)
+            require(lon.isFinite() && lat.isFinite()) { "GeoJSON coordinates finite numbers होने चाहिए।" }
+            if (pair.length() == 3) {
+                require(pair.getDouble(2).isFinite()) { "GeoJSON altitude finite number होना चाहिए।" }
+            }
             AkkpsGeoPoint(lat, lon)
         }
-        val issue = AkkpsBoundaryGeometry.validate(points)
+        require(points.first() == points.last()) {
+            "GeoJSON Polygon linear ring का पहला और आखिरी coordinate समान होना चाहिए।"
+        }
+        val openRing = points.dropLast(1)
+        require(openRing.size in 3..AkkpsBoundaryGeometry.MAX_POINTS) {
+            "Polygon में 3 से ${AkkpsBoundaryGeometry.MAX_POINTS} अलग boundary points होने चाहिए।"
+        }
+        val issue = AkkpsBoundaryGeometry.validate(openRing)
         require(issue == null) { issue ?: "Boundary अमान्य है।" }
         val properties = feature.optJSONObject("properties") ?: JSONObject()
-        val source = properties.optString("source", properties.optString("dataset", "Unknown dataset"))
-            .trim().take(MAX_SOURCE_LENGTH).ifBlank { "Unknown dataset" }
-        val yearValue = properties.opt("year") ?: properties.opt("dataset_year")
-        val year = yearValue?.toString()?.toIntOrNull()?.takeIf { it in 1900..2100 }
-        val confidenceValue = properties.opt("confidence")
-        val confidence = confidenceValue?.toString()?.toDoubleOrNull()?.takeIf { it.isFinite() && it in 0.0..1.0 }
+        val sourceValues = listOf("source", "dataset", "provider")
+            .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
+        require(sourceValues.all { it is String }) {
+            "Boundary candidate source/dataset/provider text होना चाहिए।"
+        }
+        val normalizedSources = sourceValues.map { (it as String).trim() }.filter { it.isNotBlank() }.distinct()
+        require(normalizedSources.size <= 1) {
+            "GeoJSON source, dataset और provider metadata आपस में अलग हैं; provenance स्पष्ट करें।"
+        }
+        val sourceValue = normalizedSources.singleOrNull()
+            ?: error("Boundary candidate का source/dataset/provider बताना आवश्यक है।")
+        require(sourceValue.length <= MAX_SOURCE_LENGTH) {
+            "Boundary candidate source metadata 120 characters से लंबा है।"
+        }
+        val source = sourceValue
+        val yearValues = listOf("year", "dataset_year")
+            .mapNotNull { key -> properties.opt(key)?.takeUnless { it == org.json.JSONObject.NULL } }
+            .map { value ->
+                value.toString().toIntOrNull()?.also { parsed ->
+                    require(parsed in 1900..2100) { "Dataset year 1900 से 2100 के बीच होना चाहिए।" }
+                } ?: error("Dataset year मान्य पूर्णांक नहीं है।")
+            }
+            .distinct()
+        require(yearValues.size <= 1) {
+            "GeoJSON year और dataset_year metadata आपस में अलग हैं; provenance स्पष्ट करें।"
+        }
+        val year = yearValues.singleOrNull()
+        val confidenceValue = properties.opt("confidence").takeUnless { it == org.json.JSONObject.NULL }
+        val confidence = confidenceValue?.let {
+            it.toString().toDoubleOrNull()?.also { parsed ->
+                require(parsed.isFinite() && parsed in 0.0..1.0) {
+                    "Confidence 0.0 से 1.0 के बीच होना चाहिए।"
+                }
+            } ?: error("Confidence संख्या मान्य नहीं है।")
+        }
+        val featureIdValue = feature.opt("id")
+        val featureId = when (featureIdValue) {
+            null, org.json.JSONObject.NULL -> null
+            is String -> featureIdValue.trim().takeIf { it.isNotBlank() }
+            is Number -> featureIdValue.toString()
+            else -> error("GeoJSON Feature ID string या number होना चाहिए।")
+        }
+        require(featureId == null || featureId.length <= 120) {
+            "GeoJSON Feature ID 120 characters से लंबी नहीं हो सकती।"
+        }
         AkkpsSatelliteBoundaryCandidate(
-            boundary = AkkpsBoundary(AkkpsBoundaryGeometry.closeRing(points)),
+            boundary = AkkpsBoundary(
+                points = AkkpsBoundaryGeometry.closeRing(points),
+                source = source,
+                datasetYear = year,
+                confidence = confidence,
+                sourceFeatureId = featureId
+            ),
             source = source,
             datasetYear = year,
             confidence = confidence,
-            featureId = feature.optString("id").takeIf { it.isNotBlank() }
+            featureId = featureId
         )
     }
 }
