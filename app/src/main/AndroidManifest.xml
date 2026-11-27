@@ -124,5 +124,9 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:label="Shraddha AI Message Review" />
+        <activity
+            android:name="com.Lia.assistant.action.MessageComposeActivity"
+            android:exported="false"
+            android:label="Shraddha AI Message Composer" />
 </application>
 </manifest>
