@@ -108,12 +108,22 @@ class LanguageLabDialog:
         ttk.Button(row, text="Choose audio", command=lambda: reference.set(filedialog.askopenfilename(filetypes=[("Audio", "*.wav *.flac")]))).pack(side="left", padx=6)
         ttk.Label(page, text="Exact transcript of the reference audio").pack(anchor="w", pady=(6, 0))
         transcript = ttk.Entry(page); transcript.pack(fill="x", pady=4)
+        voice_consent = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            page,
+            text="I have explicit permission from the reference voice owner to synthesize with this recording.",
+            variable=voice_consent
+        ).pack(anchor="w", pady=4)
         row2 = ttk.Frame(page); row2.pack(fill="x", pady=4)
         ttk.Entry(row2, textvariable=output).pack(side="left", fill="x", expand=True)
         ttk.Button(row2, text="Save WAV as", command=lambda: output.set(filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV audio", "*.wav")]))).pack(side="left", padx=6)
         def synthesize():
             text_value, lang = text.get("1.0", "end").strip(), language.get()
             reference_path, reference_text, output_path = reference.get(), transcript.get(), output.get()
+            consented = voice_consent.get()
+            if not consented:
+                self.status.set("Explicit permission from the reference voice owner is required.")
+                return
             if not output_path:
                 self.status.set("Choose an output WAV path.")
                 return
@@ -122,6 +132,9 @@ class LanguageLabDialog:
                     from .language_runtime import IndicF5Runtime
                 except (ImportError, ValueError):
                     from language_runtime import IndicF5Runtime
-                return str(IndicF5Runtime().synthesize(text_value, lang, reference_path, reference_text, output_path))
+                return str(IndicF5Runtime().synthesize(
+                    text_value, lang, reference_path, reference_text, output_path,
+                    explicit_reference_voice_consent=consented
+                ))
             self._run(task, lambda value: messagebox.showinfo("Shraddha AI", "Audio saved locally:\\n" + value, parent=self.window))
         ttk.Button(page, text="SYNTHESIZE OFFLINE", command=synthesize).pack(anchor="w", pady=8)
