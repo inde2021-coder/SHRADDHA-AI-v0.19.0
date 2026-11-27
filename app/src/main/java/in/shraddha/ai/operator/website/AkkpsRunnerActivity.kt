@@ -184,11 +184,14 @@ class AkkpsRunnerActivity : Activity() {
         val js = """
             (function(items){
               const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+              const blockedTypes=new Set(["hidden","password","file","checkbox","radio","button","submit","reset","image"]);
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
-                  if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
+                  if(e.disabled||e.readOnly||e.getAttribute('aria-disabled')==='true'||
+                    e.closest('[aria-hidden="true"]')||blockedTypes.has((e.type||'').toLowerCase())||
+                    (e.tagName==='SELECT'&&e.multiple)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && (v===key||v.includes(key)||key.includes(v)));
