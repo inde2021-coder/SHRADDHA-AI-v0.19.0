@@ -37,3 +37,10 @@ jobs:
       - name: Run backend unit tests when configured
         working-directory: backend
         run: npm test --if-present
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Test local Indic runtime safety and Pawari consent validator
+        run: |
+          python -m unittest discover -s pc_companion/tests -p 'test_language_runtime.py' -v
+          python -m unittest discover -s tests -p 'test_pawari_dataset_validator.py' -v
