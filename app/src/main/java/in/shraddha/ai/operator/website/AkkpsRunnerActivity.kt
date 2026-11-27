@@ -840,10 +840,11 @@ class AkkpsRunnerActivity : Activity() {
                         val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
                         val forms = page.optJSONArray("forms")?.length() ?: 0
                         val fields = page.optJSONArray("fields")?.length() ?: 0
-                        editFormSessionAuthorized = route != null &&
-                            route.module == module &&
-                            route.isDetailRoute &&
-                            forms > 0 && fields > 0
+                        val actionArray = page.optJSONArray("actions") ?: JSONArray()
+                        val actions = (0 until actionArray.length()).map { actionArray.optString(it) }
+                        editFormSessionAuthorized = AkkpsEditFormVerificationPolicy.isVerified(
+                            module, route, forms, fields, actions
+                        )
                         status.text = if (editFormSessionAuthorized) {
                             "Edit form खुला और Inspect में fields मिलीं। अब field=value कमांड दे सकते हैं; Save/Submit अलग confirmation से होगा।"
                         } else {
