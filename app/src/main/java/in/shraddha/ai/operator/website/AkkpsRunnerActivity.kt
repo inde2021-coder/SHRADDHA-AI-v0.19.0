@@ -710,6 +710,16 @@ class AkkpsRunnerActivity : Activity() {
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
         if (!explicitAssignment) {
+            val searchQuery = AkkpsRunnerSearchCommandPolicy.parse(raw)
+            if (searchQuery != null) {
+                val module = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module
+                if (module !in setOf(AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS)) {
+                    status.text = "Search के लिए पहले Farmers, Plots या AWD Reports module खोलें।"
+                } else {
+                    searchRecords(searchQuery)
+                }
+                return
+            }
             val module = AkkpsRunnerNavigationCommandPolicy.resolve(raw)
             if (module != null) {
                 val route = AkkpsRunnerNavigationCommandPolicy.route(module)
@@ -731,6 +741,43 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         fillValues(values, wantsSubmit)
+    }
+
+    /** Read-only search is allowed only through a unique visible search field in a same-origin GET form. */
+    private fun searchRecords(query: String) {
+        val js = """
+            (function(q){
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const norm=s=>String(s||'').normalize('NFKC').toLowerCase().trim();
+              const candidates=[...document.querySelectorAll('input')].filter(e=>{
+                if(!visible(e)||e.disabled||e.readOnly||['hidden','password','file','checkbox','radio','button','submit','reset'].includes(String(e.type||'').toLowerCase())) return false;
+                const labels=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) labels.push(p.innerText);
+                const hints=[e.type,e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm).join(' ');
+                return String(e.type||'').toLowerCase()==='search'||/(search|find|खोज|ढूंढ|ढूँढ)/i.test(hints);
+              });
+              if(candidates.length!==1) return JSON.stringify({status:candidates.length?'ambiguous_search':'search_field_not_found'});
+              const input=candidates[0],form=input.form;
+              if(!form||String(form.method||'GET').toUpperCase()!=='GET') return JSON.stringify({status:'search_form_not_read_only'});
+              const action=new URL(form.action||location.href,location.href);
+              if(action.protocol!=='https:'||action.origin!==location.origin) return JSON.stringify({status:'unsafe_search_origin'});
+              input.value=q;
+              input.dispatchEvent(new Event('input',{bubbles:true}));
+              input.dispatchEvent(new Event('change',{bubbles:true}));
+              form.requestSubmit();
+              return JSON.stringify({status:'dispatched'});
+            })(__QUERY__)
+        """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
+        web.evaluateJavascript(js) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            status.text = when (result?.optString("status")) {
+                "dispatched" -> "AKKPS read-only search request भेजी गई। परिणाम देखने के लिए Inspect करें; खोज सफल होने का दावा अभी नहीं किया गया।"
+                "ambiguous_search" -> "एक से अधिक search fields मिले; कोई search नहीं की गई।"
+                "search_form_not_read_only" -> "Search form GET/read-only नहीं है; सुरक्षा के लिए request रोकी गई।"
+                "unsafe_search_origin" -> "Search form AKKPS के उसी सुरक्षित origin पर नहीं है।"
+                else -> "इस पेज पर एक स्पष्ट visible search field नहीं मिला।"
+            }
+        }
     }
 
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, additionalMissing: List<String> = emptyList()) {
