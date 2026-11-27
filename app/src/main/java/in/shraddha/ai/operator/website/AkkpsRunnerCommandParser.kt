@@ -20,7 +20,7 @@ object AkkpsRunnerCommandParser {
     fun parse(raw: String): AkkpsRunnerCommand {
         val assignments = mutableListOf<Pair<String, String>>()
         var submit = false
-        raw.split(';', '\\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+        raw.split(';', '\n').map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
             val normalizedPart = Normalizer.normalize(part, Normalizer.Form.NFKC).trim()
             if (normalizedKey(normalizedPart) in submitCommands) {
                 submit = true
