@@ -8,7 +8,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class AkkpsGeoPoint(val latitude: Double, val longitude: Double)
-data class AkkpsBoundary(val points: List<AkkpsGeoPoint>) {
+data class AkkpsBoundary(
+    val points: List<AkkpsGeoPoint>,
+    val source: String? = null,
+    val datasetYear: Int? = null,
+    val confidence: Double? = null,
+    val sourceFeatureId: String? = null
+) {
     val areaSquareMeters: Double get() = AkkpsBoundaryGeometry.areaSquareMeters(points)
     val areaAcres: Double get() = areaSquareMeters / AkkpsBoundaryGeometry.SQUARE_METERS_PER_ACRE
 }
@@ -70,21 +76,51 @@ object AkkpsBoundaryGeometry {
 
     fun toJson(boundary: AkkpsBoundary): String {
         validate(boundary.points)?.let { error(it) }
-        return JSONObject().put("version", 1).put("points", JSONArray().apply {
+        validateProvenance(boundary)
+        return JSONObject().put("version", 2).put("points", JSONArray().apply {
             boundary.points.forEach { put(JSONObject().put("lat", it.latitude).put("lon", it.longitude)) }
-        }).toString()
+        }).apply {
+            boundary.source?.let { put("source", it) }
+            boundary.datasetYear?.let { put("datasetYear", it) }
+            boundary.confidence?.let { put("confidence", it) }
+            boundary.sourceFeatureId?.let { put("sourceFeatureId", it) }
+        }.toString()
     }
 
     fun fromJson(raw: String): AkkpsBoundary {
         require(raw.length in 1..200_000) { "Saved boundary data size is invalid." }
-        val array = JSONObject(raw).getJSONArray("points")
+        val json = JSONObject(raw)
+        val version = json.optInt("version", 1)
+        require(version in 1..2) { "Saved boundary version is unsupported." }
+        val array = json.getJSONArray("points")
         require(array.length() in 3..MAX_POINTS) { "Saved boundary point count is invalid." }
         val points = (0 until array.length()).map { index ->
             val point = array.getJSONObject(index)
             AkkpsGeoPoint(point.getDouble("lat"), point.getDouble("lon"))
         }
         validate(points)?.let { error(it) }
-        return AkkpsBoundary(points)
+        val source = json.optString("source").takeIf { it.isNotBlank() }
+        val datasetYear = if (json.has("datasetYear") && !json.isNull("datasetYear")) json.getInt("datasetYear") else null
+        val confidence = if (json.has("confidence") && !json.isNull("confidence")) json.getDouble("confidence") else null
+        val featureId = json.optString("sourceFeatureId").takeIf { it.isNotBlank() }
+        val boundary = AkkpsBoundary(points, source, datasetYear, confidence, featureId)
+        validateProvenance(boundary)
+        return boundary
+    }
+
+    private fun validateProvenance(boundary: AkkpsBoundary) {
+        require(boundary.source == null || (boundary.source.isNotBlank() && boundary.source.length <= 120)) {
+            "Boundary source metadata is invalid."
+        }
+        require(boundary.datasetYear == null || boundary.datasetYear in 1900..2100) {
+            "Boundary dataset year is invalid."
+        }
+        require(boundary.confidence == null || (boundary.confidence.isFinite() && boundary.confidence in 0.0..1.0)) {
+            "Boundary confidence is invalid."
+        }
+        require(boundary.sourceFeatureId == null || boundary.sourceFeatureId.length <= 120) {
+            "Boundary source feature ID is too long."
+        }
     }
 
     fun toKml(boundary: AkkpsBoundary, name: String = "AKKPS Plot Boundary"): String {
