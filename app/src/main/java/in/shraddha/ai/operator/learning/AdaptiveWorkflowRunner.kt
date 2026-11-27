@@ -55,6 +55,8 @@ class AdaptiveWorkflowRunner(private val context: android.content.Context, priva
         stopped = false
         val steps = profile.workflows[workflowName] ?: return fail("इस ऐप प्रोफ़ाइल में '$workflowName' वर्कफ़्लो नहीं मिला।")
         if (steps.isEmpty() || steps.size > 100) return fail("वर्कफ़्लो खाली है या निर्धारित सीमा से बड़ा है।")
+        val preflight = WorkflowPlanValidator.validate(profile.packageName, workflowName, steps, values)
+        if (!preflight.valid) return fail(preflight.message)
         val fingerprint = checkpoints.fingerprint(steps)
         var saved = checkpoints.getResult(profile.packageName, workflowName).getOrElse {
             return fail("Encrypted workflow checkpoint could not be read. Existing checkpoint data was preserved; no workflow action was started.")
