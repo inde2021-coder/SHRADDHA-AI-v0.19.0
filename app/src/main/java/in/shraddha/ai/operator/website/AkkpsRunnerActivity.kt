@@ -544,10 +544,24 @@ class AkkpsRunnerActivity : Activity() {
             (function(items){
               const norm=s=>String(s||'').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const all=[...document.querySelectorAll('input,textarea,select')],out=[];
+              const visible=e=>!!(e && (e.offsetWidth||e.offsetHeight||e.getClientRects().length) &&
+                getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden' &&
+                !e.closest('[aria-hidden="true"]'));
+              const allowed=new Set(['text','number','tel','email','date','search','url','']);
+              const sensitive=e=>/password|one.?time|otp|cvv|security.?code/i.test(
+                [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),e.autocomplete].join(' '));
+              const eligible=e=>{
+                if(!visible(e)||e.disabled||e.readOnly) return false;
+                if(e.tagName==='SELECT') return !e.multiple;
+                if(e.tagName==='TEXTAREA') return true;
+                if(e.tagName!=='INPUT') return false;
+                const type=(e.type||'text').toLowerCase();
+                return allowed.has(type)&&!sensitive(e);
+              };
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
-                  if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
+                  if(!eligible(e)) return false;
                   const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && v===key);
@@ -555,14 +569,14 @@ class AkkpsRunnerActivity : Activity() {
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
                 const e=found[0];
                 if(e.tagName==='SELECT'){
-                  const o=[...e.options].find(x=>norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value));
+                  const o=[...e.options].find(x=>!x.disabled&&(norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value)));
                   if(!o){out.push({key:item.key,status:'option_not_found'});continue;} e.value=o.value;
                 } else e.value=item.value;
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
-                out.push({key:item.key,status:'filled'});
+                out.push({key:item.key,status:e.value===String(item.value)||e.tagName==='SELECT'?'filled':'rejected'});
               }
               const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
-                .filter(e=>!e.disabled&&!e.value&&e.type!=='file')
+                .filter(e=>visible(e)&&!e.disabled&&!e.value&&e.type!=='file')
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
