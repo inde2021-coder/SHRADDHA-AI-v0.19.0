@@ -30,19 +30,19 @@ export function normalizePlanSteps(rawSteps, allowedTools = TOOLS) {
 }
 
 const OPERATOR_ACTIONS = new Set(['OPEN_APP', 'CLICK_TEXT', 'TYPE_TEXT', 'BACK', 'HOME', 'SCROLL_FORWARD']);
-const SECRET_INPUT = /(?:\\b(?:password|passcode|otp|one\\s*time(?:\\s*(?:password|code|pin))?|verification\\s*code|security\\s*code|secret\\s*key|recovery\\s*(?:phrase|code)|cvv|cvc|upi\\s*pin|bank\\s*pin|pin)\\b|पासवर्ड|पासकोड|ओटीपी|ओ टी पी|वन टाइम पासवर्ड|सत्यापन कोड|सुरक्षा कोड|गुप्त कुंजी|रिकवरी वाक्यांश|रिकवरी कोड|सीवीवी|यूपीआई पिन|बैंक पिन|पिन)/i;
+const SECRET_INPUT = /(?:\b(?:password|passcode|otp|one\s*time(?:\s*(?:password|code|pin))?|verification\s*code|security\s*code|secret\s*key|recovery\s*(?:phrase|code)|cvv|cvc|upi\s*pin|bank\s*pin|pin)\b|पासवर्ड|पासकोड|ओटीपी|ओ टी पी|वन टाइम पासवर्ड|सत्यापन कोड|सुरक्षा कोड|गुप्त कुंजी|रिकवरी वाक्यांश|रिकवरी कोड|सीवीवी|यूपीआई पिन|बैंक पिन|पिन)/i;
 
 function containsSensitiveInput(parts) {
   const source = parts.map(value => String(value ?? '')).join(' ');
-  const normalized = source.normalize('NFKC').replace(/[\\u200B-\\u200D\\uFEFF]/g, '');
+  const normalized = source.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
   if (SECRET_INPUT.test(normalized)) return true;
 
   // Catch common voice/transcription spacing tricks such as "O T P" and "P I N".
   const compactLatin = normalized.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (/(?:password|passcode|otp|onetimepassword|onetimecode|verificationcode|securitycode|secretkey|recoveryphrase|recoverycode|cvv|cvc|upipin|bankpin)/.test(compactLatin)) return true;
-  if (/(?:^|[^a-z])p\\s*i\\s*n(?:$|[^a-z])/i.test(normalized)) return true;
+  if (/(?:^|[^a-z])p\s*i\s*n(?:$|[^a-z])/i.test(normalized)) return true;
 
-  const compactHindi = normalized.replace(/[^\\u0900-\\u097F]/g, '');
+  const compactHindi = normalized.replace(/[^\u0900-\u097F]/g, '');
   return /(?:पासवर्ड|पासकोड|ओटीपी|वनटाइमपासवर्ड|सत्यापनकोड|सुरक्षाकोड|गुप्तकुंजी|रिकवरीवाक्यांश|रिकवरीकोड|सीवीवी|यूपीआईपिन|बैंकपिन|पिन)/.test(compactHindi);
 }
 
