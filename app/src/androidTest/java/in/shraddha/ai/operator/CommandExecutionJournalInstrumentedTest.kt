@@ -76,6 +76,16 @@ class CommandExecutionJournalInstrumentedTest {
         assertFalse(stored.contains("123456"))
     }
 
+    @Test fun resultCodeRejectsNumericPayloads() {
+        val created = requireNotNull(plan())
+        journal.markRunning(created.id, "step-1")
+        journal.finish(created.id, "step-1", CommandStepState.FAILED, "http_503")
+        val stored = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
+            .getString("plans_v1", "").orEmpty()
+        assertFalse(stored.contains("503"))
+        assertTrue(stored.contains("redacted"))
+    }
+
     @Test fun invalidAndDuplicateStepIdsAreRejected() {
         assertNull(journal.createPlan("command", listOf(
             CommandTaskStep("same", "one", "send"), CommandTaskStep("same", "two", "save")
