@@ -111,4 +111,11 @@ class AkkpsBoundaryStoreTest {
         assertTrue(AkkpsBoundaryGeometry.parseKml(malformed).isFailure)
     }
 
+    @Test fun kmlNameTruncationNeverCutsAnXmlEntity() {
+        val name = "x".repeat(98) + "&abc"
+        val kml = AkkpsBoundaryGeometry.toKml(AkkpsBoundary(square), name)
+        assertTrue(kml.contains("x".repeat(98) + "&amp;a"))
+        assertFalse(kml.contains("x".repeat(98) + "&a</name>"))
+    }
+
 }
