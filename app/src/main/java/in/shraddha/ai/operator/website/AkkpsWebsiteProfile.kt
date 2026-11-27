@@ -74,15 +74,39 @@ object AkkpsWebsiteProfile {
         WebsiteOperation.entries.map { operation ->
             WebsiteCapability(
                 operation = operation,
-                state = if (operation == WebsiteOperation.DISCOVER_SITE ||
-                    operation == WebsiteOperation.OBSERVE_PAGE ||
-                    operation == WebsiteOperation.NAVIGATE
-                ) CapabilityState.AVAILABLE else CapabilityState.UNKNOWN,
-                evidence = if (operation == WebsiteOperation.DISCOVER_SITE)
-                    "Public site origin configured; private dashboard not yet inspected."
-                else ""
+                state = when {
+                    !isRunnerOperationAllowed(operation) -> CapabilityState.UNAVAILABLE
+                    operation == WebsiteOperation.DISCOVER_SITE ||
+                        operation == WebsiteOperation.OBSERVE_PAGE ||
+                        operation == WebsiteOperation.NAVIGATE -> CapabilityState.AVAILABLE
+                    else -> CapabilityState.UNKNOWN
+                },
+                evidence = when {
+                    !isRunnerOperationAllowed(operation) -> "Blocked by AKKPS Runner data-entry scope"
+                    operation == WebsiteOperation.DISCOVER_SITE ->
+                        "Public site origin configured; private dashboard not yet inspected."
+                    else -> ""
+                }
             )
         }
+
+    /**
+     * AKKPS Runner is limited to record lookup and Farmer/Plot/AWD data entry.
+     * Report export/download, deletion and payment are deliberately out of scope.
+     */
+    fun isRunnerOperationAllowed(operation: WebsiteOperation): Boolean =
+        operation in setOf(
+            WebsiteOperation.DISCOVER_SITE,
+            WebsiteOperation.OBSERVE_PAGE,
+            WebsiteOperation.NAVIGATE,
+            WebsiteOperation.SEARCH_RECORDS,
+            WebsiteOperation.VIEW_RECORD,
+            WebsiteOperation.CREATE_RECORD,
+            WebsiteOperation.UPDATE_RECORD,
+            WebsiteOperation.SAVE_RECORD,
+            WebsiteOperation.SUBMIT_FORM,
+            WebsiteOperation.UPLOAD_DOCUMENT
+        )
 
     /**
      * High-impact operations always require a separate safety decision.
