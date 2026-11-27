@@ -6,7 +6,7 @@ import java.util.Locale
 /** Detects explicit submit intent only when a recognized command is at the end of the utterance. */
 internal object AkkpsRunnerSubmitIntentPolicy {
     private val suffix = Regex(
-        "(?:^|[\\s,;:])(?:submit(?:\\s+now)?|save(?:\\s+record)?|send|जमा(?:\\s+करें|\\s+करो)?|" +
+        "(?:^|[\\s,;:])(?:submit(?:\\s+now)?|save(?:\\s+record)?|record\\s+save|send|जमा(?:\\s+करें|\\s+करो)?|" +
             "सबमिट(?:\\s+करें)?|भेजो|भेज\\s+दें|भेजें|सहेजें|सेव(?:\\s+करें)?)$"
     )
 
