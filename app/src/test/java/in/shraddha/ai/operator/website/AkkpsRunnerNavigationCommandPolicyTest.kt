@@ -36,4 +36,10 @@ class AkkpsRunnerNavigationCommandPolicyTest {
         assertEquals("/runner/plots", AkkpsRunnerNavigationCommandPolicy.route(AkkpsRunnerModule.PLOTS))
         assertEquals("/runner/awd-reports", AkkpsRunnerNavigationCommandPolicy.route(AkkpsRunnerModule.AWD_REPORTS))
     }
+    @Test fun doesNotExposeProfileOrSyncThroughDataEntryCommandNavigation() {
+        assertNull(AkkpsRunnerNavigationCommandPolicy.resolve("open profile"))
+        assertNull(AkkpsRunnerNavigationCommandPolicy.resolve("open sync"))
+        assertNull(AkkpsRunnerNavigationCommandPolicy.resolve("डेटा सिंक खोलो"))
+    }
+
 }
