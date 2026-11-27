@@ -27,7 +27,7 @@ class AkkpsFarmerCardOcrParserTest {
 
     @Test fun extractedFieldsBecomeReviewOnlyRunnerAssignments() {
         val parsed = AkkpsFarmerCardOcrParser.parse(
-            "Farmer Name: Ram Kumar\\nFarmer ID: MP-12345\\nVillage: Rampur\\nDistrict: Seoni"
+            "Farmer Name: Ram Kumar\nFarmer ID: MP-12345\nVillage: Rampur\nDistrict: Seoni"
         )
         val command = AkkpsRunnerCommandParser.parse(parsed.toRunnerCommand())
         assertTrue(command.issues.isEmpty())
