@@ -564,10 +564,29 @@ class AkkpsRunnerActivity : Activity() {
             val forms = obj.optJSONArray("forms")?.length() ?: 0
             val tables = obj.optJSONArray("tables")?.length() ?: 0
             val actions = obj.optJSONArray("actions") ?: JSONArray()
-            val actionLabels = (0 until minOf(actions.length(), 8)).map { actions.optString(it) }
-            val navigation = obj.optJSONArray("navigation")?.length() ?: 0
-            status.text = "Module: ${obj.optString("module")} • ${obj.optString("title")}\nForms: $forms • Tables: $tables • Navigation: $navigation\nActions: " +
-                actionLabels.joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
+            val actionLabels = (0 until actions.length()).map { actions.optString(it) }
+            val navigationItems = obj.optJSONArray("navigation") ?: JSONArray()
+            val navigationLabels = (0 until navigationItems.length()).mapNotNull {
+                navigationItems.optJSONObject(it)?.optString("label")?.takeIf { label -> label.isNotBlank() }
+            }
+            val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
+            val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            val capabilities = AkkpsPageCapabilityDiscovery.discover(
+                formCount = forms,
+                tableCount = tables,
+                fieldTypes = fieldTypes,
+                fieldLabels = labels,
+                actionLabels = actionLabels,
+                navigationLabels = navigationLabels,
+                isCreateRoute = route?.isCreateRoute == true,
+                isDetailRoute = route?.isDetailRoute == true
+            )
+            val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
+                .map { it.operation.name.lowercase().replace('_', ' ') }
+            val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
+            status.text = "Module: ${obj.optString("module")} • ${obj.optString("title")}\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
+                "Observed: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
+                actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
         }
     }
