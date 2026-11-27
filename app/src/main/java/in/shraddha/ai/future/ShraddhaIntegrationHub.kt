@@ -58,6 +58,12 @@ class ShraddhaIntegrationHub(
         require(actions.isNotEmpty() && actions.size <= 256) { "A workflow must contain 1-256 actions." }
         require(workflowId.matches(Regex("[A-Za-z0-9_-]{1,64}")))
         require(title.isNotBlank() && title.length <= 120)
+        val previous = active
+        require(previous == null || previous.workflow.status in setOf(
+            WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED
+        )) {
+            "An unfinished workflow already exists (" + previous?.workflow?.status + "). Finish, cancel, or review it before creating another plan."
+        }
         val planned = AutonomousTaskPlanner.plan(actions.map {
             AutonomousTaskPlanner.Task(it.id, it.title, it.dependsOn, it.priority, it.estimatedMinutes)
         })
