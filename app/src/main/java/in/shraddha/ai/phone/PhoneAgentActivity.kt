@@ -1,5 +1,6 @@
 package `in`.shraddha.ai.phone
 
+import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.Manifest
 import android.content.Context
