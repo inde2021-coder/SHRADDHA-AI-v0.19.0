@@ -326,16 +326,48 @@ class PhoneAgentActivity : AppCompatActivity() {
     }
 
     private fun placeCall(number: String) {
-        if (number.isBlank()) return
+        val safeNumber = number.trim().replace(Regex("[\\s().-]"), "")
+        if (!safeNumber.matches(Regex("^\\+?[0-9]{3,20}$"))) {
+            voiceStatus.text = "फोन नंबर मान्य नहीं है; कॉल नहीं लगाई गई।"
+            return
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), callPermissionRequest)
             return
         }
+        val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
+        val accounts = runCatching { telecom.callCapablePhoneAccounts }.getOrDefault(emptyList())
+        when (accounts.size) {
+            0 -> launchCallWithAccount(safeNumber, null)
+            1 -> launchCallWithAccount(safeNumber, accounts.first())
+            else -> {
+                val labels = accounts.mapIndexed { index, handle ->
+                    val account = telecom.getPhoneAccount(handle)
+                    val label = account?.label?.toString()?.takeIf { it.isNotBlank() } ?: "SIM ${index + 1}"
+                    val numberHint = account?.address?.schemeSpecificPart?.takeLast(4)
+                        ?.takeIf { it.isNotBlank() }?.let { " ••••$it" }.orEmpty()
+                    "$label$numberHint"
+                }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("किस SIM से कॉल लगानी है?")
+                    .setItems(labels) { _, which ->
+                        accounts.getOrNull(which)?.let { launchCallWithAccount(safeNumber, it) }
+                    }
+                    .setNegativeButton("रद्द करें", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun launchCallWithAccount(number: String, account: android.telecom.PhoneAccountHandle?) {
         runCatching {
+            val extras = Bundle()
+            if (account != null) extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, account)
             val telecom = getSystemService(TELECOM_SERVICE) as TelecomManager
-            telecom.placeCall(Uri.fromParts("tel", number, null), Bundle())
+            telecom.placeCall(Uri.fromParts("tel", number, null), extras)
+            voiceStatus.text = "चुनी गई SIM से कॉल शुरू करने का अनुरोध भेजा गया।"
         }.onFailure {
-            voiceStatus.text = "कॉल शुरू नहीं हो सकी: " + it.message
+            voiceStatus.text = "कॉल शुरू नहीं हो सकी: ${it.message}"
             status.text = voiceStatus.text
         }
     }
