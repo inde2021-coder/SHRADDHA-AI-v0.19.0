@@ -87,7 +87,7 @@ class LocalKnowledgeDocumentStore(context: Context) {
             .getOrThrow()
     }
 
-    /** Installs a lesson shipped inside the signed APK after checking its pinned digest. */
+    /** Installs a lesson shipped inside the signed APK after checking its SHA-256 digest. */
     internal fun importBundledCurriculum(
         id: String,
         title: String,
