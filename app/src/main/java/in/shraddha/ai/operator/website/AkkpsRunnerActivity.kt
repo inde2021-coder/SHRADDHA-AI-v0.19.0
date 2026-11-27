@@ -793,6 +793,21 @@ class AkkpsRunnerActivity : Activity() {
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
                 (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
                 !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioEditable=e=>e.type==='radio'&&!e.disabled&&!e.closest('[hidden],[aria-hidden="true"]')&&
+                e.getAttribute('aria-disabled')!=='true'&&!!e.getClientRects().length&&
+                getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
+              const radioGroups=scope=>{
+                const groups=[];
+                for(const r of [...scope.querySelectorAll('input[type=radio]')].filter(radioEditable)){
+                  let g=groups.find(x=>x[0].form===r.form&&(x[0].name||x[0].id)===(r.name||r.id));
+                  if(!g){g=[];groups.push(g);} g.push(r);
+                }
+                return groups;
+              };
+              const optionLabel=r=>norm([...(r.labels||[])].map(x=>x.innerText).concat(r.closest('label')?.innerText||'').join(' '));
+              const groupLabel=g=>{const r=g[0],fs=r.closest('fieldset'),rg=r.closest('[role=radiogroup]');
+                return [r.name,r.id,fs?.querySelector('legend')?.innerText,rg?.getAttribute('aria-label')].map(norm);
+              };
               for(const item of items){
                 const key=norm(item.key);
                 const found=all.filter(e=>{
@@ -801,7 +816,19 @@ class AkkpsRunnerActivity : Activity() {
                   return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
                     .map(norm).some(v=>v && v===key);
                 });
-                if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
+                if(found.length===0){
+                  const groups=radioGroups(document).filter(g=>groupLabel(g).includes(key));
+                  if(groups.length!==1){out.push({key:item.key,status:groups.length?'ambiguous':'not_found'});continue;}
+                  const wanted=norm(item.value);
+                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
+                  options[0].checked=true;
+                  options[0].dispatchEvent(new Event('input',{bubbles:true}));
+                  options[0].dispatchEvent(new Event('change',{bubbles:true}));
+                  out.push({key:item.key,status:'filled'});
+                  continue;
+                }
+                if(found.length!==1){out.push({key:item.key,status:'ambiguous'});continue;}
                 const e=found[0];
                 if(e.tagName==='SELECT'){
                   const wanted=norm(item.value);
@@ -818,6 +845,8 @@ class AkkpsRunnerActivity : Activity() {
               const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
                 .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
+              const requiredRadios=radioGroups(document).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
+              requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
