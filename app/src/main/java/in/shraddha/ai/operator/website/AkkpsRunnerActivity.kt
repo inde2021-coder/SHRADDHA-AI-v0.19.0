@@ -890,6 +890,10 @@ Return exact JSON only. Do not include prose or markdown."""
                 val confidenceLabel = candidate.confidence?.let { "${(it * 100).toInt()}%" } ?: "उपलब्ध नहीं"
                 val yearLabel = candidate.datasetYear?.toString() ?: "उपलब्ध नहीं"
                 val applyCandidate = {
+                    val plotId = plotIdInput.text.toString().trim()
+                    runCatching { AkkpsBoundaryDraftStore(this).delete(plotId) }
+                    gpsWalkSessionInitialized = false
+                    gpsWalkPlotId = null
                     boundaryPoints.clear()
                     boundaryPoints.addAll(candidate.boundary.points)
                     status.text = "Candidate editor में लाया गया (${candidate.source}, $yearLabel)। किसान/उपयोगकर्ता की जाँच के बाद ही Save करें।"
@@ -940,6 +944,10 @@ Return exact JSON only. Do not include prose or markdown."""
                 } finally { bytes.fill(0) }
             }.onSuccess { boundary ->
                 val applyKml = {
+                    val plotId = plotIdInput.text.toString().trim()
+                    runCatching { AkkpsBoundaryDraftStore(this).delete(plotId) }
+                    gpsWalkSessionInitialized = false
+                    gpsWalkPlotId = null
                     boundaryPoints.clear()
                     boundaryPoints.addAll(boundary.points)
                     status.text = "KML boundary import हुई: ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres। Plot ID चुनकर Local Save करें।"
