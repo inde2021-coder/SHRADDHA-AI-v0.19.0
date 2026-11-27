@@ -229,7 +229,7 @@ class AkkpsRunnerActivity : Activity() {
                     if (!AkkpsWebsiteProfile.acceptsUrl(view.url.orEmpty())) {
                         uploadCallback = null
                         callback.onReceiveValue(null)
-                        return false
+                        return true
                     }
                     return try {
                         val pick = params.createIntent().apply {
@@ -240,7 +240,7 @@ class AkkpsRunnerActivity : Activity() {
                     } catch (_: Exception) {
                         uploadCallback = null
                         callback.onReceiveValue(null)
-                        false
+                        true
                     }
                 }
             }
