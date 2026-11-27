@@ -154,8 +154,10 @@ class AkkpsRunnerActivity : Activity() {
                     return false
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (AkkpsWebsiteProfile.acceptsUrl(url))
+                    if (AkkpsWebsiteProfile.acceptsUrl(url)) {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
+                        installSubmitObserver()
+                    }
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -340,6 +342,66 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun action(label: String, click: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; setTextColor(Color.WHITE); setOnClickListener { click() }
+    }
+
+    /** Capture same-origin write responses without storing request bodies, tokens or personal data. */
+    private fun installSubmitObserver() {
+        val js = """
+            (function(){
+              if(window.__akkpsSubmitObserverInstalled) return true;
+              window.__akkpsSubmitObserverInstalled=true;
+              window.__akkpsSubmitEvents=[];
+              const record=(method,url,status,body)=>{
+                try {
+                  const parsed=typeof body==='string'?JSON.parse(body):body;
+                  const id=parsed?.recordId||parsed?.id||parsed?.data?.recordId||parsed?.data?.id||'';
+                  const state=String(parsed?.status||'').toLowerCase();
+                  const success=parsed?.success===true||parsed?.ok===true||['success','created','saved'].includes(state);
+                  window.__akkpsSubmitEvents.push({
+                    method:String(method||'').toUpperCase(),
+                    path:new URL(url,location.href).pathname,
+                    httpStatus:Number(status)||0,
+                    success:!!success,
+                    recordId:String(id||'').slice(0,100),
+                    message:String(parsed?.message||parsed?.error||'').slice(0,160),
+                    at:Date.now()
+                  });
+                  if(window.__akkpsSubmitEvents.length>20) window.__akkpsSubmitEvents.shift();
+                } catch(_){}
+              };
+              const originalFetch=window.fetch;
+              if(originalFetch) window.fetch=function(input,init){
+                const url=typeof input==='string'?input:(input?.url||'');
+                const method=String(init?.method||input?.method||'GET').toUpperCase();
+                const sameOrigin=(()=>{try{return new URL(url,location.href).origin===location.origin}catch(_){return false}})();
+                return originalFetch.apply(this,arguments).then(response=>{
+                  if(sameOrigin&&['POST','PUT','PATCH'].includes(method)){
+                    response.clone().text().then(body=>record(method,url,response.status,body)).catch(()=>{});
+                  }
+                  return response;
+                });
+              };
+              const originalOpen=XMLHttpRequest.prototype.open;
+              const originalSend=XMLHttpRequest.prototype.send;
+              XMLHttpRequest.prototype.open=function(method,url){
+                this.__akkpsMethod=String(method||'GET').toUpperCase();
+                this.__akkpsUrl=String(url||'');
+                return originalOpen.apply(this,arguments);
+              };
+              XMLHttpRequest.prototype.send=function(){
+                try{
+                  const xhr=this;
+                  const sameOrigin=new URL(xhr.__akkpsUrl,location.href).origin===location.origin;
+                  if(sameOrigin&&['POST','PUT','PATCH'].includes(xhr.__akkpsMethod)){
+                    xhr.addEventListener('load',()=>record(xhr.__akkpsMethod,xhr.__akkpsUrl,xhr.status,xhr.responseText),{once:true});
+                  }
+                }catch(_){}
+                return originalSend.apply(this,arguments);
+              };
+              return true;
+            })()
+        """.trimIndent()
+        web.evaluateJavascript(js, null)
     }
 
     private fun inspectPage(onReady: ((JSONObject) -> Unit)? = null) {
