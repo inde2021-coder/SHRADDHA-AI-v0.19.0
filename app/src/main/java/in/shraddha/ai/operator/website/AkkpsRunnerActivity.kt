@@ -1042,6 +1042,10 @@ class AkkpsRunnerActivity : Activity() {
             val failedRows = (0 until out.length()).mapNotNull { out.optJSONObject(it) }
                 .filter { it.optString("status") != "filled" }
             if (failedRows.isNotEmpty()) {
+                if (failedRows.any { it.optString("key") == "FORM" }) {
+                    status.text = "एक स्पष्ट visible data-entry form नहीं मिला। सुरक्षा के लिए कोई field auto-fill नहीं हुई।"
+                    return@evaluateJavascript
+                }
                 val invalidRows = failedRows.filter { it.optString("status") == "invalid" }
                 val unresolvedRows = failedRows - invalidRows.toSet()
                 val invalidSummary = invalidRows.joinToString { row ->
