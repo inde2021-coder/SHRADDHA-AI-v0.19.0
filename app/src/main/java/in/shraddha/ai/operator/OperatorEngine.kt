@@ -49,12 +49,12 @@ class OperatorEngine(
         val ok = when (step.action) {
             OperatorActionType.OPEN_APP -> ShraddhaAccessibilityService.openApp(step.target)
             OperatorActionType.CLICK_TEXT -> {
-                val match = before.elements.firstOrNull { e ->
-                    e.clickable && (e.text.equals(step.target, true) || e.description.equals(step.target, true))
-                } ?: before.elements.firstOrNull { e ->
-                    e.clickable && (e.text.contains(step.target, true) || e.description.contains(step.target, true))
+                val matches = before.elements.filter { e ->
+                    e.clickable && !e.password &&
+                        (e.text.trim().equals(step.target.trim(), true) ||
+                            e.description.trim().equals(step.target.trim(), true))
                 }
-                match != null && ShraddhaAccessibilityService.clickVisibleText(step.target)
+                matches.size == 1 && ShraddhaAccessibilityService.clickVisibleText(step.target)
             }
             OperatorActionType.TYPE_TEXT -> {
                 // Never type into whichever field happens to have focus. The caller
