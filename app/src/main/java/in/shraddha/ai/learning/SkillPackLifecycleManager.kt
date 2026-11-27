@@ -65,7 +65,7 @@ class SkillPackLifecycleManager(context: Context) {
     }
 
     data class TrustedPublisher(val allowedHost: String, val x509RsaPublicKeyBase64: String)
-    data class Approval(
+    data class Approval internal constructor(
         val userReviewed: Boolean,
         val contentSafetyPassed: Boolean,
         val factualValidationPassed: Boolean,
