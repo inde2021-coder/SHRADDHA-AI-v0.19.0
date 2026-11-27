@@ -708,12 +708,16 @@ class AkkpsRunnerActivity : Activity() {
             val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
                 .map { it.operation.name.lowercase().replace('_', ' ') }
             val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
-            val inspectedCount = runCatching {
+            val inventoryResult = runCatching {
                 AkkpsModuleInventoryStore(this).apply {
                     if (module in AkkpsRunnerModule.entries.map { it.name }) record(module, capabilities)
                 }.load().size
-            }.getOrDefault(0)
-            status.text = "Module: $module • ${obj.optString("title")} • Inventory: $inspectedCount/6\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
+            }
+            val inventoryLabel = inventoryResult.fold(
+                { "Inventory: $it/6" },
+                { "Inventory save failed; encrypted checklist unavailable" }
+            )
+            status.text = "Module: $module • ${obj.optString("title")} • $inventoryLabel\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
                 "Observed: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
                 actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
