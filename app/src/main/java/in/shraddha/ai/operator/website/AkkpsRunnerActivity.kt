@@ -538,11 +538,10 @@ class AkkpsRunnerActivity : Activity() {
                   const path=new URL(url,location.href).pathname;
                   const candidates=[
                     parsed?.recordId,parsed?.plotId,parsed?.reportId,parsed?.farmerId,
-                    parsed?.id,parsed?._id,
                     parsed?.data?.recordId,parsed?.data?.plotId,parsed?.data?.reportId,
                     parsed?.data?.farmerId,parsed?.data?.id,parsed?.data?._id,
                     parsed?.result?.recordId,parsed?.result?.plotId,parsed?.result?.reportId,
-                    parsed?.result?.id,parsed?.record?.id,parsed?.plot?.id,parsed?.report?.id
+                    parsed?.record?.id,parsed?.plot?.id,parsed?.report?.id
                   ];
                   const id=candidates.find(v=>(typeof v==='string'||typeof v==='number')&&String(v).trim()&&String(v).length<=100)||'';
                   const state=String(parsed?.status||parsed?.data?.status||parsed?.result?.status||'').toLowerCase();
