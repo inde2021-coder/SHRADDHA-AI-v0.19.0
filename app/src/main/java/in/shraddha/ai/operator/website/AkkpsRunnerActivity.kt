@@ -179,38 +179,52 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean) {
+        if (values.isEmpty() || values.size > 100 || values.any { it.first.isBlank() || it.first.length > 120 || it.second.length > 500 }) {
+            status.text = "फॉर्म डेटा अमान्य या सीमा से अधिक है।"; return
+        }
         val payload = JSONArray()
         values.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
             (function(items){
               const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-              const all=[...document.querySelectorAll('input,textarea,select')],out=[];
+              const visible=e=>!!(e&&(e.offsetWidth||e.offsetHeight||e.getClientRects().length));
+              const forms=[...document.forms].filter(visible);
+              if(forms.length!==1)return JSON.stringify({formError:'form_not_unique',out:[],missing:[]});
+              const form=forms[0],all=[...form.querySelectorAll('input,textarea,select')],out=[],used=new Set();
               for(const item of items){
                 const key=norm(item.key);
+                if(!key){out.push({key:item.key,status:'invalid_key'});continue;}
                 const found=all.filter(e=>{
-                  if(e.disabled||['hidden','password','file'].includes(e.type)) return false;
-                  const ls=[...(e.labels||[])].map(x=>x.innerText); const p=e.closest('label'); if(p) ls.push(p.innerText);
-                  return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...ls]
-                    .map(norm).some(v=>v && (v===key||v.includes(key)||key.includes(v)));
+                  if(!visible(e)||e.disabled||['hidden','password','file'].includes((e.type||'').toLowerCase()))return false;
+                  const labels=[...(e.labels||[])].map(x=>x.innerText);const parent=e.closest('label');if(parent)labels.push(parent.innerText);
+                  return [e.name,e.id,e.placeholder,e.getAttribute('aria-label'),...labels].map(norm).filter(Boolean).some(v=>v===key);
                 });
                 if(found.length!==1){out.push({key:item.key,status:found.length?'ambiguous':'not_found'});continue;}
-                const e=found[0];
+                const e=found[0];if(used.has(e)){out.push({key:item.key,status:'duplicate_target'});continue;}
                 if(e.tagName==='SELECT'){
-                  const o=[...e.options].find(x=>norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value));
-                  if(!o){out.push({key:item.key,status:'option_not_found'});continue;} e.value=o.value;
-                } else e.value=item.value;
-                e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
+                  const option=[...e.options].find(x=>norm(x.text)===norm(item.value)||norm(x.value)===norm(item.value));
+                  if(!option){out.push({key:item.key,status:'option_not_found'});continue;}e.value=option.value;
+                }else if(e.type==='checkbox'||e.type==='radio'){
+                  const v=String(item.value).toLowerCase();
+                  if(!['true','false','yes','no','1','0','हाँ','नहीं'].includes(v)){out.push({key:item.key,status:'invalid_boolean'});continue;}
+                  e.checked=['true','yes','1','हाँ'].includes(v);
+                }else e.value=item.value;
+                used.add(e);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
-              const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
-                .filter(e=>!e.disabled&&!e.value&&e.type!=='file')
-                .map(e=>e.name||e.id||e.placeholder||'required field');
+              const missing=all.filter(e=>visible(e)&&!e.disabled&&e.required&&
+                !['hidden','password','file'].includes((e.type||'').toLowerCase())&&
+                (e.type==='checkbox'||e.type==='radio'?!e.checked:!String(e.value||'').trim()))
+                .map(e=>e.labels?.[0]?.innerText||e.name||e.id||e.placeholder||'required field');
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
+            if (result.optString("formError") == "form_not_unique") {
+                status.text = "एक ही स्पष्ट AKKPS फॉर्म नहीं मिला; डेटा नहीं भरा।"; return@evaluateJavascript
+            }
             val out = result.optJSONArray("out") ?: JSONArray()
             val errors = (0 until out.length()).mapNotNull { i ->
                 out.optJSONObject(i)?.takeIf { it.optString("status") != "filled" }?.let {
@@ -218,20 +232,25 @@ class AkkpsRunnerActivity : Activity() {
                 }
             }
             if (errors.isNotEmpty()) {
-                status.text = "इन फील्ड का सही मिलान नहीं हुआ: " + errors.joinToString() + "। अस्पष्ट फील्ड नहीं चुने गए।"
+                status.text = "इन फील्ड का सही मिलान नहीं हुआ: " + errors.joinToString() + "। कोई Submit नहीं किया。"
                 return@evaluateJavascript
             }
             if (!wantsSubmit) {
-                status.text = out.length().toString() + " फील्ड भरे गए। Submit के लिए कमांड के अंत में submit लिखें।"
+                status.text = out.length().toString() + " फील्ड भरे गए। Submit के लिए स्पष्ट कमांड दें।"
                 return@evaluateJavascript
             }
             val missing = result.optJSONArray("missing") ?: JSONArray()
             if (missing.length() > 0) {
                 status.text = "आवश्यक फील्ड खाली हैं: " +
-                    (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit नहीं किया।"
+                    (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit नहीं किया。"
                 return@evaluateJavascript
             }
-            submitForm()
+            AlertDialog.Builder(this)
+                .setTitle("AKKPS रिकॉर्ड Submit करें?")
+                .setMessage("भरे गए " + out.length() + " फील्ड का डेटा AKKPS को भेजा जाएगा। कृपया वेबसाइट पर मान जाँच लें।")
+                .setNegativeButton("अभी नहीं", null)
+                .setPositiveButton("जाँचकर Submit करें") { _, _ -> submitForm() }
+                .show()
         }
     }
 
