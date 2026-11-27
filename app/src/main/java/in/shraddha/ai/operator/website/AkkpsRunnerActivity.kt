@@ -88,9 +88,14 @@ class AkkpsRunnerActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
-        private const val MAX_GPS_ACCURACY_METERS = 15f
+private const val MAX_GPS_ACCURACY_METERS = 15f
         private const val MIN_GPS_POINT_DISTANCE_METERS = 2.0f
         private const val MAX_WALK_SPEED_METERS_PER_SECOND = 5.5
+private const val REQUEST_FILE = 7314
+        private const val REQUEST_LOCATION = 7315
+        private const val REQUEST_GPS_WALK = 7316
+        private const val REQUEST_KML_EXPORT = 7317
+        private const val REQUEST_KML_IMPORT = 7318
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -758,11 +763,5 @@ Return exact JSON only. Do not include prose or markdown."""
         web.stopLoading(); web.destroy(); super.onDestroy()
     }
 
-    companion object {
-        private const val REQUEST_FILE = 7314
-        private const val REQUEST_LOCATION = 7315
-        private const val REQUEST_GPS_WALK = 7316
-        private const val REQUEST_KML_EXPORT = 7317
-        private const val REQUEST_KML_IMPORT = 7318
-    }
+    
 }
