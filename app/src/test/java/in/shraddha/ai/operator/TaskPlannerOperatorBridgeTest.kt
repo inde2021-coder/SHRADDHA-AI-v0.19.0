@@ -227,7 +227,7 @@ class TaskPlannerOperatorBridgeTest {
             assertEquals(listOf("Continue:true"), executed)
             assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
         }
-    
+
         @Test(expected = IllegalArgumentException::class)
         fun clickWithoutExplicitTargetIsRejected() {
             val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid action must not execute"); false })
@@ -235,7 +235,7 @@ class TaskPlannerOperatorBridgeTest {
                 PlannedOperatorAction("click", "Click", OperatorStep(OperatorActionType.CLICK_TEXT))
             ))
         }
-    
+
         @Test(expected = IllegalArgumentException::class)
         fun typeWithoutValueIsRejected() {
             val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid action must not execute"); false })
@@ -243,7 +243,7 @@ class TaskPlannerOperatorBridgeTest {
                 PlannedOperatorAction("type", "Type", OperatorStep(OperatorActionType.TYPE_TEXT, target = "Name"))
             ))
         }
-    
+
         @Test(expected = IllegalArgumentException::class)
         fun oversizedOperatorInputIsRejected() {
             val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid action must not execute"); false })
@@ -253,7 +253,7 @@ class TaskPlannerOperatorBridgeTest {
                 ))
             ))
         }
-    
+
         @Test(expected = IllegalArgumentException::class)
         fun missingDependencyIsRejectedBeforeHubRegistration() {
             val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
@@ -262,7 +262,7 @@ class TaskPlannerOperatorBridgeTest {
                     dependsOn = setOf("does-not-exist"))
             ))
         }
-    
+
         @Test(expected = IllegalArgumentException::class)
         fun selfDependencyIsRejectedBeforeHubRegistration() {
             val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
@@ -271,7 +271,7 @@ class TaskPlannerOperatorBridgeTest {
                     dependsOn = setOf("step-a"))
             ))
         }
-    
+
         @Test(expected = IllegalArgumentException::class)
         fun dependencyCycleIsRejectedBeforeHubRegistration() {
             val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Invalid plan must not execute"); false })
