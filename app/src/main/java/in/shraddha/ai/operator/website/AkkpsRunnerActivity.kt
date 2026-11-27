@@ -8,6 +8,10 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -33,6 +37,40 @@ class AkkpsRunnerActivity : Activity() {
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
+    private lateinit var plotIdInput: EditText
+    private val boundaryPoints = mutableListOf<AkkpsGeoPoint>()
+    private var locationManager: LocationManager? = null
+    private var gpsWalkActive = false
+    private var lastGpsAccuracyMeters = Float.MAX_VALUE
+    private val gpsListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            if (!gpsWalkActive || !location.hasAccuracy() || location.accuracy > 25f) return
+            val point = AkkpsGeoPoint(location.latitude, location.longitude)
+            val previous = boundaryPoints.lastOrNull()
+            if (previous != null) {
+                val results = FloatArray(1)
+                Location.distanceBetween(previous.latitude, previous.longitude, point.latitude, point.longitude, results)
+                if (results[0] < 2.0f) return
+            }
+            if (boundaryPoints.size >= AkkpsBoundaryGeometry.MAX_POINTS) {
+                stopGpsWalk()
+                status.text = "500 GPS points पूरे हो गए। Walk रोक दी गई; boundary save करें।"
+                return
+            }
+            boundaryPoints.add(point)
+            lastGpsAccuracyMeters = location.accuracy
+            status.text = "GPS Walk: ${boundaryPoints.size} points • Accuracy ±${location.accuracy.toInt()} m"
+        }
+        @Deprecated("Deprecated by Android")
+        override fun onStatusChanged(provider: String?, statusValue: Int, extras: Bundle?) = Unit
+        override fun onProviderEnabled(provider: String) = Unit
+        override fun onProviderDisabled(provider: String) {
+            if (provider == LocationManager.GPS_PROVIDER) {
+                stopGpsWalk()
+                status.text = "GPS बंद है। Location चालू करके Walk फिर शुरू करें।"
+            }
+        }
+    }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -74,6 +112,21 @@ class AkkpsRunnerActivity : Activity() {
                 LinearLayout.LayoutParams(0, dp(42), 1f))
         }
         root.addView(modules)
+        plotIdInput = EditText(this).apply {
+            hint = "AKKPS Plot ID (जैसे PLOT-123)"
+            setSingleLine(true); setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
+            setPadding(dp(10), dp(6), dp(10), dp(6)); setBackgroundColor(0xFF142536.toInt())
+        }
+        root.addView(plotIdInput, LinearLayout.LayoutParams(-1, dp(46)))
+        val boundaryActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        boundaryActions.addView(action("GPS Walk शुरू") { startGpsWalk() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        boundaryActions.addView(action("Walk रोकें") { stopGpsWalk() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        boundaryActions.addView(action("Save / Reopen") { saveOrReopenBoundary() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        root.addView(boundaryActions)
+        val exportActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        exportActions.addView(action("KML Export") { exportBoundaryKml() }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        exportActions.addView(action("नई Walk") { boundaryPoints.clear(); status.text = "नई boundary walk के लिए तैयार।" }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        root.addView(exportActions)
         status = TextView(this).apply {
             text = "AKKPS वेबसाइट खुल रही है…"; textSize = 12f
             setTextColor(0xFFBBD8E2.toInt()); setPadding(dp(7), dp(7), dp(7), dp(7))
@@ -149,6 +202,88 @@ class AkkpsRunnerActivity : Activity() {
         web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL)
     }
 
+    private fun startGpsWalk() {
+        if (gpsWalkActive) return
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_GPS_WALK)
+            return
+        }
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            status.text = "GPS चालू करें। खेत के किनारे से Walk करें; फसल के अंदर जाने की जरूरत नहीं।"
+            return
+        }
+        boundaryPoints.clear()
+        locationManager = manager
+        try {
+            gpsWalkActive = true
+            manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 2f, gpsListener, Looper.getMainLooper())
+            status.text = "GPS Walk चालू। खेत की बाहरी मेड़ के किनारे धीरे-धीरे चलें।"
+        } catch (_: SecurityException) {
+            gpsWalkActive = false
+            status.text = "Precise location अनुमति नहीं मिली।"
+        } catch (e: Exception) {
+            gpsWalkActive = false
+            status.text = "GPS Walk शुरू नहीं हुई: ${e.localizedMessage ?: "GPS unavailable"}"
+        }
+    }
+
+    private fun stopGpsWalk() {
+        gpsWalkActive = false
+        runCatching { locationManager?.removeUpdates(gpsListener) }
+        locationManager = null
+        status.text = "GPS Walk रुकी: ${boundaryPoints.size} points • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
+    }
+
+    private fun saveOrReopenBoundary() {
+        val plotId = plotIdInput.text.toString().trim()
+        if (plotId.isBlank()) { status.text = "पहले AKKPS Plot ID भरें।"; return }
+        if (gpsWalkActive) { status.text = "पहले GPS Walk रोकें, फिर Save करें।"; return }
+        val store = AkkpsBoundaryStore(this)
+        if (boundaryPoints.size >= 3) {
+            val boundary = AkkpsBoundary(boundaryPoints.toList())
+            val issue = AkkpsBoundaryGeometry.validate(boundary.points)
+            if (issue != null) { status.text = issue; return }
+            AlertDialog.Builder(this)
+                .setTitle("Boundary Save करें?")
+                .setMessage("Plot: $plotId\nPoints: ${boundary.points.size}\nArea: ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres\n\nयह boundary इस फोन में locally save होगी। AKKPS server पर upload नहीं होगी।")
+                .setNegativeButton("रद्द करें", null)
+                .setPositiveButton("Local Save") { _, _ ->
+                    runCatching { store.save(plotId, boundary) }
+                        .onSuccess { status.text = "Boundary locally save हुई। ${boundary.points.size} points • ${"%.3f".format(java.util.Locale.US, boundary.areaAcres)} acres" }
+                        .onFailure { status.text = "Save failed: ${it.localizedMessage}" }
+                }.show()
+            return
+        }
+        runCatching { store.load(plotId) }
+            .onSuccess { saved ->
+                if (saved == null) status.text = "इस Plot ID की कोई saved local boundary नहीं मिली।"
+                else {
+                    boundaryPoints.clear(); boundaryPoints.addAll(saved.points)
+                    status.text = "Boundary reopen हुई: ${saved.points.size} points • ${"%.3f".format(java.util.Locale.US, saved.areaAcres)} acres"
+                }
+            }
+            .onFailure { status.text = "Saved boundary पढ़ी नहीं जा सकी: ${it.localizedMessage}" }
+    }
+
+    private fun exportBoundaryKml() {
+        if (gpsWalkActive) { status.text = "KML Export से पहले GPS Walk रोकें।"; return }
+        val plotId = plotIdInput.text.toString().trim()
+        val boundary = runCatching {
+            if (boundaryPoints.size >= 3) AkkpsBoundary(boundaryPoints.toList())
+            else AkkpsBoundaryStore(this).load(plotId) ?: error("पहले boundary record करें या reopen करें।")
+        }.getOrElse { status.text = it.localizedMessage ?: "Boundary उपलब्ध नहीं।"; return }
+        val issue = AkkpsBoundaryGeometry.validate(boundary.points)
+        if (issue != null) { status.text = issue; return }
+        pendingKml = AkkpsBoundaryGeometry.toKml(boundary, plotId.ifBlank { "AKKPS Plot" })
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/vnd.google-earth.kml+xml"
+            putExtra(Intent.EXTRA_TITLE, "${plotId.ifBlank { "akkps-boundary" }}.kml")
+        }, REQUEST_KML_EXPORT)
+    }
+
+    private var pendingKml: String? = null
+
     private fun confirmAkkpsLocation(
         origin: String,
         callback: android.webkit.GeolocationPermissions.Callback
@@ -172,6 +307,11 @@ class AkkpsRunnerActivity : Activity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_GPS_WALK) {
+            if (grantResults.isNotEmpty() && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) startGpsWalk()
+            else status.text = "GPS Walk के लिए Precise location जरूरी है; अनुमति नहीं मिली।"
+            return
+        }
         if (requestCode != REQUEST_LOCATION) return
         val origin = pendingGeolocationOrigin.orEmpty()
         val callback = pendingGeolocationCallback
@@ -423,9 +563,19 @@ Return exact JSON only. Do not include prose or markdown."""
             val selected=if(resultCode==RESULT_OK) data?.data?.let { arrayOf(it) } else null
             uploadCallback?.onReceiveValue(selected); uploadCallback=null
         }
+        if (requestCode == REQUEST_KML_EXPORT) {
+            val uri = if (resultCode == RESULT_OK) data?.data else null
+            val content = pendingKml; pendingKml = null
+            if (uri != null && content != null) runCatching {
+                contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
+                    ?: error("KML destination could not be opened.")
+            }.onSuccess { status.text = "KML export तैयार है। इसे AKKPS Plot boundary upload में चुनें।" }
+             .onFailure { status.text = "KML export failed: ${it.localizedMessage}" }
+        }
     }
 
     override fun onDestroy() {
+        stopGpsWalk()
         uploadCallback?.onReceiveValue(null); uploadCallback=null
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
@@ -435,5 +585,7 @@ Return exact JSON only. Do not include prose or markdown."""
     companion object {
         private const val REQUEST_FILE = 7314
         private const val REQUEST_LOCATION = 7315
+        private const val REQUEST_GPS_WALK = 7316
+        private const val REQUEST_KML_EXPORT = 7317
     }
 }
