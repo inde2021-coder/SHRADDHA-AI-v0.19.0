@@ -803,6 +803,10 @@ Return exact JSON only. Do not include prose or markdown."""
     }
 
     private fun submitForm(expectedValues: List<Pair<String, String>>) {
+        if (!AkkpsSubmitTargetPolicy.hasValidKeys(expectedValues.map { it.first })) {
+            status.text = "Submit रोक दिया: फील्ड सूची अमान्य या duplicate है।"
+            return
+        }
         val payload = JSONArray().apply { expectedValues.forEach { put(JSONObject().put("key", it.first).put("value", it.second)) } }
         val js = """
             (function(expected){
@@ -819,8 +823,10 @@ Return exact JSON only. Do not include prose or markdown."""
                 });
                 if(matches.length!==1 || String(matches[0].value)!==String(item.value)) return JSON.stringify({status:'field_changed',field:item.key});
               }
-              const b=f.querySelector('button[type=submit],input[type=submit]');
-              if(b)b.click();else f.requestSubmit();
+              const visible=e=>!!(e && (e.offsetWidth||e.offsetHeight||e.getClientRects().length) && getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden' && !e.closest('[aria-hidden=true]'));
+              const buttons=[...f.querySelectorAll('button[type=submit],input[type=submit]')].filter(b=>visible(b)&&!b.disabled&&b.getAttribute('aria-disabled')!=='true');
+              if(buttons.length!==1) return JSON.stringify({status:buttons.length?'ambiguous_submit':'submit_control_not_found'});
+              buttons[0].click();
               return JSON.stringify({status:'dispatched',eventStart});
             })(__EXPECTED__)
         """.trimIndent().replace("__EXPECTED__", payload.toString())
