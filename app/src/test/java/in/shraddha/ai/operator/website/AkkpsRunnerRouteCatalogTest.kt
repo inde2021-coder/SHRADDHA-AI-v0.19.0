@@ -58,6 +58,8 @@ class AkkpsRunnerRouteCatalogTest {
         listOf(
             "/runner/plots%2fnew",
             "/runner/plots/%2e%2e/farmers",
+            "/runner/plots/%252e%252e",
+            "/runner/plots%252fnew",
             "/runner/plots\\\\new",
             "/runner//plots",
             "/runner/plots/../farmers"
