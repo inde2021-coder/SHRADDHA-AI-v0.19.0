@@ -171,12 +171,18 @@ class IndicF5Runtime:
         if not isinstance(text, str) or not text.strip() or len(text) > 3000:
             raise LanguageRuntimeError("TTS text must contain 1–3000 characters.")
         reference = Path(reference_audio).expanduser().resolve()
-        if (not reference.is_file() or not reference_transcript.strip()
-                or len(reference_transcript.strip()) > 1000):
-            raise LanguageRuntimeError("A local reference voice clip and its exact transcript (1–1000 characters) are required.")
+        if (not reference.is_file() or reference.stat().st_size > 25 * 1024 * 1024
+                or not reference_transcript.strip() or len(reference_transcript.strip()) > 1000):
+            raise LanguageRuntimeError("A local reference clip up to 25 MB and its exact transcript (1–1000 characters) are required.")
+        target = Path(output_wav).expanduser().resolve()
+        if target.suffix.lower() != ".wav":
+            raise LanguageRuntimeError("Offline voice output must use a .wav filename.")
         try:
             import numpy as np
             import soundfile as sf
+            info = sf.info(str(reference))
+            if info.format not in {"WAV", "FLAC"} or not 0.2 <= info.duration <= 60 or info.channels not in (1, 2) or not 8000 <= info.samplerate <= 96000:
+                raise LanguageRuntimeError("Reference voice audio must be 0.2–60 seconds, mono/stereo WAV or FLAC, 8–96 kHz.")
             audio = np.asarray(self.model(
                 text.strip(), ref_audio_path=str(reference), ref_text=reference_transcript.strip()
             ))
@@ -186,7 +192,6 @@ class IndicF5Runtime:
                 audio = audio.astype(np.float32)
             if audio.size == 0 or not np.isfinite(audio).all():
                 raise LanguageRuntimeError("IndicF5 returned empty or non-finite audio.")
-            target = Path(output_wav).expanduser().resolve()
             target.parent.mkdir(parents=True, exist_ok=True)
             sf.write(str(target), audio, samplerate=24000)
             if not target.is_file() or target.stat().st_size <= 44:
