@@ -620,8 +620,8 @@ class OperatorActivity : Activity() {
         val controls = snapshot.elements.filter { (it.clickable || it.editable) && !it.password }.take(80).map { element ->
             JSONObject()
                 .put("id", element.id.take(100))
-                .put("label", if (element.editable) "" else element.text.take(120))
-                .put("description", if (element.editable) "" else element.description.take(120))
+                .put("label", if (element.editable) "" else safePlannerLabel(element.text))
+                .put("description", if (element.editable) "" else safePlannerLabel(element.description))
                 .put("hint", element.hintText.take(120))
                 .put("clickable", element.clickable)
                 .put("editable", element.editable)
@@ -677,6 +677,15 @@ Return JSON only. Do not execute actions or invent unseen controls."""
                     }
                 }.start()
             }.show()
+    }
+
+    private fun safePlannerLabel(raw: String): String {
+        val value = raw.trim()
+        if (value.isBlank() || value.length > 80) return ""
+        if (Regex("(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\\\\.[A-Z]{2,}").containsMatchIn(value)) return ""
+        if (Regex("(?<!\\\\d)(?:\\\\+?\\\\d[\\\\d .()-]{7,}\\\\d)(?!\\\\d)").containsMatchIn(value)) return ""
+        if (Regex("\\\\d{5,}").containsMatchIn(value)) return ""
+        return value
     }
 
     private fun runUniversalVisiblePlan(goal: String, steps: List<UniversalVisibleStep>) {
