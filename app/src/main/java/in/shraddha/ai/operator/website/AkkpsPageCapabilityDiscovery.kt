@@ -38,7 +38,7 @@ object AkkpsPageCapabilityDiscovery {
 
         val search = evidence(Regex("search|find|filter|खोज|ढूंढ|ढूँढ"))
             ?: if (types.any { it == "search" }) "visible search field" else null
-        val create = evidence(Regex("create|add new|new record|नया|नई|जोड़|जोड़|बनाएं|बनाये"))
+        val create = actionEvidence(Regex("create|add new|new record|नया|नई|जोड़|जोड़|बनाएं|बनाये"))
             ?: if (isCreateRoute) "observed create route" else null
         val update = actionEvidence(Regex("edit|update|modify|संपादित|बदलें|बदलना"))
         val save = actionEvidence(Regex("save|सहेज|सेव"))
