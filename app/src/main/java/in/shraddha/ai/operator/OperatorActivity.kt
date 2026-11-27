@@ -682,9 +682,9 @@ Return JSON only. Do not execute actions or invent unseen controls."""
     private fun safePlannerLabel(raw: String): String {
         val value = raw.trim()
         if (value.isBlank() || value.length > 80) return ""
-        if (Regex("(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\\\\.[A-Z]{2,}").containsMatchIn(value)) return ""
-        if (Regex("(?<!\\\\d)(?:\\\\+?\\\\d[\\\\d .()-]{7,}\\\\d)(?!\\\\d)").containsMatchIn(value)) return ""
-        if (Regex("\\\\d{5,}").containsMatchIn(value)) return ""
+        if (Regex("""(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}""").containsMatchIn(value)) return ""
+        if (Regex("""(?<!\\d)(?:\\+?\\d[\\d .()-]{7,}\\d)(?!\\d)""").containsMatchIn(value)) return ""
+        if (Regex("""\\d{5,}""").containsMatchIn(value)) return ""
         return value
     }
 
