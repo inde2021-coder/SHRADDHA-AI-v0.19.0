@@ -129,7 +129,17 @@ class ShraddhaInCallService : InCallService() {
     }
 
     override fun onDestroy() {
-        if (service === this) service = null
+        callbacks.toMap().forEach { (call, callback) ->
+            runCatching { call.unregisterCallback(callback) }
+        }
+        callbacks.clear()
+        if (service === this) {
+            service = null
+            activeCall = null
+            isMuted = false
+            availableCallEndpoints = emptyList()
+        }
+        sendBroadcast(Intent(ACTION_CALL_STATE).setPackage(packageName))
         super.onDestroy()
     }
 }
