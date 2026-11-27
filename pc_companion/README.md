@@ -15,11 +15,12 @@ The PC device token is stored in Windows Credential Manager only after the relay
 
 ## Controls and safety
 
-- Supported: normalized mouse click, drag/swipe, bounded text paste, Start Menu shortcut launch, show desktop, browser-style back and bounded scroll.
+- Supported: normalized mouse click, drag/swipe, bounded text paste, Start Menu shortcut launch, open a relative file/folder inside Documents, Downloads or Desktop, show desktop, browser-style back and bounded scroll.
 - **Text-based click:** exact, unique visible Button/Hyperlink/Tab/Menu/CheckBox/RadioButton controls can be activated through Windows UI Automation. Ambiguous labels, hidden/disabled controls and unknown/sensitive active windows fail closed.
 - **Active-window OCR:** `read screen` / `स्क्रीन पढ़ो` captures only the current non-sensitive window and runs local Tesseract OCR. OCR text is redacted for credential labels and long number strings before being returned over the encrypted peer channel. It is never silently uploaded to a cloud OCR provider.
 - `pytesseract` is included in the companion Python requirements; install the Windows Tesseract engine separately. The companion uses both `eng` and `hin` packs when installed, gracefully falls back to either available pack, and reports which language is missing. If neither supported pack exists, OCR returns a setup error.
-- The agent never executes arbitrary shell commands, PowerShell, scripts or file operations.
+- Voice commands `open file Reports/summary.pdf` and `open folder Projects` resolve only inside the current Windows user's Documents, Downloads or Desktop. Absolute paths, drive letters, network shares, `..`, symlink escapes and ambiguous matches are rejected. Opening uses the OS file association; it never invokes a shell.
+- The agent never executes arbitrary shell commands, PowerShell, scripts or unrestricted file operations.
 - **Revoke PC Pairing** asks for explicit confirmation, revokes this device on the relay, and deletes its Windows Credential Manager token. A new six-digit code is required to pair again.
 - Screen sharing is off by default and sends JPEG frames only while the local checkbox is enabled.
 - Android and Windows now exchange P-256 ECDH public keys through the authenticated relay, derive a session- and peer-bound AES-256-GCM key, and require both users to confirm the same short fingerprint out-of-band before visual sharing. Screen/camera frames use per-peer ciphertext envelopes with monotonically increasing sequence numbers; the relay forwards opaque ciphertext and rejects plaintext JPEG frames. A peer that is not mutually verified receives no visual frames.

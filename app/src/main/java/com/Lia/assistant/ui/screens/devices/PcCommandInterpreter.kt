@@ -23,6 +23,20 @@ object PcCommandInterpreter {
                 JSONObject().put("kind", "scroll").put("amount", -5)
             lower in setOf("hardware status", "pc status", "कंप्यूटर की स्थिति") ->
                 JSONObject().put("kind", "hardware_status")
+            Regex("^(open file|file open|फ़ाइल खोलो|फाइल खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
+                val path = Regex("^(open file|file open|फ़ाइल खोलो|फाइल खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!.groupValues[2].trim()
+                require(path.length <= 260 && path.matches(Regex("[A-Za-z0-9 _.-]+(?:/[A-Za-z0-9 _.-]+)*")) && path.split("/").none { it == "." || it == ".." }) {
+                    "Documents, Downloads या Desktop के अंदर relative file path दें।"
+                }
+                JSONObject().put("kind", "open_file").put("path", path)
+            }
+            Regex("^(open folder|open directory|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
+                val path = Regex("^(open folder|open directory|फ़ोल्डर खोलो|फोल्डर खोलो)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!.groupValues[2].trim()
+                require(path.length <= 260 && path.matches(Regex("[A-Za-z0-9 _.-]+(?:/[A-Za-z0-9 _.-]+)*")) && path.split("/").none { it == "." || it == ".." }) {
+                    "Documents, Downloads या Desktop के अंदर relative folder path दें।"
+                }
+                JSONObject().put("kind", "open_folder").put("path", path)
+            }
             Regex("^(open|launch|खोलो|खोल)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command) != null -> {
                 val app = Regex("^(open|launch|खोलो|खोल)\\s+(.+)$", RegexOption.IGNORE_CASE).find(command)!!.groupValues[2].trim()
                 require(app.length <= 80 && !app.contains(Regex("[\\\\/:]")) && !app.contains("..")) { "App name मान्य नहीं है।" }

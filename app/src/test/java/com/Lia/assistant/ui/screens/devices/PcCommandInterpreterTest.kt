@@ -29,6 +29,20 @@ class PcCommandInterpreterTest {
         assertEquals("Submit", PcCommandInterpreter.parse("बटन दबाओ Submit").getOrThrow().getString("text"))
     }
 
+    @Test fun parsesApprovedWindowsFileAndFolderCommands() {
+        val file = PcCommandInterpreter.parse("open file Reports/summary.pdf").getOrThrow()
+        assertEquals("open_file", file.getString("kind"))
+        assertEquals("Reports/summary.pdf", file.getString("path"))
+        val folder = PcCommandInterpreter.parse("फ़ोल्डर खोलो Projects").getOrThrow()
+        assertEquals("open_folder", folder.getString("kind"))
+        assertEquals("Projects", folder.getString("path"))
+    }
+
+    @Test fun rejectsWindowsAbsoluteAndTraversalPaths() {
+        assertFalse(PcCommandInterpreter.parse("open file ../secret.txt").isSuccess)
+        assertFalse(PcCommandInterpreter.parse("open file C:/Windows/win.ini").isSuccess)
+        assertFalse(PcCommandInterpreter.parse("open folder //server/share").isSuccess)
+    }
     @Test fun rejectsUnknownAndSensitiveCommands() {
         assertFalse(PcCommandInterpreter.parse("do anything").isSuccess)
         assertFalse(PcCommandInterpreter.parse("type my password 123").isSuccess)

@@ -113,5 +113,15 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(validate_remote_action({"kind": "exec", "command": "calc.exe"}))
 
 
+    def test_open_file_and_folder_actions_accept_only_safe_relative_paths(self):
+        self.assertEqual(validate_remote_action({"kind": "open_file", "path": "Reports/summary.pdf"}),
+                         {"kind": "open_file", "path": "Reports/summary.pdf"})
+        self.assertEqual(validate_remote_action({"kind": "open_folder", "path": "Projects"}),
+                         {"kind": "open_folder", "path": "Projects"})
+        for path in ("../secret.txt", "/etc/passwd", "C:/Windows/win.ini", "Reports/../../secret"):
+            self.assertIsNone(validate_remote_action({"kind": "open_file", "path": path}))
+        self.assertIsNone(validate_remote_action({"kind": "open_folder", "path": "Projects", "command": "cmd.exe"}))
+
+
 if __name__ == "__main__":
     unittest.main()
