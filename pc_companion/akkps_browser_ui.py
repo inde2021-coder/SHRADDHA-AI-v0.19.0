@@ -368,7 +368,6 @@ class AkkpsBrowserWindow:
                     "The request may have reached AKKPS, but a successful response with a record ID was not verified. Re-open the Plot map before any retry.",
                     parent=self.window
                 )
-            self._show(result)
         except Exception as exc:
             messagebox.showerror("Boundary upload blocked", str(exc), parent=self.window)
 
