@@ -58,6 +58,7 @@ object ActionExecutor {
             }
 
             "open_akkps_runner" -> {
+                `in`.shraddha.ai.operator.website.AkkpsPageInventory.clear(context)
                 val command = args.optString("command").trim()
                 if (command.length > 3000) return result.put("status", "error").put("message", "AKKPS command अधिकतम 3000 characters की हो सकती है।")
                 if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(command)) {
