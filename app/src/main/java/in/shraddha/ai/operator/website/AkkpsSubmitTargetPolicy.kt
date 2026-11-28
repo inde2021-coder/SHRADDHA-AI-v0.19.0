@@ -15,4 +15,10 @@ internal object AkkpsSubmitTargetPolicy {
         return normalized.isNotEmpty() && normalized.none { it.isBlank() } &&
             normalized.distinct().size == normalized.size
     }
+
+    /** Save Draft is deliberately not a submit target; only explicit final-submit labels qualify. */
+    fun isExplicitSubmitLabel(label: String): Boolean = normalize(label) in setOf(
+        "submit", "submit report", "submit plot", "submit registration",
+        "submit farmer", "submit awd report", "जमा करें", "सबमिट", "सबमिट करें", "भेजें"
+    )
 }
