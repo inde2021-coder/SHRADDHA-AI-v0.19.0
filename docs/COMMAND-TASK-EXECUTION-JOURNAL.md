@@ -15,7 +15,8 @@ No raw command, message body, farmer field value, contact name, phone number, co
 - PENDING may be claimed as RUNNING.
 - FAILED may be retried only within the bounded attempt count.
 - RUNNING may finish as SUCCEEDED, FAILED, UNCERTAIN, BLOCKED or SKIPPED.
-- UNCERTAIN is never automatically replayed. A recovered RUNNING step must be marked UNCERTAIN, then an adapter independently inspects the remote side effect and calls reconciliation.
+- App startup must call `recoverInterruptedSteps()` before any adapter resumes work. It durably changes every leftover RUNNING step to UNCERTAIN; startup must remain blocked if recovery persistence fails.
+- UNCERTAIN is never automatically replayed. An adapter independently inspects the remote side effect and calls reconciliation.
 - SUCCEEDED, BLOCKED and SKIPPED are terminal.
 - Repeated identical commands within a short deduplication window reuse the existing plan instead of creating a second action.
 
