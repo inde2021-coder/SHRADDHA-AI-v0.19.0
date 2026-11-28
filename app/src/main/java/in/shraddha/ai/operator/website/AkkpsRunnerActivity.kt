@@ -42,6 +42,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var pendingBoundaryUploadUri: Uri? = null
+    private var pendingBoundaryUploadPlotId: String? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
@@ -295,17 +296,21 @@ class AkkpsRunnerActivity : Activity() {
                         value.isBlank() || value == "*/*" ||
                             value.contains("kml") || value.contains("application/octet-stream")
                     }
+                    val currentPlotId = plotIdInput.text.toString().trim()
                     if (preparedBoundary != null && acceptsKml &&
+                        pendingBoundaryUploadPlotId == currentPlotId &&
                         AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module == AkkpsRunnerModule.PLOTS) {
                         AlertDialog.Builder(this@AkkpsRunnerActivity)
                             .setTitle("AKKPS Plot Boundary")
                             .setMessage("तैयार की गई KML boundary इस वेबसाइट के file field में attach होगी। इससे अभी AKKPS server पर Save/Upload नहीं होगा; वेबसाइट पर अगला Upload/Save action अलग से review और confirm करें।")
                             .setNegativeButton("दूसरी File चुनें") { _, _ ->
                                 pendingBoundaryUploadUri = null
+                                pendingBoundaryUploadPlotId = null
                                 chooseWebsiteFile(params, callback)
                             }
                             .setPositiveButton("यही KML attach करें") { _, _ ->
                                 pendingBoundaryUploadUri = null
+                                pendingBoundaryUploadPlotId = null
                                 uploadCallback = null
                                 grantUriPermission(packageName, preparedBoundary, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 callback.onReceiveValue(arrayOf(preparedBoundary))
@@ -557,6 +562,7 @@ class AkkpsRunnerActivity : Activity() {
             FileProvider.getUriForFile(this, "$packageName.lia.fileprovider", target)
         }.onSuccess { uri ->
             pendingBoundaryUploadUri = uri
+            pendingBoundaryUploadPlotId = plotId
             status.text = "KML तैयार है। अब AKKPS Plots में Create Boundary/Boundary Upload खोलें; website file picker में यह KML attach करने की पुष्टि करें। Server upload अभी नहीं हुआ।"
         }.onFailure {
             status.text = "KML तैयार नहीं हुई: ${it.localizedMessage}"
@@ -1934,6 +1940,9 @@ Return exact JSON only. Do not include prose or markdown."""
     override fun onDestroy() {
         stopGpsWalk()
         uploadCallback?.onReceiveValue(null); uploadCallback=null
+        pendingBoundaryUploadUri?.let { runCatching { revokeUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+        pendingBoundaryUploadUri = null
+        pendingBoundaryUploadPlotId = null
         pendingGeolocationCallback?.invoke(pendingGeolocationOrigin.orEmpty(), false, false)
         pendingGeolocationCallback = null; pendingGeolocationOrigin = null
         web.stopLoading(); web.destroy(); super.onDestroy()
