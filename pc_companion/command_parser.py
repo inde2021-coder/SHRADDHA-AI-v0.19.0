@@ -29,7 +29,8 @@ def parse_android_command(raw):
         raise ValueError("Command is too long.")
     lower = command.casefold()
     akkps_modules = {
-        "open akkps farmers": "farmers", "open akkps plots": "plots",
+        "open akkps farmers": "farmers", "open akkps farmer": "farmers",
+        "open akkps plots": "plots", "open akkps plot": "plots",
         "open akkps awd reports": "awd reports", "open akkps profile": "profile",
         "open akkps data sync": "data sync", "akkps किसान खोलो": "farmers",
         "akkps प्लॉट खोलो": "plots", "akkps एडब्ल्यूडी रिपोर्ट खोलो": "awd reports",
