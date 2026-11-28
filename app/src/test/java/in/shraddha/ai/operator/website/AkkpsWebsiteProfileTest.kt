@@ -54,6 +54,8 @@ class AkkpsWebsiteProfileTest {
     @Test fun runnerNavigationAllowsLoginAndOnlyApprovedRunnerModules() {
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/"))
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/login"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/auth/otp"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/auth/verify"))
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://akkps.ngo/runner/plots?page=2"))
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/awd-reports"))
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/plots/new"))
