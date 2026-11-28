@@ -1464,9 +1464,8 @@ Return exact JSON only. Do not include prose or markdown."""
               const forms=[...document.forms].filter(f=>
                 [...f.querySelectorAll('input,textarea,select')].some(e=>editable(e)&&e.value)||
                 radioGroups(f).some(g=>g.some(r=>r.checked))||
-                [...f.querySelectorAll('input[type=checkbox]')].some(e=>checkboxEditable(e)&&e.checked)||
-                [...f.querySelectorAll('[role=switch],[role=checkbox]')].some(e=>switchEditable(e)&&
-                  (e.getAttribute('aria-checked')==='true'||e.getAttribute('aria-pressed')==='true'))
+                [...f.querySelectorAll('input[type=checkbox]')].some(e=>checkboxEditable(e))||
+                [...f.querySelectorAll('[role=switch],[role=checkbox]')].some(e=>switchEditable(e))
               );
               if(forms.length!==1) return JSON.stringify({status:'form_not_unique'});
               const f=forms[0]; if(!f.reportValidity()) return JSON.stringify({status:'invalid'});
