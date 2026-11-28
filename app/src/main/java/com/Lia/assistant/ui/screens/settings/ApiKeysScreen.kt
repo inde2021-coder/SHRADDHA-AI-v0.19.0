@@ -104,7 +104,7 @@ private fun testSavedProviderKey(context: android.content.Context, provider: Str
     val result = if (provider == "GEMINI") {
         val key = ApiKeyStore.getKey(context)
         if (key.isBlank()) return "GEMINI API key is missing."
-        GeminiTextClient.reply(key, instruction, history)
+        GeminiTextClient.reply(context, key, instruction, history)
     } else {
         MultiProviderChatClient.reply(context, provider, instruction, history)
     }
