@@ -37,3 +37,11 @@ class AndroidCommandParserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AkkpsCommandTests(unittest.TestCase):
+    def test_akkps_commands(self):
+        from pc_companion.command_parser import parse_android_command
+        self.assertEqual(parse_android_command("open AKKPS")["kind"], "akkps_open")
+        self.assertEqual(parse_android_command("open AKKPS Runner")["kind"], "akkps_runner")
+        self.assertEqual(parse_android_command("inspect runner")["kind"], "akkps_inspect")
