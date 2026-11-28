@@ -35,11 +35,20 @@ object ActionExecutor {
 
 
             "open_akkps_runner" -> {
+                val command = args.optString("command").trim()
+                if (command.length > 3000) return result.put("status", "error").put("message", "AKKPS command अधिकतम 3000 characters की हो सकती है।")
+                if (Regex("(?i)\\b(password|passcode|otp|pin|captcha|security code|verification code)\\b|पासवर्ड|ओटीपी|पिन").containsMatchIn(command)) {
+                    return result.put("status", "error").put("message", "Password, OTP, PIN या CAPTCHA सामग्री Runner command में नहीं भेजी जा सकती। वेबसाइट पर स्वयं दर्ज करें।")
+                }
                 val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
+                    .putExtra(`in`.shraddha.ai.operator.website.AkkpsRunnerActivity.EXTRA_RUNNER_COMMAND, command)
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launch)
                 result.put("status", "needs_user_action").put("action", "akkps_runner_opened")
-                    .put("message", "AKKPS Runner खुल गया है। Login आप स्वयं करें; उसके बाद Inspect से पेज और उपलब्ध modules पहचानें। Password/OTP Shraddha AI को नहीं दिए जाते।")
+                    .put("command_loaded", command.isNotBlank())
+                    .put("message", if (command.isBlank())
+                        "AKKPS Runner खुल गया है। Login आप स्वयं करें; उसके बाद Inspect से पेज और उपलब्ध modules पहचानें। Password/OTP Shraddha AI को नहीं दिए जाते।"
+                    else "AKKPS Runner खुल गया है। आपकी command authenticated Runner पेज लोड होने पर चलायी जाएगी; fields review होंगे और Submit अलग पुष्टि माँगेगा। Password/OTP Shraddha AI को नहीं दिए जाते।")
             }
 
             "list_paired_devices" -> {
