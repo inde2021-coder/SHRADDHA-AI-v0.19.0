@@ -106,7 +106,7 @@ private fun SettingsScreenContent(
     var gatewayTesting by remember { mutableStateOf(false) }
     var gatewayTestStatus by remember { mutableStateOf<String?>(null) }
     val settingsScope = rememberCoroutineScope()
-    var voiceMemoryEnabled by remember { mutableStateOf(PersistentChatMemory.isEnabled(context)) }
+    var voiceMemoryEnabled by remember { mutableStateOf(PersistentChatMemory.isEnabled(context) || ConversationMemory.isPersistenceEnabled(context)) }
     var voiceMemoryError by remember { mutableStateOf<String?>(null) }
     val voiceActionJournal = remember { VoiceToolActionJournal(context) }
     val initialVoiceAction = remember { voiceActionJournal.latestResult() }
