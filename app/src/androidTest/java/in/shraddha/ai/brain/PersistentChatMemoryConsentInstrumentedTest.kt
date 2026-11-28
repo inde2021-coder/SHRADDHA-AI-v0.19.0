@@ -18,6 +18,7 @@ class PersistentChatMemoryConsentInstrumentedTest {
         val previousPending = prefs.getBoolean("conversation_memory_clear_pending", false)
         val vault = SecureMemoryVault(context)
         try {
+            PersistentChatMemory.setEnabled(context, false)
             PersistentChatMemory.setEnabled(context, true)
             assertTrue(PersistentChatMemory.record(context, "User", "private recap").isSuccess)
             assertEquals("User: private recap", PersistentChatMemory.recap(context))
@@ -134,6 +135,7 @@ class PersistentChatMemoryConsentInstrumentedTest {
         val previousPayload = vaultPrefs.getString("slot_memory", null)
         val previousLegacyPayload = vaultPrefs.getString("memory", null)
         try {
+            PersistentChatMemory.setEnabled(context, false)
             PersistentChatMemory.setEnabled(context, true)
             assertTrue(PersistentChatMemory.record(context, "User", "saved encrypted context").isSuccess)
             assertEquals(
