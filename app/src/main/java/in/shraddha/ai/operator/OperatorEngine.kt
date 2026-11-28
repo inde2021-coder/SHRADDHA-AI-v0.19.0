@@ -76,8 +76,10 @@ class OperatorEngine(
             }
             OperatorActionType.BACK -> ShraddhaAccessibilityService.goBack()
             OperatorActionType.HOME -> ShraddhaAccessibilityService.goHome()
-            OperatorActionType.SCROLL_FORWARD -> ShraddhaAccessibilityService.scrollForward()
-            OperatorActionType.SCROLL_BACKWARD -> ShraddhaAccessibilityService.scrollBackward()
+            OperatorActionType.SCROLL_FORWARD -> before.elements.any { it.scrollable } &&
+                ShraddhaAccessibilityService.scrollForward()
+            OperatorActionType.SCROLL_BACKWARD -> before.elements.any { it.scrollable } &&
+                ShraddhaAccessibilityService.scrollBackward()
         }
         if (!ok) {
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई नहीं हो सकी। स्क्रीन/ऐप की अनुमति या UI स्थिति जाँचें।")); record("operator_action", "dispatch_failed", step, before); return false
