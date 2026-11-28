@@ -1056,8 +1056,9 @@ class AkkpsRunnerActivity : Activity() {
             .setPositiveButton("आगे बढ़ें") { _, _ ->
                 val label = field.text.toString().trim()
                 if (label.isBlank() || label.length > 100 ||
-                    Regex("(?i)password|otp|pin|captcha|submit|जमा|सबमिट").containsMatchIn(label)) {
-                    status.text = "अमान्य map tool label। Submit या sensitive controls स्वीकार नहीं हैं।"
+                    Regex("(?i)password|otp|pin|captcha|save|upload|submit|delete|remove|clear|cancel|reset|जमा|सबमिट|हटाएं|मिटाएं|साफ").containsMatchIn(label) ||
+                    !Regex("(?i)draw|polygon|edit|vertex|boundary|geometry|point|बहुभुज|सीमा|बिंदु|रेखा|नक्शा|मानचित्र|संपादित").containsMatchIn(label)) {
+                    status.text = "अमान्य map tool label। केवल Draw/Edit controls स्वीकार हैं; Save/Clear/Submit नहीं।"
                     return@setPositiveButton
                 }
                 AlertDialog.Builder(this)
