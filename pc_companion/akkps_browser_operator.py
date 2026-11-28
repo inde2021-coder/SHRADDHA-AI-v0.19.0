@@ -542,6 +542,14 @@ class AkkpsBrowserOperator:
             "historical yields", "water level readings"
         }
         normalized = section_label.casefold()
+        section_aliases = {
+            "सूखने की तारीख": "drying event dates", "सूखने की तारीखें": "drying event dates",
+            "पुनः बाढ़ की तारीख": "reflooding dates", "पुनः बाढ़ की तारीखें": "reflooding dates",
+            "खाद डालने की तारीख": "fertilizer application dates", "खाद डालने की तारीखें": "fertilizer application dates",
+            "खेत का दौरा": "field visits", "ऐतिहासिक उपज": "historical yields",
+            "जल स्तर रीडिंग": "water level readings"
+        }
+        normalized = section_aliases.get(normalized, normalized)
         if normalized not in allowed_sections:
             raise ValueError("Only known AWD repeated-entry sections are supported.")
         if not add_button_label or len(add_button_label) > 80 or SENSITIVE_LABEL.search(add_button_label):
