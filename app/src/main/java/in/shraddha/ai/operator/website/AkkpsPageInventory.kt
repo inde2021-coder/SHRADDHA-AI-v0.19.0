@@ -33,6 +33,11 @@ object AkkpsPageInventory {
             .edit().putString(KEY_LAST, encoded).apply()
     }
 
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().remove(KEY_LAST).apply()
+    }
+
     fun last(context: Context): JSONObject? {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LAST, null)
             ?: return null
