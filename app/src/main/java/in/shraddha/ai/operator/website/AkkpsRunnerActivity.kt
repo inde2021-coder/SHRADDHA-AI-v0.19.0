@@ -127,7 +127,7 @@ class AkkpsRunnerActivity : Activity() {
         val incoming = intent.getStringExtra(EXTRA_RUNNER_COMMAND)?.trim()
         intent.removeExtra(EXTRA_RUNNER_COMMAND)
         if (!incoming.isNullOrBlank() && incoming.length <= 3000) {
-            if (Regex("(?i)\\\\b(password|passcode|otp|pin|captcha|security code|verification code)\\\\b|पासवर्ड|ओटीपी|पिन").containsMatchIn(incoming)) {
+            if (Regex("(?i)\\b(password|passcode|otp|pin|captcha|security code|verification code)\\b|पासवर्ड|ओटीपी|पिन").containsMatchIn(incoming)) {
                 status.text = "Credential/OTP सामग्री वाला command रोक दिया गया।"
                 return
             }
