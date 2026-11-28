@@ -256,12 +256,13 @@ object ActionExecutor {
             }
             "open_app" -> {
                 val requestedApp = args.optString("app_name", "").trim()
-                val appName = if (requestedApp.isNotBlank()) {
-                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedApp, CommandReferenceType.APP)) {
-                        is CommandReferenceResolution.Resolved -> followUp.reference.stableId
-                        else -> requestedApp
-                    }
-                } else ""
+                val resolution = if (requestedApp.isNotBlank()) {
+                    CommandFollowUpContextRuntime.resolve(requestedApp, CommandReferenceType.APP)
+                } else CommandReferenceResolution.NoReferenceRequested
+                val appName = when (resolution) {
+                    is CommandReferenceResolution.Resolved -> resolution.reference.displayLabel
+                    else -> requestedApp
+                }
                 if (appName.isEmpty()) {
                     result.put("status", "error")
                     result.put("message", "App name cannot be empty")
@@ -269,7 +270,13 @@ object ActionExecutor {
                 }
 
                 val apps = InstalledAppLabelCache.get(context)
-                val packageName = AppLauncher.findApp(appName, apps)
+                // A remembered package is only reused if it is still installed; otherwise
+                // require a fresh label match instead of launching an old/stale package ID.
+                val packageName = when (resolution) {
+                    is CommandReferenceResolution.Resolved ->
+                        apps.values.firstOrNull { it == resolution.reference.stableId }
+                    else -> AppLauncher.findApp(appName, apps)
+                }
 
                 if (packageName != null) {
                     val launched = AppLauncher.launch(context, packageName)
