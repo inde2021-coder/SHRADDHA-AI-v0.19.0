@@ -81,11 +81,16 @@ class TaskPlannerOperatorBridge(
         when (step.action) {
             OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT ->
                 require(step.target.isNotBlank()) { "Action requires an explicit target" }
+            OperatorActionType.SELECT_FILE -> {
+                require(step.target.isNotBlank() && step.value.isBlank()) {
+                    "SELECT_FILE requires an exact file name and no extra value"
+                }
+            }
             OperatorActionType.TYPE_TEXT -> {
                 require(step.target.isNotBlank()) { "TYPE_TEXT requires an explicit field target" }
                 require(step.value.isNotBlank()) { "TYPE_TEXT requires a non-empty value" }
             }
-            OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD ->
+            OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD ->
                 require(step.target.isBlank() && step.value.isBlank()) {
                     "Navigation actions do not accept a target or input value"
                 }
