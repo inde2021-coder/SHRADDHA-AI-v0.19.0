@@ -770,7 +770,7 @@ class AkkpsRunnerActivity : Activity() {
               const labelFor=e=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
-                const labelledBy=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean)
+                const labelledBy=(e.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean)
                   .map(id=>n(document.getElementById(id)?.innerText)).filter(Boolean);
                 labels.push(...labelledBy);
                 return [...new Set(labels)].join(' / ')||n(e.getAttribute('aria-label'))||n(e.placeholder)||n(e.name)||n(e.id)||n(e.innerText);
@@ -1164,7 +1164,7 @@ class AkkpsRunnerActivity : Activity() {
               const switchEditable=e=>['switch','checkbox'].includes(e.getAttribute('role'))&&
                 e.getAttribute('aria-disabled')!=='true'&&e.getAttribute('disabled')===null&&visible(e);
               const controlLabel=e=>{
-                const labelledBy=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean)
+                const labelledBy=(e.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean)
                   .map(id=>document.getElementById(id)?.innerText||'').join(' ');
                 const parent=e.closest('label');
                 return [e.getAttribute('aria-label'),labelledBy,parent?.innerText,e.getAttribute('name'),e.id]
@@ -1444,7 +1444,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 e.getAttribute('aria-disabled')!=='true'&&e.getAttribute('disabled')===null&&
                 !!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
               const controlLabel=e=>{
-                const ids=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean);
+                const ids=(e.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean);
                 const labelled=ids.map(id=>document.getElementById(id)?.innerText||'').join(' ');
                 const parent=e.closest('label');
                 return [e.getAttribute('aria-label'),labelled,parent?.innerText,e.name,e.id].map(norm);
@@ -1565,14 +1565,14 @@ Return exact JSON only. Do not include prose or markdown."""
               const serverRecord=[...events].reverse().find(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&e.httpStatus>=200&&e.httpStatus<300&&e.success&&e.recordId);
               const serverFailure=events.some(e=>e.recordWrite&&['POST','PUT','PATCH'].includes(e.method)&&(e.httpStatus>=400||/failed|error|invalid/i.test(e.message||'')));
               const selectors='[role="alert"],[aria-live="polite"],[aria-live="assertive"],.alert-success,.toast,[data-sonner-toast]';
-              const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean);
+              const notices=[...document.querySelectorAll(selectors)].map(e=>(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
               const success=/\b(saved|submitted|created successfully|record saved)\b|सफलतापूर्वक|जमा हो गया/i;
               const failure=/\b(failed|error|invalid|unable to|try again)\b|त्रुटि|असफल/i;
               const notice=notices.find(x=>success.test(x))||'';
               const failed=notices.some(x=>failure.test(x));
-              const body=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+              const body=(document.body?.innerText||'').replace(/\s+/g,' ').trim();
               const identity=values.filter(v=>v && v.length>=3).every(v=>body.includes(v));
-              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\\/(plots|awd-reports)\\/[^/]+/i.test(a.getAttribute('href')||''));
+              const recordLink=[...document.querySelectorAll('a[href]')].some(a=>/\/(plots|awd-reports)\/[^/]+/i.test(a.getAttribute('href')||''));
               return JSON.stringify({notice,failed,identity,recordLink,serverSuccess:!!serverRecord,recordId:serverRecord?.recordId||'',serverPath:serverRecord?.path||'',serverFailure});
             })(__VALUES__)
         """.trimIndent().replace("__EVENT_START__", eventStart.toString()).replace("__VALUES__", expected.toString())
