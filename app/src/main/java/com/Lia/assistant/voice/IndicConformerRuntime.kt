@@ -74,6 +74,7 @@ object IndicConformerRuntime {
     }
 
     /** Downloads only files with source-controlled SHA-256 pins; .part is verified before rename. */
+    @Synchronized
     fun download(context: Context, language: Language, onProgress: (String) -> Unit = {}) {
         val pack = packs.getValue(language)
         require(pack.checksumsPinned) {
@@ -90,38 +91,57 @@ object IndicConformerRuntime {
     private fun downloadVerified(url: String, expectedSha: String, destination: File, onProgress: (String) -> Unit) {
         require(isSha256(expectedSha)) { "A pinned SHA-256 digest is required." }
         val partial = File(destination.parentFile, destination.name + ".part")
-        partial.delete()
-        val request = Request.Builder().url(url).get().header("User-Agent", "ShraddhaAI-Offline-ASR").build()
-        http.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Model download failed (HTTP ${response.code})." }
-            val body = requireNotNull(response.body) { "Model download returned an empty response." }
-            FileOutputStream(partial).buffered().use { output ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(256 * 1024)
-                    var total = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        total += read
-                        check(total <= 350L * 1024L * 1024L) { "Model artifact exceeded the 350 MB safety limit." }
-                        output.write(buffer, 0, read)
-                        onProgress("Downloaded ${total / (1024 * 1024)} MB")
+        val backup = File(destination.parentFile, destination.name + ".bak")
+        check(!partial.exists() || partial.delete()) { "Could not clear an interrupted model download." }
+        check(!backup.exists() || backup.delete()) { "Could not clear a stale model backup." }
+        try {
+            val request = Request.Builder().url(url).get().header("User-Agent", "ShraddhaAI-Offline-ASR").build()
+            http.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Model download failed (HTTP ${response.code})." }
+                val body = requireNotNull(response.body) { "Model download returned an empty response." }
+                val declaredLength = body.contentLength()
+                check(declaredLength < 0L || declaredLength <= 350L * 1024L * 1024L) {
+                    "Model artifact exceeded the 350 MB safety limit."
+                }
+                FileOutputStream(partial).use { output ->
+                    body.byteStream().use { input ->
+                        val buffer = ByteArray(256 * 1024)
+                        try {
+                            var total = 0L
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read < 0) break
+                                total += read
+                                check(total <= 350L * 1024L * 1024L) { "Model artifact exceeded the 350 MB safety limit." }
+                                output.write(buffer, 0, read)
+                                onProgress("Downloaded ${total / (1024 * 1024)} MB")
+                            }
+                            check(declaredLength < 0L || total == declaredLength) {
+                                "Model download ended before the declared content length."
+                            }
+                            output.fd.sync()
+                        } finally {
+                            buffer.fill(0)
+                        }
                     }
-                    buffer.fill(0)
                 }
             }
-        }
-        if (!sha256(partial).equals(expectedSha, true)) {
+            if (!sha256(partial).equals(expectedSha, true)) {
+                throw SecurityException("SHA-256 mismatch. Downloaded file deleted; it will not be loaded.")
+            }
+            if (destination.exists()) {
+                check(destination.renameTo(backup)) { "Could not preserve the previously installed model." }
+            }
+            if (!partial.renameTo(destination)) {
+                if (backup.exists()) backup.renameTo(destination)
+                throw IllegalStateException("Verified model could not be atomically installed.")
+            }
+            check(!backup.exists() || backup.delete()) {
+                "New model is installed, but the previous model backup could not be removed."
+            }
+        } finally {
             partial.delete()
-            throw SecurityException("SHA-256 mismatch. Downloaded file deleted; it will not be loaded.")
-        }
-        if (destination.exists() && !destination.delete()) {
-            partial.delete()
-            throw IllegalStateException("Could not replace previous model file.")
-        }
-        check(partial.renameTo(destination)) {
-            partial.delete()
-            "Verified model could not be atomically installed."
+            if (!destination.exists() && backup.exists()) backup.renameTo(destination)
         }
     }
 
