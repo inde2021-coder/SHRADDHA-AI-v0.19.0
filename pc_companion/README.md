@@ -31,7 +31,8 @@ The PC device token is stored in Windows Credential Manager only after the relay
 - Android keyboard shortcuts use a strict allowlist (Enter, Escape, Tab, Ctrl+C/F/Z/S/A/V/X, Alt+Tab/Left/Right and Shift+Tab). Arbitrary key names and shell commands are rejected.
 - Remote action IDs are deduplicated per peer for a bounded ten-minute replay window; the Windows companion persists the bounded receipt ledger so restarting the app does not immediately reopen replay of accepted actions. If receipt persistence fails, the remote action is rejected. Encrypted receipts carry explicit success/failure state.
 - PyAutoGUI's top-left fail-safe is enabled.
-- File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.\n- The companion does not capture microphone audio, read files, or silently send messages.
+- File transfer is bidirectional: use **Send File to Phone** on Windows or **CHOOSE FILE & SEND** on Android. The receiving device must approve the transfer and choose its save location; chunks are E2E encrypted and the final file is SHA-256 verified. The Android transfer screen stores chunk checkpoints and offers Resume / Retry after reconnect.
+- The companion does not capture microphone audio, read files, or silently send messages.
 
 ## Offline Language Lab (optional)
 
@@ -45,7 +46,7 @@ py -3.12 -m venv .venv-language
 py -m pip install -r pc_companion/requirements-language.txt
 ```
 
-Configure local model paths before use. The ASR adapter currently allows Hindi, Marathi and English only. Translation allows Hindi, English and Marathi. IndicF5 synthesis allows Hindi and Marathi only and requires explicit permission from the reference-voice owner plus the exact reference transcript.
+Configure local model paths before use. The ASR adapter currently allows Hindi, Marathi and English only. Translation allows Hindi, English and Marathi. IndicF5 synthesis allows Hindi and Marathi only and requires explicit permission from the reference-voice owner plus the exact reference transcript. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
 
 Set model paths locally before starting the companion (never paste private model paths into a public issue):
 
@@ -53,7 +54,6 @@ Set model paths locally before starting the companion (never paste private model
 - `SHRADDHA_ASR_TOKENS_INDIC` and `SHRADDHA_ASR_TOKENS_EN`: matching local token files.
 - `SHRADDHA_TRANSLATION_MODEL_DIR`: local IndicTrans2 checkpoint directory.
 - IndicF5 weights must already exist in the local Hugging Face cache; runtime network downloads are disabled.
-- Optional language models are not required for core PC command/control features. If a configured local model is missing or invalid, that language capability stays unavailable; the companion does not silently switch to cloud processing. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
 
 The optional lab's Python unit tests are included in the PC test suite. A successful unit test does not prove that a user's GPU, model files, microphone or speaker produce acceptable inference; validate each installed model locally before relying on it.
 
