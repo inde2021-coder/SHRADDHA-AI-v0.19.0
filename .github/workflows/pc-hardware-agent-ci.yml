@@ -59,7 +59,7 @@ jobs:
           python pc_companion/tests/test_file_transfer.py -v
 
       - name: Compile Windows companion source
-        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py
+        run: python -m py_compile pc_companion/agent.py pc_companion/actions.py pc_companion/protocol.py pc_companion/command_parser.py pc_companion/e2e_crypto.py pc_companion/windows_hardware.py pc_companion/reconnect.py pc_companion/language_lab.py pc_companion/language_runtime.py
 
       - name: Build Windows PC companion executable
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name ShraddhaAI-PC-Companion --paths pc_companion --collect-all keyring --collect-all cryptography --hidden-import screen_brightness_control --hidden-import pycaw --hidden-import comtypes pc_companion/agent.py
