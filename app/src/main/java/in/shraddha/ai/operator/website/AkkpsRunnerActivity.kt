@@ -52,6 +52,7 @@ class AkkpsRunnerActivity : Activity() {
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
     private var pendingAiCommand: String? = null
+    private var pendingInspectOnLoad = false
     private var submitVerificationPending = false
     private var submitNeedsManualReview = false
     private val gpsListener = object : LocationListener {
@@ -135,6 +136,7 @@ class AkkpsRunnerActivity : Activity() {
             textSize = 12f; setTextColor(0xFF9CC6D6.toInt()); setPadding(dp(4), 0, dp(4), dp(8))
         })
         pendingAiCommand = intent.getStringExtra(EXTRA_RUNNER_COMMAND)?.trim()?.takeIf { it.isNotBlank() && it.length <= 3000 }
+        pendingInspectOnLoad = intent.getBooleanExtra(EXTRA_RUNNER_INSPECT, false)
         command = EditText(this).apply {
             hint = "एक कमांड: name=Ram; village=Rampur; phone=...; submit"
             setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
@@ -210,6 +212,7 @@ class AkkpsRunnerActivity : Activity() {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
                         installSubmitObserver()
                         dispatchPendingAiCommand(url)
+                        dispatchPendingInspect(url)
                     }
                 }
             }
@@ -268,6 +271,12 @@ class AkkpsRunnerActivity : Activity() {
      * Create-form commands are first routed to the observed Runner create path; submit still
      * stops at the existing explicit confirmation dialog and server-ID verification.
      */
+    private fun dispatchPendingInspect(url: String) {
+        if (!pendingInspectOnLoad || AkkpsRunnerRouteCatalog.match(url) == null) return
+        pendingInspectOnLoad = false
+        inspectPage()
+    }
+
     private fun dispatchPendingAiCommand(url: String) {
         val raw = pendingAiCommand ?: return
         val route = AkkpsRunnerRouteCatalog.match(url) ?: return // wait until login reaches Runner
@@ -1562,6 +1571,7 @@ Return exact JSON only. Do not include prose or markdown."""
 
     companion object {
         const val EXTRA_RUNNER_COMMAND = "akkps_runner_command"
+        const val EXTRA_RUNNER_INSPECT = "akkps_runner_inspect"
         private const val REQUEST_FILE = 7314
         private const val REQUEST_FARMER_CARD_OCR = 7320
         private const val REQUEST_LOCATION = 7315
