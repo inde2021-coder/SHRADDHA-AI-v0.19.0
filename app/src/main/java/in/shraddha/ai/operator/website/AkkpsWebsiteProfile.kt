@@ -80,9 +80,8 @@ object AkkpsWebsiteProfile {
             if (segments.any { it == "." || it == ".." }) return false
             val path = uri.normalize().path.orEmpty().lowercase(Locale.ROOT).trimEnd('/').ifBlank { "/" }
             val normalizedSegments = path.split('/').filter { it.isNotBlank() }
-            val allowedLoginPath = path in setOf(
-                "/", "/login", "/auth/login", "/signin", "/sign-in", "/auth/signin"
-            )
+            val allowedLoginPath = path in setOf("/", "/login", "/auth/login", "/signin", "/sign-in", "/auth/signin", "/otp", "/verify", "/two-factor") ||
+                path.startsWith("/auth/") || path.startsWith("/login/")
             val allowedRunnerPath = path == "/runner" || path.startsWith("/runner/") ||
                 path in setOf("/plots/new", "/awd-reports/new")
             normalizedSegments.none { it == "admin" || it == "coordinator" } &&
