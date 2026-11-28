@@ -19,7 +19,7 @@ It includes page inspection, Farmer Card OCR, Farmer/Plot/AWD field mapping, mis
 
 ## Windows — visible browser companion
 
-The Windows companion adds an AKKPS Website Operator window. It opens visible Microsoft Edge with a persistent local profile. The user signs in manually, then can open `/runner`, inspect visible headings/navigation/form labels, preview a field change, and fill one exact unambiguous field after local confirmation.
+The Windows companion adds an AKKPS Website Operator window. It opens visible Microsoft Edge with a persistent local profile. The user signs in manually, then can open the allow-listed Farmers, Plots, AWD Reports, Profile and Data Sync routes, inspect visible headings/navigation/form labels, preview a field change, and fill one exact unambiguous field after local confirmation.
 
 From the paired Android PC command surface, these commands are supported:
 
