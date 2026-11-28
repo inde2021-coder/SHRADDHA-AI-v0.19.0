@@ -65,5 +65,7 @@ class AkkpsFieldAliasCatalogTest {
     @Test fun normalisedLabelsAreRecognisedWithoutChangingUnknownFields() {
         assertTrue(AkkpsFieldAliasCatalog.isKnownAlias("  FARMER   CODE "))
         assertEquals("Custom Field", AkkpsFieldAliasCatalog.canonicalKey("Custom Field"))
+        assertEquals("yieldQtlAcre", AkkpsFieldAliasCatalog.canonicalKey("Yield (qtl/acre)"))
+        assertEquals("Yield (kg/acre)", AkkpsFieldAliasCatalog.canonicalKey("Yield (kg/acre)"))
     }
 }
