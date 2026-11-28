@@ -24,12 +24,14 @@ interface UniversalCommandAdapter {
 
 /** The current Android adapter delegates to observe -> dispatch -> verify OperatorEngine. */
 class AndroidAccessibilityCommandAdapter(
-    private val engine: OperatorEngine
+    private val executeStep: (OperatorStep, confirmed: Boolean) -> Boolean
 ) : UniversalCommandAdapter {
+    constructor(engine: OperatorEngine) : this(engine::execute)
+
     override val id: String = "android_accessibility"
     override val platform: UniversalCommandPlatform = UniversalCommandPlatform.ANDROID_ACCESSIBILITY
     override val supportedActions: Set<OperatorActionType> = OperatorActionType.entries.toSet()
-    override fun execute(step: OperatorStep, confirmed: Boolean): Boolean = engine.execute(step, confirmed)
+    override fun execute(step: OperatorStep, confirmed: Boolean): Boolean = executeStep(step, confirmed)
 }
 
 /**
