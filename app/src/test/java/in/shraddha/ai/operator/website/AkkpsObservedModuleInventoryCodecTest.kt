@@ -26,4 +26,21 @@ class AkkpsObservedModuleInventoryCodecTest {
             AkkpsObservedModuleInventoryCodec.encode(mapOf(bad.route.path to bad))
         }
     }
+    @Test fun capsNewlyObservedRoutesWithoutCrashingOrDroppingExistingEntries() {
+        val existingRoute = AkkpsObservedRunnerRoute("Farmers", "/runner/farmers")
+        val existing = AkkpsObservedModuleInventoryEntry(
+            existingRoute, 1_795_824_000_000L,
+            mapOf("OBSERVE_PAGE" to CapabilityState.AVAILABLE)
+        )
+        val candidates = (1..40).map { index ->
+            AkkpsObservedRunnerRoute("Module $index", "/runner/module-$index")
+        }
+        val merged = AkkpsObservedModuleInventoryCodec.mergeObserved(
+            mapOf(existingRoute.path to existing), candidates, 1_795_824_000_000L
+        )
+        assertEquals(30, merged.size)
+        assertTrue(merged.containsKey(existingRoute.path))
+        assertNotNull(AkkpsObservedModuleInventoryCodec.decode(AkkpsObservedModuleInventoryCodec.encode(merged)))
+    }
+
 }
