@@ -63,10 +63,22 @@ object AkkpsPageInventory {
     }
 
     private fun safeActions(source: JSONArray?): JSONArray = JSONArray().also { out ->
+        val actionPatterns = listOf(
+            Regex("(?i)^(create|add|new|register|बनाएं|बनाओ|नया|नई|जोड़ें|जोड़ो)\\b") to "Create",
+            Regex("(?i)^(edit|update|संपादित|बदलें|बदलना)\\b") to "Edit",
+            Regex("(?i)^(save|submit|सहेजें|जमा|सबमिट)\\b") to "Submit",
+            Regex("(?i)^(search|find|filter|खोज|ढूंढ|ढूँढ)\\b") to "Search",
+            Regex("(?i)^(view|open|details|देखें|खोलें)\\b") to "View",
+            Regex("(?i)^(upload|attach|अपलोड|संलग्न)\\b") to "Upload",
+            Regex("(?i)^(delete|remove|हटाएं|मिटाएं|डिलीट)\\b") to "Delete",
+            Regex("(?i)^(sync|सिंक)\\b") to "Sync",
+            Regex("(?i)^(cancel|back|रद्द|वापस)\\b") to "Cancel"
+        )
         for (i in 0 until minOf(source?.length() ?: 0, 40)) {
             val item = source?.optJSONObject(i) ?: continue
-            val label = item.optString("label").trim().take(80)
-            if (label.isNotBlank()) out.put(JSONObject().put("label", label)
+            val rawLabel = item.optString("label").trim().take(80)
+            val safeLabel = actionPatterns.firstOrNull { it.first.containsMatchIn(rawLabel) }?.second ?: continue
+            out.put(JSONObject().put("label", safeLabel)
                 .put("type", item.optString("type").take(20)).put("disabled", item.optBoolean("disabled")))
         }
     }
