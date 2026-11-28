@@ -1060,6 +1060,95 @@ class AkkpsBrowserOperator:
                 "geometry_changed": False, "submitted": False,
                 "note": "No coordinates or farmer records were read. KML may be attached to an exact visible Plot boundary field; portal drawing/save still requires live page verification."}
 
+    def activate_map_tool(self, tool: str, exact_button_label: str):
+        """Arm one exact visible AKKPS map Draw/Edit tool; the user places/moves vertices manually."""
+        tool_key = " ".join(str(tool or "").casefold().split())
+        if tool_key not in {"draw", "edit"}:
+            raise ValueError("Map tool must be draw or edit.")
+        label = " ".join(str(exact_button_label or "").split())
+        if not label or len(label) > 100 or SENSITIVE_LABEL.search(label):
+            raise ValueError("Provide the exact visible Draw/Edit control label.")
+        validate_runner_url(self.page.url)
+        route = urlparse(self.page.url).path.casefold().rstrip("/")
+        if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
+            raise RuntimeError("Live map editing is available only in the AKKPS Runner Plots workflow.")
+        map_locator = self.page.locator(
+            ".leaflet-container:visible, .mapboxgl-map:visible, .ol-viewport:visible, "
+            "[data-testid*='map' i]:visible, [aria-label*='map' i]:visible"
+        )
+        if map_locator.count() != 1:
+            raise RuntimeError(
+                f"Expected one visible AKKPS Plot map container; found {map_locator.count()}. "
+                "Inspect the authenticated page before choosing a map target."
+            )
+        button = self.page.get_by_role("button", name=label, exact=True)
+        if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
+            raise RuntimeError("The exact visible map tool button is missing, ambiguous or disabled.")
+        if (button.first.get_attribute("type") or "").casefold() in {"submit", "reset"}:
+            raise RuntimeError("A form-submit/reset control cannot be used as a map tool.")
+        if _is_explicit_submit_label(label):
+            raise RuntimeError("Record Submit controls are never map tools.")
+        before = button.first.evaluate("""e => ({
+          pressed: e.getAttribute('aria-pressed'),
+          checked: e.getAttribute('aria-checked'),
+          className: String(e.className || ''),
+          disabled: !!e.disabled
+        })""")
+        button.first.click()
+        self.page.wait_for_timeout(150)
+        after = button.first.evaluate("""e => ({
+          pressed: e.getAttribute('aria-pressed'),
+          checked: e.getAttribute('aria-checked'),
+          className: String(e.className || ''),
+          disabled: !!e.disabled
+        })""")
+        active = (
+            after.get("pressed") == "true" or after.get("checked") == "true" or
+            (re.search(r"(active|selected|is-active|is-selected)", after.get("className", ""), re.I)
+             and after.get("className") != before.get("className"))
+        )
+        return {
+            "tool": tool_key, "button": label, "button_clicked": True,
+            "tool_active_verified": bool(active),
+            "manual_map_interaction_required": True,
+            "vertex_coordinates_read": False, "geometry_changed_by_automation": False,
+            "record_submitted": False,
+            "outcome": "armed" if active else "uncertain",
+            "next_step": (
+                "The map tool appears active. Place or move vertices manually on the visible AKKPS map, then inspect the polygon."
+                if active else
+                "The button was clicked, but its active state was not exposed. Check the map manually; do not assume Draw/Edit mode is active."
+            )
+        }
+
+    def verify_map_boundary_layers(self):
+        """Re-inspect map containers and visible vector-layer evidence after user map interaction."""
+        result = self.inspect_map_boundary()
+        evidence = self.page.evaluate("""() => {
+          const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+          const selectors = [
+            '.leaflet-overlay-pane svg path', '.leaflet-overlay-pane canvas',
+            '.mapboxgl-canvas', '.ol-layer canvas', '.ol-overlaycontainer svg',
+            '[data-layer-type*="polygon" i]', '[data-geometry-type="polygon" i]'
+          ];
+          const counts = {};
+          for (const selector of selectors) {
+            try { counts[selector] = [...document.querySelectorAll(selector)].filter(visible).length; }
+            catch (_) { counts[selector] = 0; }
+          }
+          const status = [...document.querySelectorAll('[role=status],[aria-live],.leaflet-draw-tooltip')]
+            .filter(visible).map(e => (e.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 120))
+            .filter(Boolean).slice(0, 10);
+          return {layerEvidence: counts, status};
+        }""")
+        return {
+            **result,
+            "layer_evidence": evidence.get("layerEvidence", {}),
+            "map_status_messages": evidence.get("status", []),
+            "polygon_persistence_verified": False,
+            "note": "Visible layer evidence is not proof of server persistence. Use the portal Save/Upload action separately, then reopen the Plot and inspect again."
+        }
+
     def export_inventory(self, destination: str | Path):
         inventory = self.inventory()
         Path(destination).write_text(
