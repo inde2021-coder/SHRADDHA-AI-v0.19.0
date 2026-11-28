@@ -11,12 +11,12 @@ object AkkpsFieldAliasCatalog {
         "village" to "villageBlockNumber", "village block" to "villageBlockNumber", "गाँव" to "villageBlockNumber", "गांव" to "villageBlockNumber",
         "remarks" to "remarks", "टिप्पणी" to "remarks",
         "total land area" to "totalLandAreaAcres", "कुल भूमि क्षेत्र" to "totalLandAreaAcres",
-        "paddy area" to "paddyAreaCoveredAcres", "धान क्षेत्र" to "paddyAreaCoveredAcres",
+        "paddy area" to "paddyAreaCoveredAcres", "paddy area covered" to "paddyAreaCoveredAcres", "धान क्षेत्र" to "paddyAreaCoveredAcres",
         "rice variety" to "riceVariety", "धान की किस्म" to "riceVariety",
         "sowing date" to "sowingDate", "बुवाई की तारीख" to "sowingDate",
         "flowering date" to "floweringDate", "फूल आने की तारीख" to "floweringDate",
         "harvest date" to "harvestDate", "कटाई की तारीख" to "harvestDate",
-        "actual yield" to "actualYieldQtlAcre", "वास्तविक उपज" to "actualYieldQtlAcre",
+        "actual yield" to "actualYieldQtlAcre", "actual yield qtl acre" to "actualYieldQtlAcre", "वास्तविक उपज" to "actualYieldQtlAcre",
         "first irrigation date" to "firstIrrigationDate", "पहली सिंचाई की तारीख" to "firstIrrigationDate",
         "drying event dates" to "dryingEventDates", "सूखने की तारीखें" to "dryingEventDates",
         "re flooding dates" to "refloodingDates", "reflooding dates" to "refloodingDates", "पुनः बाढ़ की तारीखें" to "refloodingDates",
@@ -47,7 +47,7 @@ object AkkpsFieldAliasCatalog {
         "identity type" to "identityType", "पहचान का प्रकार" to "identityType",
         "aadhaar number" to "aadhaarNumber", "आधार नंबर" to "aadhaarNumber",
         "address" to "address", "पता" to "address",
-        "baseline practice continuous flooding" to "isTheBaselinePracticeContinuousFlooding", "क्या लगातार बाढ़ सिंचाई होती है" to "isTheBaselinePracticeContinuousFlooding",
+        "baseline practice continuous flooding" to "isTheBaselinePracticeContinuousFlooding", "is the baseline practice continuous flooding" to "isTheBaselinePracticeContinuousFlooding", "क्या लगातार बाढ़ सिंचाई होती है" to "isTheBaselinePracticeContinuousFlooding",
         "previous irrigation method" to "previousIrrigationMethod", "पिछली सिंचाई विधि" to "previousIrrigationMethod",
         "kharif season water source" to "kharifWaterSource", "खरीफ जल स्रोत" to "kharifWaterSource",
         "typical water depth" to "typicalWaterDepthCm", "typical water depth cm" to "typicalWaterDepthCm", "सामान्य जल गहराई" to "typicalWaterDepthCm",
@@ -109,7 +109,8 @@ object AkkpsFieldAliasCatalog {
     fun normalizeLabel(raw: String): String =
         Normalizer.normalize(raw, Normalizer.Form.NFKC)
             .lowercase(Locale.ROOT)
-            .replace(Regex("\\s+"), " ")
+            .replace(Regex("[^\\\\p{L}\\\\p{N}]+"), " ")
+            .replace(Regex("\\\\s+"), " ")
             .trim()
 
     fun canonicalKey(raw: String): String {
