@@ -33,11 +33,12 @@ Every remote command still requires the Windows companion's local approval. Subm
 ## Main Brain data-entry sequence
 
 1. Call `inspect_akkps_runner`; the user signs in if prompted.
-2. Call `get_akkps_runner_inventory` to read the current module's safe field labels and required-field metadata.
-3. Ask the user only for missing values; do not infer farmer, plot or report data.
-4. Call `open_akkps_runner` with a concise `field=value` command containing only values the user supplied. Create commands route to the matching create form.
-5. Review the filled form. If Submit was explicitly requested, the Android Runner shows its confirmation dialog; confirm on the device.
-6. Treat the record as saved only after the Runner verifies the same-origin server response and record ID. If the outcome is uncertain, inspect the list manually; never retry automatically.
+2. If the task is a new record, use `open_akkps_runner` with the explicit create intent (for example, `new farmer`, `new plot` or `new AWD report`) to open the matching form.
+3. Call `inspect_akkps_runner` and `get_akkps_runner_inventory` again to read that form's safe field labels and required-field metadata.
+4. Ask the user only for missing values; do not infer farmer, plot or report data.
+5. Call `open_akkps_runner` with a concise `field=value` command containing only values the user supplied. The Runner maps fields and checks required values.
+6. Review the filled form. If Submit was explicitly requested, the Android Runner shows its confirmation dialog; confirm on the device.
+7. Treat the record as saved only after the Runner verifies the same-origin server response and record ID. If the outcome is uncertain, inspect the list manually; never retry automatically.
 
 ## Approved origin and privacy
 
