@@ -42,6 +42,12 @@ object GeminiTextClient {
             .digest(apiKey.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
+    @Deprecated("Pass Android Context so online AI consent can be checked.")
+    suspend fun resolveModel(apiKey: String): String {
+        require(apiKey.isNotBlank()) { "Gemini API key is missing." }
+        error("Android Context is required to verify online AI consent before model discovery.")
+    }
+
     suspend fun resolveModel(context: Context, apiKey: String): String {
         `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         val cacheKey = credentialFingerprint(apiKey)
@@ -118,6 +124,10 @@ object GeminiTextClient {
             return "models/gemini-3.8-flash"
         }
     }
+
+    @Deprecated("Pass Android Context so online AI consent can be checked.")
+    fun reply(apiKey: String, systemInstruction: String, history: List<ChatTurn>): ChatReplyResult =
+        ChatReplyResult.Error("Android Context is required to verify online AI consent. No provider request was sent.")
 
     fun reply(
         context: Context,
