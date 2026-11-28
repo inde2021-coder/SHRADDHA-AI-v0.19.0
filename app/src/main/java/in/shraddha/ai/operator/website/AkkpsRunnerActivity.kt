@@ -180,17 +180,26 @@ class AkkpsRunnerActivity : Activity() {
         actions.addView(action("Farmer Card OCR") { chooseFarmerCardImage() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.addView(action("Fill + Submit") { executeCommand() }, LinearLayout.LayoutParams(0, dp(44), 1f))
         root.addView(actions)
-        val modules = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val moduleRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(
+            "Home" to "/runner",
             "Farmers" to "/runner/farmers",
             "Plots" to "/runner/plots",
             "AWD Reports" to "/runner/awd-reports",
-            "Data Sync" to "/runner/sync"
+            "Data Sync" to "/runner/sync",
+            "Profile" to "/runner/profile"
         ).forEach { item ->
-            modules.addView(action(item.first) { web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + item.second) },
-                LinearLayout.LayoutParams(0, dp(42), 1f))
+            moduleRow.addView(action(item.first) {
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + item.second)
+            }, LinearLayout.LayoutParams(dp(132), dp(42)).apply {
+                marginEnd = dp(6)
+            })
         }
-        root.addView(modules)
+        val moduleScroller = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(moduleRow)
+        }
+        root.addView(moduleScroller, LinearLayout.LayoutParams(-1, dp(46)))
         plotIdInput = EditText(this).apply {
             hint = "AKKPS Plot ID (जैसे PLOT-123)"
             setSingleLine(true); setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
