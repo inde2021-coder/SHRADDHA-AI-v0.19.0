@@ -50,7 +50,7 @@ class AkkpsBrowserWindow:
         batch.pack(fill="x", pady=(0, 8))
         self.batch_values = tk.Text(batch, height=4, wrap="word")
         self.batch_values.pack(fill="x", expand=True)
-        self.batch_values.insert("1.0", '{\n  "Farmer Name": "Example Name",\n  "Phone Number": "0000000000"\n}')
+        self.batch_values.insert("1.0", "{\n  \"Exact visible field label\": \"Your verified value\"\n}")
         batch_actions = ttk.Frame(batch); batch_actions.pack(fill="x", pady=(5, 0))
         ttk.Button(batch_actions, text="Preview All Fields", command=self.preview_batch).pack(side="left")
         ttk.Button(batch_actions, text="Fill Reviewed Batch", command=self.fill_batch).pack(side="left", padx=6)
