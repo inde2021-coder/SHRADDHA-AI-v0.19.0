@@ -106,6 +106,25 @@ class CommandExecutionJournalInstrumentedTest {
             requireNotNull(restarted.get(active.id)).steps.single().state)
     }
 
+    @Test fun exhaustedVerifiedFailuresArePrunedSoJournalDoesNotFillPermanently() {
+        repeat(105) { index ->
+            val created = requireNotNull(journal.createPlan(
+                "verified failure task $index",
+                listOf(CommandTaskStep("step-1", "files", "read"))
+            ))
+            assertNotNull(journal.markRunning(created.id, "step-1", maxAttempts = 2))
+            assertNotNull(journal.finish(created.id, "step-1", CommandStepState.FAILED, "verified_no_side_effect"))
+            assertNotNull(journal.markRunning(created.id, "step-1", maxAttempts = 2))
+            assertNotNull(journal.finish(created.id, "step-1", CommandStepState.FAILED, "verified_no_side_effect"))
+        }
+
+        val next = journal.createPlan(
+            "fresh independent task after old failures",
+            listOf(CommandTaskStep("step-1", "files", "read"))
+        )
+        assertNotNull("Exhausted, verified failures must not permanently fill the bounded journal.", next)
+    }
+
     @Test fun malformedJournalEntryBlocksRecovery() {
         assertTrue(EncryptedFeatureStore(context).put(journalKey, """[{"id":"invalid"}]""").isSuccess)
         assertFalse(CommandExecutionJournal(context).recoverInterruptedSteps())
