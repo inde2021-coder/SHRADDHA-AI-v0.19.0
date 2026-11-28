@@ -1236,11 +1236,12 @@ class AkkpsRunnerActivity : Activity() {
 
     /** Reports only post-reload map/layer evidence; it never equates a vector hint with polygon identity. */
     private fun verifyReopenedBoundaryMap(loadedUrl: String) {
+        if (!pendingBoundaryReopenAfterLoad) return
+        pendingBoundaryReopenAfterLoad = false
         val recordId = pendingBoundaryReopenRecordId ?: return
         val plotId = pendingBoundaryReopenPlotId ?: return
-        if (!pendingBoundaryReopenAfterLoad || loadedUrl != pendingBoundaryReopenUrl ||
-            !plotRouteMatches(plotId) || AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
-            pendingBoundaryReopenAfterLoad = false
+        if (loadedUrl != pendingBoundaryReopenUrl || !plotRouteMatches(plotId) ||
+            AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
             status.text = "AKKPS Plot page अपेक्षित route पर reopen नहीं हुआ; boundary persistence अभी verify नहीं है।"
             return
         }
@@ -1264,7 +1265,6 @@ class AkkpsRunnerActivity : Activity() {
             })()
         """.trimIndent()
         web.evaluateJavascript(script) { raw ->
-            pendingBoundaryReopenAfterLoad = false
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             val mapCount = result?.optInt("mapCount", -1) ?: -1
             val layerHints = result?.optInt("layerHints", 0) ?: 0
