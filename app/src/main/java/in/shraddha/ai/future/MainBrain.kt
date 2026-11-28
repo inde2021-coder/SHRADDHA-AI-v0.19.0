@@ -77,6 +77,16 @@ class MainBrain(
             }
 
             val commandJournal = `in`.shraddha.ai.operator.CommandExecutionJournal(context.applicationContext)
+            val unresolved = runCatching { commandJournal.hasUnresolvedSideEffects() }.getOrElse {
+                return JSONObject().put("status", "blocked")
+                    .put("action", "command_journal_unavailable")
+                    .put("message", "सुरक्षित command history पढ़ी नहीं जा सकी। कोई नया action शुरू नहीं किया गया।")
+            }
+            if (unresolved) {
+                return JSONObject().put("status", "blocked")
+                    .put("action", "previous_action_needs_review")
+                    .put("message", "पिछली device/online action की स्थिति अभी पक्की नहीं है। Target app में उसकी जाँच और सुरक्षित reconciliation होने तक कोई नया external action शुरू नहीं होगा।")
+            }
             val plan = runCatching {
                 commandJournal.createPlan(
                     toolName + ":" + args.toString(),
