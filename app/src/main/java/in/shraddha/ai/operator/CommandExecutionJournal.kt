@@ -168,15 +168,23 @@ class CommandExecutionJournal(context: Context) {
     }
 
     private fun persist(plan: CommandTaskPlan): Boolean {
-        val all = loadAll().filterNot { it.id == plan.id }.toMutableList().apply { add(plan) }
-            .sortedByDescending { it.createdAt }.take(MAX_PLANS).toMutableList()
+        val combined = loadAll().filterNot { it.id == plan.id } + plan
+        // Never evict a non-terminal plan: a RUNNING/UNCERTAIN/PENDING/FAILED record
+        // may represent an external side effect that still needs recovery or reconciliation.
+        val protected = combined.filterNot { it.isTerminal }
+        if (protected.size > MAX_PLANS) return false
+        val terminal = combined.filter { it.isTerminal }.sortedByDescending { it.createdAt }
+        val all = (protected + terminal.take(MAX_PLANS - protected.size))
+            .sortedByDescending { it.createdAt }.toMutableList()
         if (all.none { it.id == plan.id }) return false
         var encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
-        while (all.size > 1 && encoded.length > MAX_STORAGE_CHARS) {
-            all.removeAt(all.lastIndex)
+        while (encoded.length > MAX_STORAGE_CHARS) {
+            val oldestTerminalIndex = all.indexOfLast { it.isTerminal }
+            if (oldestTerminalIndex < 0) return false
+            all.removeAt(oldestTerminalIndex)
             encoded = JSONArray().apply { all.forEach { put(encode(it)) } }.toString()
         }
-        if (all.none { it.id == plan.id } || encoded.length > MAX_STORAGE_CHARS) return false
+        if (all.none { it.id == plan.id }) return false
         // Synchronous commit makes each state transition durable before the caller proceeds.
         return prefs.edit().putString(KEY_PLANS, encoded).commit()
     }
