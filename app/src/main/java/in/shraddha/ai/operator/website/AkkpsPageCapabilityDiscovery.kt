@@ -15,7 +15,8 @@ object AkkpsPageCapabilityDiscovery {
         actionLabels: List<String>,
         navigationLabels: List<String>,
         isCreateRoute: Boolean = false,
-        isDetailRoute: Boolean = false
+        isDetailRoute: Boolean = false,
+        supportedDataEntryModule: Boolean = false
     ): List<WebsiteCapability> {
         require(formCount >= 0 && tableCount >= 0)
         val all = (fieldLabels + actionLabels + navigationLabels).map {
@@ -25,9 +26,12 @@ object AkkpsPageCapabilityDiscovery {
         val types = fieldTypes.map { it.lowercase(Locale.ROOT).trim() }
         fun evidence(pattern: Regex): String? = all.firstOrNull { pattern.containsMatchIn(it) }
         fun actionEvidence(pattern: Regex): String? = actions.firstOrNull { pattern.containsMatchIn(it) }
-        fun capability(operation: WebsiteOperation, found: String?): WebsiteCapability {
+        fun capability(operation: WebsiteOperation, found: String?, needsKnownDataEntryModule: Boolean = false): WebsiteCapability {
             if (!AkkpsWebsiteProfile.isRunnerOperationAllowed(operation)) {
                 return WebsiteCapability(operation, CapabilityState.UNAVAILABLE, "Blocked by AKKPS Runner data-entry scope")
+            }
+            if (needsKnownDataEntryModule && !supportedDataEntryModule) {
+                return WebsiteCapability(operation, CapabilityState.UNKNOWN, "Module observed; data-entry adapter has not been verified for this module")
             }
             return WebsiteCapability(
                 operation,
@@ -61,13 +65,13 @@ object AkkpsPageCapabilityDiscovery {
             WebsiteCapability(WebsiteOperation.NAVIGATE,
                 if (navigationLabels.isNotEmpty()) CapabilityState.AVAILABLE else CapabilityState.UNKNOWN,
                 if (navigationLabels.isNotEmpty()) "Observed Runner navigation links" else ""),
-            capability(WebsiteOperation.SEARCH_RECORDS, search),
-            capability(WebsiteOperation.VIEW_RECORD, view),
-            capability(WebsiteOperation.CREATE_RECORD, create),
-            capability(WebsiteOperation.UPDATE_RECORD, update),
-            capability(WebsiteOperation.SAVE_RECORD, save),
-            capability(WebsiteOperation.SUBMIT_FORM, submit),
-            capability(WebsiteOperation.UPLOAD_DOCUMENT, upload),
+            capability(WebsiteOperation.SEARCH_RECORDS, search, needsKnownDataEntryModule = true),
+            capability(WebsiteOperation.VIEW_RECORD, view, needsKnownDataEntryModule = true),
+            capability(WebsiteOperation.CREATE_RECORD, create, needsKnownDataEntryModule = true),
+            capability(WebsiteOperation.UPDATE_RECORD, update, needsKnownDataEntryModule = true),
+            capability(WebsiteOperation.SAVE_RECORD, save, needsKnownDataEntryModule = true),
+            capability(WebsiteOperation.SUBMIT_FORM, submit, needsKnownDataEntryModule = true),
+            capability(WebsiteOperation.UPLOAD_DOCUMENT, upload, needsKnownDataEntryModule = true),
             capability(WebsiteOperation.DOWNLOAD_DOCUMENT, download),
             capability(WebsiteOperation.EXPORT_REPORT, export),
             capability(WebsiteOperation.DELETE_RECORD, delete),
