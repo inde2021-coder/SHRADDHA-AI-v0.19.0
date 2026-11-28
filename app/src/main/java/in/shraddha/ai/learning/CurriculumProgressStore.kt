@@ -148,8 +148,8 @@ class CurriculumProgressStore(context: Context) {
         val parts = reference.split('.')
         val chapter = parts.getOrNull(0)?.toIntOrNull()
         val verse = parts.getOrNull(1)?.toIntOrNull()
-        require(parts.size == 2 && chapter in 1..18 &&
-            verse in 1..GITA_CHAPTER_VERSE_COUNTS[(chapter ?: 1) - 1]) {
+        require(parts.size == 2 && chapter != null && verse != null && chapter in 1..18 &&
+            verse in 1..GITA_CHAPTER_VERSE_COUNTS[chapter - 1]) {
             "Verse reference is outside the canonical 700-verse chapter sequence."
         }
         val state = readState()
