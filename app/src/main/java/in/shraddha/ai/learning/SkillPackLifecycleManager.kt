@@ -234,7 +234,7 @@ class SkillPackLifecycleManager(context: Context) {
             throw IllegalStateException("Could not move pack provenance metadata; pack remains quarantined.")
         }
         metadata.put("stage", "ACTIVE")
-        targetMetadata.writeText(metadata.toString(), Charsets.UTF_8)
+        writeMetadata(target, metadata)
         val stateJson = readState()
         val entry = JSONObject().apply {
             put("current", pack.version)
@@ -318,7 +318,19 @@ class SkillPackLifecycleManager(context: Context) {
         }.getOrDefault(false)
     }
     private fun writeMetadata(content: File, metadata: JSONObject) {
-        File(content.parentFile, content.name + ".json").writeText(metadata.toString(), Charsets.UTF_8)
+        val target = File(content.parentFile, content.name + ".json")
+        val temp = File(content.parentFile, content.name + ".json.tmp")
+        val bytes = metadata.toString().toByteArray(Charsets.UTF_8)
+        try {
+            FileOutputStream(temp).use { output ->
+                output.write(bytes)
+                output.fd.sync()
+            }
+            check(temp.renameTo(target)) { "Could not commit Skill Factory provenance metadata." }
+        } finally {
+            temp.delete()
+            bytes.fill(0)
+        }
     }
 
     private fun readState(): JSONObject {
