@@ -17,6 +17,7 @@ ALLOWED_HOSTS = {"www.akkps.ngo", "akkps.ngo"}
 DEFAULT_HOME = "https://www.akkps.ngo"
 RUNNER_PATH = "/runner"
 SENSITIVE_TYPES = {"password", "hidden", "file"}
+UNFILLABLE_TYPES = {"button", "submit", "reset", "image"}
 SENSITIVE_LABEL = re.compile(r"password|passcode|otp|one.?time|pin|captcha|verification|पासवर्ड|ओटीपी|पिन", re.I)
 
 
@@ -145,7 +146,7 @@ class AkkpsBrowserOperator:
             kind = (item.get("type") or "").lower()
             label = item.get("label") or ""
             # Never expose credential, OTP, hidden, file or CAPTCHA controls.
-            if kind in SENSITIVE_TYPES or SENSITIVE_LABEL.search(label):
+            if kind in SENSITIVE_TYPES or kind in UNFILLABLE_TYPES or SENSITIVE_LABEL.search(label):
                 continue
             safe_fields.append(FieldInfo(
                 label=label, name=item.get("name", ""), input_type=kind,
@@ -178,16 +179,19 @@ class AkkpsBrowserOperator:
             matches = self.page.locator(
                 'input[name="' + label.replace('"', '\\"') + '"],'
                 'select[name="' + label.replace('"', '\\"') + '"],'
-                'textarea[name="' + label.replace('"', '\\"') + '"]'
+                'textarea[name="' + label.replace('"', '\\"') + '"],'
+                'input[id="' + label.replace('"', '\\"') + '"],'
+                'select[id="' + label.replace('"', '\\"') + '"],'
+                'textarea[id="' + label.replace('"', '\\"') + '"]'
             )
             count = matches.count()
         if count != 1:
             raise RuntimeError(f"Expected exactly one field labelled {label!r}; found {count}.")
         field = matches.first
-        if not field.is_visible() or not field.is_enabled():
-            raise RuntimeError("The target field is hidden or disabled.")
+        if not field.is_visible() or not field.is_enabled() or field.get_attribute("readonly") is not None:
+            raise RuntimeError("The target field is hidden, disabled or read-only.")
         field_type = (field.get_attribute("type") or "").lower()
-        if field_type in SENSITIVE_TYPES or SENSITIVE_LABEL.search(label):
+        if field_type in SENSITIVE_TYPES or field_type in UNFILLABLE_TYPES or SENSITIVE_LABEL.search(label):
             raise RuntimeError("Credential, OTP, hidden and file fields cannot be auto-filled.")
         tag = field.evaluate("(e) => e.tagName.toLowerCase()")
         if tag == "select":
