@@ -178,6 +178,7 @@ class AkkpsBrowserOperator:
         self._playwright = None
         self._context = None
         self._page = None
+        self._last_repeater_snapshot = None
 
     @property
     def page(self):
@@ -566,9 +567,79 @@ class AkkpsBrowserOperator:
         after = form.locator("input,select,textarea").count()
         if after <= before:
             raise RuntimeError("No new visible form fields appeared; row addition was not verified.")
+        self._last_repeater_snapshot = {
+            "section": section_label, "url": self.page.url, "baseline_field_count": before
+        }
         return {"section": section_label, "fields_before": before, "fields_after": after,
                 "row_added": True, "submitted": False,
-                "next_step": "Inspect the new row and enter only user-confirmed values."}
+                "next_step": "Review and fill the newest row with explicit values."}
+
+    def _plan_latest_repeated_entry(self, values: dict[str, str]):
+        snapshot = self._last_repeater_snapshot
+        if not snapshot or snapshot.get("url") != self.page.url:
+            raise RuntimeError("Add a new AWD row on this page before filling a repeated entry.")
+        if not urlparse(self.page.url).path.casefold().startswith("/runner/awd-reports"):
+            raise RuntimeError("Repeated AWD entries are available only on AWD Reports pages.")
+        if not isinstance(values, dict) or not values or len(values) > 30:
+            raise ValueError("Provide 1–30 exact field-label/value pairs for the newest row.")
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible AWD form.")
+        form = forms.first
+        fields = form.locator("input,select,textarea")
+        baseline = int(snapshot["baseline_field_count"])
+        if fields.count() <= baseline:
+            raise RuntimeError("The new AWD row is no longer present.")
+        planned = []
+        for label, value in values.items():
+            label = " ".join(str(label or "").split())
+            if not label or not isinstance(value, str) or len(value) > 2000 or SENSITIVE_LABEL.search(label):
+                raise ValueError("Every repeated-row field needs a safe exact label and text value.")
+            matches = form.get_by_label(label, exact=True)
+            if matches.count() == 0:
+                matches = form.get_by_placeholder(label, exact=True)
+            candidates = []
+            for index in range(matches.count()):
+                candidate = matches.nth(index)
+                position = candidate.evaluate("(e) => [...e.form.querySelectorAll('input,select,textarea')].indexOf(e)")
+                if position >= baseline:
+                    candidates.append(candidate)
+            if len(candidates) != 1:
+                raise RuntimeError(f"New-row field {label!r} is missing or ambiguous.")
+            field = candidates[0]
+            kind = (field.get_attribute("type") or "").casefold()
+            tag = field.evaluate("(e) => e.tagName.toLowerCase()")
+            if not field.is_visible() or not field.is_enabled() or field.get_attribute("readonly") is not None:
+                raise RuntimeError(f"New-row field {label!r} is not editable.")
+            if kind in SENSITIVE_TYPES | UNFILLABLE_TYPES | {"checkbox", "radio"} or field.get_attribute("multiple") is not None:
+                raise RuntimeError(f"New-row field {label!r} needs a separate safe handler.")
+            if tag == "select":
+                options = [" ".join(x.split()) for x in field.locator("option").all_text_contents()]
+                if value not in options:
+                    raise RuntimeError(f"{value!r} is not an exact option for {label!r}.")
+            planned.append((label, value, field))
+        return {"section": snapshot["section"], "changes": [
+            {"field": label, "value": value} for label, value, _ in planned
+        ], "submitted": False, "requires_confirmation": True}, planned
+
+    def preview_latest_repeated_entry(self, values: dict[str, str]):
+        preview, _ = self._plan_latest_repeated_entry(values)
+        return preview
+
+    def fill_latest_repeated_entry(self, values: dict[str, str]):
+        """Fill only fields added after the last confirmed AWD row-add action."""
+        preview, planned = self._plan_latest_repeated_entry(values)
+        validate_runner_url(self.page.url)
+        filled = []
+        for label, value, field in planned:
+            if field.evaluate("(e) => e.tagName.toLowerCase()") == "select":
+                field.select_option(label=value)
+            else:
+                field.fill(value)
+            filled.append(label)
+        self._last_repeater_snapshot = None
+        return {"section": preview["section"], "filled_fields": filled,
+                "submitted": False, "requires_separate_submit_confirmation": True}
 
     def choose_autocomplete_option(self, field_label: str, query: str, exact_option: str):
         """Choose one exact visible autocomplete suggestion after a user-reviewed query."""
