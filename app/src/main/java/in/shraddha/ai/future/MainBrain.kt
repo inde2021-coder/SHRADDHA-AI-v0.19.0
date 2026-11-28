@@ -100,8 +100,10 @@ class MainBrain(
                     "success", "queued" -> `in`.shraddha.ai.operator.CommandStepState.SUCCEEDED
                     "needs_user_action", "confirmation_required", "needs_clarification" ->
                         `in`.shraddha.ai.operator.CommandStepState.BLOCKED
-                    "error", "failed" -> `in`.shraddha.ai.operator.CommandStepState.FAILED
-                    "verification_pending" -> `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN
+                    // A tool-level error can occur after a remote/device side effect has begun.
+                    // Keep it non-retryable until an adapter proves that nothing was dispatched.
+                    "error", "failed", "verification_pending" ->
+                        `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN
                     else -> `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN
                 }
                 val saved = safeFinish(state, result.optString("action", status))
