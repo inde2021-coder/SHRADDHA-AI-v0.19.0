@@ -266,8 +266,9 @@ class AkkpsBrowserOperator:
             ) if label
         ))
         safe_forms = tuple(
-            tuple(label for label in (_safe_action_label(x) for x in form) if label)
-            for form in data.get("forms", ())
+            (f"Form {index + 1} ({max(0, min(int(form.get('fieldCount', 0)), 200))} fields)",)
+            for index, form in enumerate(data.get("forms", ())[:20])
+            if isinstance(form, dict)
         )
         return PageInventory(
             url=safe_url, title=safe_title,
