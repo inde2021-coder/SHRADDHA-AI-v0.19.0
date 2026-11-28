@@ -22,6 +22,7 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.link.DeviceLinkManager
+import `in`.shraddha.ai.future.OnlineAiConsent
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -64,7 +65,7 @@ class LiveEyesCameraService : Service() {
         val assistantName = assistantName()
         startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
         val cloudEnabled = getSharedPreferences(AMBIENT_PREFS, Context.MODE_PRIVATE)
-            .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false)
+            .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false) && OnlineAiConsent.isAllowed(this)
         val config = VoiceGatewaySettings.get(this)
         val backendReady = config.readError == null && config.baseUrl.startsWith("https://") && config.gatewayToken.isNotBlank()
         // A missing cloud gateway must never disable the local-first camera path.
