@@ -45,7 +45,7 @@ class AkkpsPerimeterTrack(
             "सीमा का शुरुआती सिरा अभी ${closure.roundToInt()} मीटर दूर है। बाहर से लौटें; फसल के अंदर न जाएँ।"
         }
         val ring = accepted.dropLast(1)
-        AkkpsBoundaryGeometry.measure(ring)
+        AkkpsBoundaryGeometry.validate(ring)?.let { error(it) }
         return ring
     }
 
