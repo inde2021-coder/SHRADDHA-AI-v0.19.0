@@ -53,6 +53,27 @@ class CommandExecutionJournalInstrumentedTest {
         assertNull(restarted.markRunning(created.id, "step-1"))
     }
 
+    @Test fun corruptedJournalBlocksStartupRecoveryInsteadOfSilentlyDroppingPlans() {
+        val prefs = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
+        assertTrue(prefs.edit().putString("plans_v1", "{broken-json").commit())
+
+        val restarted = CommandExecutionJournal(context)
+        assertFalse(restarted.recoverInterruptedSteps())
+        var blocked = false
+        try {
+            restarted.createPlan("new command", listOf(CommandTaskStep("step-2", "files", "upload")))
+        } catch (_: IllegalStateException) {
+            blocked = true
+        }
+        assertTrue("Corrupted durable state must not be treated as an empty journal.", blocked)
+    }
+
+    @Test fun malformedJournalEntryBlocksRecovery() {
+        val prefs = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
+        assertTrue(prefs.edit().putString("plans_v1", """[{"id":"invalid"}]""").commit())
+        assertFalse(CommandExecutionJournal(context).recoverInterruptedSteps())
+    }
+
     @Test fun deduplicationDoesNotReuseAPlanWithDifferentActions() {
         val first = requireNotNull(plan())
         val incompatible = journal.createPlan(
