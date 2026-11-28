@@ -105,6 +105,14 @@ object AkkpsRunnerPageWorkflowPolicy {
             Regex("^(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)\\s+(?:agreement|सहमति पत्र|समझौता)$") to "Agreement",
             Regex("^(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)\\s+(?:signature|हस्ताक्षर)$") to "Signature"
         )
-        return patterns.singleOrNull { it.first.matches(value) }?.second
+        val suffixPatterns = listOf(
+            Regex("^(?:field photo|खेत की फोटो)\\s+(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)$") to "Field Photos",
+            Regex("^(?:farmer photo|किसान की फोटो)\\s+(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)$") to "Farmer Photo",
+            Regex("^(?:aadhaar|identity document|पहचान दस्तावेज़|आधार दस्तावेज़)\\s+(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)$") to "Identity Document",
+            Regex("^(?:land deed|land document|भूमि दस्तावेज़)\\s+(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)$") to "Land Deed",
+            Regex("^(?:agreement|सहमति पत्र|समझौता)\\s+(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)$") to "Agreement",
+            Regex("^(?:signature|हस्ताक्षर)\\s+(?:attach|add|upload|लगाओ|संलग्न करें|जोड़ें)$") to "Signature"
+        )
+        return (patterns + suffixPatterns).singleOrNull { it.first.matches(value) }?.second
     }
 }
