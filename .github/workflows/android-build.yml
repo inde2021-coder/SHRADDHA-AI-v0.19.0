@@ -34,7 +34,7 @@ jobs:
     env:
       ANDROID_I_WANT_MY_TCG: "yes"
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v6
