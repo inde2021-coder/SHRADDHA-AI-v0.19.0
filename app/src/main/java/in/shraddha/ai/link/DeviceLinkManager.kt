@@ -42,6 +42,16 @@ object DeviceLinkManager {
         }
     }
 
+    /** Consent persistence and request cancellation share the enqueue lock to close revocation races. */
+    fun updateOnlineAiConsent(context: Context, enabled: Boolean): Boolean = synchronized(aiCallLock) {
+        val saved = `in`.shraddha.ai.future.OnlineAiConsent.setAllowed(context.applicationContext, enabled)
+        if (saved && !enabled) {
+            activeAiCalls.toList().forEach { call -> runCatching { call.cancel() } }
+            activeAiCalls.clear()
+        }
+        saved
+    }
+
     /** Consent is rechecked under the same lock used by cancellation immediately before enqueue. */
     private fun enqueueOnlineAiCall(
         call: Call,
