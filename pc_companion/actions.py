@@ -166,7 +166,7 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
         if kind == "ocr":
             message = ocr_reader() if ocr_reader else read_active_window_ocr(pyautogui)
             return True, str(message)[:12000]
-        if kind in {"akkps_open", "akkps_runner", "akkps_inspect"}:
+        if kind in {"akkps_open", "akkps_runner", "akkps_inspect", "akkps_module"}:
             if not akkps_handler:
                 return False, "AKKPS browser operator is unavailable. Install the bundled Playwright runtime."
             return True, str(akkps_handler(kind, action.get("module")))[:12000]
