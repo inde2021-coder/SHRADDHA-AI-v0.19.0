@@ -89,4 +89,22 @@ class UniversalVisibleTaskPlannerTest {
         assertTrue(result.steps[2].requiresRuntimeTargetResolution)
     }
 
+    @Test fun rejectsTrailingContentAfterAValidPlan() {
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Search"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(
+                valid + " unexpected", "press Search", snapshot
+            ).error
+        )
+    }
+
+    @Test fun acceptsWhitespaceAfterAValidPlan() {
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Search"}]}"""
+        assertNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(
+                valid + "   \n\t", "press Search", snapshot
+            ).error
+        )
+    }
+
 }
