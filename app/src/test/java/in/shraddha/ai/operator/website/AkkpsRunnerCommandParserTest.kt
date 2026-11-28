@@ -30,6 +30,10 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(inline.issues.toString(), inline.issues.isEmpty())
         assertEquals(listOf("farmerName", "village"), inline.assignments.map { it.first })
 
+        val createNew = AkkpsRunnerCommandParser.parse("create new farmer; Farmer Name=Ram; Village=Rampur")
+        assertTrue(createNew.issues.toString(), createNew.issues.isEmpty())
+        assertEquals(listOf("farmerName", "village"), createNew.assignments.map { it.first })
+
         val separate = AkkpsRunnerCommandParser.parse("new farmer; Farmer Name=Ram Kumar; Village=Rampur")
         assertTrue(separate.issues.toString(), separate.issues.isEmpty())
         assertEquals(listOf("farmerName", "village"), separate.assignments.map { it.first })
