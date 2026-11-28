@@ -46,6 +46,16 @@ class AkkpsBrowserWindow:
         ttk.Button(form, text="Fill Exact Field", command=self.fill_field).grid(row=0, column=5, padx=4)
         ttk.Button(form, text="Submit Record…", command=self.submit).grid(row=0, column=6, padx=4)
         form.columnconfigure(1, weight=1); form.columnconfigure(3, weight=1)
+        batch = ttk.LabelFrame(root, text="Batch field entry (JSON: exact visible label → value)", padding=8)
+        batch.pack(fill="x", pady=(0, 8))
+        self.batch_values = tk.Text(batch, height=4, wrap="word")
+        self.batch_values.pack(fill="x", expand=True)
+        self.batch_values.insert("1.0", '{\n  "Farmer Name": "Example Name",\n  "Phone Number": "0000000000"\n}')
+        batch_actions = ttk.Frame(batch); batch_actions.pack(fill="x", pady=(5, 0))
+        ttk.Button(batch_actions, text="Preview All Fields", command=self.preview_batch).pack(side="left")
+        ttk.Button(batch_actions, text="Fill Reviewed Batch", command=self.fill_batch).pack(side="left", padx=6)
+        ttk.Label(batch, text="Only exact visible text/select fields are supported. Review every value; this never submits the record.",
+                  wraplength=700).pack(anchor="w", pady=(4, 0))
         self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
         self.output.insert("end", "Open login → sign in manually → open Runner → inspect modules.\n")
         self.output.configure(state="disabled")
@@ -106,6 +116,42 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("Field entry rejected", str(exc), parent=self.window)
+
+    def _batch_payload(self):
+        try:
+            values = json.loads(self.batch_values.get("1.0", "end").strip())
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Batch JSON is invalid: {exc.msg}") from exc
+        if not isinstance(values, dict) or not values or any(
+            not isinstance(k, str) or not isinstance(v, str) for k, v in values.items()
+        ):
+            raise ValueError("Enter a JSON object with exact field labels and text values.")
+        return values
+
+    def preview_batch(self):
+        try:
+            preview = self.operator.preview(self._batch_payload())
+            self._show(preview)
+            self.status.set("Batch preview only. No fields were changed.")
+        except Exception as exc:
+            messagebox.showerror("Batch preview rejected", str(exc), parent=self.window)
+
+    def fill_batch(self):
+        try:
+            values = self._batch_payload()
+            preview = self.operator.preview(values)
+            if not messagebox.askyesno(
+                "Confirm AKKPS batch field entry",
+                "Review all exact labels and values below. This fills fields only; it does NOT submit.\\n\\n" +
+                json.dumps(preview, ensure_ascii=False, indent=2)[:7000],
+                parent=self.window
+            ):
+                return
+            result = self.operator.fill_reviewed_fields(values)
+            self.status.set(f"{len(result['filled_fields'])} fields filled. Record NOT submitted.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Batch field entry rejected", str(exc), parent=self.window)
 
     def submit(self):
         if not messagebox.askyesno("Confirm AKKPS submission",
