@@ -1,6 +1,7 @@
 """Small Tk window for the optional AKKPS Playwright operator."""
 from __future__ import annotations
 import json
+from dataclasses import asdict
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -55,7 +56,7 @@ class AkkpsBrowserWindow:
         try:
             inventory = self.operator.start(DEFAULT_HOME)
             self.status.set("Browser opened. Sign in manually, then choose Open Runner.")
-            self._show(inventory.__dict__)
+            self._show(asdict(inventory))
         except Exception as exc:
             messagebox.showerror("AKKPS browser unavailable", str(exc), parent=self.window)
 
