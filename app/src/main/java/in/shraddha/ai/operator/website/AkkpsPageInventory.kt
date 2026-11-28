@@ -109,13 +109,16 @@ object AkkpsPageInventory {
     private fun safePath(raw: String): String {
         val path = raw.substringBefore('?').substringBefore('#').take(300)
         if (!path.startsWith("/") || path.startsWith("//")) return ""
-        return path.split('/').joinToString("/") { segment ->
+        val segments = path.split('/')
+        return segments.mapIndexed { index, segment ->
+            val previous = segments.getOrNull(index - 1)?.lowercase().orEmpty()
             when {
                 segment.isBlank() -> ""
+                previous in setOf("farmers", "plots", "awd-reports") && segment != "new" -> ":id"
                 segment.matches(Regex("[0-9]{3,}")) -> ":id"
                 segment.matches(Regex("(?i)[0-9a-f]{8}-[0-9a-f-]{27,}")) -> ":id"
                 else -> segment.take(60)
             }
-        }
+        }.joinToString("/")
     }
 }
