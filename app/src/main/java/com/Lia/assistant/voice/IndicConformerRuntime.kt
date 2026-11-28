@@ -13,6 +13,17 @@ import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
+
+/** Preserve the last installed artifact after a process death during replacement. */
+internal fun recoverModelBackup(destination: File, backup: File) {
+    if (!backup.exists()) return
+    if (destination.exists()) {
+        check(backup.delete()) { "Could not clear a stale model backup." }
+    } else {
+        check(backup.renameTo(destination)) { "Could not restore the previous verified model." }
+    }
+}
+
 /** Optional local-only IndicConformer runtime. It never authorizes cloud fallback. */
 object IndicConformerRuntime {
     enum class Language(val code: String, val label: String) {
@@ -95,13 +106,7 @@ object IndicConformerRuntime {
         // Recover an interrupted replacement before cleaning any temporary files. If the
         // previous install moved the valid model to .bak but failed before installing the
         // new one, never delete that only remaining verified copy.
-        if (backup.exists()) {
-            if (destination.exists()) {
-                check(backup.delete()) { "Could not clear a stale model backup." }
-            } else {
-                check(backup.renameTo(destination)) { "Could not restore the previous verified model." }
-            }
-        }
+        recoverModelBackup(destination, backup)
         check(!partial.exists() || partial.delete()) { "Could not clear an interrupted model download." }
         try {
             val request = Request.Builder().url(url).get().header("User-Agent", "ShraddhaAI-Offline-ASR").build()
