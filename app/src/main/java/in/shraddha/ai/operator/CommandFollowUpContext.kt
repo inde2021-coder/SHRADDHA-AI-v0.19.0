@@ -94,3 +94,17 @@ class CommandFollowUpContext(
         )
     }
 }
+
+
+/** Shared process-local context used by Android command adapters. */
+object CommandFollowUpContextRuntime {
+    private val context = CommandFollowUpContext()
+
+    fun remember(type: CommandReferenceType, stableId: String, displayLabel: String): Boolean =
+        context.rememberExplicitSelection(type, stableId, displayLabel)
+
+    fun resolve(command: String, expectedType: CommandReferenceType): CommandReferenceResolution =
+        context.resolve(command, expectedType)
+
+    fun clear(type: CommandReferenceType? = null) = context.clear(type)
+}
