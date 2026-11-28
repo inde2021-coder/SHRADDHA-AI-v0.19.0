@@ -981,18 +981,20 @@ class AkkpsRunnerActivity : Activity() {
     private fun fillValues(values: List<Pair<String, String>>, wantsSubmit: Boolean, blockedSubmitReason: String? = null) {
         // Reuse only previously server-verified administrative defaults; never store farmer identity.
         val commonDefaults = AkkpsLocalCommonFieldMemory.snapshot(this)
-        val aliases = listOf(
-            "district" to "District", "जिला" to "जिला",
-            "block" to "Block", "विकासखंड" to "विकासखंड", "विकास खंड" to "विकास खंड",
-            "tehsil" to "Tehsil", "तहसील" to "तहसील"
+        val commonFieldAliases = listOf(
+            listOf("district", "जिला") to "District",
+            listOf("block", "विकासखंड", "विकास खंड") to "Block",
+            listOf("tehsil", "तहसील") to "Tehsil"
         )
         val providedKeys = values.map { AkkpsLocalCommonFieldMemory.normalize(it.first) }.toSet()
-        val rememberedValues = aliases.mapNotNull { (key, label) ->
-            val normalized = AkkpsLocalCommonFieldMemory.normalize(key)
-            val value = commonDefaults.optString(normalized).takeIf { it.isNotBlank() }
-            if (value != null && normalized !in providedKeys) label to value else null
+        val rememberedValues = commonFieldAliases.mapNotNull { (aliases, label) ->
+            val normalizedAliases = aliases.map(AkkpsLocalCommonFieldMemory::normalize)
+            val value = normalizedAliases.firstNotNullOfOrNull { key ->
+                commonDefaults.optString(key).takeIf { it.isNotBlank() }
+            }
+            if (value != null && normalizedAliases.none { it in providedKeys }) label to value else null
         }
-        val effectiveValues = values + rememberedValues.distinctBy { AkkpsLocalCommonFieldMemory.normalize(it.first) }
+        val effectiveValues = values + rememberedValues
         val payload = JSONArray()
         effectiveValues.forEach { payload.put(JSONObject().put("key", it.first).put("value", it.second)) }
         val js = """
