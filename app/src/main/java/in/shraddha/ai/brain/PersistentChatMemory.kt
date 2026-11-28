@@ -19,14 +19,24 @@ object PersistentChatMemory {
             .getBoolean(ENABLED_KEY, false)
 
     fun setEnabled(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(ENABLED_KEY, enabled).apply()
+        synchronized(lock) {
+            check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(ENABLED_KEY, enabled).commit()) {
+                "Could not save conversation-memory consent."
+            }
+            // Revoking consent also removes the retained recap; hiding it is not deletion.
+            if (!enabled) {
+                check(SecureMemoryVault(context.applicationContext).clear()) {
+                    "Conversation memory could not be cleared after consent was revoked."
+                }
+            }
+        }
     }
 
     fun recap(context: Context): String? {
         if (!isEnabled(context)) return null
         return SecureMemoryVault(context.applicationContext).load()
-            .getOrNull()?.takeIf { it.isNotBlank() }
+            .getOrThrow().takeIf { it.isNotBlank() }
     }
 
     fun record(context: Context, role: String, text: String): Result<Unit> = runCatching {
@@ -35,7 +45,8 @@ object PersistentChatMemory {
         if (safeText.isEmpty() || !isEnabled(context)) return@runCatching
         synchronized(lock) {
             val vault = SecureMemoryVault(context.applicationContext)
-            val existing = vault.load().getOrElse { "" }
+            // Never overwrite unreadable/corrupt encrypted data with a fresh recap.
+            val existing = vault.load().getOrThrow()
             vault.save(mergeRecap(existing, role, safeText)).getOrThrow()
         }
     }
@@ -47,12 +58,15 @@ object PersistentChatMemory {
     }
 
     fun restore(context: Context, recap: String): Result<Unit> = runCatching {
-        require(isEnabled(context)) { "Turn on Encrypted Conversation Memory before restoring a recap." }
-        val safe = recap.trim()
-        require(safe.isNotEmpty() && safe.length <= 12_000) { "Restored recap must contain 1–12,000 characters." }
-        SecureMemoryVault(context.applicationContext).save(safe).getOrThrow()
+        synchronized(lock) {
+            require(isEnabled(context)) { "Turn on Encrypted Conversation Memory before restoring a recap." }
+            val safe = recap.trim()
+            require(safe.isNotEmpty() && safe.length <= 12_000) { "Restored recap must contain 1–12,000 characters." }
+            SecureMemoryVault(context.applicationContext).save(safe).getOrThrow()
+        }
     }
 
-    fun clear(context: Context): Boolean =
+    fun clear(context: Context): Boolean = synchronized(lock) {
         SecureMemoryVault(context.applicationContext).clear()
+    }
 }
