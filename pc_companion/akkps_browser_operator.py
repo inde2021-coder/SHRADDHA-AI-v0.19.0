@@ -720,6 +720,59 @@ class AkkpsBrowserOperator:
         return {"field": label, "file_attached": True, "file_count": count,
                 "upload_submitted": False, "record_submitted": False}
 
+    def upload_attached_document_after_confirmation(self, upload_button_label: str):
+        """Click one explicit non-submit Upload control and verify its same-origin response."""
+        label = " ".join(str(upload_button_label or "").split())
+        if not label or len(label) > 80 or SENSITIVE_LABEL.search(label):
+            raise ValueError("An exact visible Upload button label is required.")
+        validate_runner_url(self.page.url)
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible document form.")
+        files = forms.first.locator('input[type="file"]')
+        selected = 0
+        for index in range(files.count()):
+            selected += int(files.nth(index).evaluate("(e) => e.files ? e.files.length : 0"))
+        if selected < 1:
+            raise RuntimeError("Choose and review a document before uploading.")
+        button = forms.first.get_by_role("button", name=label, exact=True)
+        if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
+            raise RuntimeError("Exact Upload control is missing, ambiguous or disabled.")
+        if (button.first.get_attribute("type") or "").casefold() != "button":
+            raise RuntimeError("Upload control may submit the whole record; refusing this action.")
+        origin = urlparse(self.page.url).netloc.casefold()
+        response = None
+        clicked = False
+        try:
+            with self.page.expect_response(
+                lambda item: (
+                    item.request.method.upper() in {"POST", "PUT"} and
+                    urlparse(item.url).netloc.casefold() == origin and
+                    bool(re.search(r"(upload|document|attachment|file)", urlparse(item.url).path, re.I))
+                ), timeout=20000
+            ) as response_info:
+                button.first.click()
+                clicked = True
+            response = response_info.value
+        except Exception:
+            return {"clicked": clicked, "upload_verified": False, "outcome": "uncertain",
+                    "automatic_retry": False, "record_submitted": False}
+        explicit_success = False
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+                explicit_success = (payload.get("success") is True or payload.get("ok") is True or
+                                    data.get("success") is True or
+                                    str(payload.get("status") or data.get("status") or "").casefold()
+                                    in {"success", "uploaded", "created", "ok"})
+        except Exception:
+            explicit_success = False
+        verified = 200 <= response.status < 300 and explicit_success
+        return {"clicked": True, "http_status": response.status,
+                "upload_verified": verified, "outcome": "verified" if verified else "uncertain",
+                "automatic_retry": False, "record_submitted": False}
+
     def inspect_map_boundary(self):
         """Inspect visible map/drawing controls without reading coordinates or changing geometry."""
         validate_runner_url(self.page.url)
