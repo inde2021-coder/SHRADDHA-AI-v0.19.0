@@ -106,6 +106,14 @@ class UniversalVisibleTaskPlannerTest {
         assertTrue(result.steps[1].action == OperatorActionType.SCROLL_BACKWARD)
     }
 
+
+    @Test fun rejectsScrollWhenNoScrollableSurfaceWasObserved() {
+        val json = """{"steps":[{"action":"SCROLL_BACKWARD"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(json, "scroll back", snapshot).error
+        )
+    }
+
     @Test fun rejectsInventedOrUnmentionedFileSelection() {
         val json = """{"steps":[{"action":"SELECT_FILE","target":"secret.pdf"}]}"""
         assertNotNull(
