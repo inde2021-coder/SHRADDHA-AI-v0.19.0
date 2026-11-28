@@ -21,8 +21,9 @@ No raw command, message body, farmer field value, contact name, phone number, co
 - `LiaApplication.onCreate()` runs the shared recovery gate before the app exposes command tools. `MainBrain.executeVoiceTool()` refuses to start a tool when the gate is closed and writes a durable one-step plan before dispatching the adapter.
 - Corrupt or undecodable journal data makes recovery fail closed; it is never treated as an empty journal. Storage pruning may remove terminal history only and must retain every non-terminal plan, or reject the new write when the protected set cannot fit.
 - UNCERTAIN is never automatically replayed. An adapter independently inspects the remote side effect and calls reconciliation.
+- Voice-tool results with `queued`, ambiguous `error`/`failed`, or missing/unknown status remain `UNCERTAIN`; queue acceptance is not proof of external completion, and a tool error may follow a partial side effect.
 - SUCCEEDED, BLOCKED and SKIPPED are terminal.
 - Repeated identical commands within a short deduplication window reuse the existing plan instead of creating a second action.
 
 ## Integration boundary
-This class provides durable plan/journal primitives. It does not itself invoke WhatsApp, Android UI, Windows, browser or AKKPS actions. Each adapter must call the journal before and after side effects and must provide independent evidence before reporting success. Wiring all adapters and recovery UI remains part of the wider Issue #131 implementation.
+The voice-tool entry point is wired through `MainBrain.executeVoiceTool()` and records a write-ahead step before calling `ActionExecutor`. The journal does not itself invoke WhatsApp, Android UI, Windows, browser or AKKPS actions. Other direct adapters and a user-facing recovery/reconciliation UI still require integration; each must provide independent evidence before an uncertain action is marked complete.
