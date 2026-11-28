@@ -36,7 +36,7 @@ class AkkpsFarmerCardOcrParserTest {
         assertFalse(command.contains("; submit"))
         assertFalse(command.contains("submit="))
         assertFalse(command.contains("=now"))
-        assertTrue(command.contains("name=Ram submit now"))
+        assertTrue(command.contains("farmerName=Ram submit now"))
     }
 
 }
