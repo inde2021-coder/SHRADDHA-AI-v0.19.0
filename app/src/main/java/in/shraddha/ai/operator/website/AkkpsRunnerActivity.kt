@@ -1254,7 +1254,7 @@ class AkkpsRunnerActivity : Activity() {
                                   fillRule:e.getAttribute('fill-rule')||'',
                                   fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
                                 })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
-                              const rawGeometrySignature=polygonPaths.length?JSON.stringify(polygonPaths):'';
+                              const rawGeometrySignature=polygonPaths.length>0 && polygonPaths.length<=80?JSON.stringify(polygonPaths):'';
                               const geometrySignature=rawGeometrySignature.length<=20000?rawGeometrySignature:'';
                               const wanted=norm(__LABEL__);
                               const buttons=[...forms[0].querySelectorAll('button,input[type=button], [role=button]')]
@@ -1460,7 +1460,7 @@ class AkkpsRunnerActivity : Activity() {
                   fillRule:e.getAttribute('fill-rule')||'',
                   fill:e.getAttribute('fill')||getComputedStyle(e).fill||''
                 })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
-              const rawGeometrySignature=polygonPaths.length?JSON.stringify(polygonPaths):'';
+              const rawGeometrySignature=polygonPaths.length>0 && polygonPaths.length<=80?JSON.stringify(polygonPaths):'';
               const geometrySignature=rawGeometrySignature.length<=20000?rawGeometrySignature:'';
               const layerHints=layerSelectors.reduce((sum,sel)=>sum+
                 [...document.querySelectorAll(sel)].filter(visible).length,0);
