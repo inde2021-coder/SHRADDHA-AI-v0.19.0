@@ -14,6 +14,7 @@ class LiaToolCatalogTest {
         val runnerTool = (0 until declarations.length()).mapNotNull { declarations.optJSONObject(it) }
             .first { it.optString("name") == "open_akkps_runner" }
         assertTrue(runnerTool.optJSONObject("parameters")?.optJSONObject("properties")?.has("command") == true)
+        assertTrue(runnerTool.optString("description").contains("map Draw/Edit"))
         assertTrue(names.contains("control_paired_pc"))
         val pcTool = (0 until declarations.length()).mapNotNull { declarations.optJSONObject(it) }
             .first { it.optString("name") == "control_paired_pc" }
