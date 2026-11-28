@@ -357,7 +357,10 @@ class MainBrain(
             "Operator step IDs must be unique"
         }
         request.actions.forEach { action ->
-            val decision = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value, action.step.expectedVisibleText)
+            val decision = OperatorSafetyPolicy.assess(
+                action.step.action.name, action.step.target, action.step.value,
+                action.step.expectedVisibleText, action.step.explicitlyAuthorizedByUser
+            )
             require(decision.risk != OperatorSafetyPolicy.Risk.BLOCK) { decision.reason }
         }
         val queued = scheduler.submitAll(listOf(
@@ -544,7 +547,8 @@ class MainBrain(
                         .put("target", action.step.target)
                         .put("value", action.step.value)
                         .put("expectedVisibleText", action.step.expectedVisibleText)
-                        .put("requiresConfirmation", action.step.requiresConfirmation)))
+                        .put("requiresConfirmation", action.step.requiresConfirmation)
+                        .put("explicitlyAuthorizedByUser", action.step.explicitlyAuthorizedByUser)))
             }
         }
         return JSONObject().put("id", request.id).put("title", request.title)
@@ -568,7 +572,8 @@ class MainBrain(
                     target = step.optString("target"),
                     value = step.optString("value"),
                     expectedVisibleText = step.optString("expectedVisibleText"),
-                    requiresConfirmation = step.optBoolean("requiresConfirmation")
+                    requiresConfirmation = step.optBoolean("requiresConfirmation"),
+                    explicitlyAuthorizedByUser = step.optBoolean("explicitlyAuthorizedByUser")
                 ),
                 dependsOn = (0 until actionDependencies.length()).map { actionDependencies.getString(it) }.toSet(),
                 priority = item.optInt("priority", 3),
