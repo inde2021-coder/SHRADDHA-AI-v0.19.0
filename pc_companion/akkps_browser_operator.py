@@ -791,6 +791,48 @@ class AkkpsBrowserOperator:
                 "upload_verified": verified, "outcome": "verified" if verified else "uncertain",
                 "automatic_retry": False, "record_submitted": False}
 
+    def attach_boundary_kml(self, field_label: str, file_path: str | Path):
+        """Attach a reviewed KML to the exact visible Plot boundary input; never saves the record."""
+        from pathlib import Path
+        label = " ".join(str(field_label or "").split())
+        path = Path(file_path).expanduser().resolve()
+        if not label or not re.search(r"(boundary|kml|सीमा|नक्शा|मानचित्र)", label, re.I):
+            raise ValueError("Use the exact visible Plot boundary/KML upload field label.")
+        if path.suffix.casefold() != ".kml" or not path.is_file():
+            raise ValueError("Choose an existing .kml boundary file.")
+        if path.stat().st_size <= 0 or path.stat().st_size > 10 * 1024 * 1024:
+            raise ValueError("KML must be non-empty and no larger than 10 MB.")
+        validate_runner_url(self.page.url)
+        route = urlparse(self.page.url).path.casefold().rstrip("/")
+        if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
+            raise RuntimeError("KML boundary attachment is allowed only in the AKKPS Runner Plots workflow.")
+        forms = self.page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError("Expected exactly one visible Plot boundary form.")
+        candidates = forms.first.locator('input[type="file"]')
+        matches = []
+        for index in range(candidates.count()):
+            item = candidates.nth(index)
+            labels = item.evaluate("(e) => [...(e.labels || [])].map(x => (x.innerText || '').replace(/\\s+/g, ' ').trim())")
+            hints = [item.get_attribute(key) or "" for key in ("aria-label", "name", "id", "placeholder")]
+            if label in labels or label in hints:
+                matches.append(item)
+        if len(matches) != 1:
+            raise RuntimeError("Exact boundary KML file input is missing or ambiguous.")
+        target = matches[0]
+        accept = (target.get_attribute("accept") or "").casefold()
+        if accept and not any(token in accept for token in (".kml", "application/vnd.google-earth.kml+xml", "*/*")):
+            raise RuntimeError("This file input does not accept KML.")
+        target.set_input_files(str(path))
+        verified = target.evaluate("(e, name) => !!e.files && e.files.length === 1 && e.files[0].name === name", path.name)
+        if not verified:
+            raise RuntimeError("KML attachment could not be verified in the selected Plot form.")
+        return {
+            "field": label, "file_name": path.name, "file_attached": True,
+            "portal_uploaded": False, "record_submitted": False,
+            "next_step": "Review the visible map and use the portal's own Upload/Save control with separate confirmation."
+        }
+
     def inspect_map_boundary(self):
         """Inspect visible map/drawing controls without reading coordinates or changing geometry."""
         validate_runner_url(self.page.url)
@@ -807,18 +849,27 @@ class AkkpsBrowserOperator:
             label: clean(e), width: Math.round(e.getBoundingClientRect().width),
             height: Math.round(e.getBoundingClientRect().height)
           }));
-          const controls = [...document.querySelectorAll('button,[role=button]')].filter(visible)
-            .map(clean).filter(x => /(polygon|boundary|draw|vertex|point|clear|undo|save|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x))
-            .slice(0, 40);
+          const controls = [...document.querySelectorAll('button,[role=button],a')].filter(visible)
+            .map(clean).filter(x => /(polygon|boundary|draw|vertex|point|clear|undo|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x))
+            .slice(0, 60);
+          const uploads = [...document.querySelectorAll('input[type=file]')].filter(visible).slice(0, 20).map(e => ({
+            label: [...(e.labels || [])].map(x => clean(x)).filter(Boolean).join(' / ') ||
+              e.getAttribute('aria-label') || e.name || e.id || 'unlabelled file input',
+            accept: e.accept || ''
+          }));
           const engine = window.L ? 'leaflet' :
             (window.mapboxgl ? 'mapbox-gl' : (window.google && window.google.maps ? 'google-maps' :
             (window.ol ? 'openlayers' : (window.maplibregl ? 'maplibre' : 'unknown'))));
-          return {engine, maps, controls};
+          const polygonHints = document.querySelectorAll(
+            '.leaflet-interactive, .mapboxgl-canvas, .ol-layer canvas'
+          ).length;
+          return {engine, maps, controls, uploads, polygonHints};
         }""")
         return {"page": _safe_runner_location(self.page.url)[1],
                 "map_engine": data["engine"], "maps": data["maps"], "boundary_controls": data["controls"],
+                "file_inputs": data.get("uploads", []), "visible_layer_hints": data.get("polygonHints", 0),
                 "geometry_changed": False, "submitted": False,
-                "note": "No coordinates or farmer records were read. Draw/save only through a verified page-specific workflow."}
+                "note": "No coordinates or farmer records were read. KML may be attached to an exact visible Plot boundary field; portal drawing/save still requires live page verification."}
 
     def export_inventory(self, destination: str | Path):
         inventory = self.inventory()
