@@ -35,12 +35,15 @@ class CurriculumProgressStoreInstrumentedTest {
 
         // Simulate a crash after encrypted usage was committed but before the recovery marker cleared.
         store.endSessionAt(System.currentTimeMillis(), clearSessionMarker = false)
+        val duringRecoveryWindow = store.snapshot().usedTodayMinutes
         val restarted = CurriculumProgressStore(context)
         restarted.endSession()
         val afterRecovery = restarted.snapshot().usedTodayMinutes
 
-        assertTrue("The recovered session must be counted.", afterRecovery >= before + 1)
-        assertTrue("The recovered session must not be counted twice.", afterRecovery <= before + 1)
+        assertTrue("The committed session must appear once before marker cleanup.", duringRecoveryWindow >= before + 1)
+        assertTrue("The committed session must not be counted twice before marker cleanup.", duringRecoveryWindow <= before + 1)
+        assertTrue("The recovered session must remain counted.", afterRecovery >= before + 1)
+        assertTrue("Restart recovery must not count the same session twice.", afterRecovery <= before + 1)
     }
 
     @Test fun guardianPinRateLimitsRepeatedFailuresAndUnlocksAfterCooldown() {
