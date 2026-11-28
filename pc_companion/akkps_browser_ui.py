@@ -64,6 +64,9 @@ class AkkpsBrowserWindow:
         ttk.Button(workflows, text="Attach document…", command=self.attach_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Upload attached document…", command=self.upload_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Inspect map boundary", command=self.inspect_map).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Start map Draw…", command=lambda: self.activate_map_tool("draw")).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Start map Edit…", command=lambda: self.activate_map_tool("edit")).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Verify map layers", command=self.verify_map_layers).pack(side="left", padx=3)
         ttk.Button(workflows, text="Attach boundary KML…", command=self.attach_boundary_kml).pack(side="left", padx=3)
         ttk.Button(workflows, text="Upload boundary to AKKPS…", command=self.upload_boundary_kml).pack(side="left", padx=3)
         self.output = tk.Text(root, wrap="word", height=22); self.output.pack(fill="both", expand=True)
@@ -250,6 +253,43 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("Map inspection failed", str(exc), parent=self.window)
+
+    def activate_map_tool(self, tool):
+        try:
+            label = simpledialog.askstring(
+                "AKKPS map " + tool.title(),
+                "Exact visible " + tool.title() + " button label on the current Plot map:",
+                parent=self.window
+            )
+            if not label: return
+            preview = {
+                "tool": tool, "exact_button": label,
+                "target": "one visible Plot map",
+                "next_action": "You will place/move vertices manually on the map",
+                "record_submit": False, "geometry_write_by_AI": False
+            }
+            if not messagebox.askyesno(
+                "Confirm map tool",
+                json.dumps(preview, ensure_ascii=False, indent=2),
+                parent=self.window
+            ): return
+            result = self.operator.activate_map_tool(tool, label)
+            self.status.set(
+                "Map " + tool + " mode verified. Complete vertex work manually."
+                if result.get("tool_active_verified")
+                else "Map button clicked; active mode not verified. Check the page manually."
+            )
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Map tool blocked", str(exc), parent=self.window)
+
+    def verify_map_layers(self):
+        try:
+            result = self.operator.verify_map_boundary_layers()
+            self.status.set("Map layer evidence refreshed. Server persistence is not yet verified.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("Map layer verification failed", str(exc), parent=self.window)
 
     def attach_boundary_kml(self):
         try:
