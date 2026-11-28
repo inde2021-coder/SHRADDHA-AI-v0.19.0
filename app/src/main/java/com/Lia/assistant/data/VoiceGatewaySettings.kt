@@ -148,6 +148,7 @@ object VoiceGatewaySettings {
         require(config.gatewayToken.isNotBlank()) { "Gateway token is missing. Enter the server GATEWAY_TOKEN." }
         val base = config.baseUrl.trimEnd('/')
         val healthRequest = Request.Builder().url("$base/health").get().build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(healthRequest).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("Backend health check failed (HTTP ${response.code}). Check the URL and deployment.")
             val health = JSONObject(response.body?.string().orEmpty())
@@ -193,6 +194,7 @@ object VoiceGatewaySettings {
             .url(config.baseUrl.trimEnd('/') + "/api/ai/providers")
             .header("Authorization", "Bearer " + config.gatewayToken)
             .get().build()
+        `in`.shraddha.ai.future.OnlineAiConsent.requireAllowed(context)
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
