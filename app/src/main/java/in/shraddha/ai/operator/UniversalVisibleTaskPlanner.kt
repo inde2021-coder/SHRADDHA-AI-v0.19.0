@@ -69,9 +69,14 @@ object UniversalVisibleTaskPlanner {
                     deferredTarget = screenMayHaveChanged || matches.size != 1
                     if (value.isNotEmpty()) return Result(error = "Click step में अतिरिक्त value स्वीकार नहीं है।")
                     if (isHighImpactTarget(target)) {
-                        explicitlyAuthorized = isExplicitSendSequence(userCommand, target, expected, steps)
-                        if (!explicitlyAuthorized) {
-                            return Result(error = "भेजने/हटाने/भुगतान/प्रकाशित/Submit जैसे final actions के लिए यह plan पर्याप्त explicit नहीं है।")
+                        val isSendButton = target.lowercase().trim() in setOf("send", "send message", "भेजें", "भेजो", "सेंड")
+                        if (isSendButton) {
+                            explicitlyAuthorized = isExplicitSendSequence(userCommand, target, expected, steps)
+                            if (!explicitlyAuthorized) {
+                                return Result(error = "Send के लिए exact recipient, typed message और explicit send command आवश्यक है।")
+                            }
+                        } else if (!isExplicitHighImpactIntent(userCommand, target, expected)) {
+                            return Result(error = "इस public/destructive action के लिए command में exact intent और visible postcondition आवश्यक है।")
                         }
                     }
                 }
@@ -126,10 +131,33 @@ object UniversalVisibleTaskPlanner {
         val normalized = value.lowercase().trim()
         val blocked = listOf(
             "delete", "remove", "send", "pay", "transfer", "purchase", "buy",
-            "publish", "post", "submit", "confirm", "place order",
+            "publish", "post", "submit", "confirm", "place order", "share", "forward", "follow", "unfollow", "comment",
             "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो", "सबमिट"
         )
         return blocked.any { normalized.contains(it) }
+    }
+
+    private fun isExplicitHighImpactIntent(command: String, target: String, expected: String): Boolean {
+        if (expected.isBlank()) return false
+        val normalizedTarget = target.lowercase().trim()
+        val verbs = when {
+            normalizedTarget.contains("share") || normalizedTarget.contains("forward") ||
+                normalizedTarget.contains("शेयर") -> listOf("share", "forward", "शेयर", "साझा")
+            normalizedTarget.contains("follow") || normalizedTarget.contains("अनुसरण") ||
+                normalizedTarget.contains("फॉलो") -> listOf("follow", "unfollow", "फॉलो", "अनुसरण")
+            normalizedTarget.contains("comment") || normalizedTarget.contains("टिप्पणी") ->
+                listOf("comment", "टिप्पणी", "कमेंट")
+            normalizedTarget.contains("delete") || normalizedTarget.contains("remove") ||
+                normalizedTarget.contains("हट") || normalizedTarget.contains("मिट") ->
+                listOf("delete", "remove", "हटाओ", "हटाएं", "मिटाओ", "मिटाएं")
+            normalizedTarget.contains("pay") || normalizedTarget.contains("transfer") ||
+                normalizedTarget.contains("भुगतान") -> listOf("pay", "transfer", "भुगतान", "पैसे भेज")
+            normalizedTarget.contains("publish") || normalizedTarget.contains("post") ||
+                normalizedTarget.contains("submit") || normalizedTarget.contains("प्रकाशित") ->
+                listOf("publish", "post", "submit", "प्रकाशित", "जमा", "सबमिट")
+            else -> listOf("delete", "remove", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm")
+        }
+        return verbs.any { command.contains(it, ignoreCase = true) }
     }
 
     private fun isExplicitSendSequence(
