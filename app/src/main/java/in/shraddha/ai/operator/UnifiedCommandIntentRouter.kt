@@ -100,7 +100,12 @@ object UnifiedCommandIntentRouter {
         val highImpact = action in setOf(
             UnifiedCommandAction.DELETE,
             UnifiedCommandAction.PAY,
-            UnifiedCommandAction.PUBLISH
+            UnifiedCommandAction.PUBLISH,
+            UnifiedCommandAction.SUBMIT,
+            UnifiedCommandAction.SEND,
+            UnifiedCommandAction.SHARE,
+            UnifiedCommandAction.UPLOAD,
+            UnifiedCommandAction.CALL
         )
         return UnifiedCommandIntent(
             domain = domain,
