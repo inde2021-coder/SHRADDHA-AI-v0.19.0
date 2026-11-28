@@ -20,9 +20,15 @@ import java.nio.charset.CodingErrorAction
  * Packs are plain Markdown/JSON/text; downloaded code and archives are never executed.
  */
 class SkillPackLifecycleManager(context: Context) {
-    private val root = File(context.applicationContext.noBackupFilesDir, "skill-factory").apply { mkdirs() }
-    private val quarantine = File(root, "quarantine").apply { mkdirs() }
-    private val installed = File(root, "installed").apply { mkdirs() }
+    private val root = File(context.applicationContext.noBackupFilesDir, "skill-factory").apply {
+        check(isDirectory || mkdirs()) { "Skill Factory storage directory could not be created." }
+    }
+    private val quarantine = File(root, "quarantine").apply {
+        check(isDirectory || mkdirs()) { "Skill Factory quarantine directory could not be created." }
+    }
+    private val installed = File(root, "installed").apply {
+        check(isDirectory || mkdirs()) { "Skill Factory installed directory could not be created." }
+    }
     private val state = File(root, "activation-state.json")
 
     data class Manifest(
@@ -108,15 +114,19 @@ class SkillPackLifecycleManager(context: Context) {
             connection.inputStream.use { input ->
                 FileOutputStream(part).use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var total = 0L
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        require(total <= MAX_PACK_BYTES && total <= manifest.sizeBytes) { "Pack exceeded its declared size limit." }
-                        output.write(buffer, 0, count)
+                    try {
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= MAX_PACK_BYTES && total <= manifest.sizeBytes) { "Pack exceeded its declared size limit." }
+                            output.write(buffer, 0, count)
+                        }
+                        output.fd.sync()
+                    } finally {
+                        buffer.fill(0)
                     }
-                    output.fd.sync()
                 }
             }
             require(part.length() == manifest.sizeBytes) { "Downloaded pack length does not match its manifest." }
@@ -223,7 +233,9 @@ class SkillPackLifecycleManager(context: Context) {
                 throw SecurityException("Unsigned user imports cannot be auto-activated.")
             }
         }
-        val targetDir = File(installed, pack.packId).apply { mkdirs() }
+        val targetDir = File(installed, pack.packId).apply {
+            check(isDirectory || mkdirs()) { "Skill pack installation directory could not be created." }
+        }
         val target = File(targetDir, "${pack.version}.pack")
         if (target.exists()) throw IllegalStateException("This pack version is already installed.")
         val previous = readState().optJSONObject(pack.packId)?.optString("current", "").orEmpty()
@@ -330,7 +342,15 @@ class SkillPackLifecycleManager(context: Context) {
         val backup = File(content.parentFile, content.name + ".json.bak")
         val bytes = metadata.toString().toByteArray(Charsets.UTF_8)
         try {
-            check(!backup.exists() || backup.delete()) { "Could not clear stale Skill Factory metadata backup." }
+            // Recover the last committed metadata before starting another replacement.
+            // A process may have died after target -> backup but before temp -> target.
+            if (backup.exists()) {
+                if (target.exists()) {
+                    check(backup.delete()) { "Could not clear stale Skill Factory metadata backup." }
+                } else {
+                    check(backup.renameTo(target)) { "Could not restore previous Skill Factory metadata." }
+                }
+            }
             FileOutputStream(temp).use { output ->
                 output.write(bytes)
                 output.fd.sync()
@@ -366,10 +386,14 @@ class SkillPackLifecycleManager(context: Context) {
         val digest = MessageDigest.getInstance("SHA-256")
         FileInputStream(file).use { input ->
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
+            try {
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            } finally {
+                buffer.fill(0)
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
