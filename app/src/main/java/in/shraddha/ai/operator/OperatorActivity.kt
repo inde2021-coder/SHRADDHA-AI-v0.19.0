@@ -155,9 +155,9 @@ class OperatorActivity : Activity() {
                 ))
             },
             "Back / Home / Scroll" to {
-                val choices = arrayOf("Back", "Home", "Scroll forward")
+                val choices = arrayOf("Back", "Home", "Scroll forward", "Scroll backward")
                 android.app.AlertDialog.Builder(this).setTitle("नेविगेशन कार्रवाई चुनें").setItems(choices) { _, which ->
-                    val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; else -> OperatorActionType.SCROLL_FORWARD }
+                    val type = when (which) { 0 -> OperatorActionType.BACK; 1 -> OperatorActionType.HOME; 2 -> OperatorActionType.SCROLL_FORWARD; else -> OperatorActionType.SCROLL_BACKWARD }
                     runOperatorStep(OperatorStep(type))
                 }.show()
             })
