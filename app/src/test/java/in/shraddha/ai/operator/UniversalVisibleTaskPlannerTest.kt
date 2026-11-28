@@ -92,7 +92,7 @@ class UniversalVisibleTaskPlannerTest {
 
     @Test fun acceptsExactUserNamedFileSelectionAndReverseScroll() {
         val json = """{"steps":[
-            {"action":"SELECT_FILE","target":"invoice.pdf"},
+            {"action":"SELECT_FILE","target":"invoice.pdf","expectedVisibleText":"invoice.pdf"},
             {"action":"SCROLL_BACKWARD"}
         ]}"""
         val result = UniversalVisibleTaskPlanner.parseAndValidate(
