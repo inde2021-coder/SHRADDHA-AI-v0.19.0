@@ -4,9 +4,9 @@ Shraddha AI has two entry points for the user's authorized AKKPS account.
 
 ## Android — primary Runner workspace
 
-The Main Brain tool `open_akkps_runner` opens the existing native `AkkpsRunnerActivity` WebView. It can also pass one bounded, explicit user command into the Runner; after the user signs in and the Runner route loads, the command is processed. The user signs in directly on the website; credentials and OTPs are never sent to the model.
+The Main Brain tool `open_akkps_runner` opens the existing native `AkkpsRunnerActivity` WebView. It can also pass one bounded, explicit user command into the Runner; after the user signs in and the Runner route loads, the command is processed. `inspect_akkps_runner` opens the workspace and captures a safe page inventory after login; `get_akkps_runner_inventory` returns that sanitized inventory to Main Brain. The user signs in directly on the website; credentials and OTPs are never sent to the model.
 
-The Runner workspace already includes these observed routes:
+The sanitized inventory includes module names, safe field labels, form/table counts, table headers and generic actions only; it never includes field values, farmer table rows, cookies or authentication material. The Runner workspace already includes these observed routes:
 
 - Dashboard: `/runner`
 - Farmers: `/runner/farmers`
