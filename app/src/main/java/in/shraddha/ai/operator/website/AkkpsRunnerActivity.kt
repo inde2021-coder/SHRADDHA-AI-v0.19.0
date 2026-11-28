@@ -42,6 +42,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var pendingDocumentFieldLabel: String? = null
+    private var pendingDocumentUploadFieldLabel: String? = null
     private var pendingBoundaryUploadUri: Uri? = null
     private var pendingBoundaryUploadPlotId: String? = null
     private var pendingBoundaryUploadPreparedAt = 0L
@@ -789,6 +790,7 @@ class AkkpsRunnerActivity : Activity() {
                 return labels.map(norm).some(x=>x===key || x.includes(key));
               });
               if(matches.length!==1) return JSON.stringify({status:"file_field_ambiguous",count:matches.length});
+              window.__akkpsPendingDocumentFieldLabel=__LABEL__;
               matches[0].click();
               return JSON.stringify({status:"picker_requested",accept:matches[0].accept||""});
             })()
@@ -1318,6 +1320,7 @@ class AkkpsRunnerActivity : Activity() {
                 ['POST','PUT','PATCH'].includes(String(e.method||'').toUpperCase()) &&
                 Number(e.httpStatus)>=200 && Number(e.httpStatus)<300 &&
                 e.success===true && !!String(e.documentId||'').trim() &&
+                String(e.documentFieldLabel||'')===__FIELD_LABEL__ &&
                 Date.now()-Number(e.at||0)<=15*60*1000);
               const last=recent.sort((a,b)=>Number(b.at)-Number(a.at))[0]||null;
               return JSON.stringify(last?{
@@ -1325,11 +1328,12 @@ class AkkpsRunnerActivity : Activity() {
                 path:String(last.path||'').slice(0,160), httpStatus:Number(last.httpStatus)
               }:{verified:false});
             })()
-        """.trimIndent()
+        """.trimIndent().replace("__FIELD_LABEL__", JSONObject.quote(pendingDocumentUploadFieldLabel.orEmpty()))
         web.evaluateJavascript(script) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (result?.optBoolean("verified") == true) {
-                status.text = "AKKPS document upload server response verified • Document ID: " +
+                pendingDocumentUploadFieldLabel = null
+                status.text = "AKKPS document upload server response verified • Document ID: "
                     result.optString("documentId") + " • HTTP " + result.optInt("httpStatus")
             } else {
                 status.text = "Document picker attachment portal upload नहीं है। पिछले 15 मिनट में explicit success + Document ID वाला upload response नहीं मिला; AKKPS पर manually जाँचें।"
@@ -1662,6 +1666,7 @@ class AkkpsRunnerActivity : Activity() {
                     recordWrite,
                     documentUpload,
                     documentId:String(documentId||'').slice(0,100),
+                    documentFieldLabel:documentUpload?String(window.__akkpsPendingDocumentFieldLabel||'').slice(0,120):'',
                     httpStatus:Number(status)||0,
                     success:!!success,
                     recordId:String(id||'').slice(0,100),
@@ -2702,6 +2707,7 @@ Return exact JSON only. Do not include prose or markdown."""
             val fieldLabel = pendingDocumentFieldLabel
             pendingDocumentFieldLabel = null
             if (selected.isNullOrEmpty()) {
+                pendingDocumentUploadFieldLabel = null
                 status.text = "Document picker रद्द हुआ; कोई file attach नहीं हुई।"
             } else if (!fieldLabel.isNullOrBlank()) {
                 val verify = """
@@ -2725,6 +2731,7 @@ Return exact JSON only. Do not include prose or markdown."""
                 web.evaluateJavascript(verify) { raw ->
                     val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
                     if (result?.optBoolean("attached") == true) {
+                        pendingDocumentUploadFieldLabel = fieldLabel
                         status.text = "$fieldLabel में ${result.optString("name")} file attach हुई। अभी AKKPS पर upload नहीं हुई; Upload अलग से करें।"
                     } else {
                         status.text = "File picker से selection लौटी, लेकिन $fieldLabel field में attachment verify नहीं हुई। Upload न करें; manually जाँचें।"
@@ -2853,6 +2860,7 @@ Return exact JSON only. Do not include prose or markdown."""
         stopGpsWalk()
         uploadCallback?.onReceiveValue(null); uploadCallback=null
         pendingDocumentFieldLabel = null
+        pendingDocumentUploadFieldLabel = null
         pendingBoundaryUploadUri?.let { runCatching { revokeUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
         pendingBoundaryUploadUri = null
         pendingBoundaryUploadPlotId = null
