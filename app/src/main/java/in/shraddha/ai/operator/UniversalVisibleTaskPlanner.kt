@@ -2,6 +2,7 @@ package `in`.shraddha.ai.operator
 
 import org.json.JSONObject
 import org.json.JSONTokener
+import java.util.Locale
 
 /** A single action proposed from the current UI; future targets are re-resolved at dispatch time. */
 data class UniversalVisibleStep(
@@ -20,8 +21,12 @@ object UniversalVisibleTaskPlanner {
     fun parseAndValidate(raw: String, userCommand: String, snapshot: ScreenSnapshot): Result {
         if (raw.length !in 1..20_000) return Result(error = "AI plan size invalid है।")
         if (userCommand.isBlank() || userCommand.length > 3000) return Result(error = "User command invalid है।")
-        val root = runCatching { JSONTokener(raw).nextValue() as? JSONObject }.getOrNull()
+        val tokener = JSONTokener(raw)
+        val root = runCatching { tokener.nextValue() as? JSONObject }.getOrNull()
             ?: return Result(error = "AI ने valid JSON plan नहीं दिया।")
+        if (runCatching { tokener.nextClean() != '\u0000' }.getOrDefault(true)) {
+            return Result(error = "AI plan में JSON के बाद अतिरिक्त सामग्री मिली।")
+        }
         val array = root.optJSONArray("steps") ?: return Result(error = "Plan में steps नहीं मिले।")
         if (array.length() !in 1..8) return Result(error = "एक plan में 1 से 8 steps ही स्वीकार हैं।")
 
@@ -29,7 +34,7 @@ object UniversalVisibleTaskPlanner {
         var screenMayHaveChanged = false
         for (index in 0 until array.length()) {
             val item = array.optJSONObject(index) ?: return Result(error = "Step $index का format गलत है।")
-            val action = runCatching { OperatorActionType.valueOf(item.optString("action").uppercase()) }.getOrNull()
+            val action = runCatching { OperatorActionType.valueOf(item.optString("action").uppercase(Locale.ROOT)) }.getOrNull()
                 ?: return Result(error = "Step $index में unsupported action है।")
             val target = item.optString("target").trim()
             val value = item.optString("value")
