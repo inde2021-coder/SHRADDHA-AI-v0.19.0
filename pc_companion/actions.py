@@ -169,7 +169,7 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
         if kind in {"akkps_open", "akkps_runner", "akkps_inspect"}:
             if not akkps_handler:
                 return False, "AKKPS browser operator is unavailable. Install the bundled Playwright runtime."
-            return True, str(akkps_handler(kind))[:12000]
+            return True, str(akkps_handler(kind, action.get("module")))[:12000]
         return False, "Unsupported action."
     except pyautogui.FailSafeException:
         return False, "PyAutoGUI fail-safe triggered; move the pointer away from the top-left corner and re-approve."
