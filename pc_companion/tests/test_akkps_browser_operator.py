@@ -32,6 +32,7 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
 
     def test_runner_navigation_rejects_admin_and_traversal(self):
         for url in ("https://www.akkps.ngo/admin", "https://www.akkps.ngo/coordinator/plots",
+                    "https://www.akkps.ngo/runner/admin", "https://www.akkps.ngo/runner/coordinator/plots",
                     "https://www.akkps.ngo/runner/../admin",
                     "https://www.akkps.ngo/runner/%2e%2e/admin",
                     "https://www.akkps.ngo/runner%2f..%2fadmin"):
