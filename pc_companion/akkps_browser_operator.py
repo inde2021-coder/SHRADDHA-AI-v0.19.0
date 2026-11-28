@@ -117,7 +117,7 @@ def _safe_action_label(value: str) -> str | None:
 def _safe_runner_location(url: str) -> tuple[str, str]:
     parsed = urlparse(url)
     path = parsed.path.rstrip("/") or "/"
-    for label, base in RUNNER_MODULES.items():
+    for label, base in sorted(RUNNER_MODULES.items(), key=lambda item: len(item[1]), reverse=True):
         if path == base or path.startswith(base + "/"):
             safe_path = path if path == base or path == base + "/new" else base
             return f"https://{parsed.hostname}{safe_path}", label.upper()
@@ -237,7 +237,7 @@ class AkkpsBrowserOperator:
             safe_fields.append(FieldInfo(
                 label=label, name=item.get("name", ""), input_type=kind,
                 required=bool(item.get("required")), disabled=bool(item.get("disabled")),
-                read_only=bool(item.get("readOnly")), options=tuple(item.get("options") or ()),
+                read_only=bool(item.get("readOnly")), options=(),
             ))
         safe_url, safe_title = _safe_runner_location(data["url"])
         safe_links = []
