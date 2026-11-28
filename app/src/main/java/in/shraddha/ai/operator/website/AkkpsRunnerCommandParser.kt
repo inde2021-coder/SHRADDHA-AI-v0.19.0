@@ -29,9 +29,9 @@ object AkkpsRunnerCommandParser {
         val createModule = AkkpsRunnerCreateCommandPolicy.resolve(body)
         if (createModule != null) {
             val prefix = when (createModule) {
-                AkkpsRunnerModule.FARMERS -> Regex("(?i)^(?:create|new|add|register|नया|नई|जोड़ो|जोड़ें|बनाएं|बनाओ|पंजीकरण)\\s+(?:a\\s+)?(?:farmer|farmers|kisan|किसान|किसानों)\\s*(?:[;,:]\\s*)?")
-                AkkpsRunnerModule.PLOTS -> Regex("(?i)^(?:create|new|add|register|नया|नई|जोड़ो|जोड़ें|बनाएं|बनाओ|पंजीकरण)\\s+(?:a\\s+)?(?:plot|plots|land|khet|खेत|प्लॉट|खसरा)\\s*(?:[;,:]\\s*)?")
-                AkkpsRunnerModule.AWD_REPORTS -> Regex("(?i)^(?:create|new|add|register|नया|नई|जोड़ो|जोड़ें|बनाएं|बनाओ|पंजीकरण)\\s+(?:an?\\s+)?(?:awd\\s+reports?|reports?|रिपोर्ट|एडब्ल्यूडी)\\s*(?:[;,:]\\s*)?")
+                AkkpsRunnerModule.FARMERS -> Regex("(?i)^(?:create|new|add|register|नया|नई|जोड़ो|जोड़ें|बनाएं|बनाओ|पंजीकरण)\\s+(?:a\\s+)?(?:new\\s+)?(?:farmer|farmers|kisan|किसान|किसानों)\\s*(?:[;,:]\\s*)?")
+                AkkpsRunnerModule.PLOTS -> Regex("(?i)^(?:create|new|add|register|नया|नई|जोड़ो|जोड़ें|बनाएं|बनाओ|पंजीकरण)\\s+(?:a\\s+)?(?:new\\s+)?(?:plot|plots|land|khet|खेत|प्लॉट|खसरा)\\s*(?:[;,:]\\s*)?")
+                AkkpsRunnerModule.AWD_REPORTS -> Regex("(?i)^(?:create|new|add|register|नया|नई|जोड़ो|जोड़ें|बनाएं|बनाओ|पंजीकरण)\\s+(?:an?\\s+)?(?:new\\s+)?(?:awd\\s+reports?|reports?|रिपोर्ट|एडब्ल्यूडी)\\s*(?:[;,:]\\s*)?")
                 else -> null
             }
             if (prefix != null) body = body.replaceFirst(prefix, "").trim()
