@@ -94,13 +94,16 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
                 title="New Farmer", links=(),
                 fields=(
                     FieldInfo("Farmer Name", "name", "text", True, False),
+                    FieldInfo("Farmer Gender", "gender", "select", True, False, options=("Male", "Female", "Other")),
                     FieldInfo("Phone Number", "phone", "tel", True, False),
                     FieldInfo("Password", "password", "password", False, False),
                 ),
                 buttons=(), table_headers=()
             )
-            preview = operator.preview({"Farmer Name": "Test Farmer", "Phone Number": "9999999999"})
-            self.assertEqual(len(preview["changes"]), 2)
+            preview = operator.preview({"Farmer Name": "Test Farmer", "Phone Number": "9999999999", "Farmer Gender": "Female"})
+            self.assertEqual(len(preview["changes"]), 3)
+            gender = next(item for item in preview["changes"] if item["field"] == "Farmer Gender")
+            self.assertEqual(gender["available_options"], ["Male", "Female", "Other"])
             self.assertFalse(preview["submitted"])
             with self.assertRaises(RuntimeError):
                 operator.preview({"Unknown Field": "x"})
