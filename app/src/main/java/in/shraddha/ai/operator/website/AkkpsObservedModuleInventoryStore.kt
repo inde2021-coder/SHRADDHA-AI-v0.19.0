@@ -36,6 +36,29 @@ object AkkpsObservedModuleInventoryCodec {
         }).toString()
     }
 
+    /** Merge newly observed routes without allowing the bounded inventory to overflow. */
+    fun mergeObserved(
+        existing: Map<String, AkkpsObservedModuleInventoryEntry>,
+        routes: List<AkkpsObservedRunnerRoute>,
+        observedAtEpochMillis: Long = System.currentTimeMillis()
+    ): Map<String, AkkpsObservedModuleInventoryEntry> {
+        require(existing.size <= 30 && observedAtEpochMillis > 0L)
+        val merged = existing.toMutableMap()
+        routes.take(30).forEach { route ->
+            if (merged.size >= 30) return@forEach
+            val safe = AkkpsObservedRunnerRoutePolicy.validate(
+                route.label, route.path, AkkpsWebsiteProfile.CANONICAL_URL
+            ) ?: return@forEach
+            if (safe.path !in merged) {
+                merged[safe.path] = AkkpsObservedModuleInventoryEntry(
+                    safe, observedAtEpochMillis,
+                    AkkpsWebsiteProfile.initialCapabilities().associate { it.operation.name to it.state }
+                )
+            }
+        }
+        return merged
+    }
+
     fun decode(raw: String): Map<String, AkkpsObservedModuleInventoryEntry> {
         require(raw.length in 1..50_000)
         val root = JSONObject(raw)
@@ -81,19 +104,7 @@ class AkkpsObservedModuleInventoryStore(context: Context) {
 
     /** Add newly seen links as UNKNOWN without erasing prior inspection results. */
     fun registerObserved(routes: List<AkkpsObservedRunnerRoute>) {
-        val current = load().toMutableMap()
-        routes.take(30).forEach { route ->
-            val safe = AkkpsObservedRunnerRoutePolicy.validate(
-                route.label, route.path, AkkpsWebsiteProfile.CANONICAL_URL
-            ) ?: return@forEach
-            if (safe.path !in current) {
-                current[safe.path] = AkkpsObservedModuleInventoryEntry(
-                    safe,
-                    System.currentTimeMillis(),
-                    AkkpsWebsiteProfile.initialCapabilities().associate { it.operation.name to it.state }
-                )
-            }
-        }
+        val current = AkkpsObservedModuleInventoryCodec.mergeObserved(load(), routes)
         encrypted.put(key, AkkpsObservedModuleInventoryCodec.encode(current)).getOrThrow()
     }
 
