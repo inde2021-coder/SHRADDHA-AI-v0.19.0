@@ -47,6 +47,7 @@ class AkkpsRunnerActivity : Activity() {
     private var locationManager: LocationManager? = null
     private var gpsWalkActive = false
     private var gpsWalkSessionInitialized = false
+    private var satelliteCandidateAttempted = false
     private var gpsWalkPlotId: String? = null
     private var lastGpsAccuracyMeters = Float.MAX_VALUE
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
@@ -348,6 +349,15 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun startGpsWalk() {
         if (gpsWalkActive) return
+        if (!satelliteCandidateAttempted) {
+            AlertDialog.Builder(this)
+                .setTitle("पहले Satellite Candidate जाँचें")
+                .setMessage("स्वीकृत satellite/GeoJSON boundary candidate पहले चुनें। यदि कोई उपयुक्त candidate उपलब्ध नहीं है, file picker रद्द करके GPS Walk दोबारा शुरू करें। GPS Walk केवल खेत की बाहरी मेड़ से करें; फसल के अंदर न जाएँ।")
+                .setPositiveButton("Candidate चुनें") { _, _ -> importSatelliteCandidate() }
+                .setNegativeButton("रद्द करें", null)
+                .show()
+            return
+        }
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_GPS_WALK)
             return
@@ -543,6 +553,7 @@ class AkkpsRunnerActivity : Activity() {
 
     private fun importSatelliteCandidate() {
         if (gpsWalkActive) { status.text = "Candidate Import से पहले GPS Walk रोकें।"; return }
+        satelliteCandidateAttempted = true
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/geo+json"
