@@ -34,6 +34,14 @@ object ActionExecutor {
         when (toolName) {
 
 
+            "open_akkps_runner" -> {
+                val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launch)
+                result.put("status", "needs_user_action").put("action", "akkps_runner_opened")
+                    .put("message", "AKKPS Runner खुल गया है। Login आप स्वयं करें; उसके बाद Inspect से पेज और उपलब्ध modules पहचानें। Password/OTP Shraddha AI को नहीं दिए जाते।")
+            }
+
             "list_paired_devices" -> {
                 val devices = `in`.shraddha.ai.link.DeviceLinkManager.pairedDevices()
                 val array = org.json.JSONArray()
