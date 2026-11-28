@@ -64,6 +64,7 @@
         <activity android:name=".mobile.MobileCommandCenterActivity" android:exported="false" />
         <activity android:name=".mobile.WorkAgentActivity" android:exported="false" />
         <activity android:name=".operator.learning.AppTrainingActivity" android:exported="false" />
+        <activity android:name=".learning.CurriculumLearningActivity" android:exported="false" />
         <activity android:name=".operator.files.FileAccessActivity" android:exported="false" />
         <activity android:name=".phone.PhoneAgentActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
