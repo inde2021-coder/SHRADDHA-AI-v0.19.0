@@ -60,3 +60,13 @@ The Windows GitHub Actions workflow builds and publishes the EXE as a separate a
 
 
 CI verification is run on the work branch for the companion's protocol/action unit tests and Windows executable packaging; this does not replace paired physical-device testing.
+
+## Optional Offline Language Lab
+
+The Windows companion includes an optional local-only language lab for Hindi, Marathi and English ASR/translation/TTS adapters. Install its dependencies separately with:
+
+```powershell
+python -m pip install -r requirements-language.txt
+```
+
+Install the licensed model weights locally and configure their paths in the Language Lab. No speech is sent to a cloud provider by this module. Sanskrit and Pawari are intentionally not offered as speech models until verified model assets and evaluation data are available. The lab does not download model weights automatically and does not clone a voice without explicit reference-speaker consent.
