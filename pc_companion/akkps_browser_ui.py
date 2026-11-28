@@ -59,6 +59,7 @@ class AkkpsBrowserWindow:
         workflows = ttk.LabelFrame(root, text="Page-specific workflows", padding=8)
         workflows.pack(fill="x", pady=(0, 8))
         ttk.Button(workflows, text="Add AWD repeated row…", command=self.add_awd_row).pack(side="left", padx=3)
+        ttk.Button(workflows, text="Fill newest AWD row…", command=self.fill_awd_row).pack(side="left", padx=3)
         ttk.Button(workflows, text="Autocomplete…", command=self.autocomplete).pack(side="left", padx=3)
         ttk.Button(workflows, text="Attach document…", command=self.attach_document).pack(side="left", padx=3)
         ttk.Button(workflows, text="Inspect map boundary", command=self.inspect_map).pack(side="left", padx=3)
@@ -173,6 +174,23 @@ class AkkpsBrowserWindow:
             self._show(result)
         except Exception as exc:
             messagebox.showerror("AWD row not added", str(exc), parent=self.window)
+
+    def fill_awd_row(self):
+        try:
+            values = self._batch_payload()
+            preview = self.operator.preview_latest_repeated_entry(values)
+            if not messagebox.askyesno(
+                "Confirm newest AWD row",
+                "These values will be entered only into the row added most recently. No record is submitted.\\n\\n" +
+                json.dumps(preview, ensure_ascii=False, indent=2)[:7000],
+                parent=self.window
+            ):
+                return
+            result = self.operator.fill_latest_repeated_entry(values)
+            self.status.set("Newest AWD row filled. Record NOT submitted.")
+            self._show(result)
+        except Exception as exc:
+            messagebox.showerror("AWD row fill rejected", str(exc), parent=self.window)
 
     def autocomplete(self):
         try:
