@@ -870,20 +870,31 @@ class AkkpsBrowserOperator:
             return {"clicked": clicked, "upload_verified": False, "outcome": "uncertain",
                     "automatic_retry": False, "record_submitted": False}
         explicit_success = False
+        document_id = ""
         try:
             payload = response.json()
             if isinstance(payload, dict):
                 data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+                document = payload.get("document") if isinstance(payload.get("document"), dict) else {}
+                data_document = data.get("document") if isinstance(data.get("document"), dict) else {}
                 explicit_success = (payload.get("success") is True or payload.get("ok") is True or
                                     data.get("success") is True or
                                     str(payload.get("status") or data.get("status") or "").casefold()
                                     in {"success", "uploaded", "created", "ok"})
+                document_id = str(
+                    payload.get("documentId") or payload.get("fileId") or payload.get("attachmentId") or
+                    data.get("documentId") or data.get("fileId") or data.get("attachmentId") or
+                    document.get("id") or data_document.get("id") or ""
+                ).strip()[:120]
         except Exception:
             explicit_success = False
-        verified = 200 <= response.status < 300 and explicit_success
+            document_id = ""
+        verified = 200 <= response.status < 300 and explicit_success and bool(document_id)
         return {"clicked": True, "http_status": response.status,
+                "document_id": document_id or None,
                 "upload_verified": verified, "outcome": "verified" if verified else "uncertain",
-                "automatic_retry": False, "record_submitted": False}
+                "automatic_retry": False, "record_submitted": False,
+                "verification_requires_document_id": True}
 
     def attach_boundary_kml(self, field_label: str, file_path: str | Path):
         """Attach a reviewed KML to the exact visible Plot boundary input; never saves the record."""
