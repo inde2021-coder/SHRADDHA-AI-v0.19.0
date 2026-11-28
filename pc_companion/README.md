@@ -52,7 +52,8 @@ Set model paths locally before starting the companion (never paste private model
 - `SHRADDHA_ASR_MODEL_HI`, `SHRADDHA_ASR_MODEL_MR`, `SHRADDHA_ASR_MODEL_EN`: local Sherpa-ONNX model files.
 - `SHRADDHA_ASR_TOKENS_INDIC` and `SHRADDHA_ASR_TOKENS_EN`: matching local token files.
 - `SHRADDHA_TRANSLATION_MODEL_DIR`: local IndicTrans2 checkpoint directory.
-- IndicF5 weights must already exist in the local Hugging Face cache; runtime network downloads are disabled. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
+- IndicF5 weights must already exist in the local Hugging Face cache; runtime network downloads are disabled.
+- Optional language models are not required for core PC command/control features. If a configured local model is missing or invalid, that language capability stays unavailable; the companion does not silently switch to cloud processing. Sanskrit and Pawari remain disabled in these PC adapters until the model artifacts, licenses and real-device quality are independently validated. The runtime never downloads or executes remote model code and never falls back to a cloud provider.
 
 The optional lab's Python unit tests are included in the PC test suite. A successful unit test does not prove that a user's GPU, model files, microphone or speaker produce acceptable inference; validate each installed model locally before relying on it.
 
