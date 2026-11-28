@@ -109,7 +109,7 @@ class CurriculumProgressStore(context: Context) {
             completedPacks = state.stringSet("completedPacks"),
             guardianMode = state.optBoolean("guardianMode", false),
             dailyLimitMinutes = state.optInt("dailyLimitMinutes", 45).coerceIn(5, 240),
-            usedTodayMinutes = (state.optInt("usedTodayMinutes", 0).coerceAtLeast(0) + activeSessionMinutesToday()).coerceAtMost(24 * 60),
+            usedTodayMinutes = (state.optInt("usedTodayMinutes", 0).coerceAtLeast(0) + activeSessionMinutesToday(state)).coerceAtMost(24 * 60),
             guardianOverrideUntilMillis = state.optLong("guardianOverrideUntilMillis", 0L)
         )
     }
@@ -178,9 +178,9 @@ class CurriculumProgressStore(context: Context) {
         }
     }
 
-    private fun activeSessionMinutesToday(): Int {
+    private fun activeSessionMinutesToday(state: JSONObject): Int {
         val started = prefs.getLong(SESSION_STARTED_AT, 0L)
-        if (started <= 0L) return 0
+        if (started <= 0L || state.optLong(LAST_CLOSED_SESSION_STARTED_AT, 0L) == started) return 0
         val now = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
         val todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
