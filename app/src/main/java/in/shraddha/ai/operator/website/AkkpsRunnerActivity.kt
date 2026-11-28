@@ -984,7 +984,9 @@ class AkkpsRunnerActivity : Activity() {
                 label:clean(e)
               }));
               const mapRoot=roots.length===1?roots[0]:null;
-              const controls=mapRoot?[...mapRoot.querySelectorAll('button,[role=button],a')]
+              // Drawing controls can be siblings of the map canvas inside its wrapper.
+              const mapScope=mapRoot?(mapRoot.parentElement||mapRoot):null;
+              const controls=mapScope?[...mapScope.querySelectorAll('button,[role=button],a')]
                 .filter(visible).map(clean).filter(x=>
                   /(draw|polygon|boundary|vertex|point|undo|clear|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x)
                 ).slice(0,60):[];
@@ -1092,7 +1094,9 @@ class AkkpsRunnerActivity : Activity() {
                               if (maps.length !== 1) return JSON.stringify({
                                 ok:false, reason:'expected_one_visible_map', mapCount:maps.length
                               });
-                              const matches = [...maps[0].querySelectorAll('button,[role=button],a[title],a[aria-label]')]
+                              // Leaflet draw toolbar is normally a sibling of its canvas.
+                              const mapScope=maps[0].parentElement||maps[0];
+                              const matches = [...mapScope.querySelectorAll('button,[role=button],a[title],a[aria-label]')]
                                 .filter(visible).filter(e => {
                                   const text = String(e.innerText || e.getAttribute('aria-label') ||
                                     e.getAttribute('title') || '').replace(/\\s+/g,' ').trim();
