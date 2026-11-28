@@ -18,6 +18,7 @@ import `in`.shraddha.ai.future.ShraddhaIntegrationHub
 import `in`.shraddha.ai.future.WorkflowStatus
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.data.NovaPreferences
+import com.Lia.assistant.data.VoiceGatewaySettings
 
 /** Operator console: exposes real Android accessibility actions and live observation feedback. */
 class OperatorActivity : Activity() {
@@ -586,23 +587,171 @@ class OperatorActivity : Activity() {
         }
     }
 
+    /** Plans a new task from the live screen; no App Training profile is required. */
     private fun routeNaturalCommand() {
+        val command = commandInput.text.toString().trim()
+        if (command.isBlank()) {
+            log.text = "Shraddha को करने वाला काम बताइए।"
+            return
+        }
         val snapshot = `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService.captureVisibleScreen()
-        if (snapshot == null) { log.text = "Accessibility सेवा चालू करें और target app खोलें।"; return }
-        val profile = AppProfileStore(this).get(snapshot.packageName)
-        if (profile == null) { log.text = "इस ऐप (${snapshot.packageName}) की training profile नहीं मिली। पहले App Training करें।"; return }
-        val result = NaturalLanguageWorkflowRouter.route(commandInput.text.toString(), profile)
-        val route = result.route
-        if (route == null) { log.text = result.message; return }
-        val variables = field("अन्य मान: customer_name=Rahul, phone=...")
-        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0); addView(variables) }
-        android.app.AlertDialog.Builder(this).setTitle("सीखा हुआ काम चलाएँ")
-            .setMessage("${result.message}\nविश्वास स्कोर: ${(route.confidence * 100).toInt()}%\n${route.note}\n\nज़रूरी जानकारी भरें। हर step के बाद परिणाम जाँचा जाएगा। जोखिम वाले चरण पर अलग से अनुमति माँगी जाएगी।")
-            .setView(panel).setNegativeButton("रद्द", null)
-            .setPositiveButton("चलाएँ") { _, _ ->
-                val extra = variables.text.toString().split(",").mapNotNull { part -> val pair = part.trim().split("=", limit = 2); if (pair.size == 2) pair[0].trim() to pair[1].trim() else null }.toMap()
-                runLearned(route.profile, route.workflowName, route.values + extra)
-            }.show()
+        if (snapshot == null) {
+            log.text = "Accessibility सेवा चालू करें और target app खोलें।"
+            return
+        }
+        val preferences = getSharedPreferences("universal_command_planner", MODE_PRIVATE)
+        if (!preferences.getBoolean("cloud_screen_planning_consent", false)) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Universal AI Screen Planning")
+                .setMessage("इस कमांड को समझने के लिए आपका निर्देश और वर्तमान स्क्रीन के दिखाई देने वाले non-password labels/text चुने हुए AI provider को सुरक्षित gateway से भेजे जाएँगे। Editable fields के मौजूदा values, password/OTP/PIN और पहचान-संबंधी labels नहीं भेजे जाएँगे। अनुमति देने पर यह विकल्प याद रहेगा; आप इसे Operator screen से revoke कर सकते हैं।")
+                .setNegativeButton("नहीं") { _, _ -> log.text = "Cloud screen-planning अनुमति नहीं दी गई। कोई action execute नहीं हुआ।" }
+                .setPositiveButton("अनुमति दें") { _, _ ->
+                    preferences.edit().putBoolean("cloud_screen_planning_consent", true).apply()
+                    planUniversalCommand(command, snapshot)
+                }.show()
+            return
+        }
+        planUniversalCommand(command, snapshot)
+    }
+
+    private fun planUniversalCommand(command: String, snapshot: ScreenSnapshot) {
+        log.text = "Shraddha वर्तमान स्क्रीन देखकर नया task plan बना रही है…"
+        val sensitiveLabel = Regex(
+            "(?i)(password|passcode|otp|pin|cvv|aadhaar|aadhar|account number|card number|upi|पासवर्ड|ओटीपी|पिन|आधार)"
+        )
+        val visible = JSONArray().apply {
+            snapshot.elements.asSequence()
+                .filterNot { it.password }
+                .filterNot { sensitiveLabel.containsMatchIn(listOf(it.id, it.text, it.description, it.hintText).joinToString(" ")) }
+                .take(100)
+                .forEach { element ->
+                    put(JSONObject()
+                        .put("id", element.id.take(80))
+                        .put("text", if (element.editable) "" else element.text.take(160))
+                        .put("description", element.description.take(160))
+                        .put("hint", element.hintText.take(120))
+                        .put("class", element.className.take(80))
+                        .put("clickable", element.clickable)
+                        .put("editable", element.editable)
+                        .put("scrollable", element.scrollable))
+                }
+        }
+        val system = """You are Shraddha AI's Universal Command Planner. Convert one new Hindi/English/Hinglish user command into a short, ordered plan for the CURRENT visible Android UI.
+Return JSON only: {"steps":[{"action":"OPEN_APP|CLICK_TEXT|TYPE_TEXT|BACK|HOME|SCROLL_FORWARD","target":"exact visible label, app name, or editable field label","value":"literal user-provided text only","expectedVisibleText":"observable postcondition text"}]}.
+Rules:
+- Use only the six listed actions. Never invent an API, hidden endpoint, coordinate, shell command, password, OTP, PIN, or field value.
+- OPEN_APP target must be the app explicitly named by the user.
+- CLICK_TEXT targets must be exact visible labels now, or a label that will be re-observed after a prior app/navigation transition. Never use coordinates.
+- TYPE_TEXT target must be a visible editable field now, or one expected after a prior transition. Its value must be copied exactly from the user's command; do not infer personal data.
+- Prefer a short sequence (maximum 8 steps). The executor re-observes the screen and re-resolves each target before dispatch.
+- Include expectedVisibleText for meaningful state changes. For a Like action use the resulting Unlike/Unlike button state; for a follow action use Following; for a comment use the exact comment; for a message send use the exact message body.
+- Never send, publish, delete, pay, purchase, or submit unless the user explicitly requested that exact side effect.
+- A Send step is allowed only when the command explicitly says send, the exact recipient is explicitly named and selected in a prior CLICK_TEXT step, the exact message is typed in a prior TYPE_TEXT step, and the final target is the exact visible Send button. Set expectedVisibleText to the exact message body. No mass messaging.
+- If the task cannot be performed with the listed actions or visible evidence, return {"steps":[]} rather than guessing."""
+        val prompt = "User command:\n" + command.take(3000) +
+            "\nCurrent app: " + snapshot.packageName.take(160) +
+            "\nCurrent screen: " + snapshot.activityName.take(160) +
+            "\nObserved UI elements (editable current values intentionally omitted):\n" + visible.toString().take(7000) +
+            "\nReturn the JSON plan only."
+        Thread {
+            val result = runCatching {
+                val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
+                    .trim().uppercase().ifBlank { "GEMINI" }
+                val reply = VoiceGatewaySettings.executeAgent(
+                    this, provider, "Universal Command Planner", system, prompt
+                ) ?: error("Secure AI gateway/provider configured नहीं है।")
+                val first = reply.text.indexOf('{')
+                val last = reply.text.lastIndexOf('}')
+                if (first < 0 || last <= first) error("AI ने JSON task plan नहीं दिया।")
+                val parsed = UniversalVisibleTaskPlanner.parseAndValidate(
+                    reply.text.substring(first, last + 1), command, snapshot
+                )
+                if (parsed.error != null) error(parsed.error)
+                if (parsed.steps.isEmpty()) error("इस कमांड के लिए कोई सुरक्षित supported action plan नहीं मिला।")
+                val planned = parsed.steps.mapIndexed { index, item ->
+                    val step = OperatorStep(
+                        action = item.action,
+                        target = item.target,
+                        value = item.value,
+                        expectedVisibleText = item.expectedVisibleText,
+                        requiresConfirmation = false,
+                        explicitlyAuthorizedByUser = item.explicitlyAuthorizedByUser
+                    )
+                    val safety = `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.assess(
+                        step.action.name, step.target, step.value, step.expectedVisibleText,
+                        step.explicitlyAuthorizedByUser
+                    )
+                    require(safety.risk != `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.BLOCK) {
+                        safety.reason
+                    }
+                    val needsApproval = safety.risk == `in`.shraddha.ai.operator.security.OperatorSafetyPolicy.Risk.CONFIRM
+                    PlannedOperatorAction(
+                        id = "ai_step_${index + 1}",
+                        title = item.action.name + if (item.target.isBlank()) "" else ": " + item.target.take(60),
+                        step = step,
+                        dependsOn = if (index == 0) emptySet() else setOf("ai_step_$index"),
+                        risk = if (needsApproval) Risk.SENSITIVE else Risk.READ_ONLY,
+                        requiresApproval = needsApproval
+                    )
+                }
+                planned
+            }
+            runOnUiThread {
+                val planned = result.getOrNull()
+                if (planned == null) {
+                    log.text = "Task plan रोका गया: " + (result.exceptionOrNull()?.localizedMessage ?: "अज्ञात त्रुटि") +
+                        "\nकोई action execute नहीं हुआ।"
+                } else {
+                    log.text = "Verified UI targets के साथ ${planned.size} steps का plan तैयार है। Execution शुरू हो रहा है…"
+                    startUniversalWorkflow(command, planned)
+                }
+            }
+        }.start()
+    }
+
+    private fun startUniversalWorkflow(command: String, planned: List<PlannedOperatorAction>) {
+        Thread {
+            try {
+                val engine = OperatorEngine(
+                    emit = { event -> runOnUiThread {
+                        val detail = event.snapshot?.let { "\\nApp: ${it.packageName} • UI: ${it.elements.size}" }.orEmpty()
+                        log.text = "${event.state}: ${event.message}$detail\\n\\n" + log.text.take(5000)
+                    } },
+                    audit = { event, outcome, detail ->
+                        LocalAuditTrail(this@OperatorActivity).append("universal_$event", outcome, detail)
+                    }
+                )
+                val brain = `in`.shraddha.ai.future.MainBrain(
+                    executeVerified = { step, confirmed -> engine.execute(step, confirmed) },
+                    audit = { event, outcome, detail ->
+                        LocalAuditTrail(this@OperatorActivity).append("universal_brain_$event", outcome, detail)
+                    },
+                    context = this@OperatorActivity
+                )
+                val workflowId = "universal-" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+                brain.enqueueOperatorWorkflow(
+                    `in`.shraddha.ai.future.MainBrain.WorkflowRequest(
+                        id = workflowId,
+                        title = command.take(120).ifBlank { "Universal command" },
+                        actions = planned
+                    )
+                )
+                val result = brain.startNextWorkflow()
+                runOnUiThread { showMainBrainResult(brain, result) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    log.text = "Universal command failed safely: ${error.localizedMessage ?: "Action could not be queued"}\\n" +
+                        log.text.take(4500)
+                }
+            }
+        }.start()
+    }
+
+    /** Revoke cloud screen-planning consent without changing other AI provider settings. */
+    private fun revokeUniversalPlannerConsent() {
+        getSharedPreferences("universal_command_planner", MODE_PRIVATE).edit()
+            .putBoolean("cloud_screen_planning_consent", false).apply()
+        log.text = "Cloud screen-planning अनुमति बंद कर दी गई। अगली बार अनुमति माँगी जाएगी।"
     }
 
     private fun chooseLearnedWorkflow() {
