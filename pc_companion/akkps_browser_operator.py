@@ -723,8 +723,8 @@ class AkkpsBrowserOperator:
     def upload_attached_document_after_confirmation(self, upload_button_label: str):
         """Click one explicit non-submit Upload control and verify its same-origin response."""
         label = " ".join(str(upload_button_label or "").split())
-        if not label or len(label) > 80 or SENSITIVE_LABEL.search(label):
-            raise ValueError("An exact visible Upload button label is required.")
+        if not label or len(label) > 80 or SENSITIVE_LABEL.search(label) or _safe_action_label(label) != "Upload":
+            raise ValueError("An exact visible Upload/Attach button label is required.")
         validate_runner_url(self.page.url)
         forms = self.page.locator("form:visible")
         if forms.count() != 1:
