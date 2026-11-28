@@ -348,5 +348,14 @@ class SkillPackLifecycleManager(context: Context) {
     companion object {
         const val MAX_PACK_BYTES = 10L * 1024L * 1024L
         val SUPPORTED_CONTENT_TYPES = setOf("text/markdown", "text/plain", "application/json")
+
+        // No publisher key has been provisioned in this source tree. Keep remote signed-pack
+        // downloads fail-closed until a reviewed public key and exact host are pinned in a release.
+        val PINNED_PUBLISHERS: Map<String, TrustedPublisher> = emptyMap()
+
+        // Explicit SPDX identifiers accepted for human-reviewed knowledge packs.
+        val SUPPORTED_LICENSE_IDS = setOf(
+            "CC-BY-4.0", "CC0-1.0", "MIT", "Apache-2.0", "BSD-3-Clause"
+        )
     }
 }
