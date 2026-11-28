@@ -16,6 +16,7 @@ No raw command, message body, farmer field value, contact name, phone number, co
 ## Execution state rules
 - PENDING may be claimed as RUNNING.
 - FAILED may be retried only within the bounded attempt count.
+- A FAILED step is retained for retry after its first failure; after the second verified failure it is terminal and may be pruned with old completed history. Ambiguous tool-level `failed` results are recorded as UNCERTAIN instead, not as retryable FAILED.
 - RUNNING may finish as SUCCEEDED, FAILED, UNCERTAIN, BLOCKED or SKIPPED.
 - App startup must call `recoverInterruptedSteps()` before any adapter resumes work. It durably changes every leftover RUNNING step to UNCERTAIN; startup must remain blocked if recovery persistence fails.
 - `LiaApplication.onCreate()` runs the shared recovery gate before the app exposes command tools. `MainBrain.executeVoiceTool()` refuses to start a tool when the gate is closed and writes a durable one-step plan before dispatching the adapter.
