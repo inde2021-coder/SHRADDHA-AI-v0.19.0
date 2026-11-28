@@ -229,8 +229,12 @@ class AkkpsBrowserOperator:
           const sections = [...document.querySelectorAll('h1,h2,h3,[role=heading],nav a,aside a')]
             .filter(visible).map(e => clean(e.innerText)).filter(Boolean).slice(0, 120);
           const forms = [...document.querySelectorAll('form')].filter(visible).slice(0, 30)
-            .map(f => [...f.querySelectorAll('button[type=submit],input[type=submit]')]
-              .filter(visible).map(e => clean(e.innerText || e.value || e.getAttribute('aria-label'))).filter(Boolean));
+            .map((f, index) => ({
+              index,
+              fieldCount: [...f.querySelectorAll('input,select,textarea')].filter(visible).length,
+              submitLabels: [...f.querySelectorAll('button[type=submit],input[type=submit]')]
+                .filter(visible).map(e => clean(e.innerText || e.value || e.getAttribute('aria-label'))).filter(Boolean)
+            }));
           return {url: location.href, title: document.title, links, fields, buttons, tables, sections, forms};
         }""")
         validate_runner_url(data["url"])
@@ -268,7 +272,10 @@ class AkkpsBrowserOperator:
             ) if label
         ))
         safe_forms = tuple(
-            (f"Form {index + 1} ({max(0, min(int(form.get('fieldCount', 0)), 200))} fields)",)
+            (f"Form {max(0, min(int(form.get('index', index)), 29)) + 1} "
+             f"({max(0, min(int(form.get('fieldCount', 0)), 200))} fields)",
+             *tuple(_safe_action_label(x) for x in form.get("submitLabels", ())
+                    if _safe_action_label(x)))
             for index, form in enumerate(data.get("forms", ())[:20])
             if isinstance(form, dict)
         )
