@@ -22,6 +22,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.FileProvider
+import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -39,6 +41,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var command: EditText
     private lateinit var status: TextView
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var pendingBoundaryUploadUri: Uri? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private lateinit var plotIdInput: EditText
@@ -286,17 +289,34 @@ class AkkpsRunnerActivity : Activity() {
                         callback.onReceiveValue(null)
                         return false
                     }
-                    return try {
-                        val pick = params.createIntent().apply {
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        startActivityForResult(pick, REQUEST_FILE)
-                        true
-                    } catch (_: Exception) {
-                        uploadCallback = null
-                        callback.onReceiveValue(null)
-                        false
+                    val preparedBoundary = pendingBoundaryUploadUri
+                    val acceptsKml = params.acceptTypes.orEmpty().any { type ->
+                        val value = type.trim().lowercase()
+                        value.isBlank() || value == "*/*" ||
+                            value.contains("kml") || value.contains("application/octet-stream")
                     }
+                    if (preparedBoundary != null && acceptsKml &&
+                        AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module == AkkpsRunnerModule.PLOTS) {
+                        AlertDialog.Builder(this@AkkpsRunnerActivity)
+                            .setTitle("AKKPS Plot Boundary")
+                            .setMessage("तैयार की गई KML boundary इस वेबसाइट के file field में attach होगी। इससे अभी AKKPS server पर Save/Upload नहीं होगा; वेबसाइट पर अगला Upload/Save action अलग से review और confirm करें।")
+                            .setNegativeButton("दूसरी File चुनें") { _, _ ->
+                                pendingBoundaryUploadUri = null
+                                chooseWebsiteFile(params, callback)
+                            }
+                            .setPositiveButton("यही KML attach करें") { _, _ ->
+                                pendingBoundaryUploadUri = null
+                                callback.onReceiveValue(arrayOf(preparedBoundary))
+                                status.text = "KML boundary वेबसाइट form में attach हुई। Portal Upload/Save अभी बाकी है।"
+                            }
+                            .setOnCancelListener {
+                                uploadCallback = null
+                                callback.onReceiveValue(null)
+                            }
+                            .show()
+                        return true
+                    }
+                    return chooseWebsiteFile(params, callback)
                 }
             }
         }
@@ -486,6 +506,147 @@ class AkkpsRunnerActivity : Activity() {
             "GPS Walk रुकी: ${boundaryPoints.size} points • Draft encrypted local save • Accuracy आखिरी ±${if (lastGpsAccuracyMeters.isFinite()) lastGpsAccuracyMeters.toInt() else 0} m"
         } else {
             "GPS Walk रुकी, लेकिन draft सुरक्षित नहीं हुआ: ${saved.exceptionOrNull()?.localizedMessage}"
+        }
+    }
+
+    /**
+     * Prepare the reviewed local polygon as a shareable KML for the official AKKPS
+     * Plot form. The website's own file input and Upload/Save control remain in charge
+     * of the actual server write; attaching a file is never reported as uploaded.
+     */
+    private fun prepareBoundaryForAkkpsUpload() {
+        val plotId = plotIdInput.text.toString().trim()
+        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) {
+            status.text = "AKKPS Plot ID सही भरें; KML तैयार नहीं हुई।"
+            return
+        }
+        if (gpsWalkActive) {
+            status.text = "KML तैयार करने से पहले GPS Walk रोकें।"
+            return
+        }
+        val boundary = runCatching {
+            val points = boundaryPoints.toList().takeIf { it.size >= 3 }
+                ?: AkkpsBoundaryStore(this).load(plotId)?.points
+                ?: error("इस Plot ID की कोई reviewed boundary उपलब्ध नहीं है।")
+            val metadata = boundaryProvenance
+            AkkpsBoundary(
+                points = points,
+                source = metadata?.source,
+                datasetYear = metadata?.datasetYear,
+                confidence = metadata?.confidence,
+                sourceFeatureId = metadata?.sourceFeatureId
+            )
+        }.getOrElse {
+            status.text = "Boundary उपलब्ध नहीं: ${it.localizedMessage}"
+            return
+        }
+        val issue = AkkpsBoundaryGeometry.validate(boundary.points)
+        if (issue != null) {
+            status.text = "Boundary validation असफल: $issue"
+            return
+        }
+        runCatching {
+            val directory = File(cacheDir, "akkps-boundaries").apply { mkdirs() }
+            val target = File(directory, "$plotId-boundary.kml")
+            target.writeText(
+                AkkpsBoundaryGeometry.toKml(boundary, plotId),
+                Charsets.UTF_8
+            )
+            FileProvider.getUriForFile(this, "$packageName.lia.fileprovider", target)
+        }.onSuccess { uri ->
+            pendingBoundaryUploadUri = uri
+            status.text = "KML तैयार है। अब AKKPS Plots में Create Boundary/Boundary Upload खोलें; website file picker में यह KML attach करने की पुष्टि करें। Server upload अभी नहीं हुआ।"
+        }.onFailure {
+            status.text = "KML तैयार नहीं हुई: ${it.localizedMessage}"
+        }
+    }
+
+    /** Only the approved AKKPS WebView can receive a prepared boundary file. */
+    private fun chooseWebsiteFile(
+        params: WebChromeClient.FileChooserParams,
+        callback: android.webkit.ValueCallback<Array<Uri>>
+    ): Boolean = try {
+        val pick = params.createIntent().apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivityForResult(pick, REQUEST_FILE)
+        true
+    } catch (_: Exception) {
+        uploadCallback = null
+        callback.onReceiveValue(null)
+        false
+    }
+
+    /** Safe live-map inventory: engine, visible controls, upload fields and polygon counts only. */
+    private fun inspectLiveMap() {
+        if (AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
+            status.text = "पहले AKKPS Runner का Plots module खोलें।"
+            return
+        }
+        val script = """
+            (() => {
+              const visible=e=>!!(e && e.getClientRects().length &&
+                getComputedStyle(e).display!=='none' && getComputedStyle(e).visibility!=='hidden');
+              const clean=e=>String(e?.innerText||e?.getAttribute('aria-label')||e?.title||'')
+                .replace(/\\s+/g,' ').trim().slice(0,90);
+              const surfaces=[...document.querySelectorAll(
+                '.leaflet-container,.mapboxgl-map,.ol-viewport,[role=application][aria-label*=map i],canvas'
+              )].filter(visible).slice(0,12).map(e=>({
+                kind:e.classList.contains('leaflet-container')?'leaflet':
+                  e.classList.contains('mapboxgl-map')?'mapbox-gl':
+                  e.classList.contains('ol-viewport')?'openlayers':
+                  e.tagName.toLowerCase()==='canvas'?'canvas':'application',
+                width:Math.round(e.getBoundingClientRect().width),
+                height:Math.round(e.getBoundingClientRect().height),
+                label:clean(e)
+              }));
+              const controls=[...document.querySelectorAll('button,[role=button],a')]
+                .filter(visible).map(clean).filter(x=>
+                  /(draw|polygon|boundary|vertex|point|undo|clear|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x)
+                ).slice(0,60);
+              const uploads=[...document.querySelectorAll('input[type=file]')].filter(visible).map(e=>({
+                label:[...(e.labels||[])].map(x=>clean(x)).filter(Boolean).join(' / ') ||
+                  e.getAttribute('aria-label') || e.name || e.id || 'unlabelled file input',
+                accept:e.accept||''
+              })).slice(0,20);
+              const engine=window.L?'leaflet':window.mapboxgl?'mapbox-gl':
+                window.google?.maps?'google-maps':window.ol?'openlayers':
+                window.maplibregl?'maplibre':'unknown';
+              const polygonCount=document.querySelectorAll(
+                '.leaflet-interactive.leaflet-polygon, .mapboxgl-canvas, .ol-layer canvas'
+              ).length;
+              return {engine,surfaces,controls,uploads,polygonVisualCount:polygonCount,
+                route:location.pathname};
+            })()
+        """.trimIndent()
+        web.evaluateJavascript(script) { raw ->
+            val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
+            if (result == null) {
+                status.text = "Live Map inventory नहीं पढ़ी जा सकी। कोई geometry नहीं बदली।"
+                return@evaluateJavascript
+            }
+            val surfaces = result.optJSONArray("surfaces") ?: JSONArray()
+            val controls = result.optJSONArray("controls") ?: JSONArray()
+            val uploads = result.optJSONArray("uploads") ?: JSONArray()
+            status.text = "Live Map: ${result.optString("engine")} • surfaces ${surfaces.length()} • controls ${controls.length()} • file fields ${uploads.length()} • visible layer hints ${result.optInt("polygonVisualCount")}। केवल inspection हुआ; कोई coordinate/geometry बदली या submit नहीं हुई।"
+            val summary = buildString {
+                append("Map engine: ${result.optString("engine")}\n")
+                append("Route: ${result.optString("route")}\n")
+                append("Visible map surfaces: ${surfaces.length()}\n")
+                append("Boundary controls:\n")
+                for (i in 0 until controls.length()) append("• ${controls.optString(i)}\n")
+                append("File inputs:\n")
+                for (i in 0 until uploads.length()) {
+                    val item = uploads.optJSONObject(i) ?: continue
+                    append("• ${item.optString("label")} [${item.optString("accept")}]\n")
+                }
+                append("\nLive map drawing/save is not enabled until the portal's exact map adapter and server postcondition are verified.")
+            }
+            AlertDialog.Builder(this)
+                .setTitle("AKKPS Live Map Inspection")
+                .setMessage(summary)
+                .setPositiveButton("ठीक है", null)
+                .show()
         }
     }
 
@@ -924,6 +1085,15 @@ class AkkpsRunnerActivity : Activity() {
         }
         if (Regex("(?i)\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(raw)) {
             status.text = "Password, OTP, PIN या CAPTCHA को command में न लिखें। वेबसाइट के login/form में स्वयं दर्ज करें।"; return
+        }
+        if (Regex("(?i)\\b(inspect|check|देखो|जाँचो|जांचो)\\b.*\\b(map|boundary|नक्शा|मानचित्र|सीमा)\\b|(?:नक्शा|मानचित्र|सीमा).*(?:जाँचो|जांचो|देखो)").containsMatchIn(raw)) {
+            inspectLiveMap()
+            return
+        }
+        if (Regex("(?i)\\b(prepare|attach|export)\\b.*\\b(boundary|kml|map)\\b|(?:boundary|kml).*(?:तैयार|अपलोड के लिए)").containsMatchIn(raw) ||
+            raw.contains("सीमा अपलोड के लिए तैयार")) {
+            prepareBoundaryForAkkpsUpload()
+            return
         }
         val parsed = AkkpsRunnerCommandParser.parse(raw)
         val explicitAssignment = raw.contains('=') || raw.contains(':') || parsed.submit
