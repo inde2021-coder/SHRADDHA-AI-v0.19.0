@@ -58,7 +58,7 @@
         </activity>
         <activity android:name=".link.DeviceTransferActivity" android:exported="false" />
         <activity android:name=".operator.OperatorActivity" android:exported="false" />
-        <activity android:name=".operator.website.AkkpsRunnerActivity" android:exported="false" />
+        <activity android:name=".operator.website.AkkpsRunnerActivity" android:exported="false" android:launchMode="singleTop" />
         <activity android:name=".operator.FormAutofillActivity" android:exported="false" />
         <activity android:name=".notes.NoteOcrActivity" android:exported="false" />
         <activity android:name=".mobile.MobileCommandCenterActivity" android:exported="false" />
