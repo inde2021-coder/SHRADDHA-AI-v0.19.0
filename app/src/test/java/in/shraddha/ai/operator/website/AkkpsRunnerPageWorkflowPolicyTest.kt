@@ -33,6 +33,8 @@ class AkkpsRunnerPageWorkflowPolicyTest {
         assertEquals("historical yield rows", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("add historical yield"))
         assertEquals("water level at each visit", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("add water level reading"))
         assertEquals("drying event dates", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("जोड़ें सूखने की तारीख"))
+        assertEquals("drying event dates", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("सूखने की तारीख जोड़ें"))
+        assertEquals("water level at each visit", AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("जल स्तर रीडिंग जोड़ें"))
         assertNull(AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("add farmer"))
         assertNull(AkkpsRunnerPageWorkflowPolicy.repeatedEntrySection("delete drying event"))
     }
