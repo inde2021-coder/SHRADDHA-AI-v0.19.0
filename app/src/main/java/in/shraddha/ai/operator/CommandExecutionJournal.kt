@@ -248,3 +248,18 @@ class CommandExecutionJournal(context: Context) {
         private const val MAX_STORAGE_CHARS = 256_000
     }
 }
+
+/** Process-start recovery gate shared by command adapters. */
+object CommandExecutionJournalStartup {
+    @Volatile private var recovered = false
+
+    fun recover(context: Context): Boolean {
+        val success = runCatching {
+            CommandExecutionJournal(context.applicationContext).recoverInterruptedSteps()
+        }.getOrDefault(false)
+        recovered = success
+        return success
+    }
+
+    fun isReady(): Boolean = recovered
+}
