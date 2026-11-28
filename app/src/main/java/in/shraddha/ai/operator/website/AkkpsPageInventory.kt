@@ -23,7 +23,12 @@ object AkkpsPageInventory {
             .put("forms", safeForms(page.optJSONArray("forms")))
             .put("tables", safeTables(page.optJSONArray("tables")))
             .put("fieldLabels", safeFieldLabels(page.optJSONArray("fields")))
-        val encoded = safe.toString().take(MAX_JSON_CHARS)
+        val encoded = safe.toString().takeIf { it.length <= MAX_JSON_CHARS } ?: JSONObject()
+            .put("title", safe.optString("title"))
+            .put("path", safe.optString("path"))
+            .put("capturedAt", safe.optLong("capturedAt"))
+            .put("truncated", true)
+            .toString()
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY_LAST, encoded).apply()
     }
@@ -47,7 +52,7 @@ object AkkpsPageInventory {
     }
 
     private fun safeModules(source: JSONArray?): JSONArray = JSONArray().also { out ->
-        for (i in 0 until (source?.length() ?: 0)) {
+        for (i in 0 until minOf(source?.length() ?: 0, 30)) {
             val item = source?.optJSONObject(i) ?: continue
             val label = item.optString("label").trim().take(80)
             val path = safePath(item.optString("path"))
@@ -58,7 +63,7 @@ object AkkpsPageInventory {
     }
 
     private fun safeActions(source: JSONArray?): JSONArray = JSONArray().also { out ->
-        for (i in 0 until (source?.length() ?: 0)) {
+        for (i in 0 until minOf(source?.length() ?: 0, 40)) {
             val item = source?.optJSONObject(i) ?: continue
             val label = item.optString("label").trim().take(80)
             if (label.isNotBlank()) out.put(JSONObject().put("label", label)
@@ -67,7 +72,7 @@ object AkkpsPageInventory {
     }
 
     private fun safeForms(source: JSONArray?): JSONArray = JSONArray().also { out ->
-        for (i in 0 until (source?.length() ?: 0)) {
+        for (i in 0 until minOf(source?.length() ?: 0, 20)) {
             val item = source?.optJSONObject(i) ?: continue
             out.put(JSONObject().put("index", item.optInt("index"))
                 .put("method", item.optString("method").take(8))
@@ -77,7 +82,7 @@ object AkkpsPageInventory {
     }
 
     private fun safeTables(source: JSONArray?): JSONArray = JSONArray().also { out ->
-        for (i in 0 until (source?.length() ?: 0)) {
+        for (i in 0 until minOf(source?.length() ?: 0, 20)) {
             val item = source?.optJSONObject(i) ?: continue
             val headers = JSONArray()
             val sourceHeaders = item.optJSONArray("headers") ?: JSONArray()
@@ -91,7 +96,7 @@ object AkkpsPageInventory {
     }
 
     private fun safeFieldLabels(source: JSONArray?): JSONArray = JSONArray().also { out ->
-        for (i in 0 until (source?.length() ?: 0)) {
+        for (i in 0 until minOf(source?.length() ?: 0, 80)) {
             val item = source?.optJSONObject(i) ?: continue
             val label = listOf("label", "name", "id", "placeholder", "aria")
                 .map { item.optString(it).trim() }.firstOrNull { it.isNotBlank() }.orEmpty().take(100)
