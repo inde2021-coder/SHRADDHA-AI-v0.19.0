@@ -107,7 +107,7 @@ object DeviceLinkManager {
     @Volatile var onRemoteActionResult: ((String, String, String) -> Unit)? = null
 
     @Volatile var onE2EVerification: ((String, String) -> Unit)? = null
-    private val e2eCrypto by lazy { DeviceE2ECrypto.create() }
+    @Volatile private var e2eCrypto = DeviceE2ECrypto.create()
     private data class PeerKeyState(val key: ByteArray, val fingerprint: String, @Volatile var localConfirmed: Boolean = false, @Volatile var remoteConfirmed: Boolean = false)
     private val peerKeys = ConcurrentHashMap<String, PeerKeyState>()
     // Reject duplicate authenticated actions for the same peer within this process/session.
@@ -208,6 +208,9 @@ object DeviceLinkManager {
         reconnectPending = false
         socket?.close(1000, "Replacing device session connection")
         socket = null
+        clearAllPeerE2EState()
+        // Rotate the ephemeral identity for every new or recovered relay session.
+        e2eCrypto = DeviceE2ECrypto.create()
         lastBaseUrl = baseUrl
         lastPair = pair
         sessionId = pair.sessionId
