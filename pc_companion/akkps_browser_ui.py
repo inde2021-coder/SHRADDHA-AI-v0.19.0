@@ -342,12 +342,25 @@ class AkkpsBrowserWindow:
             ): return
             result = self.operator.upload_boundary_kml_after_confirmation(label)
             if result.get("boundary_upload_verified"):
-                self.status.set("AKKPS boundary upload response verified • Record ID: " + str(result.get("record_id")))
-                messagebox.showinfo(
-                    "Boundary response verified",
-                    "AKKPS returned success and a record ID. Re-open the Plot map to confirm the polygon is visible.",
+                record_id = str(result.get("record_id") or "")
+                self.status.set("AKKPS boundary upload response verified • Record ID: " + record_id)
+                if messagebox.askyesno(
+                    "Re-open saved Plot map",
+                    "AKKPS returned success and a record ID. Reload the same authenticated Plot page now and inspect the map again?",
                     parent=self.window
-                )
+                ):
+                    reopened = self.operator.reopen_plot_map_after_upload(record_id)
+                    self.status.set("AKKPS Plot page re-opened. Exact polygon persistence still needs visual confirmation.")
+                    self._show({"upload": result, "reopen_verification": reopened})
+                    messagebox.showinfo(
+                        "Plot map re-opened",
+                        "Same Plot page reloaded. Map count: " + str(reopened.get("map_count_after_reload")) +
+                        "\\nVisible vector-layer hints: " + str(reopened.get("visible_vector_layer_hints_after_reload")) +
+                        "\\n\\nThese hints do not prove the uploaded polygon is the one displayed. Visually compare the boundary before marking it complete.",
+                        parent=self.window
+                    )
+                else:
+                    self._show(result)
             else:
                 self.status.set("Boundary upload outcome UNCERTAIN. Do not retry until the Plot map is checked.")
                 messagebox.showwarning(
