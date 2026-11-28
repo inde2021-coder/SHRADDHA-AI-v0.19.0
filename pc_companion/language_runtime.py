@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 SUPPORTED_TRANSLATION = {"hi": "hin_Deva", "en": "eng_Latn", "mr": "mar_Deva"}
-SUPPORTED_ASR = {"hi", "mr", "sa", "en"}
+SUPPORTED_ASR = {"hi", "mr", "en"}
 SUPPORTED_INDICF5_TTS = {"hi", "mr"}
 
 
