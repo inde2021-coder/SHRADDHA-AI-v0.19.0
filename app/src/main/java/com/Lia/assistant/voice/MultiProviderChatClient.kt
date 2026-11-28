@@ -50,8 +50,6 @@ object MultiProviderChatClient {
         }
         val selected = provider.uppercase()
         val cfg = config(selected) ?: return ChatReplyResult.Error("Unsupported AI provider.")
-        runCatching { `in`.shraddha.ai.future.CouncilCostBudget.ensureBudgetAllowsCall(context, selected) }
-            .onFailure { return ChatReplyResult.Error(it.message ?: "Monthly API budget blocked this request.") }
         val apiKey = runCatching { ProviderKeyStore.get(context, selected) }
             .getOrElse { return ChatReplyResult.Error("Could not read the encrypted $selected API key: ${it.message}") }
         if (apiKey.isBlank()) return ChatReplyResult.Error("$selected API key is missing. Add it in Settings.")
