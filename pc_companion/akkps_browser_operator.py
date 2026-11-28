@@ -23,12 +23,19 @@ SENSITIVE_LABEL = re.compile(r"password|passcode|otp|one.?time|pin|captcha|verif
 
 def validate_akkps_url(url: str) -> str:
     """Allow only HTTPS pages on the two explicitly configured AKKPS domains."""
-    parsed = urlparse(str(url or "").strip())
-    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_HOSTS:
+    raw = str(url or "").strip()
+    if not raw or len(raw) > 2048 or any(ch.isspace() for ch in raw):
+        raise ValueError("AKKPS URL is empty, oversized or contains whitespace.")
+    try:
+        parsed = urlparse(raw)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("AKKPS URL has an invalid port.") from exc
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_HOSTS or port not in (None, 443):
         raise ValueError("Only HTTPS pages on the approved AKKPS domains are allowed.")
     if parsed.username or parsed.password:
         raise ValueError("Credentials must not be embedded in a URL.")
-    return url
+    return raw
 
 
 def validate_runner_url(url: str) -> str:
