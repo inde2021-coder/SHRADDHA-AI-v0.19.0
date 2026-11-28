@@ -951,7 +951,7 @@ class AkkpsRunnerActivity : Activity() {
             return
         }
         val createModule = AkkpsRunnerCreateCommandPolicy.resolve(AkkpsRunnerSubmitIntentPolicy.stripSuffix(raw))
-        if (parsed.assignments.isNotEmpty() && createModule != null) {
+        if (createModule != null && (parsed.assignments.isNotEmpty() || parsed.submit)) {
             val targetRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
             val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
             if (targetRoute != null && (currentRoute?.module != createModule || !currentRoute.isCreateRoute)) {
