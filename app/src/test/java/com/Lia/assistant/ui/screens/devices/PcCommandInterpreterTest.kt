@@ -62,5 +62,8 @@ class PcCommandInterpreterTest {
         assertEquals("akkps_open", PcCommandInterpreter.parse("AKKPS खोलो").getOrThrow().getString("kind"))
         assertEquals("akkps_runner", PcCommandInterpreter.parse("Runner खोलो").getOrThrow().getString("kind"))
         assertEquals("akkps_inspect", PcCommandInterpreter.parse("AKKPS जांचो").getOrThrow().getString("kind"))
+        assertEquals("akkps_module", PcCommandInterpreter.parse("open AKKPS Farmers").getOrThrow().getString("kind"))
+        assertEquals("farmers", PcCommandInterpreter.parse("open AKKPS Farmers").getOrThrow().getString("module"))
+        assertEquals("plots", PcCommandInterpreter.parse("AKKPS प्लॉट खोलो").getOrThrow().getString("module"))
     }
 }
