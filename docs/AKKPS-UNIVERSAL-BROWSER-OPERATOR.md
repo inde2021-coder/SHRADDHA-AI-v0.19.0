@@ -28,7 +28,7 @@ From the paired Android PC command surface, these commands are supported:
 - `Inspect AKKPS` — return a bounded inventory of visible page structure.
 - `Open AKKPS Farmers`, `Open AKKPS Plots`, `Open AKKPS AWD Reports`, `Open AKKPS Profile`, or `Open AKKPS Data Sync` — navigate only to the exact allow-listed Runner module routes.
 
-Every remote command still requires the Windows companion's local approval. Submit is a separate local confirmation. A submit click is reported as unverified until the record is independently checked.
+Every remote command still requires the Windows companion's local approval. Submit is a separate local confirmation. The Windows operator reports server verification only when it observes an approved-origin POST/PUT/PATCH response with a 2xx status, an explicit success indicator and a record ID. Otherwise the result remains uncertain and the operator warns against retrying until the record list is checked.
 
 ## Main Brain data-entry sequence
 
