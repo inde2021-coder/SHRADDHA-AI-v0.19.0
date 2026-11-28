@@ -228,6 +228,8 @@ object VoiceSessionManager {
             onTranscript = { text -> _offlineTranscript.value = text },
             onBrainResponse = { text -> _offlineBrainResponse.value = text },
             onError = { message ->
+                _isActive.value = false
+                _muted.value = true
                 _lastError.value = message
                 _statusText.value = message
                 _state.value = NovaOrbState.ERROR
