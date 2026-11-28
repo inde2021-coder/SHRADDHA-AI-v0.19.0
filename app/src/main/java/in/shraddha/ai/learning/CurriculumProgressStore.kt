@@ -145,7 +145,13 @@ class CurriculumProgressStore(context: Context) {
     }
 
     @Synchronized fun markVerseComplete(reference: String) {
-        require(reference.matches(Regex("(?:[1-9]|1[0-8])\\.(?:[1-9]|[1-7][0-9])")))
+        val parts = reference.split('.')
+        val chapter = parts.getOrNull(0)?.toIntOrNull()
+        val verse = parts.getOrNull(1)?.toIntOrNull()
+        require(parts.size == 2 && chapter in 1..18 &&
+            verse in 1..GITA_CHAPTER_VERSE_COUNTS[(chapter ?: 1) - 1]) {
+            "Verse reference is outside the canonical 700-verse chapter sequence."
+        }
         val state = readState()
         val values = state.stringSet("completedVerses").toMutableSet()
         values.add(reference)
@@ -290,6 +296,7 @@ class CurriculumProgressStore(context: Context) {
         private const val ENCRYPTED_STATE = "encrypted_state"
         private const val SESSION_STARTED_AT = "session_started_at"
         private const val LAST_CLOSED_SESSION_STARTED_AT = "last_closed_session_started_at"
+        private val GITA_CHAPTER_VERSE_COUNTS = intArrayOf(47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 34, 27, 20, 24, 28, 78)
         private const val PIN_SALT = "guardian_pin_salt"
         private const val PIN_HASH = "guardian_pin_hash"
         private const val KEY_ALIAS = "shraddha_curriculum_progress_aes_v1"
