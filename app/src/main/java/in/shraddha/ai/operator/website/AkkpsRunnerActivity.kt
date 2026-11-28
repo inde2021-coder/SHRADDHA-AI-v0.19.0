@@ -206,7 +206,7 @@ class AkkpsRunnerActivity : Activity() {
                     return false
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (AkkpsWebsiteProfile.acceptsUrl(url)) {
+                    if (AkkpsWebsiteProfile.allowsRunnerNavigation(url)) {
                         status.text = "AKKPS पेज खुला। Login के बाद Inspect दबाएँ।"
                         installSubmitObserver()
                         dispatchPendingAiCommand(url)
