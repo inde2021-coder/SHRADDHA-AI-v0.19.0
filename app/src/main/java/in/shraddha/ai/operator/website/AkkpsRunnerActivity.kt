@@ -814,7 +814,15 @@ class AkkpsRunnerActivity : Activity() {
         web.evaluateJavascript(js) { raw ->
             val obj = runCatching { JSONObject(decode(raw)) }.getOrNull()
             if (obj == null) { status.text = "पेज की जानकारी नहीं पढ़ी जा सकी।"; return@evaluateJavascript }
-            val fields = obj.optJSONArray("fields") ?: JSONArray()
+            val rawFields = obj.optJSONArray("fields") ?: JSONArray()
+            val fields = JSONArray()
+            for (i in 0 until rawFields.length()) {
+                val field = rawFields.optJSONObject(i) ?: continue
+                val type = field.optString("type")
+                val label = listOf("label", "name", "id", "placeholder", "aria")
+                    .map { field.optString(it) }.firstOrNull { it.isNotBlank() }.orEmpty()
+                if (!AkkpsSensitiveFieldPolicy.isSensitive(type, label)) fields.put(field)
+            }
             val labels = (0 until fields.length()).mapNotNull { i ->
                 val f = fields.optJSONObject(i) ?: return@mapNotNull null
                 val label = listOf("label", "name", "id", "placeholder", "aria")
