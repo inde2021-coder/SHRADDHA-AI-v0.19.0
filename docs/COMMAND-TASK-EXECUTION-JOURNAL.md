@@ -2,6 +2,8 @@
 
 This is the persistence/safety foundation for Universal Command Automation (Issue #131).
 
+Journal JSON is encrypted at rest with the app's existing Android Keystore AES-GCM `EncryptedFeatureStore`; it is not written as plaintext SharedPreferences data. The serialized journal is capped below the encrypted store's per-record limit, and any missing-key/authentication/decryption error blocks recovery.
+
 ## What is recorded
 - random task and step IDs;
 - SHA-256 fingerprint of the normalized command (not the command text);
