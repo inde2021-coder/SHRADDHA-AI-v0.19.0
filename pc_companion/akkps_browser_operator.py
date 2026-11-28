@@ -295,7 +295,7 @@ class AkkpsBrowserOperator:
         if count == 0:
             all_fields = self.page.locator("input,select,textarea")
             indices = all_fields.evaluate_all(
-                "(elements, exact) => elements.map((e, i) => ({i, match: e.name === exact || e.id === exact}))"
+                "(elements, exact) => elements.map((e, i) => ({i, match: e.name === exact || e.id === exact || e.placeholder === exact}))"
                 ".filter(x => x.match).map(x => x.i)",
                 label,
             )
