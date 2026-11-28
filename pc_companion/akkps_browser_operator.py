@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 import json
 import re
 
@@ -53,7 +53,7 @@ def validate_runner_url(url: str) -> str:
     raw_path = parsed.path or "/"
     if (len(raw_path) > 1024 or "\\" in raw_path or "//" in raw_path or "%" in raw_path):
         raise ValueError("Unsafe AKKPS route path was rejected.")
-    path = unquote(raw_path)
+    path = raw_path
     if any(segment in {".", ".."} for segment in path.split("/")):
         raise ValueError("AKKPS path traversal was rejected.")
     normalized = path.rstrip("/") or "/"
