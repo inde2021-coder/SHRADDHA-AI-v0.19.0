@@ -22,6 +22,7 @@ import com.Lia.assistant.data.NovaPreferences
 import com.Lia.assistant.data.AssistantBrand
 import com.Lia.assistant.voice.VoiceSessionManager
 import `in`.shraddha.ai.link.DeviceLinkManager
+import `in`.shraddha.ai.future.OnlineAiConsent
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -59,26 +60,28 @@ class LiveEyesCameraService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Live Eyes sends camera frames to the configured cloud vision gateway.
+        // Keep this service off unless the user has explicitly enabled Online AI.
+        if (!OnlineAiConsent.isAllowed(this)) {
+            publishState(STATE_OFF)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         stopped = false
         publishState(STATE_STARTING)
         val assistantName = assistantName()
         startForeground(NOTIFICATION_ID, notification("$assistantName Eyes चालू हैं"))
-        val cloudEnabled = getSharedPreferences(AMBIENT_PREFS, Context.MODE_PRIVATE)
-            .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false)
         val config = VoiceGatewaySettings.get(this)
-        val backendReady = config.readError == null && config.baseUrl.startsWith("https://") && config.gatewayToken.isNotBlank()
-        // A missing cloud gateway must never disable the local-first camera path.
-        // Cloud frames are independently gated below; local OCR/object tracking remains active.
+        if (config.readError != null || !config.baseUrl.startsWith("https://") || config.gatewayToken.isBlank()) {
+            updateNotification((config.readError ?: "पहले Settings में सुरक्षित AI backend जोड़ें").take(120))
+            stopSelf()
+            return START_NOT_STICKY
+        }
         closeCamera()
         previousObservation = ""
         lastAnnouncedAt = 0L
         lastCloudAnalysisAt = 0L
-        updateNotification(
-            if (cloudEnabled && backendReady) "Live Eyes active • local + consented cloud understanding"
-            else if (cloudEnabled) "Live Eyes active • local-only (secure cloud backend unavailable)"
-            else "Live Eyes active • on-device OCR and object tracking only"
-        )
-        openHeadlessCamera(if (backendReady) config.baseUrl else "", if (backendReady) config.gatewayToken else "")
+        openHeadlessCamera(config.baseUrl, config.gatewayToken)
         return START_NOT_STICKY
     }
 
@@ -136,11 +139,15 @@ class LiveEyesCameraService : Service() {
             reader?.setOnImageAvailableListener({ source ->
                 val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
-                    val now = android.os.SystemClock.elapsedRealtime()
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    // Consent revocation stops the camera before local analysis or another cloud frame.
+                    if (!OnlineAiConsent.isAllowed(this@LiveEyesCameraService) ||
+                        ContextCompat.checkSelfPermission(this@LiveEyesCameraService, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                        stopped = true
+                        publishState(STATE_OFF)
                         stopSelf()
                         return@setOnImageAvailableListener
                     }
+                    val now = android.os.SystemClock.elapsedRealtime()
                     if (now - lastAnalysisAt < ANALYSIS_INTERVAL_MS || !requestInFlight.compareAndSet(false, true)) return@setOnImageAvailableListener
                     val buffer = image.planes[0].buffer
                     val jpeg = ByteArray(buffer.remaining()).also { buffer.get(it) }
@@ -160,18 +167,18 @@ class LiveEyesCameraService : Service() {
                             }
                         }
                     }
-                    val cloudConsent = getSharedPreferences(AMBIENT_PREFS, Context.MODE_PRIVATE)
-                        .getBoolean(PREF_CLOUD_ANALYSIS_ENABLED, false)
-                    val backendReadyNow = baseUrl.startsWith("https://") && token.isNotBlank()
-                    if (!AmbientIntelligencePolicy.mayAnalyzeCloudFrame(
-                            cameraPermissionGranted = true,
-                            cloudAnalysisConsentEnabled = cloudConsent,
-                            secureBackendReady = backendReadyNow,
-                            nowMs = now,
-                            lastAnalysisMs = lastCloudAnalysisAt
-                        )) {
+                    if (!AmbientIntelligencePolicy.shouldAnalyzeCloudFrame(now, lastCloudAnalysisAt)) {
                         jpeg.fill(0)
                         requestInFlight.set(false)
+                        return@setOnImageAvailableListener
+                    }
+                    if (!OnlineAiConsent.isAllowed(this)) {
+                        jpeg.fill(0)
+                        requestInFlight.set(false)
+                        stopped = true
+                        publishState(STATE_OFF)
+                        closeCamera()
+                        stopSelf()
                         return@setOnImageAvailableListener
                     }
                     lastCloudAnalysisAt = now
@@ -271,7 +278,6 @@ class LiveEyesCameraService : Service() {
         private const val PREFS_NAME = "shraddha_live_eyes_state"
         const val AMBIENT_PREFS = "shraddha_ambient_settings"
         const val PREF_PROACTIVE_COMPANION = "proactive_companion_enabled"
-        const val PREF_CLOUD_ANALYSIS_ENABLED = "cloud_scene_analysis_consent"
         private const val PREF_STATE = "state"
         private const val PREF_PID = "pid"
         private const val PREF_OBSERVATION = "latest_observation"
