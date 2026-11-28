@@ -76,6 +76,7 @@ class PersistentChatMemoryConsentInstrumentedTest {
         val prefs = context.getSharedPreferences("nova_prefs", Context.MODE_PRIVATE)
         val vaultPrefs = context.getSharedPreferences("shraddha_secure_vault", Context.MODE_PRIVATE)
         val previousConsent = prefs.getBoolean("remember_conversations", false)
+        val previousPending = prefs.getBoolean("conversation_memory_clear_pending", false)
         val previousPayload = vaultPrefs.getString("slot_memory", null)
         try {
             PersistentChatMemory.setEnabled(context, true)
@@ -88,7 +89,10 @@ class PersistentChatMemoryConsentInstrumentedTest {
         } finally {
             if (previousPayload == null) vaultPrefs.edit().remove("slot_memory").commit()
             else vaultPrefs.edit().putString("slot_memory", previousPayload).commit()
-            prefs.edit().putBoolean("remember_conversations", previousConsent).commit()
+            prefs.edit()
+                .putBoolean("remember_conversations", previousConsent)
+                .putBoolean("conversation_memory_clear_pending", previousPending)
+                .commit()
         }
     }
 }
