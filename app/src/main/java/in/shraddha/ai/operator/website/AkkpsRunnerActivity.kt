@@ -983,10 +983,11 @@ class AkkpsRunnerActivity : Activity() {
                 height:Math.round(e.getBoundingClientRect().height),
                 label:clean(e)
               }));
-              const controls=[...document.querySelectorAll('button,[role=button],a')]
+              const mapRoot=roots.length===1?roots[0]:null;
+              const controls=mapRoot?[...mapRoot.querySelectorAll('button,[role=button],a')]
                 .filter(visible).map(clean).filter(x=>
                   /(draw|polygon|boundary|vertex|point|undo|clear|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x)
-                ).slice(0,60);
+                ).slice(0,60):[];
               const uploads=[...document.querySelectorAll('input[type=file]')].map(e=>({
                 label:[...(e.labels||[])].map(x=>clean(x)).filter(Boolean).join(' / ') ||
                   e.getAttribute('aria-label') || e.name || e.id || 'unlabelled file input',
