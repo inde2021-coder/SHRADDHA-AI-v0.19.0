@@ -306,6 +306,8 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Credential, OTP, hidden and file fields cannot be auto-filled.")
         tag = field.evaluate("(e) => e.tagName.toLowerCase()")
         if tag == "select":
+            if field.get_attribute("multiple") is not None:
+                raise RuntimeError("Multi-select fields require a dedicated reviewed action.")
             field.select_option(label=value)
         elif field_type in {"checkbox", "radio"}:
             raise RuntimeError("Checkbox/radio choices require a dedicated reviewed action.")
