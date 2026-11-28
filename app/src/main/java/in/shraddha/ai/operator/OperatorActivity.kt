@@ -555,6 +555,11 @@ class OperatorActivity : Activity() {
         actions.addView(action("कमांड चलाएँ") { routeNaturalCommand() },
             LinearLayout.LayoutParams(0, dp(50), 1f))
         root.addView(actions)
+        if (getSharedPreferences("universal_command_planner", MODE_PRIVATE)
+                .getBoolean("cloud_screen_planning_consent", false)) {
+            root.addView(action("Cloud planning अनुमति बंद करें") { revokeUniversalPlannerConsent() },
+                LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(6) })
+        }
         log = TextView(this).apply {
             text = "कमांड तैयार है। संवेदनशील काम से पहले अनुमति माँगी जाएगी।"
             textSize = 13f
