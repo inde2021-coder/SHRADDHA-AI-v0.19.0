@@ -319,7 +319,7 @@ class AkkpsRunnerActivity : Activity() {
                     }
                     val currentPlotId = plotIdInput.text.toString().trim()
                     if (preparedBoundary != null && acceptsKml &&
-                        pendingBoundaryUploadPlotId == currentPlotId &&
+                        pendingBoundaryUploadPlotId == currentPlotId && plotRouteMatches(currentPlotId) &&
                         AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module == AkkpsRunnerModule.PLOTS) {
                         AlertDialog.Builder(this@AkkpsRunnerActivity)
                             .setTitle("AKKPS Plot Boundary")
@@ -867,9 +867,26 @@ class AkkpsRunnerActivity : Activity() {
      * Plot form. The website's own file input and Upload/Save control remain in charge
      * of the actual server write; attaching a file is never reported as uploaded.
      */
+    private fun currentPlotRouteId(): String? {
+        val path = runCatching { URI(web.url.orEmpty()).path.orEmpty() }.getOrDefault("")
+        val parts = path.trim('/').split('/').filter { it.isNotBlank() }
+        if (parts.size >= 3 && parts[0] == "runner" && parts[1] == "plots" &&
+            parts[2] !in setOf("new", "create-boundary", "create-land-map")) {
+            return parts[2]
+        }
+        return null
+    }
+
+    private fun plotRouteMatches(plotId: String): Boolean =
+        currentPlotRouteId()?.equals(plotId, ignoreCase = true) ?: true
+
     private fun prepareBoundaryForAkkpsUpload() {
         val plotId = plotIdInput.text.toString().trim()
-        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}"))) {
+        if (AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
+            status.text = "पहले AKKPS Runner का Plots/Boundary page खोलें।"
+            return
+        }
+        if (!plotId.matches(Regex("[A-Za-z0-9_-]{1,80}")) || !plotRouteMatches(plotId)) {
             status.text = "AKKPS Plot ID सही भरें; KML तैयार नहीं हुई।"
             return
         }
@@ -1016,7 +1033,8 @@ class AkkpsRunnerActivity : Activity() {
         }
         val currentPlotId = plotIdInput.text.toString().trim()
         val preparedAt = pendingBoundaryUploadPreparedAt
-        if (currentPlotId.isBlank() || preparedAt <= 0L || pendingBoundaryUploadPlotId != currentPlotId) {
+        if (currentPlotId.isBlank() || preparedAt <= 0L ||
+            pendingBoundaryUploadPlotId != currentPlotId || !plotRouteMatches(currentPlotId)) {
             status.text = "पहले इसी Plot ID की reviewed KML तैयार करें और AKKPS form में attach करें; उसके बाद upload verify करें।"
             return
         }
