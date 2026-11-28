@@ -16,9 +16,9 @@ object OperatorSafetyPolicy {
     private val genericCodePattern = Regex("(?i)\\bcode\\b")
     private val separatedSecretTokens = setOf("otp", "pin", "cvv", "ओटीपी", "पिन")
     private val zeroWidthCharacters = Regex("[\\u200B-\\u200D\\uFEFF]")
-    private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
+    private val destructiveWords = listOf("delete", "remove", "send", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm", "place order", "share", "forward", "follow", "unfollow", "comment", "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो")
     private val finalButtonLabels = setOf(
-        "send", "send message", "submit", "pay", "pay now", "confirm", "delete", "remove", "publish", "post",
+        "send", "send message", "submit", "pay", "pay now", "confirm", "delete", "remove", "publish", "post", "share", "forward", "follow", "unfollow", "comment",
         "भेजें", "भेजो", "सबमिट", "भुगतान", "अभी भुगतान करें", "पुष्टि करें", "हटाएं", "मिटाएं", "प्रकाशित करें"
     )
     private fun normalize(value: String): String =
@@ -37,13 +37,26 @@ object OperatorSafetyPolicy {
         return false
     }
 
-    fun assess(action: String, target: String = "", value: String = "", expectedVisibleText: String = ""): Decision {
+    fun assess(
+        action: String,
+        target: String = "",
+        value: String = "",
+        expectedVisibleText: String = "",
+        explicitlyAuthorizedByUser: Boolean = false
+    ): Decision {
         val all = normalize("$action $target $value $expectedVisibleText")
         val tokens = all.split(Regex("[^\\p{L}\\p{N}]+"))
         if (secretPattern.containsMatchIn(all) || genericCodePattern.containsMatchIn(all) ||
             "code" in tokens || containsSeparatedSecretLabel(all)) {
             return Decision(Risk.BLOCK, "पासवर्ड, OTP, PIN या भुगतान-सुरक्षा जानकारी AI द्वारा नहीं भरी जाएगी।")
         }
+        val normalizedAction = normalize(action).replace(Regex("[^a-z0-9]+"), "_").trim('_')
+        val normalizedTarget = normalize(target).replace(Regex("\\s+"), " ").trim()
+        val exactSendButton = normalizedAction == "click_text" &&
+            normalizedTarget in setOf("send", "send message", "भेजें", "भेजो", "सेंड")
+        // The planner sets this flag only after proving that the original user command
+        // contains the exact recipient and message and the visible Send control is unique.
+        if (explicitlyAuthorizedByUser && exactSendButton) return Decision(Risk.LOW, "उपयोगकर्ता ने इसी recipient और message को स्पष्ट रूप से भेजने का निर्देश दिया।")
         if (destructiveWords.any { all.contains(it) }) return Decision(Risk.CONFIRM, "इस कार्रवाई से संदेश, भुगतान, खरीद, प्रकाशन या डेटा हट सकता है; स्पष्ट पुष्टि आवश्यक है।")
         if (all.contains("accessibility settings") || all.contains("unknown sources") || all.contains("install apk")) return Decision(Risk.BLOCK, "सुरक्षा सेटिंग/अनजान APK की अनुमति AI स्वयं नहीं बदलेगा।")
         return Decision(Risk.LOW, "सामान्य कार्रवाई")

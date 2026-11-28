@@ -11,7 +11,8 @@ class AkkpsPageCapabilityDiscoveryTest {
             fieldTypes = listOf("text", "file"),
             fieldLabels = listOf("Farmer Name", "Search"),
             actionLabels = listOf("Create New", "Save", "Submit", "Upload Document"),
-            navigationLabels = listOf("Farmers", "Plots")
+            navigationLabels = listOf("Farmers", "Plots"),
+            supportedDataEntryModule = true
         ).associateBy { it.operation }
 
         assertEquals(CapabilityState.AVAILABLE, result.getValue(WebsiteOperation.SEARCH_RECORDS).state)
@@ -42,10 +43,12 @@ class AkkpsPageCapabilityDiscoveryTest {
 
     @Test fun createAndDetailRoutesAreExplicitEvidence() {
         val create = AkkpsPageCapabilityDiscovery.discover(
-            0, 0, emptyList(), emptyList(), emptyList(), emptyList(), isCreateRoute = true
+            0, 0, emptyList(), emptyList(), emptyList(), emptyList(),
+            isCreateRoute = true, supportedDataEntryModule = true
         )
         val detail = AkkpsPageCapabilityDiscovery.discover(
-            0, 0, emptyList(), emptyList(), emptyList(), emptyList(), isDetailRoute = true
+            0, 0, emptyList(), emptyList(), emptyList(), emptyList(),
+            isDetailRoute = true, supportedDataEntryModule = true
         )
         assertEquals(CapabilityState.AVAILABLE, create.first { it.operation == WebsiteOperation.CREATE_RECORD }.state)
         assertEquals(CapabilityState.AVAILABLE, detail.first { it.operation == WebsiteOperation.VIEW_RECORD }.state)
@@ -112,7 +115,8 @@ class AkkpsPageCapabilityDiscoveryTest {
             fieldTypes = emptyList(),
             fieldLabels = emptyList(),
             actionLabels = listOf("Create New Farmer"),
-            navigationLabels = emptyList()
+            navigationLabels = emptyList(),
+            supportedDataEntryModule = true
         )
         assertEquals(
             CapabilityState.AVAILABLE,

@@ -34,6 +34,20 @@ object AkkpsPageInventory {
         return runCatching { JSONObject(raw) }.getOrNull()
     }
 
+    /** First-level module links observed in the latest authenticated page inspection. */
+    fun observedRoutes(context: Context): List<AkkpsObservedRunnerRoute> {
+        val page = last(context) ?: return emptyList()
+        val modules = page.optJSONArray("modules") ?: return emptyList()
+        return (0 until modules.length()).mapNotNull { index ->
+            val item = modules.optJSONObject(index) ?: return@mapNotNull null
+            AkkpsObservedRunnerRoutePolicy.validate(
+                item.optString("label"),
+                item.optString("path"),
+                AkkpsWebsiteProfile.CANONICAL_URL
+            )?.copy(active = item.optBoolean("active"))
+        }.distinctBy { it.path }.take(30)
+    }
+
     fun summary(page: JSONObject): String {
         val modules = page.optJSONArray("modules")?.length() ?: 0
         val actions = page.optJSONArray("actions")?.length() ?: 0
@@ -50,9 +64,12 @@ object AkkpsPageInventory {
         for (i in 0 until (source?.length() ?: 0)) {
             val item = source?.optJSONObject(i) ?: continue
             val label = item.optString("label").trim().take(80)
-            val path = safePath(item.optString("path"))
-            if (label.isNotBlank() && path.isNotBlank()) {
-                out.put(JSONObject().put("label", label).put("path", path).put("active", item.optBoolean("active")))
+            val route = AkkpsObservedRunnerRoutePolicy.validate(
+                label, item.optString("path"), AkkpsWebsiteProfile.CANONICAL_URL
+            )
+            if (route != null) {
+                out.put(JSONObject().put("label", route.label).put("path", route.path)
+                    .put("active", item.optBoolean("active")))
             }
         }
     }

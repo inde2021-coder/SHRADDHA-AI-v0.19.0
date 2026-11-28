@@ -45,7 +45,10 @@ class TaskPlannerOperatorBridge(
             require(action.id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
             require(action.title.isNotBlank() && action.title.length <= 120)
             validateOperatorStep(action.step)
-            val safety = OperatorSafetyPolicy.assess(action.step.action.name, action.step.target, action.step.value, action.step.expectedVisibleText)
+            val safety = OperatorSafetyPolicy.assess(
+                action.step.action.name, action.step.target, action.step.value,
+                action.step.expectedVisibleText, action.step.explicitlyAuthorizedByUser
+            )
             require(safety.risk != OperatorSafetyPolicy.Risk.BLOCK) {
                 "Operator plan contains an action blocked by safety policy: ${safety.reason}"
             }
@@ -78,11 +81,17 @@ class TaskPlannerOperatorBridge(
         when (step.action) {
             OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT ->
                 require(step.target.isNotBlank()) { "Action requires an explicit target" }
+            OperatorActionType.SELECT_FILE -> {
+                require(step.target.isNotBlank() && step.value.isBlank() &&
+                    step.expectedVisibleText.equals(step.target, ignoreCase = true)) {
+                    "SELECT_FILE requires an exact file name, no extra value and a matching postcondition"
+                }
+            }
             OperatorActionType.TYPE_TEXT -> {
                 require(step.target.isNotBlank()) { "TYPE_TEXT requires an explicit field target" }
                 require(step.value.isNotBlank()) { "TYPE_TEXT requires a non-empty value" }
             }
-            OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD ->
+            OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD ->
                 require(step.target.isBlank() && step.value.isBlank()) {
                     "Navigation actions do not accept a target or input value"
                 }

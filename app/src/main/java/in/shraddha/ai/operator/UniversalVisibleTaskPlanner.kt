@@ -2,74 +2,204 @@ package `in`.shraddha.ai.operator
 
 import org.json.JSONObject
 import org.json.JSONTokener
+import java.util.Locale
 
-/** A single action proposed from the currently visible UI, not an arbitrary device script. */
-data class UniversalVisibleStep(val action: OperatorActionType, val target: String = "", val value: String = "", val expectedVisibleText: String = "")
+/** A single action proposed from the current UI; future targets are re-resolved at dispatch time. */
+data class UniversalVisibleStep(
+    val action: OperatorActionType,
+    val target: String = "",
+    val value: String = "",
+    val expectedVisibleText: String = "",
+    val explicitlyAuthorizedByUser: Boolean = false,
+    val requiresRuntimeTargetResolution: Boolean = false
+)
 
-/** Validates model output against the live accessibility snapshot before it can enter the Main Brain queue. */
+/** Validates model output against observed UI evidence and the literal user command. */
 object UniversalVisibleTaskPlanner {
     data class Result(val steps: List<UniversalVisibleStep> = emptyList(), val error: String? = null)
 
     fun parseAndValidate(raw: String, userCommand: String, snapshot: ScreenSnapshot): Result {
         if (raw.length !in 1..20_000) return Result(error = "AI plan size invalid है।")
         if (userCommand.isBlank() || userCommand.length > 3000) return Result(error = "User command invalid है।")
-        val root = runCatching { JSONTokener(raw).nextValue() as? JSONObject }.getOrNull()
+        val tokener = JSONTokener(raw)
+        val root = runCatching { tokener.nextValue() as? JSONObject }.getOrNull()
             ?: return Result(error = "AI ने valid JSON plan नहीं दिया।")
+        if (runCatching { tokener.nextClean() != '\u0000' }.getOrDefault(true)) {
+            return Result(error = "AI plan में JSON के बाद अतिरिक्त सामग्री मिली।")
+        }
         val array = root.optJSONArray("steps") ?: return Result(error = "Plan में steps नहीं मिले।")
         if (array.length() !in 1..8) return Result(error = "एक plan में 1 से 8 steps ही स्वीकार हैं।")
+
         val steps = mutableListOf<UniversalVisibleStep>()
+        var screenMayHaveChanged = false
         for (index in 0 until array.length()) {
             val item = array.optJSONObject(index) ?: return Result(error = "Step $index का format गलत है।")
-            val action = runCatching { OperatorActionType.valueOf(item.optString("action").uppercase()) }.getOrNull()
+            val action = runCatching { OperatorActionType.valueOf(item.optString("action").uppercase(Locale.ROOT)) }.getOrNull()
                 ?: return Result(error = "Step $index में unsupported action है।")
             val target = item.optString("target").trim()
             val value = item.optString("value")
             val expected = item.optString("expectedVisibleText").trim()
-            if (target.length > 120 || value.length > 2000 || expected.length > 120) return Result(error = "Step $index की सीमा पार हुई।")
-            if (expected.isNotBlank() && snapshot.elements.any { element ->
+            if (target.length > 120 || value.length > 2000 || expected.length > 120) {
+                return Result(error = "Step $index की सीमा पार हुई।")
+            }
+            if (!screenMayHaveChanged && expected.isNotBlank() && snapshot.elements.any { element ->
                     element.text.contains(expected, true) || element.description.contains(expected, true)
                 }) return Result(error = "Step $index का expected result पहले से स्क्रीन पर है; verification अनुमानित नहीं होगा।")
-            if (action == OperatorActionType.CLICK_TEXT && isHighImpactTarget(target)) {
-                return Result(error = "भुगतान, भेजने, प्रकाशित करने, हटाने या Submit करने वाले बटन universal planner से नहीं चलेंगे।")
-            }
+
+            var explicitlyAuthorized = false
+            var deferredTarget = false
             when (action) {
                 OperatorActionType.OPEN_APP -> {
-                    if (target.isBlank() || !containsMention(userCommand, target)) return Result(error = "ऐप का नाम user command में स्पष्ट नहीं है।")
+                    if (target.isBlank() || !containsMention(userCommand, target)) {
+                        return Result(error = "ऐप का नाम user command में स्पष्ट नहीं है।")
+                    }
+                    if (value.isNotEmpty()) return Result(error = "OPEN_APP step में अतिरिक्त value स्वीकार नहीं है।")
                 }
                 OperatorActionType.CLICK_TEXT -> {
                     val matches = snapshot.elements.filter { e ->
                         e.clickable && !e.password && listOf(e.text, e.description)
                             .any { it.isNotBlank() && it.trim().equals(target, true) }
                     }
-                    if (target.isBlank() || matches.size != 1) return Result(error = "Step $index का clickable target स्क्रीन पर exact और unique नहीं है।")
+                    if (target.isBlank()) return Result(error = "Step $index का clickable target खाली है।")
+                    if (matches.size != 1 && !screenMayHaveChanged) {
+                        return Result(error = "Step $index का clickable target स्क्रीन पर exact और unique नहीं है।")
+                    }
+                    // After any prior action that can change the screen, even a target that
+                    // existed in the old snapshot must be re-resolved from the live UI.
+                    deferredTarget = screenMayHaveChanged || matches.size != 1
                     if (value.isNotEmpty()) return Result(error = "Click step में अतिरिक्त value स्वीकार नहीं है।")
+                    if (isLikeTarget(target)) {
+                        val explicitLike = listOf("like", "लाइक", "पसंद").any {
+                            userCommand.contains(it, ignoreCase = true)
+                        }
+                        val verifiedLikedState = listOf("unlike", "liked", " unlike", "अनलाइक", "पसंद किया")
+                            .any { expected.contains(it, ignoreCase = true) }
+                        if (!explicitLike || !verifiedLikedState) {
+                            return Result(error = "Like action के लिए explicit user intent और Unlike/Liked postcondition आवश्यक है।")
+                        }
+                    }
+                    if (isHighImpactTarget(target)) {
+                        val isSendButton = target.lowercase().trim() in setOf("send", "send message", "भेजें", "भेजो", "सेंड")
+                        if (isSendButton) {
+                            explicitlyAuthorized = isExplicitSendSequence(userCommand, target, expected, steps)
+                            if (!explicitlyAuthorized) {
+                                return Result(error = "Send के लिए exact recipient, typed message और explicit send command आवश्यक है।")
+                            }
+                        } else if (!isExplicitHighImpactIntent(userCommand, target, expected)) {
+                            return Result(error = "इस public/destructive action के लिए command में exact intent और visible postcondition आवश्यक है।")
+                        }
+                    }
+                }
+                OperatorActionType.SELECT_FILE -> {
+                    if (target.isBlank() || !containsMention(userCommand, target)) {
+                        return Result(error = "चुनी जाने वाली file का exact नाम user command में स्पष्ट नहीं है।")
+                    }
+                    if (value.isNotBlank()) return Result(error = "SELECT_FILE step में अतिरिक्त value स्वीकार नहीं है।")
+                    if (expected.isBlank() || !expected.equals(target, true)) {
+                        return Result(error = "चुनी गई file का exact नाम post-selection verification में देना आवश्यक है।")
+                    }
+                    deferredTarget = screenMayHaveChanged
                 }
                 OperatorActionType.TYPE_TEXT -> {
                     val matches = snapshot.elements.filter { e ->
                         e.editable && !e.password && listOf(e.id, e.text, e.description, e.hintText)
                             .any { it.isNotBlank() && it.trim().equals(target, true) }
                     }
-                    if (target.isBlank() || matches.size != 1) return Result(error = "Step $index का editable field exact और unique नहीं है।")
-                    if (value.isBlank() || !userCommand.contains(value, ignoreCase = true))
+                    if (target.isBlank()) return Result(error = "Step $index का editable field target खाली है।")
+                    if (matches.size != 1 && !screenMayHaveChanged) {
+                        return Result(error = "Step $index का editable field exact और unique नहीं है।")
+                    }
+                    // Never reuse a stale editable target after a screen transition.
+                    deferredTarget = screenMayHaveChanged || matches.size != 1
+                    if (value.isBlank() || !userCommand.contains(value, ignoreCase = true)) {
                         return Result(error = "Step $index का typed value user command में नहीं मिला; अनुमानित data रोका गया।")
+                    }
                 }
-                OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD -> {
-                    if (target.isNotBlank() || value.isNotBlank()) return Result(error = "Navigation step में target/value नहीं होना चाहिए।")
+                OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD -> {
+                    if (target.isNotBlank() || value.isNotBlank()) {
+                        return Result(error = "Navigation step में target/value नहीं होना चाहिए।")
+                    }
+                    if (action in setOf(OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD) &&
+                        snapshot.elements.none { it.scrollable }) {
+                        return Result(error = "स्क्रीन पर कोई observed scrollable area नहीं है; scroll अनुमान से नहीं किया जाएगा।")
+                    }
                 }
             }
-            steps += UniversalVisibleStep(action, target, value, expected)
+            steps += UniversalVisibleStep(
+                action = action,
+                target = target,
+                value = value,
+                expectedVisibleText = expected,
+                explicitlyAuthorizedByUser = explicitlyAuthorized,
+                requiresRuntimeTargetResolution = deferredTarget
+            )
+            if (action in setOf(
+                    OperatorActionType.OPEN_APP, OperatorActionType.CLICK_TEXT,
+                    OperatorActionType.BACK, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD, OperatorActionType.SELECT_FILE
+                )) screenMayHaveChanged = true
         }
         return Result(steps = steps)
     }
+
+    private fun isLikeTarget(value: String): Boolean =
+        value.lowercase().trim() in setOf("like", "like button", "लाइक", "पसंद")
 
     private fun isHighImpactTarget(value: String): Boolean {
         val normalized = value.lowercase().trim()
         val blocked = listOf(
             "delete", "remove", "send", "pay", "transfer", "purchase", "buy",
-            "publish", "post", "submit", "confirm", "place order",
+            "publish", "post", "submit", "confirm", "place order", "share", "forward", "follow", "unfollow", "comment",
             "हटाओ", "मिटाओ", "भुगतान", "पैसे भेज", "खरीद", "पोस्ट करो", "भेजो", "पुष्टि करो", "जमा करो", "सबमिट"
         )
         return blocked.any { normalized.contains(it) }
+    }
+
+    private fun isExplicitHighImpactIntent(command: String, target: String, expected: String): Boolean {
+        if (expected.isBlank()) return false
+        val normalizedTarget = target.lowercase().trim()
+        val verbs = when {
+            normalizedTarget.contains("share") || normalizedTarget.contains("forward") ||
+                normalizedTarget.contains("शेयर") -> listOf("share", "forward", "शेयर", "साझा")
+            normalizedTarget.contains("follow") || normalizedTarget.contains("अनुसरण") ||
+                normalizedTarget.contains("फॉलो") -> listOf("follow", "unfollow", "फॉलो", "अनुसरण")
+            normalizedTarget.contains("comment") || normalizedTarget.contains("टिप्पणी") ->
+                listOf("comment", "टिप्पणी", "कमेंट")
+            normalizedTarget.contains("delete") || normalizedTarget.contains("remove") ||
+                normalizedTarget.contains("हट") || normalizedTarget.contains("मिट") ->
+                listOf("delete", "remove", "हटाओ", "हटाएं", "मिटाओ", "मिटाएं")
+            normalizedTarget.contains("pay") || normalizedTarget.contains("transfer") ||
+                normalizedTarget.contains("भुगतान") -> listOf("pay", "transfer", "भुगतान", "पैसे भेज")
+            normalizedTarget.contains("publish") || normalizedTarget.contains("post") ||
+                normalizedTarget.contains("submit") || normalizedTarget.contains("प्रकाशित") ->
+                listOf("publish", "post", "submit", "प्रकाशित", "जमा", "सबमिट")
+            else -> listOf("delete", "remove", "pay", "transfer", "purchase", "buy", "publish", "post", "submit", "confirm")
+        }
+        return verbs.any { command.contains(it, ignoreCase = true) }
+    }
+
+    private fun isExplicitSendSequence(
+        command: String,
+        sendTarget: String,
+        expected: String,
+        previous: List<UniversalVisibleStep>
+    ): Boolean {
+        val sendLabels = setOf("send", "send message", "भेजें", "भेजो", "सेंड")
+        if (sendTarget.lowercase().trim() !in sendLabels) return false
+        val explicitVerb = listOf("send", "भेजो", "भेजना", "भेजें", "सेंड").any {
+            command.contains(it, ignoreCase = true)
+        }
+        if (!explicitVerb || expected.isBlank()) return false
+        val messageWasTyped = previous.any {
+            it.action == OperatorActionType.TYPE_TEXT && it.value.isNotBlank() &&
+                it.value == expected && command.contains(it.value, ignoreCase = true)
+        }
+        val navigationLabels = setOf("chats", "search", "messages", "contacts", "खोज", "चैट", "संदेश")
+        val explicitRecipientWasSelected = previous.any {
+            it.action == OperatorActionType.CLICK_TEXT &&
+                it.target.lowercase().trim() !in navigationLabels &&
+                containsMention(command, it.target)
+        }
+        return messageWasTyped && explicitRecipientWasSelected
     }
 
     private fun containsMention(command: String, target: String): Boolean =

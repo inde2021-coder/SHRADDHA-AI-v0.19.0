@@ -37,7 +37,10 @@ class OperatorEngine(
     /** Execute one explicitly supplied step at a time. Sensitive actions are deliberately excluded. */
     fun execute(step: OperatorStep, confirmed: Boolean = false): Boolean {
         if (cancelled) { record("operator_action", "cancelled", step); return false }
-        val safety = OperatorSafetyPolicy.assess(step.action.name, step.target, step.value, step.expectedVisibleText)
+        val safety = OperatorSafetyPolicy.assess(
+            step.action.name, step.target, step.value, step.expectedVisibleText,
+            step.explicitlyAuthorizedByUser
+        )
         if (safety.risk == OperatorSafetyPolicy.Risk.BLOCK) {
             emit(OperatorEvent(OperatorTaskState.FAILED, safety.reason)); record("operator_action", "blocked", step); return false
         }
@@ -56,6 +59,7 @@ class OperatorEngine(
                 // The accessibility service independently rechecks visibility, sensitivity and uniqueness.
                 match != null && ShraddhaAccessibilityService.clickVisibleText(step.target)
             }
+            OperatorActionType.SELECT_FILE -> ShraddhaAccessibilityService.selectFileInPicker(step.target)
             OperatorActionType.TYPE_TEXT -> {
                 // Never type into whichever field happens to have focus. The caller
                 // must identify one visible, non-sensitive field by its exact label,
@@ -72,7 +76,11 @@ class OperatorEngine(
             }
             OperatorActionType.BACK -> ShraddhaAccessibilityService.goBack()
             OperatorActionType.HOME -> ShraddhaAccessibilityService.goHome()
-            OperatorActionType.SCROLL_FORWARD -> ShraddhaAccessibilityService.scrollForward()
+            // Scroll is allowed only after this step's fresh observation proves a scrollable surface.
+            OperatorActionType.SCROLL_FORWARD -> before.elements.any { it.scrollable } &&
+                ShraddhaAccessibilityService.scrollForward()
+            OperatorActionType.SCROLL_BACKWARD -> before.elements.any { it.scrollable } &&
+                ShraddhaAccessibilityService.scrollBackward()
         }
         if (!ok) {
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई नहीं हो सकी। स्क्रीन/ऐप की अनुमति या UI स्थिति जाँचें।")); record("operator_action", "dispatch_failed", step, before); return false
@@ -80,17 +88,32 @@ class OperatorEngine(
         emit(OperatorEvent(OperatorTaskState.VERIFYING, "कार्रवाई के बाद स्क्रीन दोबारा जाँची जा रही है…"))
         Thread.sleep(450)
         val after = observe() ?: run { record("operator_action", "verification_unavailable", step, before); return false }
-        val expectedVisible = step.expectedVisibleText.isNotBlank() && after.elements.any {
+        val expectedVisible = if (step.explicitlyAuthorizedByUser) {
+            // Verify the exact dictated message as a conversation item, not merely in the composer.
+            val sentItemVisible = after.elements.any { element ->
+                !element.editable && !element.password &&
+                    (element.text.contains(step.expectedVisibleText, true) ||
+                        element.description.contains(step.expectedVisibleText, true))
+            }
+            val composerStillContains = after.elements.any { element ->
+                element.editable && !element.password &&
+                    (element.text.contains(step.expectedVisibleText, true) ||
+                        element.description.contains(step.expectedVisibleText, true))
+            }
+            step.expectedVisibleText.isNotBlank() && sentItemVisible && !composerStillContains
+        } else step.expectedVisibleText.isNotBlank() && after.elements.any {
             it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
         }
         val screenChanged = screenFingerprint(before) != screenFingerprint(after)
-        val actionVerified = if (step.expectedVisibleText.isNotBlank()) expectedVisible else when (step.action) {
+        val actionVerified = if (step.action == OperatorActionType.SELECT_FILE) {
+            screenChanged && expectedVisible
+        } else if (step.expectedVisibleText.isNotBlank()) expectedVisible else when (step.action) {
             OperatorActionType.TYPE_TEXT -> step.value.isNotBlank() && after.elements.any {
                 !it.password && (it.text.contains(step.value, true) || it.description.contains(step.value, true))
             }
             OperatorActionType.OPEN_APP -> screenChanged ||
                 after.packageName.contains(step.target, true) || after.activityName.contains(step.target, true)
-            OperatorActionType.CLICK_TEXT, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD -> screenChanged
+            OperatorActionType.CLICK_TEXT, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD -> screenChanged
         }
         if (!actionVerified) {
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित UI बदलाव/परिणाम सत्यापित नहीं हुआ।", after)); record("operator_action", "verification_failed", step, after); return false

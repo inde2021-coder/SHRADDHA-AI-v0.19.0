@@ -38,6 +38,7 @@ class AkkpsRunnerActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var command: EditText
     private lateinit var status: TextView
+    private lateinit var observedNavigation: LinearLayout
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
     private var pendingGeolocationCallback: android.webkit.GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
@@ -156,6 +157,8 @@ class AkkpsRunnerActivity : Activity() {
                 LinearLayout.LayoutParams(0, dp(42), 1f))
         }
         root.addView(modules)
+        observedNavigation = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(observedNavigation)
         plotIdInput = EditText(this).apply {
             hint = "AKKPS Plot ID (जैसे PLOT-123)"
             setSingleLine(true); setTextColor(Color.WHITE); setHintTextColor(0xFF7896A8.toInt())
@@ -705,18 +708,15 @@ class AkkpsRunnerActivity : Activity() {
               const navigation=[...document.querySelectorAll('a[href]')].filter(visible).map(a=>{
                 try{
                   const u=new URL(a.href,location.href);
-                  if(u.origin!==location.origin) return null;
+                  if(u.origin!==location.origin||u.protocol!=='https:'||u.search||u.hash) return null;
                   const p=u.pathname.replace(/\/$/,'')||'/';
-                  let module='';
-                  if(/^\/runner\/?$/.test(p)) module='HOME';
-                  else if(/^\/runner\/farmers(?:\/new|\/[^/]+)?$/.test(p)) module='FARMERS';
-                  else if(/^\/runner\/plots(?:\/new|\/[^/]+)?$/.test(p)||p==='/plots/new') module='PLOTS';
-                  else if(/^\/runner\/awd-reports(?:\/new|\/[^/]+)?$/.test(p)||p==='/awd-reports/new') module='AWD_REPORTS';
-                  else if(p==='/runner/profile') module='PROFILE';
-                  else if(p==='/runner/sync') module='SYNC';
-                  return module?{label:n(a.innerText||a.getAttribute('aria-label')),module}:null;
+                  const parts=p.split('/').filter(Boolean);
+                  if(parts.length!==2||parts[0]!=='runner'||['admin','coordinator','superadmin','login','logout'].includes(parts[1].toLowerCase())) return null;
+                  if(!/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(parts[1])) return null;
+                  const label=n(a.innerText||a.getAttribute('aria-label')||a.title);
+                  return label?{label,path:p,active:a.getAttribute('aria-current')==='page'||a.classList.contains('active')}:null;
                 }catch(_){return null}
-              }).filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.module===v.module&&x.label===v.label)===i).slice(0,30);
+              }).filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.path===v.path&&x.label===v.label)===i).slice(0,30);
               const path=location.pathname.replace(/\/$/,'')||'/';
               let module='UNKNOWN';
               if(path==='/runner') module='HOME';
@@ -743,9 +743,24 @@ class AkkpsRunnerActivity : Activity() {
             val actions = obj.optJSONArray("actions") ?: JSONArray()
             val actionLabels = (0 until actions.length()).map { actions.optString(it) }
             val navigationItems = obj.optJSONArray("navigation") ?: JSONArray()
-            val navigationLabels = (0 until navigationItems.length()).mapNotNull {
-                navigationItems.optJSONObject(it)?.optString("label")?.takeIf { label -> label.isNotBlank() }
+            val observedRoutes = (0 until navigationItems.length()).mapNotNull { index ->
+                val item = navigationItems.optJSONObject(index) ?: return@mapNotNull null
+                AkkpsObservedRunnerRoutePolicy.validate(
+                    item.optString("label"), item.optString("path"), web.url.orEmpty()
+                )?.copy(active = item.optBoolean("active"))
+            }.distinctBy { it.path }.take(30)
+            val safeModules = JSONArray().apply {
+                observedRoutes.forEach { routeItem ->
+                    put(JSONObject().put("label", routeItem.label).put("path", routeItem.path)
+                        .put("active", routeItem.active))
+                }
             }
+            obj.put("path", runCatching { URI(web.url.orEmpty()).path.orEmpty() }.getOrDefault(""))
+            obj.put("modules", safeModules)
+            runCatching { AkkpsPageInventory.save(this, obj) }
+            runCatching { AkkpsObservedModuleInventoryStore(this).registerObserved(observedRoutes) }
+            renderObservedNavigation(observedRoutes)
+            val navigationLabels = observedRoutes.map { it.label }
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
             val route = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
             val module = route?.module?.name ?: obj.optString("module")
@@ -757,21 +772,67 @@ class AkkpsRunnerActivity : Activity() {
                 actionLabels = actionLabels,
                 navigationLabels = navigationLabels,
                 isCreateRoute = route?.isCreateRoute == true,
-                isDetailRoute = route?.isDetailRoute == true
+                isDetailRoute = route?.isDetailRoute == true,
+                supportedDataEntryModule = route?.module in setOf(
+                    AkkpsRunnerModule.FARMERS, AkkpsRunnerModule.PLOTS, AkkpsRunnerModule.AWD_REPORTS
+                )
             )
             val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
                 .map { it.operation.name.lowercase().replace('_', ' ') }
             val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
+            val currentModulePath = route?.module?.basePath
+                ?: runCatching { URI(web.url.orEmpty()).path.orEmpty().trimEnd('/') }.getOrDefault("")
+            val currentObservedRoute = observedRoutes.firstOrNull { it.path == currentModulePath }
+                ?: AkkpsObservedRunnerRoutePolicy.validate(
+                    obj.optString("title").ifBlank { module }, currentModulePath, web.url.orEmpty()
+                )
+            if (currentObservedRoute != null) {
+                runCatching { AkkpsObservedModuleInventoryStore(this).record(currentObservedRoute, capabilities) }
+            }
+            val observedChecklist = runCatching { AkkpsObservedModuleInventoryStore(this).load() }.getOrDefault(emptyMap())
             val inspectedCount = runCatching {
                 AkkpsModuleInventoryStore(this).apply {
                     if (module in AkkpsRunnerModule.entries.map { it.name }) record(module, capabilities)
                 }.load().size
             }.getOrDefault(0)
-            status.text = "Module: $module • ${obj.optString("title")} • Inventory: $inspectedCount/6\nForms: $forms • Tables: $tables • Navigation: ${navigationLabels.size}\n" +
-                "Observed: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
+            status.text = "Module: $module • " + obj.optString("title") +
+                " • Observed modules: " + observedChecklist.size + " • Inspected: " +
+                observedChecklist.values.count { entry -> entry.capabilities.values.any { state -> state != CapabilityState.UNKNOWN } } +
+                "\nForms: $forms • Tables: $tables • Known module checks: $inspectedCount/6 • Navigation: " + navigationLabels.size +
+                "\nObserved: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
                 actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
             onReady?.invoke(obj)
         }
+    }
+
+    private fun renderObservedNavigation(routes: List<AkkpsObservedRunnerRoute>) {
+        if (!::observedNavigation.isInitialized) return
+        observedNavigation.removeAllViews()
+        if (routes.isEmpty()) return
+        observedNavigation.addView(TextView(this).apply {
+            text = "Login session में देखे गए अन्य Runner modules"
+            textSize = 11f
+            setTextColor(0xFF9CC6D6.toInt())
+            setPadding(dp(4), dp(5), dp(4), dp(4))
+        })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        routes.take(4).forEach { route ->
+            row.addView(action(route.label) {
+                val safe = AkkpsObservedRunnerRoutePolicy.validate(route.label, route.path, web.url.orEmpty())
+                if (safe == null) {
+                    status.text = "यह module link अब current AKKPS page से verify नहीं होता। पहले Inspect करें।"
+                } else {
+                    status.text = safe.label + " खोल रहे हैं। इस module की write capability अभी अलग से verify होगी।"
+                    web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + safe.path)
+                }
+            }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        }
+        observedNavigation.addView(row)
+        if (routes.size > 4) observedNavigation.addView(TextView(this).apply {
+            text = (routes.size - 4).toString() + " अतिरिक्त observed modules: Inspect के बाद कमांड से खोलें।"
+            textSize = 10f
+            setTextColor(0xFF7896A8.toInt())
+        })
     }
 
     private fun executeCommand() {
@@ -827,6 +888,19 @@ class AkkpsRunnerActivity : Activity() {
                 val route = AkkpsRunnerNavigationCommandPolicy.route(module)
                 status.text = "${module.label} module खोला जा रहा है…"
                 web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + route)
+                return
+            }
+            val observedRoute = AkkpsObservedRunnerRoutePolicy.resolveCommand(
+                raw, AkkpsPageInventory.observedRoutes(this)
+            )
+            if (observedRoute != null) {
+                val safe = AkkpsObservedRunnerRoutePolicy.validate(
+                    observedRoute.label, observedRoute.path, web.url.orEmpty()
+                )
+                if (safe != null) {
+                    status.text = safe.label + " observed Runner module खोला जा रहा है। Data-entry permission अभी verify नहीं मानी जाएगी।"
+                    web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + safe.path)
+                } else status.text = "Observed module route अब सुरक्षित रूप से verify नहीं हुआ। Inspect करें।"
                 return
             }
             val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())

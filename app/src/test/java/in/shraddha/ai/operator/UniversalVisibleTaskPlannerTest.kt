@@ -45,4 +45,139 @@ class UniversalVisibleTaskPlannerTest {
         val bad = """{"steps":[{"action":"DELETE","target":"file"}]}"""
         assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate(bad, "delete file", snapshot).error)
     }
+    @Test fun permitsExplicitSingleRecipientSendOnlyWithExactTypedMessage() {
+        val messagingScreen = snapshot.copy(elements = snapshot.elements + listOf(
+            ScreenElement("rahul", "Rahul", "", "TextView", Rect(0,100,100,140), true, false, false, false),
+            ScreenElement("message", "", "Message", "EditText", Rect(0,150,100,190), false, true, false, false, hintText = "Message"),
+            ScreenElement("send", "Send", "", "Button", Rect(0,200,100,240), true, false, false, false)
+        ))
+        val json = """{"steps":[
+            {"action":"CLICK_TEXT","target":"Rahul"},
+            {"action":"TYPE_TEXT","target":"Message","value":"I will reach in 10 minutes"},
+            {"action":"CLICK_TEXT","target":"Send","expectedVisibleText":"I will reach in 10 minutes"}
+        ]}"""
+        val result = UniversalVisibleTaskPlanner.parseAndValidate(
+            json, "WhatsApp पर Rahul को I will reach in 10 minutes भेजो", messagingScreen
+        )
+        assertNull(result.error)
+        assertTrue(result.steps.last().explicitlyAuthorizedByUser)
+    }
+
+    @Test fun rejectsSendWithoutExplicitRecipientOrExactMessage() {
+        val messagingScreen = snapshot.copy(elements = snapshot.elements + listOf(
+            ScreenElement("message", "", "Message", "EditText", Rect(0,150,100,190), false, true, false, false, hintText = "Message"),
+            ScreenElement("send", "Send", "", "Button", Rect(0,200,100,240), true, false, false, false)
+        ))
+        val json = """{"steps":[
+            {"action":"TYPE_TEXT","target":"Message","value":"Hello"},
+            {"action":"CLICK_TEXT","target":"Send","expectedVisibleText":"Hello"}
+        ]}"""
+        assertNotNull(UniversalVisibleTaskPlanner.parseAndValidate(json, "send Hello", messagingScreen).error)
+    }
+
+    @Test fun allowsTargetsOnlyAfterAVisibleScreenTransitionAndRechecksAtExecution() {
+        val json = """{"steps":[
+            {"action":"OPEN_APP","target":"WhatsApp"},
+            {"action":"CLICK_TEXT","target":"Chats"},
+            {"action":"TYPE_TEXT","target":"Search","value":"Rahul"}
+        ]}"""
+        val result = UniversalVisibleTaskPlanner.parseAndValidate(
+            json, "WhatsApp खोलो और Rahul को खोजो", snapshot
+        )
+        assertNull(result.error)
+        assertTrue(result.steps[1].requiresRuntimeTargetResolution)
+        assertTrue(result.steps[2].requiresRuntimeTargetResolution)
+    }
+
+
+    @Test fun acceptsExactUserNamedFileSelectionAndReverseScroll() {
+        val json = """{"steps":[
+            {"action":"SELECT_FILE","target":"invoice.pdf","expectedVisibleText":"invoice.pdf"},
+            {"action":"SCROLL_BACKWARD"}
+        ]}"""
+        val scrollableSnapshot = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "feed", "Feed", "", "RecyclerView", Rect(0,100,300,500), false, false, true, false
+        ))
+        val result = UniversalVisibleTaskPlanner.parseAndValidate(
+            json, "attach invoice.pdf and scroll back", scrollableSnapshot
+        )
+        assertNull(result.error)
+        assertEquals(OperatorActionType.SELECT_FILE, result.steps[0].action)
+        assertTrue(result.steps[1].action == OperatorActionType.SCROLL_BACKWARD)
+    }
+
+
+    @Test fun rejectsScrollWhenNoScrollableSurfaceWasObserved() {
+        val json = """{"steps":[{"action":"SCROLL_BACKWARD"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(json, "scroll back", snapshot).error
+        )
+    }
+
+    @Test fun rejectsInventedOrUnmentionedFileSelection() {
+        val json = """{"steps":[{"action":"SELECT_FILE","target":"secret.pdf"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(json, "attach invoice.pdf", snapshot).error
+        )
+        val empty = """{"steps":[{"action":"SELECT_FILE","target":""}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(empty, "attach a file", snapshot).error
+        )
+    }
+
+
+    @Test fun rejectsTrailingContentAfterAValidPlan() {
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Search"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(
+                valid + " unexpected", "press Search", snapshot
+            ).error
+        )
+    }
+
+    @Test fun acceptsWhitespaceAfterAValidPlan() {
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Search"}]}"""
+        assertNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(
+                valid + "   \n\t", "press Search", snapshot
+            ).error
+        )
+    }
+
+    @Test fun explicitShareReachesApprovalGateButUnrequestedShareIsRejected() {
+        val withShare = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "share", "Share", "", "Button", Rect(0,100,100,140), true, false, false, false
+        ))
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Share","expectedVisibleText":"Shared"}]}"""
+        val accepted = UniversalVisibleTaskPlanner.parseAndValidate(
+            valid, "share this post with Rahul", withShare
+        )
+        assertNull(accepted.error)
+        assertFalse(accepted.steps.single().explicitlyAuthorizedByUser)
+
+        val invalid = UniversalVisibleTaskPlanner.parseAndValidate(
+            valid, "open this post", withShare
+        )
+        assertNotNull(invalid.error)
+    }
+
+
+    @Test fun likeRequiresExplicitIntentAndVerifiedLikedState() {
+        val withLike = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "like", "Like", "", "Button", Rect(0,100,100,140), true, false, false, false
+        ))
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Like","expectedVisibleText":"Unlike"}]}"""
+        assertNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(valid, "like the first reel", withLike).error
+        )
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(valid, "open the first reel", withLike).error
+        )
+        val noPostcondition = """{"steps":[{"action":"CLICK_TEXT","target":"Like"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(noPostcondition, "like the first reel", withLike).error
+        )
+    }
+
+
 }

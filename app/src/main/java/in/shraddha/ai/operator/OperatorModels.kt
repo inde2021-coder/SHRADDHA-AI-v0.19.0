@@ -25,14 +25,15 @@ data class ScreenSnapshot(
     val elements: List<ScreenElement>
 )
 
-enum class OperatorActionType { OPEN_APP, CLICK_TEXT, TYPE_TEXT, BACK, HOME, SCROLL_FORWARD }
+enum class OperatorActionType { OPEN_APP, CLICK_TEXT, TYPE_TEXT, SELECT_FILE, BACK, HOME, SCROLL_FORWARD, SCROLL_BACKWARD }
 
 data class OperatorStep(
     val action: OperatorActionType,
     val target: String = "",
     val value: String = "",
     val expectedVisibleText: String = "",
-    val requiresConfirmation: Boolean = false
+    val requiresConfirmation: Boolean = false,
+    val explicitlyAuthorizedByUser: Boolean = false
 )
 
 enum class OperatorTaskState { IDLE, OBSERVING, EXECUTING, VERIFYING, WAITING_CONFIRMATION, COMPLETED, FAILED, CANCELLED }

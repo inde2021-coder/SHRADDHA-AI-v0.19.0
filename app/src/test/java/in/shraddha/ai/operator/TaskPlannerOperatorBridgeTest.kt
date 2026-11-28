@@ -76,6 +76,30 @@ class TaskPlannerOperatorBridgeTest {
         assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
     }
 
+
+    @Test fun fileSelectionAndReverseScrollAreValidatedAsSupportedOperatorSteps() {
+        val executed = mutableListOf<OperatorActionType>()
+        val bridge = TaskPlannerOperatorBridge(executeVerified = { step, _ ->
+            executed += step.action
+            true
+        })
+        bridge.createPlan("bridge-file-scroll", "Attach report and navigate", listOf(
+            PlannedOperatorAction(
+                "file", "Select report file",
+                OperatorStep(OperatorActionType.SELECT_FILE, target = "report.pdf", expectedVisibleText = "report.pdf")
+            ),
+            PlannedOperatorAction(
+                "scroll-back", "Scroll to previous content",
+                OperatorStep(OperatorActionType.SCROLL_BACKWARD),
+                dependsOn = setOf("file")
+            )
+        ))
+        val completed = bridge.start()
+        assertEquals(listOf(OperatorActionType.SELECT_FILE, OperatorActionType.SCROLL_BACKWARD), executed)
+        assertEquals(WorkflowStatus.COMPLETED, completed.workflow.status)
+    }
+
+
     @Test(expected = IllegalArgumentException::class)
     fun secretEntryIsRejectedBySafetyPolicyBeforeExecution() {
         val bridge = TaskPlannerOperatorBridge(executeVerified = { _, _ -> fail("Blocked action must never execute"); false })
