@@ -167,11 +167,15 @@ class AkkpsBrowserOperator:
         return self.inventory()
 
     def close(self):
-        if self._context:
-            self._context.close()
-        if self._playwright:
-            self._playwright.stop()
-        self._context = self._playwright = self._page = None
+        try:
+            if self._context:
+                self._context.close()
+        finally:
+            try:
+                if self._playwright:
+                    self._playwright.stop()
+            finally:
+                self._context = self._playwright = self._page = None
 
     def navigate(self, url: str):
         validate_runner_url(url)
