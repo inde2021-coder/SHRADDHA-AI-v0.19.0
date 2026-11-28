@@ -173,6 +173,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         activeOrb?.setReducedMotion(NovaPreferences.getBoolean(this, NovaPreferences.Keys.REDUCED_MOTION, false))
         activeOrb?.setOrbStyle(NovaOrbStyle.fromString(NovaPreferences.getString(this, NovaPreferences.Keys.ORB_STYLE, NovaOrbStyle.NOVA.name)))
+        // Returning from Android Settings must refresh the live permission snapshot.
+        if (currentPage == "permissions" && ::pageRoot.isInitialized) showPage("permissions")
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -501,6 +503,15 @@ class MainActivity : AppCompatActivity() {
             "cloud" -> addFirebaseCloudSection(pageRoot)
             "future" -> addFutureIntelligence(pageRoot)
             "permissions" -> section(pageRoot, "APP CONTROL SETUP", "Android permissions को अपनी इच्छा से चालू करें") {
+                val permissionLines = `in`.shraddha.ai.permissions.PermissionHealth.collect(this@MainActivity)
+                    .joinToString("\n") { item -> (if (item.enabled) "●" else "○") + "  " + item.title + ": " + item.detail }
+                addView(TextView(this@MainActivity).apply {
+                    text = "वास्तविक permission status\n" + permissionLines
+                    textSize = 12f; setLineSpacing(dp(5).toFloat(), 1f)
+                    setTextColor(0xFFDCE8F5.toInt()); setPadding(dp(14), dp(14), dp(14), dp(14))
+                    background = rounded(0xFF101D2D.toInt(), 16)
+                    contentDescription = "Read-only permission status: " + permissionLines
+                })
                 addView(actionButton("Enable Contacts + Calling", "Voice call के लिए Contacts और Phone permission एक बार दें") {
                     requestFeaturePermissions(arrayOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.CALL_PHONE), 12, "Voice calling")
                 })
