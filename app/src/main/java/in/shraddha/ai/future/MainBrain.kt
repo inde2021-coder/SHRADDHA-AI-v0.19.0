@@ -85,7 +85,10 @@ class MainBrain(
             }.getOrNull() ?: return JSONObject().put("status", "blocked")
                 .put("action", "command_journal_unavailable")
                 .put("message", "सुरक्षित command record नहीं बन पाया; कोई action execute नहीं किया गया।")
-            if (commandJournal.markRunning(plan.id, "voice-action") == null) {
+            fun safeFinish(state: `in`.shraddha.ai.operator.CommandStepState, code: String) =
+                runCatching { commandJournal.finish(plan.id, "voice-action", state, code) }.getOrNull()
+
+            if (runCatching { commandJournal.markRunning(plan.id, "voice-action") }.getOrNull() == null) {
                 return JSONObject().put("status", "blocked")
                     .put("action", "duplicate_or_unresolved_command")
                     .put("message", "यह command पहले से दर्ज है या इसकी पिछली स्थिति unresolved है। दोबारा चलाने से पहले target app में जाँच करें।")
@@ -101,7 +104,7 @@ class MainBrain(
                     "verification_pending" -> `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN
                     else -> `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN
                 }
-                val saved = commandJournal.finish(plan.id, "voice-action", state, result.optString("action", status))
+                val saved = safeFinish(state, result.optString("action", status))
                 return if (saved != null) result else JSONObject()
                     .put("status", "verification_pending")
                     .put("action", "command_result_not_journaled")
@@ -115,7 +118,7 @@ class MainBrain(
                 val journal = `in`.shraddha.ai.operator.VoiceToolActionJournal(context.applicationContext)
                 val taskId = "voice_" + UUID.randomUUID().toString().replace("-", "")
                 if (!journal.begin(taskId, toolName)) {
-                    commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.BLOCKED, "voice_journal_busy")
+                    safeFinish(`in`.shraddha.ai.operator.CommandStepState.BLOCKED, "voice_journal_busy")
                     return JSONObject().put("status", "error")
                         .put("action", "voice_action_journal_unavailable")
                         .put("message", "सुरक्षित action journal save नहीं हुई; Website Forge launch नहीं किया गया।")
@@ -128,7 +131,7 @@ class MainBrain(
                         .put("message", error.localizedMessage ?: "Website Forge launch failed.")
                 }
                 if (!journal.finish(taskId, result)) {
-                    commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN, "voice_result_unrecorded")
+                    safeFinish(`in`.shraddha.ai.operator.CommandStepState.UNCERTAIN, "voice_result_unrecorded")
                     return JSONObject()
                         .put("status", "verification_pending")
                         .put("action", "voice_action_result_not_journaled")
@@ -139,7 +142,7 @@ class MainBrain(
 
             val scheduler = runCatching { MainBrainSchedulerRuntime.get(context.applicationContext) }
                 .getOrElse { error ->
-                    commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_unavailable")
+                    safeFinish(`in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_unavailable")
                     return JSONObject().put("status", "error")
                         .put("action", "scheduler_storage_unavailable")
                         .put("message", "Main Brain encrypted task history could not be opened; no voice action was started. ${error.localizedMessage ?: "Secure storage unavailable"}")
@@ -154,19 +157,19 @@ class MainBrain(
                     payload = payload
                 ))).single()
             }.getOrElse { error ->
-                commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_submit_failed")
+                safeFinish(`in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_submit_failed")
                 return JSONObject().put("status", "error")
                     .put("message", error.message ?: "Main Brain could not queue the voice tool.")
             }
             val claim = runCatching { scheduler.claimSpecific(taskId) }.getOrElse { error ->
-                commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_claim_failed")
+                safeFinish(`in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_claim_failed")
                 return JSONObject().put("status", "error")
                     .put("action", "scheduler_claim_failed")
                     .put("message", error.localizedMessage ?: "Main Brain could not safely claim the voice action.")
             }
             if (claim == null) {
                 runCatching { scheduler.cancel(taskId) }
-                commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_busy")
+                safeFinish(`in`.shraddha.ai.operator.CommandStepState.BLOCKED, "scheduler_busy")
                 return JSONObject().put("status", "scheduler_busy")
                     .put("message", "Main Brain is executing a higher-priority task. Please retry after it finishes.")
                     .put("task_id", submitted.task.id)
@@ -174,7 +177,7 @@ class MainBrain(
             val journal = `in`.shraddha.ai.operator.VoiceToolActionJournal(context.applicationContext)
             if (!journal.begin(taskId, toolName)) {
                 runCatching { scheduler.fail(taskId, "Encrypted voice action journal could not be committed; action was not executed.") }
-                commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.BLOCKED, "voice_journal_busy")
+                safeFinish(`in`.shraddha.ai.operator.CommandStepState.BLOCKED, "voice_journal_busy")
                 return JSONObject().put("status", "error")
                     .put("action", "voice_action_journal_unavailable")
                     .put("message", "सुरक्षित action journal save नहीं हुई; कोई action execute नहीं किया गया।")
@@ -183,7 +186,7 @@ class MainBrain(
                 val result = com.Lia.assistant.action.ActionExecutor.execute(context.applicationContext, toolName, args, withinMainBrainTask = true)
                 if (!journal.finish(taskId, result)) {
                     runCatching { scheduler.fail(taskId, "Action result could not be durably journaled; automatic replay is prohibited.") }
-                    commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN, "voice_result_unrecorded")
+                    safeFinish(`in`.shraddha.ai.operator.CommandStepState.UNCERTAIN, "voice_result_unrecorded")
                     JSONObject().put("status", "verification_pending")
                         .put("action", "voice_action_result_not_journaled")
                         .put("message", "Action execute हो सकता है, लेकिन उसका result सुरक्षित रूप से save नहीं हुआ। इसे दोबारा अपने-आप नहीं चलाया जाएगा; target app में जाँच करें।")
@@ -205,7 +208,7 @@ class MainBrain(
                     .put("action", "voice_tool_failed")
                     .put("message", error.localizedMessage ?: "Main Brain tool execution failed.")
                 journal.finish(taskId, failed)
-                commandJournal.finish(plan.id, "voice-action", `in`.shraddha.ai.operator.CommandStepState.UNCERTAIN, "execution_interrupted")
+                safeFinish(`in`.shraddha.ai.operator.CommandStepState.UNCERTAIN, "execution_interrupted")
                 runCatching { scheduler.fail(taskId, "Voice tool may have partially executed; review required.") }
                 failed
             }
