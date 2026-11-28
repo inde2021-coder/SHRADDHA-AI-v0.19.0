@@ -80,6 +80,9 @@ object UniversalVisibleTaskPlanner {
                         return Result(error = "चुनी जाने वाली file का exact नाम user command में स्पष्ट नहीं है।")
                     }
                     if (value.isNotBlank()) return Result(error = "SELECT_FILE step में अतिरिक्त value स्वीकार नहीं है।")
+                    if (expected.isBlank() || !expected.equals(target, true)) {
+                        return Result(error = "चुनी गई file का exact नाम post-selection verification में देना आवश्यक है।")
+                    }
                     deferredTarget = screenMayHaveChanged
                 }
                 OperatorActionType.TYPE_TEXT -> {
