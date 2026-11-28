@@ -10,12 +10,12 @@ except ImportError:
     from akkps_browser_operator import AkkpsBrowserOperator, DEFAULT_HOME
 
 class AkkpsBrowserWindow:
-    def __init__(self, parent):
+    def __init__(self, parent, operator=None):
         self.window = tk.Toplevel(parent)
         self.window.title("Shraddha AI • AKKPS Website Operator")
         self.window.geometry("760x620")
         self.window.minsize(620, 480)
-        self.operator = AkkpsBrowserOperator(Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile")
+        self.operator = operator or AkkpsBrowserOperator(Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile")
         self.status = tk.StringVar(value="Browser not started")
         self.field_label = tk.StringVar()
         self.field_value = tk.StringVar()
