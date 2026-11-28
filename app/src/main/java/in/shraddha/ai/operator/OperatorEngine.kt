@@ -113,7 +113,7 @@ class OperatorEngine(
             }
             OperatorActionType.OPEN_APP -> screenChanged ||
                 after.packageName.contains(step.target, true) || after.activityName.contains(step.target, true)
-            OperatorActionType.CLICK_TEXT, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD -> screenChanged
+            OperatorActionType.CLICK_TEXT, OperatorActionType.BACK, OperatorActionType.HOME, OperatorActionType.SCROLL_FORWARD, OperatorActionType.SCROLL_BACKWARD -> screenChanged
         }
         if (!actionVerified) {
             emit(OperatorEvent(OperatorTaskState.FAILED, "कार्रवाई हुई, लेकिन अपेक्षित UI बदलाव/परिणाम सत्यापित नहीं हुआ।", after)); record("operator_action", "verification_failed", step, after); return false
