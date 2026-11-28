@@ -296,7 +296,7 @@ class AkkpsBrowserWindow:
             }
             if not messagebox.askyesno(
                 "Confirm AKKPS boundary upload",
-                "This action may update the selected Plot boundary on AKKPS. It will not submit the whole Plot form.\\n\\n" +
+                "This action may update the selected Plot boundary on AKKPS. It will not submit the whole Plot form.\n\n" +
                 json.dumps(preview, ensure_ascii=False, indent=2),
                 parent=self.window
             ): return
