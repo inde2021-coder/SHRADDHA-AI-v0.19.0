@@ -253,11 +253,11 @@ class AkkpsBrowserOperator:
               .map(id => clean(document.getElementById(id)?.innerText)).filter(Boolean);
             const fieldset = e.closest('fieldset');
             const legend = fieldset?.querySelector('legend');
-            return clean([
-              ...labels, ...labelledBy, e.getAttribute('aria-label'),
-              e.closest('label')?.innerText, legend?.innerText,
-              e.getAttribute('placeholder'), e.name, e.id
-            ].filter(Boolean).join(' / '));
+            return clean(
+              labels[0] || labelledBy[0] || e.getAttribute('aria-label') ||
+              e.closest('label')?.innerText || legend?.innerText ||
+              e.getAttribute('placeholder') || e.name || e.id
+            );
           };
           const visibleForms = [...document.querySelectorAll('form')].filter(visible);
           const fieldScope = visibleForms.length === 1 ? visibleForms[0] : document;
