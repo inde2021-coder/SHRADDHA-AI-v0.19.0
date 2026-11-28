@@ -634,7 +634,7 @@ class AkkpsRunnerActivity : Activity() {
         val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
         latin.process(input).addOnSuccessListener { latinResult ->
             devanagari.process(input).addOnSuccessListener { devResult ->
-                val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\\n" + devResult.text)
+                val parsed = AkkpsFarmerCardOcrParser.parse(latinResult.text + "\n" + devResult.text)
                 latin.close(); devanagari.close()
                 if (!parsed.readyForUserReview) {
                     status.text = "कार्ड से स्पष्ट labelled fields नहीं मिले। साफ तस्वीर लें या आवाज़ से जानकारी दें।"
