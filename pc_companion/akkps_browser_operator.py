@@ -176,15 +176,15 @@ class AkkpsBrowserOperator:
             matches = self.page.get_by_placeholder(label, exact=True)
             count = matches.count()
         if count == 0:
-            matches = self.page.locator(
-                'input[name="' + label.replace('"', '\\"') + '"],'
-                'select[name="' + label.replace('"', '\\"') + '"],'
-                'textarea[name="' + label.replace('"', '\\"') + '"],'
-                'input[id="' + label.replace('"', '\\"') + '"],'
-                'select[id="' + label.replace('"', '\\"') + '"],'
-                'textarea[id="' + label.replace('"', '\\"') + '"]'
+            all_fields = self.page.locator("input,select,textarea")
+            indices = all_fields.evaluate_all(
+                "(elements, exact) => elements.map((e, i) => ({i, match: e.name === exact || e.id === exact}))"
+                ".filter(x => x.match).map(x => x.i)",
+                label,
             )
-            count = matches.count()
+            count = len(indices)
+            if count == 1:
+                matches = all_fields.nth(indices[0])
         if count != 1:
             raise RuntimeError(f"Expected exactly one field labelled {label!r}; found {count}.")
         field = matches.first
