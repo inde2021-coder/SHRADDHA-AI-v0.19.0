@@ -894,8 +894,12 @@ class AkkpsRunnerActivity : Activity() {
         return null
     }
 
+    /**
+     * A Plot ID typed into the companion field is not proof of the currently open
+     * portal record. Require the ID to be present in the authenticated Plot route.
+     */
     private fun plotRouteMatches(plotId: String): Boolean =
-        currentPlotRouteId()?.equals(plotId, ignoreCase = true) ?: true
+        plotId.isNotBlank() && currentPlotRouteId()?.equals(plotId, ignoreCase = true) == true
 
     private fun prepareBoundaryForAkkpsUpload() {
         val plotId = plotIdInput.text.toString().trim()
@@ -1334,7 +1338,12 @@ class AkkpsRunnerActivity : Activity() {
         pendingBoundaryReopenAfterLoad = false
         val recordId = pendingBoundaryReopenRecordId ?: return
         val plotId = pendingBoundaryReopenPlotId ?: return
-        if (loadedUrl != pendingBoundaryReopenUrl || !plotRouteMatches(plotId) ||
+        val expected = runCatching { URI(pendingBoundaryReopenUrl.orEmpty()) }.getOrNull()
+        val loaded = runCatching { URI(loadedUrl) }.getOrNull()
+        val samePlotRoute = expected != null && loaded != null &&
+            expected.host.equals(loaded.host, ignoreCase = true) &&
+            expected.path.equals(loaded.path, ignoreCase = true)
+        if (!samePlotRoute || !plotRouteMatches(plotId) ||
             AkkpsRunnerRouteCatalog.match(web.url.orEmpty())?.module != AkkpsRunnerModule.PLOTS) {
             status.text = "AKKPS Plot page अपेक्षित route पर reopen नहीं हुआ; boundary persistence अभी verify नहीं है।"
             return
