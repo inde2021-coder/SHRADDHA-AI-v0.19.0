@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, RUNNER_MODULES, SENSITIVE_LABEL, validate_akkps_url, validate_runner_url
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, validate_akkps_url, validate_runner_url
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -16,6 +16,13 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
     def test_rejects_credentials_in_url(self):
         with self.assertRaises(ValueError):
             validate_akkps_url("https://user:pass@www.akkps.ngo")
+
+    def test_inventory_redacts_record_specific_urls_and_dynamic_action_text(self):
+        safe_url, title = _safe_runner_location("https://www.akkps.ngo/runner/farmers/farmer-928374/edit?phone=999")
+        self.assertEqual(safe_url, "https://www.akkps.ngo/runner/farmers")
+        self.assertEqual(title, "FARMERS")
+        self.assertEqual(_safe_action_label("Create New Farmer"), "Create")
+        self.assertIsNone(_safe_action_label("View Ram Kumar"))
 
     def test_runner_module_catalog_is_exact_and_bounded(self):
         self.assertEqual(RUNNER_MODULES["farmers"], "/runner/farmers")
