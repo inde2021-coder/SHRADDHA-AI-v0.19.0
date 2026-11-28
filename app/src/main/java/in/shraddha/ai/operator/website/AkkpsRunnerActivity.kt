@@ -985,7 +985,11 @@ class AkkpsRunnerActivity : Activity() {
             (function(items){
               const norm=s=>String(s||'').normalize('NFKC').replace(/([a-z0-9])([A-Z])/g,'$1 $2').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
               const allowed=__ALLOWED_TYPES__;
-              const all=[...document.querySelectorAll('input,textarea,select')],out=[];
+              const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).display!=='none'&&
+                getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[aria-hidden="true"]');
+              const forms=[...document.forms].filter(visible);
+              if(forms.length!==1)return JSON.stringify({formError:forms.length?'form_not_unique':'form_not_found',out:[],missing:[]});
+              const form=forms[0],all=[...form.querySelectorAll('input,textarea,select')],out=[],used=new Set();
               const editable=e=>!e.disabled&&!e.readOnly&&!e.closest('[hidden],[aria-hidden="true"]')&&
                 !e.hasAttribute('hidden')&&e.getAttribute('aria-disabled')!=='true'&&
                 (e.tagName==='SELECT'?!e.multiple:(e.tagName==='TEXTAREA'||allowed.includes(String(e.type||'').toLowerCase())))&&
@@ -1015,15 +1019,18 @@ class AkkpsRunnerActivity : Activity() {
                     .map(norm).some(v=>v && v===key);
                 });
                 if(found.length===0){
-                  const groups=radioGroups(document).filter(g=>{
+                  const groups=radioGroups(form).filter(g=>{
                     const labels=groupLabel(g);
                     return labels.includes(key)||(key==='farmer gender'&&labels.includes('gender'));
                   });
                   if(groups.length!==1){out.push({key:item.key,status:groups.length?'ambiguous':'not_found'});continue;}
+                  const group=groups[0];
+                  if(group.some(r=>used.has(r))){out.push({key:item.key,status:'duplicate_target'});continue;}
                   const wanted=norm(item.value);
-                  const options=groups[0].filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
+                  const options=group.filter(r=>norm(r.value)===wanted||optionLabel(r)===wanted);
                   if(options.length!==1){out.push({key:item.key,status:options.length?'option_ambiguous':'option_not_found'});continue;}
                   options[0].checked=true;
+                  group.forEach(r=>used.add(r));
                   options[0].dispatchEvent(new Event('input',{bubbles:true}));
                   options[0].dispatchEvent(new Event('change',{bubbles:true}));
                   out.push({key:item.key,status:'filled'});
@@ -1031,6 +1038,7 @@ class AkkpsRunnerActivity : Activity() {
                 }
                 if(found.length!==1){out.push({key:item.key,status:'ambiguous'});continue;}
                 const e=found[0];
+                if(used.has(e)){out.push({key:item.key,status:'duplicate_target'});continue;}
                 if(e.tagName==='SELECT'){
                   const wanted=norm(item.value);
                   const options=[...e.options].filter(o=>!o.disabled&&!(o.parentElement&&o.parentElement.disabled)&&
@@ -1040,13 +1048,14 @@ class AkkpsRunnerActivity : Activity() {
                 }else{
                   e.value=item.value;
                 }
+                used.add(e);
                 e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true}));
                 out.push({key:item.key,status:'filled'});
               }
-              const missing=[...document.querySelectorAll('input[required],textarea[required],select[required]')]
+              const missing=[...form.querySelectorAll('input[required],textarea[required],select[required]')]
                 .filter(e=>editable(e)&&!e.value)
                 .map(e=>e.name||e.id||e.placeholder||'required field');
-              const requiredRadios=radioGroups(document).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
+              const requiredRadios=radioGroups(form).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
               requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
@@ -1055,6 +1064,10 @@ class AkkpsRunnerActivity : Activity() {
         web.evaluateJavascript(js) { rawResult ->
             val result = runCatching { JSONObject(decode(rawResult)) }.getOrNull()
             if (result == null) { status.text = "फॉर्म परिणाम पढ़ा नहीं जा सका; Submit नहीं किया।"; return@evaluateJavascript }
+            if (result.optString("formError").isNotBlank()) {
+                status.text = "एक ही स्पष्ट AKKPS फॉर्म नहीं मिला; डेटा नहीं भरा और Submit नहीं किया।"
+                return@evaluateJavascript
+            }
             val out = result.optJSONArray("out") ?: JSONArray()
             val errors = (0 until out.length()).mapNotNull { i ->
                 out.optJSONObject(i)?.takeIf { it.optString("status") != "filled" }?.let {
