@@ -68,6 +68,7 @@ class AkkpsRunnerPageWorkflowPolicyTest {
     @Test
     fun parsesOnlyKnownDocumentPickerCommands() {
         assertEquals("Field Photos", AkkpsRunnerPageWorkflowPolicy.documentFieldLabel("attach field photo"))
+        assertEquals("Field Photos", AkkpsRunnerPageWorkflowPolicy.documentFieldLabel("खेत की फोटो जोड़ें"))
         assertEquals("Farmer Photo", AkkpsRunnerPageWorkflowPolicy.documentFieldLabel("upload farmer photo"))
         assertEquals("Identity Document", AkkpsRunnerPageWorkflowPolicy.documentFieldLabel("attach Aadhaar"))
         assertEquals("Land Deed", AkkpsRunnerPageWorkflowPolicy.documentFieldLabel("attach land deed"))
