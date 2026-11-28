@@ -1022,6 +1022,36 @@ class AkkpsBrowserOperator:
             "selected_file": selected_kml[0]
         }
 
+    def reopen_plot_map_after_upload(self, record_id: str):
+        """Reload the same authenticated Plot route and report post-reload map evidence."""
+        record_id = str(record_id or "").strip()
+        if not record_id or len(record_id) > 120:
+            raise ValueError("A verified AKKPS boundary record ID is required before reopen verification.")
+        validate_runner_url(self.page.url)
+        before_url = self.page.url
+        before = urlparse(before_url)
+        route = before.path.casefold().rstrip("/")
+        if not (route == "/runner/plots" or route.startswith("/runner/plots/")):
+            raise RuntimeError("Open the same AKKPS Runner Plot page before reopening the saved boundary.")
+        self.page.reload(wait_until="domcontentloaded", timeout=30000)
+        self.page.wait_for_timeout(900)
+        validate_runner_url(self.page.url)
+        after = urlparse(self.page.url)
+        if after.netloc.casefold() != before.netloc.casefold() or after.path.casefold().rstrip("/") != route:
+            raise RuntimeError("AKKPS did not reopen the same Plot route; persistence remains unverified.")
+        evidence = self.verify_map_boundary_layers()
+        map_count = len(evidence.get("maps", []))
+        layer_evidence = evidence.get("layer_evidence", {})
+        visible_hints = sum(int(value or 0) for value in layer_evidence.values())
+        return {
+            "reopened": True, "same_plot_route": True, "record_id": record_id,
+            "map_count_after_reload": map_count,
+            "visible_vector_layer_hints_after_reload": visible_hints,
+            "polygon_persistence_verified": False,
+            "outcome": "map_reopened_with_layer_hints" if map_count == 1 and visible_hints > 0 else "reopened_but_boundary_not_visibly_confirmed",
+            "note": "The same authenticated Plot route was reloaded after a verified write response. Vector-layer hints are not proof that this exact record's polygon persisted; compare the visible Plot boundary manually."
+        }
+
     def inspect_map_boundary(self):
         """Inspect visible map/drawing controls without reading coordinates or changing geometry."""
         validate_runner_url(self.page.url)
