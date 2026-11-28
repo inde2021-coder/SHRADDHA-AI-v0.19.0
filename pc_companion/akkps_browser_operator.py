@@ -46,6 +46,37 @@ def validate_akkps_url(url: str) -> str:
     return raw
 
 
+def verified_record_response(method: str, url: str, status: int, payload):
+    """Return a record ID only for a successful, approved-origin Runner write response."""
+    try:
+        validate_akkps_url(url)
+    except ValueError:
+        return None
+    if str(method or "").upper() not in {"POST", "PUT", "PATCH"}:
+        return None
+    if not isinstance(status, int) or isinstance(status, bool) or not 200 <= status < 300:
+        return None
+    path = urlparse(url).path.casefold()
+    if not re.search(r"(farmer|plot|awd|report|record|boundary)", path):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    record_id = next((payload.get(key) or data.get(key) for key in
+                      ("recordId", "farmerId", "plotId", "reportId", "id")
+                      if payload.get(key) or data.get(key)), None)
+    state = str(payload.get("status") or data.get("status") or "").casefold()
+    message = str(payload.get("message") or data.get("message") or "").casefold()
+    success = (payload.get("success") is True or payload.get("ok") is True or
+               data.get("success") is True or state in {"success", "created", "saved", "ok"} or
+               any(term in message for term in
+                   ("saved successfully", "submitted successfully", "record created")))
+    if not success or record_id is None:
+        return None
+    value = str(record_id).strip()
+    return value[:100] if value and len(value) <= 100 else None
+
+
 def validate_runner_url(url: str) -> str:
     """Allow only login/root and Runner routes; reject encoded traversal and admin areas."""
     validate_akkps_url(url)
@@ -352,24 +383,67 @@ class AkkpsBrowserOperator:
                 "requires_user_confirmation": True, "submitted": False}
 
     def submit_after_confirmation(self, confirmation: str):
-        """Submit only after an exact human confirmation; never auto-retry."""
+        """Submit only after exact confirmation; verify a record ID or leave outcome uncertain."""
         if confirmation != "SUBMIT AKKPS RECORD":
             raise PermissionError("Explicit confirmation phrase is required before submission.")
-        # The actual submit control must be unique and visible; user confirms exact page.
-        candidates = self.page.locator('button[type="submit"], input[type="submit"]')
+        page = self.page
+        before_url = page.url
+        validate_runner_url(before_url)
+        forms = page.locator("form:visible")
+        if forms.count() != 1:
+            raise RuntimeError(f"Expected exactly one visible form; found {forms.count()}. Refusing submission.")
+        form = forms.first
+        action_url = form.get_attribute("action") or before_url
+        from urllib.parse import urljoin
+        action_url = urljoin(before_url, action_url)
+        validate_akkps_url(action_url)
+        if urlparse(action_url).netloc.casefold() != urlparse(before_url).netloc.casefold():
+            raise RuntimeError("Cross-origin form submission is blocked.")
+        action_path = urlparse(action_url).path.casefold()
+        if re.search(r"/(admin|coordinator)(/|$)", action_path):
+            raise RuntimeError("Admin/Coordinator submissions are outside the Runner scope.")
+        candidates = form.locator('button[type="submit"], input[type="submit"]')
         count = candidates.count()
         if count != 1:
-            raise RuntimeError(f"Expected one submit control; found {count}. Refusing submission.")
+            raise RuntimeError(f"Expected one submit control in the reviewed form; found {count}. Refusing submission.")
         button = candidates.first
         if not button.is_visible() or not button.is_enabled():
             raise RuntimeError("Submit control is not available.")
-        before_url = self.page.url
-        button.click()
-        # Do not wait for a navigation timeout: an SPA may have accepted the write
-        # without navigating. Report the outcome as uncertain until a record is re-opened.
-        # A click or toast alone is not server-side proof. Caller must verify the record.
-        return {"clicked": True, "before_url": before_url, "after_url": self.page.url,
-                "server_record_verified": False, "automatic_retry": False}
+        response = None
+        try:
+            with page.expect_response(
+                lambda item: (
+                    item.request.method.upper() in {"POST", "PUT", "PATCH"} and
+                    urlparse(item.url).hostname in ALLOWED_HOSTS and
+                    bool(re.search(r"(farmer|plot|awd|report|record|boundary)",
+                                   urlparse(item.url).path, re.I))
+                ),
+                timeout=15000
+            ) as response_info:
+                button.click()
+            response = response_info.value
+        except Exception:
+            # The click may have reached the server even if the browser did not
+            # expose a matching response. Never retry a potentially accepted write.
+            return {"clicked": True, "before_url": before_url,
+                    "after_url": page.url if not page.is_closed() else before_url,
+                    "server_record_verified": False, "record_id": None,
+                    "outcome": "uncertain", "automatic_retry": False}
+        record_id = None
+        try:
+            payload = response.json()
+            record_id = verified_record_response(
+                response.request.method, response.url, response.status, payload
+            )
+        except Exception:
+            record_id = None
+        return {
+            "clicked": True, "before_url": before_url,
+            "after_url": page.url if not page.is_closed() else before_url,
+            "server_record_verified": bool(record_id), "record_id": record_id,
+            "outcome": "verified" if record_id else "uncertain",
+            "automatic_retry": False
+        }
 
     def export_inventory(self, destination: str | Path):
         inventory = self.inventory()
