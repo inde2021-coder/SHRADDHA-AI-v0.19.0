@@ -1076,7 +1076,7 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Live map editing is available only in the AKKPS Runner Plots workflow.")
         map_locator = self.page.locator(
             ".leaflet-container:visible, .mapboxgl-map:visible, .ol-viewport:visible, .gm-style:visible, "
-            "[data-testid*='map' i]:visible, [aria-label*='map' i]:visible"
+            "[data-testid*='map' i]:visible, [role=application][aria-label*='map' i]:visible"
         )
         if map_locator.count() != 1:
             raise RuntimeError(
