@@ -54,6 +54,7 @@ class AkkpsRunnerActivity : Activity() {
     private var pendingAiCommand: String? = null
     private var aiCommandDispatchScheduled = false
     private var fieldFillInProgress = false
+    private var submitConfirmationPending = false
     private var pendingInspectOnLoad = false
     private var submitVerificationPending = false
     private var submitNeedsManualReview = false
@@ -122,7 +123,7 @@ class AkkpsRunnerActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (submitVerificationPending || submitNeedsManualReview || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress) {
+        if (submitVerificationPending || submitNeedsManualReview || submitConfirmationPending || pendingAiCommand != null || aiCommandDispatchScheduled || fieldFillInProgress) {
             status.text = "पिछला AKKPS command/Submit अभी पूरा नहीं हुआ। नया command नहीं चलाया गया।"
             return
         }
@@ -1220,12 +1221,18 @@ class AkkpsRunnerActivity : Activity() {
                     (0 until missing.length()).joinToString { missing.optString(it) } + "। Submit नहीं किया।"
                 return@evaluateJavascript
             }
-            AlertDialog.Builder(this)
+            submitConfirmationPending = true
+            val dialog = AlertDialog.Builder(this)
                 .setTitle("AKKPS रिकॉर्ड Submit करें?")
                 .setMessage("${out.length()} fields भरी गई हैं। AKKPS form एक बार देख लें। आपकी स्पष्ट अनुमति के बाद ही Submit होगा।")
-                .setNegativeButton("अभी नहीं", null)
-                .setPositiveButton("Confirm Submit") { _, _ -> submitForm(effectiveValues) }
-                .show()
+                .setNegativeButton("अभी नहीं") { _, _ -> submitConfirmationPending = false }
+                .setPositiveButton("Confirm Submit") { _, _ ->
+                    submitConfirmationPending = false
+                    submitForm(effectiveValues)
+                }
+                .create()
+            dialog.setOnCancelListener { submitConfirmationPending = false }
+            dialog.show()
         }
     }
 
