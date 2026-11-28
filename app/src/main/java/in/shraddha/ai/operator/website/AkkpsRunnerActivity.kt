@@ -927,19 +927,12 @@ class AkkpsRunnerActivity : Activity() {
             requestAiMapping(raw)
             return
         }
-        val dataEntryRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
-        if (!isAllowedDataEntryRoute(dataEntryRoute)) {
-            status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
-            return
-        }
         if (parsed.issues.isNotEmpty()) {
             status.text = parsed.issues.joinToString("\\n")
             return
         }
-        val wantsSubmit = parsed.submit
-        val values = parsed.assignments
         val createModule = AkkpsRunnerCreateCommandPolicy.resolve(AkkpsRunnerSubmitIntentPolicy.stripSuffix(raw))
-        if (values.isNotEmpty() && createModule != null) {
+        if (parsed.assignments.isNotEmpty() && createModule != null) {
             val targetRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
             val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
             if (targetRoute != null && (currentRoute?.module != createModule || !currentRoute.isCreateRoute)) {
@@ -949,6 +942,13 @@ class AkkpsRunnerActivity : Activity() {
                 return
             }
         }
+        val dataEntryRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+        if (!isAllowedDataEntryRoute(dataEntryRoute)) {
+            status.text = "डेटा भरने के लिए Farmers, Plots या AWD का Create/Edit form खोलें। List, Profile और Sync pages पर auto-fill बंद है।"
+            return
+        }
+        val wantsSubmit = parsed.submit
+        val values = parsed.assignments
         if (values.isEmpty()) {
             status.text = "Submit से पहले कम-से-कम एक स्पष्ट field=value assignment दें।"
             return
