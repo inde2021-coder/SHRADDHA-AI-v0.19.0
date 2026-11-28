@@ -50,7 +50,12 @@ class CommandExecutionJournal(context: Context) {
             val age = now - it.createdAt
             it.commandFingerprint == fingerprint && age in 0..DEDUP_WINDOW_MS
         }
-        if (existing != null) return existing
+        if (existing != null) {
+            val samePlanShape = existing.steps.map { Triple(it.id, it.capability, it.action) } ==
+                steps.map { Triple(it.id, it.capability, it.action) }
+            // Never reuse a recent plan for a different set/order of actions.
+            return if (samePlanShape) existing else null
+        }
         val plan = CommandTaskPlan(UUID.randomUUID().toString(), fingerprint, System.currentTimeMillis(),
             steps.map { it.copy(state = CommandStepState.PENDING, attempt = 0, resultCode = "") })
         return if (persist(plan)) plan else null
@@ -62,6 +67,29 @@ class CommandExecutionJournal(context: Context) {
     @Synchronized
     fun recoverablePlans(): List<CommandTaskPlan> = loadAll().filter { plan ->
         plan.steps.any { it.state in setOf(CommandStepState.PENDING, CommandStepState.FAILED, CommandStepState.UNCERTAIN, CommandStepState.RUNNING) }
+    }
+
+    /**
+     * Call once when the app process starts, before any task adapter can resume work.
+     * A persisted RUNNING state means the process may have died after an external side
+     * effect began. Mark it UNCERTAIN; never assume it is safe to execute again.
+     *
+     * Returns false if any durable write fails, so startup recovery can remain blocked.
+     */
+    @Synchronized
+    fun recoverInterruptedSteps(): Boolean {
+        val plans = loadAll()
+        for (plan in plans) {
+            val recovered = plan.steps.map { step ->
+                if (step.state == CommandStepState.RUNNING) step.copy(
+                    state = CommandStepState.UNCERTAIN,
+                    resultCode = "process_interrupted",
+                    updatedAt = System.currentTimeMillis()
+                ) else step
+            }
+            if (recovered != plan.steps && !persist(plan.copy(steps = recovered))) return false
+        }
+        return true
     }
 
     @Synchronized
