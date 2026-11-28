@@ -151,4 +151,22 @@ class UniversalVisibleTaskPlannerTest {
     }
 
 
+    @Test fun likeRequiresExplicitIntentAndVerifiedLikedState() {
+        val withLike = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "like", "Like", "", "Button", Rect(0,100,100,140), true, false, false, false
+        ))
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Like","expectedVisibleText":"Unlike"}]}"""
+        assertNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(valid, "like the first reel", withLike).error
+        )
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(valid, "open the first reel", withLike).error
+        )
+        val noPostcondition = """{"steps":[{"action":"CLICK_TEXT","target":"Like"}]}"""
+        assertNotNull(
+            UniversalVisibleTaskPlanner.parseAndValidate(noPostcondition, "like the first reel", withLike).error
+        )
+    }
+
+
 }
