@@ -1302,8 +1302,10 @@ class PcCompanionApp:
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "result": message[:240]}, action_id, action.get("kind", ""))
 
-    def _run_akkps_action(self, kind):
-        if kind == "akkps_open":
+    def _run_akkps_action(self, kind, module=None):
+        if kind == "akkps_module":
+            inventory = self.akkps_operator.open_module(module)
+        elif kind == "akkps_open":
             inventory = self.akkps_operator.start()
         elif kind == "akkps_runner":
             if self.akkps_operator._page is None:
