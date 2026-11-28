@@ -95,8 +95,11 @@ class UniversalVisibleTaskPlannerTest {
             {"action":"SELECT_FILE","target":"invoice.pdf","expectedVisibleText":"invoice.pdf"},
             {"action":"SCROLL_BACKWARD"}
         ]}"""
+        val scrollableSnapshot = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "feed", "Feed", "", "RecyclerView", Rect(0,100,300,500), false, false, true, false
+        ))
         val result = UniversalVisibleTaskPlanner.parseAndValidate(
-            json, "attach invoice.pdf and scroll back", snapshot
+            json, "attach invoice.pdf and scroll back", scrollableSnapshot
         )
         assertNull(result.error)
         assertEquals(OperatorActionType.SELECT_FILE, result.steps[0].action)
