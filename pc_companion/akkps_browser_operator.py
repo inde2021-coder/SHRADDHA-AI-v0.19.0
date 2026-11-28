@@ -668,10 +668,13 @@ class AkkpsBrowserOperator:
           const controls = [...document.querySelectorAll('button,[role=button]')].filter(visible)
             .map(clean).filter(x => /(polygon|boundary|draw|vertex|point|clear|undo|save|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x))
             .slice(0, 40);
-          return {maps, controls};
+          const engine = window.L ? 'leaflet' :
+            (window.mapboxgl ? 'mapbox-gl' : (window.google && window.google.maps ? 'google-maps' :
+            (window.ol ? 'openlayers' : (window.maplibregl ? 'maplibre' : 'unknown'))));
+          return {engine, maps, controls};
         }""")
         return {"page": _safe_runner_location(self.page.url)[1],
-                "maps": data["maps"], "boundary_controls": data["controls"],
+                "map_engine": data["engine"], "maps": data["maps"], "boundary_controls": data["controls"],
                 "geometry_changed": False, "submitted": False,
                 "note": "No coordinates or farmer records were read. Draw/save only through a verified page-specific workflow."}
 
