@@ -20,7 +20,11 @@ object AkkpsObservedModuleInventoryCodec {
                     entry.route.label, entry.route.path, AkkpsWebsiteProfile.CANONICAL_URL
                 ) != null &&
                 entry.observedAtEpochMillis > 0L &&
-                entry.capabilities.keys.all { key -> WebsiteOperation.entries.any { it.name == key } }
+                entry.capabilities.all { (key, state) ->
+                    val operation = WebsiteOperation.entries.firstOrNull { it.name == key }
+                    operation != null &&
+                        (AkkpsWebsiteProfile.isRunnerOperationAllowed(operation) || state == CapabilityState.UNAVAILABLE)
+                }
         }) { "Observed AKKPS module inventory is invalid." }
         return JSONObject().put("version", 1).put("modules", JSONArray().apply {
             entries.values.sortedBy { it.route.path }.forEach { entry ->
@@ -82,7 +86,10 @@ object AkkpsObservedModuleInventoryCodec {
             while (keys.hasNext()) {
                 val key = keys.next()
                 require(WebsiteOperation.entries.any { it.name == key })
-                capabilities[key] = CapabilityState.valueOf(rawCapabilities.getString(key))
+                val operation = WebsiteOperation.valueOf(key)
+                val state = CapabilityState.valueOf(rawCapabilities.getString(key))
+                require(AkkpsWebsiteProfile.isRunnerOperationAllowed(operation) || state == CapabilityState.UNAVAILABLE)
+                capabilities[key] = state
             }
             result[route.path] = AkkpsObservedModuleInventoryEntry(
                 route.copy(active = item.optBoolean("active")), observedAt, capabilities
@@ -114,12 +121,20 @@ class AkkpsObservedModuleInventoryStore(context: Context) {
             route.label, route.path, AkkpsWebsiteProfile.CANONICAL_URL
         ) ?: error("Observed AKKPS module route is invalid.")
         val current = load().toMutableMap()
+        require(safe.path in current || current.size < 30) { "AKKPS observed module inventory is full." }
+        val safeCapabilities = capabilities.associate { capability ->
+            val state = if (AkkpsWebsiteProfile.isRunnerOperationAllowed(capability.operation)) {
+                capability.state
+            } else {
+                CapabilityState.UNAVAILABLE
+            }
+            capability.operation.name to state
+        }
         current[safe.path] = AkkpsObservedModuleInventoryEntry(
             safe.copy(active = route.active),
             System.currentTimeMillis(),
-            capabilities.associate { it.operation.name to it.state }
+            safeCapabilities
         )
-        require(current.size <= 30)
         encrypted.put(key, AkkpsObservedModuleInventoryCodec.encode(current)).getOrThrow()
     }
 
