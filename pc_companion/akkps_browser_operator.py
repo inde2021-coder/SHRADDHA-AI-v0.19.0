@@ -38,6 +38,7 @@ class FieldInfo:
     input_type: str
     required: bool
     disabled: bool
+    read_only: bool = False
     options: tuple[str, ...] = ()
 
 
@@ -151,7 +152,7 @@ class AkkpsBrowserOperator:
             safe_fields.append(FieldInfo(
                 label=label, name=item.get("name", ""), input_type=kind,
                 required=bool(item.get("required")), disabled=bool(item.get("disabled")),
-                options=tuple(item.get("options") or ()),
+                read_only=bool(item.get("readOnly")), options=tuple(item.get("options") or ()),
             ))
         return PageInventory(
             url=data["url"], title=data["title"],
@@ -214,8 +215,10 @@ class AkkpsBrowserOperator:
             if len(matches) != 1:
                 raise RuntimeError(f"Field {label!r} is missing or ambiguous in the current page inventory.")
             field = matches[0]
-            if field.disabled:
-                raise RuntimeError(f"Field {label!r} is disabled.")
+            if field.disabled or field.read_only:
+                raise RuntimeError(f"Field {label!r} is disabled or read-only.")
+            if field.input_type in SENSITIVE_TYPES or field.input_type in UNFILLABLE_TYPES or field.input_type in {"checkbox", "radio"}:
+                raise RuntimeError(f"Field {label!r} is not an auto-fillable text/select field.")
             preview.append({"field": field.label, "value": str(value), "required": field.required})
         return {"page": inventory.title, "url": inventory.url, "changes": preview,
                 "requires_user_confirmation": True, "submitted": False}
