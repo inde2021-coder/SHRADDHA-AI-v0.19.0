@@ -211,6 +211,7 @@ class SkillPackLifecycleManager(context: Context) {
             "Pack remains quarantined until human review and every independent validation gate passes."
         }
         val sourceMetadata = File(quarantine, pack.file.name + ".json")
+        recoverSkillPackMetadataBackup(sourceMetadata, File(quarantine, pack.file.name + ".json.bak"))
         require(sourceMetadata.isFile) { "Pack provenance metadata is missing; activation is blocked." }
         val metadata = JSONObject(sourceMetadata.readText(Charsets.UTF_8))
         require(metadata.optString("packId") == pack.packId &&
