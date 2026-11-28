@@ -39,15 +39,15 @@ object AkkpsRunnerPageWorkflowPolicy {
     fun boundaryAction(command: String): AkkpsBoundaryVoiceAction? {
         val value = normalize(command)
         return when (value) {
-            "inspect map", "inspect live map", "check map", "नक्शा जांचो", "नक्शा जाँचो",
+            "inspect map", "inspect live map", "inspect map boundary", "inspect akkps live map", "check map", "check live map", "नक्शा जांचो", "नक्शा जाँचो",
             "मानचित्र जांचो", "सीमा जांचो" -> AkkpsBoundaryVoiceAction.INSPECT_MAP
             "verify boundary upload", "check boundary upload", "confirm boundary upload",
             "boundary upload verify", "सीमा अपलोड जांचो", "सीमा अपलोड की पुष्टि करो" -> AkkpsBoundaryVoiceAction.VERIFY_UPLOAD
-            "prepare boundary for upload", "prepare kml for upload", "prepare boundary kml",
+            "prepare boundary for upload", "prepare boundary for akkps upload", "prepare boundary for portal upload", "prepare kml for upload", "prepare kml for akkps upload", "prepare boundary kml",
             "सीमा अपलोड के लिए तैयार करो", "kml अपलोड के लिए तैयार करो" -> AkkpsBoundaryVoiceAction.PREPARE_UPLOAD
             "import satellite candidate", "import satellite boundary", "satellite candidate चुनें",
             "सैटेलाइट सीमा चुनें" -> AkkpsBoundaryVoiceAction.IMPORT_SATELLITE
-            "start gps walk", "start boundary walk", "gps walk शुरू करो", "सीमा की gps walk शुरू करो" -> AkkpsBoundaryVoiceAction.START_GPS_WALK
+            "start gps walk", "start boundary walk", "start gps boundary walk", "gps walk शुरू करो", "सीमा की gps walk शुरू करो" -> AkkpsBoundaryVoiceAction.START_GPS_WALK
             "stop gps walk", "stop boundary walk", "gps walk रोकें", "सीमा की gps walk रोकें" -> AkkpsBoundaryVoiceAction.STOP_GPS_WALK
             "save local boundary", "save boundary locally", "स्थानीय सीमा save करो", "सीमा locally save करो" -> AkkpsBoundaryVoiceAction.SAVE_LOCAL
             "reopen saved boundary", "open saved boundary", "saved boundary खोलो", "पुरानी सीमा खोलो" -> AkkpsBoundaryVoiceAction.REOPEN_LOCAL
