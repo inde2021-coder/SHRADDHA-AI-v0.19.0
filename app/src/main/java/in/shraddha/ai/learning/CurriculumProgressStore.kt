@@ -252,7 +252,7 @@ class CurriculumProgressStore(context: Context) {
         require(bytes.size > GCM_IV_BYTES) { "Learning progress data is incomplete." }
         val iv = bytes.copyOfRange(0, GCM_IV_BYTES)
         val encrypted = bytes.copyOfRange(GCM_IV_BYTES, bytes.size)
-        try {
+        return try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
             val clear = cipher.doFinal(encrypted)
@@ -280,8 +280,9 @@ class CurriculumProgressStore(context: Context) {
             val sealed = cipher.doFinal(clear)
             iv = nonce
             encrypted = sealed
-            combined = nonce + sealed
-            check(prefs.edit().putString(ENCRYPTED_STATE, Base64.encodeToString(combined, Base64.NO_WRAP)).commit()) {
+            val payload = nonce + sealed
+            combined = payload
+            check(prefs.edit().putString(ENCRYPTED_STATE, Base64.encodeToString(payload, Base64.NO_WRAP)).commit()) {
                 "Could not save encrypted learning progress."
             }
         } finally {
