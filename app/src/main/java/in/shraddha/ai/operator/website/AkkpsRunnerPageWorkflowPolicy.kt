@@ -59,7 +59,12 @@ object AkkpsRunnerPageWorkflowPolicy {
 
     fun repeatedEntrySection(command: String): String? {
         val value = normalize(command)
-        if (!(value.startsWith("add ") || value.startsWith("add another ") || value.startsWith("new ") || value.startsWith("जोड़ें") || value.startsWith("जोड़ें") || value.startsWith("जोड़ो") || value.startsWith("नई प्रविष्टि") || value.startsWith("एक और"))) return null
+        val actionPrefix = value.startsWith("add ") || value.startsWith("add another ") ||
+            value.startsWith("new ") || value.startsWith("जोड़ें") || value.startsWith("जोड़ें") ||
+            value.startsWith("जोड़ो") || value.startsWith("नई प्रविष्टि") || value.startsWith("एक और")
+        val actionSuffix = value.endsWith(" जोड़ें") || value.endsWith(" जोड़ें") ||
+            value.endsWith(" जोड़ो") || value.endsWith(" add")
+        if (!actionPrefix && !actionSuffix) return null
         val matches = repeatedSections.filter { it.second.containsMatchIn(value) }
         if (matches.size != 1) return null
         return matches.single().first
