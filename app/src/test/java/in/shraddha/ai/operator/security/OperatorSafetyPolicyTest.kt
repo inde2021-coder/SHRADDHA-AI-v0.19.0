@@ -66,4 +66,17 @@ class OperatorSafetyPolicyTest {
         assertEquals("UPI account number postcondition", OperatorSafetyPolicy.Risk.BLOCK, OperatorSafetyPolicy.assess("TYPE", "Field", "", "UPI account number").risk)
     }
 
+    @Test fun explicitSingleRecipientSendCanProceedButGenericSendStillNeedsApproval() {
+        assertEquals(OperatorSafetyPolicy.Risk.CONFIRM,
+            OperatorSafetyPolicy.assess("CLICK_TEXT", "Send", "", "Hello").risk)
+        assertEquals(OperatorSafetyPolicy.Risk.LOW,
+            OperatorSafetyPolicy.assess(
+                "CLICK_TEXT", "Send", "", "Hello", explicitlyAuthorizedByUser = true
+            ).risk)
+        assertEquals(OperatorSafetyPolicy.Risk.CONFIRM,
+            OperatorSafetyPolicy.assess(
+                "CLICK_TEXT", "Send to all", "", "Hello", explicitlyAuthorizedByUser = true
+            ).risk)
+    }
+
 }
