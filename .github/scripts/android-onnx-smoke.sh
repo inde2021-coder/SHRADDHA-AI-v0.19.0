@@ -70,8 +70,16 @@ echo "Installing app and instrumentation APKs with direct ADB install..."
 "$ADB" -s "$SERIAL" install --no-streaming -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
 echo "Running the full Android instrumentation suite..."
-instrumentation_output="$( "$ADB" -s "$SERIAL" shell am instrument -w -r in.shraddha.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tr -d "\r" )"
+if instrumentation_output="$(timeout --signal=TERM --kill-after=30s 90m "$ADB" -s "$SERIAL" shell am instrument -w -r in.shraddha.ai.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tr -d "\r")"; then
+  instrumentation_status=0
+else
+  instrumentation_status=$?
+fi
 printf "%s\n" "$instrumentation_output"
+if (( instrumentation_status != 0 )); then
+  echo "ERROR: Android instrumentation exited with status $instrumentation_status (20-minute safety timeout included)."
+  exit "$instrumentation_status"
+fi
 if ! grep -Eq "INSTRUMENTATION_CODE: -1" <<< "$instrumentation_output" ||
    ! grep -Eq "OK \([0-9]+ tests?\)" <<< "$instrumentation_output"; then
   echo "ERROR: Android instrumentation did not report a clean successful test run."
