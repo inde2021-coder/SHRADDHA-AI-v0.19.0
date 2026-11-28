@@ -13,18 +13,14 @@ is not assumed; the user must sign in on whichever host requires it.
 
 ## Install and run
 
-From the repository root on Windows:
-
-```powershell
-py -3.12 -m pip install -r pc_companion/requirements-browser.txt
-```
+The Windows companion dependency set includes Playwright. The Windows package workflow bundles its Python runtime and uses the Microsoft Edge installation already present on Windows. For source development, install `pc_companion/requirements.txt`.
 
 The persistent browser profile is local to the current Windows user. Do not copy,
 commit, upload, or share that profile. It may contain authenticated cookies and
 site storage. Credentials, passwords, OTPs and CAPTCHA answers are entered by the
 user directly in the visible browser; Shraddha AI must not request or retain them.
 
-## Safety contract
+## Shraddha AI commands\n\nFrom the paired Android PC command surface, the user can say or type:\n\n- `Open AKKPS` — opens the main portal in visible Edge; the user signs in manually.\n- `Open AKKPS Runner` — opens `/runner` on the currently authenticated AKKPS host.\n- `Inspect AKKPS` — returns the visible page title, same-origin navigation, safe field labels, button labels and table headers.\n\nThese commands still require the Windows PC's local approval for each remote action. The Windows companion also exposes the AKKPS Website Operator window for manual inspection and reviewed field entry.\n\n## Safety contract
 
 - Only HTTPS on the four exact AKKPS hostnames above is allowed.
 - Browser is headed/visible; no stealth, CAPTCHA bypass, MFA bypass, or access-control bypass.
