@@ -1050,7 +1050,7 @@ class AkkpsBrowserOperator:
             (window.mapboxgl ? 'mapbox-gl' : (window.google && window.google.maps ? 'google-maps' :
             (window.ol ? 'openlayers' : (window.maplibregl ? 'maplibre' : 'unknown'))));
           const polygonHints = document.querySelectorAll(
-            '.leaflet-interactive, .mapboxgl-canvas, .ol-layer canvas'
+            '.leaflet-interactive.leaflet-polygon, .ol-overlaycontainer svg path, [data-geometry-type="polygon" i]'
           ).length;
           return {engine, maps, controls, uploads, polygonHints};
         }""")
@@ -1127,8 +1127,7 @@ class AkkpsBrowserOperator:
         evidence = self.page.evaluate("""() => {
           const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
           const selectors = [
-            '.leaflet-overlay-pane svg path', '.leaflet-overlay-pane canvas',
-            '.mapboxgl-canvas', '.ol-layer canvas', '.ol-overlaycontainer svg',
+            '.leaflet-overlay-pane svg path', '.ol-overlaycontainer svg path',
             '[data-layer-type*="polygon" i]', '[data-geometry-type="polygon" i]'
           ];
           const counts = {};
