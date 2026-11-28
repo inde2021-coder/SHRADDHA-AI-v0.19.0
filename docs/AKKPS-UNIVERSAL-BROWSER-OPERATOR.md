@@ -30,6 +30,15 @@ From the paired Android PC command surface, these commands are supported:
 
 Every remote command still requires the Windows companion's local approval. Submit is a separate local confirmation. A submit click is reported as unverified until the record is independently checked.
 
+## Main Brain data-entry sequence
+
+1. Call `inspect_akkps_runner`; the user signs in if prompted.
+2. Call `get_akkps_runner_inventory` to read the current module's safe field labels and required-field metadata.
+3. Ask the user only for missing values; do not infer farmer, plot or report data.
+4. Call `open_akkps_runner` with a concise `field=value` command containing only values the user supplied. Create commands route to the matching create form.
+5. Review the filled form. If Submit was explicitly requested, the Android Runner shows its confirmation dialog; confirm on the device.
+6. Treat the record as saved only after the Runner verifies the same-origin server response and record ID. If the outcome is uncertain, inspect the list manually; never retry automatically.
+
 ## Approved origin and privacy
 
 Only HTTPS on `akkps.ngo` and `www.akkps.ngo` is accepted. The similarly spelled `akps.ngo` host is not enabled because it has not been verified as the same service; use the `akkps.ngo` domain shown by the official login page.
