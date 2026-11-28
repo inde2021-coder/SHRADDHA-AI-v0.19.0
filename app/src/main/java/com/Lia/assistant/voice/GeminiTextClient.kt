@@ -227,9 +227,7 @@ object GeminiTextClient {
                             if (input >= 0L && output >= 0L) ProviderTokenUsage("GEMINI", modelName.removePrefix("models/"), input, output) else null
                         }
                         if (usage == null) {
-                            `in`.shraddha.ai.future.CouncilCostBudget.stopIfUsageUnknown(context, "GEMINI", modelName.removePrefix("models/"))
-                        } else {
-                            `in`.shraddha.ai.future.CouncilCostBudget.recordUsageAndEnforce(context, usage)
+                            } else {
                         }
                         return ChatReplyResult.Success(text, usage)
                     }
