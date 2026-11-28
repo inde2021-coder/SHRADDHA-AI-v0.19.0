@@ -33,17 +33,19 @@ object PersistentChatMemory {
         }
     }
 
-    fun recap(context: Context): String? {
-        if (!isEnabled(context)) return null
-        return SecureMemoryVault(context.applicationContext).load()
+    fun recap(context: Context): String? = synchronized(lock) {
+        if (!isEnabled(context)) return@synchronized null
+        SecureMemoryVault(context.applicationContext).load()
             .getOrThrow().takeIf { it.isNotBlank() }
     }
 
     fun record(context: Context, role: String, text: String): Result<Unit> = runCatching {
         require(role == "User" || role == "Assistant") { "Unsupported memory role" }
         val safeText = text.trim().take(MAX_TURN_CHARS)
-        if (safeText.isEmpty() || !isEnabled(context)) return@runCatching
+        if (safeText.isEmpty()) return@runCatching
         synchronized(lock) {
+            // Re-check consent inside the same lock as revocation/clear to prevent a late write.
+            if (!isEnabled(context)) return@synchronized
             val vault = SecureMemoryVault(context.applicationContext)
             // Never overwrite unreadable/corrupt encrypted data with a fresh recap.
             val existing = vault.load().getOrThrow()
