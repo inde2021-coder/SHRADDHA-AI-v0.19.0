@@ -65,8 +65,9 @@ class MainBrain(
         }
 
         /**
-         * Voice device/app tools are serialized through the same durable scheduler as Operator
-         * and WorkManager. A process death while RUNNING marks the call failed; it is never replayed.
+         * Voice device/app tools are serialized through the durable scheduler and a write-ahead
+         * command journal. Startup converts interrupted RUNNING actions to UNCERTAIN; they are
+         * never blindly replayed, and corrupted journal state blocks new tool execution.
          */
         suspend fun executeVoiceTool(context: Context, toolName: String, args: JSONObject): JSONObject {
             if (!`in`.shraddha.ai.operator.CommandExecutionJournalStartup.isReady()) {
