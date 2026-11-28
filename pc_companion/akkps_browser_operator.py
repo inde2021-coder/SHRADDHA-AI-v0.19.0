@@ -51,8 +51,7 @@ def validate_runner_url(url: str) -> str:
     validate_akkps_url(url)
     parsed = urlparse(url)
     raw_path = parsed.path or "/"
-    if (len(raw_path) > 1024 or "\\" in raw_path or "//" in raw_path
-            or re.search(r"(?i)%2f|%5c|%2e", raw_path)):
+    if (len(raw_path) > 1024 or "\\" in raw_path or "//" in raw_path or "%" in raw_path):
         raise ValueError("Unsafe AKKPS route path was rejected.")
     path = unquote(raw_path)
     if any(segment in {".", ".."} for segment in path.split("/")):
