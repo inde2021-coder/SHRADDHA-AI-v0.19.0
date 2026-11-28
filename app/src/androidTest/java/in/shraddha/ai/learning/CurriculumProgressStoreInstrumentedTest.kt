@@ -86,18 +86,23 @@ class CurriculumProgressStoreInstrumentedTest {
         store.setDailyLimit(60)
         val prefs = context.getSharedPreferences("shraddha_curriculum_progress_v1", Context.MODE_PRIVATE)
         assertTrue(prefs.contains("encrypted_state"))
+        val previous = prefs.getString("encrypted_state", null)
 
-        // Valid Base64 length, but not a valid AES-GCM record.
-        assertTrue(prefs.edit().putString("encrypted_state", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").commit())
-        var rejected = false
         try {
-            store.snapshot()
-        } catch (_: Exception) {
-            rejected = true
+            // Valid Base64 length, but not a valid AES-GCM record.
+            assertTrue(prefs.edit().putString("encrypted_state", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").commit())
+            var rejected = false
+            try {
+                store.snapshot()
+            } catch (_: Exception) {
+                rejected = true
+            }
+            assertTrue("Tampered progress must not be treated as a fresh empty profile.", rejected)
+            assertEquals("Corrupted data remains available for diagnosis; it is not silently overwritten.",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", prefs.getString("encrypted_state", null))
+        } finally {
+            check(prefs.edit().putString("encrypted_state", previous).commit())
         }
-        assertTrue("Tampered progress must not be treated as a fresh empty profile.", rejected)
-        assertEquals("Corrupted data remains available for diagnosis; it is not silently overwritten.",
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", prefs.getString("encrypted_state", null))
     }
 
     @Test fun verseProgressRejectsReferencesOutsideActualChapterCounts() {
