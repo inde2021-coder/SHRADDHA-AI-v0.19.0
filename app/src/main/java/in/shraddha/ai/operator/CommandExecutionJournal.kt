@@ -187,6 +187,7 @@ class CommandExecutionJournal(context: Context) {
                 safeCode(s.optString("resultCode")), s.optLong("updatedAt"))
         }
         require(steps.isNotEmpty() && steps.size <= MAX_STEPS && steps.all { validStep(it) })
+        require(steps.map { it.id }.distinct().size == steps.size) { "Stored command journal contains duplicate step IDs." }
         val id = o.getString("id")
         val fingerprint = o.getString("fingerprint")
         val createdAt = o.getLong("createdAt")
