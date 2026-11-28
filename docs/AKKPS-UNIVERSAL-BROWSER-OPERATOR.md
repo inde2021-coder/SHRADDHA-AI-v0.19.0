@@ -52,7 +52,7 @@ On Android, the existing Runner workspace supports KML import/export, GeoJSON sa
 - After a row is verified: speak exact `Field Label = value` assignments for that newest row
 - `select village Rampur`, `choose rice variety Swarna`, `select farmer Ravi Kumar`, `choose plot PLOT-101`
 - `attach field photo`, `attach farmer photo`, `attach Aadhaar`, `attach land deed`, `attach agreement`, `attach signature`
-- `inspect live map`, `import satellite candidate`, `start gps walk`, `stop gps walk`
+- `inspect live map`, `start map draw`, `start map edit`, `import satellite candidate`, `start gps walk`, `stop gps walk`
 - `save local boundary`, `reopen saved boundary`, `import boundary kml`, `export boundary kml`
 - `prepare boundary for AKKPS upload`, then open the portal's KML file field and confirm the prepared file; after using the portal's own Upload/Save control, say `verify boundary upload`
 
