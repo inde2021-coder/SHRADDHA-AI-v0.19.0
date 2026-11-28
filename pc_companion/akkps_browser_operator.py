@@ -26,7 +26,7 @@ RUNNER_MODULES = {
 }
 SENSITIVE_TYPES = {"password", "hidden", "file"}
 UNFILLABLE_TYPES = {"button", "submit", "reset", "image"}
-SENSITIVE_LABEL = re.compile(r"password|passcode|otp|one.?time|pin|captcha|verification|पासवर्ड|ओटीपी|पिन", re.I)
+SENSITIVE_LABEL = re.compile(r"password|passcode|otp|one.?time|pin|cvv|cvc|captcha|verification|security.?code|secret.?key|recovery.?phrase|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड", re.I)
 
 
 def validate_akkps_url(url: str) -> str:
