@@ -68,7 +68,7 @@ class AkkpsBrowserWindow:
         try:
             inventory = self.operator.open_runner()
             self.status.set("Runner opened. Inspect the visible page to map its modules.")
-            self._show(inventory.__dict__)
+            self._show(asdict(inventory))
         except Exception as exc:
             messagebox.showerror("Cannot open Runner", str(exc), parent=self.window)
 
@@ -84,7 +84,7 @@ class AkkpsBrowserWindow:
         try:
             inventory = self.operator.inventory()
             self.status.set("Page inventory captured. No form values or farmer records were read.")
-            self._show(inventory.__dict__)
+            self._show(asdict(inventory))
         except Exception as exc:
             messagebox.showerror("Page inspection failed", str(exc), parent=self.window)
 
