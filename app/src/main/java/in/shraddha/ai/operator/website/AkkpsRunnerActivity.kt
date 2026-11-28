@@ -52,6 +52,7 @@ class AkkpsRunnerActivity : Activity() {
     private var bestGpsAccuracyMeters = Float.MAX_VALUE
     private var lastGpsElapsedRealtimeNanos = 0L
     private var pendingAiCommand: String? = null
+    private var aiCommandDispatchScheduled = false
     private var pendingInspectOnLoad = false
     private var submitVerificationPending = false
     private var submitNeedsManualReview = false
@@ -120,7 +121,7 @@ class AkkpsRunnerActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (submitVerificationPending || submitNeedsManualReview || pendingAiCommand != null) {
+        if (submitVerificationPending || submitNeedsManualReview || pendingAiCommand != null || aiCommandDispatchScheduled) {
             status.text = "पिछला AKKPS command/Submit अभी पूरा नहीं हुआ। नया command नहीं चलाया गया।"
             return
         }
@@ -304,6 +305,7 @@ class AkkpsRunnerActivity : Activity() {
     }
 
     private fun dispatchPendingAiCommand(url: String) {
+        if (aiCommandDispatchScheduled) return
         val raw = pendingAiCommand ?: return
         val route = AkkpsRunnerRouteCatalog.match(url) ?: return // wait until login reaches Runner
         val createIntent = raw.replace(
@@ -320,9 +322,16 @@ class AkkpsRunnerActivity : Activity() {
             }
         }
         pendingAiCommand = null
+        aiCommandDispatchScheduled = true
         command.setText(raw)
         status.text = "Shraddha AI command loaded. Fields review होंगे; Submit अलग पुष्टि माँगेगा।"
-        web.postDelayed({ if (!isFinishing && !isDestroyed) executeCommand() }, 350)
+        web.postDelayed({
+            try {
+                if (!isFinishing && !isDestroyed) executeCommand()
+            } finally {
+                aiCommandDispatchScheduled = false
+            }
+        }, 350)
     }
 
     private fun startGpsWalk() {
