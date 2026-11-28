@@ -1046,7 +1046,9 @@ class AkkpsBrowserOperator:
             height: Math.round(e.getBoundingClientRect().height)
           }));
           const mapRoot = roots.length === 1 ? roots[0] : null;
-          const controls = mapRoot ? [...mapRoot.querySelectorAll('button,[role=button],a')].filter(visible)
+          // Map drawing toolbars are commonly siblings of the canvas; keep inspection bounded.
+          const mapScope = mapRoot ? (mapRoot.parentElement || mapRoot) : null;
+          const controls = mapScope ? [...mapScope.querySelectorAll('button,[role=button],a')].filter(visible)
             .map(clean).filter(x => /(polygon|boundary|draw|vertex|point|clear|undo|save|upload|kml|सीमा|बहुभुज|नक्शा|मानचित्र)/i.test(x))
             .slice(0, 60) : [];
           const uploads = [...document.querySelectorAll('input[type=file]')].slice(0, 20).map(e => ({
@@ -1106,7 +1108,9 @@ class AkkpsBrowserOperator:
         # Only controls inside the unique map root are eligible. Page-level Edit/Save
         # controls are never mistaken for map tools.
         map_locator = map_candidates.nth(root_indices[0])
-        controls = map_locator.locator("button,[role=button],a[title],a[aria-label]")
+        # Drawing toolbars often sit beside the canvas; never search page-level controls.
+        map_scope = map_locator.locator("xpath=..")
+        controls = map_scope.locator("button,[role=button],a[title],a[aria-label]")
         matches = controls.evaluate_all("""(items, wanted) => items.map((e, i) => ({
           i, label: String(e.innerText || e.getAttribute('aria-label') ||
             e.getAttribute('title') || '').replace(/\\s+/g, ' ').trim(),
