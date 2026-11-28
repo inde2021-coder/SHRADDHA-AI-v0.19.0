@@ -64,15 +64,15 @@ object AkkpsPageInventory {
 
     private fun safeActions(source: JSONArray?): JSONArray = JSONArray().also { out ->
         val actionPatterns = listOf(
-            Regex("(?i)^(create|add|new|register|बनाएं|बनाओ|नया|नई|जोड़ें|जोड़ो)\\b") to "Create",
-            Regex("(?i)^(edit|update|संपादित|बदलें|बदलना)\\b") to "Edit",
-            Regex("(?i)^(save|submit|सहेजें|जमा|सबमिट)\\b") to "Submit",
-            Regex("(?i)^(search|find|filter|खोज|ढूंढ|ढूँढ)\\b") to "Search",
-            Regex("(?i)^(view|open|details|देखें|खोलें)\\b") to "View",
-            Regex("(?i)^(upload|attach|अपलोड|संलग्न)\\b") to "Upload",
-            Regex("(?i)^(delete|remove|हटाएं|मिटाएं|डिलीट)\\b") to "Delete",
-            Regex("(?i)^(sync|सिंक)\\b") to "Sync",
-            Regex("(?i)^(cancel|back|रद्द|वापस)\\b") to "Cancel"
+            Regex("(?i)^(create|add|new|register|बनाएं|बनाओ|नया|नई|जोड़ें|जोड़ो)(?:\\s|$|[:：])") to "Create",
+            Regex("(?i)^(edit|update|संपादित|बदलें|बदलना)(?:\\s|$|[:：])") to "Edit",
+            Regex("(?i)^(save|submit|सहेजें|जमा|सबमिट)(?:\\s|$|[:：])") to "Submit",
+            Regex("(?i)^(search|find|filter|खोज|ढूंढ|ढूँढ)(?:\\s|$|[:：])") to "Search",
+            Regex("(?i)^(view|open|details|देखें|खोलें)(?:\\s|$|[:：])") to "View",
+            Regex("(?i)^(upload|attach|अपलोड|संलग्न)(?:\\s|$|[:：])") to "Upload",
+            Regex("(?i)^(delete|remove|हटाएं|मिटाएं|डिलीट)(?:\\s|$|[:：])") to "Delete",
+            Regex("(?i)^(sync|सिंक)(?:\\s|$|[:：])") to "Sync",
+            Regex("(?i)^(cancel|back|रद्द|वापस)(?:\\s|$|[:：])") to "Cancel"
         )
         for (i in 0 until minOf(source?.length() ?: 0, 40)) {
             val item = source?.optJSONObject(i) ?: continue
