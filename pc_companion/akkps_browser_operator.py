@@ -16,6 +16,14 @@ import re
 ALLOWED_HOSTS = {"www.akkps.ngo", "akkps.ngo"}
 DEFAULT_HOME = "https://www.akkps.ngo"
 RUNNER_PATH = "/runner"
+RUNNER_MODULES = {
+    "dashboard": "/runner",
+    "farmers": "/runner/farmers",
+    "plots": "/runner/plots",
+    "awd reports": "/runner/awd-reports",
+    "profile": "/runner/profile",
+    "data sync": "/runner/sync",
+}
 SENSITIVE_TYPES = {"password", "hidden", "file"}
 UNFILLABLE_TYPES = {"button", "submit", "reset", "image"}
 SENSITIVE_LABEL = re.compile(r"password|passcode|otp|one.?time|pin|captcha|verification|पासवर्ड|ओटीपी|पिन", re.I)
@@ -134,6 +142,17 @@ class AkkpsBrowserOperator:
             raise RuntimeError("Sign in on the approved AKKPS portal before opening Runner.")
         target = f"https://{current.hostname}{RUNNER_PATH}"
         return self.navigate(target)
+
+    def open_module(self, module: str):
+        """Navigate only to an observed, allow-listed Runner module route."""
+        key = " ".join(str(module or "").casefold().split())
+        route = RUNNER_MODULES.get(key)
+        if route is None:
+            raise ValueError("Unknown AKKPS Runner module.")
+        current = urlparse(self.page.url)
+        if current.hostname not in ALLOWED_HOSTS:
+            raise RuntimeError("Open the AKKPS portal and sign in before choosing a Runner module.")
+        return self.navigate(f"https://{current.hostname}{route}")
 
     def inventory(self) -> PageInventory:
         """Read visible page structure only; never collect input values or row contents."""
