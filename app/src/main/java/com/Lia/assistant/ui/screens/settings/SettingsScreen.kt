@@ -61,7 +61,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import `in`.shraddha.ai.future.CouncilCostBudget
-import com.Lia.assistant.voice.ConversationMemory
+import `in`.shraddha.ai.brain.PersistentChatMemory
 import `in`.shraddha.ai.operator.VoiceToolActionJournal
 import com.Lia.assistant.data.LanguagePreference
 import com.Lia.assistant.data.NovaAppState
@@ -105,8 +105,8 @@ private fun SettingsScreenContent(
     var gatewayTesting by remember { mutableStateOf(false) }
     var gatewayTestStatus by remember { mutableStateOf<String?>(null) }
     val settingsScope = rememberCoroutineScope()
-    var voiceMemoryEnabled by remember { mutableStateOf(ConversationMemory.isPersistenceEnabled(context)) }
-    var voiceMemoryError by remember { mutableStateOf(ConversationMemory.persistenceError()) }
+    var voiceMemoryEnabled by remember { mutableStateOf(PersistentChatMemory.isEnabled(context)) }
+    var voiceMemoryError by remember { mutableStateOf<String?>(null) }
     val voiceActionJournal = remember { VoiceToolActionJournal(context) }
     val initialVoiceAction = remember { voiceActionJournal.latestResult() }
     var voiceActionEntry by remember { mutableStateOf(initialVoiceAction.getOrNull()) }
@@ -293,13 +293,13 @@ private fun SettingsScreenContent(
                     icon = Icons.Default.Speed,
                     switch = voiceMemoryEnabled,
                     onCheckedChange = { enabled ->
-                        ConversationMemory.setPersistenceEnabled(context, enabled)
+                        runCatching { PersistentChatMemory.setEnabled(context, enabled) }
                             .onSuccess {
-                                voiceMemoryEnabled = enabled
+                                voiceMemoryEnabled = PersistentChatMemory.isEnabled(context)
                                 voiceMemoryError = null
                             }
                             .onFailure { error ->
-                                voiceMemoryEnabled = ConversationMemory.isPersistenceEnabled(context)
+                                voiceMemoryEnabled = PersistentChatMemory.isEnabled(context)
                                 voiceMemoryError = error.localizedMessage ?: "Could not update encrypted conversation memory."
                             }
                     }
