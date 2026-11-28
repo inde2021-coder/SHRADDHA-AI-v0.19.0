@@ -770,7 +770,10 @@ class AkkpsRunnerActivity : Activity() {
               const labelFor=e=>{
                 const labels=[...(e.labels||[])].map(x=>n(x.innerText)).filter(Boolean);
                 const p=e.closest('label'); if(p) labels.push(n(p.innerText));
-                return [...new Set(labels)].join(' / ')||n(e.getAttribute('aria-label'))||n(e.placeholder)||n(e.name)||n(e.id);
+                const labelledBy=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean)
+                  .map(id=>n(document.getElementById(id)?.innerText)).filter(Boolean);
+                labels.push(...labelledBy);
+                return [...new Set(labels)].join(' / ')||n(e.getAttribute('aria-label'))||n(e.placeholder)||n(e.name)||n(e.id)||n(e.innerText);
               };
               const fields=[...document.querySelectorAll('input,textarea,select,[role=switch],[role=checkbox]')].filter(e=>
                 (visible(e)||(String(e.type||'').toLowerCase()==='checkbox'&&visible(e.closest('label')||e.parentElement)))&&
@@ -1259,6 +1262,10 @@ class AkkpsRunnerActivity : Activity() {
               requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
               const requiredCheckboxes=all.filter(e=>checkboxEditable(e)&&e.required&&!e.checked);
               requiredCheckboxes.forEach(e=>missing.push(e.name||e.id||e.getAttribute('aria-label')||e.closest('label')?.innerText||'required checkbox'));
+              const requiredSwitches=[...form.querySelectorAll('[role=switch],[role=checkbox]')]
+                .filter(switchEditable).filter(e=>e.getAttribute('aria-required')==='true'&&
+                  (e.getAttribute('aria-checked')??e.getAttribute('aria-pressed'))!=='true');
+              requiredSwitches.forEach(e=>missing.push(controlLabel(e).find(Boolean)||'required toggle'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
