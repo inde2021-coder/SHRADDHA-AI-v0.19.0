@@ -133,4 +133,22 @@ class UniversalVisibleTaskPlannerTest {
         )
     }
 
+    @Test fun explicitShareReachesApprovalGateButUnrequestedShareIsRejected() {
+        val withShare = snapshot.copy(elements = snapshot.elements + ScreenElement(
+            "share", "Share", "", "Button", Rect(0,100,100,140), true, false, false, false
+        ))
+        val valid = """{"steps":[{"action":"CLICK_TEXT","target":"Share","expectedVisibleText":"Shared"}]}"""
+        val accepted = UniversalVisibleTaskPlanner.parseAndValidate(
+            valid, "share this post with Rahul", withShare
+        )
+        assertNull(accepted.error)
+        assertFalse(accepted.steps.single().explicitlyAuthorizedByUser)
+
+        val invalid = UniversalVisibleTaskPlanner.parseAndValidate(
+            valid, "open this post", withShare
+        )
+        assertNotNull(invalid.error)
+    }
+
+
 }
