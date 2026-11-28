@@ -17,8 +17,11 @@ internal object AkkpsSubmitTargetPolicy {
     }
 
     /** Save Draft is deliberately not a submit target; only explicit final-submit labels qualify. */
-    fun isExplicitSubmitLabel(label: String): Boolean = normalize(label) in setOf(
+    val explicitSubmitLabels = setOf(
         "submit", "submit report", "submit plot", "submit registration",
-        "submit farmer", "submit awd report", "जमा करें", "सबमिट", "सबमिट करें", "भेजें"
+        "submit farmer", "submit farmer registration", "submit awd", "submit awd report",
+        "जमा करें", "जमा करो", "सबमिट", "सबमिट करें", "भेजें", "भेजो"
     )
+
+    fun isExplicitSubmitLabel(label: String): Boolean = normalize(label) in explicitSubmitLabels
 }
