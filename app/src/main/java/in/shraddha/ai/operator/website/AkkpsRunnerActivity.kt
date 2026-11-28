@@ -1528,6 +1528,7 @@ Return exact JSON only. Do not include prose or markdown."""
             })(__EXPECTED__)
         """.trimIndent().replace("__EXPECTED__", payload.toString())
             .replace("__ALLOWED_TYPES__", JSONArray(AkkpsRunnerFieldPolicy.allowedInputTypes.toList()).toString())
+            .replace("__SUBMIT_LABELS__", JSONArray(AkkpsSubmitTargetPolicy.explicitSubmitLabels.toList()).toString())
         val before = web.url.orEmpty()
         web.evaluateJavascript(js) { raw ->
             val result = runCatching { JSONObject(decode(raw)) }.getOrNull()
