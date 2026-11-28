@@ -95,6 +95,39 @@ class PageInventory:
     forms: tuple[tuple[str, ...], ...] = ()
 
 
+def _safe_action_label(value: str) -> str | None:
+    text = " ".join(str(value or "").casefold().split())
+    patterns = (
+        (r"^(create|add|new|register|बनाएं|बनाओ|नया|नई|जोड़ें|जोड़ो)(?:\\b|$)", "Create"),
+        (r"^(edit|update|संपादित|बदलें|बदलना)(?:\\b|$)", "Edit"),
+        (r"^(save|submit|सहेजें|जमा|सबमिट)(?:\\b|$)", "Submit"),
+        (r"^(search|find|filter|खोज|ढूंढ|ढूँढ)(?:\\b|$)", "Search"),
+        (r"^(view|open|details|देखें|खोलें)(?:\\b|$)", "View"),
+        (r"^(upload|attach|अपलोड|संलग्न)(?:\\b|$)", "Upload"),
+        (r"^(delete|remove|हटाएं|मिटाएं|डिलीट)(?:\\b|$)", "Delete"),
+        (r"^(sync|सिंक)(?:\\b|$)", "Sync"),
+        (r"^(cancel|back|रद्द|वापस)(?:\\b|$)", "Cancel"),
+    )
+    for pattern, safe in patterns:
+        if re.search(pattern, text, re.I):
+            return safe
+    return None
+
+
+def _safe_runner_location(url: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    path = parsed.path.rstrip("/") or "/"
+    for label, base in RUNNER_MODULES.items():
+        if path == base or path.startswith(base + "/"):
+            safe_path = path if path == base or path == base + "/new" else base
+            return f"https://{parsed.hostname}{safe_path}", label.upper()
+    if path == "/plots/new":
+        return f"https://{parsed.hostname}/plots/new", "PLOTS"
+    if path == "/awd-reports/new":
+        return f"https://{parsed.hostname}/awd-reports/new", "AWD REPORTS"
+    return f"https://{parsed.hostname}{path}", "AKKPS LOGIN"
+
+
 class AkkpsBrowserOperator:
     """Visible, human-in-the-loop browser session for AKKPS/TerraMark."""
 
@@ -206,11 +239,36 @@ class AkkpsBrowserOperator:
                 required=bool(item.get("required")), disabled=bool(item.get("disabled")),
                 read_only=bool(item.get("readOnly")), options=tuple(item.get("options") or ()),
             ))
+        safe_url, safe_title = _safe_runner_location(data["url"])
+        safe_links = []
+        for href in data["links"]:
+            try:
+                parsed_link = urlparse(href)
+                validate_runner_url(href)
+                if parsed_link.path.rstrip("/") in set(RUNNER_MODULES.values()):
+                    safe_links.append(f"https://{parsed_link.hostname}{parsed_link.path.rstrip('/')}")
+            except ValueError:
+                continue
+        safe_buttons = tuple(dict.fromkeys(
+            label for label in (_safe_action_label(x) for x in data["buttons"]) if label
+        ))
+        safe_sections = tuple(dict.fromkeys(
+            label for label in (
+                _safe_action_label(x) or (
+                    " ".join(str(x).casefold().split()).upper()
+                    if " ".join(str(x).casefold().split()) in RUNNER_MODULES else None
+                ) for x in data.get("sections", ())
+            ) if label
+        ))
+        safe_forms = tuple(
+            tuple(label for label in (_safe_action_label(x) for x in form) if label)
+            for form in data.get("forms", ())
+        )
         return PageInventory(
-            url=data["url"], title=data["title"],
-            links=tuple(data["links"]), fields=tuple(safe_fields),
-            buttons=tuple(data["buttons"]), table_headers=tuple(tuple(x) for x in data["tables"]),
-            sections=tuple(data.get("sections", ())), forms=tuple(tuple(x) for x in data.get("forms", ())),
+            url=safe_url, title=safe_title,
+            links=tuple(safe_links), fields=tuple(safe_fields),
+            buttons=safe_buttons, table_headers=tuple(tuple(x) for x in data["tables"]),
+            sections=safe_sections, forms=safe_forms,
         )
 
     def fill_exact_label(self, label: str, value: str):
