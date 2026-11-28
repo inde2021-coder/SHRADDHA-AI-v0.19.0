@@ -10,6 +10,14 @@ internal object AkkpsRunnerSubmitIntentPolicy {
             "सबमिट(?:\\s+करें)?|भेजो|भेज\\s+दें|भेजें|सहेजें|सेव(?:\\s+करें)?)$"
     )
 
+    fun stripSuffix(raw: String): String {
+        if (!isExplicit(raw)) return raw
+        return raw.replace(
+            Regex("(?i)(?:^|[\\s,;:])(?:submit(?:\\s+now)?|save(?:\\s+record)?|record\\s+save|send|जमा(?:\\s+करें|\\s+करो)?|सबमिट(?:\\s+करें)?|भेजो|भेज\\s+दें|भेजें|सहेजें|सेव(?:\\s+करें)?)$"),
+            ""
+        ).trim()
+    }
+
     fun isExplicit(raw: String): Boolean {
         if (raw.isBlank() || raw.length > 4_000) return false
         val normalized = Normalizer.normalize(raw, Normalizer.Form.NFKC)
