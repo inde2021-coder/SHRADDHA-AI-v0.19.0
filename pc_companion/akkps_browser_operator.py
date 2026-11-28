@@ -196,17 +196,21 @@ class AkkpsBrowserOperator:
                 "Browser automation is optional. Install Playwright with `python -m pip install playwright==1.55.0` and install Microsoft Edge."
             ) from exc
         self.profile_dir.mkdir(parents=True, exist_ok=True)
-        self._playwright = sync_playwright().start()
-        self._context = self._playwright.chromium.launch_persistent_context(
-            user_data_dir=str(self.profile_dir),
-            headless=False,
-            channel="msedge",
-            accept_downloads=True,
-            viewport={"width": 1440, "height": 900},
-        )
-        self._page = self._context.pages[0] if self._context.pages else self._context.new_page()
-        self._page.goto(start_url, wait_until="domcontentloaded", timeout=45000)
-        return self.inventory()
+        try:
+            self._playwright = sync_playwright().start()
+            self._context = self._playwright.chromium.launch_persistent_context(
+                user_data_dir=str(self.profile_dir),
+                headless=False,
+                channel="msedge",
+                accept_downloads=True,
+                viewport={"width": 1440, "height": 900},
+            )
+            self._page = self._context.pages[0] if self._context.pages else self._context.new_page()
+            self._page.goto(start_url, wait_until="domcontentloaded", timeout=45000)
+            return self.inventory()
+        except Exception:
+            self.close()
+            raise
 
     def close(self):
         try:
