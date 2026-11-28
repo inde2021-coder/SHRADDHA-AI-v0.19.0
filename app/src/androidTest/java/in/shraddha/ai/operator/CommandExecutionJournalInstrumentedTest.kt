@@ -3,6 +3,7 @@ package `in`.shraddha.ai.operator
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
+import `in`.shraddha.ai.brain.EncryptedFeatureStore
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -14,16 +15,21 @@ class CommandExecutionJournalInstrumentedTest {
     private lateinit var context: Context
     private lateinit var journal: CommandExecutionJournal
 
+    private val journalKey = "command_execution_journal_plans_v1"
+
     @Before fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-            .edit().clear().commit()
+        EncryptedFeatureStore(context).remove(journalKey)
         journal = CommandExecutionJournal(context)
     }
 
     @After fun tearDown() {
-        context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-            .edit().clear().commit()
+        EncryptedFeatureStore(context).remove(journalKey)
+    }
+
+    private fun corruptEncryptedPayload() {
+        context.getSharedPreferences("shraddha_feature_store", Context.MODE_PRIVATE)
+            .edit().putString(journalKey, "not-an-authenticated-encrypted-payload").commit()
     }
 
     private fun plan(command: String = "send private message to +919876543210") =
@@ -33,8 +39,7 @@ class CommandExecutionJournalInstrumentedTest {
         assertTrue(CommandExecutionJournalStartup.recover(context))
         assertTrue(CommandExecutionJournalStartup.isReady())
 
-        context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-            .edit().putString("plans_v1", "{broken").commit()
+        corruptEncryptedPayload()
         assertFalse(CommandExecutionJournalStartup.recover(context))
         assertFalse(CommandExecutionJournalStartup.isReady())
     }
@@ -64,8 +69,7 @@ class CommandExecutionJournalInstrumentedTest {
     }
 
     @Test fun corruptedJournalBlocksStartupRecoveryInsteadOfSilentlyDroppingPlans() {
-        val prefs = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-        assertTrue(prefs.edit().putString("plans_v1", "{broken-json").commit())
+        corruptEncryptedPayload()
 
         val restarted = CommandExecutionJournal(context)
         assertFalse(restarted.recoverInterruptedSteps())
@@ -103,8 +107,7 @@ class CommandExecutionJournalInstrumentedTest {
     }
 
     @Test fun malformedJournalEntryBlocksRecovery() {
-        val prefs = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-        assertTrue(prefs.edit().putString("plans_v1", """[{"id":"invalid"}]""").commit())
+        assertTrue(EncryptedFeatureStore(context).put(journalKey, """[{"id":"invalid"}]""").isSuccess)
         assertFalse(CommandExecutionJournal(context).recoverInterruptedSteps())
     }
 
@@ -144,9 +147,12 @@ class CommandExecutionJournalInstrumentedTest {
     @Test fun journalStoresFingerprintAndMetadataNotRawCommandOrMessageBody() {
         val raw = "send private message to +919876543210: OTP 123456"
         val created = requireNotNull(journal.createPlan(raw, listOf(CommandTaskStep("step-1", "messaging", "send"))))
-        val stored = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-            .getString("plans_v1", "").orEmpty()
+        val encrypted = context.getSharedPreferences("shraddha_feature_store", Context.MODE_PRIVATE)
+            .getString(journalKey, "").orEmpty()
+        val stored = EncryptedFeatureStore(context).get(journalKey).getOrThrow()
         assertTrue(stored.contains(created.commandFingerprint))
+        assertFalse(encrypted.contains(created.commandFingerprint))
+        assertFalse(encrypted.contains(raw))
         assertFalse(stored.contains(raw))
         assertFalse(stored.contains("+919876543210"))
         assertFalse(stored.contains("123456"))
@@ -156,8 +162,10 @@ class CommandExecutionJournalInstrumentedTest {
         val created = requireNotNull(plan())
         journal.markRunning(created.id, "step-1")
         journal.finish(created.id, "step-1", CommandStepState.FAILED, "http_503")
-        val stored = context.getSharedPreferences("shraddha_command_execution_journal", Context.MODE_PRIVATE)
-            .getString("plans_v1", "").orEmpty()
+        val encrypted = context.getSharedPreferences("shraddha_feature_store", Context.MODE_PRIVATE)
+            .getString(journalKey, "").orEmpty()
+        val stored = EncryptedFeatureStore(context).get(journalKey).getOrThrow()
+        assertFalse(encrypted.contains("redacted"))
         assertFalse(stored.contains("503"))
         assertTrue(stored.contains("redacted"))
     }
