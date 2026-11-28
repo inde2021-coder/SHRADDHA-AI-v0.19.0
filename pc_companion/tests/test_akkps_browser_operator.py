@@ -56,7 +56,7 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
             validate_akkps_url("https://www.akkps.ngo:invalid/runner")
 
     def test_sensitive_labels_are_detected(self):
-        for label in ("Password", "OTP", "PIN", "CAPTCHA", "पासवर्ड", "ओटीपी"):
+        for label in ("Password", "OTP", "PIN", "CAPTCHA", "CVV", "Security Code", "Recovery Phrase", "पासवर्ड", "ओटीपी"):
             with self.subTest(label=label):
                 self.assertRegex(label, SENSITIVE_LABEL)
 
