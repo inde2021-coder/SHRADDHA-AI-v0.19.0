@@ -78,6 +78,7 @@ class AkkpsBrowserOperator:
         self._context = self._playwright.chromium.launch_persistent_context(
             user_data_dir=str(self.profile_dir),
             headless=False,
+            channel="msedge",
             accept_downloads=True,
             viewport={"width": 1440, "height": 900},
         )
