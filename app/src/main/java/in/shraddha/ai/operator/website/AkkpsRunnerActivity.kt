@@ -866,17 +866,46 @@ class AkkpsRunnerActivity : Activity() {
                       if(fieldMatches.length!==1) return JSON.stringify({status:"field_changed"});
                       if(options.length!==1) return JSON.stringify({status:"option_ambiguous",count:options.length});
                       options[0].click();
-                      const value=String(fieldMatches[0].value||"").trim();
-                      return JSON.stringify({status:norm(value)===key?"selected":"selection_unverified",value});
+                      return JSON.stringify({status:"clicked"});
                     })()
                 """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
                     .replace("__LABEL__", JSONObject.quote(fieldLabel))
                 web.evaluateJavascript(chooseScript) { chooseRaw ->
                     val chosen = runCatching { JSONObject(decode(chooseRaw)) }.getOrNull()
-                    status.text = when (chosen?.optString("status")) {
-                        "selected" -> "$fieldLabel में exact suggestion $query चुना और verify हुआ। Record submit नहीं हुआ।"
-                        "option_ambiguous" -> "Exact suggestion " + query + " unique नहीं मिला (" + chosen.optInt("count") + "); कोई option auto-select नहीं किया।"
-                        else -> "Autocomplete selection verify नहीं हुई; website पर manually जाँचें।"
+                    when (chosen?.optString("status")) {
+                        "clicked" -> web.postDelayed({
+                            val verifyScript = """
+                                (() => {
+                                  const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\\s+/g," ").trim();
+                                  const key=norm(__QUERY__), label=norm(__LABEL__);
+                                  const forms=[...document.querySelectorAll("form")].filter(f=>f.getClientRects().length);
+                                  if(forms.length!==1) return JSON.stringify({status:"form_changed"});
+                                  const fields=[...forms[0].querySelectorAll("input:not([type]),input[type=text],input[type=search]")];
+                                  const matches=fields.filter(e=>{
+                                    const labels=[...(e.labels||[])].map(x=>x.innerText||"");
+                                    const ids=(e.getAttribute("aria-labelledby")||"").split(/\\s+/).filter(Boolean);
+                                    labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
+                                    labels.push(e.placeholder||"",e.getAttribute("aria-label")||"");
+                                    return labels.map(norm).some(x=>x===label || x.includes(label));
+                                  });
+                                  if(matches.length!==1) return JSON.stringify({status:"field_changed"});
+                                  const value=String(matches[0].value||"").trim();
+                                  return JSON.stringify({status:norm(value)===key?"selected":"selection_unverified",value});
+                                })()
+                            """.trimIndent().replace("__QUERY__", JSONObject.quote(query))
+                                .replace("__LABEL__", JSONObject.quote(fieldLabel))
+                            web.evaluateJavascript(verifyScript) { verifyRaw ->
+                                val verified = runCatching { JSONObject(decode(verifyRaw)) }.getOrNull()
+                                status.text = if (verified?.optString("status") == "selected") {
+                                    "$fieldLabel में exact suggestion $query चुना और verify हुआ। Record submit नहीं हुआ।"
+                                } else {
+                                    "Autocomplete selection verify नहीं हुई; website पर manually जाँचें।"
+                                }
+                            }
+                        }, 250)
+                        "option_ambiguous" -> status.text =
+                            "Exact suggestion " + query + " unique नहीं मिला (" + chosen.optInt("count") + "); कोई option auto-select नहीं किया।"
+                        else -> status.text = "Autocomplete selection verify नहीं हुई; website पर manually जाँचें।"
                     }
                 }
             }, 1100)
@@ -1589,7 +1618,7 @@ class AkkpsRunnerActivity : Activity() {
                   const state=String(parsed?.status||data?.status||'').toLowerCase();
                   const message=String(parsed?.message||parsed?.error||data?.message||'').slice(0,160);
                   const recordWrite=/\b(plot|plots|farmer|farmers|awd|report|records|boundary|map|maps|kml)\b/i.test(path);
-                  const documentUpload=/\b(document|documents|attachment|attachments|upload|file|files)\b/i.test(path);
+                  const documentUpload=/\b(document|documents|attachment|attachments|uploads?|file|files)\b/i.test(path);
                   const documentId=parsed?.documentId||parsed?.fileId||parsed?.attachmentId||
                     data?.documentId||data?.fileId||data?.attachmentId||
                     parsed?.document?.id||parsed?.file?.id||data?.document?.id||data?.file?.id||'';
