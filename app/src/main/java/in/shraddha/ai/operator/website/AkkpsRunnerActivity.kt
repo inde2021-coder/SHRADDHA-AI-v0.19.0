@@ -847,7 +847,7 @@ class AkkpsRunnerActivity : Activity() {
                             AkkpsRunnerModule.PROFILE -> "/runner/profile"
                             AkkpsRunnerModule.SYNC -> "/runner/sync"
                         }
-                        put(JSONObject().put("label", item.optString("label")).put("path", targetPath))
+                        put(JSONObject().put("label", item.optString("label")).put("path", targetPath).put("active", targetModule == route?.module))
                     }
                     if (route != null && (0 until length()).none { optJSONObject(it)?.optString("label") == route.module.label }) {
                         put(JSONObject().put("label", route.module.label).put("path", route.module.basePath).put("active", true))
