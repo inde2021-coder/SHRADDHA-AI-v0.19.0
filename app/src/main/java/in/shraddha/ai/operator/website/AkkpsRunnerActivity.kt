@@ -758,6 +758,7 @@ class AkkpsRunnerActivity : Activity() {
             obj.put("path", runCatching { URI(web.url.orEmpty()).path.orEmpty() }.getOrDefault(""))
             obj.put("modules", safeModules)
             runCatching { AkkpsPageInventory.save(this, obj) }
+            runCatching { AkkpsObservedModuleInventoryStore(this).registerObserved(observedRoutes) }
             renderObservedNavigation(observedRoutes)
             val navigationLabels = observedRoutes.map { it.label }
             val fieldTypes = (0 until fields.length()).mapNotNull { fields.optJSONObject(it)?.optString("type") }
@@ -776,13 +777,24 @@ class AkkpsRunnerActivity : Activity() {
             val available = capabilities.filter { it.state == CapabilityState.AVAILABLE }
                 .map { it.operation.name.lowercase().replace('_', ' ') }
             val unknown = capabilities.count { it.state == CapabilityState.UNKNOWN }
+            val currentModulePath = route?.module?.basePath
+                ?: runCatching { URI(web.url.orEmpty()).path.orEmpty().trimEnd('/') }.getOrDefault("")
+            val currentObservedRoute = observedRoutes.firstOrNull { it.path == currentModulePath }
+                ?: AkkpsObservedRunnerRoutePolicy.validate(
+                    obj.optString("title").ifBlank { module }, currentModulePath, web.url.orEmpty()
+                )
+            if (currentObservedRoute != null) {
+                runCatching { AkkpsObservedModuleInventoryStore(this).record(currentObservedRoute, capabilities) }
+            }
+            val observedChecklist = runCatching { AkkpsObservedModuleInventoryStore(this).load() }.getOrDefault(emptyMap())
             val inspectedCount = runCatching {
                 AkkpsModuleInventoryStore(this).apply {
                     if (module in AkkpsRunnerModule.entries.map { it.name }) record(module, capabilities)
                 }.load().size
             }.getOrDefault(0)
             status.text = "Module: $module • " + obj.optString("title") +
-                " • Verified modules observed: " + observedRoutes.size +
+                " • Observed modules: " + observedChecklist.size + " • Inspected: " +
+                observedChecklist.values.count { entry -> entry.capabilities.values.any { state -> state != CapabilityState.UNKNOWN } } +
                 "\nForms: $forms • Tables: $tables • Known module checks: $inspectedCount/6 • Navigation: " + navigationLabels.size +
                 "\nObserved: " + available.joinToString(" • ") + " • Unknown: $unknown\nActions: " +
                 actionLabels.take(8).joinToString(" • ") + "\nFields: " + labels.take(12).joinToString(" • ")
