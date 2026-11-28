@@ -83,7 +83,20 @@ class OperatorEngine(
         emit(OperatorEvent(OperatorTaskState.VERIFYING, "कार्रवाई के बाद स्क्रीन दोबारा जाँची जा रही है…"))
         Thread.sleep(450)
         val after = observe() ?: run { record("operator_action", "verification_unavailable", step, before); return false }
-        val expectedVisible = step.expectedVisibleText.isNotBlank() && after.elements.any {
+        val expectedVisible = if (step.explicitlyAuthorizedByUser) {
+            // Verify the exact dictated message as a conversation item, not merely in the composer.
+            val sentItemVisible = after.elements.any { element ->
+                !element.editable && !element.password &&
+                    (element.text.contains(step.expectedVisibleText, true) ||
+                        element.description.contains(step.expectedVisibleText, true))
+            }
+            val composerStillContains = after.elements.any { element ->
+                element.editable && !element.password &&
+                    (element.text.contains(step.expectedVisibleText, true) ||
+                        element.description.contains(step.expectedVisibleText, true))
+            }
+            step.expectedVisibleText.isNotBlank() && sentItemVisible && !composerStillContains
+        } else step.expectedVisibleText.isNotBlank() && after.elements.any {
             it.text.contains(step.expectedVisibleText, true) || it.description.contains(step.expectedVisibleText, true)
         }
         val screenChanged = screenFingerprint(before) != screenFingerprint(after)
