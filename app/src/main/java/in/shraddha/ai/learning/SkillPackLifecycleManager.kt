@@ -253,6 +253,7 @@ class SkillPackLifecycleManager(context: Context) {
     }
 
     @Synchronized
+    @Synchronized
     fun rollback(packId: String): Boolean {
         require(validId(packId))
         val stateJson = readState()
@@ -267,6 +268,7 @@ class SkillPackLifecycleManager(context: Context) {
         return true
     }
 
+    @Synchronized
     fun activePackFile(packId: String): File? {
         if (!validId(packId)) return null
         val version = readState().optJSONObject(packId)?.optString("current").orEmpty()
