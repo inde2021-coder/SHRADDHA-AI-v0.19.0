@@ -938,6 +938,17 @@ class AkkpsRunnerActivity : Activity() {
         }
         val wantsSubmit = parsed.submit
         val values = parsed.assignments
+        val createModule = AkkpsRunnerCreateCommandPolicy.resolve(AkkpsRunnerSubmitIntentPolicy.stripSuffix(raw))
+        if (values.isNotEmpty() && createModule != null) {
+            val targetRoute = AkkpsRunnerCreateCommandPolicy.route(createModule)
+            val currentRoute = AkkpsRunnerRouteCatalog.match(web.url.orEmpty())
+            if (targetRoute != null && (currentRoute?.module != createModule || !currentRoute.isCreateRoute)) {
+                pendingAiCommand = raw
+                status.text = "${createModule.label} का सही नया form खोला जा रहा है; command उसके बाद चलेगी।"
+                web.loadUrl(AkkpsWebsiteProfile.CANONICAL_URL + targetRoute)
+                return
+            }
+        }
         if (values.isEmpty()) {
             status.text = "Submit से पहले कम-से-कम एक स्पष्ट field=value assignment दें।"
             return
