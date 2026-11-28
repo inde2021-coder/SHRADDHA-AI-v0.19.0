@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class AkkpsGeoPoint(val latitude: Double, val longitude: Double)
+data class AkkpsAreaMeasurement(val squareMeters: Double, val hectares: Double, val acres: Double)
 data class AkkpsBoundary(
     val points: List<AkkpsGeoPoint>,
     val source: String? = null,
@@ -182,6 +183,83 @@ object AkkpsBoundaryGeometry {
             "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><Placemark><name>$safeName</name>$extendedData" +
             "<Polygon><outerBoundaryIs><LinearRing><coordinates>$coordinates</coordinates></LinearRing></outerBoundaryIs></Polygon>" +
             "</Placemark></Document></kml>"
+    }
+
+
+    /** Validates a candidate ring and returns its area in common agricultural units. */
+    fun measure(points: List<AkkpsGeoPoint>): AkkpsAreaMeasurement {
+        validate(points)?.let { error(it) }
+        val squareMeters = areaSquareMeters(points)
+        return AkkpsAreaMeasurement(
+            squareMeters = squareMeters,
+            hectares = squareMeters / 10_000.0,
+            acres = squareMeters / SQUARE_METERS_PER_ACRE
+        )
+    }
+
+    /**
+     * Returns false for overlap, edge-touching, invalid candidates or invalid saved parcels.
+     * This is a local parcel-topology check, not a satellite-image boundary detector.
+     */
+    fun doesNotOverlapExisting(
+        candidate: List<AkkpsGeoPoint>,
+        existingBoundaries: List<List<AkkpsGeoPoint>>
+    ): Boolean {
+        if (validate(candidate) != null) return false
+        val candidateRing = closeRing(candidate)
+        for (existing in existingBoundaries) {
+            if (validate(existing) != null) return false
+            val existingRing = closeRing(existing)
+            for (i in 0 until candidateRing.lastIndex) {
+                for (j in 0 until existingRing.lastIndex) {
+                    if (segmentsTouch(candidateRing[i], candidateRing[i + 1], existingRing[j], existingRing[j + 1])) {
+                        return false
+                    }
+                }
+            }
+            if (pointInside(candidateRing.first(), existingRing) ||
+                pointInside(existingRing.first(), candidateRing)) return false
+        }
+        return true
+    }
+
+    private fun segmentsTouch(
+        a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint, d: AkkpsGeoPoint
+    ): Boolean {
+        fun orient(p: AkkpsGeoPoint, q: AkkpsGeoPoint, r: AkkpsGeoPoint): Double =
+            (q.longitude - p.longitude) * (r.latitude - p.latitude) -
+                (q.latitude - p.latitude) * (r.longitude - p.longitude)
+        fun onSegment(p: AkkpsGeoPoint, q: AkkpsGeoPoint, r: AkkpsGeoPoint): Boolean {
+            val eps = 1e-12
+            return r.longitude >= minOf(p.longitude, q.longitude) - eps &&
+                r.longitude <= maxOf(p.longitude, q.longitude) + eps &&
+                r.latitude >= minOf(p.latitude, q.latitude) - eps &&
+                r.latitude <= maxOf(p.latitude, q.latitude) + eps
+        }
+        val o1 = orient(a, b, c); val o2 = orient(a, b, d)
+        val o3 = orient(c, d, a); val o4 = orient(c, d, b)
+        val eps = 1e-12
+        if (((o1 > eps && o2 < -eps) || (o1 < -eps && o2 > eps)) &&
+            ((o3 > eps && o4 < -eps) || (o3 < -eps && o4 > eps))) return true
+        return (abs(o1) <= eps && onSegment(a, b, c)) ||
+            (abs(o2) <= eps && onSegment(a, b, d)) ||
+            (abs(o3) <= eps && onSegment(c, d, a)) ||
+            (abs(o4) <= eps && onSegment(c, d, b))
+    }
+
+    private fun pointInside(point: AkkpsGeoPoint, closedRing: List<AkkpsGeoPoint>): Boolean {
+        var inside = false
+        var j = closedRing.lastIndex - 1
+        for (i in 0 until closedRing.lastIndex) {
+            val a = closedRing[i]
+            val b = closedRing[j]
+            val crosses = (a.latitude > point.latitude) != (b.latitude > point.latitude) &&
+                point.longitude < (b.longitude - a.longitude) *
+                    (point.latitude - a.latitude) / (b.latitude - a.latitude) + a.longitude
+            if (crosses) inside = !inside
+            j = i
+        }
+        return inside
     }
 
     private fun hasSelfIntersection(closed: List<AkkpsGeoPoint>): Boolean {
