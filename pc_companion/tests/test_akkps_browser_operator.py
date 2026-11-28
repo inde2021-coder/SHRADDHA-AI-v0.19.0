@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from akkps_browser_operator import AkkpsBrowserOperator, validate_akkps_url
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, validate_akkps_url
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
