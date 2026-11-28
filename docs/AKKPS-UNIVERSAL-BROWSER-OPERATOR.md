@@ -75,3 +75,10 @@ Only HTTPS on `akkps.ngo` and `www.akkps.ngo` is accepted. The similarly spelled
 The Windows browser profile may contain authenticated cookies and site storage. It stays on the local Windows user profile and must never be committed, uploaded, copied, or shared. Passwords, OTPs and CAPTCHA answers are entered by the user directly into the visible site. Shraddha AI does not read or store them.
 
 No stealth, CAPTCHA bypass, MFA bypass, or access-control bypass is implemented. Delete, bulk update, payment, approval and other irreversible actions are not enabled by this adapter. The private account's real module flows and server-side outcomes still require authorized end-to-end verification by the account owner.
+
+## Upload and same-Plot verification hardening (2026-11-28)
+- Android exposes **Verify Document Upload** after the user uses the portal's own upload action. It requires a recent same-origin HTTPS write response with an explicit success indicator and a returned document/file/attachment ID. File picker selection is attachment only.
+- Windows document upload uses the same conservative outcome: a 2xx response without explicit success and a document/file/attachment ID remains uncertain; do not retry until the portal is checked.
+- Boundary upload and Save→Reopen require the active authenticated URL to identify the exact Plot record. A typed Plot ID alone is not sufficient.
+- Post-reload map/vector-layer hints are still not proof of exact polygon identity or persistence. The authorized Runner session must visually compare the saved boundary on the same Plot; unknown endpoint or map-engine behavior is not guessed.
+
