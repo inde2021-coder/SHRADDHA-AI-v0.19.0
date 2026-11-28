@@ -36,6 +36,10 @@ try:
 except ImportError:  # Running agent.py directly from the companion folder.
     from control_session import control_grant_is_valid
 from command_parser import parse_android_command
+try:
+    from .language_lab import LanguageLabDialog
+except ImportError:  # Running agent.py directly from the companion folder.
+    from language_lab import LanguageLabDialog
 from file_transfer import FILE_CHUNK_BYTES, MAX_PC_FILE_BYTES, all_chunk_indexes, chunk_count_for_size, expected_chunk_bytes, take_chunk_window, validate_resume_indexes, valid_transfer_manifest, can_accept_incoming_transfer, requeue_rejected_chunk, prepare_retry_queue, sha256_file, TransferPersistenceError
 
 SERVICE_NAME = "ShraddhaAI-PC-Companion"
@@ -157,6 +161,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="PC Hardware Status", command=self._show_hardware_status).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
+        ttk.Button(buttons, text="Offline Language Lab", command=lambda: LanguageLabDialog(self.root)).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)

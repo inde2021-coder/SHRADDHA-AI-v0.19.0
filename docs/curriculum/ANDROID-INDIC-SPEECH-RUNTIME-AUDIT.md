@@ -57,25 +57,3 @@ Decision:
 5. Measure peak RAM, download size, real-time factor, and battery use.
 6. Integrate translation only after bidirectional language coverage and licence review.
 7. Integrate TTS only after per-voice licence review, SHA-256 pinning, and offline playback tests.
-
-
-## 5. Licence and release gates (checked 2026-11-27)
-
-- The upstream AI4Bharat IndicConformer source model is MIT-licensed. The selected ONNX export repository identifies its package as Apache-2.0 while separately crediting the AI4Bharat source model as MIT. Retain both notices and comply with the export repository's Apache-2.0 terms for the downloaded artifacts. The Android sherpa-onnx runtime is a separate dependency whose own licence notices must also be retained.
-- Hindi and Sanskrit model artifacts in the current app code have pinned SHA-256 values. They are not bundled in the APK; the user downloads them on demand. The app verifies the exact bytes before installation and inference.
-- Marathi is listed as a candidate language but remains blocked in the app because its exact ONNX digest has not been independently confirmed. A model being listed by the publisher is not enough to enable a download.
-- AI4Bharat IndicF5 is MIT-licensed and lists Hindi and Marathi among its supported languages. It requires a reference voice and does not itself provide a consented Shraddha identity. The Android TTS runtime, speaker consent, audio quality checks and native-speaker review are not implemented in this branch.
-- AI4Bharat IndicTrans2 has MIT-licensed model releases. An Android translation runtime, model packaging/download, memory/performance budget and translation evaluation are not implemented in this branch.
-- English offline ASR, English/Hinglish offline TTS, Sanskrit TTS and all Pawari/Powari ASR/TTS/translation remain unimplemented or unverified.
-- Pawari collection is limited to four separate operational profiles: Balaghat, Seoni, Gondia and Bhandara. No recordings are included. The field validator only checks metadata/consent/review conditions; it does not create rights, verify identity or authorize training/publication.
-
-## 6. Required acceptance tests before claiming full multilingual support
-
-1. Download Hindi and Sanskrit artifacts on a real Android device; verify SHA-256 and successful sherpa-onnx model initialization.
-2. Run recorded and live microphone samples with speaker-disjoint evaluation; report WER/CER, latency, memory and battery by language.
-3. Pin Marathi model bytes from an authoritative source and repeat the same tests before enabling Marathi.
-4. Integrate and test offline IndicF5 TTS with a separately consented reference voice; verify no hidden Google/system voice fallback.
-5. Integrate and test IndicTrans2 with reviewed held-out sentence pairs and a bounded on-device memory profile.
-6. Implement English/Hinglish offline recognition separately and evaluate code-switch performance.
-7. Collect Pawari/Powari speech only after local community consent, preserve district variety labels, and obtain two independent native-speaker reviews plus model-use rights.
-8. Run a full Android emulator and physical-device pass. Unit tests alone do not prove microphone capture or model inference.

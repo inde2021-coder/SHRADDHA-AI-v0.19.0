@@ -56,6 +56,84 @@ object AkkpsBoundaryGeometry {
         return abs(sum * EARTH_RADIUS_METERS * EARTH_RADIUS_METERS / 2.0)
     }
 
+    data class Measurement(val squareMeters: Double) {
+        val hectares: Double get() = squareMeters / 10_000.0
+        val acres: Double get() = squareMeters / SQUARE_METERS_PER_ACRE
+    }
+
+    /** Returns a validated area measurement; malformed or self-crossing rings fail closed. */
+    fun measure(points: List<AkkpsGeoPoint>): Measurement {
+        validate(points)?.let { error(it) }
+        return Measurement(areaSquareMeters(points))
+    }
+
+    /**
+     * True only when a valid candidate is disjoint from every valid protected parcel.
+     * Touching edges/vertices count as overlap. Geometry is evaluated in the local
+     * longitude/latitude plane, appropriate for adjacent rural plots at local scale.
+     */
+    fun doesNotOverlapExisting(
+        candidate: List<AkkpsGeoPoint>,
+        existingBoundaries: List<List<AkkpsGeoPoint>>
+    ): Boolean {
+        if (validate(candidate) != null) return false
+        val candidateRing = closeRing(candidate)
+        for (existing in existingBoundaries) {
+            if (validate(existing) != null) return false
+            val existingRing = closeRing(existing)
+            for (i in 0 until candidateRing.lastIndex) {
+                for (j in 0 until existingRing.lastIndex) {
+                    if (segmentsTouchOrCross(candidateRing[i], candidateRing[i + 1],
+                            existingRing[j], existingRing[j + 1])) return false
+                }
+            }
+            if (pointInOrOnPolygon(candidateRing.first(), existingRing) ||
+                pointInOrOnPolygon(existingRing.first(), candidateRing)) return false
+        }
+        return true
+    }
+
+    private fun segmentsTouchOrCross(
+        a: AkkpsGeoPoint, b: AkkpsGeoPoint, c: AkkpsGeoPoint, d: AkkpsGeoPoint
+    ): Boolean {
+        fun cross(p: AkkpsGeoPoint, q: AkkpsGeoPoint, r: AkkpsGeoPoint) =
+            (q.longitude - p.longitude) * (r.latitude - p.latitude) -
+                (q.latitude - p.latitude) * (r.longitude - p.longitude)
+        fun onSegment(p: AkkpsGeoPoint, q: AkkpsGeoPoint, r: AkkpsGeoPoint): Boolean {
+            val epsilon = 1e-12
+            return r.longitude >= minOf(p.longitude, q.longitude) - epsilon &&
+                r.longitude <= maxOf(p.longitude, q.longitude) + epsilon &&
+                r.latitude >= minOf(p.latitude, q.latitude) - epsilon &&
+                r.latitude <= maxOf(p.latitude, q.latitude) + epsilon
+        }
+        val epsilon = 1e-12
+        val abC = cross(a, b, c); val abD = cross(a, b, d)
+        val cdA = cross(c, d, a); val cdB = cross(c, d, b)
+        if (((abC > epsilon && abD < -epsilon) || (abC < -epsilon && abD > epsilon)) &&
+            ((cdA > epsilon && cdB < -epsilon) || (cdA < -epsilon && cdB > epsilon))) return true
+        return (abs(abC) <= epsilon && onSegment(a, b, c)) ||
+            (abs(abD) <= epsilon && onSegment(a, b, d)) ||
+            (abs(cdA) <= epsilon && onSegment(c, d, a)) ||
+            (abs(cdB) <= epsilon && onSegment(c, d, b))
+    }
+
+    private fun pointInOrOnPolygon(point: AkkpsGeoPoint, closedRing: List<AkkpsGeoPoint>): Boolean {
+        var inside = false
+        for (i in 0 until closedRing.lastIndex) {
+            val a = closedRing[i]
+            val b = closedRing[i + 1]
+            if (segmentsTouchOrCross(a, b, point, point)) return true
+            val straddles = (a.latitude > point.latitude) != (b.latitude > point.latitude)
+            if (straddles) {
+                val crossingLongitude = a.longitude +
+                    (point.latitude - a.latitude) * (b.longitude - a.longitude) /
+                    (b.latitude - a.latitude)
+                if (point.longitude < crossingLongitude) inside = !inside
+            }
+        }
+        return inside
+    }
+
     /** Parse the outer KML coordinates tuple order: longitude,latitude[,altitude]. */
     fun parseKml(kml: String): Result<AkkpsBoundary> = runCatching {
         require(kml.length in 1..2_000_000) { "KML file size is invalid." }
