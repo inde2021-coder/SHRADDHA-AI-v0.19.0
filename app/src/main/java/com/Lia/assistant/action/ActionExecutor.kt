@@ -46,6 +46,10 @@ object ActionExecutor {
             "get_akkps_runner_inventory" -> {
                 val inventory = `in`.shraddha.ai.operator.website.AkkpsPageInventory.last(context)
                     ?: return result.put("status", "needs_user_action").put("message", "अभी AKKPS Runner inventory उपलब्ध नहीं है। पहले inspect_akkps_runner चलाएँ और वेबसाइट में स्वयं Login करें।")
+                val capturedAt = inventory.optLong("capturedAt", 0L)
+                if (capturedAt <= 0L || System.currentTimeMillis() - capturedAt > 30 * 60 * 1000L) {
+                    return result.put("status", "needs_user_action").put("message", "AKKPS page inventory पुरानी है। वर्तमान login session में inspect_akkps_runner दोबारा चलाएँ।")
+                }
                 result.put("status", "success")
                     .put("inventory", inventory)
                     .put("summary", `in`.shraddha.ai.operator.website.AkkpsPageInventory.summary(inventory))
