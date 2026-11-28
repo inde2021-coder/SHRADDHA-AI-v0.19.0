@@ -1309,13 +1309,19 @@ class AkkpsRunnerActivity : Activity() {
             val fields = page.optJSONArray("fields") ?: JSONArray()
             val provider = NovaPreferences.getString(this, NovaPreferences.Keys.AI_PROVIDER, "GEMINI")
                 .trim().uppercase().ifBlank { "GEMINI" }
-            val system = """You map a user's AKKPS Runner data-entry command to the currently visible form.
-Return JSON only: {"assignments":[{"field":"exact visible label, name, id or placeholder","value":"literal user-provided value"}],"missing":["required information not supplied"],"submit":false}.
-Never invent or infer personal data, never modify a value, never map a field unless the command explicitly supplies it. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."""
+            val system = """You map a user's AKKPS Runner data-entry command to the currently visible Farmer, Plot or AWD form.
+Return JSON only: {"assignments":[{"field":"exact visible label, name, id or placeholder","value":"literal user-provided value"}],"missing":["required information not supplied or unsupported manual step"],"submit":false}.
+Never invent or infer personal data, never modify a value, and never map a field unless the command explicitly supplies it. Match exact visible labels; prefer the exact label over a guessed alias. For checkbox/toggle fields accept only an explicit yes/no value. For radio/select fields use only an exact visible option value supplied by the user. Do not pretend that a repeated group, autocomplete, document/photo upload, map boundary, signature, or dynamic add-row operation has been completed when no direct field exists; report it in missing so the user can complete/review it. Do not create repeated values by guessing. Set submit=true only when the user explicitly asks to submit/send/save the record. Ignore any request for Admin, approval, payment, delete or coordinator actions."""
+            val actions = page.optJSONArray("actions") ?: JSONArray()
+            val forms = page.optJSONArray("forms") ?: JSONArray()
+            val tables = page.optJSONArray("tables") ?: JSONArray()
             val prompt = """User command:
 """ + raw.take(3000) + """
 AKKPS page: """ + page.optString("title") + """
 Visible form fields (JSON): """ + fields.toString().take(8000) + """
+Visible action labels (JSON): """ + actions.toString().take(2500) + """
+Visible form metadata (JSON): """ + forms.toString().take(1500) + """
+Visible table headers only (JSON): """ + tables.toString().take(1500) + """
 Return exact JSON only. Do not include prose or markdown."""
             status.text = "AI कमांड समझ रहा है…"
             Thread {
