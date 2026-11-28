@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, FieldInfo, PageInventory, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, validate_akkps_url, validate_runner_url, verified_record_response
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, FieldInfo, PageInventory, RUNNER_MODULES, SENSITIVE_LABEL, _safe_action_label, _safe_runner_location, _simple_polygon_ring, validate_akkps_url, validate_runner_url, verified_record_response
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -79,6 +79,32 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
         self.assertIsNone(verified_record_response("GET", url, 200, {"success": True, "plotId": "PLOT-101"}))
         self.assertIsNone(verified_record_response("POST", "https://evil.example/api/plots", 201, {"success": True, "plotId": "PLOT-101"}))
         self.assertIsNone(verified_record_response("POST", "https://www.akkps.ngo/api/telemetry", 201, {"success": True, "id": "x"}))
+
+    def test_boundary_response_accepts_boundary_ids_only_with_explicit_success(self):
+        url = "https://www.akkps.ngo/api/plots/PLOT-101/boundary"
+        self.assertEqual(
+            verified_record_response("POST", url, 201, {"success": True, "boundaryId": "BOUNDARY-7"}),
+            "BOUNDARY-7"
+        )
+        self.assertEqual(
+            verified_record_response("PUT", url, 200, {"success": True, "data": {"boundary": {"id": "BOUNDARY-8"}}}),
+            "BOUNDARY-8"
+        )
+        self.assertIsNone(verified_record_response("POST", url, 201, {"boundaryId": "BOUNDARY-7"}))
+
+    def test_kml_ring_validator_rejects_self_intersections_and_zero_area(self):
+        self.assertTrue(_simple_polygon_ring([
+            (77.0, 28.0), (77.01, 28.0), (77.01, 28.01),
+            (77.0, 28.01), (77.0, 28.0)
+        ]))
+        self.assertFalse(_simple_polygon_ring([
+            (77.0, 28.0), (77.01, 28.01), (77.0, 28.01),
+            (77.01, 28.0), (77.0, 28.0)
+        ]))
+        self.assertFalse(_simple_polygon_ring([
+            (77.0, 28.0), (77.01, 28.0), (77.02, 28.0),
+            (77.0, 28.0)
+        ]))
 
     def test_form_inventory_maps_visible_form_metadata_without_values(self):
         # Form metadata is structural only; no field values are represented.
