@@ -876,14 +876,14 @@ class AkkpsRunnerActivity : Activity() {
                         "clicked" -> web.postDelayed({
                             val verifyScript = """
                                 (() => {
-                                  const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\\s+/g," ").trim();
+                                  const norm=s=>String(s||"").normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
                                   const key=norm(__QUERY__), label=norm(__LABEL__);
                                   const forms=[...document.querySelectorAll("form")].filter(f=>f.getClientRects().length);
                                   if(forms.length!==1) return JSON.stringify({status:"form_changed"});
                                   const fields=[...forms[0].querySelectorAll("input:not([type]),input[type=text],input[type=search]")];
                                   const matches=fields.filter(e=>{
                                     const labels=[...(e.labels||[])].map(x=>x.innerText||"");
-                                    const ids=(e.getAttribute("aria-labelledby")||"").split(/\\s+/).filter(Boolean);
+                                    const ids=(e.getAttribute("aria-labelledby")||"").split(/\s+/).filter(Boolean);
                                     labels.push(...ids.map(id=>document.getElementById(id)?.innerText||""));
                                     labels.push(e.placeholder||"",e.getAttribute("aria-label")||"");
                                     return labels.map(norm).some(x=>x===label || x.includes(label));
