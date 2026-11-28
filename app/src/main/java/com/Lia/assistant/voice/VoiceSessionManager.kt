@@ -227,7 +227,14 @@ object VoiceSessionManager {
         _currentPersonality.value = personality
         _currentLanguage.value = language
 
-        val recap = ConversationMemory.recap()
+        val persistentRecap = if (PersistentChatMemory.isEnabled(currentContext)) {
+            runCatching { PersistentChatMemory.recap(currentContext) }
+                .onFailure {
+                    _statusText.value = "Encrypted conversation memory is unavailable; saved context was not loaded."
+                }
+                .getOrNull()
+        } else null
+        val recap = persistentRecap ?: ConversationMemory.recap()
         val prompt = PersonalityPromptBuilder.build(
             personality = personality,
             language = language,
@@ -389,6 +396,12 @@ object VoiceSessionManager {
                 }
                 if (response.isNotBlank()) {
                     ConversationMemory.recordTurn(MemoryRole.ASSISTANT, response)
+                    scope.launch {
+                        val saved = PersistentChatMemory.record(currentContext, "Assistant", response)
+                        if (saved.isFailure && PersistentChatMemory.isEnabled(currentContext)) {
+                            _statusText.value = "Encrypted conversation memory is unavailable; this turn was not saved."
+                        }
+                    }
                     VoiceLatencyTracker.markTurnComplete()
                     speakWithShraddha(currentContext, currentEpoch, assistantName, response)
                 } else {
