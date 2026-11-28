@@ -15,6 +15,16 @@ import java.security.MessageDigest
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 
+/** Restore the last committed provenance metadata after an interrupted atomic replacement. */
+internal fun recoverSkillPackMetadataBackup(target: File, backup: File) {
+    if (!backup.exists()) return
+    if (target.exists()) {
+        check(backup.delete()) { "Could not clear stale Skill Factory metadata backup." }
+    } else {
+        check(backup.renameTo(target)) { "Could not restore previous Skill Factory metadata." }
+    }
+}
+
 /**
  * Quarantine-first, non-executable knowledge pack lifecycle.
  * Packs are plain Markdown/JSON/text; downloaded code and archives are never executed.
@@ -327,6 +337,7 @@ class SkillPackLifecycleManager(context: Context) {
         if (!file.isFile) return false
         return runCatching {
             val metadataFile = File(file.parentFile, file.name + ".json")
+            recoverSkillPackMetadataBackup(metadataFile, File(file.parentFile, file.name + ".json.bak"))
             if (!metadataFile.isFile) return false
             val metadata = JSONObject(metadataFile.readText(Charsets.UTF_8))
             metadata.optString("stage") == "ACTIVE" &&
@@ -344,13 +355,7 @@ class SkillPackLifecycleManager(context: Context) {
         try {
             // Recover the last committed metadata before starting another replacement.
             // A process may have died after target -> backup but before temp -> target.
-            if (backup.exists()) {
-                if (target.exists()) {
-                    check(backup.delete()) { "Could not clear stale Skill Factory metadata backup." }
-                } else {
-                    check(backup.renameTo(target)) { "Could not restore previous Skill Factory metadata." }
-                }
-            }
+            recoverSkillPackMetadataBackup(target, backup)
             FileOutputStream(temp).use { output ->
                 output.write(bytes)
                 output.fd.sync()
