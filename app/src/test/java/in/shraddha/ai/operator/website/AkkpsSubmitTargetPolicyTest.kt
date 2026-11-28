@@ -13,6 +13,15 @@ class AkkpsSubmitTargetPolicyTest {
         assertTrue(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Farmer Name", "Village")))
     }
 
+    @Test fun recognizesFinalSubmitButtonsButNotDraftButtons() {
+        listOf("Submit", "Submit!", "Submit Report", "Submit Plot", "Submit Registration", "सबमिट करें", "जमा करें").forEach {
+            assertTrue(it, AkkpsSubmitTargetPolicy.isExplicitSubmitLabel(it))
+        }
+        listOf("Save Draft", "Save", "Add visit", "Remove", "Cancel", "").forEach {
+            assertFalse(it, AkkpsSubmitTargetPolicy.isExplicitSubmitLabel(it))
+        }
+    }
+
     @Test fun rejectsEmptyAndBlankKeys() {
         assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(emptyList()))
         assertFalse(AkkpsSubmitTargetPolicy.hasValidKeys(listOf("Name", " ")))

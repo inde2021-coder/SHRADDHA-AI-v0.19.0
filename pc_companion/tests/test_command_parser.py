@@ -35,5 +35,22 @@ class AndroidCommandParserTests(unittest.TestCase):
             parse_android_command("x" * 501)
 
 
+class AkkpsCommandTests(unittest.TestCase):
+    def test_akkps_commands(self):
+        from pc_companion.command_parser import parse_android_command
+        self.assertEqual(parse_android_command("open AKKPS")["kind"], "akkps_open")
+        self.assertEqual(parse_android_command("open AKKPS Runner")["kind"], "akkps_runner")
+        self.assertEqual(parse_android_command("inspect runner")["kind"], "akkps_inspect")
+        self.assertEqual(parse_android_command("AKKPS खोलो")["kind"], "akkps_open")
+        self.assertEqual(parse_android_command("Runner खोलो")["kind"], "akkps_runner")
+        self.assertEqual(parse_android_command("AKKPS जांचो")["kind"], "akkps_inspect")
+        self.assertEqual(parse_android_command("open AKKPS Farmers"), {"kind": "akkps_module", "module": "farmers"})
+        self.assertEqual(parse_android_command("open AKKPS Plots"), {"kind": "akkps_module", "module": "plots"})
+        self.assertEqual(parse_android_command("AKKPS किसान खोलो"), {"kind": "akkps_module", "module": "farmers"})
+        self.assertEqual(parse_android_command("open AKKPS AWD Reports"), {"kind": "akkps_module", "module": "awd reports"})
+        self.assertEqual(parse_android_command("open AKKPS Profile"), {"kind": "akkps_module", "module": "profile"})
+        self.assertEqual(parse_android_command("open AKKPS Data Sync"), {"kind": "akkps_module", "module": "data sync"})
+
+
 if __name__ == "__main__":
     unittest.main()

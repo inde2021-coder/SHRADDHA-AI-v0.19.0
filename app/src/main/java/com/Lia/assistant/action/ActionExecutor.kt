@@ -34,6 +34,47 @@ object ActionExecutor {
         when (toolName) {
 
 
+            "inspect_akkps_runner" -> {
+                `in`.shraddha.ai.operator.website.AkkpsPageInventory.clear(context)
+                val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
+                    .putExtra(`in`.shraddha.ai.operator.website.AkkpsRunnerActivity.EXTRA_RUNNER_INSPECT, true)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                context.startActivity(launch)
+                result.put("status", "needs_user_action").put("action", "akkps_runner_inspection_started")
+                    .put("message", "AKKPS Runner खुल गया है। Login आप स्वयं करें; authenticated Runner page load होने पर safe module/form inventory अपने आप capture होगी।")
+            }
+
+            "get_akkps_runner_inventory" -> {
+                val inventory = `in`.shraddha.ai.operator.website.AkkpsPageInventory.last(context)
+                    ?: return result.put("status", "needs_user_action").put("message", "अभी AKKPS Runner inventory उपलब्ध नहीं है। पहले inspect_akkps_runner चलाएँ और वेबसाइट में स्वयं Login करें।")
+                val capturedAt = inventory.optLong("capturedAt", 0L)
+                if (capturedAt <= 0L || System.currentTimeMillis() - capturedAt > 30 * 60 * 1000L) {
+                    return result.put("status", "needs_user_action").put("message", "AKKPS page inventory पुरानी है। वर्तमान login session में inspect_akkps_runner दोबारा चलाएँ।")
+                }
+                result.put("status", "success")
+                    .put("inventory", inventory)
+                    .put("summary", `in`.shraddha.ai.operator.website.AkkpsPageInventory.summary(inventory))
+                    .put("message", "यह केवल safe page structure है; farmer rows, form values, cookies और credentials इसमें शामिल नहीं हैं।")
+            }
+
+            "open_akkps_runner" -> {
+                `in`.shraddha.ai.operator.website.AkkpsPageInventory.clear(context)
+                val command = args.optString("command").trim()
+                if (command.length > 3000) return result.put("status", "error").put("message", "AKKPS command अधिकतम 3000 characters की हो सकती है।")
+                if (Regex("(?i)\\b(password|passcode|otp|one[- ]time (?:password|code|pin)|pin|cvv|cvc|captcha|security code|verification code|recovery phrase|secret key)\\b|पासवर्ड|ओटीपी|पिन|गुप्त कुंजी|सत्यापन कोड").containsMatchIn(command)) {
+                    return result.put("status", "error").put("message", "Password, OTP, PIN या CAPTCHA सामग्री Runner command में नहीं भेजी जा सकती। वेबसाइट पर स्वयं दर्ज करें।")
+                }
+                val launch = android.content.Intent(context, `in`.shraddha.ai.operator.website.AkkpsRunnerActivity::class.java)
+                    .putExtra(`in`.shraddha.ai.operator.website.AkkpsRunnerActivity.EXTRA_RUNNER_COMMAND, command)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                context.startActivity(launch)
+                result.put("status", "needs_user_action").put("action", "akkps_runner_opened")
+                    .put("command_loaded", command.isNotBlank())
+                    .put("message", if (command.isBlank())
+                        "AKKPS Runner खुल गया है। Login आप स्वयं करें; उसके बाद Inspect से पेज और उपलब्ध modules पहचानें। Password/OTP Shraddha AI को नहीं दिए जाते।"
+                    else "AKKPS Runner खुल गया है। आपकी command authenticated Runner पेज लोड होने पर चलायी जाएगी; fields review होंगे और Submit अलग पुष्टि माँगेगा। Password/OTP Shraddha AI को नहीं दिए जाते।")
+            }
+
             "list_paired_devices" -> {
                 val devices = `in`.shraddha.ai.link.DeviceLinkManager.pairedDevices()
                 val array = org.json.JSONArray()
@@ -54,7 +95,12 @@ object ActionExecutor {
                 if (!peer.online) return result.put("status", "error").put("message", "${peer.name} अभी offline है; कोई PC command नहीं भेजी गई।")
                 val action = JSONObject().put("kind", kind)
                 when (kind) {
-                    "hardware_status", "back", "home", "screenshot" -> Unit
+                    "hardware_status", "back", "home", "screenshot", "akkps_open", "akkps_runner", "akkps_inspect" -> Unit
+                    "akkps_module" -> {
+                        val module = args.optString("module").trim().lowercase()
+                        if (module !in setOf("farmers", "plots", "awd reports", "profile", "data sync")) return result.put("status", "error").put("message", "Unknown AKKPS Runner module.")
+                        action.put("module", module)
+                    }
                     "set_volume", "set_brightness" -> {
                         val percent = args.optInt("percent", -1)
                         if (percent !in 0..100) return result.put("status", "error").put("message", "PC percent 0 से 100 के बीच होना चाहिए।")

@@ -115,7 +115,7 @@ def read_active_window_ocr(pyautogui):
 
 
 def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=None,
-                   text_clicker=None, ocr_reader=None):
+                   text_clicker=None, ocr_reader=None, akkps_handler=None):
     kind = action["kind"]
     try:
         # Every remote action that can alter the focused desktop must fail closed
@@ -166,6 +166,10 @@ def execute_action(action, pyautogui, clipboard, open_shortcut, monitor_bounds=N
         if kind == "ocr":
             message = ocr_reader() if ocr_reader else read_active_window_ocr(pyautogui)
             return True, str(message)[:12000]
+        if kind in {"akkps_open", "akkps_runner", "akkps_inspect", "akkps_module"}:
+            if not akkps_handler:
+                return False, "AKKPS browser operator is unavailable. Install the bundled Playwright runtime."
+            return True, str(akkps_handler(kind, action.get("module")))[:12000]
         return False, "Unsupported action."
     except pyautogui.FailSafeException:
         return False, "PyAutoGUI fail-safe triggered; move the pointer away from the top-left corner and re-approve."

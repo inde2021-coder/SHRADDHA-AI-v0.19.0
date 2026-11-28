@@ -54,4 +54,19 @@ class PcCommandInterpreterTest {
             .map { PcCommandInterpreter.parse(it).getOrThrow().getString("kind") }
         assertTrue(kinds.all { it in setOf("home", "back", "scroll", "open_app", "type", "set_volume") })
     }
+
+    @Test fun parsesAkkpsBrowserCommands() {
+        assertEquals("akkps_open", PcCommandInterpreter.parse("open AKKPS").getOrThrow().getString("kind"))
+        assertEquals("akkps_runner", PcCommandInterpreter.parse("open AKKPS Runner").getOrThrow().getString("kind"))
+        assertEquals("akkps_inspect", PcCommandInterpreter.parse("inspect runner").getOrThrow().getString("kind"))
+        assertEquals("akkps_open", PcCommandInterpreter.parse("AKKPS खोलो").getOrThrow().getString("kind"))
+        assertEquals("akkps_runner", PcCommandInterpreter.parse("Runner खोलो").getOrThrow().getString("kind"))
+        assertEquals("akkps_inspect", PcCommandInterpreter.parse("AKKPS जांचो").getOrThrow().getString("kind"))
+        assertEquals("akkps_module", PcCommandInterpreter.parse("open AKKPS Farmers").getOrThrow().getString("kind"))
+        assertEquals("farmers", PcCommandInterpreter.parse("open AKKPS Farmers").getOrThrow().getString("module"))
+        assertEquals("plots", PcCommandInterpreter.parse("AKKPS प्लॉट खोलो").getOrThrow().getString("module"))
+        assertEquals("awd reports", PcCommandInterpreter.parse("open AKKPS AWD Reports").getOrThrow().getString("module"))
+        assertEquals("profile", PcCommandInterpreter.parse("open AKKPS Profile").getOrThrow().getString("module"))
+        assertEquals("data sync", PcCommandInterpreter.parse("open AKKPS Data Sync").getOrThrow().getString("module"))
+    }
 }

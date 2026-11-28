@@ -79,6 +79,16 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(calls, ["Save"])
         self.assertEqual(message, "Clicked Save")
 
+    def test_akkps_module_action_calls_only_allowlisted_browser_handler(self):
+        calls = []
+        ok, message = execute_action(
+            {"kind": "akkps_module", "module": "farmers"}, self.gui, self.clipboard,
+            lambda _name: False, akkps_handler=lambda kind, module: calls.append((kind, module)) or "Farmers opened"
+        )
+        self.assertTrue(ok)
+        self.assertEqual(calls, [("akkps_module", "farmers")])
+        self.assertEqual(message, "Farmers opened")
+
     def test_ocr_action_returns_local_reader_result(self):
         ok, message = execute_action(
             {"kind": "ocr"}, self.gui, self.clipboard, lambda _name: False,

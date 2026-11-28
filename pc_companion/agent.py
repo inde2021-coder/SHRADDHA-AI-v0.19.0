@@ -93,6 +93,11 @@ class PcCompanionApp:
         self.phone_control_grant_until = 0.0
         self.device_token = None
         self.e2e_crypto = DeviceE2ECrypto()
+        try:
+            from .akkps_browser_operator import AkkpsBrowserOperator
+        except ImportError:
+            from akkps_browser_operator import AkkpsBrowserOperator
+        self.akkps_operator = AkkpsBrowserOperator(Path.home() / "AppData" / "Local" / "ShraddhaAI" / "AKKPSBrowserProfile")
         self.peer_keys = {}
         self.e2e_lock = threading.RLock()
         self.seen_remote_actions = {}
@@ -162,6 +167,7 @@ class PcCompanionApp:
         ttk.Button(buttons, text="Set PC Volume", command=lambda: self._set_local_hardware("set_volume")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Set PC Brightness", command=lambda: self._set_local_hardware("set_brightness")).pack(side="left", padx=6)
         ttk.Button(buttons, text="Offline Language Lab", command=lambda: LanguageLabDialog(self.root)).pack(side="left", padx=6)
+        ttk.Button(buttons, text="AKKPS Website Operator", command=self._open_akkps_browser).pack(side="left", padx=6)
         ttk.Separator(frame).pack(fill="x", pady=8)
         ttk.Checkbutton(frame, text="Allow remote mouse / keyboard (approve each request on this PC)",
                         variable=self.remote_var, command=self._publish_permissions).pack(anchor="w", pady=4)
@@ -185,6 +191,16 @@ class PcCompanionApp:
                   wraplength=510, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
         ttk.Label(frame, text="E2E safety: screen frames are sent only after both devices confirm the same fingerprint over a separate trusted channel. Reject mismatches. Keys are ephemeral and must be verified again after reconnect.",
                   wraplength=510, foreground="#146c43", font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 0))
+
+    def _open_akkps_browser(self):
+        try:
+            try:
+                from .akkps_browser_ui import AkkpsBrowserWindow
+            except ImportError:
+                from akkps_browser_ui import AkkpsBrowserWindow
+            AkkpsBrowserWindow(self.root, self.akkps_operator)
+        except Exception as exc:
+            messagebox.showerror("AKKPS Website Operator", str(exc), parent=self.root)
 
     def _set_local_hardware(self, kind):
         from tkinter import simpledialog
@@ -1269,7 +1285,7 @@ class PcCompanionApp:
                 )
                 message = json.dumps(result, ensure_ascii=False)[:1200] if isinstance(result, dict) else str(result)
             else:
-                ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds())
+                ok, message = execute_action(action, pyautogui, pyperclip, self._open_start_menu_shortcut, self._selected_monitor_bounds(), akkps_handler=self._run_akkps_action)
             self.status_var.set(message)
             if peer_id and action_id:
                 sent = self._send_e2e_message(peer_id, "remote_action_result",
@@ -1285,6 +1301,24 @@ class PcCompanionApp:
             if peer_id and action_id:
                 self._send_e2e_message(peer_id, "remote_action_result",
                                        {"ok": False, "result": message[:240]}, action_id, action.get("kind", ""))
+
+    def _run_akkps_action(self, kind, module=None):
+        if kind == "akkps_module":
+            inventory = self.akkps_operator.open_module(module)
+        elif kind == "akkps_open":
+            inventory = self.akkps_operator.start()
+        elif kind == "akkps_runner":
+            if self.akkps_operator._page is None:
+                raise RuntimeError("पहले Windows पर AKKPS वेबसाइट खोलकर स्वयं लॉगिन करें।")
+            inventory = self.akkps_operator.open_runner()
+        else:
+            inventory = self.akkps_operator.inventory()
+        return json.dumps({
+            "title": inventory.title, "url": inventory.url,
+            "navigation": list(inventory.links), "fields": [f.__dict__ for f in inventory.fields],
+            "buttons": list(inventory.buttons), "table_headers": [list(x) for x in inventory.table_headers],
+            "sections": list(inventory.sections), "forms": [list(x) for x in inventory.forms]
+        }, ensure_ascii=False)[:12000]
 
     def _open_start_menu_shortcut(self, app_name):
         roots = [
@@ -1419,6 +1453,10 @@ class PcCompanionApp:
 
     def _close(self):
         self.disconnect()
+        try:
+            self.akkps_operator.close()
+        except Exception:
+            pass
         self.stop_event.set()
         self.root.destroy()
 

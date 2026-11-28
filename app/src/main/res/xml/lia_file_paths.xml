@@ -2,4 +2,5 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="websites" path="Websites/" />
     <cache-path name="shared_media" path="shared/" />
+    <cache-path name="akkps_boundaries" path="akkps-boundaries/" />
 </paths>

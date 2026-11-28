@@ -25,6 +25,27 @@ class AkkpsRunnerCommandParserTest {
         assertTrue(parsed.issues.isEmpty())
     }
 
+    @Test fun parsesCreatePrefixBeforeFieldAssignments() {
+        val inline = AkkpsRunnerCommandParser.parse("create farmer Farmer Name=Ram Kumar; Village=Rampur")
+        assertTrue(inline.issues.toString(), inline.issues.isEmpty())
+        assertEquals(listOf("farmerName", "village"), inline.assignments.map { it.first })
+
+        val createNew = AkkpsRunnerCommandParser.parse("create new farmer; Farmer Name=Ram; Village=Rampur")
+        assertTrue(createNew.issues.toString(), createNew.issues.isEmpty())
+        assertEquals(listOf("farmerName", "village"), createNew.assignments.map { it.first })
+
+        val separate = AkkpsRunnerCommandParser.parse("new farmer; Farmer Name=Ram Kumar; Village=Rampur")
+        assertTrue(separate.issues.toString(), separate.issues.isEmpty())
+        assertEquals(listOf("farmerName", "village"), separate.assignments.map { it.first })
+    }
+
+    @Test fun trailingSubmitAfterLastValueIsDetectedAndRemovedFromValue() {
+        val parsed = AkkpsRunnerCommandParser.parse("create farmer Farmer Name=Ram Kumar; Village=Rampur submit")
+        assertTrue(parsed.issues.toString(), parsed.issues.isEmpty())
+        assertEquals(listOf("Ram Kumar", "Rampur"), parsed.assignments.map { it.second })
+        assertTrue(parsed.submit)
+    }
+
     @Test fun preservesCommasInsideValues() {
         val parsed = AkkpsRunnerCommandParser.parse("Address=Ward 4, Near School; Village=Rampur")
         assertEquals("Ward 4, Near School", parsed.assignments.first().second)

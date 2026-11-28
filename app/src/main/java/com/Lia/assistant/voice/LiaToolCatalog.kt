@@ -44,6 +44,33 @@ object LiaToolCatalog {
 
         array.put(
             GeminiToolUtils.functionDecl(
+                name = "inspect_akkps_runner",
+                description = "Opens the dedicated AKKPS Runner workspace and automatically inspects the authenticated visible page after the user signs in. Only page structure is captured: module names, form counts, safe field labels, table headers and generic actions. It never captures form values, farmer rows, cookies, passwords or OTPs.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "get_akkps_runner_inventory",
+                description = "Returns the latest sanitized AKKPS Runner page inventory captured on this device. Use after inspect_akkps_runner and after the user has signed in. The result contains page structure only, not farmer records or field values.",
+                params = emptyMap(),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
+                name = "open_akkps_runner",
+                description = "Opens Shraddha AI's dedicated, allow-listed AKKPS Runner workspace. The user signs in directly inside the official HTTPS website; passwords and OTPs stay in the website and are never sent to the AI. Optionally pass a concise allow-listed Runner command using only user-supplied data: field=value, add an AWD repeated row, select an exact autocomplete option, attach a named document, or start map Draw/Edit. For map Draw/Edit the Runner asks for the exact visible map-tool label and the user places/moves vertices manually; never invent missing farmer/plot/report data or claim map persistence. The user signs in directly on the website. Submit requires a separate on-device confirmation, and the Runner verifies the server response and record ID.",
+                params = mapOf("command" to "Optional exact user-requested AKKPS Runner command, maximum 3000 characters. Never include passwords, OTPs, PINs or CAPTCHA answers."),
+                required = emptyList()
+            )
+        )
+
+        array.put(
+            GeminiToolUtils.functionDecl(
                 name = "build_website",
                 description = "Launches the Website Forge to design, code, and animate a complete website based on a description.",
                 params = mapOf("prompt" to "Detailed description of the website to build"),
@@ -89,10 +116,11 @@ object LiaToolCatalog {
         array.put(
             GeminiToolUtils.functionDecl(
                 name = "control_paired_pc",
-                description = "Sends a typed command to one already paired Windows PC through the encrypted device relay. The user must identify the exact paired device ID shown in Device Universe; never guess a target. Supported kind values: hardware_status, set_volume (percent 0-100), set_brightness (percent 0-100), power (operation shutdown/restart/sleep; ALWAYS ask the user for explicit confirmation before calling), open_app (name), back, home, scroll (amount -10..10), screenshot, web_search (query). This opens Device Control and requests fresh time-limited approval from the target PC before sending. The Windows companion performs its own per-action confirmation and reports the result; a queued request is not proof of execution.",
+                description = "Sends a typed command to one already paired Windows PC through the encrypted device relay. The user must identify the exact paired device ID shown in Device Universe; never guess a target. Supported kind values: hardware_status, set_volume (percent 0-100), set_brightness (percent 0-100), power (operation shutdown/restart/sleep; ALWAYS ask the user for explicit confirmation before calling), open_app (name), back, home, scroll (amount -10..10), screenshot, web_search (query), akkps_open, akkps_runner, akkps_inspect, akkps_module (module: farmers, plots, awd reports, profile, data sync). AKKPS commands operate only the user-authorized visible Edge session; login stays manual and each remote action still needs local PC approval. This opens Device Control and requests fresh time-limited approval from the target PC before sending. The Windows companion performs its own per-action confirmation and reports the result; a queued request is not proof of execution.",
                 params = mapOf(
                     "target_device_id" to "Exact paired Windows device ID shown in Device Universe",
-                    "kind" to "One of hardware_status, set_volume, set_brightness, power, open_app, back, home, scroll, screenshot, web_search",
+                    "kind" to "One of hardware_status, set_volume, set_brightness, power, open_app, back, home, scroll, screenshot, web_search, akkps_open, akkps_runner, akkps_inspect, akkps_module",
+                    "module" to "Exact AKKPS Runner module for akkps_module: farmers, plots, awd reports, profile, or data sync",
                     "percent" to "0-100 for set_volume or set_brightness",
                     "operation" to "shutdown, restart, or sleep for power",
                     "name" to "Installed application name for open_app",

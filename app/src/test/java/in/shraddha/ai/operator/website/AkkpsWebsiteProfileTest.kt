@@ -46,14 +46,22 @@ class AkkpsWebsiteProfileTest {
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/coordinator/plots"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/../admin"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/%2e%2e/admin"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/%252e%252e/admin"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner%2f..%2fadmin"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner\\\\..\\\\admin"))
     }
 
-    @Test fun runnerNavigationAllowsCanonicalSiteAndNonRestrictedModules() {
+    @Test fun runnerNavigationAllowsLoginAndOnlyApprovedRunnerModules() {
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/login"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/auth/otp"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/auth/verify"))
         assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://akkps.ngo/runner/plots?page=2"))
-        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/administrator-help"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/runner/awd-reports"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/plots/new"))
+        assertTrue(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/awd-reports/new"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/administrator-help"))
+        assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("https://www.akkps.ngo/dashboard"))
         assertFalse(AkkpsWebsiteProfile.allowsRunnerNavigation("http://www.akkps.ngo/runner"))
     }
 
