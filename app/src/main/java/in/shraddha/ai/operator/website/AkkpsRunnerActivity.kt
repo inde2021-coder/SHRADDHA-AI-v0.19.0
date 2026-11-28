@@ -195,7 +195,7 @@ class AkkpsRunnerActivity : Activity() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val targetUrl = request.url.toString()
                     val path = runCatching { URI(targetUrl).path.orEmpty().lowercase() }.getOrDefault("")
-                    if (!AkkpsWebsiteProfile.acceptsUrl(targetUrl) ||
+                    if (!AkkpsWebsiteProfile.allowsRunnerNavigation(targetUrl) ||
                         path.startsWith("/admin") || path.startsWith("/coordinator")) {
                         runOnUiThread { status.text = "सुरक्षा: केवल AKKPS Runner कार्यों की अनुमति है।" }
                         return true
