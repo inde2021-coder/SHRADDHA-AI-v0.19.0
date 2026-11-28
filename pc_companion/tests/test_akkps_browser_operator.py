@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, SENSITIVE_LABEL, validate_akkps_url, validate_runner_url
+from pc_companion.akkps_browser_operator import AkkpsBrowserOperator, RUNNER_MODULES, SENSITIVE_LABEL, validate_akkps_url, validate_runner_url
 
 
 class AkkpsBrowserOperatorTests(unittest.TestCase):
@@ -16,6 +16,13 @@ class AkkpsBrowserOperatorTests(unittest.TestCase):
     def test_rejects_credentials_in_url(self):
         with self.assertRaises(ValueError):
             validate_akkps_url("https://user:pass@www.akkps.ngo")
+
+    def test_runner_module_catalog_is_exact_and_bounded(self):
+        self.assertEqual(RUNNER_MODULES["farmers"], "/runner/farmers")
+        self.assertEqual(RUNNER_MODULES["plots"], "/runner/plots")
+        self.assertEqual(RUNNER_MODULES["awd reports"], "/runner/awd-reports")
+        self.assertNotIn("admin", RUNNER_MODULES)
+        self.assertNotIn("coordinator", RUNNER_MODULES)
 
     def test_runner_navigation_allows_login_and_runner_only(self):
         for url in ("https://www.akkps.ngo/", "https://www.akkps.ngo/login",
