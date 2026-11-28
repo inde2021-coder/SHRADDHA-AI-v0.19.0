@@ -8,6 +8,9 @@ import com.Lia.assistant.data.VoiceGatewaySettings
 import `in`.shraddha.ai.link.DeviceLinkManager
 import `in`.shraddha.ai.accessibility.ShraddhaAccessibilityService as DeviceAccessibilityService
 import `in`.shraddha.ai.operator.security.OperatorSafetyPolicy
+import `in`.shraddha.ai.operator.CommandFollowUpContextRuntime
+import `in`.shraddha.ai.operator.CommandReferenceType
+import `in`.shraddha.ai.operator.CommandReferenceResolution
 import `in`.shraddha.ai.operator.learning.AppProfileStore
 import `in`.shraddha.ai.operator.learning.WorkflowCheckpointStore
 import kotlinx.coroutines.Dispatchers
@@ -252,7 +255,13 @@ object ActionExecutor {
                 }
             }
             "open_app" -> {
-                val appName = args.optString("app_name", "").trim()
+                val requestedApp = args.optString("app_name", "").trim()
+                val appName = if (requestedApp.isNotBlank()) requestedApp else when (
+                    val followUp = CommandFollowUpContextRuntime.resolve("same app", CommandReferenceType.APP)
+                ) {
+                    is CommandReferenceResolution.Resolved -> followUp.reference.stableId
+                    else -> ""
+                }
                 if (appName.isEmpty()) {
                     result.put("status", "error")
                     result.put("message", "App name cannot be empty")
@@ -265,6 +274,7 @@ object ActionExecutor {
                 if (packageName != null) {
                     val launched = AppLauncher.launch(context, packageName)
                     if (launched) {
+                        CommandFollowUpContextRuntime.remember(CommandReferenceType.APP, packageName, apps.firstOrNull { it.packageName == packageName }?.label ?: appName)
                         result.put("status", "success")
                         result.put("action", "app_opened")
                         result.put("package", packageName)
@@ -280,7 +290,13 @@ object ActionExecutor {
             }
 
             "call_contact" -> {
-                val query = args.optString("contact_name", "").trim()
+                val requestedContact = args.optString("contact_name", "").trim()
+                val query = if (requestedContact.isBlank() || requestedContact in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
+                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContact.ifBlank { "उसे" }, CommandReferenceType.CONTACT)) {
+                        is CommandReferenceResolution.Resolved -> followUp.reference.stableId
+                        else -> requestedContact
+                    }
+                } else requestedContact
                 if (query.isEmpty()) {
                     result.put("status", "error")
                     result.put("message", "Contact query is empty")
@@ -289,6 +305,7 @@ object ActionExecutor {
 
                 when (val lookup = ContactResolver.lookup(context, query)) {
                     is ContactLookupResult.Found -> {
+                        CommandFollowUpContextRuntime.remember(CommandReferenceType.CONTACT, lookup.phoneNumber, lookup.displayName)
                         val callStatus = CommIntents.placeCall(context, lookup.phoneNumber)
                         result.put("status", when (callStatus) { "call_started" -> "success"; "dialer_opened_no_permission" -> "needs_user_action"; else -> "error" })
                         result.put("action", callStatus)
@@ -320,7 +337,13 @@ object ActionExecutor {
             }
 
             "message_contact" -> {
-                val contactName = args.optString("contact_name", "").trim()
+                val requestedContactName = args.optString("contact_name", "").trim()
+                val contactName = if (requestedContactName.isBlank() || requestedContactName in setOf("it", "that one", "same person", "उसे", "उसको", "उसी को", "वही")) {
+                    when (val followUp = CommandFollowUpContextRuntime.resolve(requestedContactName.ifBlank { "उसे" }, CommandReferenceType.CONTACT)) {
+                        is CommandReferenceResolution.Resolved -> followUp.reference.stableId
+                        else -> requestedContactName
+                    }
+                } else requestedContactName
                 val messageText = args.optString("message", "").trim()
                 val targetApp = args.optString("app", "sms").lowercase().trim()
 
@@ -375,6 +398,7 @@ object ActionExecutor {
                     return result
                 }
                 if (openMessageReview(context, channel, phoneNumber, messageText)) {
+                    CommandFollowUpContextRuntime.remember(CommandReferenceType.CONTACT, phoneNumber, contactName)
                     result.put("status", "review_required").put("action", "message_review_opened")
                     result.put("recipient", phoneNumber)
                     result.put("message_preview", messageText)
