@@ -1224,6 +1224,8 @@ class AkkpsRunnerActivity : Activity() {
                 .map(e=>e.name||e.id||e.placeholder||'required field');
               const requiredRadios=radioGroups(form).filter(g=>g.some(r=>r.required)&&!g.some(r=>r.checked));
               requiredRadios.forEach(g=>missing.push(g[0].name||g[0].id||g[0].closest('fieldset')?.querySelector('legend')?.innerText||'required choice'));
+              const requiredCheckboxes=all.filter(e=>checkboxEditable(e)&&e.required&&!e.checked);
+              requiredCheckboxes.forEach(e=>missing.push(e.name||e.id||e.getAttribute('aria-label')||e.closest('label')?.innerText||'required checkbox'));
               return JSON.stringify({out,missing});
             })(__PAYLOAD__)
         """.trimIndent().replace("__PAYLOAD__", payload.toString())
