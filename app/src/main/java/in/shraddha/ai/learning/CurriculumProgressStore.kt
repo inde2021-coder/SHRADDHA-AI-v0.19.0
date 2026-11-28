@@ -252,19 +252,41 @@ class CurriculumProgressStore(context: Context) {
         require(bytes.size > GCM_IV_BYTES) { "Learning progress data is incomplete." }
         val iv = bytes.copyOfRange(0, GCM_IV_BYTES)
         val encrypted = bytes.copyOfRange(GCM_IV_BYTES, bytes.size)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-        return JSONObject(String(cipher.doFinal(encrypted), Charsets.UTF_8))
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+            val clear = cipher.doFinal(encrypted)
+            try {
+                JSONObject(String(clear, Charsets.UTF_8))
+            } finally {
+                clear.fill(0)
+            }
+        } finally {
+            bytes.fill(0)
+            iv.fill(0)
+            encrypted.fill(0)
+        }
     }
 
     private fun writeState(state: JSONObject) {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val iv = cipher.iv
-        val encrypted = cipher.doFinal(state.toString().toByteArray(Charsets.UTF_8))
-        val combined = iv + encrypted
-        check(prefs.edit().putString(ENCRYPTED_STATE, Base64.encodeToString(combined, Base64.NO_WRAP)).commit()) {
-            "Could not save encrypted learning progress."
+        val clear = state.toString().toByteArray(Charsets.UTF_8)
+        var iv: ByteArray? = null
+        var encrypted: ByteArray? = null
+        var combined: ByteArray? = null
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+            iv = cipher.iv
+            encrypted = cipher.doFinal(clear)
+            combined = iv + encrypted
+            check(prefs.edit().putString(ENCRYPTED_STATE, Base64.encodeToString(combined, Base64.NO_WRAP)).commit()) {
+                "Could not save encrypted learning progress."
+            }
+        } finally {
+            clear.fill(0)
+            iv?.fill(0)
+            encrypted?.fill(0)
+            combined?.fill(0)
         }
     }
 
