@@ -250,10 +250,10 @@ class AkkpsBrowserOperator:
         """Read visible page structure only; never collect input values or row contents."""
         data = self.page.evaluate("""() => {
           const visible = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
-          const clean = s => (s || '').replace(/\\s+/g, ' ').trim().slice(0, 160);
+          const clean = s => (s || '').replace(/\s+/g, ' ').trim().slice(0, 160);
           const labelFor = e => {
             const labels = [...(e.labels || [])].map(x => clean(x.innerText)).filter(Boolean);
-            const labelledBy = (e.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean)
+            const labelledBy = (e.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
               .map(id => clean(document.getElementById(id)?.innerText)).filter(Boolean);
             const fieldset = e.closest('fieldset');
             const legend = fieldset?.querySelector('legend');
