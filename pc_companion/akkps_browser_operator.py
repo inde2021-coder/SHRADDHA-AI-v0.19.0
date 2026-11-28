@@ -1085,22 +1085,35 @@ class AkkpsBrowserOperator:
             )
         # Only controls inside the uniquely identified map container are eligible.
         # Page-level Edit/Save buttons must never be mistaken for map tools.
-        button = map_locator.first.get_by_role("button", name=label, exact=True)
-        if button.count() != 1 or not button.first.is_visible() or not button.first.is_enabled():
-            raise RuntimeError("The exact visible map tool button is missing, ambiguous or disabled.")
-        if (button.first.get_attribute("type") or "").casefold() in {"submit", "reset"}:
+        controls = map_locator.first.locator("button,[role=button],a[title],a[aria-label]")
+        matches = controls.evaluate_all("""(items, wanted) => items.map((e, i) => ({
+          i, label: String(e.innerText || e.getAttribute('aria-label') ||
+            e.getAttribute('title') || '').replace(/\\s+/g, ' ').trim(),
+          visible: !!(e.getClientRects().length && getComputedStyle(e).display !== 'none' &&
+            getComputedStyle(e).visibility !== 'hidden'),
+          disabled: !!e.disabled
+        })).filter(x => x.label === wanted && x.visible && !x.disabled).map(x => x.i)""", label)
+        if len(matches) != 1:
+            raise RuntimeError("The exact visible map Draw/Edit control is missing, ambiguous or disabled.")
+        control = controls.nth(matches[0])
+        tag_name = control.evaluate("(e) => e.tagName.toLowerCase()")
+        if tag_name == "a":
+            href = (control.get_attribute("href") or "").strip().casefold()
+            if href not in {"", "#"}:
+                raise RuntimeError("A map link that navigates away from the current page cannot be activated as a Draw/Edit tool.")
+        if (control.get_attribute("type") or "").casefold() in {"submit", "reset"}:
             raise RuntimeError("A form-submit/reset control cannot be used as a map tool.")
         if _is_explicit_submit_label(label):
             raise RuntimeError("Record Submit controls are never map tools.")
-        before = button.first.evaluate("""e => ({
+        before = control.evaluate("""e => ({
           pressed: e.getAttribute('aria-pressed'),
           checked: e.getAttribute('aria-checked'),
           className: String(e.className || ''),
           disabled: !!e.disabled
         })""")
-        button.first.click()
+        control.click()
         self.page.wait_for_timeout(150)
-        after = button.first.evaluate("""e => ({
+        after = control.evaluate("""e => ({
           pressed: e.getAttribute('aria-pressed'),
           checked: e.getAttribute('aria-checked'),
           className: String(e.className || ''),
