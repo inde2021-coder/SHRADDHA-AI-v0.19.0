@@ -80,6 +80,20 @@ class CurriculumProgressStoreInstrumentedTest {
 
         store.setGuardianMode(false)
     }
+    @Test fun verseProgressRejectsReferencesOutsideActualChapterCounts() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = CurriculumProgressStore(context)
+        listOf("1.48", "18.79", "0.1", "2.0", "abc", "1.1.1").forEach { reference ->
+            var rejected = false
+            try {
+                store.markVerseComplete(reference)
+            } catch (_: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue("Invalid verse reference must be rejected: $reference", rejected)
+        }
+    }
+
     @Test fun guardianApprovalGrantsOnlyATimeLimitedLearningExtension() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = CurriculumProgressStore(context)
